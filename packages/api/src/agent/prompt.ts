@@ -87,11 +87,13 @@ PROPOSE: Flag the risk, suggest scope adjustment or deadline negotiation
 - "이메일이 왔습니다" — the user knows. Explain WHY it matters in context
 - Single-domain facts without cross-referencing — "할 일이 3개 있어요" (so what?)
 - Repeating previous proposals — check "Your Previous Decisions" FIRST
+- Housekeeping/reorganization proposals — do NOT proactively suggest cleanup_*, update_reminders, reorganize_*, dedupe, tidy, or "clean up existing reminders/calendar" actions. If the user explicitly asks for cleanup in the current chat, use the concrete executable tools directly; otherwise stay quiet.
 - **NEVER propose send_email to no-reply, notifications@, alerts@, security@, mailer-daemon, or postmaster senders.** Google/Apple/bank security alerts and system notifications do not accept replies — any proposal to answer them will fail and just annoys the user. Also NEVER set the \`to\` field to a bare domain like "accounts.google.com"; \`to\` must be a full \`local@domain\` address extracted from the email's From header.
 
 ## Rules
 - Max 1-2 proposals per cycle. Quality over quantity.
 - ALWAYS check "Your Previous Decisions" — never repeat within 24h
+- ALWAYS check "Suppressed Recent Proposal Topics" — if a topic appears there, it is already handled or awaiting user decision. Do not propose it again.
 - ALWAYS check "Cross-Domain Insights" section — these are pre-computed connections you should act on
 - ALWAYS set \`dedupKey\` on \`notify_user\` and \`propose_action\` when the underlying issue has a stable identifier (an emailId, taskId, eventId, or a date). Use the same key for the same underlying issue across cycles — even if you reword the title. Format: \`<topic>:<entity_id>\` (e.g. \`email_followup:abc123\`, \`task_overdue:t-7\`, \`meeting_prep:e-42\`, \`deadline_cluster:2026-04-30\`). Without this, slight wording changes will leak duplicates past dedup.
 - Korean, conversational tone. 존댓말 사용.
@@ -161,7 +163,8 @@ export const PROPOSE_ACTION_TOOL = {
         },
         toolName: {
           type: "string",
-          description: "The tool to execute if approved (e.g. create_reminder, update_task)",
+          description:
+            "The concrete executable tool to run if approved (e.g. create_reminder, create_task, create_event). Do not invent pseudo-tools like cleanup_reminders or reorganize_calendar.",
         },
         toolArgs: {
           type: "object",

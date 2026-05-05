@@ -33,6 +33,8 @@ import {
   areSimilarProposalIssues,
   getNotifKey,
   getToolRisk,
+  isHousekeepingProposalToolName,
+  proposalIssueTokens,
   TOOL_RISK_LEVELS,
 } from "./agent-logic.js";
 import { type AgentMode, getAgentModePolicy, normalizeAgentMode } from "./agent-mode.js";
@@ -89,6 +91,12 @@ const lastRunTime = new Map<string, number>();
 // Survives server restarts (unlike previous in-memory Map approach)
 const NOTIFY_DEDUP_HOURS = 2; // Don't repeat same notification within 2 hours
 const PROPOSAL_DEDUP_HOURS = 24; // Don't re-propose the same underlying issue within a day
+const CONTEXT_SUPPRESSION_HOURS = 24; // Hide recently-proposed topics before the LLM sees context
+const EXECUTABLE_TOOL_NAMES = new Set(
+  ALL_TOOLS.map((tool) => (tool as { function?: { name?: string } }).function?.name).filter(
+    (name): name is string => typeof name === "string" && name.length > 0,
+  ),
+);
 
 async function hasRecentNotification(userId: string, titleKey: string): Promise<boolean> {
   const since = new Date(Date.now() - NOTIFY_DEDUP_HOURS * 60 * 60 * 1000);
@@ -166,6 +174,104 @@ function safeJson(raw: string): unknown {
   } catch {
     return raw;
   }
+}
+
+interface RecentProposalSuppression {
+  id: string;
+  toolName: string;
+  status: string;
+  createdAt: Date;
+  message: string;
+  toolArgs: unknown;
+  tokens: Set<string>;
+}
+
+async function getRecentProposalSuppressions(userId: string): Promise<RecentProposalSuppression[]> {
+  const since = new Date(Date.now() - CONTEXT_SUPPRESSION_HOURS * 60 * 60 * 1000);
+  const rows = (await db.pendingAction.findMany({
+    where: {
+      userId,
+      status: { in: ["PENDING", "REJECTED", "EXECUTED"] },
+      createdAt: { gte: since },
+    },
+    select: {
+      id: true,
+      toolName: true,
+      toolArgs: true,
+      reasoning: true,
+      status: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: "desc" },
+    take: 80,
+  })) as Array<{
+    id: string;
+    toolName: string;
+    toolArgs: string;
+    reasoning: string | null;
+    status: string;
+    createdAt: Date;
+  }>;
+
+  return rows
+    .map((row) => {
+      const toolArgs = safeJson(row.toolArgs);
+      const input = {
+        message: row.reasoning ?? "",
+        toolName: row.toolName,
+        toolArgs,
+      };
+      return {
+        id: row.id,
+        toolName: row.toolName,
+        status: row.status,
+        createdAt: row.createdAt,
+        message: row.reasoning ?? "",
+        toolArgs,
+        tokens: proposalIssueTokens(input),
+      };
+    })
+    .filter((row) => row.tokens.size > 0);
+}
+
+function shouldSuppressContextText(
+  text: string,
+  suppressions: RecentProposalSuppression[],
+): boolean {
+  if (!text.trim() || suppressions.length === 0) return false;
+  return suppressions.some((suppression) =>
+    areSimilarProposalIssues(
+      { message: text, toolName: "context_item" },
+      {
+        message: suppression.message,
+        toolName: suppression.toolName,
+        toolArgs: suppression.toolArgs,
+      },
+    ),
+  );
+}
+
+function filterSuppressedContextItems<T>(
+  items: T[],
+  getText: (item: T) => string,
+  suppressions: RecentProposalSuppression[],
+): { visible: T[]; hidden: number } {
+  if (suppressions.length === 0) return { visible: items, hidden: 0 };
+  const visible = items.filter((item) => !shouldSuppressContextText(getText(item), suppressions));
+  return { visible, hidden: items.length - visible.length };
+}
+
+function formatRecentProposalSuppressions(suppressions: RecentProposalSuppression[]): string {
+  if (suppressions.length === 0) return "";
+  const lines = suppressions.slice(0, 8).map((suppression) => {
+    const ageMin = Math.max(0, Math.round((Date.now() - suppression.createdAt.getTime()) / 60_000));
+    const age = ageMin < 60 ? `${ageMin}m ago` : `${Math.round(ageMin / 60)}h ago`;
+    const anchors = [...suppression.tokens].slice(0, 6).join(", ");
+    return `- [${suppression.status}] ${suppression.toolName} (${age}) anchors: ${anchors}`;
+  });
+  return `## Suppressed Recent Proposal Topics (last ${CONTEXT_SUPPRESSION_HOURS}h)
+These topics already had an approval card or user decision recently. Treat them as already handled. Do NOT propose them again unless the user explicitly asks in the current chat.
+${lines.join("\n")}`;
 }
 
 // DB-based email reply dedup: check AgentLog for recent send_email actions
@@ -372,21 +478,22 @@ async function gatherUserContext(userId: string): Promise<string> {
     contacts,
     recentAgentLogs,
     recentChatMessages,
+    recentProposalSuppressions,
   ] = await Promise.all([
     prisma.task.findMany({
       where: { userId, status: { not: "DONE" } },
       orderBy: { dueDate: "asc" },
-      take: MAX_CONTEXT_ITEMS,
+      take: MAX_CONTEXT_ITEMS * 2,
     }),
     prisma.calendarEvent.findMany({
       where: { userId, startTime: { gte: now, lte: in7d } },
       orderBy: { startTime: "asc" },
-      take: MAX_CONTEXT_ITEMS,
+      take: MAX_CONTEXT_ITEMS * 2,
     }),
     prisma.reminder.findMany({
       where: { userId, status: "PENDING" },
       orderBy: { remindAt: "asc" },
-      take: MAX_CONTEXT_ITEMS,
+      take: MAX_CONTEXT_ITEMS * 2,
     }),
     prisma.note.findMany({
       where: { userId },
@@ -405,7 +512,7 @@ async function gatherUserContext(userId: string): Promise<string> {
           receivedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
         },
         orderBy: { receivedAt: "desc" },
-        take: 5,
+        take: 10,
         select: {
           id: true,
           gmailId: true,
@@ -476,14 +583,71 @@ async function gatherUserContext(userId: string): Promise<string> {
         select: { content: true, createdAt: true },
       })
       .catch(() => []),
+    getRecentProposalSuppressions(userId).catch(() => []),
   ]);
+
+  const suppressedTasks = filterSuppressedContextItems(
+    tasks,
+    (t: { title: string; description: string | null; dueDate: Date | null }) =>
+      `${t.title} ${t.description || ""} ${t.dueDate?.toISOString() || ""}`,
+    recentProposalSuppressions,
+  );
+  const visibleTasks = suppressedTasks.visible.slice(0, MAX_CONTEXT_ITEMS);
+  const suppressedCalendar = filterSuppressedContextItems(
+    calendar,
+    (e: {
+      title: string;
+      description: string | null;
+      startTime: Date;
+      endTime: Date;
+      location: string | null;
+    }) =>
+      `${e.title} ${e.description || ""} ${e.location || ""} ${e.startTime.toISOString()} ${e.endTime.toISOString()}`,
+    recentProposalSuppressions,
+  );
+  const visibleCalendar = suppressedCalendar.visible.slice(0, MAX_CONTEXT_ITEMS);
+  const suppressedReminders = filterSuppressedContextItems(
+    reminders,
+    (r: { title: string; description: string | null; remindAt: Date }) =>
+      `${r.title} ${r.description || ""} ${r.remindAt.toISOString()}`,
+    recentProposalSuppressions,
+  );
+  const visibleReminders = suppressedReminders.visible.slice(0, MAX_CONTEXT_ITEMS);
+  const suppressedEmails = filterSuppressedContextItems(
+    emails || [],
+    (e: {
+      from: string;
+      subject: string;
+      snippet: string | null;
+      body: string | null;
+      summary: string | null;
+      actionItems: string | null;
+    }) =>
+      `${e.from} ${e.subject} ${e.summary || ""} ${e.actionItems || ""} ${e.snippet || ""} ${e.body || ""}`,
+    recentProposalSuppressions,
+  );
+  const visibleEmails = suppressedEmails.visible.slice(0, 5);
+  const hiddenContextItems =
+    suppressedTasks.hidden +
+    suppressedCalendar.hidden +
+    suppressedReminders.hidden +
+    suppressedEmails.hidden;
 
   const sections: string[] = [];
 
   sections.push(`## Current Time\nKST: ${kstStr}\nUTC: ${now.toISOString()}`);
 
-  if (tasks.length > 0) {
-    const taskLines = tasks.map(
+  const suppressionSummary = formatRecentProposalSuppressions(recentProposalSuppressions);
+  if (suppressionSummary) {
+    sections.push(
+      hiddenContextItems > 0
+        ? `${suppressionSummary}\n\nHidden matching context items before reasoning: ${hiddenContextItems}`
+        : suppressionSummary,
+    );
+  }
+
+  if (visibleTasks.length > 0) {
+    const taskLines = visibleTasks.map(
       (t: { dueDate: Date | null; priority: string | null; title: string; status: string }) => {
         const due = t.dueDate ? t.dueDate.toISOString().split("T")[0] : "no due date";
         const overdue = t.dueDate && t.dueDate < now ? " ⚠️ OVERDUE" : "";
@@ -491,13 +655,13 @@ async function gatherUserContext(userId: string): Promise<string> {
         return `- [${t.priority || "MEDIUM"}] ${t.title} (due: ${due}${overdue}${dueSoon}) — status: ${t.status}`;
       },
     );
-    sections.push(`## Open Tasks (${tasks.length})\n${taskLines.join("\n")}`);
+    sections.push(`## Open Tasks (${visibleTasks.length})\n${taskLines.join("\n")}`);
   } else {
     sections.push("## Open Tasks\nNone");
   }
 
-  if (calendar.length > 0) {
-    const calLines = calendar.map(
+  if (visibleCalendar.length > 0) {
+    const calLines = visibleCalendar.map(
       (e: { title: string; startTime: Date; meetingLink: string | null }) => {
         const start = e.startTime.toLocaleString("ko-KR", {
           timeZone: "Asia/Seoul",
@@ -513,8 +677,8 @@ async function gatherUserContext(userId: string): Promise<string> {
     sections.push("## Upcoming Calendar\nNone");
   }
 
-  if (reminders.length > 0) {
-    const remLines = reminders.map((r: { title: string; remindAt: Date }) => {
+  if (visibleReminders.length > 0) {
+    const remLines = visibleReminders.map((r: { title: string; remindAt: Date }) => {
       const at = r.remindAt.toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
       const overdue = r.remindAt < now ? " ⚠️ PAST DUE" : "";
       return `- ${r.title} @ ${at}${overdue}`;
@@ -536,7 +700,7 @@ async function gatherUserContext(userId: string): Promise<string> {
   // approval prompts for auto-replies that cannot be delivered.
   // `isNoReplyAddress` uses string parsing rather than regex because the
   // From header is attacker-controllable (CodeQL js/polynomial-redos).
-  const replyableEmails = (emails || []).filter(
+  const replyableEmails = (visibleEmails || []).filter(
     (e: { from: string; category?: string | null }) =>
       !isNoReplyAddress(e.from) && e.category !== "notification" && e.category !== "security",
   );
@@ -640,7 +804,7 @@ async function gatherUserContext(userId: string): Promise<string> {
   const crossDomainHints: string[] = [];
 
   // Deadline clustering — flag when multiple deadlines converge
-  const typedTasks = tasks as Array<{
+  const typedTasks = visibleTasks as Array<{
     title: string;
     status: string;
     priority: string | null;
@@ -655,7 +819,7 @@ async function gatherUserContext(userId: string): Promise<string> {
   }
 
   // Free time block detection — find available slots today for task work
-  const typedCalendar = calendar as Array<{
+  const typedCalendar = visibleCalendar as Array<{
     title: string;
     startTime: Date;
     endTime?: Date;
@@ -672,7 +836,7 @@ async function gatherUserContext(userId: string): Promise<string> {
   }
 
   // Link upcoming meetings to contacts and incomplete tasks
-  if (calendar.length > 0 && (contacts.length > 0 || tasks.length > 0)) {
+  if (visibleCalendar.length > 0 && (contacts.length > 0 || visibleTasks.length > 0)) {
     for (const event of typedCalendar) {
       const minutesUntil = Math.round((event.startTime.getTime() - now.getTime()) / 60_000);
       if (minutesUntil > 0 && minutesUntil <= 24 * 60) {
@@ -706,16 +870,16 @@ async function gatherUserContext(userId: string): Promise<string> {
         }
 
         // Check for unanswered emails from meeting-related contacts
-        if (emails && emails.length > 0 && relatedContacts.length > 0) {
+        if (visibleEmails && visibleEmails.length > 0 && relatedContacts.length > 0) {
           for (const contact of relatedContacts as Array<{
             name: string;
             email: string | null;
             company: string | null;
           }>) {
             if (!contact.email) continue;
-            const emailFromContact = (emails as Array<{ from: string; subject: string }>).find(
-              (e) => e.from.toLowerCase().includes(contact.email!.toLowerCase()),
-            );
+            const emailFromContact = (
+              visibleEmails as Array<{ from: string; subject: string }>
+            ).find((e) => e.from.toLowerCase().includes(contact.email!.toLowerCase()));
             if (emailFromContact) {
               crossDomainHints.push(
                 `📨 Unanswered? Email from ${contact.name} ("${emailFromContact.subject}") + meeting with them in ${minutesUntil < 60 ? `${minutesUntil}min` : `${Math.round(minutesUntil / 60)}h`} → reply before meeting?`,
@@ -728,8 +892,8 @@ async function gatherUserContext(userId: string): Promise<string> {
   }
 
   // Link emails to contacts (general, not meeting-specific)
-  if (emails && emails.length > 0 && contacts.length > 0) {
-    for (const email of emails as Array<{ from: string; subject: string }>) {
+  if (visibleEmails && visibleEmails.length > 0 && contacts.length > 0) {
+    for (const email of visibleEmails as Array<{ from: string; subject: string }>) {
       const matchedContact = (
         contacts as Array<{
           name: string;
@@ -1083,171 +1247,198 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
           // Propose action via chat — create conversation + message + pending action
           const dedupKey = typeof args.dedupKey === "string" ? args.dedupKey : "";
           const key = getNotifKey(args.message);
+          const proposedToolName = typeof args.toolName === "string" ? args.toolName : "";
 
-          // In-memory dedupKey check first — catches LLM wording variations within
-          // the TTL window that the fuzzy title hash cannot detect.
-          const dedupKeyHit = dedupKey && wasRecentlyDeduped(userId, dedupKey);
-
-          // DB-backed dedup: check RECENT PENDING actions (not stale ones older than 6h)
-          const pendingCutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
-          const existingPending = await db.pendingAction.findFirst({
-            where: {
-              userId,
-              toolName: args.toolName,
-              status: "PENDING",
-              createdAt: { gte: pendingCutoff },
-            },
-            orderBy: { createdAt: "desc" },
-          });
-          const similarRecent = await findRecentSimilarProposal(userId, {
-            message: args.message,
-            toolName: args.toolName,
-            toolArgs: args.toolArgs ?? {},
-          });
-          const alreadyNotified = await hasRecentNotification(userId, key);
-
-          if (dedupKeyHit || existingPending || similarRecent || alreadyNotified) {
+          if (isHousekeepingProposalToolName(proposedToolName)) {
             result = JSON.stringify({
               skipped: true,
-              reason: dedupKeyHit
-                ? "duplicate proposal (dedupKey)"
-                : similarRecent
-                  ? "duplicate proposal (similar recent issue)"
-                  : "duplicate proposal",
+              reason: "housekeeping proposal suppressed",
             });
             await logAgentAction(
               userId,
               "skip",
-              similarRecent
-                ? `Dedup similar proposal (${similarRecent.status} ${similarRecent.toolName} ${similarRecent.id}): "${args.message.slice(0, 50)}"`
-                : `Dedup proposal: "${args.message.slice(0, 50)}"`,
-            );
-          } else {
-            // Find or create an agent conversation for today
-            const todayStart = new Date();
-            todayStart.setHours(0, 0, 0, 0);
-
-            let agentConvo = await db.conversation.findFirst({
-              where: {
-                userId,
-                source: "agent",
-                createdAt: { gte: todayStart },
-              },
-              orderBy: { createdAt: "desc" },
-            });
-
-            if (!agentConvo) {
-              const todayStr = new Date().toLocaleDateString("ko-KR", {
-                month: "long",
-                day: "numeric",
-              });
-              agentConvo = await db.conversation.create({
-                data: {
-                  userId,
-                  title: `EVE 제안 — ${todayStr}`,
-                  source: "agent",
-                },
-              });
-            }
-
-            // Create the assistant message with the proposal
-            const assistantMsg = await db.message.create({
-              data: {
-                conversationId: agentConvo.id,
-                role: "ASSISTANT",
-                content: args.message,
-                metadata: JSON.stringify({ source: "agent", hasAction: true }),
-              },
-            });
-
-            // Create the pending action
-            const pendingAction = await db.pendingAction.create({
-              data: {
-                conversationId: agentConvo.id,
-                messageId: assistantMsg.id,
-                userId,
-                toolName: args.toolName,
-                toolArgs: JSON.stringify(args.toolArgs ?? {}),
-                reasoning: args.message,
-              },
-            });
-            await upsertAttentionForPendingAction(pendingAction);
-
-            // Update conversation timestamp
-            await prisma.conversation.update({
-              where: { id: agentConvo.id },
-              data: { updatedAt: new Date() },
-            });
-
-            const proposalLink = `/chat/${agentConvo.id}`;
-            if (!isShadowMode) {
-              // Also create a notification so user sees it in notification bell.
-              // pendingActionId + conversationId are persisted so the drawer can render
-              // inline approve/reject buttons even after a page reload.
-              const notifTitle = `[EVE] ${args.message.slice(0, 50)}${args.message.length > 50 ? "..." : ""}`;
-              const notification = await (prisma.notification.create as Function)({
-                data: {
-                  userId,
-                  type: "agent_proposal",
-                  title: notifTitle,
-                  message: args.message,
-                  link: proposalLink,
-                  conversationId: agentConvo.id,
-                  pendingActionId: (pendingAction as { id: string }).id,
-                },
-              });
-
-              // Push notification with conversationId so bell links to the right chat
-              pushNotification(userId, {
-                id: notification.id,
-                type: args.category || "insight",
-                title: notifTitle,
-                message: args.message,
-                createdAt: notification.createdAt.toISOString(),
-                conversationId: agentConvo.id,
-                link: proposalLink,
-              });
-
-              // Always send push notification for proposed actions (phone/browser)
-              sendPushNotification(
-                userId,
-                {
-                  title: "[EVE] 확인이 필요해요",
-                  body: args.message.slice(0, 100),
-                  url: proposalLink,
-                },
-                "agent_proposal",
-              );
-            }
-
-            if (dedupKey) recordDedupKey(userId, dedupKey);
-
-            result = JSON.stringify({
-              success: true,
-              proposed: true,
-              shadow: isShadowMode,
-              conversationId: agentConvo.id,
-            });
-
-            await logAgentAction(
-              userId,
-              "propose",
-              `${isShadowMode ? "[SHADOW] " : ""}[${args.priority}] Proposed ${args.toolName}: ${args.message.slice(0, 100)}`,
+              `Suppressed housekeeping proposal ${proposedToolName}: "${args.message.slice(0, 80)}"`,
               "propose_action",
               args.category,
             );
-            console.log(
-              `[AGENT] Proposed action to ${userId} in convo ${agentConvo.id}: ${args.toolName}`,
-            );
-
-            // Notify sidebar to refresh
-            pushNotification(userId, {
-              id: "sidebar-refresh",
-              type: "system",
-              title: "conversations-updated",
-              message: "",
-              createdAt: new Date().toISOString(),
+          } else if (!EXECUTABLE_TOOL_NAMES.has(proposedToolName)) {
+            result = JSON.stringify({
+              skipped: true,
+              reason: "unknown proposal tool",
             });
+            await logAgentAction(
+              userId,
+              "skip",
+              `Suppressed unknown proposal tool ${proposedToolName}: "${args.message.slice(0, 80)}"`,
+              "propose_action",
+              args.category,
+            );
+          } else {
+            // In-memory dedupKey check first — catches LLM wording variations within
+            // the TTL window that the fuzzy title hash cannot detect.
+            const dedupKeyHit = dedupKey && wasRecentlyDeduped(userId, dedupKey);
+
+            // DB-backed dedup: check RECENT PENDING actions (not stale ones older than 6h)
+            const pendingCutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
+            const existingPending = await db.pendingAction.findFirst({
+              where: {
+                userId,
+                toolName: proposedToolName,
+                status: "PENDING",
+                createdAt: { gte: pendingCutoff },
+              },
+              orderBy: { createdAt: "desc" },
+            });
+            const similarRecent = await findRecentSimilarProposal(userId, {
+              message: args.message,
+              toolName: proposedToolName,
+              toolArgs: args.toolArgs ?? {},
+            });
+            const alreadyNotified = await hasRecentNotification(userId, key);
+
+            if (dedupKeyHit || existingPending || similarRecent || alreadyNotified) {
+              result = JSON.stringify({
+                skipped: true,
+                reason: dedupKeyHit
+                  ? "duplicate proposal (dedupKey)"
+                  : similarRecent
+                    ? "duplicate proposal (similar recent issue)"
+                    : "duplicate proposal",
+              });
+              await logAgentAction(
+                userId,
+                "skip",
+                similarRecent
+                  ? `Dedup similar proposal (${similarRecent.status} ${similarRecent.toolName} ${similarRecent.id}): "${args.message.slice(0, 50)}"`
+                  : `Dedup proposal: "${args.message.slice(0, 50)}"`,
+              );
+            } else {
+              // Find or create an agent conversation for today
+              const todayStart = new Date();
+              todayStart.setHours(0, 0, 0, 0);
+
+              let agentConvo = await db.conversation.findFirst({
+                where: {
+                  userId,
+                  source: "agent",
+                  createdAt: { gte: todayStart },
+                },
+                orderBy: { createdAt: "desc" },
+              });
+
+              if (!agentConvo) {
+                const todayStr = new Date().toLocaleDateString("ko-KR", {
+                  month: "long",
+                  day: "numeric",
+                });
+                agentConvo = await db.conversation.create({
+                  data: {
+                    userId,
+                    title: `EVE 제안 — ${todayStr}`,
+                    source: "agent",
+                  },
+                });
+              }
+
+              // Create the assistant message with the proposal
+              const assistantMsg = await db.message.create({
+                data: {
+                  conversationId: agentConvo.id,
+                  role: "ASSISTANT",
+                  content: args.message,
+                  metadata: JSON.stringify({ source: "agent", hasAction: true }),
+                },
+              });
+
+              // Create the pending action
+              const pendingAction = await db.pendingAction.create({
+                data: {
+                  conversationId: agentConvo.id,
+                  messageId: assistantMsg.id,
+                  userId,
+                  toolName: proposedToolName,
+                  toolArgs: JSON.stringify(args.toolArgs ?? {}),
+                  reasoning: args.message,
+                },
+              });
+              await upsertAttentionForPendingAction(pendingAction);
+
+              // Update conversation timestamp
+              await prisma.conversation.update({
+                where: { id: agentConvo.id },
+                data: { updatedAt: new Date() },
+              });
+
+              const proposalLink = `/chat/${agentConvo.id}`;
+              if (!isShadowMode) {
+                // Also create a notification so user sees it in notification bell.
+                // pendingActionId + conversationId are persisted so the drawer can render
+                // inline approve/reject buttons even after a page reload.
+                const notifTitle = `[EVE] ${args.message.slice(0, 50)}${args.message.length > 50 ? "..." : ""}`;
+                const notification = await (prisma.notification.create as Function)({
+                  data: {
+                    userId,
+                    type: "agent_proposal",
+                    title: notifTitle,
+                    message: args.message,
+                    link: proposalLink,
+                    conversationId: agentConvo.id,
+                    pendingActionId: (pendingAction as { id: string }).id,
+                  },
+                });
+
+                // Push notification with conversationId so bell links to the right chat
+                pushNotification(userId, {
+                  id: notification.id,
+                  type: args.category || "insight",
+                  title: notifTitle,
+                  message: args.message,
+                  createdAt: notification.createdAt.toISOString(),
+                  conversationId: agentConvo.id,
+                  link: proposalLink,
+                });
+
+                // Always send push notification for proposed actions (phone/browser)
+                sendPushNotification(
+                  userId,
+                  {
+                    title: "[EVE] 확인이 필요해요",
+                    body: args.message.slice(0, 100),
+                    url: proposalLink,
+                  },
+                  "agent_proposal",
+                );
+              }
+
+              if (dedupKey) recordDedupKey(userId, dedupKey);
+
+              result = JSON.stringify({
+                success: true,
+                proposed: true,
+                shadow: isShadowMode,
+                conversationId: agentConvo.id,
+              });
+
+              await logAgentAction(
+                userId,
+                "propose",
+                `${isShadowMode ? "[SHADOW] " : ""}[${args.priority}] Proposed ${proposedToolName}: ${args.message.slice(0, 100)}`,
+                "propose_action",
+                args.category,
+              );
+              console.log(
+                `[AGENT] Proposed action to ${userId} in convo ${agentConvo.id}: ${proposedToolName}`,
+              );
+
+              // Notify sidebar to refresh
+              pushNotification(userId, {
+                id: "sidebar-refresh",
+                type: "system",
+                title: "conversations-updated",
+                message: "",
+                createdAt: new Date().toISOString(),
+              });
+            }
           }
         } else if (fnName === "notify_user") {
           if (isShadowMode) {

@@ -3,6 +3,7 @@ import {
   areSimilarProposalIssues,
   getNotifKey,
   getToolRisk,
+  isHousekeepingProposalToolName,
   proposalIssueTokens,
   TOOL_RISK_LEVELS,
 } from "../agent-logic.js";
@@ -139,5 +140,22 @@ describe("proposal issue dedup", () => {
     };
 
     expect(areSimilarProposalIssues(first, second)).toBe(false);
+  });
+});
+
+describe("isHousekeepingProposalToolName", () => {
+  it("blocks proactive cleanup and reorganize proposal names", () => {
+    expect(isHousekeepingProposalToolName("cleanup_reminders_to_critical_only")).toBe(true);
+    expect(isHousekeepingProposalToolName("cleanup calendar item misdated")).toBe(true);
+    expect(isHousekeepingProposalToolName("reorganize_calendar_items")).toBe(true);
+    expect(isHousekeepingProposalToolName("update_reminders")).toBe(true);
+    expect(isHousekeepingProposalToolName("dedupe_reminders")).toBe(true);
+  });
+
+  it("allows concrete executable tools", () => {
+    expect(isHousekeepingProposalToolName("create_task")).toBe(false);
+    expect(isHousekeepingProposalToolName("create_event")).toBe(false);
+    expect(isHousekeepingProposalToolName("create_reminder")).toBe(false);
+    expect(isHousekeepingProposalToolName("update_task")).toBe(false);
   });
 });

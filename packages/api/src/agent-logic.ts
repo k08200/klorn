@@ -159,6 +159,42 @@ export function areSimilarProposalIssues(a: ProposalIssueInput, b: ProposalIssue
   return hasNamedAnchor || numericAnchors >= 2;
 }
 
+/**
+ * Housekeeping proposals are noisy when generated proactively: they usually
+ * reorganize existing reminders/calendar items instead of surfacing a new risk.
+ * They may still be valid when the user explicitly asks, but the autonomous
+ * agent should not create approval cards for them on its own.
+ */
+export function isHousekeepingProposalToolName(toolName: string | null | undefined): boolean {
+  const normalized = (toolName || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+  if (!normalized) return false;
+
+  return (
+    normalized.startsWith("cleanup_") ||
+    normalized.startsWith("clean_up_") ||
+    normalized.includes("_cleanup_") ||
+    normalized.endsWith("_cleanup") ||
+    normalized.startsWith("reorganize_") ||
+    normalized.startsWith("re_org_") ||
+    normalized.startsWith("organize_") ||
+    normalized.startsWith("tidy_") ||
+    normalized.startsWith("declutter_") ||
+    normalized.startsWith("dedupe_") ||
+    normalized.startsWith("deduplicate_") ||
+    normalized.startsWith("consolidate_") ||
+    normalized.startsWith("prune_") ||
+    normalized === "update_reminder" ||
+    normalized === "update_reminders" ||
+    normalized.includes("reminder_cleanup") ||
+    normalized.includes("cleanup_reminder") ||
+    normalized.includes("cleanup_reminders")
+  );
+}
+
 function stringifyArgs(args: unknown): string {
   if (!args) return "";
   if (typeof args === "string") return args;
