@@ -77,10 +77,10 @@ export default function LandingPage() {
             Sign in
           </Link>
           <Link
-            href="/login"
+            href="/early-access"
             className="text-sm bg-white text-black hover:bg-gray-200 px-5 py-2 rounded-lg font-medium transition"
           >
-            Try Free
+            Get Early Access
           </Link>
         </div>
       </nav>
@@ -106,14 +106,14 @@ export default function LandingPage() {
           </p>
 
           <Link
-            href="/login"
+            href="/early-access"
             className="group inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-xl text-base font-medium transition-all shadow-lg shadow-blue-600/20 hover:shadow-blue-500/30"
           >
-            Start Free
+            Request Early Access
             <Icon type="arrow" />
           </Link>
           <p className="text-xs text-gray-600 mt-4">
-            No credit card. Connect Gmail &amp; Calendar in one click.
+            Limited beta &mdash; we&apos;re inviting founders this week.
           </p>
         </div>
       </section>
@@ -343,13 +343,13 @@ export default function LandingPage() {
             Connect your Gmail and Calendar. EVE takes it from there.
           </p>
           <Link
-            href="/login"
+            href="/early-access"
             className="inline-flex items-center gap-2 bg-white text-black hover:bg-gray-200 px-10 py-4 rounded-xl text-sm font-semibold transition-all shadow-lg"
           >
-            Get Started Free
+            Request Early Access
             <Icon type="arrow" />
           </Link>
-          <p className="text-xs text-gray-600 mt-4">No credit card required</p>
+          <p className="text-xs text-gray-600 mt-4">Limited beta &mdash; request access below</p>
         </div>
       </section>
 
@@ -371,9 +371,6 @@ export default function LandingPage() {
             </Link>
             <Link href="/terms" className="hover:text-gray-300 transition">
               Terms
-            </Link>
-            <Link href="/login" className="hover:text-gray-300 transition">
-              Sign in
             </Link>
           </div>
         </div>

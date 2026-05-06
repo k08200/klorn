@@ -62,7 +62,7 @@ function LoginForm() {
       } else {
         await register(email, password, name || undefined);
         toast("Account created!", "success");
-        router.push("/dashboard");
+        router.push("/inbox");
         return;
       }
     } catch (err) {
@@ -78,23 +78,6 @@ function LoginForm() {
           })()
         : msg;
       toast(parsed, "error");
-    }
-    setLoading(false);
-  };
-
-  const handleDemo = async () => {
-    setLoading(true);
-    try {
-      await login("demo@hireeve.com", "demo");
-      toast("Welcome to EVE demo!", "success");
-    } catch {
-      try {
-        await register("demo@hireeve.com", "demo", "Demo User");
-        toast("Welcome to EVE demo!", "success");
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Failed";
-        toast(msg, "error");
-      }
     }
     setLoading(false);
   };
@@ -246,17 +229,6 @@ function LoginForm() {
         <p className="text-[10px] text-gray-600 text-center mt-1.5">
           Google login is in review. Email sign-up works for everyone.
         </p>
-
-        <div className="mt-3">
-          <button
-            type="button"
-            onClick={handleDemo}
-            disabled={loading}
-            className="w-full bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 text-gray-300 py-2.5 rounded-lg text-sm font-medium transition-colors"
-          >
-            Try Demo (no sign-up needed)
-          </button>
-        </div>
 
         {/* Back to home */}
         <div className="text-center mt-5">
