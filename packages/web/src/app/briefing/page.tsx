@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { Markdown } from "../../components/markdown";
 import { apiFetch } from "../../lib/api";
+import { useT } from "../../lib/i18n";
 import { captureClientError } from "../../lib/sentry";
 
 interface BriefingResponse {
@@ -53,6 +54,7 @@ export default function BriefingPage() {
 }
 
 function BriefingView() {
+  const { t } = useT();
   const [noteId, setNoteId] = useState<string | null>(null);
   const [content, setContent] = useState<string | null>(null);
   const [createdAt, setCreatedAt] = useState<string | null>(null);
@@ -190,6 +192,9 @@ function BriefingView() {
       {!loading && !error && !content && (
         <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-6 text-center">
           <p className="text-sm text-gray-400 mb-3">아직 오늘의 브리핑이 없습니다.</p>
+          <p className="mx-auto mb-4 max-w-md text-xs leading-5 text-cyan-200/90">
+            {t("briefing.learningMode")}
+          </p>
           <p className="text-xs text-gray-500 mb-4">
             자동 브리핑 시간은{" "}
             <Link href="/settings" className="text-cyan-400 hover:underline">

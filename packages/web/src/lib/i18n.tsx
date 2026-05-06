@@ -70,6 +70,9 @@ const translations: Record<Locale, Record<string, string>> = {
     "chat.newConversation": "New conversation",
     "chat.typeMessage": "Type a message...",
     "chat.send": "Send",
+    // Briefing
+    "briefing.learningMode":
+      "EVE is learning your email and calendar patterns for the first 2-3 days. Top 3 picks get sharper as you use it.",
     // Common
     "common.loading": "Loading...",
     "common.cancel": "Cancel",
@@ -169,6 +172,9 @@ const translations: Record<Locale, Record<string, string>> = {
     "chat.newConversation": "새 대화",
     "chat.typeMessage": "메시지를 입력하세요...",
     "chat.send": "전송",
+    // Briefing
+    "briefing.learningMode":
+      "EVE는 처음 2-3일 동안 메일과 일정 패턴을 학습합니다. 사용할수록 Top 3가 더 정확해져요.",
     // Common
     "common.loading": "로딩 중...",
     "common.cancel": "취소",
