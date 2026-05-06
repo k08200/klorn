@@ -53,6 +53,62 @@ export async function sendPasswordResetEmail(to: string, resetToken: string): Pr
   }
 }
 
+export async function sendWaitlistAdminAlert(entry: {
+  email: string;
+  name?: string | null;
+  useCase?: string | null;
+}): Promise<boolean> {
+  const adminEmails = (process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const alertTo = process.env.WAITLIST_ALERT_EMAIL || adminEmails[0];
+  if (!alertTo) {
+    console.log(
+      "[EMAIL] No waitlist alert target configured (ADMIN_EMAILS or WAITLIST_ALERT_EMAIL)",
+    );
+    return false;
+  }
+
+  if (!resend) {
+    console.log(
+      "[EMAIL] No RESEND_API_KEY — would alert",
+      maskEmail(alertTo),
+      "about",
+      maskEmail(entry.email),
+    );
+    return true;
+  }
+
+  const safeEmail = entry.email.replace(/[<>]/g, "");
+  const safeName = (entry.name || "").replace(/[<>]/g, "");
+  const safeUseCase = (entry.useCase || "").replace(/[<>]/g, "");
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: alertTo,
+      subject: `[EVE] New waitlist signup: ${safeEmail}`,
+      html: `
+        <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+          <h2 style="color: #3b82f6; margin: 0 0 16px;">New early-access request</h2>
+          <p style="color: #374151; font-size: 14px; margin: 0 0 4px;"><strong>Email:</strong> ${safeEmail}</p>
+          ${safeName ? `<p style="color: #374151; font-size: 14px; margin: 0 0 4px;"><strong>Name:</strong> ${safeName}</p>` : ""}
+          ${safeUseCase ? `<p style="color: #374151; font-size: 14px; margin: 0 0 12px;"><strong>How they use email:</strong> ${safeUseCase}</p>` : ""}
+          <p style="color: #6b7280; font-size: 13px; margin: 16px 0 0;">
+            Review at <a href="${WEB_URL}/admin/waitlist">${WEB_URL}/admin/waitlist</a>.
+          </p>
+        </div>
+      `,
+    });
+    console.log("[EMAIL] Waitlist alert sent for", maskEmail(entry.email));
+    return true;
+  } catch (err) {
+    console.error("[EMAIL] Failed to send waitlist alert:", err);
+    return false;
+  }
+}
+
 export async function sendVerificationEmail(to: string, verifyToken: string): Promise<boolean> {
   const verifyUrl = `${WEB_URL}/verify-email?token=${verifyToken}`;
   const safeAddr = maskEmail(to);

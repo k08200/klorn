@@ -830,3 +830,24 @@ enum FeedbackSignal {
   SNOOZED
   DISMISSED
 }
+
+// Public early-access waitlist. Submissions land here before the founder
+// adds the email to the Google Cloud Console Test users list and approves
+// access. No FK to User — these are people without accounts yet.
+model Waitlist {
+  id         String         @id @default(uuid())
+  email      String         @unique
+  name       String?
+  useCase    String?        @db.VarChar(500)
+  status     WaitlistStatus @default(PENDING)
+  approvedAt DateTime?
+  createdAt  DateTime       @default(now())
+
+  @@index([status, createdAt])
+}
+
+enum WaitlistStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}

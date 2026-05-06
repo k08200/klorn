@@ -363,6 +363,9 @@ export default function LandingPage() {
             <span>EVE &mdash; Connect once. EVE handles the rest.</span>
           </div>
           <div className="flex items-center gap-6 text-xs text-gray-600">
+            <Link href="/early-access" className="hover:text-gray-300 transition">
+              Early Access
+            </Link>
             <Link href="/privacy" className="hover:text-gray-300 transition">
               Privacy
             </Link>

@@ -290,6 +290,43 @@ export async function adminRoutes(app: FastifyInstance) {
     return { routes: snapshot, capturedAt: new Date().toISOString() };
   });
 
+  // GET /api/admin/waitlist — Public waitlist entries (PENDING first)
+  app.get("/waitlist", async (request) => {
+    const { status } = request.query as { status?: string };
+    const where = status === "APPROVED" || status === "REJECTED" ? { status } : {};
+    const entries = await db.waitlist.findMany({
+      where,
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      take: 200,
+    });
+    const countRows = (await db.waitlist.groupBy({
+      by: ["status"],
+      _count: { status: true },
+    })) as Array<{ status: string; _count: { status: number } }>;
+    const counts: Record<string, number> = {};
+    for (const row of countRows) {
+      counts[row.status] = row._count.status;
+    }
+    return { entries, counts };
+  });
+
+  // PATCH /api/admin/waitlist/:id — mark approved or rejected
+  app.patch("/waitlist/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { status } = request.body as { status?: string };
+    if (status !== "APPROVED" && status !== "REJECTED" && status !== "PENDING") {
+      return reply.code(400).send({ error: "status must be APPROVED, REJECTED, or PENDING" });
+    }
+    const entry = await db.waitlist.update({
+      where: { id },
+      data: {
+        status,
+        approvedAt: status === "APPROVED" ? new Date() : null,
+      },
+    });
+    return entry;
+  });
+
   // GET /api/admin/eval — Run agent decision-logic eval scenarios
   app.get("/eval", async () => {
     const results = runAllScenarios();

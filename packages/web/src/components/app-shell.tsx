@@ -13,6 +13,7 @@ const NO_SIDEBAR_ROUTES = [
   "/verify-email",
   "/privacy",
   "/terms",
+  "/early-access",
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
