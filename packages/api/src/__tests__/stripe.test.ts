@@ -34,6 +34,13 @@ describe("plan device limits", () => {
     expect(planHasFeature("FREE", "agent_mode_auto")).toBe(false);
   });
 
+  it("keeps calendar event creation available on every paid plan", () => {
+    for (const plan of ["PRO", "TEAM", "ENTERPRISE"]) {
+      expect(planHasFeature(plan, "calendar_create")).toBe(true);
+      expect(planHasFeature(plan, "calendar_write")).toBe(true);
+    }
+  });
+
   it("defaults chat and agent workloads to the free OpenRouter model", () => {
     expect(getDefaultChatModel("FREE")).toBe("google/gemma-4-31b-it:free");
     expect(getDefaultAgentModel("FREE")).toBe("google/gemma-4-31b-it:free");
