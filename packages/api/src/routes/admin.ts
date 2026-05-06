@@ -234,14 +234,12 @@ export async function adminRoutes(app: FastifyInstance) {
     // Token usage + estimated cost
     const tokenAgg = await db.tokenUsage.aggregate({
       where: { createdAt: { gte: last7d } },
-      _sum: { promptTokens: true, completionTokens: true, totalTokens: true },
+      _sum: { promptTokens: true, completionTokens: true, totalTokens: true, estimatedCost: true },
     });
     const promptTokens = Number(tokenAgg._sum?.promptTokens ?? 0);
     const completionTokens = Number(tokenAgg._sum?.completionTokens ?? 0);
     const totalTokens = Number(tokenAgg._sum?.totalTokens ?? 0);
-    // gpt-4o-mini pricing (approx): $0.15 / 1M prompt, $0.60 / 1M completion
-    const estimatedCostUsd =
-      (promptTokens / 1_000_000) * 0.15 + (completionTokens / 1_000_000) * 0.6;
+    const estimatedCostUsd = Number(tokenAgg._sum?.estimatedCost ?? 0);
 
     // Top errors (last 7d)
     const recentErrors = await db.agentLog.findMany({

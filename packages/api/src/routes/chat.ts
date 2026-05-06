@@ -12,6 +12,7 @@ import { db, prisma } from "../db.js";
 import { extractSnippet } from "../extract-snippet.js";
 import { recipientFromToolArgs, recordFeedback } from "../feedback.js";
 import { loadMemoriesForPrompt } from "../memory.js";
+import { estimateModelCostUsd } from "../model-fallback.js";
 import { createCompletion, EVE_SYSTEM_PROMPT, MODEL, resolveUserChatModel } from "../openai.js";
 import { scheduleReminderDeliveryCheck } from "../reminder-scheduler.js";
 import { createReminder } from "../reminders.js";
@@ -1148,7 +1149,7 @@ export function chatRoutes(app: FastifyInstance) {
               promptTokens,
               completionTokens,
               totalTokens,
-              estimatedCost: (promptTokens * 0.00015 + completionTokens * 0.0006) / 1000,
+              estimatedCost: estimateModelCostUsd(userChatModel, promptTokens, completionTokens),
             },
           })
           .catch(() => {

@@ -21,7 +21,7 @@ import { getDefaultAgentModel, getDefaultChatModel, isModelAllowedForPlan } from
  */
 export const openai = (getProvider("openrouter")?.client ?? null) as unknown as OpenAI;
 
-export const MODEL = process.env.CHAT_MODEL || "openai/gpt-5.4-nano";
+export const MODEL = process.env.CHAT_MODEL || "google/gemma-4-31b-it:free";
 export const AGENT_MODEL = process.env.AGENT_MODEL || MODEL;
 
 /** User-facing error thrown when every configured provider has failed */

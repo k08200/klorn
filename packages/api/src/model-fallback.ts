@@ -149,5 +149,16 @@ export function isBudgetError(error: unknown): boolean {
 
 /** Returns true if the model is already a free tier model */
 export function isFreeModel(model: string): boolean {
-  return model.endsWith(":free");
+  return model.endsWith(":free") || model === "openrouter/free";
+}
+
+/** Conservative cost estimate for token ledger/admin UI. */
+export function estimateModelCostUsd(
+  model: string,
+  promptTokens: number,
+  completionTokens: number,
+): number {
+  if (isFreeModel(model)) return 0;
+  // Legacy rough estimate used by the app before model-specific pricing.
+  return (promptTokens * 0.00015 + completionTokens * 0.0006) / 1000;
 }

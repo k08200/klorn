@@ -155,32 +155,33 @@ export function planHasFeature(plan: string, feature: FeatureKey, role?: string)
  */
 export const PLAN_MODELS: Record<string, { chat: string[]; agent: string[] }> = {
   FREE: {
-    // Qwen 3.5 Flash: near-nano input cost ($0.065/M), cheaper output ($0.26/M),
-    // 1M context, built-in reasoning — meaningfully smarter than gpt-5.4-nano
-    // at comparable per-request cost for EVE's chat workload.
-    chat: ["qwen/qwen3.5-flash-02-23"],
-    agent: [], // No agent for free plan
+    // Free OpenRouter model with native function calling; keeps beta costs at $0.
+    chat: ["google/gemma-4-31b-it:free"],
+    agent: ["google/gemma-4-31b-it:free"],
   },
   PRO: {
     chat: [
+      "google/gemma-4-31b-it:free",
       "qwen/qwen3.5-flash-02-23",
       "openai/gpt-5.4-mini",
       "openai/gpt-5.4",
       "anthropic/claude-sonnet-4.6",
     ],
-    agent: ["qwen/qwen3.5-flash-02-23", "openai/gpt-5.4-mini"],
+    agent: ["google/gemma-4-31b-it:free", "qwen/qwen3.5-flash-02-23", "openai/gpt-5.4-mini"],
   },
   TEAM: {
     chat: [
+      "google/gemma-4-31b-it:free",
       "qwen/qwen3.5-flash-02-23",
       "openai/gpt-5.4-mini",
       "openai/gpt-5.4",
       "anthropic/claude-sonnet-4.6",
     ],
-    agent: ["qwen/qwen3.5-flash-02-23", "openai/gpt-5.4-mini"],
+    agent: ["google/gemma-4-31b-it:free", "qwen/qwen3.5-flash-02-23", "openai/gpt-5.4-mini"],
   },
   ENTERPRISE: {
     chat: [
+      "google/gemma-4-31b-it:free",
       "qwen/qwen3.5-flash-02-23",
       "openai/gpt-5.4-mini",
       "openai/gpt-5.4",
@@ -188,6 +189,7 @@ export const PLAN_MODELS: Record<string, { chat: string[]; agent: string[] }> = 
       "anthropic/claude-opus-4.6",
     ],
     agent: [
+      "google/gemma-4-31b-it:free",
       "qwen/qwen3.5-flash-02-23",
       "openai/gpt-5.4-mini",
       "openai/gpt-5.4",
@@ -199,7 +201,7 @@ export const PLAN_MODELS: Record<string, { chat: string[]; agent: string[] }> = 
 /** Get the default chat model for a plan */
 export function getDefaultChatModel(plan: string): string {
   const models = PLAN_MODELS[plan]?.chat;
-  return models?.[0] || "openai/gpt-5.4-nano";
+  return models?.[0] || "google/gemma-4-31b-it:free";
 }
 
 /** Get the default agent model for a plan */

@@ -16,7 +16,7 @@ model User {
   name                String?
   role                UserRole             @default(USER)
   plan                Plan                 @default(FREE)
-  chatModel           String               @default("openai/gpt-5.4-nano")
+  chatModel           String               @default("google/gemma-4-31b-it:free")
   agentModel          String?
   stripeId            String?              @unique
   emailVerified       Boolean              @default(false)
@@ -468,7 +468,7 @@ model TokenUsage {
   user             User          @relation(fields: [userId], references: [id])
   conversationId   String?
   conversation     Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  model            String // e.g. "openai/gpt-5.4-nano"
+  model            String // e.g. "google/gemma-4-31b-it:free"
   promptTokens     Int
   completionTokens Int
   totalTokens      Int

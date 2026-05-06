@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { getEffectivePlan, PLANS, planHasFeature } from "../stripe.js";
+import {
+  getDefaultAgentModel,
+  getDefaultChatModel,
+  getEffectivePlan,
+  isModelAllowedForPlan,
+  PLANS,
+  planHasFeature,
+} from "../stripe.js";
 
 describe("plan device limits", () => {
   it("allows free users to stay signed in on phone and desktop at the same time", () => {
@@ -22,5 +29,18 @@ describe("plan device limits", () => {
     expect(planHasFeature("FREE", "pattern_learning")).toBe(true);
     expect(planHasFeature("FREE", "email_auto_reply")).toBe(false);
     expect(planHasFeature("FREE", "agent_mode_auto")).toBe(false);
+  });
+
+  it("defaults chat and agent workloads to the free OpenRouter model", () => {
+    expect(getDefaultChatModel("FREE")).toBe("google/gemma-4-31b-it:free");
+    expect(getDefaultAgentModel("FREE")).toBe("google/gemma-4-31b-it:free");
+    expect(getDefaultChatModel("PRO")).toBe("google/gemma-4-31b-it:free");
+    expect(getDefaultAgentModel("PRO")).toBe("google/gemma-4-31b-it:free");
+  });
+
+  it("keeps premium models selectable without making them the default", () => {
+    expect(isModelAllowedForPlan("PRO", "openai/gpt-5.4-mini", "chat")).toBe(true);
+    expect(isModelAllowedForPlan("PRO", "openai/gpt-5.4-mini", "agent")).toBe(true);
+    expect(isModelAllowedForPlan("FREE", "openai/gpt-5.4-mini", "chat")).toBe(false);
   });
 });

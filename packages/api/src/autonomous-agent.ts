@@ -46,6 +46,7 @@ import { db, prisma } from "./db.js";
 import { recipientFromToolArgs, recordFeedback } from "./feedback.js";
 import { isNoReplyAddress, markAsRead } from "./gmail.js";
 import { loadMemoriesForPrompt } from "./memory.js";
+import { estimateModelCostUsd } from "./model-fallback.js";
 import { humanizeAutoExec } from "./notification-format.js";
 import type { NotifCategory } from "./notification-prefs.js";
 import { AGENT_MODEL, createCompletion, openai, resolveUserAgentModel } from "./openai.js";
@@ -311,8 +312,7 @@ async function trackTokenUsage(
   const prompt = usage.prompt_tokens || 0;
   const completion = usage.completion_tokens || 0;
   const total = usage.total_tokens || prompt + completion;
-  // Rough cost estimate for nano model: ~$0.10/M input, ~$0.40/M output
-  const estimatedCost = prompt * 0.0000001 + completion * 0.0000004;
+  const estimatedCost = estimateModelCostUsd(modelName, prompt, completion);
   try {
     await db.tokenUsage.create({
       data: {

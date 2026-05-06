@@ -31,7 +31,7 @@ const PLANS = [
     price: "$0",
     period: "",
     limit: "50 msgs · 500K tokens/mo",
-    features: ["Email & Calendar read-only", "Task & note management", "GPT-5.4 Nano model"],
+    features: ["Email & Calendar read-only", "Task & note management", "Free OpenRouter model"],
   },
   {
     key: "PRO",
@@ -47,7 +47,7 @@ const PLANS = [
       "Email auto-reply & Pattern learning",
       "Slack & Notion integrations",
       "Web search & Document writer",
-      "GPT-5.4 + Claude Sonnet models",
+      "Optional GPT-5.4 + Claude Sonnet models",
     ],
   },
   {
@@ -58,7 +58,7 @@ const PLANS = [
     limit: "Unlimited",
     features: [
       "Everything in Pro",
-      "Claude Opus model access",
+      "Optional Claude Opus model access",
       "On-premise option",
       "SLA guarantee",
       "Custom integrations",
