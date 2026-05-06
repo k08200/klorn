@@ -6,7 +6,7 @@ import { API_BASE } from "@/lib/api";
 
 type Status = "idle" | "submitting" | "success" | "already" | "error";
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{1,63}$/;
 
 export default function EarlyAccessPage() {
   const [email, setEmail] = useState("");

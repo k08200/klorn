@@ -13,7 +13,9 @@ const waitlistBodySchema = {
   },
 } as const;
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Bounded quantifiers (≤64 local, ≤253 domain, ≤63 TLD) to avoid polynomial-time
+// regex backtracking on long crafted inputs. CodeQL js/polynomial-redos.
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{1,63}$/;
 
 function normalizeEmail(value: string): string {
   return value.trim().toLowerCase();
