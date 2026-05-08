@@ -23,9 +23,15 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
+      - key: WEB_URL
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: PUSH_RECEIPT_BASE_URL
+        sync: false
       - key: PORT
         value: "3001"
       - key: CORS_ORIGINS
-        value: "https://hire-eve-web.vercel.app"
+        value: "https://hireeve.com,https://www.hireeve.com,https://hire-eve-web.vercel.app"
       - key: RENDER_EXTERNAL_URL
         value: "https://hireeve.onrender.com"
