@@ -4,7 +4,7 @@
  *
  * Two distinct failure modes:
  *   - 402 insufficient_credits: swap to a :free OpenRouter model
- *   - 403 "Key limit exceeded (weekly limit)": swap providers entirely
+ *   - 403/429 provider quota or rate limit: swap providers entirely
  *     (the limit is per-KEY, so another :free model on the same key fails too)
  */
 
@@ -20,7 +20,7 @@ const CREDIT_RETRY_AFTER_MS = 5 * 60 * 1000; // 5 minutes
 interface ProviderState {
   /** Credit exhaustion (402). Retry after short cooldown. */
   creditExhaustedAt: number | null;
-  /** Weekly key-limit (403). Retry only after UTC-Monday weekly reset. */
+  /** Provider quota/rate limit. Retry only after UTC-Monday weekly reset. */
   keyLimitedUntil: number | null;
 }
 
@@ -81,7 +81,7 @@ export function markCreditExhausted(provider: ProviderName): void {
   state[provider].creditExhaustedAt = Date.now();
 }
 
-/** Mark a provider as weekly-key-limited (403) — hold until weekly reset */
+/** Mark a provider as quota/rate-limited — hold until weekly reset */
 export function markKeyLimited(provider: ProviderName): void {
   const until = nextWeeklyResetMs();
   state[provider].keyLimitedUntil = until;
@@ -120,8 +120,9 @@ export function isCreditError(error: unknown): boolean {
 }
 
 /**
- * 403 weekly key limit — per-KEY, not per-model. Switch providers entirely.
- * Only matches when the 403 is clearly a rate/quota issue, not generic auth.
+ * Provider quota/rate limit — per-KEY, not per-model. Switch providers entirely.
+ * Only matches generic statuses when the message is clearly a rate/quota issue,
+ * not auth or malformed-request errors.
  */
 export function isKeyLimitError(error: unknown): boolean {
   const status =
@@ -131,6 +132,7 @@ export function isKeyLimitError(error: unknown): boolean {
 
   const message = error instanceof Error ? error.message.toLowerCase() : "";
 
+  if (status === 429) return true;
   if (status === 403 && (message.includes("key limit") || message.includes("limit exceeded"))) {
     return true;
   }
@@ -138,7 +140,10 @@ export function isKeyLimitError(error: unknown): boolean {
   return (
     message.includes("key limit exceeded") ||
     message.includes("weekly limit") ||
-    message.includes("daily limit exceeded")
+    message.includes("daily limit exceeded") ||
+    message.includes("rate limit") ||
+    message.includes("too many requests") ||
+    message.includes("provider returned error")
   );
 }
 
