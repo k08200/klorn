@@ -124,6 +124,28 @@ function hasMeaningfulText(value: string | undefined): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+// Beta auto-PRO: when the gate is OFF and BETA_AUTO_PRO_ENABLED=true, the
+// first BETA_AUTO_PRO_LIMIT signups silently get PRO. Past the cap returns
+// null and the caller falls back to default plan. Used by both the
+// email/password register endpoint and the Google OAuth signup callback so
+// the two paths stay consistent.
+async function evaluateBetaAutoPro(): Promise<{
+  plan: "PRO";
+  betaProGrantedAt: Date;
+} | null> {
+  const betaGateEnabled = process.env.BETA_GATE_ENABLED === "true";
+  const betaAutoProEnabled = !betaGateEnabled && process.env.BETA_AUTO_PRO_ENABLED === "true";
+  const betaAutoProLimit = Number.parseInt(process.env.BETA_AUTO_PRO_LIMIT || "50", 10);
+  if (!betaAutoProEnabled || !Number.isFinite(betaAutoProLimit) || betaAutoProLimit <= 0) {
+    return null;
+  }
+  const grantedCount = await prisma.user.count({
+    where: { betaProGrantedAt: { not: null } },
+  });
+  if (grantedCount >= betaAutoProLimit) return null;
+  return { plan: "PRO", betaProGrantedAt: new Date() };
+}
+
 export function authRoutes(app: FastifyInstance) {
   // POST /api/auth/register — Create account
   app.post("/register", { schema: { body: registerBodySchema } }, async (request, reply) => {
@@ -167,19 +189,7 @@ export function authRoutes(app: FastifyInstance) {
       return reply.code(409).send({ error: "Email already registered" });
     }
 
-    // Beta auto-PRO: when the gate is OFF and BETA_AUTO_PRO_ENABLED=true, the
-    // first BETA_AUTO_PRO_LIMIT signups silently get PRO (so a private URL can
-    // be shared without per-user admin work). Past the cap the column stays
-    // null and the user falls back to FREE — no error surface.
-    const betaAutoProEnabled = !betaGateEnabled && process.env.BETA_AUTO_PRO_ENABLED === "true";
-    const betaAutoProLimit = Number.parseInt(process.env.BETA_AUTO_PRO_LIMIT || "50", 10);
-    let grantBetaAutoPro = false;
-    if (betaAutoProEnabled && Number.isFinite(betaAutoProLimit) && betaAutoProLimit > 0) {
-      const grantedCount = await prisma.user.count({
-        where: { betaProGrantedAt: { not: null } },
-      });
-      grantBetaAutoPro = grantedCount < betaAutoProLimit;
-    }
+    const betaAutoProGrant = await evaluateBetaAutoPro();
 
     const verifyToken = crypto.randomBytes(32).toString("hex");
     const verifyTokenExp = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
@@ -190,7 +200,7 @@ export function authRoutes(app: FastifyInstance) {
         passwordHash: await hashPassword(password),
         name: normalizedName || normalizedEmail.split("@")[0],
         ...(betaGateEnabled && { plan: "PRO" }),
-        ...(grantBetaAutoPro && { plan: "PRO", betaProGrantedAt: new Date() }),
+        ...(betaAutoProGrant ?? {}),
         verifyToken,
         verifyTokenExp,
       },
@@ -490,6 +500,7 @@ export function authRoutes(app: FastifyInstance) {
           { label: "oauth.find_user_by_email" },
         );
         if (!user) {
+          const betaAutoProGrant = await evaluateBetaAutoPro();
           user = await withDbRetry(
             () =>
               prisma.user.create({
@@ -498,6 +509,7 @@ export function authRoutes(app: FastifyInstance) {
                   name: profile.name || profile.email.split("@")[0],
                   passwordHash: null, // Google-only user, no password
                   emailVerified: true, // Google accounts are pre-verified
+                  ...(betaAutoProGrant ?? {}),
                 },
               }),
             { label: "oauth.create_user" },
