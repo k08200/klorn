@@ -50,10 +50,7 @@ import { estimateModelCostUsd } from "./model-fallback.js";
 import { humanizeAutoExec } from "./notification-format.js";
 import type { NotifCategory } from "./notification-prefs.js";
 import { AGENT_MODEL, createCompletion, openai, resolveUserAgentModel } from "./openai.js";
-import {
-  formatFeedbackPolicyCandidatesForPrompt,
-  getFeedbackPolicyCandidates,
-} from "./policy-extraction.js";
+import { getFeedbackPolicyContextForPrompt } from "./policy-extraction.js";
 import { sendPushNotification } from "./push.js";
 import { captureError } from "./sentry.js";
 import { planHasFeature } from "./stripe.js";
@@ -979,9 +976,7 @@ export async function runAgentForUser(
         loadMemoriesForPrompt(userId).catch(() => ""),
         getProposalHistory(userId).catch(() => ""),
         analyzePatterns(userId).catch(() => ""),
-        getFeedbackPolicyCandidates(userId, { limit: 500 })
-          .then(({ candidates }) => formatFeedbackPolicyCandidatesForPrompt(candidates))
-          .catch(() => ""),
+        getFeedbackPolicyContextForPrompt(userId).catch(() => ""),
       ]);
 
     // Skip if context is minimal (no tasks, no calendar, no emails)

@@ -11,6 +11,7 @@ import { compactHistory, forceCompact, isTokenLimitError } from "../context-comp
 import { db, prisma } from "../db.js";
 import { extractSnippet } from "../extract-snippet.js";
 import { recipientFromToolArgs, recordFeedback } from "../feedback.js";
+import { getUserLlmCredentials } from "../llm-credentials.js";
 import { loadMemoriesForPrompt } from "../memory.js";
 import { estimateModelCostUsd } from "../model-fallback.js";
 import { createCompletion, EVE_SYSTEM_PROMPT, MODEL, resolveUserChatModel } from "../openai.js";
@@ -470,6 +471,7 @@ export function chatRoutes(app: FastifyInstance) {
         (retryUser as unknown as { chatModel?: string })?.chatModel || null,
         retryPlan,
       );
+      const retryCredentials = await getUserLlmCredentials(conversation.userId);
 
       // Build dynamic context for retry
       const retryContextParts: string[] = [];
@@ -547,11 +549,14 @@ export function chatRoutes(app: FastifyInstance) {
           let maxIterations = 5;
 
           while (maxIterations-- > 0) {
-            const response = await createCompletion({
-              model: retryChatModel,
-              messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-              tools,
-            });
+            const response = await createCompletion(
+              {
+                model: retryChatModel,
+                messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+                tools,
+              },
+              { credentials: retryCredentials },
+            );
 
             const choice = response.choices[0];
             const toolCalls = choice.message.tool_calls;
@@ -594,11 +599,14 @@ export function chatRoutes(app: FastifyInstance) {
             }
           }
         } else {
-          const stream = await createCompletion({
-            model: retryChatModel,
-            messages: history as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-            stream: true,
-          });
+          const stream = await createCompletion(
+            {
+              model: retryChatModel,
+              messages: history as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+              stream: true,
+            },
+            { credentials: retryCredentials },
+          );
           for await (const chunk of stream) {
             const delta = chunk.choices[0]?.delta?.content;
             if (delta) {
@@ -761,6 +769,7 @@ export function chatRoutes(app: FastifyInstance) {
         (user as unknown as { chatModel?: string })?.chatModel || null,
         user?.plan || "FREE",
       );
+      const userCredentials = await getUserLlmCredentials(conversation.userId);
 
       // Save user message
       const savedUserMessage = await prisma.message.create({
@@ -823,17 +832,20 @@ export function chatRoutes(app: FastifyInstance) {
         });
 
         // Generate a smarter title in the background (non-blocking)
-        createCompletion({
-          model: userChatModel,
-          messages: [
-            {
-              role: "system",
-              content:
-                "Generate a short conversation title (max 40 chars) for this message. Reply with ONLY the title, no quotes or explanation. Use the same language as the user.",
-            },
-            { role: "user", content: trimmedContent },
-          ],
-        })
+        createCompletion(
+          {
+            model: userChatModel,
+            messages: [
+              {
+                role: "system",
+                content:
+                  "Generate a short conversation title (max 40 chars) for this message. Reply with ONLY the title, no quotes or explanation. Use the same language as the user.",
+              },
+              { role: "user", content: trimmedContent },
+            ],
+          },
+          { credentials: userCredentials },
+        )
           .then((res) => {
             const smartTitle = res.choices[0]?.message?.content?.trim();
             if (smartTitle && smartTitle.length <= 60) {
@@ -983,11 +995,14 @@ export function chatRoutes(app: FastifyInstance) {
             try {
               response = await withRetry(
                 () =>
-                  createCompletion({
-                    model: userChatModel,
-                    messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-                    tools,
-                  }),
+                  createCompletion(
+                    {
+                      model: userChatModel,
+                      messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+                      tools,
+                    },
+                    { credentials: userCredentials },
+                  ),
                 {
                   maxRetries: 2,
                   onRetry: (attempt, _err, delay) =>
@@ -1083,11 +1098,14 @@ export function chatRoutes(app: FastifyInstance) {
           const openStream = () =>
             withRetry(
               () =>
-                createCompletion({
-                  model: userChatModel,
-                  messages: history as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-                  stream: true,
-                }),
+                createCompletion(
+                  {
+                    model: userChatModel,
+                    messages: history as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+                    stream: true,
+                  },
+                  { credentials: userCredentials },
+                ),
               {
                 maxRetries: 2,
                 onRetry: (attempt, _err, delay) =>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
-import { apiFetch } from "../../lib/api";
+import { API_BASE, apiFetch } from "../../lib/api";
 import { captureClientError } from "../../lib/sentry";
 
 interface CalendarEvent {
@@ -44,6 +44,7 @@ function CalendarView() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
@@ -61,6 +62,12 @@ function CalendarView() {
 
   useEffect(() => {
     loadEvents();
+    apiFetch<{ connected: boolean }>("/api/auth/google/status")
+      .then((data) => setGoogleConnected(data.connected))
+      .catch((err) => {
+        captureClientError(err, { scope: "calendar.google-status" });
+        setGoogleConnected(false);
+      });
   }, [loadEvents]);
 
   const syncNow = async () => {
@@ -73,10 +80,14 @@ function CalendarView() {
         { method: "POST", body: JSON.stringify({}) },
       );
       if (result.error) {
+        if (result.error.toLowerCase().includes("google not connected")) {
+          setGoogleConnected(false);
+        }
         setError(result.error);
         return;
       }
       const synced = result.synced ?? 0;
+      setGoogleConnected(true);
       setSyncMessage(
         synced > 0
           ? `Google Calendar에서 ${synced}개 일정을 가져왔어요.`
@@ -148,18 +159,33 @@ function CalendarView() {
 
       {!loading && !error && events.length === 0 && (
         <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-center">
-          <p className="mb-1 text-sm text-stone-300">앞으로 14일 동안 일정이 없어요.</p>
-          <p className="mb-4 text-xs text-stone-500">
-            Google 연결은 정상입니다. 필요하면 다시 동기화해서 최신 상태만 확인하세요.
+          <p className="mb-1 text-sm text-stone-300">
+            {googleConnected === false
+              ? "Google Calendar가 아직 연결되지 않았어요."
+              : "앞으로 14일 동안 일정이 없어요."}
           </p>
-          <button
-            type="button"
-            onClick={syncNow}
-            disabled={syncing}
-            className="rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
-          >
-            {syncing ? "동기화 중..." : "다시 동기화"}
-          </button>
+          <p className="mb-4 text-xs text-stone-500">
+            {googleConnected === false
+              ? "연결 후 동기화하면 EVE가 실제 캘린더 상태를 기준으로 브리핑합니다."
+              : "Google 연결은 정상입니다. 캘린더가 비어 있으면 빈 상태 그대로 브리핑에 반영됩니다."}
+          </p>
+          {googleConnected === false ? (
+            <a
+              href={`${API_BASE}/api/auth/google?token=${typeof window !== "undefined" ? localStorage.getItem("eve-token") || "" : ""}`}
+              className="inline-flex rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200"
+            >
+              Google 연결
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={syncNow}
+              disabled={syncing}
+              className="rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
+            >
+              {syncing ? "동기화 중..." : "다시 동기화"}
+            </button>
+          )}
         </div>
       )}
 

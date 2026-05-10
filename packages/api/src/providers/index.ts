@@ -15,6 +15,7 @@
  * rejected by the OpenAI-compat endpoint's Bearer auth path.
  */
 
+import crypto from "node:crypto";
 import type OpenAI from "openai";
 import OpenAISDK from "openai";
 import type {
@@ -35,6 +36,8 @@ type ChatResult =
 
 export interface Provider {
   name: ProviderName;
+  /** Stable non-secret key for per-API-key fallback cooldown state */
+  quotaKey: string;
   /** Model used when caller's model can't be routed into this provider */
   defaultModel: string;
   /** Translate a caller-supplied model ID to this provider's namespace */
@@ -47,12 +50,21 @@ export interface Provider {
   supportsTools: boolean;
 }
 
-function buildOpenRouter(): Provider | null {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+export interface ProviderCredentials {
+  openRouterApiKey?: string | null;
+  geminiApiKey?: string | null;
+}
+
+function keyHash(apiKey: string): string {
+  return crypto.createHash("sha256").update(apiKey).digest("hex").slice(0, 12);
+}
+
+function buildOpenRouter(apiKey = process.env.OPENROUTER_API_KEY, scope = "env"): Provider | null {
   if (!apiKey) return null;
   const client = new OpenAISDK({ apiKey, baseURL: "https://openrouter.ai/api/v1" });
   return {
     name: "openrouter",
+    quotaKey: `openrouter:${scope}:${keyHash(apiKey)}`,
     client,
     defaultModel: process.env.FALLBACK_MODEL || "google/gemma-4-31b-it:free",
     supportsTools: true,
@@ -66,12 +78,12 @@ function buildOpenRouter(): Provider | null {
   };
 }
 
-function buildGemini(): Provider | null {
-  const apiKey = process.env.GEMINI_API_KEY;
+function buildGemini(apiKey = process.env.GEMINI_API_KEY, scope = "env"): Provider | null {
   if (!apiKey) return null;
   const defaultModel = process.env.GEMINI_FALLBACK_MODEL || "gemini-2.5-flash";
   return {
     name: "gemini",
+    quotaKey: `gemini:${scope}:${keyHash(apiKey)}`,
     client: null, // uses native adapter, not OpenAI SDK
     defaultModel,
     // Gemini's OpenAI-compat tools support is unreliable; caller should strip
@@ -117,8 +129,18 @@ export function getProvider(name: ProviderName): Provider | null {
 }
 
 /** Ordered list of providers to try, skipping any that aren't configured */
-export function getProviderChain(): Provider[] {
-  return (["openrouter", "gemini"] as const)
-    .map((n) => providers[n])
-    .filter((p): p is Provider => p !== null);
+export function getProviderChain(credentials: ProviderCredentials = {}): Provider[] {
+  const chain = [
+    buildOpenRouter(credentials.openRouterApiKey ?? undefined, "user"),
+    buildGemini(credentials.geminiApiKey ?? undefined, "user"),
+    providers.openrouter,
+    providers.gemini,
+  ].filter((p): p is Provider => p !== null);
+
+  const seen = new Set<string>();
+  return chain.filter((provider) => {
+    if (seen.has(provider.quotaKey)) return false;
+    seen.add(provider.quotaKey);
+    return true;
+  });
 }

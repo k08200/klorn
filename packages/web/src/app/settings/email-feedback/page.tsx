@@ -1,6 +1,7 @@
 "use client";
 
 import { EmailFeedbackList } from "../../../components/email-feedback-list";
+import FeedbackPolicyStudio from "../../../components/feedback-policy-studio";
 
 export default function EmailFeedbackPage() {
   return (
@@ -15,6 +16,7 @@ export default function EmailFeedbackPage() {
         </p>
       </header>
 
+      <FeedbackPolicyStudio />
       <EmailFeedbackList />
     </div>
   );

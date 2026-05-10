@@ -66,6 +66,27 @@ function autonomyLevelForPendingAction(pa: PendingActionLike): AutopilotLevel {
   return AUTOPILOT_LEVEL.SUGGEST;
 }
 
+function evidence(
+  source: string,
+  sourceId: string,
+  facts: Array<{ label: string; value: string }>,
+) {
+  return { source, sourceId, facts };
+}
+
+function pendingActionCost(pa: PendingActionLike): string {
+  if (pa.toolName === "send_email") {
+    return "답장이 늦어지면 관계나 일정 리스크가 커질 수 있어요.";
+  }
+  if (pa.toolName === "create_event") {
+    return "일정이 고정되지 않으면 준비 시간과 후속 작업이 밀릴 수 있어요.";
+  }
+  if (pa.toolName.startsWith("delete_")) {
+    return "삭제 결정이 맞는지 확인하지 않으면 되돌리기 어려운 손실이 생길 수 있어요.";
+  }
+  return "결정이 대기 상태로 남으면 관련 업무 흐름도 멈춰요.";
+}
+
 /**
  * Upsert the AttentionItem mirroring this PendingAction. Safe to call after
  * either a create or an update — uses the (source, sourceId) unique key.
@@ -90,12 +111,25 @@ export async function upsertAttentionForPendingAction(pa: PendingActionLike): Pr
         title: titleFor(pa),
         body: pa.reasoning,
         suggestedAction: pa.toolName.replace(/_/g, " "),
+        costOfIgnoring: pendingActionCost(pa),
+        evidence: evidence("PENDING_ACTION", pa.id, [
+          { label: "Prepared action", value: pa.toolName.replace(/_/g, " ") },
+          { label: "Risk level", value: getToolRisk(pa.toolName) ?? "READ_ONLY" },
+        ]),
         resolvedAt: isResolved ? new Date() : null,
       },
       update: {
         status,
         priority: PENDING_ACTION_PRIORITY,
         autonomyLevel,
+        title: titleFor(pa),
+        body: pa.reasoning,
+        suggestedAction: pa.toolName.replace(/_/g, " "),
+        costOfIgnoring: pendingActionCost(pa),
+        evidence: evidence("PENDING_ACTION", pa.id, [
+          { label: "Prepared action", value: pa.toolName.replace(/_/g, " ") },
+          { label: "Risk level", value: getToolRisk(pa.toolName) ?? "READ_ONLY" },
+        ]),
         resolvedAt: isResolved ? new Date() : null,
       },
     });
@@ -182,6 +216,14 @@ function priorityForTask(task: TaskLike, isOverdue: boolean): number {
   return p;
 }
 
+function taskCost(task: TaskLike, isOverdue: boolean): string {
+  if (isOverdue) return "마감이 지나 관련 후속 작업이나 약속이 밀릴 수 있어요.";
+  if (task.priority === "URGENT" || task.priority === "HIGH") {
+    return "오늘 처리하지 않으면 높은 우선순위 작업이 내일로 넘어가요.";
+  }
+  return "오늘 마감이라 놓치면 작업 큐가 밀릴 수 있어요.";
+}
+
 /**
  * Surface a task into the queue if its due window is open. No-op for tasks
  * that are not yet due today, so this is safe to call on every task change.
@@ -220,6 +262,12 @@ export async function upsertAttentionForTask(task: TaskLike, now = Date.now()): 
         priority: priorityForTask(task, isOverdue),
         autonomyLevel: AUTOPILOT_LEVEL.OBSERVE,
         title: task.title,
+        suggestedAction: task.status === "DONE" ? null : "review task",
+        costOfIgnoring: taskCost(task, isOverdue),
+        evidence: evidence("TASK", task.id, [
+          { label: "Priority", value: task.priority },
+          { label: "Due date", value: task.dueDate.toISOString() },
+        ]),
         resolvedAt: isResolved ? new Date() : null,
       },
       update: {
@@ -227,6 +275,12 @@ export async function upsertAttentionForTask(task: TaskLike, now = Date.now()): 
         priority: priorityForTask(task, isOverdue),
         autonomyLevel: AUTOPILOT_LEVEL.OBSERVE,
         title: task.title,
+        suggestedAction: task.status === "DONE" ? null : "review task",
+        costOfIgnoring: taskCost(task, isOverdue),
+        evidence: evidence("TASK", task.id, [
+          { label: "Priority", value: task.priority },
+          { label: "Due date", value: task.dueDate.toISOString() },
+        ]),
         resolvedAt: isResolved ? new Date() : null,
       },
     });
@@ -328,6 +382,12 @@ export async function upsertAttentionForCalendarEvent(
         priority,
         autonomyLevel: AUTOPILOT_LEVEL.OBSERVE,
         title: event.title,
+        suggestedAction: "prepare meeting",
+        costOfIgnoring: "회의 전에 맥락을 놓치면 답변, 자료, 약속 확인이 늦어질 수 있어요.",
+        evidence: evidence("CALENDAR_EVENT", event.id, [
+          { label: "Start time", value: event.startTime.toISOString() },
+          { label: "Queue type", value: type },
+        ]),
         resolvedAt: isResolved ? new Date() : null,
       },
       update: {
@@ -335,6 +395,12 @@ export async function upsertAttentionForCalendarEvent(
         priority,
         autonomyLevel: AUTOPILOT_LEVEL.OBSERVE,
         title: event.title,
+        suggestedAction: "prepare meeting",
+        costOfIgnoring: "회의 전에 맥락을 놓치면 답변, 자료, 약속 확인이 늦어질 수 있어요.",
+        evidence: evidence("CALENDAR_EVENT", event.id, [
+          { label: "Start time", value: event.startTime.toISOString() },
+          { label: "Queue type", value: type },
+        ]),
         resolvedAt: isResolved ? new Date() : null,
       },
     });
@@ -392,6 +458,12 @@ export async function upsertAttentionForNotification(notif: NotificationLike): P
         autonomyLevel: AUTOPILOT_LEVEL.SUGGEST,
         title: notif.title,
         body: notif.message,
+        suggestedAction: "review proposal",
+        costOfIgnoring: "확인하지 않으면 EVE가 준비한 후속 조치가 대기 상태로 남아요.",
+        evidence: evidence("NOTIFICATION", notif.id, [
+          { label: "Notification type", value: notif.type },
+          { label: "Unread", value: String(!notif.isRead) },
+        ]),
         resolvedAt: isResolved ? new Date() : null,
       },
       update: {
@@ -399,6 +471,12 @@ export async function upsertAttentionForNotification(notif: NotificationLike): P
         autonomyLevel: AUTOPILOT_LEVEL.SUGGEST,
         title: notif.title,
         body: notif.message,
+        suggestedAction: "review proposal",
+        costOfIgnoring: "확인하지 않으면 EVE가 준비한 후속 조치가 대기 상태로 남아요.",
+        evidence: evidence("NOTIFICATION", notif.id, [
+          { label: "Notification type", value: notif.type },
+          { label: "Unread", value: String(!notif.isRead) },
+        ]),
         resolvedAt: isResolved ? new Date() : null,
       },
     });
@@ -434,6 +512,8 @@ export interface CommitmentLike {
   description: string | null;
   status: string;
   dueAt: Date | null;
+  dueText?: string | null;
+  owner?: string | null;
   confidence: number;
 }
 
@@ -461,6 +541,20 @@ function priorityForCommitment(
   return 55;
 }
 
+function commitmentCost(
+  type: "COMMITMENT_DUE" | "COMMITMENT_OVERDUE" | "COMMITMENT_UNCONFIRMED",
+  c: CommitmentLike,
+): string {
+  if (type === "COMMITMENT_OVERDUE")
+    return "약속 기한이 지나 신뢰나 후속 일정에 영향을 줄 수 있어요.";
+  if (type === "COMMITMENT_UNCONFIRMED") {
+    return "기한이 불명확해서 지금 확인하지 않으면 나중에 놓칠 가능성이 커요.";
+  }
+  return c.owner === "COUNTERPARTY"
+    ? "상대가 하기로 한 일이 제때 오지 않으면 다음 결정이 막힐 수 있어요."
+    : "내가 하기로 한 일을 놓치면 상대방의 다음 작업이 지연될 수 있어요.";
+}
+
 export async function upsertAttentionForCommitment(
   c: CommitmentLike,
   now = Date.now(),
@@ -485,6 +579,14 @@ export async function upsertAttentionForCommitment(
         confidence: c.confidence,
         title: c.title,
         body: c.description,
+        suggestedAction:
+          type === "COMMITMENT_UNCONFIRMED" ? "confirm commitment" : "review commitment",
+        costOfIgnoring: commitmentCost(type, c),
+        evidence: evidence("COMMITMENT", c.id, [
+          { label: "Owner", value: c.owner ?? "UNKNOWN" },
+          { label: "Due", value: c.dueAt?.toISOString() ?? c.dueText ?? "unconfirmed" },
+          { label: "Confidence", value: String(c.confidence) },
+        ]),
         resolvedAt: isResolved ? new Date() : null,
       },
       update: {
@@ -495,6 +597,14 @@ export async function upsertAttentionForCommitment(
         confidence: c.confidence,
         title: c.title,
         body: c.description,
+        suggestedAction:
+          type === "COMMITMENT_UNCONFIRMED" ? "confirm commitment" : "review commitment",
+        costOfIgnoring: commitmentCost(type, c),
+        evidence: evidence("COMMITMENT", c.id, [
+          { label: "Owner", value: c.owner ?? "UNKNOWN" },
+          { label: "Due", value: c.dueAt?.toISOString() ?? c.dueText ?? "unconfirmed" },
+          { label: "Confidence", value: String(c.confidence) },
+        ]),
         resolvedAt: isResolved ? new Date() : null,
       },
     });

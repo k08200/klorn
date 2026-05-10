@@ -26,6 +26,20 @@ const ALLOWED_SIGNALS = new Set<FeedbackSignal>([
   "DISMISSED",
 ]);
 
+const preferenceBodySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["candidateId", "kind", "toolName", "action"],
+  properties: {
+    candidateId: { type: "string", minLength: 1, maxLength: 240 },
+    kind: { type: "string", minLength: 1, maxLength: 80 },
+    toolName: { type: "string", minLength: 1, maxLength: 120 },
+    recipient: { anyOf: [{ type: "string", maxLength: 240 }, { type: "null" }] },
+    action: { type: "string", enum: ["ACTIVE", "IGNORED"] },
+    note: { anyOf: [{ type: "string", maxLength: 500 }, { type: "null" }] },
+  },
+} as const;
+
 export function feedbackRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
 
@@ -93,12 +107,79 @@ export function feedbackRoutes(app: FastifyInstance) {
       minEvents?: string;
     };
 
-    return await getFeedbackPolicyCandidates(userId, {
+    const result = await getFeedbackPolicyCandidates(userId, {
       days: parseOptionalInteger(days),
       limit: parseOptionalInteger(limit),
       minEvents: parseOptionalInteger(minEvents),
     });
+    const prefs = await getPolicyPreferences(userId);
+    return {
+      ...result,
+      candidates: result.candidates.map((candidate) => {
+        const pref = prefs.get(candidate.id);
+        return {
+          ...candidate,
+          active: pref?.action === "ACTIVE",
+          ignored: pref?.action === "IGNORED",
+        };
+      }),
+    };
   });
+
+  app.post("/policy-preferences", { schema: { body: preferenceBodySchema } }, async (request) => {
+    const userId = getUserId(request);
+    const body = request.body as {
+      candidateId: string;
+      kind: string;
+      toolName: string;
+      recipient?: string | null;
+      action: "ACTIVE" | "IGNORED";
+      note?: string | null;
+    };
+
+    const model = (
+      prisma as unknown as {
+        feedbackPolicyPreference?: { upsert: (args: unknown) => Promise<unknown> };
+      }
+    ).feedbackPolicyPreference;
+    if (!model) throw new Error("FeedbackPolicyPreference model is not available");
+
+    const preference = await model.upsert({
+      where: { userId_candidateId: { userId, candidateId: body.candidateId } },
+      create: {
+        userId,
+        candidateId: body.candidateId,
+        kind: body.kind,
+        toolName: body.toolName,
+        recipient: body.recipient ?? null,
+        action: body.action,
+        note: body.note ?? null,
+      },
+      update: {
+        kind: body.kind,
+        toolName: body.toolName,
+        recipient: body.recipient ?? null,
+        action: body.action,
+        note: body.note ?? null,
+      },
+    });
+
+    return { preference };
+  });
+}
+
+async function getPolicyPreferences(userId: string): Promise<Map<string, { action: string }>> {
+  const model = (
+    prisma as unknown as {
+      feedbackPolicyPreference?: { findMany: (args: unknown) => Promise<unknown> };
+    }
+  ).feedbackPolicyPreference;
+  if (!model) return new Map();
+  const rows = (await model.findMany({
+    where: { userId },
+    select: { candidateId: true, action: true },
+  })) as Array<{ candidateId: string; action: string }>;
+  return new Map(rows.map((row) => [row.candidateId, { action: row.action }]));
 }
 
 function parseOptionalInteger(value: string | undefined): number | undefined {

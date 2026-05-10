@@ -45,6 +45,7 @@ export type AttentionItem =
       label: string;
       conversationId: string;
       reasoning: string | null;
+      decision: DecisionDetails;
     }
   | {
       kind: "overdue_task";
@@ -52,6 +53,7 @@ export type AttentionItem =
       title: string;
       dueDate: string;
       daysOverdue: number;
+      decision: DecisionDetails;
     }
   | {
       kind: "today_event";
@@ -60,6 +62,7 @@ export type AttentionItem =
       startTime: string;
       minutesAway: number;
       location: string | null;
+      decision: DecisionDetails;
     }
   | {
       kind: "agent_proposal";
@@ -67,6 +70,7 @@ export type AttentionItem =
       title: string;
       message: string;
       link: string | null;
+      decision: DecisionDetails;
     }
   | {
       kind: "commitment";
@@ -79,7 +83,21 @@ export type AttentionItem =
       dueText: string | null;
       confidence: number;
       attentionType: "COMMITMENT_DUE" | "COMMITMENT_OVERDUE" | "COMMITMENT_UNCONFIRMED";
+      decision: DecisionDetails;
     };
+
+export interface DecisionEvidenceFact {
+  label: string;
+  value: string;
+}
+
+export interface DecisionDetails {
+  priority: number;
+  confidence: number;
+  suggestedAction: string | null;
+  costOfIgnoring: string | null;
+  evidence: DecisionEvidenceFact[];
+}
 
 export interface TodaySection {
   events: EventInput[];
@@ -158,6 +176,11 @@ type AttentionRow = {
   source: "PENDING_ACTION" | "TASK" | "CALENDAR_EVENT" | "NOTIFICATION" | "COMMITMENT";
   sourceId: string;
   type: string;
+  priority: number;
+  confidence: number;
+  suggestedAction: string | null;
+  costOfIgnoring: string | null;
+  evidence: unknown;
 };
 
 type PendingActionRow = {
@@ -212,7 +235,35 @@ type CommitmentRow = {
   confidence: number;
 };
 
-async function buildPendingItem(pa: PendingActionRow): Promise<AttentionItem | null> {
+function decisionFromRow(row: AttentionRow): DecisionDetails {
+  return {
+    priority: row.priority,
+    confidence: row.confidence,
+    suggestedAction: row.suggestedAction,
+    costOfIgnoring: row.costOfIgnoring,
+    evidence: evidenceFacts(row.evidence),
+  };
+}
+
+function evidenceFacts(value: unknown): DecisionEvidenceFact[] {
+  if (!value || typeof value !== "object") return [];
+  const facts = (value as { facts?: unknown }).facts;
+  if (!Array.isArray(facts)) return [];
+  return facts
+    .map((fact) => {
+      if (!fact || typeof fact !== "object") return null;
+      const row = fact as { label?: unknown; value?: unknown };
+      if (typeof row.label !== "string" || typeof row.value !== "string") return null;
+      return { label: row.label, value: row.value };
+    })
+    .filter((fact): fact is DecisionEvidenceFact => fact !== null)
+    .slice(0, 4);
+}
+
+async function buildPendingItem(
+  row: AttentionRow,
+  pa: PendingActionRow,
+): Promise<AttentionItem | null> {
   if (pa.status !== "PENDING") return null;
   let targetLabel: string | null = null;
   try {
@@ -229,10 +280,11 @@ async function buildPendingItem(pa: PendingActionRow): Promise<AttentionItem | n
     label: targetLabel ? `${baseLabel}: ${targetLabel}` : baseLabel,
     conversationId: pa.conversationId,
     reasoning: pa.reasoning,
+    decision: decisionFromRow(row),
   };
 }
 
-function buildOverdueTaskItem(task: TaskRow, now: number): AttentionItem | null {
+function buildOverdueTaskItem(row: AttentionRow, task: TaskRow, now: number): AttentionItem | null {
   if (task.status === "DONE" || !task.dueDate) return null;
   const due = task.dueDate.getTime();
   if (!Number.isFinite(due)) return null;
@@ -244,10 +296,15 @@ function buildOverdueTaskItem(task: TaskRow, now: number): AttentionItem | null 
     title: task.title,
     dueDate: task.dueDate.toISOString(),
     daysOverdue,
+    decision: decisionFromRow(row),
   };
 }
 
-function buildTodayEventItem(event: CalendarEventRow, now: number): AttentionItem | null {
+function buildTodayEventItem(
+  row: AttentionRow,
+  event: CalendarEventRow,
+  now: number,
+): AttentionItem | null {
   const start = event.startTime.getTime();
   if (!Number.isFinite(start)) return null;
   if (start < now) return null; // already started — RESOLVED on next mirror pass
@@ -258,10 +315,11 @@ function buildTodayEventItem(event: CalendarEventRow, now: number): AttentionIte
     startTime: event.startTime.toISOString(),
     minutesAway: Math.round((start - now) / 60_000),
     location: event.location,
+    decision: decisionFromRow(row),
   };
 }
 
-function buildAgentProposalItem(notif: NotificationRow): AttentionItem | null {
+function buildAgentProposalItem(row: AttentionRow, notif: NotificationRow): AttentionItem | null {
   if (notif.isRead) return null;
   if (notif.pendingActionId) return null; // mirrored via the PA row instead
   if (notif.type !== "agent_proposal") return null;
@@ -271,6 +329,7 @@ function buildAgentProposalItem(notif: NotificationRow): AttentionItem | null {
     title: notif.title,
     message: notif.message,
     link: notif.link,
+    decision: decisionFromRow(row),
   };
 }
 
@@ -294,6 +353,7 @@ function buildCommitmentItem(row: AttentionRow, commitment: CommitmentRow): Atte
     dueText: commitment.dueText,
     confidence: commitment.confidence,
     attentionType: row.type,
+    decision: decisionFromRow(row),
   };
 }
 
@@ -311,19 +371,19 @@ async function buildItemFromAttention(
   switch (row.source) {
     case "PENDING_ACTION": {
       const pa = sources.paById.get(row.sourceId);
-      return pa ? await buildPendingItem(pa) : null;
+      return pa ? await buildPendingItem(row, pa) : null;
     }
     case "TASK": {
       const task = sources.taskById.get(row.sourceId);
-      return task ? buildOverdueTaskItem(task, now) : null;
+      return task ? buildOverdueTaskItem(row, task, now) : null;
     }
     case "CALENDAR_EVENT": {
       const event = sources.eventById.get(row.sourceId);
-      return event ? buildTodayEventItem(event, now) : null;
+      return event ? buildTodayEventItem(row, event, now) : null;
     }
     case "NOTIFICATION": {
       const notif = sources.notifById.get(row.sourceId);
-      return notif ? buildAgentProposalItem(notif) : null;
+      return notif ? buildAgentProposalItem(row, notif) : null;
     }
     case "COMMITMENT": {
       const commitment = sources.commitmentById.get(row.sourceId);
@@ -387,7 +447,17 @@ export async function buildInboxSummary(userId: string, now = Date.now()): Promi
     where: { userId, status: "OPEN" },
     orderBy: [{ priority: "desc" }, { surfacedAt: "desc" }],
     take: TOP_LIMIT * 4, // overfetch to absorb any rows whose source row no longer qualifies
-    select: { id: true, source: true, sourceId: true, type: true },
+    select: {
+      id: true,
+      source: true,
+      sourceId: true,
+      type: true,
+      priority: true,
+      confidence: true,
+      suggestedAction: true,
+      costOfIgnoring: true,
+      evidence: true,
+    },
   })) as AttentionRow[];
 
   // Bucket source ids and fetch the display data in a single round trip per source.

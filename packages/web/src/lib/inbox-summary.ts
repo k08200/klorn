@@ -12,6 +12,7 @@ export type AttentionItem =
       label: string;
       conversationId: string;
       reasoning: string | null;
+      decision: DecisionDetails;
     }
   | {
       kind: "overdue_task";
@@ -19,6 +20,7 @@ export type AttentionItem =
       title: string;
       dueDate: string;
       daysOverdue: number;
+      decision: DecisionDetails;
     }
   | {
       kind: "today_event";
@@ -27,6 +29,7 @@ export type AttentionItem =
       startTime: string;
       minutesAway: number;
       location: string | null;
+      decision: DecisionDetails;
     }
   | {
       kind: "agent_proposal";
@@ -34,6 +37,7 @@ export type AttentionItem =
       title: string;
       message: string;
       link: string | null;
+      decision: DecisionDetails;
     }
   | {
       kind: "commitment";
@@ -46,7 +50,21 @@ export type AttentionItem =
       dueText: string | null;
       confidence: number;
       attentionType: "COMMITMENT_DUE" | "COMMITMENT_OVERDUE" | "COMMITMENT_UNCONFIRMED";
+      decision: DecisionDetails;
     };
+
+export interface DecisionEvidenceFact {
+  label: string;
+  value: string;
+}
+
+export interface DecisionDetails {
+  priority: number;
+  confidence: number;
+  suggestedAction: string | null;
+  costOfIgnoring: string | null;
+  evidence: DecisionEvidenceFact[];
+}
 
 export interface TaskItem {
   id: string;

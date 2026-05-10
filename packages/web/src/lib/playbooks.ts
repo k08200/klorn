@@ -23,6 +23,7 @@ export interface EvePlaybook {
   cadence: string;
   targetSignals: string[];
   activationChecklist: PlaybookStep[];
+  active?: boolean;
 }
 
 export interface PlaybookContextHit {
