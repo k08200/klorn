@@ -50,7 +50,7 @@ attachPerfMonitor(app);
 
 const ALLOWED_ORIGINS = (
   process.env.CORS_ORIGINS ||
-  "http://localhost:8001,http://localhost:3000,tauri://localhost,https://tauri.localhost,http://tauri.localhost"
+  "http://localhost:8001,http://127.0.0.1:8001,http://127.0.2.2:8001,http://127.0.2.3:8001,http://localhost:3000,http://127.0.0.1:3000,tauri://localhost,https://tauri.localhost,http://tauri.localhost"
 )
   .split(",")
   .map((o) => o.trim());

@@ -20,6 +20,7 @@ import {
   getLoginAuthUrl,
   getOAuth2Client,
 } from "../gmail.js";
+import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
 
 const authHeaderSchema = {
   type: "object",
@@ -124,6 +125,39 @@ function hasMeaningfulText(value: string | undefined): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function isLoginBriefingDue(
+  briefingTime: string | null | undefined,
+  timeZone: string | null | undefined,
+): boolean {
+  const match = /^(\d{2}):(\d{2})$/.exec(briefingTime || "");
+  if (!match) return false;
+  const targetMinutes = Number(match[1]) * 60 + Number(match[2]);
+  return localMinuteOfDay(new Date(), normalizeTimeZone(timeZone)) >= targetMinutes;
+}
+
+function triggerDueLoginBriefing(userId: string, delayMs = 0): void {
+  const run = async () => {
+    const config = await prisma.automationConfig.upsert({
+      where: { userId },
+      create: { userId },
+      update: {},
+    });
+    const configAny = config as unknown as { timezone?: string | null };
+    if (!config.dailyBriefing || !isLoginBriefingDue(config.briefingTime, configAny.timezone)) {
+      return;
+    }
+    const { createDailyBriefingDelivery } = await import("../briefing.js");
+    await createDailyBriefingDelivery(userId);
+  };
+
+  const timer = setTimeout(() => {
+    run().catch((err) => {
+      console.warn(`[AUTH] Login briefing catch-up failed for ${userId}:`, err);
+    });
+  }, delayMs);
+  timer.unref?.();
+}
+
 // Beta auto-PRO: when the gate is OFF and BETA_AUTO_PRO_ENABLED=true, the
 // first BETA_AUTO_PRO_LIMIT signups silently get PRO. Past the cap returns
 // null and the caller falls back to default plan. Used by both the
@@ -222,6 +256,7 @@ export function authRoutes(app: FastifyInstance) {
       deviceType: parseDeviceType(ua),
       ipAddress: ip,
     });
+    triggerDueLoginBriefing(user.id, 10_000);
 
     return reply.code(201).send({
       token,
@@ -571,6 +606,7 @@ export function authRoutes(app: FastifyInstance) {
           deviceType: parseDeviceType(ua),
           ipAddress: ip,
         });
+        triggerDueLoginBriefing(user.id, 10_000);
 
         // Desktop app: store token for polling, show success page
         if (isDesktopLogin) {
@@ -857,6 +893,7 @@ export function authRoutes(app: FastifyInstance) {
     // Check if Google is connected
     const auth = await getAuthedClient(userId);
     if (!auth) {
+      triggerDueLoginBriefing(userId);
       return { synced: false, reason: "google_not_connected" };
     }
 
@@ -983,6 +1020,7 @@ export function authRoutes(app: FastifyInstance) {
       // Email sync failed — skip
     }
 
+    triggerDueLoginBriefing(userId);
     return { synced: true, ...results };
   });
 

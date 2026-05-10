@@ -13,8 +13,9 @@ import { listEvents } from "./calendar.js";
 import { prisma } from "./db.js";
 import { recordFeedback } from "./feedback.js";
 import { listEmails } from "./gmail.js";
+import { getUserLlmCredentials } from "./llm-credentials.js";
 import { listNotes } from "./notes.js";
-import { createCompletion, EVE_SYSTEM_PROMPT, MODEL, openai } from "./openai.js";
+import { createCompletion, EVE_SYSTEM_PROMPT, MODEL } from "./openai.js";
 import { sendPushNotification } from "./push.js";
 import { listTasks } from "./tasks.js";
 import { localDayUtcRange, normalizeTimeZone } from "./time-zone.js";
@@ -152,17 +153,17 @@ Calendar: ${JSON.stringify(data.events)}
 Emails: ${JSON.stringify(data.emails)}
 Recent Notes: ${JSON.stringify(data.notes)}`;
 
-  if (!openai) {
-    return "EVE briefing unavailable — LLM not configured.";
-  }
-
-  const response = await createCompletion({
-    model: MODEL,
-    messages: [
-      { role: "system", content: EVE_SYSTEM_PROMPT },
-      { role: "user", content: briefingPrompt },
-    ],
-  });
+  const credentials = await getUserLlmCredentials(userId);
+  const response = await createCompletion(
+    {
+      model: MODEL,
+      messages: [
+        { role: "system", content: EVE_SYSTEM_PROMPT },
+        { role: "user", content: briefingPrompt },
+      ],
+    },
+    { credentials },
+  );
 
   return response.choices[0]?.message?.content || "No briefing generated.";
 }
@@ -184,10 +185,11 @@ export async function createDailyBriefingDelivery(userId: string): Promise<{
     select: { id: true, content: true, createdAt: true },
   });
   if (existing) {
+    const notification = await ensureDailyBriefingNotification(userId, existing.content);
     return {
       briefing: existing.content,
       note: { id: existing.id, createdAt: existing.createdAt },
-      notification: null,
+      notification,
       reused: true,
     };
   }
@@ -203,6 +205,27 @@ export async function createDailyBriefingDelivery(userId: string): Promise<{
     select: { id: true, createdAt: true },
   });
 
+  const notification = await ensureDailyBriefingNotification(userId, briefing);
+
+  return { briefing, note, notification, reused: false };
+}
+
+async function ensureDailyBriefingNotification(
+  userId: string,
+  briefing: string,
+): Promise<{ id: string; createdAt: Date } | null> {
+  const today = await todayRangeForUser(userId);
+  const existing = await prisma.notification.findFirst({
+    where: {
+      userId,
+      type: "briefing",
+      createdAt: today,
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, createdAt: true },
+  });
+  if (existing) return null;
+
   const briefingMsg = briefing.slice(0, 200) + (briefing.length > 200 ? "..." : "");
   const notification = await prisma.notification.create({
     data: {
@@ -210,6 +233,7 @@ export async function createDailyBriefingDelivery(userId: string): Promise<{
       type: "briefing",
       title: "Daily Briefing Ready",
       message: briefingMsg,
+      link: "/briefing",
     },
     select: { id: true, createdAt: true },
   });
@@ -233,7 +257,7 @@ export async function createDailyBriefingDelivery(userId: string): Promise<{
     "daily_briefing",
   );
 
-  return { briefing, note, notification, reused: false };
+  return notification;
 }
 
 export function briefingRoutes(app: FastifyInstance) {

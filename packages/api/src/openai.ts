@@ -12,7 +12,12 @@ import {
   markCreditExhausted,
   markKeyLimited,
 } from "./model-fallback.js";
-import { getProvider, getProviderChain, type Provider } from "./providers/index.js";
+import {
+  getProvider,
+  getProviderChain,
+  type Provider,
+  type ProviderCredentials,
+} from "./providers/index.js";
 import { getDefaultAgentModel, getDefaultChatModel, isModelAllowedForPlan } from "./stripe.js";
 
 /**
@@ -32,6 +37,10 @@ export class AllProvidersExhaustedError extends Error {
   }
 }
 
+export interface CompletionOptions {
+  credentials?: ProviderCredentials;
+}
+
 const KOREAN_EXHAUSTED_MESSAGE =
   "지금 사용할 수 있는 AI 쿼터를 모두 소진했어요. 다음 주 월요일(UTC 00:00)에 무료 한도가 리셋되거나, 설정에서 본인 API 키를 등록하면 바로 복구돼요.";
 
@@ -48,12 +57,15 @@ const KOREAN_EXHAUSTED_MESSAGE =
  */
 export async function createCompletion(
   params: ChatCompletionCreateParamsNonStreaming,
+  options?: CompletionOptions,
 ): Promise<OpenAI.Chat.Completions.ChatCompletion>;
 export async function createCompletion(
   params: ChatCompletionCreateParamsStreaming,
+  options?: CompletionOptions,
 ): Promise<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>>;
 export async function createCompletion(
   params: ChatCompletionCreateParamsNonStreaming | ChatCompletionCreateParamsStreaming,
+  options: CompletionOptions = {},
 ): Promise<
   | OpenAI.Chat.Completions.ChatCompletion
   | AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>
@@ -62,7 +74,7 @@ export async function createCompletion(
     | OpenAI.Chat.Completions.ChatCompletion
     | AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
 
-  const chain = getProviderChain();
+  const chain = getProviderChain(options.credentials);
   if (chain.length === 0) {
     throw new Error("No LLM providers configured — set OPENROUTER_API_KEY and/or GEMINI_API_KEY");
   }
@@ -88,7 +100,7 @@ export async function createCompletion(
   let lastError: unknown;
   for (let i = 0; i < chain.length; i++) {
     const provider = chain[i];
-    if (isProviderUnavailable(provider.name)) continue;
+    if (isProviderUnavailable(provider.quotaKey)) continue;
 
     // First-choice model for this provider:
     // - OpenRouter: caller's model
@@ -105,14 +117,14 @@ export async function createCompletion(
 
       // 402: same provider, swap to :free model, retry once
       if (provider.name === "openrouter" && isCreditError(err) && !isFreeModel(model)) {
-        markCreditExhausted(provider.name);
+        markCreditExhausted(provider.quotaKey);
         model = FALLBACK_MODEL;
         try {
           return await call(provider, model);
         } catch (err2) {
           lastError = err2;
           if (isKeyLimitError(err2)) {
-            markKeyLimited(provider.name);
+            markKeyLimited(provider.quotaKey);
             continue; // → next provider
           }
           throw err2;
@@ -121,7 +133,7 @@ export async function createCompletion(
 
       // 403 weekly key limit: this provider is done — move to next provider
       if (isKeyLimitError(err)) {
-        markKeyLimited(provider.name);
+        markKeyLimited(provider.quotaKey);
         continue;
       }
 

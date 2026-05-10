@@ -3,10 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
 import { useToast } from "../../components/toast";
-import { apiFetch } from "../../lib/api";
+import { API_BASE, apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function ChatListPage() {
   return (
@@ -60,33 +58,33 @@ function NewChatWelcome() {
 
   const suggestions = [
     {
-      label: "Clear decisions",
-      message: "Show me the decisions I should clear today.",
+      label: "오늘 결정 정리",
+      message: "오늘 내가 처리해야 할 결정을 우선순위로 정리해줘.",
       meta: "queue",
     },
     {
-      label: "Find hidden risk",
-      message: "Look across email, calendar, and tasks for anything at risk.",
+      label: "숨은 리스크 찾기",
+      message: "메일, 일정, 할 일에서 놓치면 위험한 신호를 찾아줘.",
       meta: "signals",
     },
     {
-      label: "Prepare meetings",
-      message: "Review today's meetings and tell me what needs prep.",
+      label: "미팅 준비",
+      message: "오늘 미팅을 보고 준비해야 할 맥락과 질문을 정리해줘.",
       meta: "context",
     },
     {
-      label: "Draft follow-up",
-      message: "Find a thread that needs a follow-up and draft the next move.",
+      label: "후속 액션 작성",
+      message: "후속 조치가 필요한 스레드를 찾아 다음 액션을 초안으로 만들어줘.",
       meta: "move",
     },
     {
-      label: "Protect focus",
-      message: "Find one important task and block time for it.",
+      label: "집중 시간 확보",
+      message: "가장 중요한 일 하나를 골라 집중 시간을 잡는 결정을 만들어줘.",
       meta: "calendar",
     },
     {
-      label: "Update memory",
-      message: "Remember how I want EVE to handle approvals.",
+      label: "운영 규칙 저장",
+      message: "내가 EVE의 승인과 자동 실행을 어떻게 다루길 원하는지 기억해줘.",
       meta: "memory",
     },
   ];
@@ -106,9 +104,11 @@ function NewChatWelcome() {
               i
             </span>
             <div>
-              <p className="text-sm font-medium text-amber-100">Connect Google to get started</p>
+              <p className="text-sm font-medium text-amber-100">
+                Google을 연결하면 판단이 빨라져요
+              </p>
               <p className="text-xs text-stone-500">
-                Link Gmail & Calendar for email sync, notifications, and scheduling
+                Gmail과 Calendar 신호를 연결해 결정 카드, 알림, 일정 준비를 자동으로 구성합니다
               </p>
             </div>
           </a>
@@ -116,14 +116,14 @@ function NewChatWelcome() {
         <div className="mb-8 text-center">
           <img src="/brand/mark.svg" alt="" className="mx-auto mb-4 h-14 w-14" />
           <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-300/80">
-            Command Console
+            Decision Thread
           </p>
           <h1 className="text-3xl font-semibold tracking-tight text-stone-50 sm:text-4xl">
-            Turn the work stream into decisions.
+            오늘 처리할 결정을 바로 만드세요.
           </h1>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-stone-500">
-            Ask EVE to inspect signals, assemble context, draft the move, or prepare a decision card
-            before anything gets executed.
+            EVE가 흩어진 업무 신호를 읽고, 근거를 모으고, 실행 전 승인 가능한 다음 행동으로
+            정리합니다.
           </p>
         </div>
 
@@ -135,7 +135,7 @@ function NewChatWelcome() {
             className="group w-full rounded-2xl border border-stone-700/60 bg-stone-950/55 px-5 py-4 text-left text-sm text-stone-500 shadow-2xl shadow-black/20 transition hover:border-amber-500/45 hover:bg-stone-900/80"
           >
             <span className="flex items-center justify-between gap-3">
-              <span>Ask EVE to build a decision, brief, or next move...</span>
+              <span>새 결정 스레드를 열고 맥락, 판단, 다음 행동을 요청하세요...</span>
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-300 text-stone-950 transition group-hover:bg-amber-200">
                 <svg
                   aria-hidden="true"

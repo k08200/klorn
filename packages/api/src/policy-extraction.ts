@@ -50,7 +50,8 @@ export interface FeedbackPolicyCandidate {
   support: FeedbackPolicySupport;
   rationale: string;
   evidence: FeedbackPolicyEvidence[];
-  active: false;
+  active: boolean;
+  ignored?: boolean;
 }
 
 export interface FeedbackPolicyExtractionOptions {
@@ -99,6 +100,33 @@ export async function getFeedbackPolicyCandidates(
       minEvents: opts.minEvents,
     }),
   };
+}
+
+export async function getFeedbackPolicyContextForPrompt(userId: string): Promise<string> {
+  const [{ candidates }, preferences] = await Promise.all([
+    getFeedbackPolicyCandidates(userId, { limit: 500 }),
+    getFeedbackPolicyPreferences(userId),
+  ]);
+
+  const activeIds = new Set(
+    preferences.filter((pref) => pref.action === "ACTIVE").map((pref) => pref.candidateId),
+  );
+  const ignoredIds = new Set(
+    preferences.filter((pref) => pref.action === "IGNORED").map((pref) => pref.candidateId),
+  );
+
+  const selected =
+    activeIds.size > 0
+      ? candidates.filter((candidate) => activeIds.has(candidate.id))
+      : candidates.filter((candidate) => !ignoredIds.has(candidate.id));
+
+  return formatFeedbackPolicyCandidatesForPrompt(
+    selected.map((candidate) => ({
+      ...candidate,
+      active: activeIds.has(candidate.id),
+      ignored: ignoredIds.has(candidate.id),
+    })),
+  );
 }
 
 export function extractFeedbackPolicyCandidates(
@@ -163,6 +191,21 @@ function buildBuckets(events: FeedbackPolicyEvent[]): Map<string, Bucket> {
     }
   }
   return buckets;
+}
+
+async function getFeedbackPolicyPreferences(
+  userId: string,
+): Promise<Array<{ candidateId: string; action: string }>> {
+  const model = (
+    prisma as unknown as {
+      feedbackPolicyPreference?: { findMany: (args: unknown) => Promise<unknown> };
+    }
+  ).feedbackPolicyPreference;
+  if (!model) return [];
+  return (await model.findMany({
+    where: { userId },
+    select: { candidateId: true, action: true },
+  })) as Array<{ candidateId: string; action: string }>;
 }
 
 function addToBucket(

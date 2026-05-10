@@ -93,6 +93,15 @@ interface UserProfile {
   timezone: string;
 }
 
+interface ModelSettings {
+  chatModels: string[];
+  agentModels: string[];
+  currentChatModel: string;
+  currentAgentModel: string | null;
+  hasOpenRouterApiKey: boolean;
+  hasGeminiApiKey: boolean;
+}
+
 const TIMEZONES = [
   "Asia/Seoul",
   "Asia/Tokyo",
@@ -135,7 +144,11 @@ export default function SettingsPage() {
   );
   const [agentInterval, setAgentInterval] = useState(5);
   const [dailyBriefingEnabled, setDailyBriefingEnabled] = useState(true);
-  const [briefingTime, setBriefingTime] = useState("07:30");
+  const [briefingTime, setBriefingTime] = useState("06:00");
+  const [modelSettings, setModelSettings] = useState<ModelSettings | null>(null);
+  const [modelSaving, setModelSaving] = useState(false);
+  const [openRouterApiKey, setOpenRouterApiKey] = useState("");
+  const [geminiApiKey, setGeminiApiKey] = useState("");
   const [alwaysAllowedTools, setAlwaysAllowedTools] = useState<string[]>([]);
   const [autoMarkReadEnabled, setAutoMarkReadEnabled] = useState(false);
   const [preApprovableTools, setPreApprovableTools] = useState<string[]>([]);
@@ -490,7 +503,7 @@ export default function SettingsPage() {
         setAgentModeOptions(normalizeAgentModeOptions(d.agentModes));
         setAgentInterval(d.agentIntervalMin ?? 5);
         setDailyBriefingEnabled(d.dailyBriefing ?? true);
-        setBriefingTime(d.briefingTime ?? "07:30");
+        setBriefingTime(d.briefingTime ?? "06:00");
         setAlwaysAllowedTools(d.alwaysAllowedTools ?? []);
         setPreApprovableTools(d.preApprovableTools ?? []);
         setAutoMarkReadEnabled(d.autoMarkReadEnabled ?? false);
@@ -684,6 +697,48 @@ export default function SettingsPage() {
       .then((data) => setEmailFeedbackCount(data.count))
       .catch((err) => captureClientError(err, { scope: "settings.email-feedback-count" }));
   }, []);
+
+  useEffect(() => {
+    apiFetch<ModelSettings>("/api/billing/models")
+      .then(setModelSettings)
+      .catch((err) => captureClientError(err, { scope: "settings.model-settings" }));
+  }, []);
+
+  const patchModelSettings = async (body: Record<string, unknown>, successMessage: string) => {
+    setModelSaving(true);
+    try {
+      const updated = await apiFetch<
+        Partial<ModelSettings> & {
+          success: boolean;
+          chatModel?: string;
+          agentModel?: string | null;
+        }
+      >("/api/billing/models", {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      setModelSettings((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...(updated.chatModel ? { currentChatModel: updated.chatModel } : {}),
+              ...(updated.agentModel !== undefined
+                ? { currentAgentModel: updated.agentModel ?? null }
+                : {}),
+              hasOpenRouterApiKey: updated.hasOpenRouterApiKey ?? prev.hasOpenRouterApiKey,
+              hasGeminiApiKey: updated.hasGeminiApiKey ?? prev.hasGeminiApiKey,
+            }
+          : prev,
+      );
+      setOpenRouterApiKey("");
+      setGeminiApiKey("");
+      toast(successMessage, "success");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to save model settings", "error");
+    } finally {
+      setModelSaving(false);
+    }
+  };
 
   const integrations: Integration[] = [
     {
@@ -988,7 +1043,7 @@ export default function SettingsPage() {
                 onChange={(e) => updateBriefingTime(e.target.value)}
                 className="bg-stone-900 border border-stone-700 rounded px-2 py-1 text-sm text-stone-200 disabled:opacity-50"
               />
-              <span className="text-xs text-stone-500">Default is 07:30.</span>
+              <span className="text-xs text-stone-500">Default is 06:00.</span>
             </div>
           </div>
           <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-4 flex items-center justify-between">
@@ -1099,6 +1154,148 @@ export default function SettingsPage() {
                   onChange={(e) => updateNotifPref("quietHoursEnd", e.target.value || null)}
                   className="bg-stone-900 border border-stone-700 rounded px-2 py-1 text-sm text-stone-200"
                 />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Models */}
+        <section className="mb-8">
+          <h2 className="text-sm font-semibold text-stone-300 mb-3">Model & API Keys</h2>
+          <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-5 space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="chat-model" className="block text-sm text-stone-400 mb-1">
+                  Chat model
+                </label>
+                <select
+                  id="chat-model"
+                  value={modelSettings?.currentChatModel || ""}
+                  disabled={!modelSettings || modelSaving}
+                  onChange={(e) =>
+                    patchModelSettings({ chatModel: e.target.value }, "Chat model saved")
+                  }
+                  className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition disabled:opacity-50"
+                >
+                  {(modelSettings?.chatModels || []).map((model) => (
+                    <option key={model} value={model}>
+                      {model}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-stone-500">
+                  Free defaults stay on the free model; paid models remain plan-gated.
+                </p>
+              </div>
+              <div>
+                <label htmlFor="agent-model" className="block text-sm text-stone-400 mb-1">
+                  Agent model
+                </label>
+                <select
+                  id="agent-model"
+                  value={modelSettings?.currentAgentModel || ""}
+                  disabled={!modelSettings || modelSaving || !modelSettings.agentModels.length}
+                  onChange={(e) =>
+                    patchModelSettings({ agentModel: e.target.value || null }, "Agent model saved")
+                  }
+                  className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition disabled:opacity-50"
+                >
+                  {(modelSettings?.agentModels || []).map((model) => (
+                    <option key={model} value={model}>
+                      {model}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-stone-500">
+                  Background runs use this when the selected plan allows it.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 border-t border-stone-800 pt-4 sm:grid-cols-2">
+              <div>
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <label htmlFor="openrouter-key" className="text-sm text-stone-400">
+                    OpenRouter API key
+                  </label>
+                  <span className="text-[11px] text-stone-500">
+                    {modelSettings?.hasOpenRouterApiKey ? "Saved" : "Not set"}
+                  </span>
+                </div>
+                <input
+                  id="openrouter-key"
+                  type="password"
+                  value={openRouterApiKey}
+                  onChange={(e) => setOpenRouterApiKey(e.target.value)}
+                  placeholder="sk-or-..."
+                  className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition placeholder-stone-500"
+                />
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={modelSaving || !openRouterApiKey.trim()}
+                    onClick={() => patchModelSettings({ openRouterApiKey }, "OpenRouter key saved")}
+                    className="rounded-lg bg-amber-300 px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-amber-200 disabled:bg-stone-700 disabled:text-stone-500"
+                  >
+                    Save
+                  </button>
+                  {modelSettings?.hasOpenRouterApiKey && (
+                    <button
+                      type="button"
+                      disabled={modelSaving}
+                      onClick={() =>
+                        patchModelSettings(
+                          { clearOpenRouterApiKey: true },
+                          "OpenRouter key removed",
+                        )
+                      }
+                      className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-1.5 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <label htmlFor="gemini-key" className="text-sm text-stone-400">
+                    Gemini API key
+                  </label>
+                  <span className="text-[11px] text-stone-500">
+                    {modelSettings?.hasGeminiApiKey ? "Saved" : "Not set"}
+                  </span>
+                </div>
+                <input
+                  id="gemini-key"
+                  type="password"
+                  value={geminiApiKey}
+                  onChange={(e) => setGeminiApiKey(e.target.value)}
+                  placeholder="AIza..."
+                  className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition placeholder-stone-500"
+                />
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={modelSaving || !geminiApiKey.trim()}
+                    onClick={() => patchModelSettings({ geminiApiKey }, "Gemini key saved")}
+                    className="rounded-lg bg-amber-300 px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-amber-200 disabled:bg-stone-700 disabled:text-stone-500"
+                  >
+                    Save
+                  </button>
+                  {modelSettings?.hasGeminiApiKey && (
+                    <button
+                      type="button"
+                      disabled={modelSaving}
+                      onClick={() =>
+                        patchModelSettings({ clearGeminiApiKey: true }, "Gemini key removed")
+                      }
+                      className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-1.5 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

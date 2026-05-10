@@ -6,6 +6,7 @@
  * activating automations or creating durable playbook state.
  */
 
+import { prisma } from "./db.js";
 import {
   buildWorkGraphSummary,
   type WorkGraphContext,
@@ -47,6 +48,7 @@ export interface EvePlaybook {
   cadence: string;
   targetSignals: string[];
   activationChecklist: PlaybookStep[];
+  active?: boolean;
 }
 
 export interface PlaybookContextHit {
@@ -274,8 +276,52 @@ const PLAYBOOKS: PlaybookDefinition[] = [
   },
 ];
 
-export function listEvePlaybooks(): EvePlaybook[] {
-  return PLAYBOOKS.map(publicPlaybook);
+export function listEvePlaybooks(activeIds: Set<string> = new Set()): EvePlaybook[] {
+  return PLAYBOOKS.map((playbook) => publicPlaybook(playbook, activeIds));
+}
+
+export async function listActivePlaybookIds(userId: string): Promise<Set<string>> {
+  const model = (
+    prisma as unknown as {
+      activatedPlaybook?: { findMany: (args: unknown) => Promise<unknown> };
+    }
+  ).activatedPlaybook;
+  if (!model) return new Set();
+  const rows = (await model.findMany({
+    where: { userId, status: "ACTIVE" },
+    select: { playbookId: true },
+  })) as Array<{ playbookId: string }>;
+  return new Set(rows.map((row) => row.playbookId));
+}
+
+export async function activatePlaybook(userId: string, playbookId: string): Promise<EvePlaybook> {
+  const definition = PLAYBOOKS.find((playbook) => playbook.id === playbookId);
+  if (!definition) throw new Error(`Unknown playbook: ${playbookId}`);
+  const model = (
+    prisma as unknown as {
+      activatedPlaybook?: { upsert: (args: unknown) => Promise<unknown> };
+    }
+  ).activatedPlaybook;
+  if (!model) throw new Error("ActivatedPlaybook model is not available");
+  await model.upsert({
+    where: { userId_playbookId: { userId, playbookId } },
+    create: { userId, playbookId, status: "ACTIVE" },
+    update: { status: "ACTIVE" },
+  });
+  return publicPlaybook(definition, new Set([playbookId]));
+}
+
+export async function deactivatePlaybook(userId: string, playbookId: string): Promise<void> {
+  const model = (
+    prisma as unknown as {
+      activatedPlaybook?: { updateMany: (args: unknown) => Promise<unknown> };
+    }
+  ).activatedPlaybook;
+  if (!model) return;
+  await model.updateMany({
+    where: { userId, playbookId },
+    data: { status: "PAUSED" },
+  });
 }
 
 export async function buildPlaybookRecommendations(
@@ -286,22 +332,26 @@ export async function buildPlaybookRecommendations(
     limit: opts.contextLimit ?? 20,
     now: opts.now,
   });
-  return recommendPlaybooksFromGraph(graph, opts);
+  const activeIds = await listActivePlaybookIds(userId).catch(() => new Set<string>());
+  return recommendPlaybooksFromGraph(graph, opts, activeIds);
 }
 
 export function recommendPlaybooksFromGraph(
   graph: WorkGraphSummary,
   opts: Pick<PlaybookRecommendationOptions, "limit"> = {},
+  activeIds: Set<string> = new Set(),
 ): PlaybookRecommendationSummary {
   const limit = normalizeLimit(opts.limit);
-  const recommendations = PLAYBOOKS.map((playbook) => scorePlaybook(playbook, graph.contexts))
-    .filter((recommendation) => recommendation.score > 0)
+  const recommendations = PLAYBOOKS.map((playbook) =>
+    scorePlaybook(playbook, graph.contexts, activeIds),
+  )
+    .filter((recommendation) => recommendation.score > 0 || recommendation.playbook.active)
     .sort(compareRecommendations)
     .slice(0, limit);
 
   return {
     generatedAt: graph.generatedAt,
-    playbooks: listEvePlaybooks(),
+    playbooks: listEvePlaybooks(activeIds),
     recommendations,
   };
 }
@@ -309,6 +359,7 @@ export function recommendPlaybooksFromGraph(
 function scorePlaybook(
   definition: PlaybookDefinition,
   contexts: WorkGraphContext[],
+  activeIds: Set<string>,
 ): PlaybookRecommendation {
   const hits = contexts
     .map((context) => scoreContext(definition, context))
@@ -317,13 +368,15 @@ function scorePlaybook(
     .slice(0, 3);
   const score = Math.min(
     100,
-    hits.reduce((sum, hit) => sum + hit.signalScore, 0),
+    hits.reduce((sum, hit) => sum + hit.signalScore, 0) + (activeIds.has(definition.id) ? 12 : 0),
   );
   return {
-    playbook: publicPlaybook(definition),
+    playbook: publicPlaybook(definition, activeIds),
     score,
     confidence: confidenceFor(score, hits.length),
-    reasons: reasonsFor(hits),
+    reasons: activeIds.has(definition.id)
+      ? ["Activated by user", ...reasonsFor(hits)].slice(0, 4)
+      : reasonsFor(hits),
     activeContexts: hits,
     suggestedFirstActions: definition.activationChecklist.slice(0, 2),
   };
@@ -370,7 +423,7 @@ function contextText(context: WorkGraphContext): string {
     .toLowerCase();
 }
 
-function publicPlaybook(definition: PlaybookDefinition): EvePlaybook {
+function publicPlaybook(definition: PlaybookDefinition, activeIds: Set<string>): EvePlaybook {
   return {
     id: definition.id,
     domain: definition.domain,
@@ -380,6 +433,7 @@ function publicPlaybook(definition: PlaybookDefinition): EvePlaybook {
     cadence: definition.cadence,
     targetSignals: definition.targetSignals,
     activationChecklist: definition.activationChecklist,
+    active: activeIds.has(definition.id),
   };
 }
 
@@ -394,6 +448,7 @@ function reasonsFor(hits: PlaybookContextHit[]): string[] {
 }
 
 function compareRecommendations(a: PlaybookRecommendation, b: PlaybookRecommendation): number {
+  if (a.playbook.active !== b.playbook.active) return a.playbook.active ? -1 : 1;
   if (b.score !== a.score) return b.score - a.score;
   return b.confidence - a.confidence;
 }

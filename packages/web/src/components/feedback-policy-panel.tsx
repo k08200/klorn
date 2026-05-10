@@ -43,28 +43,28 @@ const KIND_COPY: Record<
   { label: string; tone: string; dot: string; summary: string }
 > = {
   ALLOW_AFTER_SUGGESTION: {
-    label: "Usually approved",
+    label: "승인 반복",
     tone: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
     dot: "bg-emerald-400",
-    summary: "Propose confidently",
+    summary: "더 자신 있게 제안",
   },
   REQUIRE_DRAFT_REVIEW: {
-    label: "Draft review",
-    tone: "border-teal-400/30 bg-teal-400/10 text-teal-200",
-    dot: "bg-teal-400",
-    summary: "Keep reviewable",
+    label: "검토 유지",
+    tone: "border-sky-400/30 bg-sky-400/10 text-sky-200",
+    dot: "bg-sky-400",
+    summary: "초안 검토 후 실행",
   },
   AVOID_SUGGESTION: {
-    label: "Usually rejected",
+    label: "거절 반복",
     tone: "border-rose-500/30 bg-rose-500/10 text-rose-200",
     dot: "bg-rose-400",
-    summary: "Avoid proposing",
+    summary: "제안 빈도 낮추기",
   },
   LOWER_PRIORITY: {
-    label: "Low priority",
+    label: "낮은 우선순위",
     tone: "border-stone-600 bg-stone-900 text-stone-300",
     dot: "bg-stone-400",
-    summary: "Stay quiet",
+    summary: "조용히 관찰",
   },
 };
 
@@ -100,9 +100,9 @@ export function FeedbackPolicyPanel() {
     <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-medium">Learned policy signals</h3>
+          <h3 className="font-medium">학습된 운영 신호</h3>
           <p className="mt-0.5 text-xs text-stone-500">
-            {since ? `Since ${new Date(since).toLocaleDateString()}` : "Recent feedback patterns"}
+            {since ? `${new Date(since).toLocaleDateString("ko-KR")} 이후` : "최근 피드백 패턴"}
           </p>
         </div>
         <button
@@ -111,7 +111,7 @@ export function FeedbackPolicyPanel() {
           disabled={loading}
           className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-1.5 text-xs font-medium text-stone-300 transition hover:bg-stone-700 disabled:opacity-50"
         >
-          {loading ? "Loading" : "Refresh"}
+          {loading ? "확인 중" : "새로고침"}
         </button>
       </div>
 
@@ -122,11 +122,11 @@ export function FeedbackPolicyPanel() {
         </div>
       ) : error ? (
         <div className="mt-4 rounded-lg border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-200">
-          Unable to load policy signals.
+          운영 신호를 불러오지 못했습니다.
         </div>
       ) : candidates.length === 0 ? (
         <div className="mt-4 rounded-lg border border-stone-800 bg-stone-950/45 px-3 py-3 text-sm text-stone-500">
-          No stable policy signals yet.
+          아직 안정적인 운영 신호가 없습니다.
         </div>
       ) : (
         <div className="mt-4 space-y-2">
@@ -159,16 +159,16 @@ export function FeedbackPolicyPanel() {
                   </span>
                 </div>
                 <div className="mt-3 grid grid-cols-3 gap-2 text-[10px] text-stone-500 sm:grid-cols-6">
-                  <SignalCount label="Approved" value={candidate.support.approved} />
-                  <SignalCount label="Rejected" value={candidate.support.rejected} />
-                  <SignalCount label="Edited" value={candidate.support.edited} />
-                  <SignalCount label="Ignored" value={candidate.support.ignored} />
-                  <SignalCount label="Snoozed" value={candidate.support.snoozed} />
-                  <SignalCount label="Dismissed" value={candidate.support.dismissed} />
+                  <SignalCount label="승인" value={candidate.support.approved} />
+                  <SignalCount label="거절" value={candidate.support.rejected} />
+                  <SignalCount label="수정" value={candidate.support.edited} />
+                  <SignalCount label="무시" value={candidate.support.ignored} />
+                  <SignalCount label="미룸" value={candidate.support.snoozed} />
+                  <SignalCount label="닫음" value={candidate.support.dismissed} />
                 </div>
                 <div className="mt-2 flex items-center justify-between text-[10px] text-stone-600">
-                  <span>{Math.round(candidate.confidence * 100)}% confidence</span>
-                  <span>{candidate.support.total} events</span>
+                  <span>신뢰도 {Math.round(candidate.confidence * 100)}%</span>
+                  <span>{candidate.support.total}개 이벤트</span>
                 </div>
               </div>
             );

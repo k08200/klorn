@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
-import { apiFetch } from "../../lib/api";
+import { API_BASE, apiFetch } from "../../lib/api";
 import { captureClientError } from "../../lib/sentry";
 
 interface CalendarEvent {
@@ -44,6 +44,7 @@ function CalendarView() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
@@ -61,6 +62,12 @@ function CalendarView() {
 
   useEffect(() => {
     loadEvents();
+    apiFetch<{ connected: boolean }>("/api/auth/google/status")
+      .then((data) => setGoogleConnected(data.connected))
+      .catch((err) => {
+        captureClientError(err, { scope: "calendar.google-status" });
+        setGoogleConnected(false);
+      });
   }, [loadEvents]);
 
   const syncNow = async () => {
@@ -73,10 +80,14 @@ function CalendarView() {
         { method: "POST", body: JSON.stringify({}) },
       );
       if (result.error) {
+        if (result.error.toLowerCase().includes("google not connected")) {
+          setGoogleConnected(false);
+        }
         setError(result.error);
         return;
       }
       const synced = result.synced ?? 0;
+      setGoogleConnected(true);
       setSyncMessage(
         synced > 0
           ? `Google Calendar에서 ${synced}개 일정을 가져왔어요.`
@@ -123,16 +134,20 @@ function CalendarView() {
           </button>
         </div>
         <div className="mt-5 grid grid-cols-3 gap-2">
-          <CalendarStat label="14 days" value={events.length} />
-          <CalendarStat label="Today" value={todayCount} />
+          <CalendarStat label="14일" value={events.length} />
+          <CalendarStat label="오늘" value={todayCount} />
           <CalendarStat
-            label="Next"
+            label="다음"
             value={nextEvent ? formatTime(new Date(nextEvent.startTime)) : "-"}
           />
         </div>
       </header>
 
-      {loading && <p className="text-sm text-stone-500">로딩 중...</p>}
+      {loading && (
+        <div className="rounded-xl border border-stone-800 bg-stone-950/35 px-4 py-5 text-center text-sm text-stone-500">
+          일정 맥락을 조립하는 중...
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -148,18 +163,33 @@ function CalendarView() {
 
       {!loading && !error && events.length === 0 && (
         <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-center">
-          <p className="mb-1 text-sm text-stone-300">앞으로 14일 동안 일정이 없어요.</p>
-          <p className="mb-4 text-xs text-stone-500">
-            Google 연결은 정상입니다. 필요하면 다시 동기화해서 최신 상태만 확인하세요.
+          <p className="mb-1 text-sm text-stone-300">
+            {googleConnected === false
+              ? "Google Calendar가 아직 연결되지 않았어요."
+              : "앞으로 14일 동안 일정이 없어요."}
           </p>
-          <button
-            type="button"
-            onClick={syncNow}
-            disabled={syncing}
-            className="rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
-          >
-            {syncing ? "동기화 중..." : "다시 동기화"}
-          </button>
+          <p className="mb-4 text-xs text-stone-500">
+            {googleConnected === false
+              ? "연결 후 동기화하면 EVE가 실제 캘린더 상태를 기준으로 브리핑합니다."
+              : "Google 연결은 정상입니다. 캘린더가 비어 있으면 빈 상태 그대로 브리핑에 반영됩니다."}
+          </p>
+          {googleConnected === false ? (
+            <a
+              href={`${API_BASE}/api/auth/google?token=${typeof window !== "undefined" ? localStorage.getItem("eve-token") || "" : ""}`}
+              className="inline-flex rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200"
+            >
+              Google 연결
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={syncNow}
+              disabled={syncing}
+              className="rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
+            >
+              {syncing ? "동기화 중..." : "다시 동기화"}
+            </button>
+          )}
         </div>
       )}
 
@@ -264,15 +294,15 @@ function EventRow({ event }: { event: CalendarEvent }) {
           <button
             type="button"
             onClick={togglePrep}
-            className="ml-3 mt-1 inline-flex items-center gap-1 text-xs text-teal-300 hover:text-teal-200"
+            className="ml-3 mt-1 inline-flex items-center gap-1 rounded-md border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-xs text-amber-200 transition hover:bg-amber-300/15 hover:text-amber-100"
           >
             준비팩
           </button>
         </div>
       </div>
       {prepOpen && (
-        <div className="mt-3 border-t border-stone-700/45 pt-3">
-          {prepLoading && <p className="text-xs text-stone-500">준비팩 생성 중...</p>}
+        <div className="mt-3 rounded-lg border border-stone-800 bg-black/20 p-3">
+          {prepLoading && <p className="text-xs text-stone-500">미팅 근거를 모으는 중...</p>}
           {prepError && <p className="text-xs text-red-300">{prepError}</p>}
           {prep && (
             <div className="space-y-3">
@@ -289,16 +319,19 @@ function EventRow({ event }: { event: CalendarEvent }) {
                   {prep.openCommitments.length}
                 </span>
               </div>
-              <ul className="space-y-1">
+              <ul className="space-y-1.5">
                 {prep.checklist.map((item) => (
-                  <li key={item} className="text-xs text-stone-300">
+                  <li
+                    key={item}
+                    className="rounded-md border border-stone-800/70 bg-stone-950/40 px-2 py-1.5 text-xs text-stone-300"
+                  >
                     {item}
                   </li>
                 ))}
               </ul>
               {prep.relatedEmails.length > 0 && (
                 <div>
-                  <p className="mb-1 text-[11px] text-stone-500">관련 메일</p>
+                  <p className="mb-1 text-[11px] font-medium text-stone-500">관련 메일</p>
                   <ul className="space-y-1">
                     {prep.relatedEmails.map((email) => (
                       <li key={email.id} className="truncate text-xs text-stone-300">
@@ -310,7 +343,7 @@ function EventRow({ event }: { event: CalendarEvent }) {
               )}
               {prep.openTasks.length > 0 && (
                 <div>
-                  <p className="mb-1 text-[11px] text-stone-500">미팅 전 할 일</p>
+                  <p className="mb-1 text-[11px] font-medium text-stone-500">미팅 전 할 일</p>
                   <ul className="space-y-1">
                     {prep.openTasks.map((task) => (
                       <li key={task.id} className="truncate text-xs text-stone-300">

@@ -92,11 +92,9 @@ function ChatPageContent() {
         if (loadController.signal.aborted) return;
         const msg = err instanceof Error ? err.message : "Failed to load conversation";
         if (msg.includes("403") || msg.includes("Forbidden")) {
-          setLoadError(
-            "Cannot access this conversation. You may be logged into a different account.",
-          );
+          setLoadError("이 스레드에 접근할 수 없습니다. 다른 계정으로 로그인했을 수 있어요.");
         } else if (msg.includes("404") || msg.includes("not found")) {
-          setLoadError("Conversation not found.");
+          setLoadError("스레드를 찾을 수 없습니다.");
         } else {
           setLoadError(msg);
         }
@@ -172,19 +170,19 @@ function ChatPageContent() {
     const lower = `${userMsg} ${assistantMsg}`.toLowerCase();
 
     if (lower.includes("email") || lower.includes("mail")) {
-      s.push("Show important emails only", "Draft a reply");
+      s.push("중요한 메일만 보여줘", "답장 초안을 작성해줘");
     } else if (lower.includes("task") || lower.includes("todo")) {
-      s.push("Show due today", "Sort by priority");
+      s.push("오늘 마감만 보여줘", "우선순위로 정렬해줘");
     } else if (lower.includes("calendar") || lower.includes("schedule")) {
-      s.push("Show this week", "Find free slots");
+      s.push("이번 주 일정을 보여줘", "빈 시간을 찾아줘");
     } else if (lower.includes("note") || lower.includes("memo")) {
-      s.push("Show recent notes", "Write a report");
+      s.push("최근 메모를 보여줘", "보고서 초안을 만들어줘");
     }
 
     if (s.length === 0) {
-      s.push("Tell me more", "Any alternatives?");
+      s.push("근거를 더 보여줘", "다른 선택지도 비교해줘");
     }
-    s.push("Summarize");
+    s.push("요약해줘");
     setSuggestions(s.slice(0, 3));
   };
 
@@ -211,7 +209,7 @@ function ChatPageContent() {
               } else if (data.type === "tool_result") {
                 setActiveTools((prev) => prev.filter((t) => t !== data.name));
               } else if (data.type === "error") {
-                fullContent += `\n\n[Error: ${data.content}]`;
+                fullContent += `\n\n[오류: ${data.content}]`;
                 setStreamingContent(fullContent);
               }
             } catch {
@@ -225,7 +223,7 @@ function ChatPageContent() {
             const partialMsg: Message = {
               id: crypto.randomUUID(),
               role: "ASSISTANT",
-              content: `${fullContent}\n\n_[Generation stopped]_`,
+              content: `${fullContent}\n\n_[생성이 중지되었습니다]_`,
               createdAt: new Date().toISOString(),
             };
             setMessages((prev) => [...prev, partialMsg]);
@@ -275,7 +273,7 @@ function ChatPageContent() {
         if (retryCount < 2) {
           const delay = Math.min(1000 * 2 ** retryCount, 8000);
           (streamResponseDirect as unknown as { _retries: number })._retries = retryCount + 1;
-          setStreamingContent("Connection lost. Reconnecting...");
+          setStreamingContent("연결이 끊겼습니다. 다시 연결하는 중...");
           await new Promise((r) => setTimeout(r, delay));
           if (!abortRef.current?.signal.aborted) {
             await streamResponseDirect(messageContent);
@@ -287,7 +285,7 @@ function ChatPageContent() {
             {
               id: crypto.randomUUID(),
               role: "ASSISTANT",
-              content: "Connection failed after retries. Please try again.",
+              content: "재연결에 실패했습니다. 다시 시도해 주세요.",
               createdAt: new Date().toISOString(),
             },
           ]);
@@ -343,7 +341,7 @@ function ChatPageContent() {
           {
             id: crypto.randomUUID(),
             role: "ASSISTANT",
-            content: "Connection failed. Please try again.",
+            content: "연결에 실패했습니다. 다시 시도해 주세요.",
             createdAt: new Date().toISOString(),
           },
         ]);
@@ -379,7 +377,7 @@ function ChatPageContent() {
         {
           id: crypto.randomUUID(),
           role: "ASSISTANT",
-          content: "Retry failed. Please try again.",
+          content: "다시 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.",
           createdAt: new Date().toISOString(),
         },
       ]);
@@ -447,7 +445,7 @@ function ChatPageContent() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 512_000) {
-      toast("File too large (max 500KB)", "error");
+      toast("파일이 너무 큽니다 (최대 500KB)", "error");
       return;
     }
     const reader = new FileReader();
@@ -478,7 +476,7 @@ function ChatPageContent() {
 
   const copyMessage = (content: string) => {
     navigator.clipboard.writeText(content);
-    toast("Copied", "success");
+    toast("복사했습니다", "success");
   };
 
   const exportConversation = () => {
@@ -488,7 +486,7 @@ function ChatPageContent() {
       const time = new Date(m.createdAt).toLocaleString("ko-KR");
       return `### ${label} — ${time}\n\n${m.content}`;
     });
-    const md = `# EVE Conversation\n\nExported: ${new Date().toLocaleString("ko-KR")}\n\n---\n\n${lines.join("\n\n---\n\n")}`;
+    const md = `# EVE Conversation\n\n내보낸 시간: ${new Date().toLocaleString("ko-KR")}\n\n---\n\n${lines.join("\n\n---\n\n")}`;
     const blob = new Blob([md], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -496,7 +494,7 @@ function ChatPageContent() {
     a.download = `eve-chat-${id.slice(0, 8)}.md`;
     a.click();
     URL.revokeObjectURL(url);
-    toast("Exported as Markdown", "success");
+    toast("Markdown으로 내보냈습니다", "success");
   };
 
   const handleActionApprove = async (actionId: string, autoAllow = false) => {
@@ -512,21 +510,21 @@ function ChatPageContent() {
         if (action) next.set(action.messageId, { ...action, status: "EXECUTED" });
         return next;
       });
-      toast("Done", "success");
+      toast("실행했습니다", "success");
       // Reload messages to get the follow-up message
       apiFetch<{ messages: Message[] }>(`/api/chat/conversations/${id}`)
         .then((data) => setMessages(data.messages))
         .catch((err) => captureClientError(err, { scope: "chat.reload-after-action", id }));
     } catch {
-      toast("Execution failed", "error");
+      toast("실행에 실패했습니다", "error");
     }
     setActionLoading(null);
   };
 
   const handleActionReject = async (actionId: string, neverSuggest = false) => {
     const reason = neverSuggest
-      ? "Never suggest this again"
-      : window.prompt("Reason for rejection (optional)");
+      ? "다시 제안하지 않기"
+      : window.prompt("거절 이유를 남길 수 있어요 (선택)");
     if (reason === null) return;
     setActionLoading(actionId);
     try {
@@ -545,7 +543,7 @@ function ChatPageContent() {
         .then((data) => setMessages(data.messages))
         .catch((err) => captureClientError(err, { scope: "chat.reload-after-action", id }));
     } catch {
-      toast("Action failed", "error");
+      toast("처리하지 못했습니다", "error");
     }
     setActionLoading(null);
   };
@@ -557,15 +555,15 @@ function ChatPageContent() {
         <div className="flex items-center justify-between border-b border-stone-700/35 bg-[#11100d]/72 px-4 py-2 backdrop-blur-xl">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300/75">
-              Command Console
+              Decision Thread
             </p>
-            <p className="text-xs text-stone-500">Context first. Approval before execution.</p>
+            <p className="text-xs text-stone-500">맥락 먼저, 실행은 승인 뒤에.</p>
           </div>
           <button
             type="button"
             onClick={exportConversation}
             className="flex items-center gap-1.5 rounded-lg border border-stone-700/40 px-2.5 py-1.5 text-xs text-stone-500 transition hover:border-stone-600 hover:bg-stone-900/60 hover:text-stone-300"
-            title="Export as Markdown"
+            title="Markdown으로 내보내기"
           >
             <svg
               aria-hidden="true"
@@ -582,7 +580,7 @@ function ChatPageContent() {
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-            Export
+            내보내기
           </button>
         </div>
       )}
@@ -610,7 +608,7 @@ function ChatPageContent() {
               </div>
               <p className="text-stone-300 text-sm mb-4">{loadError}</p>
               <a href="/chat" className="text-sm text-amber-300 hover:text-amber-200 transition">
-                Back to threads
+                스레드 목록으로 돌아가기
               </a>
             </div>
           )}
@@ -621,33 +619,33 @@ function ChatPageContent() {
                 New Decision Thread
               </p>
               <h2 className="mb-2 text-center text-2xl font-semibold tracking-tight text-stone-100">
-                Start with the outcome you need.
+                필요한 결과부터 말해 주세요.
               </h2>
               <p className="mb-8 max-w-md text-center text-sm leading-6 text-stone-500">
-                EVE can inspect live work context, explain why it matters, and package the next
-                action for approval.
+                EVE가 실시간 업무 맥락을 읽고, 왜 중요한지 설명한 뒤, 승인 가능한 다음 행동으로
+                묶어드립니다.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
                 {[
                   {
                     code: "01",
-                    title: "Clear today's decisions",
-                    prompt: "Show me the decisions I should clear today.",
+                    title: "오늘 결정 정리",
+                    prompt: "오늘 내가 처리해야 할 결정을 우선순위로 정리해줘.",
                   },
                   {
                     code: "02",
-                    title: "Trace hidden risk",
-                    prompt: "Look across email, calendar, and tasks for anything at risk.",
+                    title: "숨은 리스크 추적",
+                    prompt: "메일, 일정, 할 일에서 놓치면 위험한 신호를 찾아줘.",
                   },
                   {
                     code: "03",
-                    title: "Prepare the day",
-                    prompt: "Review today's meetings and tell me what needs prep.",
+                    title: "오늘 준비",
+                    prompt: "오늘 미팅을 보고 준비해야 할 맥락과 질문을 정리해줘.",
                   },
                   {
                     code: "04",
-                    title: "Draft the next move",
-                    prompt: "Find a thread that needs a follow-up and draft the next move.",
+                    title: "다음 행동 초안",
+                    prompt: "후속 조치가 필요한 스레드를 찾아 다음 액션을 초안으로 만들어줘.",
                   },
                 ].map((starter) => (
                   <button
@@ -728,7 +726,7 @@ function ChatPageContent() {
                           onClick={() => submitEditMessage(idx)}
                           className="px-3 py-1 text-xs bg-amber-300 text-stone-950 rounded-lg hover:bg-amber-200 transition"
                         >
-                          Save & Resend
+                          저장 후 다시 보내기
                         </button>
                         <button
                           type="button"
@@ -738,7 +736,7 @@ function ChatPageContent() {
                           }}
                           className="px-3 py-1 text-xs text-stone-400 hover:text-stone-200 transition"
                         >
-                          Cancel
+                          취소
                         </button>
                       </div>
                     </div>
@@ -774,11 +772,11 @@ function ChatPageContent() {
                         const preview = (() => {
                           const name = action.toolName;
                           if (name === "send_email")
-                            return `To: ${args.to || "?"} · ${args.subject || "No subject"}`;
+                            return `To: ${args.to || "?"} · ${args.subject || "제목 없음"}`;
                           if (name === "create_event")
-                            return `${args.title || "Event"} · ${args.startTime ? new Date(args.startTime).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}${args.location ? ` · ${args.location}` : ""}`;
-                          if (name === "create_task") return args.title || "New task";
-                          if (name === "create_note") return args.title || "New note";
+                            return `${args.title || "일정"} · ${args.startTime ? new Date(args.startTime).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}${args.location ? ` · ${args.location}` : ""}`;
+                          if (name === "create_task") return args.title || "새 할 일";
+                          if (name === "create_note") return args.title || "새 메모";
                           if (name === "create_contact")
                             return `${args.name || "?"} ${args.email ? `(${args.email})` : ""}`;
                           if (
@@ -797,7 +795,7 @@ function ChatPageContent() {
                               args[idKey] ||
                               args.id ||
                               "⚠️ 항목을 찾을 수 없음";
-                            return `Delete: ${label}`;
+                            return `삭제: ${label}`;
                           }
                           if (
                             name === "update_task" ||
@@ -815,7 +813,7 @@ function ChatPageContent() {
                               args[idKey] ||
                               args.id ||
                               "⚠️ 항목을 찾을 수 없음";
-                            return `Update: ${label}`;
+                            return `수정: ${label}`;
                           }
                           return null;
                         })();
@@ -832,10 +830,10 @@ function ChatPageContent() {
                                   type="button"
                                   onClick={() => handleActionApprove(action.id)}
                                   disabled={isLoading}
-                                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg bg-amber-300 hover:bg-amber-200 text-stone-950 disabled:opacity-50 disabled:cursor-not-allowed transition"
                                 >
                                   {isLoading ? (
-                                    <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <span className="w-3 h-3 border-2 border-stone-950/30 border-t-stone-950 rounded-full animate-spin" />
                                   ) : (
                                     <svg
                                       aria-hidden="true"
@@ -851,7 +849,7 @@ function ChatPageContent() {
                                       <polyline points="20 6 9 17 4 12" />
                                     </svg>
                                   )}
-                                  Approve
+                                  승인
                                 </button>
                                 <button
                                   type="button"
@@ -859,7 +857,7 @@ function ChatPageContent() {
                                   disabled={isLoading}
                                   className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg border border-stone-600 text-stone-300 hover:bg-stone-800 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
                                 >
-                                  Reject
+                                  거절
                                 </button>
                               </div>
                               <div className="flex items-center gap-3 text-[11px]">
@@ -869,7 +867,7 @@ function ChatPageContent() {
                                   disabled={isLoading}
                                   className="text-amber-300 hover:text-amber-200 disabled:opacity-50 transition"
                                 >
-                                  Always allow {action.toolName.replace(/_/g, " ")}
+                                  이 도구는 항상 허용
                                 </button>
                                 <span className="text-stone-700">|</span>
                                 <button
@@ -878,7 +876,7 @@ function ChatPageContent() {
                                   disabled={isLoading}
                                   className="text-stone-500 hover:text-red-400 disabled:opacity-50 transition"
                                 >
-                                  Never suggest this
+                                  다시 제안하지 않기
                                 </button>
                               </div>
                             </div>
@@ -887,9 +885,9 @@ function ChatPageContent() {
                       }
 
                       const statusLabel: Record<string, { text: string; color: string }> = {
-                        EXECUTED: { text: "Executed", color: "text-emerald-400" },
-                        REJECTED: { text: "Rejected", color: "text-stone-500" },
-                        FAILED: { text: "Failed", color: "text-red-400" },
+                        EXECUTED: { text: "실행됨", color: "text-emerald-400" },
+                        REJECTED: { text: "거절됨", color: "text-stone-500" },
+                        FAILED: { text: "실패", color: "text-red-400" },
                       };
                       const status = statusLabel[action.status];
                       if (!status) return null;
@@ -1168,7 +1166,7 @@ function ChatPageContent() {
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Ask for a decision, context trace, or next move..."
+              placeholder="결정, 근거 추적, 다음 행동을 요청하세요..."
               rows={1}
               className="w-full bg-transparent px-5 pt-4 pb-2 text-[15px] resize-none focus:outline-none placeholder-stone-500 max-h-[200px]"
             />
@@ -1255,7 +1253,7 @@ function ChatPageContent() {
           </div>
 
           <p className="mt-2 text-center text-[11px] text-stone-600">
-            EVE prepares the reasoning chain. You approve the action.
+            EVE는 판단 근거를 먼저 준비하고, 실제 실행은 승인 뒤에 진행합니다.
           </p>
         </div>
       </div>

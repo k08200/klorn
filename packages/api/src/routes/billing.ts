@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { encryptOptional } from "../crypto-tokens.js";
 import { db, prisma } from "../db.js";
 import {
   getEffectivePlan,
@@ -125,6 +126,10 @@ export async function billingRoutes(app: FastifyInstance) {
 
     const planModels = PLAN_MODELS[user.plan] || PLAN_MODELS.FREE;
     const userFields = user as unknown as { chatModel?: string; agentModel?: string };
+    const keyFields = user as unknown as {
+      openRouterApiKey?: string | null;
+      geminiApiKey?: string | null;
+    };
 
     return {
       plan: user.plan,
@@ -132,17 +137,30 @@ export async function billingRoutes(app: FastifyInstance) {
       agentModels: planModels.agent,
       currentChatModel: userFields.chatModel || planModels.chat[0],
       currentAgentModel: userFields.agentModel || planModels.agent[0] || null,
+      hasOpenRouterApiKey: !!keyFields.openRouterApiKey,
+      hasGeminiApiKey: !!keyFields.geminiApiKey,
       // Show all models across all plans (locked ones for upsell UI)
       allModels: PLAN_MODELS,
     };
   });
 
-  // PATCH /api/billing/models — Update user's selected model
+  // PATCH /api/billing/models — Update user's selected model and personal LLM keys
   app.patch("/models", async (request, reply) => {
     const userId = getUserId(request);
-    const { chatModel, agentModel } = request.body as {
+    const {
+      chatModel,
+      agentModel,
+      openRouterApiKey,
+      geminiApiKey,
+      clearOpenRouterApiKey,
+      clearGeminiApiKey,
+    } = request.body as {
       chatModel?: string;
-      agentModel?: string;
+      agentModel?: string | null;
+      openRouterApiKey?: string | null;
+      geminiApiKey?: string | null;
+      clearOpenRouterApiKey?: boolean;
+      clearGeminiApiKey?: boolean;
     };
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -173,8 +191,22 @@ export async function billingRoutes(app: FastifyInstance) {
       }
     }
 
+    if (typeof openRouterApiKey === "string") {
+      const trimmed = openRouterApiKey.trim();
+      updateData.openRouterApiKey = trimmed ? encryptOptional(trimmed) : null;
+    } else if (clearOpenRouterApiKey) {
+      updateData.openRouterApiKey = null;
+    }
+
+    if (typeof geminiApiKey === "string") {
+      const trimmed = geminiApiKey.trim();
+      updateData.geminiApiKey = trimmed ? encryptOptional(trimmed) : null;
+    } else if (clearGeminiApiKey) {
+      updateData.geminiApiKey = null;
+    }
+
     if (Object.keys(updateData).length === 0) {
-      return reply.code(400).send({ error: "No model specified" });
+      return reply.code(400).send({ error: "No model or key setting specified" });
     }
 
     // Use raw update to handle new fields before Prisma regenerate
@@ -186,6 +218,18 @@ export async function billingRoutes(app: FastifyInstance) {
       ...Object.values(updateData),
     );
 
-    return { success: true, ...updateData };
+    return {
+      success: true,
+      ...(updateData.chatModel !== undefined ? { chatModel: updateData.chatModel } : {}),
+      ...(updateData.agentModel !== undefined ? { agentModel: updateData.agentModel } : {}),
+      hasOpenRouterApiKey:
+        updateData.openRouterApiKey !== undefined
+          ? !!updateData.openRouterApiKey
+          : !!(user as unknown as { openRouterApiKey?: string | null }).openRouterApiKey,
+      hasGeminiApiKey:
+        updateData.geminiApiKey !== undefined
+          ? !!updateData.geminiApiKey
+          : !!(user as unknown as { geminiApiKey?: string | null }).geminiApiKey,
+    };
   });
 }

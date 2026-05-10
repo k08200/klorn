@@ -19,7 +19,7 @@ import {
   summarizeUnsummarizedEmails,
   syncEmails,
 } from "./email-sync.js";
-import { getAuthedClient, renewExpiringGmailWatches, sendEmail, trashEmail } from "./gmail.js";
+import { getAuthedClient, renewExpiringGmailWatches, sendEmail } from "./gmail.js";
 import { formatUrgentEmailBody } from "./notification-format.js";
 import { runProactiveActions } from "./proactive-actions.js";
 import { sendPushNotification } from "./push.js";
@@ -80,6 +80,14 @@ function isReconcileDue(userId: string): boolean {
   const last = lastReconcileAt.get(userId);
   if (!last) return true;
   return Date.now() - last >= RECONCILE_INTERVAL_MS;
+}
+
+const lastCalendarSyncAt = new Map<string, number>();
+const CALENDAR_SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+function isCalendarSyncDue(userId: string): boolean {
+  const last = lastCalendarSyncAt.get(userId);
+  if (!last) return true;
+  return Date.now() - last >= CALENDAR_SYNC_INTERVAL_MS;
 }
 
 /**
@@ -191,8 +199,8 @@ async function runAutomations() {
       }
 
       // --- Calendar Auto-Sync (every 15 minutes) ---
-      const minute = new Date().getMinutes();
-      if (minute === 0 || minute === 15 || minute === 30 || minute === 45) {
+      if (isCalendarSyncDue(config.userId)) {
+        lastCalendarSyncAt.set(config.userId, Date.now());
         try {
           const auth = await getAuthedClient(config.userId);
           if (auth) {
@@ -311,20 +319,9 @@ async function runAutomations() {
               await summarizeUnsummarizedEmails(config.userId, syncResult.newCount);
             }
 
-            // Auto-delete LOW priority emails (ads/promotions) — trash in Gmail + remove from DB
-            const lowEmails = await prisma.emailMessage.findMany({
-              where: { userId: config.userId, priority: "LOW" },
-              select: { id: true, gmailId: true },
-            });
-            for (const low of lowEmails) {
-              try {
-                await trashEmail(config.userId, low.gmailId);
-                await prisma.emailMessage.delete({ where: { id: low.id } });
-              } catch {
-                // Gmail trash failed — just remove from local DB
-                await prisma.emailMessage.delete({ where: { id: low.id } }).catch(() => {});
-              }
-            }
+            // LOW-priority mail is a quarantine signal, not a destructive
+            // action. Keep the local/Gmail records intact so the user can audit
+            // EVE's classification and approve any cleanup later.
 
             // Auto-reply: check rules for newly synced emails (dedup by gmailId)
             // Requires TEAM+ plan for auto-reply

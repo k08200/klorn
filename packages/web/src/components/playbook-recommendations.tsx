@@ -19,6 +19,7 @@ const EMPTY_SUMMARY: PlaybookRecommendationSummary = {
 export default function PlaybookRecommendations() {
   const [data, setData] = useState<PlaybookRecommendationSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -44,6 +45,19 @@ export default function PlaybookRecommendations() {
   if (loading && data.recommendations.length === 0) return null;
   if (data.recommendations.length === 0) return null;
 
+  const setActivation = async (playbookId: string, active: boolean) => {
+    if (updating) return;
+    setUpdating(playbookId);
+    try {
+      await apiFetch(`/api/playbooks/${playbookId}/activate`, {
+        method: active ? "POST" : "DELETE",
+      });
+      await refresh();
+    } finally {
+      setUpdating(null);
+    }
+  };
+
   return (
     <section className="mb-6" aria-label="EVE playbook recommendations">
       <div className="mb-2 flex items-center justify-between">
@@ -52,16 +66,32 @@ export default function PlaybookRecommendations() {
       </div>
       <div className="space-y-2">
         {data.recommendations.map((recommendation) => (
-          <PlaybookCard key={recommendation.playbook.id} recommendation={recommendation} />
+          <PlaybookCard
+            key={recommendation.playbook.id}
+            recommendation={recommendation}
+            updating={updating === recommendation.playbook.id}
+            onToggle={() =>
+              setActivation(recommendation.playbook.id, !recommendation.playbook.active)
+            }
+          />
         ))}
       </div>
     </section>
   );
 }
 
-function PlaybookCard({ recommendation }: { recommendation: PlaybookRecommendation }) {
+function PlaybookCard({
+  recommendation,
+  updating,
+  onToggle,
+}: {
+  recommendation: PlaybookRecommendation;
+  updating: boolean;
+  onToggle: () => void;
+}) {
   const domain = domainMeta(recommendation.playbook.domain);
   const primaryContext = recommendation.activeContexts[0] ?? null;
+  const active = Boolean(recommendation.playbook.active);
 
   return (
     <article className="rounded-xl border border-stone-800 bg-stone-900/40 p-4 transition hover:bg-stone-900/60">
@@ -76,6 +106,11 @@ function PlaybookCard({ recommendation }: { recommendation: PlaybookRecommendati
             <span className="text-[11px] text-stone-500">
               {Math.round(recommendation.confidence * 100)}%
             </span>
+            {active && (
+              <span className="rounded border border-emerald-400/20 bg-emerald-400/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                활성
+              </span>
+            )}
           </div>
           <p className="mt-2 truncate text-sm font-medium text-stone-100">
             {recommendation.playbook.name}
@@ -101,6 +136,18 @@ function PlaybookCard({ recommendation }: { recommendation: PlaybookRecommendati
           </span>
         ))}
       </div>
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={updating}
+        className={`mt-3 h-8 rounded-md border px-3 text-xs transition disabled:opacity-50 ${
+          active
+            ? "border-stone-700 text-stone-400 hover:bg-stone-800"
+            : "border-amber-300/25 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15"
+        }`}
+      >
+        {updating ? "저장 중..." : active ? "일시 중지" : "활성화"}
+      </button>
     </article>
   );
 }

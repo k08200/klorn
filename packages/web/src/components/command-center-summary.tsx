@@ -91,6 +91,7 @@ function AttentionRow({ item, index }: { item: AttentionItem; index: number }) {
         {body.subtitle && (
           <p className="mt-1 text-[11px] text-stone-400 line-clamp-1">{body.subtitle}</p>
         )}
+        <DecisionTrace item={item} />
       </div>
     </div>
   );
@@ -100,6 +101,40 @@ function AttentionRow({ item, index }: { item: AttentionItem; index: number }) {
     </Link>
   ) : (
     content
+  );
+}
+
+function DecisionTrace({ item }: { item: AttentionItem }) {
+  const decision = item.decision;
+  const facts = decision.evidence.slice(0, 2);
+  if (!decision.costOfIgnoring && facts.length === 0) return null;
+
+  return (
+    <div className="mt-2 grid gap-1.5 rounded-md border border-stone-800/70 bg-black/20 p-2">
+      {decision.costOfIgnoring && (
+        <p className="line-clamp-2 text-[11px] leading-4 text-stone-400">
+          놓치면: {decision.costOfIgnoring}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="rounded border border-stone-800 px-1.5 py-0.5 text-[10px] text-stone-500">
+          신뢰도 {Math.round(decision.confidence * 100)}%
+        </span>
+        {decision.suggestedAction && (
+          <span className="rounded border border-amber-300/20 bg-amber-300/10 px-1.5 py-0.5 text-[10px] text-amber-200">
+            {decision.suggestedAction}
+          </span>
+        )}
+        {facts.map((fact) => (
+          <span
+            key={`${fact.label}:${fact.value}`}
+            className="max-w-full truncate rounded border border-stone-800 px-1.5 py-0.5 text-[10px] text-stone-500"
+          >
+            {fact.label}: {fact.value}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 

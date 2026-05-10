@@ -10,49 +10,54 @@ datasource db {
 }
 
 model User {
-  id                  String               @id @default(uuid())
-  email               String               @unique
-  passwordHash        String?
-  name                String?
-  role                UserRole             @default(USER)
-  plan                Plan                 @default(FREE)
-  chatModel           String               @default("google/gemma-4-31b-it:free")
-  agentModel          String?
-  stripeId            String?              @unique
-  emailVerified       Boolean              @default(false)
-  verifyToken         String?
-  verifyTokenExp      DateTime?
-  resetToken          String?
-  resetTokenExp       DateTime?
-  betaProGrantedAt    DateTime?
-  agents              Agent[]
-  testRuns            TestRun[]
-  conversations       Conversation[]
-  tokens              UserToken[]
-  tasks               Task[]
-  notes               Note[]
-  reminders           Reminder[]
-  contacts            Contact[]
-  calendarEvents      CalendarEvent[]
-  workspaceMembers    WorkspaceMember[]
-  automationConfig    AutomationConfig?
-  agentLogs           AgentLog[]
-  notifications       Notification[]
-  pushSubscriptions   PushSubscription[]
-  pushDeliveryLogs    PushDeliveryLog[]
-  memories            Memory[]
-  skills              Skill[]
-  tokenUsages         TokenUsage[]
-  devices             Device[]
-  emailMessages       EmailMessage[]
-  emailRules          EmailRule[]
-  attentionItems      AttentionItem[]
-  commitments         Commitment[]
-  feedbackEvents      FeedbackEvent[]
-  emailLabelFeedback  EmailLabelFeedback[]
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  emailProcessingLogs EmailProcessingLog[]
+  id                        String                     @id @default(uuid())
+  email                     String                     @unique
+  passwordHash              String?
+  name                      String?
+  role                      UserRole                   @default(USER)
+  plan                      Plan                       @default(FREE)
+  chatModel                 String                     @default("google/gemma-4-31b-it:free")
+  agentModel                String?
+  openRouterApiKey          String?
+  geminiApiKey              String?
+  stripeId                  String?                    @unique
+  emailVerified             Boolean                    @default(false)
+  verifyToken               String?
+  verifyTokenExp            DateTime?
+  resetToken                String?
+  resetTokenExp             DateTime?
+  betaProGrantedAt          DateTime?
+  agents                    Agent[]
+  testRuns                  TestRun[]
+  conversations             Conversation[]
+  tokens                    UserToken[]
+  tasks                     Task[]
+  notes                     Note[]
+  reminders                 Reminder[]
+  contacts                  Contact[]
+  calendarEvents            CalendarEvent[]
+  workspaceMembers          WorkspaceMember[]
+  automationConfig          AutomationConfig?
+  agentLogs                 AgentLog[]
+  notifications             Notification[]
+  pushSubscriptions         PushSubscription[]
+  pushDeliveryLogs          PushDeliveryLog[]
+  memories                  Memory[]
+  skills                    Skill[]
+  tokenUsages               TokenUsage[]
+  devices                   Device[]
+  emailMessages             EmailMessage[]
+  emailRules                EmailRule[]
+  attentionItems            AttentionItem[]
+  commitments               Commitment[]
+  feedbackEvents            FeedbackEvent[]
+  emailLabelFeedback        EmailLabelFeedback[]
+  playbookActivations       ActivatedPlaybook[]
+  workContextSnapshots      WorkContextSnapshot[]
+  feedbackPolicyPreferences FeedbackPolicyPreference[]
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  emailProcessingLogs       EmailProcessingLog[]
 }
 
 enum UserRole {
@@ -313,7 +318,7 @@ model AutomationConfig {
   emailAutoClassify    Boolean  @default(true)
   reminderAutoCheck    Boolean  @default(true)
   dailyBriefing        Boolean  @default(true)
-  briefingTime         String   @default("07:30")
+  briefingTime         String   @default("06:00")
   timezone             String   @default("Asia/Seoul")
   downloadAutoOrganize Boolean  @default(false)
   autonomousAgent      Boolean  @default(true)
@@ -830,6 +835,70 @@ enum FeedbackSignal {
   IGNORED
   SNOOZED
   DISMISSED
+}
+
+// Durable Work Graph snapshots. WorkGraph v0 is still inferred from source
+// tables, but every summary write-throughs the active contexts here so EVE can
+// build longitudinal project memory without waiting for a full graph schema.
+model WorkContextSnapshot {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  contextKey     String
+  kind           String
+  title          String
+  subtitle       String?
+  href           String?
+  risk           String
+  reasons        Json
+  signals        Json
+  people         Json
+  lastActivityAt DateTime
+  generatedAt    DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, contextKey])
+  @@index([userId, risk, lastActivityAt])
+}
+
+// User-enabled operating patterns. Recommendations can stay read-only, but an
+// activation tells EVE to bias ranking, briefings, and future playbook work
+// around that domain.
+model ActivatedPlaybook {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  playbookId String
+  status     String   @default("ACTIVE")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, playbookId])
+  @@index([userId, status])
+}
+
+// User controls over extracted feedback policies. The extractor remains
+// conservative; this table records which candidates the user explicitly wants
+// EVE to apply or ignore.
+model FeedbackPolicyPreference {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  candidateId String
+  kind        String
+  toolName    String
+  recipient   String?
+  action      String   @default("ACTIVE") // ACTIVE | IGNORED
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, candidateId])
+  @@index([userId, action])
+  @@index([userId, toolName])
 }
 
 // Public early-access waitlist. Submissions land here before the founder

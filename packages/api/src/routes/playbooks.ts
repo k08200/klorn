@@ -7,12 +7,36 @@
 
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
-import { buildPlaybookRecommendations, listEvePlaybooks } from "../playbooks.js";
+import {
+  activatePlaybook,
+  buildPlaybookRecommendations,
+  deactivatePlaybook,
+  listActivePlaybookIds,
+  listEvePlaybooks,
+} from "../playbooks.js";
+
+const playbookIdParamSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id"],
+  properties: {
+    id: { type: "string", minLength: 1 },
+  },
+} as const;
 
 export function playbookRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
 
-  app.get("/", async () => ({ playbooks: listEvePlaybooks() }));
+  app.get("/", async (request) => {
+    const userId = getUserId(request);
+    const activeIds = await listActivePlaybookIds(userId);
+    return { playbooks: listEvePlaybooks(activeIds) };
+  });
+
+  app.get("/activations", async (request) => {
+    const userId = getUserId(request);
+    return { activePlaybookIds: [...(await listActivePlaybookIds(userId))] };
+  });
 
   app.get("/recommendations", async (request) => {
     const userId = getUserId(request);
@@ -21,6 +45,19 @@ export function playbookRoutes(app: FastifyInstance) {
       limit: parseOptionalInteger(limit),
       contextLimit: parseOptionalInteger(contextLimit),
     });
+  });
+
+  app.post("/:id/activate", { schema: { params: playbookIdParamSchema } }, async (request) => {
+    const userId = getUserId(request);
+    const { id } = request.params as { id: string };
+    return { playbook: await activatePlaybook(userId, id) };
+  });
+
+  app.delete("/:id/activate", { schema: { params: playbookIdParamSchema } }, async (request) => {
+    const userId = getUserId(request);
+    const { id } = request.params as { id: string };
+    await deactivatePlaybook(userId, id);
+    return { success: true };
   });
 }
 

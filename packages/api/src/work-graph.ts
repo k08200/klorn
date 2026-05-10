@@ -376,5 +376,56 @@ export async function buildWorkGraphSummary(
     })
     .slice(0, limit);
 
+  await persistWorkContextSnapshots(userId, sorted, now);
+
   return { generatedAt: new Date(now).toISOString(), contexts: sorted };
+}
+
+async function persistWorkContextSnapshots(
+  userId: string,
+  contexts: WorkGraphContext[],
+  now: number,
+): Promise<void> {
+  const model = (
+    prisma as unknown as {
+      workContextSnapshot?: { upsert: (args: unknown) => Promise<unknown> };
+    }
+  ).workContextSnapshot;
+  if (!model || contexts.length === 0) return;
+
+  await Promise.all(
+    contexts.map((context) =>
+      model
+        .upsert({
+          where: { userId_contextKey: { userId, contextKey: context.id } },
+          create: {
+            userId,
+            contextKey: context.id,
+            kind: context.kind,
+            title: context.title,
+            subtitle: context.subtitle,
+            href: context.href,
+            risk: context.risk,
+            reasons: context.reasons,
+            signals: context.signals,
+            people: context.people,
+            lastActivityAt: new Date(context.lastActivityAt),
+            generatedAt: new Date(now),
+          },
+          update: {
+            kind: context.kind,
+            title: context.title,
+            subtitle: context.subtitle,
+            href: context.href,
+            risk: context.risk,
+            reasons: context.reasons,
+            signals: context.signals,
+            people: context.people,
+            lastActivityAt: new Date(context.lastActivityAt),
+            generatedAt: new Date(now),
+          },
+        })
+        .catch(() => {}),
+    ),
+  );
 }

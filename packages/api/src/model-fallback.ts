@@ -8,8 +8,6 @@
  *     (the limit is per-KEY, so another :free model on the same key fails too)
  */
 
-import type { ProviderName } from "./providers/index.js";
-
 /** Free model used when paid credits run out (same provider) */
 export const FALLBACK_MODEL = process.env.FALLBACK_MODEL || "google/gemma-4-31b-it:free";
 
@@ -24,10 +22,15 @@ interface ProviderState {
   keyLimitedUntil: number | null;
 }
 
-const state: Record<ProviderName, ProviderState> = {
+const state: Record<string, ProviderState> = {
   openrouter: { creditExhaustedAt: null, keyLimitedUntil: null },
   gemini: { creditExhaustedAt: null, keyLimitedUntil: null },
 };
+
+function providerState(provider: string): ProviderState {
+  state[provider] ??= { creditExhaustedAt: null, keyLimitedUntil: null };
+  return state[provider];
+}
 
 /**
  * Compute the next OpenRouter weekly-reset boundary.
@@ -45,8 +48,8 @@ function nextWeeklyResetMs(now: Date = new Date()): number {
 }
 
 /** Is this provider currently in a credit-exhausted cooldown? */
-export function isCreditExhausted(provider: ProviderName): boolean {
-  const s = state[provider];
+export function isCreditExhausted(provider: string): boolean {
+  const s = providerState(provider);
   if (s.creditExhaustedAt === null) return false;
   if (Date.now() - s.creditExhaustedAt > CREDIT_RETRY_AFTER_MS) {
     s.creditExhaustedAt = null;
@@ -57,8 +60,8 @@ export function isCreditExhausted(provider: ProviderName): boolean {
 }
 
 /** Is this provider locked out until the weekly reset? */
-export function isKeyLimited(provider: ProviderName): boolean {
-  const s = state[provider];
+export function isKeyLimited(provider: string): boolean {
+  const s = providerState(provider);
   if (s.keyLimitedUntil === null) return false;
   if (Date.now() >= s.keyLimitedUntil) {
     s.keyLimitedUntil = null;
@@ -69,33 +72,36 @@ export function isKeyLimited(provider: ProviderName): boolean {
 }
 
 /** Provider is unusable for any reason right now */
-export function isProviderUnavailable(provider: ProviderName): boolean {
+export function isProviderUnavailable(provider: string): boolean {
   return isKeyLimited(provider) || isCreditExhausted(provider);
 }
 
 /** Mark a provider as credit-exhausted (402) — short cooldown */
-export function markCreditExhausted(provider: ProviderName): void {
-  if (state[provider].creditExhaustedAt === null) {
+export function markCreditExhausted(provider: string): void {
+  const s = providerState(provider);
+  if (s.creditExhaustedAt === null) {
     console.warn(`[MODEL-FALLBACK] ${provider} credits exhausted — cooldown for 5min`);
   }
-  state[provider].creditExhaustedAt = Date.now();
+  s.creditExhaustedAt = Date.now();
 }
 
 /** Mark a provider as quota/rate-limited — hold until weekly reset */
-export function markKeyLimited(provider: ProviderName): void {
+export function markKeyLimited(provider: string): void {
+  const s = providerState(provider);
   const until = nextWeeklyResetMs();
-  state[provider].keyLimitedUntil = until;
+  s.keyLimitedUntil = until;
   console.warn(
     `[MODEL-FALLBACK] ${provider} hit weekly key limit — locked out until ${new Date(until).toISOString()}`,
   );
 }
 
 /** Manually clear all fallback state (admin / post-topup) */
-export function clearFallbackState(provider?: ProviderName): void {
-  const targets: ProviderName[] = provider ? [provider] : ["openrouter", "gemini"];
+export function clearFallbackState(provider?: string): void {
+  const targets = provider ? [provider] : Object.keys(state);
   for (const p of targets) {
-    state[p].creditExhaustedAt = null;
-    state[p].keyLimitedUntil = null;
+    const s = providerState(p);
+    s.creditExhaustedAt = null;
+    s.keyLimitedUntil = null;
   }
   console.log(`[MODEL-FALLBACK] Cleared state for: ${targets.join(", ")}`);
 }
