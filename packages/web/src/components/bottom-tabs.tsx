@@ -10,11 +10,11 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  { href: "/chat", label: "Chat", icon: "chat" },
+  { href: "/chat", label: "Command", icon: "chat" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
-  { href: "/email", label: "Email", icon: "email" },
-  { href: "/briefing", label: "Briefing", icon: "briefing" },
-  { href: "/inbox", label: "Approve", icon: "inbox" },
+  { href: "/email", label: "Signals", icon: "email" },
+  { href: "/briefing", label: "Brief", icon: "briefing" },
+  { href: "/inbox", label: "Decide", icon: "inbox" },
 ];
 
 export default function BottomTabs() {
@@ -23,7 +23,7 @@ export default function BottomTabs() {
   return (
     <nav
       aria-label="Main navigation"
-      className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-[#0a0a0f]/95 backdrop-blur-sm border-t border-gray-800/60 pb-safe"
+      className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-stone-700/50 bg-[#10100d]/92 pb-safe shadow-[0_-16px_44px_rgba(0,0,0,0.35)] backdrop-blur-xl"
     >
       <ul className="grid grid-cols-5">
         {TABS.map((tab) => {
@@ -32,8 +32,8 @@ export default function BottomTabs() {
             <li key={tab.href}>
               <Link
                 href={tab.href}
-                className={`flex flex-col items-center justify-center gap-1 py-2.5 min-h-[56px] text-[11px] transition ${
-                  active ? "text-white" : "text-gray-500"
+                className={`flex min-h-[62px] flex-col items-center justify-center gap-1 py-2 text-[10px] transition ${
+                  active ? "text-amber-200" : "text-stone-500"
                 }`}
               >
                 <TabIcon type={tab.icon} active={active} />

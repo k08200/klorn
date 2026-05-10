@@ -10,22 +10,21 @@ import ServiceWorkerRegister from "../components/sw-register";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "EVE — Your AI Chief of Staff",
+  title: "EVE - Decision OS for Work",
   description:
-    "Your AI Chief of Staff. Triages email, preps meetings, and runs follow-ups for founders — without the six-figure salary.",
+    "EVE turns email, calendar, tasks, and memory into decision cards you can inspect, approve, and trust.",
   manifest: "/manifest.json",
   openGraph: {
-    title: "EVE — Your AI Chief of Staff",
+    title: "EVE - Decision OS for Work",
     description:
-      "Same job a human Chief of Staff does — email triage, meeting prep, follow-ups — for $29/mo, running 24/7.",
+      "A quiet operating layer for work signals, decision context, approvals, and memory.",
     siteName: "hireEVE",
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "EVE — Your AI Chief of Staff",
-    description:
-      "The AI CoS founders couldn't afford to hire. $29/mo. Always on. Connect Gmail once, EVE handles the rest.",
+    title: "EVE - Decision OS for Work",
+    description: "Turn scattered work signals into decisions with context, approval, and memory.",
   },
   appleWebApp: {
     capable: true,
@@ -44,7 +43,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-gray-950 text-gray-100 antialiased">
+      <body className="bg-[#10100d] text-stone-100 antialiased">
         <Providers>
           <KeyboardShortcuts />
           <CommandPalette />

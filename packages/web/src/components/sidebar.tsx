@@ -73,7 +73,8 @@ function groupByDate(convs: Conversation[]): DateGroup[] {
 }
 
 const NAV_ITEMS = [
-  { href: "/inbox", label: "Approval Queue", icon: "check" },
+  { href: "/inbox", label: "Decision Queue", icon: "check" },
+  { href: "/email", label: "Signal Mail", icon: "mail" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/briefing", label: "Briefing", icon: "bell" },
 ];
@@ -365,23 +366,30 @@ export default function Sidebar({
     : "";
 
   const sidebarContent = (
-    <div className="relative flex flex-col h-full bg-[#0a0a0f] border-r border-gray-800/40 pt-safe pb-safe">
+    <div className="relative flex h-full flex-col overflow-hidden border-r border-stone-700/40 bg-[#11100d]/95 pt-safe pb-safe shadow-2xl shadow-black/25">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-[radial-gradient(circle_at_18%_0%,rgba(245,158,11,0.18),transparent_58%)]" />
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-3">
+      <div className="relative flex items-center justify-between px-3 py-3">
         <Link
           href="/chat"
-          className="text-sm font-semibold text-gray-200 hover:text-white transition pl-1"
+          className="flex items-center gap-2 rounded-lg px-1 py-1 text-sm font-semibold text-stone-100 transition hover:text-white"
           onClick={onMobileClose}
         >
-          EVE
+          <img src="/brand/mark.svg" alt="" className="h-7 w-7" />
+          <span>
+            <span className="block leading-none">EVE</span>
+            <span className="mt-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-stone-500">
+              Decision OS
+            </span>
+          </span>
         </Link>
         <div className="flex items-center gap-1">
           {user && <NotificationBell userId={user.id} />}
           <button
             type="button"
             onClick={createChat}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition"
-            title="New chat"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-stone-700/60 bg-stone-900/40 text-stone-400 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-200"
+            title="New command"
           >
             <svg
               aria-hidden="true"
@@ -402,7 +410,7 @@ export default function Sidebar({
       </div>
 
       {/* Search */}
-      <div className="px-3 pb-2">
+      <div className="relative px-3 pb-2">
         <div className="relative">
           <svg
             aria-hidden="true"
@@ -421,8 +429,8 @@ export default function Sidebar({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search chats..."
-            className="w-full bg-gray-900/50 border border-gray-800/60 rounded-lg pl-8 pr-3 py-1.5 text-xs text-gray-300 placeholder-gray-600 focus:outline-none focus:border-gray-600 transition"
+            placeholder="Search decisions..."
+            className="w-full rounded-lg border border-stone-700/60 bg-stone-950/45 py-1.5 pl-8 pr-3 text-xs text-stone-300 placeholder-stone-600 transition focus:border-amber-500/50 focus:outline-none"
           />
           {search && (
             <button
@@ -437,19 +445,19 @@ export default function Sidebar({
       </div>
 
       {/* Conversation list */}
-      <div className="flex-1 overflow-y-auto px-2 pb-2">
+      <div className="relative flex-1 overflow-y-auto px-2 pb-2">
         {/* EVE Suggestions — agent conversations with pending actions */}
         {agentSuggestions.length > 0 && (
           <div className="mb-3">
             <Link
               href="/inbox"
               onClick={onMobileClose}
-              className="text-[11px] font-medium text-cyan-400/80 hover:text-cyan-300 px-2 py-1.5 flex items-center gap-1.5 rounded-md hover:bg-cyan-500/5 transition"
+              className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium text-amber-300/85 transition hover:bg-amber-500/10 hover:text-amber-200"
             >
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-              Approval Queue
+              <span className="h-2 w-2 animate-pulse rounded-full bg-amber-300" />
+              Decision Queue
               {totalPending > 0 && (
-                <span className="ml-auto bg-cyan-500/20 text-cyan-300 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+                <span className="ml-auto rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-200">
                   {totalPending}
                 </span>
               )}
@@ -463,15 +471,15 @@ export default function Sidebar({
                   onClick={onMobileClose}
                   className={`group flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition border-l-2 ${
                     isActive
-                      ? "bg-cyan-500/10 border-cyan-400 text-white"
-                      : "border-cyan-500/30 text-gray-300 hover:bg-cyan-500/5 hover:text-white hover:border-cyan-400"
+                      ? "border-amber-300 bg-amber-500/10 text-white"
+                      : "border-amber-500/30 text-stone-300 hover:border-amber-300 hover:bg-amber-500/5 hover:text-white"
                   }`}
                 >
                   <span className="truncate flex-1 text-[13px]">
                     {conv.title || "EVE suggestion"}
                   </span>
                   {(conv.pendingActionCount || 0) > 0 && (
-                    <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded-full shrink-0">
+                    <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200">
                       {conv.pendingActionCount} pending
                     </span>
                   )}
@@ -780,7 +788,7 @@ export default function Sidebar({
       </div>
 
       {/* Workspace nav */}
-      <div className="border-t border-gray-800/40 px-2 py-2">
+      <div className="relative border-t border-stone-700/40 px-2 py-2">
         <div className="space-y-0.5">
           {NAV_ITEMS.map((item) => {
             const badge = item.href === "/inbox" && totalPending > 0 ? totalPending : null;
@@ -791,14 +799,14 @@ export default function Sidebar({
                 onClick={onMobileClose}
                 className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] transition ${
                   pathname.startsWith(item.href)
-                    ? "bg-gray-800/80 text-white"
-                    : "text-gray-500 hover:bg-gray-800/50 hover:text-gray-300"
+                    ? "bg-amber-500/10 text-amber-100"
+                    : "text-stone-500 hover:bg-stone-800/55 hover:text-stone-300"
                 }`}
               >
                 <NavIcon type={item.icon} size={14} />
                 <span className="flex-1">{item.label}</span>
                 {badge !== null && (
-                  <span className="bg-cyan-500/20 text-cyan-300 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+                  <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-200">
                     {badge}
                   </span>
                 )}

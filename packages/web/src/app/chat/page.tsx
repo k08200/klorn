@@ -59,63 +59,119 @@ function NewChatWelcome() {
   };
 
   const suggestions = [
-    { label: "Daily briefing", message: "Give me today's briefing" },
-    { label: "Check emails", message: "Check my emails" },
-    { label: "Show tasks", message: "Show my tasks" },
-    { label: "Write a report", message: "Write a report" },
-    { label: "Schedule meeting", message: "Schedule a meeting" },
-    { label: "Search contacts", message: "Search contacts" },
+    {
+      label: "Clear decisions",
+      message: "Show me the decisions I should clear today.",
+      meta: "queue",
+    },
+    {
+      label: "Find hidden risk",
+      message: "Look across email, calendar, and tasks for anything at risk.",
+      meta: "signals",
+    },
+    {
+      label: "Prepare meetings",
+      message: "Review today's meetings and tell me what needs prep.",
+      meta: "context",
+    },
+    {
+      label: "Draft follow-up",
+      message: "Find a thread that needs a follow-up and draft the next move.",
+      meta: "move",
+    },
+    {
+      label: "Protect focus",
+      message: "Find one important task and block time for it.",
+      meta: "calendar",
+    },
+    {
+      label: "Update memory",
+      message: "Remember how I want EVE to handle approvals.",
+      meta: "memory",
+    },
   ];
 
   const { googleConnected } = useAuth();
   const connectUrl = `${API_BASE}/api/auth/google?token=${typeof window !== "undefined" ? localStorage.getItem("eve-token") || "" : ""}`;
 
   return (
-    <div className="flex flex-col items-center justify-center h-full px-4">
-      <div className="max-w-2xl w-full text-center">
+    <div className="flex min-h-full flex-col items-center justify-center px-4 pb-28 pt-10 md:py-10">
+      <div className="w-full max-w-4xl">
         {googleConnected === false && (
           <a
             href={connectUrl}
-            className="flex items-center gap-3 bg-blue-600/10 border border-blue-500/30 rounded-xl px-5 py-3 mb-6 text-left hover:bg-blue-600/20 transition mx-auto max-w-md"
+            className="mx-auto mb-6 flex max-w-md items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-5 py-3 text-left transition hover:bg-amber-500/15"
           >
-            <span className="text-blue-400 text-lg">!</span>
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-amber-300/40 text-sm text-amber-200">
+              i
+            </span>
             <div>
-              <p className="text-sm font-medium text-blue-300">Connect Google to get started</p>
-              <p className="text-xs text-gray-500">
+              <p className="text-sm font-medium text-amber-100">Connect Google to get started</p>
+              <p className="text-xs text-stone-500">
                 Link Gmail & Calendar for email sync, notifications, and scheduling
               </p>
             </div>
           </a>
         )}
-        <h1 className="text-2xl font-semibold text-gray-100 mb-2">What can I help with?</h1>
-        <p className="text-sm text-gray-500 mb-10">
-          EVE is ready to assist. Ask anything or pick a suggestion below.
-        </p>
+        <div className="mb-8 text-center">
+          <img src="/brand/mark.svg" alt="" className="mx-auto mb-4 h-14 w-14" />
+          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-300/80">
+            Command Console
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight text-stone-50 sm:text-4xl">
+            Turn the work stream into decisions.
+          </h1>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-stone-500">
+            Ask EVE to inspect signals, assemble context, draft the move, or prepare a decision card
+            before anything gets executed.
+          </p>
+        </div>
 
         {/* Quick input */}
-        <div className="relative mb-8">
+        <div className="relative mx-auto mb-7 max-w-2xl">
           <button
             type="button"
             onClick={() => startChat()}
-            className="w-full bg-[#1a1a24] border border-gray-700/50 rounded-2xl px-5 py-4 text-left text-gray-500 text-sm hover:border-gray-600 transition cursor-text"
+            className="group w-full rounded-2xl border border-stone-700/60 bg-stone-950/55 px-5 py-4 text-left text-sm text-stone-500 shadow-2xl shadow-black/20 transition hover:border-amber-500/45 hover:bg-stone-900/80"
           >
-            Message EVE...
+            <span className="flex items-center justify-between gap-3">
+              <span>Ask EVE to build a decision, brief, or next move...</span>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-300 text-stone-950 transition group-hover:bg-amber-200">
+                <svg
+                  aria-hidden="true"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="12" y1="19" x2="12" y2="5" />
+                  <polyline points="5 12 12 5 19 12" />
+                </svg>
+              </span>
+            </span>
           </button>
         </div>
 
         {/* Suggestions */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-w-lg mx-auto">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {suggestions.map((s) => (
             <button
               key={s.message}
               type="button"
               onClick={() => startChat(s.message)}
-              className="bg-[#1a1a24] border border-gray-800/60 hover:border-gray-700 rounded-xl px-4 py-3 text-left transition group"
+              className="group rounded-xl border border-stone-700/45 bg-stone-950/35 px-4 py-3.5 text-left transition hover:border-amber-500/35 hover:bg-amber-500/10"
             >
-              <p className="text-[13px] text-gray-300 group-hover:text-white transition">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-600">
+                {s.meta}
+              </p>
+              <p className="mt-2 text-[13px] font-medium text-stone-200 transition group-hover:text-white">
                 {s.label}
               </p>
-              <p className="text-[11px] text-gray-600 mt-0.5">{s.message}</p>
+              <p className="mt-1 text-[11px] leading-5 text-stone-600">{s.message}</p>
             </button>
           ))}
         </div>

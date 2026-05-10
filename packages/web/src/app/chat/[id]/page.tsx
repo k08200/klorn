@@ -551,14 +551,20 @@ function ChatPageContent() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       {/* Top bar */}
       {messages.length > 0 && (
-        <div className="flex justify-end px-4 py-1.5 border-b border-gray-800/30">
+        <div className="flex items-center justify-between border-b border-stone-700/35 bg-[#11100d]/72 px-4 py-2 backdrop-blur-xl">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300/75">
+              Command Console
+            </p>
+            <p className="text-xs text-stone-500">Context first. Approval before execution.</p>
+          </div>
           <button
             type="button"
             onClick={exportConversation}
-            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition px-2 py-1 rounded hover:bg-gray-800/50"
+            className="flex items-center gap-1.5 rounded-lg border border-stone-700/40 px-2.5 py-1.5 text-xs text-stone-500 transition hover:border-stone-600 hover:bg-stone-900/60 hover:text-stone-300"
             title="Export as Markdown"
           >
             <svg
@@ -581,7 +587,7 @@ function ChatPageContent() {
         </div>
       )}
       {/* Messages */}
-      <div ref={scrollAreaRef} className="flex-1 overflow-y-auto relative">
+      <div ref={scrollAreaRef} className="relative flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
           {loadError && (
             <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -609,35 +615,39 @@ function ChatPageContent() {
             </div>
           )}
           {!loadError && messages.length === 0 && !streaming && (
-            <div className="flex flex-col items-center justify-center min-h-[60vh]">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-lg font-bold text-white mb-4">
-                E
-              </div>
-              <h2 className="text-xl font-semibold text-gray-200 mb-1">
-                How can I help you today?
+            <div className="flex min-h-[60vh] flex-col items-center justify-center">
+              <img src="/brand/mark.svg" alt="" className="mb-4 h-12 w-12" />
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-300/75">
+                New Decision Thread
+              </p>
+              <h2 className="mb-2 text-center text-2xl font-semibold tracking-tight text-stone-100">
+                Start with the outcome you need.
               </h2>
-              <p className="text-sm text-gray-500 mb-8">Ask me anything or pick a starter below</p>
+              <p className="mb-8 max-w-md text-center text-sm leading-6 text-stone-500">
+                EVE can inspect live work context, explain why it matters, and package the next
+                action for approval.
+              </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
                 {[
                   {
-                    icon: "📧",
-                    title: "Check my emails",
-                    prompt: "Summarize my important unread emails",
+                    code: "01",
+                    title: "Clear today's decisions",
+                    prompt: "Show me the decisions I should clear today.",
                   },
                   {
-                    icon: "📋",
-                    title: "Today's tasks",
-                    prompt: "Show today's tasks sorted by priority",
+                    code: "02",
+                    title: "Trace hidden risk",
+                    prompt: "Look across email, calendar, and tasks for anything at risk.",
                   },
                   {
-                    icon: "📅",
-                    title: "Schedule overview",
-                    prompt: "Show today and tomorrow's schedule with free slots",
+                    code: "03",
+                    title: "Prepare the day",
+                    prompt: "Review today's meetings and tell me what needs prep.",
                   },
                   {
-                    icon: "📝",
-                    title: "Write a document",
-                    prompt: "Help me write a report",
+                    code: "04",
+                    title: "Draft the next move",
+                    prompt: "Find a thread that needs a follow-up and draft the next move.",
                   },
                 ].map((starter) => (
                   <button
@@ -653,14 +663,16 @@ function ChatPageContent() {
                       setMessages([userMsg]);
                       streamResponse(starter.prompt);
                     }}
-                    className="flex items-start gap-3 text-left px-4 py-3.5 rounded-xl border border-gray-800/60 bg-gray-900/40 hover:bg-gray-800/60 hover:border-gray-700 transition group"
+                    className="group flex items-start gap-3 rounded-xl border border-stone-700/50 bg-stone-950/35 px-4 py-3.5 text-left transition hover:border-amber-500/35 hover:bg-amber-500/10"
                   >
-                    <span className="text-lg mt-0.5">{starter.icon}</span>
+                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-stone-700/70 text-[10px] font-semibold text-amber-200">
+                      {starter.code}
+                    </span>
                     <div>
-                      <p className="text-sm font-medium text-gray-300 group-hover:text-white transition">
+                      <p className="text-sm font-medium text-stone-300 transition group-hover:text-white">
                         {starter.title}
                       </p>
-                      <p className="text-xs text-gray-600 mt-0.5 line-clamp-1">{starter.prompt}</p>
+                      <p className="mt-0.5 line-clamp-1 text-xs text-stone-600">{starter.prompt}</p>
                     </div>
                   </button>
                 ))}
@@ -677,11 +689,11 @@ function ChatPageContent() {
                 {/* Avatar */}
                 <div className="shrink-0 pt-0.5">
                   {msg.role === "USER" ? (
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-[10px] font-bold text-white">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-stone-700 text-[10px] font-bold text-white">
                       U
                     </div>
                   ) : (
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-[10px] font-bold text-white">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-300 text-[10px] font-bold text-stone-950">
                       E
                     </div>
                   )}
@@ -689,7 +701,7 @@ function ChatPageContent() {
 
                 {/* Content */}
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold text-gray-300 mb-1.5">
+                  <p className="text-[13px] font-semibold text-stone-300 mb-1.5">
                     {msg.role === "USER" ? "You" : "EVE"}
                   </p>
                   {msg.role === "USER" && editingMsgId === msg.id ? (
@@ -1064,7 +1076,7 @@ function ChatPageContent() {
         <div className="max-w-3xl mx-auto">
           {/* Suggestions */}
           {suggestions.length > 0 && !streaming && (
-            <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
+            <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
               {suggestions.map((s) => (
                 <button
                   key={s}
@@ -1080,7 +1092,7 @@ function ChatPageContent() {
                     setSuggestions([]);
                     streamResponse(s);
                   }}
-                  className="text-[13px] text-gray-400 border border-gray-700/50 hover:border-gray-600 hover:text-gray-200 rounded-full px-4 py-1.5 transition whitespace-nowrap shrink-0"
+                  className="shrink-0 whitespace-nowrap rounded-full border border-stone-700/50 px-4 py-1.5 text-[13px] text-stone-400 transition hover:border-amber-500/35 hover:bg-amber-500/10 hover:text-stone-100"
                 >
                   {s}
                 </button>
@@ -1150,13 +1162,13 @@ function ChatPageContent() {
           )}
 
           {/* Input box */}
-          <div className="bg-[#1a1a24] border border-gray-700/50 rounded-2xl focus-within:border-gray-600 transition">
+          <div className="rounded-2xl border border-stone-700/55 bg-stone-950/70 shadow-2xl shadow-black/20 transition focus-within:border-amber-500/45">
             <textarea
               ref={inputRef}
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Message EVE..."
+              placeholder="Ask for a decision, context trace, or next move..."
               rows={1}
               className="w-full bg-transparent px-5 pt-4 pb-2 text-[15px] resize-none focus:outline-none placeholder-gray-500 max-h-[200px]"
             />
@@ -1220,7 +1232,7 @@ function ChatPageContent() {
                   type="button"
                   onClick={sendMessage}
                   disabled={!input.trim() && !attachment}
-                  className="p-2 rounded-lg bg-white text-gray-900 hover:bg-gray-200 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition"
+                  className="rounded-lg bg-amber-300 p-2 text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-700 disabled:text-stone-500"
                   title="Send"
                 >
                   <svg
@@ -1242,8 +1254,8 @@ function ChatPageContent() {
             </div>
           </div>
 
-          <p className="text-center text-[11px] text-gray-600 mt-2">
-            EVE can make mistakes. Verify important information.
+          <p className="mt-2 text-center text-[11px] text-stone-600">
+            EVE prepares the reasoning chain. You approve the action.
           </p>
         </div>
       </div>

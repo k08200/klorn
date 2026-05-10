@@ -27,15 +27,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="flex h-dvh overflow-hidden bg-[#10100d] text-stone-100">
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(217,119,6,0.14),transparent_30%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.12),transparent_28%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:48px_48px]" />
         {/* Mobile header — pt-safe respects iPhone notch in PWA */}
-        <div className="md:hidden flex items-center gap-3 px-4 h-12 pt-safe border-b border-gray-800/40 shrink-0 box-content">
+        <div className="relative z-10 md:hidden flex items-center gap-3 px-4 h-12 pt-safe border-b border-stone-700/40 bg-[#10100d]/90 backdrop-blur-xl shrink-0 box-content">
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
-            className="flex items-center justify-center min-w-[44px] min-h-[44px] -ml-2 text-gray-400 hover:text-white active:text-white transition"
+            className="flex items-center justify-center min-w-[44px] min-h-[44px] -ml-2 text-stone-400 hover:text-white active:text-white transition"
             aria-label="Menu"
           >
             <svg
@@ -54,9 +56,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <span className="text-sm font-semibold text-gray-300">EVE</span>
+          <img src="/brand/mark.svg" alt="" className="h-6 w-6" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold leading-none text-stone-100">EVE</p>
+            <p className="mt-0.5 text-[10px] leading-none text-stone-500">Decision OS</p>
+          </div>
         </div>
-        <main className="flex-1 overflow-y-auto pb-[calc(56px+env(safe-area-inset-bottom))] md:pb-safe">
+        <main className="relative z-10 flex-1 overflow-y-auto pb-[calc(62px+env(safe-area-inset-bottom))] md:pb-safe">
           {children}
         </main>
         <BottomTabs />
