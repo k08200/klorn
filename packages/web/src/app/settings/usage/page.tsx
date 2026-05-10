@@ -86,11 +86,11 @@ export default function UsagePage() {
         <>
           {/* Summary cards */}
           <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <UsageMetric label="Total Tokens" value={formatTokens(stats.summary.totalTokens)} />
-            <UsageMetric label="Messages" value={String(stats.summary.messageCount)} />
-            <UsageMetric label="Est. Cost" value={`$${stats.summary.totalCost.toFixed(4)}`} />
+            <UsageMetric label="Model Tokens" value={formatTokens(stats.summary.totalTokens)} />
+            <UsageMetric label="Decision Turns" value={String(stats.summary.messageCount)} />
+            <UsageMetric label="Est. Spend" value={`$${stats.summary.totalCost.toFixed(4)}`} />
             <UsageMetric
-              label="Avg/Message"
+              label="Avg/Turn"
               value={
                 stats.summary.messageCount > 0
                   ? formatTokens(Math.round(stats.summary.totalTokens / stats.summary.messageCount))
@@ -102,13 +102,13 @@ export default function UsagePage() {
           {/* Daily breakdown */}
           {stats.daily.length > 0 && (
             <div className="mb-8">
-              <h2 className="mb-3 text-sm font-medium text-stone-300">Daily Breakdown</h2>
+              <h2 className="mb-3 text-sm font-medium text-stone-300">Daily Ledger</h2>
               <div className="overflow-hidden rounded-xl border border-stone-700/45 bg-stone-950/35">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-stone-700/45 text-[11px] text-stone-500">
                       <th className="px-4 py-2 text-left font-medium">Date</th>
-                      <th className="px-4 py-2 text-right font-medium">Messages</th>
+                      <th className="px-4 py-2 text-right font-medium">Turns</th>
                       <th className="px-4 py-2 text-right font-medium">Tokens</th>
                       <th className="px-4 py-2 text-right font-medium">Cost</th>
                     </tr>
@@ -137,13 +137,13 @@ export default function UsagePage() {
       {/* Per-conversation usage */}
       {convUsages.length > 0 && (
         <div>
-          <h2 className="mb-3 text-sm font-medium text-stone-300">Top Conversations by Usage</h2>
+          <h2 className="mb-3 text-sm font-medium text-stone-300">Top Decision Threads by Usage</h2>
           <div className="overflow-hidden rounded-xl border border-stone-700/45 bg-stone-950/35">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-stone-700/45 text-[11px] text-stone-500">
-                  <th className="px-4 py-2 text-left font-medium">Conversation</th>
-                  <th className="px-4 py-2 text-right font-medium">Messages</th>
+                  <th className="px-4 py-2 text-left font-medium">Decision Thread</th>
+                  <th className="px-4 py-2 text-right font-medium">Turns</th>
                   <th className="px-4 py-2 text-right font-medium">Tokens</th>
                   <th className="px-4 py-2 text-right font-medium">Cost</th>
                 </tr>

@@ -229,7 +229,7 @@ function AdminDashboard() {
               Operations Command
             </p>
             <h1 className="mt-3 text-2xl font-semibold tracking-tight text-stone-50">
-              Admin Dashboard
+              Control Plane
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-400">
               실행 성공률, 승인 흐름, 사용자 상태를 운영 판단에 필요한 신호로 정리합니다.
@@ -248,7 +248,7 @@ function AdminDashboard() {
               onClick={() => setTab("users")}
               className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition md:flex-none ${tab === "users" ? "bg-amber-300 text-stone-950" : "text-stone-500 hover:text-stone-200"}`}
             >
-              Users
+              Accounts
             </button>
           </div>
         </header>
@@ -321,9 +321,9 @@ function AdminDashboard() {
         {/* Stats */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard label="Total Users" value={stats.totalUsers} />
-            <StatCard label="Conversations" value={stats.totalConversations} />
-            <StatCard label="Messages (this month)" value={stats.monthlyMessages} />
+            <StatCard label="Total Accounts" value={stats.totalUsers} />
+            <StatCard label="Decision Threads" value={stats.totalConversations} />
+            <StatCard label="Decision Turns (month)" value={stats.monthlyMessages} />
             <StatCard
               label="Plan Distribution"
               value={Object.entries(stats.planDistribution)
@@ -382,7 +382,7 @@ function AdminDashboard() {
 
             <section>
               <h2 className="mb-3 text-sm font-medium text-stone-400">
-                Active Users & Notifications
+                Active Accounts & Notifications
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard label="DAU" value={ops.activeUsers.dau} />
@@ -396,7 +396,9 @@ function AdminDashboard() {
             </section>
 
             <section>
-              <h2 className="mb-3 text-sm font-medium text-stone-400">Token Usage (last 7d)</h2>
+              <h2 className="mb-3 text-sm font-medium text-stone-400">
+                Model Spend Ledger (last 7d)
+              </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard
                   label="Estimated Cost"
@@ -492,8 +494,8 @@ function AdminDashboard() {
                   <th className="p-3 pr-4">Name</th>
                   <th className="p-3 pr-4">Role</th>
                   <th className="p-3 pr-4">Plan</th>
-                  <th className="p-3 pr-4">Messages</th>
-                  <th className="p-3 pr-4">Chats</th>
+                  <th className="p-3 pr-4">Decision Turns</th>
+                  <th className="p-3 pr-4">Threads</th>
                   <th className="p-3 pr-4">Joined</th>
                   <th className="p-3">Actions</th>
                 </tr>

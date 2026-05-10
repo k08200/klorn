@@ -191,10 +191,10 @@ function BillingContent() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* Messages usage */}
+            {/* Decision turns usage */}
             <div>
               <div className="mb-1 flex justify-between text-sm">
-                <span className="text-stone-400">Messages</span>
+                <span className="text-stone-400">Decision turns</span>
                 <span className="text-stone-300">
                   {status.messageCount} /{" "}
                   {status.messageLimit === Infinity ? "∞" : status.messageLimit.toLocaleString()}
