@@ -92,25 +92,47 @@ function CalendarView() {
   };
 
   const groups = groupByDay(events);
+  const todayCount = groups.find((group) => group.label === "오늘")?.events.length ?? 0;
+  const nextEvent = events
+    .map((event) => ({ event, start: new Date(event.startTime) }))
+    .filter(({ start }) => start.getTime() >= Date.now())
+    .sort((a, b) => a.start.getTime() - b.start.getTime())[0]?.event;
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-6 md:py-10">
-      <header className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl md:text-2xl font-semibold text-gray-100">캘린더</h1>
-          <p className="text-xs text-gray-500 mt-1">앞으로 14일 일정</p>
+    <div className="mx-auto w-full max-w-3xl px-4 pb-28 pt-6 md:py-10">
+      <header className="mb-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-2xl shadow-black/10">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+              Decision Calendar
+            </p>
+            <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
+              일정에서 준비할 결정을 찾기
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+              앞으로 14일의 미팅을 보고, 준비팩과 관련 신호를 같은 흐름에서 확인합니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={syncNow}
+            disabled={syncing}
+            className="shrink-0 rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
+          >
+            {syncing ? "동기화 중..." : "지금 동기화"}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={syncNow}
-          disabled={syncing}
-          className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:bg-gray-800 disabled:opacity-50 transition"
-        >
-          {syncing ? "동기화 중..." : "지금 동기화"}
-        </button>
+        <div className="mt-5 grid grid-cols-3 gap-2">
+          <CalendarStat label="14 days" value={events.length} />
+          <CalendarStat label="Today" value={todayCount} />
+          <CalendarStat
+            label="Next"
+            value={nextEvent ? formatTime(new Date(nextEvent.startTime)) : "-"}
+          />
+        </div>
       </header>
 
-      {loading && <p className="text-sm text-gray-500">로딩 중...</p>}
+      {loading && <p className="text-sm text-stone-500">로딩 중...</p>}
 
       {error && (
         <div className="mb-4 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -125,16 +147,16 @@ function CalendarView() {
       )}
 
       {!loading && !error && events.length === 0 && (
-        <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-6 text-center">
-          <p className="text-sm text-gray-400 mb-1">앞으로 14일 동안 일정이 없어요.</p>
-          <p className="text-xs text-gray-500 mb-4">
+        <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-center">
+          <p className="mb-1 text-sm text-stone-300">앞으로 14일 동안 일정이 없어요.</p>
+          <p className="mb-4 text-xs text-stone-500">
             Google 연결은 정상입니다. 필요하면 다시 동기화해서 최신 상태만 확인하세요.
           </p>
           <button
             type="button"
             onClick={syncNow}
             disabled={syncing}
-            className="text-sm px-4 py-2 rounded-lg bg-white text-black hover:bg-gray-200 disabled:opacity-50 transition"
+            className="rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
           >
             {syncing ? "동기화 중..." : "다시 동기화"}
           </button>
@@ -145,9 +167,9 @@ function CalendarView() {
         <div className="space-y-6">
           {groups.map((g) => (
             <section key={g.key}>
-              <h2 className="sticky top-0 z-10 -mx-4 px-4 py-2 bg-[#0a0a0f]/95 backdrop-blur text-[13px] font-medium text-gray-300">
+              <h2 className="sticky top-0 z-10 -mx-4 bg-[#10100d]/92 px-4 py-2 text-[13px] font-medium text-stone-300 backdrop-blur-xl">
                 {g.label}
-                <span className="ml-2 text-[11px] text-gray-500 font-normal">
+                <span className="ml-2 text-[11px] font-normal text-stone-500">
                   {g.events.length}건
                 </span>
               </h2>
@@ -160,6 +182,17 @@ function CalendarView() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function CalendarStat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-xl border border-stone-700/45 bg-black/15 px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
+        {label}
+      </p>
+      <p className="mt-1 truncate text-lg font-semibold text-stone-100">{value}</p>
     </div>
   );
 }
@@ -193,22 +226,22 @@ function EventRow({ event }: { event: CalendarEvent }) {
   };
 
   return (
-    <li className="rounded-lg border border-gray-800 bg-gray-900/40 p-3 active:bg-gray-900/70 transition">
+    <li className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-3 transition hover:border-amber-500/30 hover:bg-amber-500/5 active:bg-stone-900/70">
       <div className="flex items-start gap-3">
-        <div className="text-[12px] font-medium text-gray-400 shrink-0 w-20 pt-0.5 tabular-nums">
+        <div className="w-20 shrink-0 pt-0.5 text-[12px] font-medium tabular-nums text-stone-400">
           {timeLabel}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm text-gray-100 leading-snug">{event.title || "제목 없음"}</p>
+          <p className="text-sm leading-snug text-stone-100">{event.title || "제목 없음"}</p>
           {event.location && (
-            <p className="text-xs text-gray-500 truncate mt-0.5">{event.location}</p>
+            <p className="mt-0.5 truncate text-xs text-stone-500">{event.location}</p>
           )}
           {event.meetingLink && (
             <a
               href={event.meetingLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 mt-1"
+              className="mt-1 inline-flex items-center gap-1 text-xs text-amber-300 hover:text-amber-200"
             >
               미팅 참여
               <svg
@@ -231,15 +264,15 @@ function EventRow({ event }: { event: CalendarEvent }) {
           <button
             type="button"
             onClick={togglePrep}
-            className="ml-3 inline-flex items-center gap-1 text-xs text-violet-300 hover:text-violet-200 mt-1"
+            className="ml-3 mt-1 inline-flex items-center gap-1 text-xs text-teal-300 hover:text-teal-200"
           >
             준비팩
           </button>
         </div>
       </div>
       {prepOpen && (
-        <div className="mt-3 pt-3 border-t border-gray-800">
-          {prepLoading && <p className="text-xs text-gray-500">준비팩 생성 중...</p>}
+        <div className="mt-3 border-t border-stone-700/45 pt-3">
+          {prepLoading && <p className="text-xs text-stone-500">준비팩 생성 중...</p>}
           {prepError && <p className="text-xs text-red-300">{prepError}</p>}
           {prep && (
             <div className="space-y-3">
@@ -251,24 +284,24 @@ function EventRow({ event }: { event: CalendarEvent }) {
                 >
                   {readinessLabel(prep.readiness)}
                 </span>
-                <span className="text-[11px] text-gray-500">
+                <span className="text-[11px] text-stone-500">
                   메일 {prep.relatedEmails.length} · 할 일 {prep.openTasks.length} · 약속{" "}
                   {prep.openCommitments.length}
                 </span>
               </div>
               <ul className="space-y-1">
                 {prep.checklist.map((item) => (
-                  <li key={item} className="text-xs text-gray-300">
+                  <li key={item} className="text-xs text-stone-300">
                     {item}
                   </li>
                 ))}
               </ul>
               {prep.relatedEmails.length > 0 && (
                 <div>
-                  <p className="text-[11px] text-gray-500 mb-1">관련 메일</p>
+                  <p className="mb-1 text-[11px] text-stone-500">관련 메일</p>
                   <ul className="space-y-1">
                     {prep.relatedEmails.map((email) => (
-                      <li key={email.id} className="text-xs text-gray-300 truncate">
+                      <li key={email.id} className="truncate text-xs text-stone-300">
                         {email.subject}
                       </li>
                     ))}
@@ -277,10 +310,10 @@ function EventRow({ event }: { event: CalendarEvent }) {
               )}
               {prep.openTasks.length > 0 && (
                 <div>
-                  <p className="text-[11px] text-gray-500 mb-1">미팅 전 할 일</p>
+                  <p className="mb-1 text-[11px] text-stone-500">미팅 전 할 일</p>
                   <ul className="space-y-1">
                     {prep.openTasks.map((task) => (
-                      <li key={task.id} className="text-xs text-gray-300 truncate">
+                      <li key={task.id} className="truncate text-xs text-stone-300">
                         {task.title}
                       </li>
                     ))}

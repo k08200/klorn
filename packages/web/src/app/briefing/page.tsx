@@ -163,25 +163,38 @@ function BriefingView() {
   const topActions = content ? extractTopActions(content) : [];
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-6 md:py-10">
-      <header className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-xl md:text-2xl font-semibold text-gray-100">오늘의 브리핑</h1>
-          {formattedTime && (
-            <p className="text-xs text-gray-500 mt-1">오늘 {formattedTime}에 생성됨</p>
-          )}
+    <div className="mx-auto w-full max-w-3xl px-4 pb-28 pt-6 md:py-10">
+      <header className="mb-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-2xl shadow-black/10">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+              Decision Brief
+            </p>
+            <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
+              오늘 처리할 결정만 압축
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+              메일, 일정, 할 일을 읽고 오늘 승인하거나 미뤄야 할 항목을 브리핑으로 정리합니다.
+              {formattedTime && <span className="ml-2 text-stone-400">오늘 {formattedTime}</span>}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={regenerate}
+            disabled={generating}
+            className="shrink-0 rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
+          >
+            {generating ? "생성 중..." : content ? "다시 생성" : "지금 생성"}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={regenerate}
-          disabled={generating}
-          className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:bg-gray-800 disabled:opacity-50 transition"
-        >
-          {generating ? "생성 중..." : content ? "다시 생성" : "지금 생성"}
-        </button>
+        <div className="mt-5 grid grid-cols-3 gap-2">
+          <BriefStat label="Top actions" value={topActions.length} />
+          <BriefStat label="Feedback" value={Object.keys(feedback).length} />
+          <BriefStat label="State" value={content ? "Ready" : "Empty"} />
+        </div>
       </header>
 
-      {loading && <p className="text-sm text-gray-500">로딩 중...</p>}
+      {loading && <p className="text-sm text-stone-500">로딩 중...</p>}
 
       {error && (
         <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -190,14 +203,14 @@ function BriefingView() {
       )}
 
       {!loading && !error && !content && (
-        <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-6 text-center">
-          <p className="text-sm text-gray-400 mb-3">아직 오늘의 브리핑이 없습니다.</p>
-          <p className="mx-auto mb-4 max-w-md text-xs leading-5 text-cyan-200/90">
+        <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-center">
+          <p className="mb-3 text-sm text-stone-300">아직 오늘의 브리핑이 없습니다.</p>
+          <p className="mx-auto mb-4 max-w-md text-xs leading-5 text-amber-100/85">
             {t("briefing.learningMode")}
           </p>
-          <p className="text-xs text-gray-500 mb-4">
+          <p className="mb-4 text-xs text-stone-500">
             자동 브리핑 시간은{" "}
-            <Link href="/settings" className="text-cyan-400 hover:underline">
+            <Link href="/settings" className="text-amber-300 hover:underline">
               설정
             </Link>
             에서 바꿀 수 있어요.
@@ -206,7 +219,7 @@ function BriefingView() {
             type="button"
             onClick={regenerate}
             disabled={generating}
-            className="text-sm px-4 py-2 rounded-lg bg-white text-black hover:bg-gray-200 disabled:opacity-50 transition"
+            className="rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
           >
             {generating ? "생성 중..." : "지금 생성하기"}
           </button>
@@ -215,24 +228,24 @@ function BriefingView() {
 
       {content && (
         <div className="space-y-4">
-          <article className="rounded-xl border border-gray-800 bg-gray-900/40 p-5 md:p-6">
+          <article className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-5 md:p-6">
             <Markdown content={content} />
           </article>
 
           {noteId && topActions.length > 0 && (
-            <section className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
+            <section className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
               <div className="mb-3">
-                <h2 className="text-sm font-semibold text-gray-100">Top 3 피드백</h2>
-                <p className="mt-1 text-xs text-gray-500">오늘 고른 항목이 맞았는지 기록해요.</p>
+                <h2 className="text-sm font-semibold text-stone-100">Top 3 피드백</h2>
+                <p className="mt-1 text-xs text-stone-500">오늘 고른 항목이 맞았는지 기록해요.</p>
               </div>
               <div className="space-y-3">
                 {topActions.map((action) => (
                   <div
                     key={action.rank}
-                    className="rounded-lg border border-gray-800 bg-black/20 p-3"
+                    className="rounded-lg border border-stone-700/45 bg-black/20 p-3"
                   >
-                    <p className="text-sm text-gray-300">
-                      <span className="text-gray-500">{action.rank}.</span> {action.label}
+                    <p className="text-sm text-stone-300">
+                      <span className="text-stone-500">{action.rank}.</span> {action.label}
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                       {FEEDBACK_OPTIONS.map((option) => {
@@ -246,8 +259,8 @@ function BriefingView() {
                             disabled={savingRank === action.rank}
                             className={`h-8 rounded-lg border px-2 text-xs transition disabled:opacity-50 ${
                               selected
-                                ? "border-cyan-400 bg-cyan-400/10 text-cyan-200"
-                                : "border-gray-700 text-gray-400 hover:bg-gray-800"
+                                ? "border-amber-300 bg-amber-500/10 text-amber-100"
+                                : "border-stone-700 text-stone-400 hover:bg-stone-800"
                             }`}
                           >
                             {savingRank === action.rank && !selected ? "저장 중" : option.label}
@@ -262,6 +275,17 @@ function BriefingView() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function BriefStat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-xl border border-stone-700/45 bg-black/15 px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
+        {label}
+      </p>
+      <p className="mt-1 truncate text-lg font-semibold text-stone-100">{value}</p>
     </div>
   );
 }

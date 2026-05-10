@@ -30,11 +30,11 @@ interface ListResponse {
 }
 
 const FILTERS: { key: Filter; label: string; query: string }[] = [
-  { key: "all", label: "전체", query: "" },
-  { key: "reply-needed", label: "답장 필요", query: "filter=reply-needed" },
-  { key: "urgent", label: "긴급", query: "filter=urgent" },
-  { key: "unread", label: "미처리", query: "filter=unread" },
-  { key: "automated", label: "자동 분류", query: "category=automated" },
+  { key: "all", label: "All signals", query: "" },
+  { key: "reply-needed", label: "Needs reply", query: "filter=reply-needed" },
+  { key: "urgent", label: "Urgent", query: "filter=urgent" },
+  { key: "unread", label: "Unread", query: "filter=unread" },
+  { key: "automated", label: "Automated", query: "category=automated" },
 ];
 
 export default function EmailPage() {
@@ -88,29 +88,45 @@ function EmailView() {
     }
   };
 
+  const unreadCount = emails.filter((email) => !email.isRead).length;
+  const urgentCount = emails.filter((email) => email.priority === "URGENT").length;
+  const replyCount = emails.filter((email) => email.needsReply).length;
+
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-6 md:py-10">
-      <header className="flex items-start justify-between mb-4">
-        <div>
-          <h1 className="text-xl md:text-2xl font-semibold text-gray-100">메일</h1>
-          <p className="text-xs text-gray-500 mt-1">
-            EVE가 분류한 내용을 확인하세요
-            {source === "demo" && <span className="ml-2 text-amber-400">· 데모 데이터</span>}
-          </p>
+    <div className="mx-auto w-full max-w-3xl px-4 pb-28 pt-6 md:py-10">
+      <header className="mb-5 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-2xl shadow-black/10">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+              Signal Mail
+            </p>
+            <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
+              메일 신호를 결정 단위로 정리
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+              EVE가 긴급도, 답장 필요 여부, 자동화 신호를 먼저 드러내고 실행 전 맥락으로 묶습니다.
+              {source === "demo" && <span className="ml-2 text-amber-300">데모 데이터</span>}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={syncNow}
+            disabled={syncing}
+            className="shrink-0 rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
+          >
+            {syncing ? "동기화 중..." : "지금 동기화"}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={syncNow}
-          disabled={syncing}
-          className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:bg-gray-800 disabled:opacity-50 transition"
-        >
-          {syncing ? "동기화 중..." : "지금 동기화"}
-        </button>
+        <div className="mt-5 grid grid-cols-3 gap-2">
+          <SignalStat label="Unread" value={unreadCount} />
+          <SignalStat label="Urgent" value={urgentCount} />
+          <SignalStat label="Reply" value={replyCount} />
+        </div>
       </header>
 
       <FilterTabs current={filter} onChange={setFilter} />
 
-      {loading && <p className="text-sm text-gray-500 px-1 py-3">로딩 중...</p>}
+      {loading && <p className="px-1 py-3 text-sm text-stone-500">로딩 중...</p>}
 
       {error && (
         <div className="mt-3 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -119,9 +135,12 @@ function EmailView() {
       )}
 
       {!loading && !error && emails.length === 0 && (
-        <div className="mt-4 rounded-xl border border-gray-800 bg-gray-900/40 p-6 text-center">
-          <p className="text-sm text-gray-400">
-            {filter === "all" ? "받은 메일이 없어요." : "조건에 맞는 메일이 없어요."}
+        <div className="mt-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-center">
+          <p className="text-sm text-stone-300">
+            {filter === "all" ? "아직 들어온 메일 신호가 없어요." : "조건에 맞는 신호가 없어요."}
+          </p>
+          <p className="mt-1 text-xs text-stone-600">
+            동기화가 끝나면 실행이 필요한 메일만 먼저 떠오릅니다.
           </p>
         </div>
       )}
@@ -137,9 +156,20 @@ function EmailView() {
   );
 }
 
+function SignalStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-stone-700/45 bg-black/15 px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
+        {label}
+      </p>
+      <p className="mt-1 text-lg font-semibold text-stone-100">{value}</p>
+    </div>
+  );
+}
+
 function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filter) => void }) {
   return (
-    <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-2 scrollbar-hide">
+    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 scrollbar-hide">
       {FILTERS.map((f) => {
         const active = f.key === current;
         return (
@@ -147,10 +177,10 @@ function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filt
             key={f.key}
             type="button"
             onClick={() => onChange(f.key)}
-            className={`shrink-0 px-3 py-1.5 rounded-full text-xs transition min-h-[32px] ${
+            className={`min-h-[32px] shrink-0 rounded-full px-3 py-1.5 text-xs transition ${
               active
-                ? "bg-white text-black"
-                : "bg-gray-900/60 border border-gray-800 text-gray-300 hover:bg-gray-800"
+                ? "bg-amber-300 text-stone-950"
+                : "border border-stone-700/55 bg-stone-950/45 text-stone-400 hover:bg-stone-900/70 hover:text-stone-200"
             }`}
           >
             {f.label}
@@ -167,32 +197,32 @@ function EmailRowItem({ email }: { email: EmailRow }) {
     <li>
       <Link
         href={`/email/${email.id}`}
-        className="block rounded-lg border border-gray-800 bg-gray-900/40 p-3 active:bg-gray-900/70 transition"
+        className="block rounded-xl border border-stone-700/45 bg-stone-950/35 p-3 transition hover:border-amber-500/30 hover:bg-amber-500/5 active:bg-stone-900/70"
       >
         <div className="flex items-start gap-2">
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <PriorityBadge priority={email.priority} />
               {email.needsReply && <ReplyNeededBadge />}
               {email.category && <CategoryBadge category={email.category} />}
-              {unread && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />}
+              {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300" />}
             </div>
             <p
-              className={`text-sm truncate mt-1.5 ${unread ? "text-gray-100 font-medium" : "text-gray-300"}`}
+              className={`mt-1.5 truncate text-sm ${unread ? "font-medium text-stone-100" : "text-stone-300"}`}
             >
               {senderName(email.from)}
             </p>
-            <p className="text-xs text-gray-400 truncate mt-0.5">{email.subject || "제목 없음"}</p>
+            <p className="mt-0.5 truncate text-xs text-stone-400">{email.subject || "제목 없음"}</p>
             {email.summary ? (
-              <p className="text-[11px] text-cyan-400/80 line-clamp-2 mt-1">
-                <span className="text-cyan-500 mr-1">EVE:</span>
+              <p className="mt-1 line-clamp-2 text-[11px] text-amber-200/85">
+                <span className="mr-1 text-amber-300">EVE:</span>
                 {email.summary}
               </p>
             ) : email.snippet ? (
-              <p className="text-[11px] text-gray-500 line-clamp-2 mt-1">{email.snippet}</p>
+              <p className="mt-1 line-clamp-2 text-[11px] text-stone-600">{email.snippet}</p>
             ) : null}
           </div>
-          <time className="text-[11px] text-gray-500 shrink-0 tabular-nums pt-0.5">
+          <time className="shrink-0 pt-0.5 text-[11px] tabular-nums text-stone-500">
             {formatRelative(email.date)}
           </time>
         </div>
@@ -200,7 +230,6 @@ function EmailRowItem({ email }: { email: EmailRow }) {
     </li>
   );
 }
-
 function ReplyNeededBadge() {
   return (
     <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-400/30 bg-amber-400/10 text-amber-300 font-medium shrink-0">
