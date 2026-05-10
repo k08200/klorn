@@ -608,9 +608,9 @@ function ChatPageContent() {
                   <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
               </div>
-              <p className="text-gray-300 text-sm mb-4">{loadError}</p>
-              <a href="/chat" className="text-sm text-blue-400 hover:text-blue-300 transition">
-                Back to chats
+              <p className="text-stone-300 text-sm mb-4">{loadError}</p>
+              <a href="/chat" className="text-sm text-amber-300 hover:text-amber-200 transition">
+                Back to threads
               </a>
             </div>
           )}
@@ -683,7 +683,7 @@ function ChatPageContent() {
           {messages.map((msg, idx) => (
             <div
               key={msg.id}
-              className={`group py-5 ${idx > 0 ? "border-t border-gray-800/30" : ""}`}
+              className={`group py-5 ${idx > 0 ? "border-t border-stone-800/30" : ""}`}
             >
               <div className="flex gap-4">
                 {/* Avatar */}
@@ -719,14 +719,14 @@ function ChatPageContent() {
                             setEditContent("");
                           }
                         }}
-                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-[15px] text-gray-200 resize-none focus:outline-none focus:border-gray-500"
+                        className="w-full bg-stone-800 border border-stone-600 rounded-lg px-3 py-2 text-[15px] text-stone-200 resize-none focus:outline-none focus:border-amber-500/50"
                         rows={Math.min(editContent.split("\n").length + 1, 8)}
                       />
                       <div className="flex items-center gap-2 mt-2">
                         <button
                           type="button"
                           onClick={() => submitEditMessage(idx)}
-                          className="px-3 py-1 text-xs bg-white text-gray-900 rounded-lg hover:bg-gray-200 transition"
+                          className="px-3 py-1 text-xs bg-amber-300 text-stone-950 rounded-lg hover:bg-amber-200 transition"
                         >
                           Save & Resend
                         </button>
@@ -736,18 +736,18 @@ function ChatPageContent() {
                             setEditingMsgId(null);
                             setEditContent("");
                           }}
-                          className="px-3 py-1 text-xs text-gray-400 hover:text-gray-200 transition"
+                          className="px-3 py-1 text-xs text-stone-400 hover:text-stone-200 transition"
                         >
                           Cancel
                         </button>
                       </div>
                     </div>
                   ) : msg.role === "USER" ? (
-                    <p className="text-[15px] text-gray-200 leading-relaxed whitespace-pre-wrap">
+                    <p className="text-[15px] text-stone-200 leading-relaxed whitespace-pre-wrap">
                       {msg.content}
                     </p>
                   ) : (
-                    <div className="text-[15px] text-gray-200 leading-relaxed">
+                    <div className="text-[15px] text-stone-200 leading-relaxed">
                       <Markdown content={msg.content} />
                       <div className="mt-2">
                         <SpeakButton text={msg.content} />
@@ -822,7 +822,7 @@ function ChatPageContent() {
                         return (
                           <div className="mt-3 space-y-2">
                             {preview && (
-                              <div className="text-xs text-gray-400 bg-gray-800/50 rounded-lg px-3 py-2 border border-gray-700/50">
+                              <div className="text-xs text-stone-400 bg-stone-800/50 rounded-lg px-3 py-2 border border-stone-700/50">
                                 {preview}
                               </div>
                             )}
@@ -857,7 +857,7 @@ function ChatPageContent() {
                                   type="button"
                                   onClick={() => handleActionReject(action.id)}
                                   disabled={isLoading}
-                                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg border border-stone-600 text-stone-300 hover:bg-stone-800 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
                                 >
                                   Reject
                                 </button>
@@ -867,16 +867,16 @@ function ChatPageContent() {
                                   type="button"
                                   onClick={() => handleActionApprove(action.id, true)}
                                   disabled={isLoading}
-                                  className="text-blue-400 hover:text-blue-300 disabled:opacity-50 transition"
+                                  className="text-amber-300 hover:text-amber-200 disabled:opacity-50 transition"
                                 >
                                   Always allow {action.toolName.replace(/_/g, " ")}
                                 </button>
-                                <span className="text-gray-700">|</span>
+                                <span className="text-stone-700">|</span>
                                 <button
                                   type="button"
                                   onClick={() => handleActionReject(action.id, true)}
                                   disabled={isLoading}
-                                  className="text-gray-500 hover:text-red-400 disabled:opacity-50 transition"
+                                  className="text-stone-500 hover:text-red-400 disabled:opacity-50 transition"
                                 >
                                   Never suggest this
                                 </button>
@@ -888,7 +888,7 @@ function ChatPageContent() {
 
                       const statusLabel: Record<string, { text: string; color: string }> = {
                         EXECUTED: { text: "Executed", color: "text-emerald-400" },
-                        REJECTED: { text: "Rejected", color: "text-gray-500" },
+                        REJECTED: { text: "Rejected", color: "text-stone-500" },
                         FAILED: { text: "Failed", color: "text-red-400" },
                       };
                       const status = statusLabel[action.status];
@@ -898,7 +898,7 @@ function ChatPageContent() {
                         <div className={`flex items-center gap-2 mt-2 text-xs ${status.color}`}>
                           <span className="inline-block w-1.5 h-1.5 rounded-full bg-current" />
                           {status.text}
-                          <span className="text-gray-600">
+                          <span className="text-stone-600">
                             {action.toolName.replace(/_/g, " ")}
                           </span>
                         </div>
@@ -911,7 +911,7 @@ function ChatPageContent() {
                       <button
                         type="button"
                         onClick={() => copyMessage(msg.content)}
-                        className="p-1.5 rounded-md text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition"
+                        className="p-1.5 rounded-md text-stone-500 hover:text-stone-300 hover:bg-stone-800 transition"
                         title="Copy"
                         aria-label="Copy message"
                       >
@@ -934,7 +934,7 @@ function ChatPageContent() {
                         <button
                           type="button"
                           onClick={() => startEditMessage(msg)}
-                          className="p-1.5 rounded-md text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition"
+                          className="p-1.5 rounded-md text-stone-500 hover:text-stone-300 hover:bg-stone-800 transition"
                           title="Edit"
                           aria-label="Edit message"
                         >
@@ -958,7 +958,7 @@ function ChatPageContent() {
                         <button
                           type="button"
                           onClick={() => retryMessage(idx)}
-                          className="p-1.5 rounded-md text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition"
+                          className="p-1.5 rounded-md text-stone-500 hover:text-stone-300 hover:bg-stone-800 transition"
                           title="Retry"
                           aria-label="Retry response"
                         >
@@ -987,18 +987,18 @@ function ChatPageContent() {
 
           {/* Streaming */}
           {streaming && streamingContent && (
-            <div className="py-5 border-t border-gray-800/30">
+            <div className="py-5 border-t border-stone-800/30">
               <div className="flex gap-4">
                 <div className="shrink-0 pt-0.5">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-[10px] font-bold text-white">
+                  <div className="w-7 h-7 rounded-full bg-amber-300 flex items-center justify-center text-[10px] font-bold text-stone-950">
                     E
                   </div>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold text-gray-300 mb-1.5">EVE</p>
-                  <div className="text-[15px] text-gray-200 leading-relaxed">
+                  <p className="text-[13px] font-semibold text-stone-300 mb-1.5">EVE</p>
+                  <div className="text-[15px] text-stone-200 leading-relaxed">
                     <Markdown content={streamingContent} />
-                    <span className="inline-block w-0.5 h-5 bg-gray-400 rounded-full animate-pulse ml-0.5 align-text-bottom" />
+                    <span className="inline-block w-0.5 h-5 bg-stone-400 rounded-full animate-pulse ml-0.5 align-text-bottom" />
                   </div>
                 </div>
               </div>
@@ -1027,17 +1027,17 @@ function ChatPageContent() {
 
           {/* Loading dots */}
           {streaming && !streamingContent && activeTools.length === 0 && (
-            <div className="py-5 border-t border-gray-800/30">
+            <div className="py-5 border-t border-stone-800/30">
               <div className="flex gap-4">
                 <div className="shrink-0 pt-0.5">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-[10px] font-bold text-white">
+                  <div className="w-7 h-7 rounded-full bg-amber-300 flex items-center justify-center text-[10px] font-bold text-stone-950">
                     E
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 pt-2">
-                  <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:0ms]" />
-                  <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:150ms]" />
-                  <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:300ms]" />
+                  <span className="w-2 h-2 bg-stone-500 rounded-full animate-bounce [animation-delay:0ms]" />
+                  <span className="w-2 h-2 bg-stone-500 rounded-full animate-bounce [animation-delay:150ms]" />
+                  <span className="w-2 h-2 bg-stone-500 rounded-full animate-bounce [animation-delay:300ms]" />
                 </div>
               </div>
             </div>
@@ -1051,7 +1051,7 @@ function ChatPageContent() {
           <button
             type="button"
             onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}
-            className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-gray-800 hover:bg-gray-700 border border-gray-600 text-gray-300 rounded-full w-9 h-9 flex items-center justify-center shadow-lg transition"
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-stone-800 hover:bg-stone-700 border border-stone-600 text-stone-300 rounded-full w-9 h-9 flex items-center justify-center shadow-lg transition"
             aria-label="Scroll to bottom"
           >
             <svg
@@ -1102,7 +1102,7 @@ function ChatPageContent() {
 
           {/* Attachment preview */}
           {attachment && (
-            <div className="flex items-center gap-2 mb-2 bg-gray-900 border border-gray-700/50 rounded-xl px-3 py-2 text-xs">
+            <div className="flex items-center gap-2 mb-2 bg-stone-900 border border-stone-700/50 rounded-xl px-3 py-2 text-xs">
               <svg
                 aria-hidden="true"
                 width="14"
@@ -1111,16 +1111,16 @@ function ChatPageContent() {
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
-                className="text-gray-400 shrink-0"
+                className="text-stone-400 shrink-0"
               >
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
               </svg>
-              <span className="text-gray-300 truncate flex-1">{attachment.name}</span>
+              <span className="text-stone-300 truncate flex-1">{attachment.name}</span>
               <button
                 type="button"
                 onClick={() => setAttachment(null)}
-                className="text-gray-500 hover:text-red-400 transition shrink-0 text-sm"
+                className="text-stone-500 hover:text-red-400 transition shrink-0 text-sm"
               >
                 x
               </button>
@@ -1129,13 +1129,13 @@ function ChatPageContent() {
 
           {/* Skill picker dropdown */}
           {showSkillPicker && skillsList.length > 0 && (
-            <div className="mb-2 rounded-xl bg-gray-900 border border-gray-700 overflow-hidden max-h-48 overflow-y-auto">
+            <div className="mb-2 rounded-xl bg-stone-900 border border-stone-700 overflow-hidden max-h-48 overflow-y-auto">
               {skillsList.map((skill) => (
                 <button
                   key={skill.id}
                   type="button"
                   onClick={() => selectSkill(skill)}
-                  className="w-full text-left px-4 py-2.5 hover:bg-gray-800 transition flex items-center gap-3"
+                  className="w-full text-left px-4 py-2.5 hover:bg-stone-800 transition flex items-center gap-3"
                 >
                   <svg
                     width="14"
@@ -1153,7 +1153,7 @@ function ChatPageContent() {
                   <div className="min-w-0">
                     <span className="text-sm text-white">{skill.name}</span>
                     {skill.description && (
-                      <span className="text-xs text-gray-500 ml-2">{skill.description}</span>
+                      <span className="text-xs text-stone-500 ml-2">{skill.description}</span>
                     )}
                   </div>
                 </button>
@@ -1170,7 +1170,7 @@ function ChatPageContent() {
               onKeyDown={handleKeyDown}
               placeholder="Ask for a decision, context trace, or next move..."
               rows={1}
-              className="w-full bg-transparent px-5 pt-4 pb-2 text-[15px] resize-none focus:outline-none placeholder-gray-500 max-h-[200px]"
+              className="w-full bg-transparent px-5 pt-4 pb-2 text-[15px] resize-none focus:outline-none placeholder-stone-500 max-h-[200px]"
             />
             <div className="flex items-center justify-between px-3 pb-3">
               <div className="flex items-center gap-1">
@@ -1184,7 +1184,7 @@ function ChatPageContent() {
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
-                  className="p-2 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 transition"
+                  className="p-2 rounded-lg text-stone-500 hover:text-stone-300 hover:bg-stone-800/50 transition"
                   title="Attach file"
                 >
                   <svg
@@ -1214,7 +1214,7 @@ function ChatPageContent() {
                 <button
                   type="button"
                   onClick={() => abortRef.current?.abort()}
-                  className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition"
+                  className="p-2 rounded-lg bg-stone-700 hover:bg-stone-600 text-white transition"
                   title="Stop"
                 >
                   <svg
