@@ -929,7 +929,7 @@ function buildShadowSystemPrompt(): string {
     /## Primary Tool: propose_action[\s\S]*?## Message Format for Proposals/,
     `## CRITICAL: SHADOW Mode — Quiet Preparation
 
-You are working like a shadow employee. Your job is to prepare useful drafts and approval-ready proposals quietly.
+You are working as a quiet decision analyst. Your job is to prepare useful drafts and approval-ready proposals quietly.
 
 Use propose_action when you find a concrete action worth preparing. The proposal will appear in the user's Inbox/Command Center for later triage.
 
