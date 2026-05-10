@@ -88,19 +88,19 @@ export default function PwaPrompts() {
 
       {/* Update available banner */}
       {updateAvailable && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 border border-gray-700 rounded-xl shadow-2xl shadow-black/60 px-4 py-3 flex items-center gap-3 animate-slide-up">
-          <div className="text-sm text-gray-200">A new version of EVE is available</div>
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] bg-stone-950 border border-stone-700 rounded-xl shadow-2xl shadow-black/60 px-4 py-3 flex items-center gap-3 animate-slide-up">
+          <div className="text-sm text-stone-200">A new version of EVE is available</div>
           <button
             type="button"
             onClick={handleUpdate}
-            className="px-3 py-1 text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition whitespace-nowrap"
+            className="px-3 py-1 text-xs font-medium bg-amber-300 hover:bg-amber-200 text-stone-950 rounded-lg transition whitespace-nowrap"
           >
             Update now
           </button>
           <button
             type="button"
             onClick={() => setUpdateAvailable(false)}
-            className="text-gray-500 hover:text-gray-300 transition text-sm"
+            className="text-stone-500 hover:text-stone-300 transition text-sm"
           >
             Later
           </button>
@@ -109,25 +109,25 @@ export default function PwaPrompts() {
 
       {/* Install prompt */}
       {showInstall && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 border border-gray-700 rounded-xl shadow-2xl shadow-black/60 px-4 py-3 flex items-center gap-3 animate-slide-up max-w-sm">
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] bg-stone-950 border border-stone-700 rounded-xl shadow-2xl shadow-black/60 px-4 py-3 flex items-center gap-3 animate-slide-up max-w-sm">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-sm font-bold text-white shrink-0">
             E
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-gray-200">Install EVE</p>
-            <p className="text-xs text-gray-500">Add to home screen for quick access</p>
+            <p className="text-sm font-medium text-stone-200">Install EVE</p>
+            <p className="text-xs text-stone-500">Add to home screen for quick access</p>
           </div>
           <button
             type="button"
             onClick={handleInstall}
-            className="px-3 py-1.5 text-xs font-medium bg-white text-gray-900 hover:bg-gray-200 rounded-lg transition whitespace-nowrap"
+            className="px-3 py-1.5 text-xs font-medium bg-white text-stone-950 hover:bg-stone-200 rounded-lg transition whitespace-nowrap"
           >
             Install
           </button>
           <button
             type="button"
             onClick={dismissInstall}
-            className="text-gray-500 hover:text-gray-300 transition text-lg leading-none"
+            className="text-stone-500 hover:text-stone-300 transition text-lg leading-none"
           >
             x
           </button>

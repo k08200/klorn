@@ -4,7 +4,7 @@ import type { InputHTMLAttributes, TextareaHTMLAttributes } from "react";
 import { forwardRef } from "react";
 
 const baseStyles =
-  "w-full bg-gray-900 border border-gray-800 rounded-lg px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-colors";
+  "w-full bg-stone-950 border border-stone-800 rounded-lg px-4 py-2.5 text-sm text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25 transition-colors";
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -17,7 +17,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div>
         {label && (
-          <label htmlFor={inputId} className="block text-xs font-medium text-gray-400 mb-1.5">
+          <label htmlFor={inputId} className="block text-xs font-medium text-stone-400 mb-1.5">
             {label}
           </label>
         )}
@@ -51,7 +51,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <div>
         {label && (
-          <label htmlFor={inputId} className="block text-xs font-medium text-gray-400 mb-1.5">
+          <label htmlFor={inputId} className="block text-xs font-medium text-stone-400 mb-1.5">
             {label}
           </label>
         )}
@@ -82,7 +82,7 @@ export function Select({ label, children, className = "", id, ...props }: Select
   return (
     <div>
       {label && (
-        <label htmlFor={inputId} className="block text-xs font-medium text-gray-400 mb-1.5">
+        <label htmlFor={inputId} className="block text-xs font-medium text-stone-400 mb-1.5">
           {label}
         </label>
       )}

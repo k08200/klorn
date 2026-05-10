@@ -10,8 +10,8 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-  default: "bg-gray-800 text-gray-300 border-gray-700",
-  blue: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  default: "bg-stone-900 text-stone-300 border-stone-700",
+  blue: "bg-amber-300/10 text-amber-300 border-amber-300/20",
   green: "bg-green-500/10 text-green-400 border-green-500/20",
   yellow: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
   red: "bg-red-500/10 text-red-400 border-red-500/20",
@@ -19,8 +19,8 @@ const variantStyles: Record<BadgeVariant, string> = {
 };
 
 const dotColors: Record<BadgeVariant, string> = {
-  default: "bg-gray-400",
-  blue: "bg-blue-400",
+  default: "bg-stone-400",
+  blue: "bg-amber-300",
   green: "bg-green-400",
   yellow: "bg-yellow-400",
   red: "bg-red-400",

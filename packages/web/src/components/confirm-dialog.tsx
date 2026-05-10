@@ -43,14 +43,14 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       {children}
       {options && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[110] px-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-sm animate-slide-up">
+          <div className="bg-stone-950 border border-stone-700 rounded-xl p-6 w-full max-w-sm animate-slide-up">
             <h3 className="font-semibold mb-2">{options.title}</h3>
-            <p className="text-sm text-gray-400 mb-6">{options.message}</p>
+            <p className="text-sm text-stone-400 mb-6">{options.message}</p>
             <div className="flex gap-2 justify-end">
               <button
                 type="button"
                 onClick={() => handleClose(false)}
-                className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition"
+                className="px-4 py-2 rounded-lg text-sm text-stone-400 hover:text-white transition"
               >
                 Cancel
               </button>
@@ -60,7 +60,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                   options.danger
                     ? "bg-red-600 hover:bg-red-500 text-white"
-                    : "bg-blue-600 hover:bg-blue-500 text-white"
+                    : "bg-amber-300 hover:bg-amber-200 text-stone-950"
                 }`}
               >
                 {options.confirmLabel || "Confirm"}

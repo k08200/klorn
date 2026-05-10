@@ -15,12 +15,12 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<Variant, string> = {
   primary:
-    "bg-blue-600 hover:bg-blue-500 text-white disabled:bg-gray-700 disabled:text-gray-500 shadow-sm shadow-blue-600/20",
+    "bg-amber-300 hover:bg-amber-200 text-stone-950 disabled:bg-stone-700 disabled:text-stone-500 shadow-sm shadow-amber-300/20",
   secondary:
-    "bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 hover:border-gray-600",
+    "bg-stone-900 hover:bg-stone-700 text-stone-200 border border-stone-700 hover:border-stone-500",
   danger:
     "bg-red-600/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-800/40 hover:border-red-600",
-  ghost: "bg-transparent hover:bg-gray-800 text-gray-400 hover:text-gray-200",
+  ghost: "bg-transparent hover:bg-stone-900 text-stone-400 hover:text-stone-200",
 };
 
 const sizeStyles: Record<Size, string> = {
@@ -43,7 +43,7 @@ export default function Button({
     <button
       type="button"
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center font-medium rounded-lg transition-all duration-150 cursor-pointer disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:ring-offset-1 focus:ring-offset-gray-950 ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
+      className={`inline-flex items-center justify-center font-medium rounded-lg transition-all duration-150 cursor-pointer disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-amber-300/35 focus:ring-offset-1 focus:ring-offset-stone-950 ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
       {...props}
     >
       {loading ? (

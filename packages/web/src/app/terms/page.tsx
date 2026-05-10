@@ -12,22 +12,22 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <section className="space-y-3">
       <h2 className="text-xl font-semibold text-white">{title}</h2>
-      <div className="space-y-3 text-sm leading-6 text-gray-300">{children}</div>
+      <div className="space-y-3 text-sm leading-6 text-stone-300">{children}</div>
     </section>
   );
 }
 
 export default function TermsPage() {
   return (
-    <main className="min-h-screen bg-[#06060a] text-white">
+    <main className="min-h-screen bg-[#10100d] text-white">
       <nav className="mx-auto flex max-w-4xl items-center justify-between px-6 py-5">
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-300 text-sm font-bold text-stone-950">
             E
           </div>
           <span className="text-lg font-bold tracking-tight">EVE</span>
         </Link>
-        <div className="flex items-center gap-5 text-sm text-gray-400">
+        <div className="flex items-center gap-5 text-sm text-stone-400">
           <Link href="/privacy" className="transition hover:text-white">
             Privacy
           </Link>
@@ -38,13 +38,13 @@ export default function TermsPage() {
       </nav>
 
       <article className="mx-auto max-w-4xl px-6 py-14">
-        <p className="text-sm font-medium uppercase tracking-[0.18em] text-blue-300">
+        <p className="text-sm font-medium uppercase tracking-[0.18em] text-amber-200">
           Terms of Service
         </p>
         <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
           Beta terms for EVE
         </h1>
-        <p className="mt-5 max-w-2xl text-sm leading-6 text-gray-400">
+        <p className="mt-5 max-w-2xl text-sm leading-6 text-stone-400">
           Last updated: {updatedAt}. These terms apply to the EVE beta. By using EVE, you agree to
           these terms and the Privacy Policy.
         </p>
@@ -104,7 +104,7 @@ export default function TermsPage() {
           <Section title="Account deletion">
             <p>
               You may request deletion of your EVE account data by contacting{" "}
-              <a className="text-blue-300 hover:text-blue-200" href="mailto:k0820086@gmail.com">
+              <a className="text-amber-200 hover:text-amber-100" href="mailto:k0820086@gmail.com">
                 k0820086@gmail.com
               </a>
               . Deleting EVE account data does not automatically delete data from Google or other
@@ -122,7 +122,7 @@ export default function TermsPage() {
           <Section title="Contact">
             <p>
               Questions about these terms can be sent to{" "}
-              <a className="text-blue-300 hover:text-blue-200" href="mailto:k0820086@gmail.com">
+              <a className="text-amber-200 hover:text-amber-100" href="mailto:k0820086@gmail.com">
                 k0820086@gmail.com
               </a>
               .

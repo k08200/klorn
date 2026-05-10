@@ -14,7 +14,7 @@ interface TabsProps {
 
 export default function Tabs({ tabs, active, onChange }: TabsProps) {
   return (
-    <div className="flex gap-1 p-1 bg-gray-900/60 border border-gray-800/60 rounded-lg w-fit">
+    <div className="flex gap-1 p-1 bg-stone-950/60 border border-stone-800/60 rounded-lg w-fit">
       {tabs.map((tab) => (
         <button
           key={tab.id}
@@ -22,13 +22,13 @@ export default function Tabs({ tabs, active, onChange }: TabsProps) {
           onClick={() => onChange(tab.id)}
           className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
             active === tab.id
-              ? "bg-gray-800 text-white shadow-sm"
-              : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/50"
+              ? "bg-stone-900 text-white shadow-sm"
+              : "text-stone-400 hover:text-stone-200 hover:bg-stone-900/50"
           }`}
         >
           {tab.label}
           {tab.count !== undefined && (
-            <span className={`ml-1.5 ${active === tab.id ? "text-gray-400" : "text-gray-600"}`}>
+            <span className={`ml-1.5 ${active === tab.id ? "text-stone-400" : "text-stone-600"}`}>
               {tab.count}
             </span>
           )}

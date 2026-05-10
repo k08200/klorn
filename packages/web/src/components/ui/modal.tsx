@@ -47,15 +47,15 @@ export default function Modal({ open, onClose, title, children, footer, size = "
       aria-label={title}
     >
       <div
-        className={`w-full ${sizes[size]} bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl shadow-black/40`}
+        className={`w-full ${sizes[size]} bg-stone-950 border border-stone-800 rounded-2xl shadow-2xl shadow-black/40`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800/80">
-          <h2 className="text-base font-semibold text-gray-100">{title}</h2>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-700/45">
+          <h2 className="text-base font-semibold text-stone-100">{title}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-300 transition p-1 rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            className="text-stone-500 hover:text-stone-300 transition p-1 rounded-lg hover:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-300/35"
             aria-label="Close"
           >
             <svg
@@ -80,7 +80,7 @@ export default function Modal({ open, onClose, title, children, footer, size = "
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-800/80">
+          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-stone-700/45">
             {footer}
           </div>
         )}

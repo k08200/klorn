@@ -12,22 +12,22 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <section className="space-y-3">
       <h2 className="text-xl font-semibold text-white">{title}</h2>
-      <div className="space-y-3 text-sm leading-6 text-gray-300">{children}</div>
+      <div className="space-y-3 text-sm leading-6 text-stone-300">{children}</div>
     </section>
   );
 }
 
 export default function PrivacyPage() {
   return (
-    <main className="min-h-screen bg-[#06060a] text-white">
+    <main className="min-h-screen bg-[#10100d] text-white">
       <nav className="mx-auto flex max-w-4xl items-center justify-between px-6 py-5">
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-300 text-sm font-bold text-stone-950">
             E
           </div>
           <span className="text-lg font-bold tracking-tight">EVE</span>
         </Link>
-        <div className="flex items-center gap-5 text-sm text-gray-400">
+        <div className="flex items-center gap-5 text-sm text-stone-400">
           <Link href="/terms" className="transition hover:text-white">
             Terms
           </Link>
@@ -38,13 +38,13 @@ export default function PrivacyPage() {
       </nav>
 
       <article className="mx-auto max-w-4xl px-6 py-14">
-        <p className="text-sm font-medium uppercase tracking-[0.18em] text-blue-300">
+        <p className="text-sm font-medium uppercase tracking-[0.18em] text-amber-200">
           Privacy Policy
         </p>
         <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
           How EVE handles your work data
         </h1>
-        <p className="mt-5 max-w-2xl text-sm leading-6 text-gray-400">
+        <p className="mt-5 max-w-2xl text-sm leading-6 text-stone-400">
           Last updated: {updatedAt}. EVE is currently in beta. This policy explains what data we
           access, why we access it, and how you can delete it.
         </p>
@@ -52,9 +52,9 @@ export default function PrivacyPage() {
         <div className="mt-12 space-y-10">
           <Section title="What EVE is">
             <p>
-              EVE is an AI chief-of-staff product that helps users review Gmail, Calendar, tasks,
-              reminders, notifications, and related work context so they can notice important
-              replies, meetings, and follow-ups.
+              EVE is a Decision OS for work that helps users review Gmail, Calendar, tasks,
+              reminders, notifications, and related work context so important replies, meetings, and
+              follow-ups become easier to decide on.
             </p>
           </Section>
 
@@ -129,7 +129,7 @@ export default function PrivacyPage() {
             </p>
             <p>
               To delete your account data, contact{" "}
-              <a className="text-blue-300 hover:text-blue-200" href="mailto:k0820086@gmail.com">
+              <a className="text-amber-200 hover:text-amber-100" href="mailto:k0820086@gmail.com">
                 k0820086@gmail.com
               </a>
               . Authenticated users may also use EVE&apos;s in-app data deletion endpoint. Deleting
@@ -149,7 +149,7 @@ export default function PrivacyPage() {
           <Section title="Contact">
             <p>
               Questions, deletion requests, or security concerns can be sent to{" "}
-              <a className="text-blue-300 hover:text-blue-200" href="mailto:k0820086@gmail.com">
+              <a className="text-amber-200 hover:text-amber-100" href="mailto:k0820086@gmail.com">
                 k0820086@gmail.com
               </a>
               .
