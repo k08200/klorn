@@ -89,10 +89,10 @@ function EmailDetailView() {
   }, [load]);
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-4 md:py-8">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-28 pt-5 md:py-10">
       <Link
         href="/email"
-        className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-200 mb-4"
+        className="mb-4 inline-flex items-center gap-1 rounded-full border border-stone-700/45 bg-stone-950/35 px-3 py-1.5 text-xs text-stone-400 transition hover:border-amber-500/35 hover:text-stone-100"
       >
         <svg
           aria-hidden="true"
@@ -111,7 +111,7 @@ function EmailDetailView() {
         메일 목록
       </Link>
 
-      {loading && <p className="text-sm text-gray-500">로딩 중...</p>}
+      {loading && <p className="text-sm text-stone-500">로딩 중...</p>}
 
       {error && (
         <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -121,38 +121,60 @@ function EmailDetailView() {
 
       {email && (
         <article>
-          <header className="mb-4">
-            <h1 className="text-lg md:text-xl font-semibold text-gray-100 leading-snug break-words">
+          <header className="mb-5 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-2xl shadow-black/10">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+              Signal Detail
+            </p>
+            <h1 className="break-words text-xl font-semibold leading-snug tracking-tight text-stone-50 md:text-2xl">
               {email.subject || "제목 없음"}
             </h1>
-            <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
-              <span className="truncate">{email.from}</span>
-              <span className="text-gray-600">·</span>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
+              <span className="max-w-full truncate">{email.from}</span>
+              <span className="text-stone-600">·</span>
               <time className="shrink-0 tabular-nums">{formatFull(email.date)}</time>
+            </div>
+            <div className="mt-5 grid grid-cols-3 gap-2">
+              <DetailStat label="Priority" value={PRIORITY_LABELS[email.priority]} />
+              <DetailStat label="Reply" value={email.needsReply ? "Needed" : "No signal"} />
+              <DetailStat
+                label="Category"
+                value={email.category ? categoryLabel(email.category) : "-"}
+              />
             </div>
           </header>
 
           <EveAnalysis email={email} />
 
           {email.body ? (
-            <section className="mt-6 rounded-xl border border-gray-800 bg-gray-950/40 p-4">
-              <h2 className="text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-3">
+            <section className="mt-5 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+              <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-stone-500">
                 본문
               </h2>
-              <pre className="text-sm text-gray-200 whitespace-pre-wrap font-sans leading-relaxed break-words">
+              <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-stone-200">
                 {email.body}
               </pre>
             </section>
           ) : email.snippet ? (
-            <section className="mt-6 rounded-xl border border-gray-800 bg-gray-950/40 p-4">
-              <h2 className="text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-3">
+            <section className="mt-5 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+              <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-stone-500">
                 미리보기
               </h2>
-              <p className="text-sm text-gray-300">{email.snippet}</p>
+              <p className="text-sm text-stone-300">{email.snippet}</p>
             </section>
           ) : null}
         </article>
       )}
+    </div>
+  );
+}
+
+function DetailStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-stone-700/45 bg-black/15 px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
+        {label}
+      </p>
+      <p className="mt-1 truncate text-sm font-semibold text-stone-100">{value}</p>
     </div>
   );
 }
@@ -163,8 +185,8 @@ function EveAnalysis({ email }: { email: EmailDetail }) {
 
   if (!hasAnything) {
     return (
-      <section className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
-        <p className="text-xs text-gray-500">
+      <section className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+        <p className="text-xs text-stone-500">
           EVE가 아직 분석하지 않은 메일이에요. 동기화 후 잠시 뒤에 다시 확인해 주세요.
         </p>
       </section>
@@ -172,10 +194,10 @@ function EveAnalysis({ email }: { email: EmailDetail }) {
   }
 
   return (
-    <section className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="text-[11px] font-semibold text-cyan-400 uppercase tracking-wider">
-          EVE 분석
+    <section className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-300">
+          EVE 판단
         </span>
         <div className="flex items-center gap-1.5">
           <PriorityPill priority={email.priority} />
@@ -185,17 +207,17 @@ function EveAnalysis({ email }: { email: EmailDetail }) {
         <LabelFeedbackControl emailId={email.id} currentPriority={email.priority} />
       </div>
 
-      {email.summary && <p className="text-sm text-gray-200 leading-relaxed">{email.summary}</p>}
+      {email.summary && <p className="text-sm leading-relaxed text-stone-200">{email.summary}</p>}
 
       {email.keyPoints.length > 0 && (
         <div className="mt-3">
-          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1.5">
+          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-stone-500">
             핵심 포인트
           </p>
           <ul className="space-y-1">
             {email.keyPoints.map((k, i) => (
-              <li key={i} className="text-xs text-gray-300 flex gap-1.5">
-                <span className="text-cyan-500/70">•</span>
+              <li key={i} className="flex gap-1.5 text-xs text-stone-300">
+                <span className="text-amber-300/75">•</span>
                 <span>{k}</span>
               </li>
             ))}
@@ -205,13 +227,13 @@ function EveAnalysis({ email }: { email: EmailDetail }) {
 
       {email.actionItems.length > 0 && (
         <div className="mt-3">
-          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1.5">
+          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-stone-500">
             할 일
           </p>
           <ul className="space-y-1">
             {email.actionItems.map((a, i) => (
-              <li key={i} className="text-xs text-gray-300 flex gap-1.5">
-                <span className="text-amber-400/80">☐</span>
+              <li key={i} className="flex gap-1.5 text-xs text-stone-300">
+                <span className="text-amber-300/80">□</span>
                 <span>{a}</span>
               </li>
             ))}
@@ -296,7 +318,7 @@ function LabelFeedbackControl({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-[11px] text-gray-500 hover:text-gray-300 underline-offset-2 hover:underline"
+        className="text-[11px] text-stone-500 underline-offset-2 hover:text-stone-300 hover:underline"
       >
         분류 틀림
       </button>
@@ -309,14 +331,14 @@ function LabelFeedbackControl({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[11px] text-gray-500">실제 우선순위:</span>
+      <span className="text-[11px] text-stone-500">실제 우선순위:</span>
       {options.map((p) => (
         <button
           key={p}
           type="button"
           onClick={() => submit(p)}
           disabled={!!submitting}
-          className="text-[11px] px-1.5 py-0.5 rounded border border-gray-700 text-gray-200 hover:bg-gray-800 disabled:opacity-50 transition"
+          className="rounded border border-stone-700 px-1.5 py-0.5 text-[11px] text-stone-200 transition hover:bg-stone-800 disabled:opacity-50"
         >
           {submitting === p ? "..." : PRIORITY_LABELS[p]}
         </button>
@@ -328,7 +350,7 @@ function LabelFeedbackControl({
           setError(null);
         }}
         disabled={!!submitting}
-        className="text-[11px] text-gray-500 hover:text-gray-300"
+        className="text-[11px] text-stone-500 hover:text-stone-300"
       >
         취소
       </button>
@@ -392,9 +414,9 @@ function ReplyNeededFeedbackControl({ emailId }: { emailId: string }) {
   ];
 
   return (
-    <div className="mt-4 border-t border-cyan-500/10 pt-3">
+    <div className="mt-4 border-t border-amber-500/10 pt-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] text-gray-500">답장 필요 판단:</span>
+        <span className="text-[11px] text-stone-500">답장 필요 판단:</span>
         {options.map((option) => {
           const selected = feedback?.choice === option.choice;
           return (
@@ -407,7 +429,7 @@ function ReplyNeededFeedbackControl({ emailId }: { emailId: string }) {
               className={`h-7 rounded-lg border px-2 text-[11px] transition disabled:opacity-50 ${
                 selected
                   ? "border-amber-300 bg-amber-400/10 text-amber-200"
-                  : "border-gray-700 text-gray-400 hover:bg-gray-800"
+                  : "border-stone-700 text-stone-400 hover:bg-stone-800"
               }`}
             >
               {submitting === option.choice ? "..." : option.label}
@@ -424,7 +446,7 @@ function PriorityPill({ priority }: { priority: EmailDetail["priority"] }) {
   if (priority === "NORMAL") return null;
   const styles = {
     URGENT: "bg-red-500/15 text-red-300 border-red-500/30",
-    LOW: "bg-gray-900 text-gray-500 border-gray-800",
+    LOW: "bg-stone-900 text-stone-500 border-stone-800",
   };
   const labels = { URGENT: "긴급", LOW: "낮음" };
   return (
@@ -437,6 +459,15 @@ function PriorityPill({ priority }: { priority: EmailDetail["priority"] }) {
 }
 
 function CategoryPill({ category }: { category: string }) {
+  const label = categoryLabel(category);
+  return (
+    <span className="rounded border border-stone-700 bg-stone-900/60 px-1.5 py-0.5 text-[10px] text-stone-400">
+      {label}
+    </span>
+  );
+}
+
+function categoryLabel(category: string): string {
   const labelMap: Record<string, string> = {
     business: "비즈니스",
     engineering: "엔지니어링",
@@ -447,12 +478,7 @@ function CategoryPill({ category }: { category: string }) {
     conversation: "대화",
     other: "기타",
   };
-  const label = labelMap[category] || category;
-  return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-900/60 text-gray-400">
-      {label}
-    </span>
-  );
+  return labelMap[category] || category;
 }
 
 function formatFull(iso: string): string {

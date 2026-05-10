@@ -15,11 +15,11 @@ interface Memory {
 }
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  PREFERENCE: { label: "Preference", color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
-  FACT: { label: "Fact", color: "text-purple-400 bg-purple-500/10 border-purple-500/20" },
-  DECISION: { label: "Decision", color: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
-  CONTEXT: { label: "Context", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
-  FEEDBACK: { label: "Feedback", color: "text-rose-400 bg-rose-500/10 border-rose-500/20" },
+  PREFERENCE: { label: "Preference", color: "text-amber-200 bg-amber-500/10 border-amber-500/25" },
+  FACT: { label: "Fact", color: "text-teal-200 bg-teal-500/10 border-teal-500/25" },
+  DECISION: { label: "Decision", color: "text-rose-200 bg-rose-500/10 border-rose-500/25" },
+  CONTEXT: { label: "Context", color: "text-emerald-200 bg-emerald-500/10 border-emerald-500/25" },
+  FEEDBACK: { label: "Feedback", color: "text-stone-200 bg-stone-500/10 border-stone-500/25" },
 };
 
 export default function MemoryPage() {
@@ -52,21 +52,33 @@ export default function MemoryPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-      <h1 className="text-xl font-semibold text-gray-200 mb-1">EVE&apos;s Memory</h1>
-      <p className="text-sm text-gray-500 mb-6">
-        Things EVE remembers about you across conversations. You can review and delete any memory.
-      </p>
+    <div className="mx-auto max-w-3xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
+      <header className="mb-5 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-2xl shadow-black/10">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+          Memory Graph
+        </p>
+        <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
+          EVE가 판단에 쓰는 기억
+        </h1>
+        <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+          승인 방식, 선호, 반복되는 업무 맥락을 확인하고 필요 없는 기억은 지웁니다.
+        </p>
+        <div className="mt-5 grid grid-cols-3 gap-2">
+          <MemoryStat label="Total" value={stats.total} />
+          <MemoryStat label="Shown" value={memories.length} />
+          <MemoryStat label="Types" value={stats.byType.length} />
+        </div>
+      </header>
 
       {/* Stats */}
-      <div className="flex gap-2 mb-4 flex-wrap">
+      <div className="mb-4 flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => setFilter("all")}
-          className={`px-3 py-1.5 text-xs rounded-lg transition border ${
+          className={`rounded-full border px-3 py-1.5 text-xs transition ${
             filter === "all"
-              ? "bg-white text-gray-900 border-white"
-              : "text-gray-400 bg-gray-800/50 border-gray-800 hover:bg-gray-800"
+              ? "border-amber-300 bg-amber-300 text-stone-950"
+              : "border-stone-700/55 bg-stone-950/45 text-stone-400 hover:bg-stone-900/70 hover:text-stone-200"
           }`}
         >
           All ({stats.total})
@@ -78,10 +90,10 @@ export default function MemoryPage() {
               key={type}
               type="button"
               onClick={() => setFilter(type)}
-              className={`px-3 py-1.5 text-xs rounded-lg transition border ${
+              className={`rounded-full border px-3 py-1.5 text-xs transition ${
                 filter === type
                   ? `${color} border-current`
-                  : "text-gray-400 bg-gray-800/50 border-gray-800 hover:bg-gray-800"
+                  : "border-stone-700/55 bg-stone-950/45 text-stone-400 hover:bg-stone-900/70 hover:text-stone-200"
               }`}
             >
               {label} ({count})
@@ -97,7 +109,7 @@ export default function MemoryPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search memories..."
-          className="w-full bg-gray-900/50 border border-gray-800/60 rounded-xl px-4 py-2.5 text-sm text-gray-300 placeholder-gray-600 focus:outline-none focus:border-gray-600 transition"
+          className="w-full rounded-xl border border-stone-700/60 bg-stone-950/45 px-4 py-2.5 text-sm text-stone-300 placeholder-stone-600 transition focus:border-amber-500/50 focus:outline-none"
         />
       </div>
 
@@ -106,33 +118,33 @@ export default function MemoryPage() {
         {memories.map((m) => {
           const typeInfo = TYPE_LABELS[m.type] || {
             label: m.type,
-            color: "text-gray-400 bg-gray-500/10",
+            color: "text-stone-400 bg-stone-500/10 border-stone-500/20",
           };
           return (
             <div
               key={m.id}
-              className="bg-gray-900/60 border border-gray-800/50 rounded-xl p-4 group"
+              className="group rounded-xl border border-stone-700/45 bg-stone-950/35 p-4 transition hover:border-amber-500/30 hover:bg-amber-500/5"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1.5">
+                  <div className="mb-1.5 flex items-center gap-2">
                     <span
-                      className={`inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full border ${typeInfo.color}`}
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${typeInfo.color}`}
                     >
                       {typeInfo.label}
                     </span>
-                    <span className="text-[12px] text-gray-500 font-mono">{m.key}</span>
+                    <span className="font-mono text-[12px] text-stone-500">{m.key}</span>
                   </div>
-                  <p className="text-sm text-gray-200 leading-relaxed">{m.content}</p>
-                  <p className="text-[11px] text-gray-600 mt-2">
+                  <p className="text-sm leading-relaxed text-stone-200">{m.content}</p>
+                  <p className="mt-2 text-[11px] text-stone-600">
                     Updated: {new Date(m.updatedAt).toLocaleDateString("ko-KR")}
-                    {m.source && ` • Source: ${m.source}`}
+                    {m.source && ` | Source: ${m.source}`}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => deleteMemory(m.id)}
-                  className="p-1.5 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition opacity-0 group-hover:opacity-100"
+                  className="rounded-md p-1.5 text-stone-600 opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
                   title="Delete memory"
                 >
                   <svg
@@ -156,14 +168,25 @@ export default function MemoryPage() {
         })}
 
         {memories.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-sm mb-1">No memories yet</p>
-            <p className="text-gray-600 text-xs">
-              EVE will automatically remember important things as you chat
+          <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 py-12 text-center">
+            <p className="mb-1 text-sm text-stone-400">No memories yet</p>
+            <p className="text-xs text-stone-600">
+              EVE will remember decision preferences as you work.
             </p>
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function MemoryStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-stone-700/45 bg-black/15 px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
+        {label}
+      </p>
+      <p className="mt-1 text-lg font-semibold text-stone-100">{value}</p>
     </div>
   );
 }
