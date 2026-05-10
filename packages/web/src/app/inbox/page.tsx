@@ -145,27 +145,39 @@ function InboxView() {
   const pendingCount = actions.filter((a) => a.status === "PENDING").length;
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-6 md:py-10">
-      <header className="mb-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl md:text-2xl font-semibold text-gray-100">Approval Queue</h1>
-            <p className="text-xs text-gray-500 mt-1">
-              EVE가 대신하기 전에 확인이 필요한 작업이에요.
+    <div className="mx-auto w-full max-w-4xl px-4 py-6 md:py-10">
+      <header className="mb-6 overflow-hidden rounded-2xl border border-amber-300/15 bg-gradient-to-br from-gray-950 via-gray-950 to-amber-950/20 p-5 md:p-6">
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
+              Decision Queue
+            </p>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-gray-50 md:text-3xl">
+              흩어진 신호를 승인 가능한 결정으로 정리합니다.
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-gray-400">
+              EVE가 실행하기 전에 무엇을 봤고, 왜 중요하다고 판단했으며, 어떤 행동을
+              준비했는지 확인하세요.
             </p>
           </div>
           <button
             type="button"
             onClick={() => load(filter)}
             disabled={loading}
-            className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:bg-gray-800 disabled:opacity-50 transition shrink-0"
+            className="h-9 shrink-0 rounded-lg border border-gray-700 px-3 text-xs text-gray-300 transition hover:bg-gray-800 disabled:opacity-50"
             aria-label="Refresh inbox"
           >
             {loading ? "..." : "새로고침"}
           </button>
         </div>
 
-        <div className="flex items-center gap-1 mt-4 bg-gray-900/50 border border-gray-800 rounded-lg p-1 w-fit">
+        <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-xl border border-white/10 bg-black/20">
+          <QueueMetric label="승인 대기" value={pendingCount} />
+          <QueueMetric label="전체 카드" value={actions.length} />
+          <QueueMetric label="열린 약속" value={commitments.length} />
+        </div>
+
+        <div className="mt-4 flex w-fit items-center gap-1 rounded-lg border border-gray-800 bg-gray-950/80 p-1">
           <FilterTab
             active={filter === "pending"}
             label={`대기 중${pendingCount ? ` (${pendingCount})` : ""}`}
@@ -199,7 +211,7 @@ function InboxView() {
       {actions.length > 0 && (
         <section className="mb-6" aria-label="Approval queue">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold text-gray-100">승인 대기</h2>
+            <h2 className="text-sm font-semibold text-gray-100">결정 카드</h2>
             <span className="text-[11px] text-gray-500">{actions.length}</span>
           </div>
           <ul className="space-y-3">
@@ -351,6 +363,15 @@ function FilterTab({
   );
 }
 
+function QueueMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="border-r border-white/10 px-4 py-3 last:border-r-0">
+      <p className="text-2xl font-semibold text-gray-50">{value}</p>
+      <p className="mt-1 text-[11px] text-gray-500">{label}</p>
+    </div>
+  );
+}
+
 function ActionCard({
   action,
   loading,
@@ -364,22 +385,58 @@ function ActionCard({
 }) {
   const preview = buildPreview(action.toolName, action.toolArgs, action.targetLabel);
   const emailPreview = action.toolName === "send_email" ? buildEmailPreview(action.toolArgs) : null;
+  const reasoning = splitReasoning(action.reasoning);
   const isPending = action.status === "PENDING";
+  const risk = riskForTool(action.toolName);
 
   return (
-    <article className="rounded-xl border border-gray-800 bg-gray-900/40 p-4 md:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] font-medium text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 rounded px-1.5 py-0.5">
-              {action.toolName.replace(/_/g, " ")}
+    <article className="overflow-hidden rounded-xl border border-gray-800 bg-gray-950/70">
+      <div className="border-b border-gray-800 bg-gray-900/50 px-4 py-3 md:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-300">
+              Decision Card
             </span>
             <StatusBadge status={action.status} />
-            <span className="text-[11px] text-gray-600">{formatRelative(action.createdAt)}</span>
           </div>
-          {preview && <p className="mt-2 text-sm text-gray-200 break-words">{preview}</p>}
+          <span className="text-[11px] text-gray-600">{formatRelative(action.createdAt)}</span>
+        </div>
+      </div>
+
+      <div className="p-4 md:p-5">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-medium text-cyan-300 bg-cyan-400/10 border border-cyan-400/20 rounded px-1.5 py-0.5">
+              {action.toolName.replace(/_/g, " ")}
+            </span>
+            <RiskBadge risk={risk} />
+            {action.conversationTitle && (
+              <span className="min-w-0 truncate text-[11px] text-gray-600">
+                대화: {action.conversationTitle}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <DecisionSection
+              label="Signal"
+              title="EVE가 본 신호"
+              body={reasoning.situation || action.conversationTitle || "연결된 대화와 작업 신호를 확인했어요."}
+            />
+            <DecisionSection
+              label="Judgment"
+              title="지금 중요한 이유"
+              body={reasoning.judgment || action.reasoning || "실행 전 사용자의 확인이 필요한 변경이에요."}
+            />
+            <DecisionSection
+              label="Move"
+              title="준비된 행동"
+              body={reasoning.proposal || preview || action.toolName.replace(/_/g, " ")}
+            />
+          </div>
+
           {emailPreview && (
-            <div className="mt-3 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
+            <div className="mt-4 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-medium text-amber-300">전송 전 승인 필요</span>
                 <span className="text-[11px] text-gray-500">send_email</span>
@@ -395,67 +452,128 @@ function ActionCard({
               )}
             </div>
           )}
-          {action.reasoning && (
-            <p className="mt-2 text-xs text-gray-400 leading-relaxed">{action.reasoning}</p>
+
+          {isPending && (
+            <div className="flex flex-wrap items-center gap-2 mt-4 border-t border-gray-800 pt-4">
+              <button
+                type="button"
+                onClick={onApprove}
+                disabled={!!loading}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-amber-400 hover:bg-amber-300 text-gray-950 disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[88px]"
+              >
+                {loading === "approve" ? (
+                  <span className="w-3 h-3 border-2 border-gray-950/30 border-t-gray-950 rounded-full animate-spin" />
+                ) : (
+                  "승인"
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={onReject}
+                disabled={!!loading}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[88px]"
+              >
+                {loading === "reject" ? (
+                  <span className="w-3 h-3 border-2 border-gray-300/30 border-t-gray-200 rounded-full animate-spin" />
+                ) : (
+                  "거절"
+                )}
+              </button>
+              <Link
+                href={`/chat/${action.conversationId}`}
+                className="text-xs text-cyan-400 hover:text-cyan-300 ml-auto transition"
+              >
+                대화 열기 →
+              </Link>
+            </div>
           )}
-          {action.conversationTitle && (
-            <p className="mt-2 text-[11px] text-gray-600 truncate">
-              대화: {action.conversationTitle}
-            </p>
+
+          {!isPending && (
+            <div className="flex items-center justify-between mt-4 border-t border-gray-800 pt-3">
+              {action.result && (
+                <p className="text-[11px] text-gray-500 truncate flex-1">{action.result}</p>
+              )}
+              <Link
+                href={`/chat/${action.conversationId}`}
+                className="text-xs text-gray-400 hover:text-gray-200 transition shrink-0 ml-2"
+              >
+                대화 열기 →
+              </Link>
+            </div>
           )}
         </div>
       </div>
-
-      {isPending && (
-        <div className="flex flex-wrap items-center gap-2 mt-4">
-          <button
-            type="button"
-            onClick={onApprove}
-            disabled={!!loading}
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[88px]"
-          >
-            {loading === "approve" ? (
-              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              "승인"
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={onReject}
-            disabled={!!loading}
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[88px]"
-          >
-            {loading === "reject" ? (
-              <span className="w-3 h-3 border-2 border-gray-300/30 border-t-gray-200 rounded-full animate-spin" />
-            ) : (
-              "거절"
-            )}
-          </button>
-          <Link
-            href={`/chat/${action.conversationId}`}
-            className="text-xs text-cyan-400 hover:text-cyan-300 ml-auto transition"
-          >
-            대화 열기 →
-          </Link>
-        </div>
-      )}
-
-      {!isPending && (
-        <div className="flex items-center justify-between mt-3">
-          {action.result && (
-            <p className="text-[11px] text-gray-500 truncate flex-1">{action.result}</p>
-          )}
-          <Link
-            href={`/chat/${action.conversationId}`}
-            className="text-xs text-gray-400 hover:text-gray-200 transition shrink-0 ml-2"
-          >
-            대화 열기 →
-          </Link>
-        </div>
-      )}
     </article>
   );
+}
+
+function DecisionSection({ label, title, body }: { label: string; title: string; body: string }) {
+  return (
+    <section className="rounded-lg border border-gray-800 bg-black/20 p-3">
+      <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-amber-300">{label}</p>
+      <h3 className="mt-2 text-xs font-semibold text-gray-200">{title}</h3>
+      <p className="mt-2 text-xs leading-5 text-gray-400">{body}</p>
+    </section>
+  );
+}
+
+function RiskBadge({ risk }: { risk: "low" | "medium" | "high" }) {
+  const map = {
+    low: {
+      label: "낮은 위험",
+      className: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
+    },
+    medium: {
+      label: "승인 필요",
+      className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
+    },
+    high: {
+      label: "높은 위험",
+      className: "text-red-300 bg-red-500/10 border-red-500/20",
+    },
+  }[risk];
+
+  return (
+    <span className={`text-[11px] font-medium border rounded px-1.5 py-0.5 ${map.className}`}>
+      {map.label}
+    </span>
+  );
+}
+
+function riskForTool(toolName: string): "low" | "medium" | "high" {
+  if (toolName.startsWith("delete_") || toolName === "archive_email") return "high";
+  if (
+    toolName === "send_email" ||
+    toolName === "create_event" ||
+    toolName === "create_contact" ||
+    toolName === "update_contact"
+  ) {
+    return "medium";
+  }
+  return "low";
+}
+
+function splitReasoning(reasoning: string | null): {
+  situation: string | null;
+  judgment: string | null;
+  proposal: string | null;
+} {
+  if (!reasoning) return { situation: null, judgment: null, proposal: null };
+
+  const read = (label: "상황" | "판단" | "제안"): string | null => {
+    const labels = ["상황", "판단", "제안"].filter((item) => item !== label).join("|");
+    const match = reasoning.match(
+      new RegExp(`(?:📋|💡|✅)?\\s*${label}\\s*[:：]\\s*([\\s\\S]*?)(?=(?:📋|💡|✅)?\\s*(?:${labels})\\s*[:：]|$)`),
+    );
+    return match?.[1]?.trim() || null;
+  };
+
+  const situation = read("상황");
+  const judgment = read("판단");
+  const proposal = read("제안");
+  if (situation || judgment || proposal) return { situation, judgment, proposal };
+
+  return { situation: null, judgment: reasoning.trim(), proposal: null };
 }
 
 function CommitmentOwnerBadge({ owner }: { owner: CommitmentItem["owner"] }) {
