@@ -102,8 +102,8 @@ export default function BriefingCard() {
 
   if (loading) {
     return (
-      <section className="mb-6 rounded-xl border border-gray-800 bg-gray-900/40 p-4">
-        <div className="h-16 animate-pulse rounded-lg bg-gray-800/70" />
+      <section className="mb-6 rounded-xl border border-stone-800 bg-stone-900/40 p-4">
+        <div className="h-16 animate-pulse rounded-lg bg-stone-800/70" />
       </section>
     );
   }
@@ -112,27 +112,27 @@ export default function BriefingCard() {
   const time = status.note ? formatTime(status.note.createdAt) : status.automation.briefingTime;
 
   return (
-    <section className="mb-6 rounded-xl border border-gray-800 bg-gray-900/40 p-4">
+    <section className="mb-6 rounded-xl border border-stone-800 bg-stone-900/40 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-gray-100">오늘 브리핑</h2>
+            <h2 className="text-sm font-semibold text-stone-100">오늘 브리핑</h2>
             <span className={`inline-flex items-center gap-1 text-[11px] ${push.className}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${push.dotClassName}`} />
               {push.label}
             </span>
           </div>
-          <p className="mt-1 line-clamp-2 text-sm text-gray-400">
+          <p className="mt-1 line-clamp-2 text-sm text-stone-400">
             {status.note?.preview || emptyMessage(status)}
           </p>
-          {time && <p className="mt-2 text-[11px] text-gray-600">{time}</p>}
+          {time && <p className="mt-2 text-[11px] text-stone-600">{time}</p>}
           {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
         </div>
 
         {status.generated ? (
           <Link
             href="/briefing"
-            className="shrink-0 rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-300 transition hover:bg-gray-800"
+            className="shrink-0 rounded-lg border border-stone-700 px-3 py-1.5 text-xs text-stone-300 transition hover:bg-stone-800"
           >
             열기
           </Link>
@@ -141,7 +141,7 @@ export default function BriefingCard() {
             type="button"
             onClick={generate}
             disabled={generating}
-            className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-black transition hover:bg-gray-200 disabled:opacity-50"
+            className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-black transition hover:bg-stone-200 disabled:opacity-50"
           >
             {generating ? "생성 중..." : "지금 만들기"}
           </button>
@@ -178,11 +178,11 @@ function pushMeta(
         dotClassName: "bg-amber-300",
       };
     case "pending":
-      return { label: "대기", className: "text-gray-400", dotClassName: "bg-gray-500" };
+      return { label: "대기", className: "text-stone-400", dotClassName: "bg-stone-500" };
     case "not_sent":
-      return { label: "미전송", className: "text-gray-500", dotClassName: "bg-gray-600" };
+      return { label: "미전송", className: "text-stone-500", dotClassName: "bg-stone-600" };
     case "no_subscription":
-      return { label: "구독 기기 없음", className: "text-gray-500", dotClassName: "bg-gray-600" };
+      return { label: "구독 기기 없음", className: "text-stone-500", dotClassName: "bg-stone-600" };
   }
 }
 

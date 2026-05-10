@@ -47,8 +47,8 @@ export default function PlaybookRecommendations() {
   return (
     <section className="mb-6" aria-label="EVE playbook recommendations">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-100">추천 플레이북</h2>
-        <span className="text-[11px] text-gray-500">{data.recommendations.length}</span>
+        <h2 className="text-sm font-semibold text-stone-100">추천 플레이북</h2>
+        <span className="text-[11px] text-stone-500">{data.recommendations.length}</span>
       </div>
       <div className="space-y-2">
         {data.recommendations.map((recommendation) => (
@@ -64,7 +64,7 @@ function PlaybookCard({ recommendation }: { recommendation: PlaybookRecommendati
   const primaryContext = recommendation.activeContexts[0] ?? null;
 
   return (
-    <article className="rounded-xl border border-gray-800 bg-gray-900/40 p-4 transition hover:bg-gray-900/60">
+    <article className="rounded-xl border border-stone-800 bg-stone-900/40 p-4 transition hover:bg-stone-900/60">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -73,18 +73,18 @@ function PlaybookCard({ recommendation }: { recommendation: PlaybookRecommendati
             >
               {domain.label}
             </span>
-            <span className="text-[11px] text-gray-500">
+            <span className="text-[11px] text-stone-500">
               {Math.round(recommendation.confidence * 100)}%
             </span>
           </div>
-          <p className="mt-2 truncate text-sm font-medium text-gray-100">
+          <p className="mt-2 truncate text-sm font-medium text-stone-100">
             {recommendation.playbook.name}
           </p>
-          <p className="mt-1 line-clamp-1 text-xs text-gray-400">
+          <p className="mt-1 line-clamp-1 text-xs text-stone-400">
             {recommendation.reasons[0] || recommendation.playbook.bestFor}
           </p>
         </div>
-        <span className="shrink-0 rounded border border-gray-700 bg-gray-950/40 px-2 py-1 text-[11px] text-gray-400">
+        <span className="shrink-0 rounded border border-stone-700 bg-stone-950/40 px-2 py-1 text-[11px] text-stone-400">
           {recommendation.score}
         </span>
       </div>
@@ -95,7 +95,7 @@ function PlaybookCard({ recommendation }: { recommendation: PlaybookRecommendati
         {recommendation.suggestedFirstActions.slice(0, 2).map((step) => (
           <span
             key={step.id}
-            className="rounded border border-gray-800 px-1.5 py-0.5 text-[11px] text-gray-400"
+            className="rounded border border-stone-800 px-1.5 py-0.5 text-[11px] text-stone-400"
           >
             {step.title}
           </span>
@@ -107,12 +107,12 @@ function PlaybookCard({ recommendation }: { recommendation: PlaybookRecommendati
 
 function ContextLink({ context }: { context: PlaybookContextHit }) {
   const content = (
-    <div className="mt-3 rounded-lg border border-gray-800/70 bg-gray-950/30 px-3 py-2">
+    <div className="mt-3 rounded-lg border border-stone-800/70 bg-stone-950/30 px-3 py-2">
       <div className="flex items-center gap-2">
         <RiskDot risk={context.risk} />
-        <p className="min-w-0 truncate text-xs text-gray-300">{context.title}</p>
+        <p className="min-w-0 truncate text-xs text-stone-300">{context.title}</p>
       </div>
-      <p className="mt-1 line-clamp-1 text-[11px] text-gray-500">
+      <p className="mt-1 line-clamp-1 text-[11px] text-stone-500">
         {context.matchedKeywords.slice(0, 3).join(" · ")}
       </p>
     </div>
@@ -129,7 +129,7 @@ function ContextLink({ context }: { context: PlaybookContextHit }) {
 
 function RiskDot({ risk }: { risk: PlaybookContextHit["risk"] }) {
   const className =
-    risk === "high" ? "bg-red-400" : risk === "medium" ? "bg-amber-300" : "bg-gray-500";
+    risk === "high" ? "bg-red-400" : risk === "medium" ? "bg-amber-300" : "bg-stone-500";
   return <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${className}`} />;
 }
 

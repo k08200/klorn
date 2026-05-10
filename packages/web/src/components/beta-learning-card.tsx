@@ -67,16 +67,16 @@ export default function BetaLearningCard() {
   if (dismissed) return null;
 
   return (
-    <section className="mb-6 rounded-xl border border-cyan-900/50 bg-cyan-950/15 p-4">
+    <section className="mb-6 rounded-xl border border-amber-300/20 bg-amber-950/15 p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">
             Beta learning
           </p>
-          <h2 className="mt-2 text-base font-semibold text-gray-100">
+          <h2 className="mt-2 text-base font-semibold text-stone-100">
             EVE가 처음 2-3일 동안 메일과 일정 패턴을 학습합니다.
           </h2>
-          <p className="mt-2 text-sm leading-6 text-gray-400">
+          <p className="mt-2 text-sm leading-6 text-stone-400">
             처음 브리핑은 다소 보수적일 수 있고, 사용할수록 Top 3가 더 정확해져요.
           </p>
         </div>
@@ -85,7 +85,7 @@ export default function BetaLearningCard() {
           {!connected && (
             <Link
               href="/settings"
-              className="rounded-lg border border-cyan-500/50 px-3 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/10"
+              className="rounded-lg border border-amber-300/40 px-3 py-1.5 text-xs font-medium text-amber-100 transition hover:bg-amber-300/10"
             >
               연결
             </Link>
@@ -93,7 +93,7 @@ export default function BetaLearningCard() {
           <button
             type="button"
             onClick={dismiss}
-            className="rounded-lg border border-gray-700 px-2.5 py-1.5 text-xs text-gray-400 transition hover:bg-gray-800 hover:text-gray-200"
+            className="rounded-lg border border-stone-700 px-2.5 py-1.5 text-xs text-stone-400 transition hover:bg-stone-800 hover:text-stone-200"
             aria-label="Hide beta learning notice"
           >
             닫기
@@ -101,9 +101,9 @@ export default function BetaLearningCard() {
         </div>
       </div>
 
-      <div className="mt-4 h-1.5 rounded-full bg-gray-800">
+      <div className="mt-4 h-1.5 rounded-full bg-stone-800">
         <div
-          className="h-full rounded-full bg-cyan-400 transition-all"
+          className="h-full rounded-full bg-amber-300 transition-all"
           style={{ width: `${progress}%` }}
         />
       </div>
@@ -112,13 +112,13 @@ export default function BetaLearningCard() {
         {steps.map((step) => (
           <div
             key={step.label}
-            className="rounded-lg border border-gray-800/80 bg-black/20 px-3 py-2"
+            className="rounded-lg border border-stone-800/80 bg-black/20 px-3 py-2"
           >
             <div className="flex items-center gap-2">
               <span className={`h-2 w-2 rounded-full ${dotClass(step.state)}`} />
-              <p className="text-xs font-medium text-gray-200">{step.label}</p>
+              <p className="text-xs font-medium text-stone-200">{step.label}</p>
             </div>
-            <p className="mt-1 text-[11px] leading-5 text-gray-500">{step.detail}</p>
+            <p className="mt-1 text-[11px] leading-5 text-stone-500">{step.detail}</p>
           </div>
         ))}
       </div>
@@ -137,10 +137,10 @@ function dotClass(state: StepState): string {
     case "done":
       return "bg-emerald-400";
     case "active":
-      return "bg-cyan-300";
+      return "bg-amber-300";
     case "failed":
       return "bg-amber-300";
     case "pending":
-      return "bg-gray-600";
+      return "bg-stone-600";
   }
 }

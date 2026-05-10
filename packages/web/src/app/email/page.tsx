@@ -241,8 +241,8 @@ function ReplyNeededBadge() {
 function PriorityBadge({ priority }: { priority: EmailRow["priority"] }) {
   const styles = {
     URGENT: "bg-red-500/15 text-red-300 border-red-500/30",
-    NORMAL: "bg-gray-800 text-gray-400 border-gray-700",
-    LOW: "bg-gray-900 text-gray-500 border-gray-800",
+    NORMAL: "bg-stone-800 text-stone-400 border-stone-700",
+    LOW: "bg-stone-900 text-stone-500 border-stone-800",
   } as const;
   const labels = { URGENT: "긴급", NORMAL: "일반", LOW: "낮음" } as const;
   if (priority === "NORMAL") return null;
@@ -268,7 +268,7 @@ function CategoryBadge({ category }: { category: string }) {
   };
   const label = labelMap[category] || category;
   return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-900/60 text-gray-400 shrink-0">
+    <span className="text-[10px] px-1.5 py-0.5 rounded border border-stone-700 bg-stone-900/60 text-stone-400 shrink-0">
       {label}
     </span>
   );

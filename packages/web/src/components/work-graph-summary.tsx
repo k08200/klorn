@@ -39,19 +39,19 @@ export default function WorkGraphSummaryCard() {
 
   return (
     <section
-      className="mb-6 overflow-hidden rounded-2xl border border-gray-800 bg-gray-950/70"
+      className="mb-6 overflow-hidden rounded-2xl border border-stone-800 bg-stone-950/70"
       aria-label="Work graph summary"
     >
-      <div className="border-b border-gray-800 bg-gradient-to-br from-gray-950 via-gray-950 to-cyan-950/20 p-4 md:p-5">
+      <div className="border-b border-stone-800 bg-gradient-to-br from-stone-950 via-stone-950 to-amber-950/20 p-4 md:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-300">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">
               Work Graph
             </p>
-            <h2 className="mt-2 text-lg font-semibold tracking-tight text-gray-100">
+            <h2 className="mt-2 text-lg font-semibold tracking-tight text-stone-100">
               지금 움직이는 업무 맥락
             </h2>
-            <p className="mt-2 max-w-xl text-xs leading-5 text-gray-500">
+            <p className="mt-2 max-w-xl text-xs leading-5 text-stone-500">
               EVE가 메일, 대화, 약속을 같은 일 단위로 묶어 어떤 맥락이 위험해지고 있는지 보여줍니다.
             </p>
           </div>
@@ -81,18 +81,18 @@ function ContextCard({ context }: { context: WorkGraphContext }) {
   const reasons = context.reasons.slice(0, 2);
 
   const body = (
-    <article className="rounded-xl border border-gray-800 bg-gray-900/40 p-4 transition hover:border-cyan-400/30 hover:bg-gray-900/60">
+    <article className="rounded-xl border border-stone-800 bg-stone-900/40 p-4 transition hover:border-amber-300/30 hover:bg-stone-900/60">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <RiskBadge risk={context.risk} />
-            <span className="text-[11px] text-gray-500">{kindLabel(context.kind)}</span>
-            <span className="text-[11px] text-gray-600">
+            <span className="text-[11px] text-stone-500">{kindLabel(context.kind)}</span>
+            <span className="text-[11px] text-stone-600">
               {formatRelative(context.lastActivityAt)}
             </span>
           </div>
-          <p className="mt-2 break-words text-sm font-semibold text-gray-100">{context.title}</p>
-          <p className="mt-1 line-clamp-2 text-xs text-gray-400">
+          <p className="mt-2 break-words text-sm font-semibold text-stone-100">{context.title}</p>
+          <p className="mt-1 line-clamp-2 text-xs text-stone-400">
             {subtitleFor(context) || "연결된 신호 없음"}
           </p>
         </div>
@@ -107,14 +107,14 @@ function ContextCard({ context }: { context: WorkGraphContext }) {
               {chips.map((chip) => (
                 <span
                   key={chip}
-                  className="rounded border border-gray-800 bg-black/20 px-1.5 py-0.5 text-[11px] text-gray-400"
+                  className="rounded border border-stone-800 bg-black/20 px-1.5 py-0.5 text-[11px] text-stone-400"
                 >
                   {chip}
                 </span>
               ))}
             </div>
           ) : (
-            <p className="text-xs text-gray-500">아직 뚜렷한 신호가 없어요.</p>
+            <p className="text-xs text-stone-500">아직 뚜렷한 신호가 없어요.</p>
           )}
         </ContextPanel>
 
@@ -122,25 +122,25 @@ function ContextCard({ context }: { context: WorkGraphContext }) {
           {reasons.length > 0 ? (
             <ul className="space-y-1.5">
               {reasons.map((reason) => (
-                <li key={reason} className="text-xs leading-5 text-gray-400">
+                <li key={reason} className="text-xs leading-5 text-stone-400">
                   {reason}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-gray-500">최근 활동 기준으로 표시했어요.</p>
+            <p className="text-xs text-stone-500">최근 활동 기준으로 표시했어요.</p>
           )}
         </ContextPanel>
       </div>
 
       {people.length > 0 && (
-        <div className="mt-3 flex items-center gap-2 border-t border-gray-800 pt-3">
-          <span className="shrink-0 text-[11px] text-gray-600">관련 사람</span>
+        <div className="mt-3 flex items-center gap-2 border-t border-stone-800 pt-3">
+          <span className="shrink-0 text-[11px] text-stone-600">관련 사람</span>
           <div className="flex min-w-0 flex-wrap gap-1.5">
             {people.map((person) => (
               <span
                 key={person}
-                className="max-w-full truncate rounded border border-gray-800 px-1.5 py-0.5 text-[11px] text-gray-400"
+                className="max-w-full truncate rounded border border-stone-800 px-1.5 py-0.5 text-[11px] text-stone-400"
               >
                 {person}
               </span>
@@ -163,16 +163,16 @@ function ContextCard({ context }: { context: WorkGraphContext }) {
 function GraphMetric({ label, value }: { label: string; value: number }) {
   return (
     <div className="border-r border-white/10 px-3 py-2 last:border-r-0">
-      <p className="text-lg font-semibold text-gray-100">{value}</p>
-      <p className="mt-0.5 text-[10px] text-gray-600">{label}</p>
+      <p className="text-lg font-semibold text-stone-100">{value}</p>
+      <p className="mt-0.5 text-[10px] text-stone-600">{label}</p>
     </div>
   );
 }
 
 function ContextPanel({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-gray-800 bg-black/20 p-3">
-      <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-cyan-300">
+    <section className="rounded-lg border border-stone-800 bg-black/20 p-3">
+      <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-amber-200">
         {label}
       </p>
       {children}
@@ -186,7 +186,7 @@ function ContextGlyph({ risk }: { risk: WorkGraphRisk }) {
       ? "border-red-400/25 bg-red-400/10 text-red-200"
       : risk === "medium"
         ? "border-amber-300/25 bg-amber-300/10 text-amber-200"
-        : "border-cyan-300/20 bg-cyan-300/8 text-cyan-200";
+        : "border-amber-300/20 bg-amber-300/10 text-amber-100";
 
   return (
     <div
@@ -194,10 +194,15 @@ function ContextGlyph({ risk }: { risk: WorkGraphRisk }) {
       aria-hidden="true"
     >
       <span className="h-2 w-2 rounded-full bg-current" />
-      <span className="absolute left-3 top-4 h-1.5 w-1.5 rounded-full bg-gray-500" />
-      <span className="absolute right-4 top-3 h-1.5 w-1.5 rounded-full bg-gray-500" />
-      <span className="absolute bottom-4 right-5 h-1.5 w-1.5 rounded-full bg-gray-500" />
-      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 64 64" fill="none">
+      <span className="absolute left-3 top-4 h-1.5 w-1.5 rounded-full bg-stone-500" />
+      <span className="absolute right-4 top-3 h-1.5 w-1.5 rounded-full bg-stone-500" />
+      <span className="absolute bottom-4 right-5 h-1.5 w-1.5 rounded-full bg-stone-500" />
+      <svg
+        className="absolute inset-0 h-full w-full"
+        viewBox="0 0 64 64"
+        fill="none"
+        aria-hidden="true"
+      >
         <path d="M19 22 32 32 45 20M32 32l10 16" stroke="currentColor" strokeOpacity=".28" />
       </svg>
     </div>
@@ -223,7 +228,7 @@ function riskEntry(risk: WorkGraphRisk): { label: string; className: string } {
         className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
       };
     case "low":
-      return { label: "낮음", className: "text-gray-400 bg-gray-500/10 border-gray-500/20" };
+      return { label: "낮음", className: "text-stone-400 bg-stone-500/10 border-stone-500/20" };
   }
 }
 

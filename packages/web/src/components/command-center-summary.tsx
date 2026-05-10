@@ -54,10 +54,10 @@ export default function CommandCenterSummary() {
 
 function Top3Section({ items }: { items: AttentionItem[] }) {
   return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
+    <div className="rounded-xl border border-stone-800 bg-stone-900/40 p-4">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-gray-100">지금 봐야 할 것</h2>
-        <span className="text-[11px] text-gray-500">Top {items.length}</span>
+        <h2 className="text-sm font-semibold text-stone-100">지금 봐야 할 것</h2>
+        <span className="text-[11px] text-stone-500">Top {items.length}</span>
       </div>
       <ol className="space-y-2">
         {items.map((item, idx) => (
@@ -75,8 +75,8 @@ function AttentionRow({ item, index }: { item: AttentionItem; index: number }) {
   const body = bodyFor(item);
   const href = hrefFor(item);
   const content = (
-    <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-gray-800/60 bg-gray-900/40 hover:bg-gray-800/40 transition">
-      <span className="text-[11px] font-semibold text-gray-500 mt-0.5 shrink-0 w-4 text-center">
+    <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-stone-800/60 bg-stone-900/40 hover:bg-stone-800/40 transition">
+      <span className="text-[11px] font-semibold text-stone-500 mt-0.5 shrink-0 w-4 text-center">
         {index}
       </span>
       <div className="min-w-0 flex-1">
@@ -86,10 +86,10 @@ function AttentionRow({ item, index }: { item: AttentionItem; index: number }) {
           >
             {badge.label}
           </span>
-          <span className="text-sm text-gray-100 truncate">{body.title}</span>
+          <span className="text-sm text-stone-100 truncate">{body.title}</span>
         </div>
         {body.subtitle && (
-          <p className="mt-1 text-[11px] text-gray-400 line-clamp-1">{body.subtitle}</p>
+          <p className="mt-1 text-[11px] text-stone-400 line-clamp-1">{body.subtitle}</p>
         )}
       </div>
     </div>
@@ -113,9 +113,12 @@ function badgeFor(item: AttentionItem): { label: string; className: string } {
     case "overdue_task":
       return { label: "지난 일", className: "text-red-300 bg-red-500/10 border-red-500/20" };
     case "today_event":
-      return { label: "곧 시작", className: "text-cyan-300 bg-cyan-400/10 border-cyan-400/20" };
+      return { label: "곧 시작", className: "text-amber-200 bg-amber-300/10 border-amber-300/20" };
     case "agent_proposal":
-      return { label: "EVE 제안", className: "text-blue-300 bg-blue-400/10 border-blue-400/20" };
+      return {
+        label: "결정 제안",
+        className: "text-amber-200 bg-amber-300/10 border-amber-300/20",
+      };
     case "commitment":
       if (item.attentionType === "COMMITMENT_OVERDUE") {
         return { label: "약속 지남", className: "text-red-300 bg-red-500/10 border-red-500/20" };
@@ -219,8 +222,8 @@ function formatEventSubtitle(
 
 function TodaySectionView({ section }: { section: TodaySection }) {
   return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
-      <h2 className="text-sm font-semibold text-gray-100 mb-3">오늘 챙겨야 할 것</h2>
+    <div className="rounded-xl border border-stone-800 bg-stone-900/40 p-4">
+      <h2 className="text-sm font-semibold text-stone-100 mb-3">오늘 챙겨야 할 것</h2>
       <div className="space-y-3">
         {section.events.length > 0 && (
           <SubList
@@ -265,7 +268,7 @@ interface SubListItem {
 }
 
 function SubList({ label, items, tone }: { label: string; items: SubListItem[]; tone?: "warn" }) {
-  const labelClass = tone === "warn" ? "text-red-300" : "text-gray-400";
+  const labelClass = tone === "warn" ? "text-red-300" : "text-stone-400";
   return (
     <div>
       <p className={`text-[11px] font-medium mb-1.5 ${labelClass}`}>
@@ -275,16 +278,16 @@ function SubList({ label, items, tone }: { label: string; items: SubListItem[]; 
         {items.slice(0, 3).map((it) => (
           <li
             key={it.key}
-            className="flex items-center gap-2 text-sm text-gray-200 px-2 py-1 rounded border border-transparent hover:border-gray-800/80"
+            className="flex items-center gap-2 text-sm text-stone-200 px-2 py-1 rounded border border-transparent hover:border-stone-800/80"
           >
             <span className="truncate flex-1">{it.primary}</span>
             {it.secondary && (
-              <span className="text-[11px] text-gray-500 shrink-0">{it.secondary}</span>
+              <span className="text-[11px] text-stone-500 shrink-0">{it.secondary}</span>
             )}
           </li>
         ))}
         {items.length > 3 && (
-          <li className="text-[11px] text-gray-600 px-2">+ {items.length - 3}개 더</li>
+          <li className="text-[11px] text-stone-600 px-2">+ {items.length - 3}개 더</li>
         )}
       </ul>
     </div>

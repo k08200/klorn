@@ -146,16 +146,16 @@ function InboxView() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-6 md:py-10">
-      <header className="mb-6 overflow-hidden rounded-2xl border border-amber-300/15 bg-gradient-to-br from-gray-950 via-gray-950 to-amber-950/20 p-5 md:p-6">
+      <header className="mb-6 overflow-hidden rounded-2xl border border-amber-300/15 bg-gradient-to-br from-stone-950 via-stone-950 to-amber-950/20 p-5 md:p-6">
         <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
           <div className="max-w-2xl">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
               Decision Queue
             </p>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-gray-50 md:text-3xl">
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-stone-50 md:text-3xl">
               흩어진 신호를 승인 가능한 결정으로 정리합니다.
             </h1>
-            <p className="mt-3 text-sm leading-6 text-gray-400">
+            <p className="mt-3 text-sm leading-6 text-stone-400">
               EVE가 실행하기 전에 무엇을 봤고, 왜 중요하다고 판단했으며, 어떤 행동을 준비했는지
               확인하세요.
             </p>
@@ -164,7 +164,7 @@ function InboxView() {
             type="button"
             onClick={() => load(filter)}
             disabled={loading}
-            className="h-9 shrink-0 rounded-lg border border-gray-700 px-3 text-xs text-gray-300 transition hover:bg-gray-800 disabled:opacity-50"
+            className="h-9 shrink-0 rounded-lg border border-stone-700 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
             aria-label="Refresh inbox"
           >
             {loading ? "..." : "새로고침"}
@@ -177,7 +177,7 @@ function InboxView() {
           <QueueMetric label="열린 약속" value={commitments.length} />
         </div>
 
-        <div className="mt-4 flex w-fit items-center gap-1 rounded-lg border border-gray-800 bg-gray-950/80 p-1">
+        <div className="mt-4 flex w-fit items-center gap-1 rounded-lg border border-stone-800 bg-stone-950/80 p-1">
           <FilterTab
             active={filter === "pending"}
             label={`대기 중${pendingCount ? ` (${pendingCount})` : ""}`}
@@ -190,7 +190,7 @@ function InboxView() {
       <BetaLearningCard />
 
       {loading && actions.length === 0 && (
-        <p className="text-sm text-gray-500 py-8 text-center">로딩 중...</p>
+        <p className="text-sm text-stone-500 py-8 text-center">로딩 중...</p>
       )}
 
       {error && (
@@ -200,19 +200,19 @@ function InboxView() {
       )}
 
       {!loading && !error && actions.length === 0 && commitments.length === 0 && (
-        <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-8 text-center">
-          <p className="text-sm text-gray-300 mb-1">
+        <div className="rounded-xl border border-stone-800 bg-stone-900/40 p-8 text-center">
+          <p className="text-sm text-stone-300 mb-1">
             {filter === "pending" ? "대기 중인 항목이 없어요" : "받은 일이 없어요"}
           </p>
-          <p className="text-xs text-gray-500">EVE가 새로운 제안을 만들면 여기에 표시돼요.</p>
+          <p className="text-xs text-stone-500">EVE가 새로운 제안을 만들면 여기에 표시돼요.</p>
         </div>
       )}
 
       {actions.length > 0 && (
-        <section className="mb-6" aria-label="Approval queue">
+        <section className="mb-6" aria-label="Decision queue">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold text-gray-100">결정 카드</h2>
-            <span className="text-[11px] text-gray-500">{actions.length}</span>
+            <h2 className="text-sm font-semibold text-stone-100">결정 카드</h2>
+            <span className="text-[11px] text-stone-500">{actions.length}</span>
           </div>
           <ul className="space-y-3">
             {actions.map((action) => (
@@ -260,8 +260,8 @@ function CommitmentSection({
   return (
     <section className="mb-6" aria-label="Commitment ledger">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-sm font-semibold text-gray-100">챙길 약속</h2>
-        <span className="text-[11px] text-gray-500">{commitments.length}</span>
+        <h2 className="text-sm font-semibold text-stone-100">챙길 약속</h2>
+        <span className="text-[11px] text-stone-500">{commitments.length}</span>
       </div>
       <ul className="space-y-2">
         {commitments.map((commitment) => (
@@ -291,19 +291,19 @@ function CommitmentCard({
   onDismiss: () => void;
 }) {
   return (
-    <article className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
+    <article className="rounded-xl border border-stone-800 bg-stone-900/40 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <CommitmentOwnerBadge owner={commitment.owner} />
-            <span className="text-[11px] text-gray-500">
+            <span className="text-[11px] text-stone-500">
               {commitmentKindLabel(commitment.kind)}
             </span>
-            <span className="text-[11px] text-gray-600">{commitmentDueLabel(commitment)}</span>
+            <span className="text-[11px] text-stone-600">{commitmentDueLabel(commitment)}</span>
           </div>
-          <p className="mt-2 text-sm font-medium text-gray-100 break-words">{commitment.title}</p>
+          <p className="mt-2 text-sm font-medium text-stone-100 break-words">{commitment.title}</p>
           {commitment.description && (
-            <p className="mt-1 text-xs text-gray-400 line-clamp-2">{commitment.description}</p>
+            <p className="mt-1 text-xs text-stone-400 line-clamp-2">{commitment.description}</p>
           )}
         </div>
       </div>
@@ -325,15 +325,15 @@ function CommitmentCard({
           type="button"
           onClick={onDismiss}
           disabled={!!loading}
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-700 text-gray-300 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[72px]"
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-stone-700 text-stone-300 hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[72px]"
         >
           {loading === "dismiss" ? (
-            <span className="w-3 h-3 border-2 border-gray-300/30 border-t-gray-200 rounded-full animate-spin" />
+            <span className="w-3 h-3 border-2 border-stone-300/30 border-t-stone-200 rounded-full animate-spin" />
           ) : (
             "숨김"
           )}
         </button>
-        <span className="ml-auto text-[11px] text-gray-600">
+        <span className="ml-auto text-[11px] text-stone-600">
           신뢰도 {Math.round(commitment.confidence * 100)}%
         </span>
       </div>
@@ -355,7 +355,7 @@ function FilterTab({
       type="button"
       onClick={onClick}
       className={`text-xs px-3 py-1.5 rounded-md transition ${
-        active ? "bg-gray-800 text-white" : "text-gray-400 hover:text-gray-200"
+        active ? "bg-stone-800 text-white" : "text-stone-400 hover:text-stone-200"
       }`}
     >
       {label}
@@ -366,8 +366,8 @@ function FilterTab({
 function QueueMetric({ label, value }: { label: string; value: number }) {
   return (
     <div className="border-r border-white/10 px-4 py-3 last:border-r-0">
-      <p className="text-2xl font-semibold text-gray-50">{value}</p>
-      <p className="mt-1 text-[11px] text-gray-500">{label}</p>
+      <p className="text-2xl font-semibold text-stone-50">{value}</p>
+      <p className="mt-1 text-[11px] text-stone-500">{label}</p>
     </div>
   );
 }
@@ -390,8 +390,8 @@ function ActionCard({
   const risk = riskForTool(action.toolName);
 
   return (
-    <article className="overflow-hidden rounded-xl border border-gray-800 bg-gray-950/70">
-      <div className="border-b border-gray-800 bg-gray-900/50 px-4 py-3 md:px-5">
+    <article className="overflow-hidden rounded-xl border border-stone-800 bg-stone-950/70">
+      <div className="border-b border-stone-800 bg-stone-900/50 px-4 py-3 md:px-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-300">
@@ -399,19 +399,19 @@ function ActionCard({
             </span>
             <StatusBadge status={action.status} />
           </div>
-          <span className="text-[11px] text-gray-600">{formatRelative(action.createdAt)}</span>
+          <span className="text-[11px] text-stone-600">{formatRelative(action.createdAt)}</span>
         </div>
       </div>
 
       <div className="p-4 md:p-5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] font-medium text-cyan-300 bg-cyan-400/10 border border-cyan-400/20 rounded px-1.5 py-0.5">
+            <span className="text-[11px] font-medium text-amber-200 bg-amber-300/10 border border-amber-300/20 rounded px-1.5 py-0.5">
               {action.toolName.replace(/_/g, " ")}
             </span>
             <RiskBadge risk={risk} />
             {action.conversationTitle && (
-              <span className="min-w-0 truncate text-[11px] text-gray-600">
+              <span className="min-w-0 truncate text-[11px] text-stone-600">
                 대화: {action.conversationTitle}
               </span>
             )}
@@ -447,14 +447,14 @@ function ActionCard({
             <div className="mt-4 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-medium text-amber-300">전송 전 승인 필요</span>
-                <span className="text-[11px] text-gray-500">send_email</span>
+                <span className="text-[11px] text-stone-500">send_email</span>
               </div>
-              <p className="mt-2 text-xs text-gray-300 break-words">To: {emailPreview.to}</p>
-              <p className="mt-1 text-xs text-gray-400 break-words">
+              <p className="mt-2 text-xs text-stone-300 break-words">To: {emailPreview.to}</p>
+              <p className="mt-1 text-xs text-stone-400 break-words">
                 Subject: {emailPreview.subject}
               </p>
               {emailPreview.body && (
-                <p className="mt-2 text-xs leading-relaxed text-gray-300 line-clamp-4 whitespace-pre-wrap">
+                <p className="mt-2 text-xs leading-relaxed text-stone-300 line-clamp-4 whitespace-pre-wrap">
                   {emailPreview.body}
                 </p>
               )}
@@ -462,15 +462,15 @@ function ActionCard({
           )}
 
           {isPending && (
-            <div className="flex flex-wrap items-center gap-2 mt-4 border-t border-gray-800 pt-4">
+            <div className="flex flex-wrap items-center gap-2 mt-4 border-t border-stone-800 pt-4">
               <button
                 type="button"
                 onClick={onApprove}
                 disabled={!!loading}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-amber-400 hover:bg-amber-300 text-gray-950 disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[88px]"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-amber-400 hover:bg-amber-300 text-stone-950 disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[88px]"
               >
                 {loading === "approve" ? (
-                  <span className="w-3 h-3 border-2 border-gray-950/30 border-t-gray-950 rounded-full animate-spin" />
+                  <span className="w-3 h-3 border-2 border-stone-950/30 border-t-stone-950 rounded-full animate-spin" />
                 ) : (
                   "승인"
                 )}
@@ -479,17 +479,17 @@ function ActionCard({
                 type="button"
                 onClick={onReject}
                 disabled={!!loading}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[88px]"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-stone-600 text-stone-300 hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[88px]"
               >
                 {loading === "reject" ? (
-                  <span className="w-3 h-3 border-2 border-gray-300/30 border-t-gray-200 rounded-full animate-spin" />
+                  <span className="w-3 h-3 border-2 border-stone-300/30 border-t-stone-200 rounded-full animate-spin" />
                 ) : (
                   "거절"
                 )}
               </button>
               <Link
                 href={`/chat/${action.conversationId}`}
-                className="text-xs text-cyan-400 hover:text-cyan-300 ml-auto transition"
+                className="text-xs text-amber-300 hover:text-amber-200 ml-auto transition"
               >
                 대화 열기 →
               </Link>
@@ -497,13 +497,13 @@ function ActionCard({
           )}
 
           {!isPending && (
-            <div className="flex items-center justify-between mt-4 border-t border-gray-800 pt-3">
+            <div className="flex items-center justify-between mt-4 border-t border-stone-800 pt-3">
               {action.result && (
-                <p className="text-[11px] text-gray-500 truncate flex-1">{action.result}</p>
+                <p className="text-[11px] text-stone-500 truncate flex-1">{action.result}</p>
               )}
               <Link
                 href={`/chat/${action.conversationId}`}
-                className="text-xs text-gray-400 hover:text-gray-200 transition shrink-0 ml-2"
+                className="text-xs text-stone-400 hover:text-stone-200 transition shrink-0 ml-2"
               >
                 대화 열기 →
               </Link>
@@ -517,10 +517,10 @@ function ActionCard({
 
 function DecisionSection({ label, title, body }: { label: string; title: string; body: string }) {
   return (
-    <section className="rounded-lg border border-gray-800 bg-black/20 p-3">
+    <section className="rounded-lg border border-stone-800 bg-black/20 p-3">
       <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-amber-300">{label}</p>
-      <h3 className="mt-2 text-xs font-semibold text-gray-200">{title}</h3>
-      <p className="mt-2 text-xs leading-5 text-gray-400">{body}</p>
+      <h3 className="mt-2 text-xs font-semibold text-stone-200">{title}</h3>
+      <p className="mt-2 text-xs leading-5 text-stone-400">{body}</p>
     </section>
   );
 }
@@ -608,12 +608,12 @@ function commitmentOwnerEntry(owner: CommitmentItem["owner"]): {
     case "COUNTERPARTY":
       return {
         label: "상대 약속",
-        className: "text-cyan-300 bg-cyan-400/10 border-cyan-400/20",
+        className: "text-amber-200 bg-amber-300/10 border-amber-300/20",
       };
     case "TEAM":
       return {
         label: "팀 약속",
-        className: "text-blue-300 bg-blue-400/10 border-blue-400/20",
+        className: "text-amber-200 bg-amber-300/10 border-amber-300/20",
       };
     case "UNKNOWN":
       return {
@@ -652,7 +652,7 @@ function StatusBadge({ status }: { status: PendingActionItem["status"] }) {
       label: "실행됨",
       className: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
     },
-    REJECTED: { label: "거절됨", className: "text-gray-400 bg-gray-500/10 border-gray-500/20" },
+    REJECTED: { label: "거절됨", className: "text-stone-400 bg-stone-500/10 border-stone-500/20" },
     FAILED: { label: "실패", className: "text-red-300 bg-red-500/10 border-red-500/20" },
   };
   const entry = map[status];
