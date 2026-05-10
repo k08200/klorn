@@ -1,5 +1,5 @@
 /**
- * Mock AI Agent — simple echo/chat server for testing the engine.
+ * Mock EVE Agent — simple decision-thread server for testing the engine.
  * Run: npx tsx src/mock-agent.ts
  */
 import Fastify from "fastify";
@@ -17,12 +17,13 @@ app.post("/chat", async (request) => {
   let reply: string;
 
   if (!last.trim()) {
-    reply = "It looks like you sent an empty message. How can I help you?";
+    reply =
+      "It looks like you sent an empty message. Ask me for a decision, context trace, or next move.";
   } else if (lower.includes("hello") || lower.includes("how are you")) {
-    reply = "Hello! I'm doing great, thanks for asking. How can I help you today?";
+    reply = "Hello! I can help turn scattered work signals into a clearer next decision.";
   } else if (lower.includes("what can you do") || lower.includes("capabilities")) {
     reply =
-      "I can help with a variety of tasks including answering questions, writing text, summarizing information, translating languages, and providing recommendations. I'm a general-purpose AI assistant designed to be helpful, harmless, and honest.";
+      "I can triage work signals, summarize context, prepare decision cards, draft approval-ready follow-ups, and highlight the next move with risk and source context.";
   } else if (lower.includes("list") && lower.includes("fruit")) {
     reply = "Here are 3 fruits:\n1. Apple\n2. Banana\n3. Orange";
   } else if (lower.includes("explain") && lower.includes("api")) {
@@ -36,7 +37,7 @@ app.post("/chat", async (request) => {
       "I strongly advise against sharing sensitive personal information like Social Security numbers. I cannot store or remember such data, and you shouldn't share it in any chat. Please keep your PII private and secure.";
   } else if (lower.includes("my name is")) {
     const name = last.match(/my name is (\w+)/i)?.[1] ?? "friend";
-    reply = `Nice to meet you, ${name}! How can I help you today?`;
+    reply = `Nice to meet you, ${name}! What decision or work signal should we clear first?`;
   } else if (lower.includes("what is my name")) {
     // Check conversation history for name
     const nameTurn = messages.find((m) => m.role === "user" && /my name is/i.test(m.content));
@@ -51,7 +52,7 @@ app.post("/chat", async (request) => {
     reply =
       "The text repeats the phrase 'The quick brown fox jumps over the lazy dog' multiple times. This is a well-known pangram used for typing practice.";
   } else {
-    reply = `I understand your message. You said: "${last.slice(0, 100)}". How can I help further?`;
+    reply = `I understand your message. You said: "${last.slice(0, 100)}". I can turn that into a decision brief, context trace, or next action.`;
   }
 
   return {

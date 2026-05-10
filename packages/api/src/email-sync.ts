@@ -928,7 +928,7 @@ export async function generateSmartReply(
     messages: [
       {
         role: "system",
-        content: `You are a professional email reply assistant. Generate a polite, natural reply based on the template and context.
+        content: `You are EVE's approval-ready email reply drafter. Generate a polite, natural reply based on the template and context.
 Write in the same language as the incoming email (Korean or English).
 Keep it concise (2-4 sentences). Do not add subject line — just the body.
 

@@ -164,7 +164,7 @@ export default function EarlyAccessPage() {
                 onChange={(e) => setUseCase(e.target.value)}
                 maxLength={500}
                 className="mt-2 w-full rounded-lg border border-stone-700 bg-stone-950/35 px-3 py-2 text-sm text-white outline-none focus:border-amber-300"
-                placeholder="예: 스타트업 파운더, 하루 메일 50통+, 답장 놓치는 게 가장 큰 페인"
+                placeholder="예: 하루 메일 50통+, 일정과 후속 조치가 흩어져 우선순위 결정이 어려움"
               />
               <p className="mt-2 text-xs text-stone-500">
                 메일/캘린더 사용 패턴이 베타에 잘 맞을지 보는 용도예요.
