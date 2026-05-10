@@ -1,12 +1,12 @@
 # hireEVE
 
-**Your AI Chief of Staff. Without the $200K salary.**
+**Decision OS for work signals, approvals, and memory.**
 
-EVE is an autonomous attention layer for work. She reads your email, watches your calendar, tracks promises you made, and turns the noise into a queue of decisions you can approve in one click.
+EVE is a Decision OS for work. It reads email, calendar, tasks, and memory, connects the hidden context between them, and turns scattered signals into decisions you can inspect, approve, and trust.
 
 ## Why EVE?
 
-Every founder checks five apps every morning and none of them answer the only question that matters: **"What should I do right now?"**
+Every team checks five apps every morning and none of them answer the question that matters: **"What decision needs my attention now?"**
 
 EVE connects Gmail, Calendar, Slack, and Notion, then cross-references everything to surface decisions — not just summaries.
 
@@ -21,10 +21,10 @@ EVE connects Gmail, Calendar, Slack, and Notion, then cross-references everythin
 ## How It Works
 
 1. **Connect** — Link Gmail and Calendar in one click
-2. **EVE listens** — Ingests email, events, and tasks; extracts people, promises, deadlines, and risks
+2. **EVE connects context** — Ingests email, events, and tasks; extracts people, promises, deadlines, and risks
 3. **Command Center** — Your home screen shows what to act on now, what needs approval, what was handled
 4. **Morning briefing** — Prioritized day-plan delivered before you open your laptop
-5. **Autopilot ladder** — EVE earns trust gradually: observe → suggest → draft → execute with approval → execute autonomously
+5. **Trust ladder** — EVE earns scope gradually: observe → suggest → draft → execute with approval → report exceptions
 
 ### Command Center (the home screen)
 
@@ -33,7 +33,7 @@ Not a chat. Not an inbox. An **operations console**:
 - Top 3 things to act on now
 - Pending approvals
 - Today's commitments and risks
-- What EVE handled silently
+- What EVE prepared quietly
 - What's likely to bite you tomorrow
 
 ### Commitment Ledger
@@ -44,14 +44,14 @@ EVE extracts implicit promises from your conversations — *"I'll send it by Fri
 
 People, companies, projects, and threads linked together. *"Min-soo Kim = ABC Ventures investor → linked to pitch deck task → due before Friday meeting."*
 
-### Shadow Employee Mode
+### Shadow Mode
 
 EVE doesn't auto-execute on day one. She watches for two weeks, learns your patterns, and asks for permission:
 > "I noticed you always prep meeting notes the night before. Want me to start drafting them automatically?"
 
 Trust is earned, not toggled.
 
-### Autopilot Ladder
+### Trust Ladder
 
 Not AUTO/OFF. Five stages:
 
@@ -93,7 +93,7 @@ One person's email + another's calendar + the team's tasks = decisions no single
 - **Commitment Ledger** — Tracks implicit promises across email and chat
 - **Work Graph** — People, projects, and threads connected
 - **Shadow mode** — Trust-earning observation period
-- **Autopilot ladder** — Five autonomy levels per action class
+- **Trust ladder** — Five autonomy levels per action class
 - **Meeting prep pack** — Auto-generated briefings before events
 - **Feedback learning** — Policy that adapts to your approvals
 - **Team risk radar** — Cross-member conflict detection

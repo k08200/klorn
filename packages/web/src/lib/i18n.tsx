@@ -66,8 +66,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "dashboard.afternoon": "afternoon",
     "dashboard.evening": "evening",
     // Chat
-    "chat.newConversation": "New conversation",
-    "chat.typeMessage": "Type a message...",
+    "chat.newConversation": "New decision thread",
+    "chat.typeMessage": "Ask for a decision, context trace, or next move...",
     "chat.send": "Send",
     // Briefing
     "briefing.learningMode":

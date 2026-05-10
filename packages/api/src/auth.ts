@@ -366,7 +366,7 @@ async function seedDemoData() {
         startTime: meetingStart,
         endTime: meetingEnd,
         location: "강남 위워크 3층",
-        color: "#3b82f6",
+        color: "#d8a45d",
       },
       {
         userId: uid,
@@ -374,7 +374,7 @@ async function seedDemoData() {
         startTime: new Date(nextWeek.setHours(10, 0, 0, 0)),
         endTime: new Date(nextWeek.setHours(11, 0, 0, 0)),
         meetingLink: "https://meet.google.com/abc-defg-hij",
-        color: "#8b5cf6",
+        color: "#14b8a6",
       },
     ],
   });
