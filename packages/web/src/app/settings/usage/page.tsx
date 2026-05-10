@@ -46,14 +46,22 @@ export default function UsagePage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-      <h1 className="text-xl font-semibold text-gray-200 mb-1">Token Usage</h1>
-      <p className="text-sm text-gray-500 mb-6">
-        Track your AI token consumption and estimated costs
-      </p>
+    <div className="mx-auto max-w-3xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
+      <header className="mb-5 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-2xl shadow-black/10">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+          Usage Ledger
+        </p>
+        <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
+          EVE 운영량과 추정 비용
+        </h1>
+        <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+          대화와 판단 생성에 쓰인 토큰을 기간별로 확인하고, 어떤 스레드가 비용을 만드는지
+          추적합니다.
+        </p>
+      </header>
 
       {/* Period selector */}
-      <div className="flex gap-2 mb-6">
+      <div className="mb-6 flex gap-2">
         {[
           { value: "week", label: "This Week" },
           { value: "month", label: "This Month" },
@@ -63,10 +71,10 @@ export default function UsagePage() {
             key={p.value}
             type="button"
             onClick={() => setPeriod(p.value)}
-            className={`px-3 py-1.5 text-xs rounded-lg transition ${
+            className={`rounded-full border px-3 py-1.5 text-xs transition ${
               period === p.value
-                ? "bg-white text-gray-900"
-                : "text-gray-400 bg-gray-800/50 hover:bg-gray-800"
+                ? "border-amber-300 bg-amber-300 text-stone-950"
+                : "border-stone-700/55 bg-stone-950/45 text-stone-400 hover:bg-stone-900/70 hover:text-stone-200"
             }`}
           >
             {p.label}
@@ -77,56 +85,43 @@ export default function UsagePage() {
       {stats && (
         <>
           {/* Summary cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-            <div className="bg-gray-900/60 border border-gray-800/50 rounded-xl p-4">
-              <p className="text-[11px] text-gray-500 mb-1">Total Tokens</p>
-              <p className="text-lg font-semibold text-gray-200">
-                {formatTokens(stats.summary.totalTokens)}
-              </p>
-            </div>
-            <div className="bg-gray-900/60 border border-gray-800/50 rounded-xl p-4">
-              <p className="text-[11px] text-gray-500 mb-1">Messages</p>
-              <p className="text-lg font-semibold text-gray-200">{stats.summary.messageCount}</p>
-            </div>
-            <div className="bg-gray-900/60 border border-gray-800/50 rounded-xl p-4">
-              <p className="text-[11px] text-gray-500 mb-1">Est. Cost</p>
-              <p className="text-lg font-semibold text-emerald-400">
-                ${stats.summary.totalCost.toFixed(4)}
-              </p>
-            </div>
-            <div className="bg-gray-900/60 border border-gray-800/50 rounded-xl p-4">
-              <p className="text-[11px] text-gray-500 mb-1">Avg/Message</p>
-              <p className="text-lg font-semibold text-gray-200">
-                {stats.summary.messageCount > 0
+          <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <UsageMetric label="Total Tokens" value={formatTokens(stats.summary.totalTokens)} />
+            <UsageMetric label="Messages" value={String(stats.summary.messageCount)} />
+            <UsageMetric label="Est. Cost" value={`$${stats.summary.totalCost.toFixed(4)}`} />
+            <UsageMetric
+              label="Avg/Message"
+              value={
+                stats.summary.messageCount > 0
                   ? formatTokens(Math.round(stats.summary.totalTokens / stats.summary.messageCount))
-                  : "0"}
-              </p>
-            </div>
+                  : "0"
+              }
+            />
           </div>
 
           {/* Daily breakdown */}
           {stats.daily.length > 0 && (
             <div className="mb-8">
-              <h2 className="text-sm font-medium text-gray-300 mb-3">Daily Breakdown</h2>
-              <div className="bg-gray-900/60 border border-gray-800/50 rounded-xl overflow-hidden">
+              <h2 className="mb-3 text-sm font-medium text-stone-300">Daily Breakdown</h2>
+              <div className="overflow-hidden rounded-xl border border-stone-700/45 bg-stone-950/35">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-[11px] text-gray-500 border-b border-gray-800/50">
-                      <th className="text-left px-4 py-2 font-medium">Date</th>
-                      <th className="text-right px-4 py-2 font-medium">Messages</th>
-                      <th className="text-right px-4 py-2 font-medium">Tokens</th>
-                      <th className="text-right px-4 py-2 font-medium">Cost</th>
+                    <tr className="border-b border-stone-700/45 text-[11px] text-stone-500">
+                      <th className="px-4 py-2 text-left font-medium">Date</th>
+                      <th className="px-4 py-2 text-right font-medium">Messages</th>
+                      <th className="px-4 py-2 text-right font-medium">Tokens</th>
+                      <th className="px-4 py-2 text-right font-medium">Cost</th>
                     </tr>
                   </thead>
                   <tbody>
                     {stats.daily.map((d) => (
-                      <tr key={d.date} className="border-b border-gray-800/30 last:border-0">
-                        <td className="px-4 py-2 text-gray-300">{d.date}</td>
-                        <td className="px-4 py-2 text-right text-gray-400">{d.messages}</td>
-                        <td className="px-4 py-2 text-right text-gray-400">
+                      <tr key={d.date} className="border-b border-stone-800/45 last:border-0">
+                        <td className="px-4 py-2 text-stone-300">{d.date}</td>
+                        <td className="px-4 py-2 text-right text-stone-400">{d.messages}</td>
+                        <td className="px-4 py-2 text-right text-stone-400">
                           {formatTokens(d.tokens)}
                         </td>
-                        <td className="px-4 py-2 text-right text-emerald-400/80">
+                        <td className="px-4 py-2 text-right text-amber-200/85">
                           ${d.cost.toFixed(4)}
                         </td>
                       </tr>
@@ -142,26 +137,26 @@ export default function UsagePage() {
       {/* Per-conversation usage */}
       {convUsages.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium text-gray-300 mb-3">Top Conversations by Usage</h2>
-          <div className="bg-gray-900/60 border border-gray-800/50 rounded-xl overflow-hidden">
+          <h2 className="mb-3 text-sm font-medium text-stone-300">Top Conversations by Usage</h2>
+          <div className="overflow-hidden rounded-xl border border-stone-700/45 bg-stone-950/35">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-[11px] text-gray-500 border-b border-gray-800/50">
-                  <th className="text-left px-4 py-2 font-medium">Conversation</th>
-                  <th className="text-right px-4 py-2 font-medium">Messages</th>
-                  <th className="text-right px-4 py-2 font-medium">Tokens</th>
-                  <th className="text-right px-4 py-2 font-medium">Cost</th>
+                <tr className="border-b border-stone-700/45 text-[11px] text-stone-500">
+                  <th className="px-4 py-2 text-left font-medium">Conversation</th>
+                  <th className="px-4 py-2 text-right font-medium">Messages</th>
+                  <th className="px-4 py-2 text-right font-medium">Tokens</th>
+                  <th className="px-4 py-2 text-right font-medium">Cost</th>
                 </tr>
               </thead>
               <tbody>
                 {convUsages.map((c) => (
-                  <tr key={c.conversationId} className="border-b border-gray-800/30 last:border-0">
-                    <td className="px-4 py-2 text-gray-300 truncate max-w-[200px]">{c.title}</td>
-                    <td className="px-4 py-2 text-right text-gray-400">{c.messageCount}</td>
-                    <td className="px-4 py-2 text-right text-gray-400">
+                  <tr key={c.conversationId} className="border-b border-stone-800/45 last:border-0">
+                    <td className="max-w-[200px] truncate px-4 py-2 text-stone-300">{c.title}</td>
+                    <td className="px-4 py-2 text-right text-stone-400">{c.messageCount}</td>
+                    <td className="px-4 py-2 text-right text-stone-400">
                       {formatTokens(c.totalTokens)}
                     </td>
-                    <td className="px-4 py-2 text-right text-emerald-400/80">
+                    <td className="px-4 py-2 text-right text-amber-200/85">
                       ${c.estimatedCost.toFixed(4)}
                     </td>
                   </tr>
@@ -173,8 +168,17 @@ export default function UsagePage() {
       )}
 
       {!stats && (
-        <div className="flex items-center justify-center py-20 text-gray-500">Loading...</div>
+        <div className="flex items-center justify-center py-20 text-stone-500">Loading...</div>
       )}
+    </div>
+  );
+}
+
+function UsageMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+      <p className="mb-1 text-[11px] text-stone-500">{label}</p>
+      <p className="text-lg font-semibold text-stone-100">{value}</p>
     </div>
   );
 }

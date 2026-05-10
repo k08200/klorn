@@ -115,31 +115,36 @@ export default function SettingsStatusPage() {
 
   return (
     <AuthGuard>
-      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <Link
-              href="/settings"
-              className="mb-3 inline-block text-sm text-gray-500 hover:text-gray-300"
+      <main className="mx-auto max-w-4xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
+        <header className="mb-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-2xl shadow-black/10">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <Link
+                href="/settings"
+                className="mb-3 inline-flex rounded-full border border-stone-700/45 px-3 py-1.5 text-xs text-stone-400 transition hover:border-amber-500/35 hover:text-stone-100"
+              >
+                Back to settings
+              </Link>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+                Ops Readiness
+              </p>
+              <h1 className="text-2xl font-semibold tracking-tight text-stone-50">EVE Status</h1>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+                Deployment, integrations, push, reminders, and briefing readiness.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={load}
+              className="shrink-0 rounded-lg border border-stone-700/60 px-3 py-2 text-sm text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100"
             >
-              ← Settings
-            </Link>
-            <h1 className="mb-1 text-xl font-semibold text-gray-100">EVE Status</h1>
-            <p className="text-sm text-gray-500">
-              Deployment, integrations, push, reminders, and briefing readiness.
-            </p>
+              Refresh
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={load}
-            className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-300 transition hover:border-gray-600 hover:bg-gray-800"
-          >
-            Refresh
-          </button>
-        </div>
+        </header>
 
         {loading && !readiness ? (
-          <div className="py-20 text-center text-sm text-gray-500">Loading status...</div>
+          <div className="py-20 text-center text-sm text-stone-500">Loading status...</div>
         ) : readiness ? (
           <>
             <section className="mb-6 grid gap-3 sm:grid-cols-3">
@@ -161,20 +166,20 @@ export default function SettingsStatusPage() {
             </section>
 
             <section className="mb-8">
-              <h2 className="mb-3 text-sm font-semibold text-gray-300">Readiness Checks</h2>
+              <h2 className="mb-3 text-sm font-semibold text-stone-300">Readiness Checks</h2>
               <div className="grid gap-3 sm:grid-cols-2">
                 {readiness.checks.map((check) => (
                   <div
                     key={check.key}
-                    className="rounded-lg border border-gray-800/70 bg-gray-900/70 p-4"
+                    className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4"
                   >
                     <div className="mb-2 flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-medium text-gray-100">{check.label}</h3>
+                      <h3 className="text-sm font-medium text-stone-100">{check.label}</h3>
                       <StatusPill status={check.status} />
                     </div>
-                    <p className="text-sm text-gray-400">{check.message}</p>
+                    <p className="text-sm text-stone-400">{check.message}</p>
                     {check.detail ? (
-                      <pre className="mt-3 max-h-32 overflow-auto rounded-md bg-gray-950/80 p-3 text-[11px] leading-relaxed text-gray-500">
+                      <pre className="mt-3 max-h-32 overflow-auto rounded-md bg-black/20 p-3 text-[11px] leading-relaxed text-stone-500">
                         {JSON.stringify(check.detail, null, 2)}
                       </pre>
                     ) : null}
@@ -185,18 +190,18 @@ export default function SettingsStatusPage() {
 
             <section className="mb-8">
               <div className="mb-3 flex items-center justify-between gap-4">
-                <h2 className="text-sm font-semibold text-gray-300">Reminder Diagnostics</h2>
+                <h2 className="text-sm font-semibold text-stone-300">Reminder Diagnostics</h2>
                 <button
                   type="button"
                   onClick={deliverDue}
                   disabled={delivering}
-                  className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-gray-300 transition hover:border-gray-600 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-sm text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {delivering ? "Checking..." : "Run due check"}
                 </button>
               </div>
               {diagnostics ? (
-                <div className="rounded-lg border border-gray-800/70 bg-gray-900/70 p-4">
+                <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
                   <div className="mb-4 grid gap-3 sm:grid-cols-3">
                     <Metric label="Push subscriptions" value={String(diagnostics.subscriptions)} />
                     <Metric label="Recent reminders" value={String(diagnostics.reminders.length)} />
@@ -212,7 +217,7 @@ export default function SettingsStatusPage() {
                       rows={diagnostics.reminders.map((r) => ({
                         id: r.id,
                         title: r.title,
-                        meta: `${r.status}${r.due ? " · due" : ""} · ${formatDate(r.remindAt)}`,
+                        meta: `${r.status}${r.due ? " | due" : ""} | ${formatDate(r.remindAt)}`,
                       }))}
                     />
                     <DiagnosticsList
@@ -230,7 +235,7 @@ export default function SettingsStatusPage() {
                       rows={diagnostics.pushDeliveries.map((d) => ({
                         id: d.id,
                         title: d.title,
-                        meta: `${d.status}${d.skipReason ? ` · ${d.skipReason}` : ""} · ${
+                        meta: `${d.status}${d.skipReason ? ` | ${d.skipReason}` : ""} | ${
                           d.receivedAt
                             ? "received"
                             : d.acceptedAt
@@ -242,7 +247,7 @@ export default function SettingsStatusPage() {
                   </div>
                 </div>
               ) : (
-                <div className="rounded-lg border border-gray-800/70 bg-gray-900/70 p-6 text-sm text-gray-500">
+                <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-sm text-stone-500">
                   Reminder diagnostics unavailable.
                 </div>
               )}
@@ -268,12 +273,12 @@ function SummaryTile({
   status: CheckStatus;
 }) {
   return (
-    <div className="rounded-lg border border-gray-800/70 bg-gray-900/70 p-4">
-      <p className="mb-1 text-xs text-gray-500">{label}</p>
+    <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+      <p className="mb-1 text-xs text-stone-500">{label}</p>
       <p
         className={
           status === "ok"
-            ? "text-lg font-semibold text-gray-100"
+            ? "text-lg font-semibold text-stone-100"
             : "text-lg font-semibold text-amber-300"
         }
       >
@@ -296,8 +301,8 @@ function StatusPill({ status }: { status: CheckStatus }) {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-lg font-semibold text-gray-100">{value}</p>
+      <p className="text-xs text-stone-500">{label}</p>
+      <p className="text-lg font-semibold text-stone-100">{value}</p>
     </div>
   );
 }
@@ -313,15 +318,15 @@ function DiagnosticsList({
 }) {
   return (
     <div>
-      <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{title}</h3>
+      <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-stone-500">{title}</h3>
       {rows.length === 0 ? (
-        <p className="text-sm text-gray-600">{empty}</p>
+        <p className="text-sm text-stone-600">{empty}</p>
       ) : (
         <div className="space-y-2">
           {rows.slice(0, 5).map((row) => (
-            <div key={row.id} className="rounded-md border border-gray-800/60 bg-gray-950/50 p-3">
-              <p className="truncate text-sm text-gray-300">{row.title}</p>
-              <p className="mt-1 truncate text-xs text-gray-500">{row.meta}</p>
+            <div key={row.id} className="rounded-md border border-stone-700/45 bg-black/15 p-3">
+              <p className="truncate text-sm text-stone-300">{row.title}</p>
+              <p className="mt-1 truncate text-xs text-stone-500">{row.meta}</p>
             </div>
           ))}
         </div>
