@@ -52,7 +52,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "settings.quickActions": "Quick Actions",
     "settings.dailyBriefing": "Daily Briefing",
     "settings.generateNow": "Generate Now",
-    "settings.capabilities": "EVE Capabilities",
+    "settings.capabilities": "Decision OS Surfaces",
     "settings.data": "Data",
     "settings.exportData": "Export Data",
     "settings.export": "Export",
@@ -133,7 +133,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "auth.accountCreated": "계정이 생성되었습니다!",
     // Settings
     "settings.title": "설정",
-    "settings.subtitle": "프로필, 연동, 환경설정을 관리하세요",
+    "settings.subtitle": "프로필, 연동, 의사결정 흐름을 관리하세요",
     "settings.profile": "프로필",
     "settings.security": "보안",
     "settings.integrations": "연동",
@@ -150,10 +150,10 @@ const translations: Record<Locale, Record<string, string>> = {
     "settings.disconnect": "연결 해제",
     "settings.connect": "연결",
     "settings.envVars": "환경변수 설정 필요",
-    "settings.quickActions": "빠른 실행",
+    "settings.quickActions": "빠른 결정",
     "settings.dailyBriefing": "일일 브리핑",
     "settings.generateNow": "지금 생성",
-    "settings.capabilities": "EVE 기능 목록",
+    "settings.capabilities": "Decision OS 표면",
     "settings.data": "데이터",
     "settings.exportData": "데이터 내보내기",
     "settings.export": "내보내기",
@@ -167,8 +167,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "dashboard.afternoon": "오후",
     "dashboard.evening": "저녁",
     // Chat
-    "chat.newConversation": "새 대화",
-    "chat.typeMessage": "메시지를 입력하세요...",
+    "chat.newConversation": "새 결정 스레드",
+    "chat.typeMessage": "결정, 맥락 추적, 다음 수를 물어보세요...",
     "chat.send": "전송",
     // Briefing
     "briefing.learningMode":

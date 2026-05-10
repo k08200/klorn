@@ -108,7 +108,7 @@ export default async function generateBriefing(userId: string): Promise<string> 
   const briefingPrompt = `오늘은 ${today}. 사용자가 자리에 앉자마자 읽는 1분짜리 아침 브리핑을 써줘.
 
 ## 너의 역할
-데이터를 요약하는 게 아니라, **오늘 뭐부터 해야 할지 결정**하는 것. 직원처럼 생각하고 말해.
+데이터를 요약하는 게 아니라, **오늘 뭐부터 해야 할지 결정**하는 것. 조용한 의사결정 파트너처럼 맥락과 다음 수를 짚어줘.
 
 ## 반드시 할 것
 1. **도메인 연결**: "서버가 미리 찾은 신호"의 crossLinks를 우선 근거로 삼아 이메일·캘린더·태스크를 엮어서 언급. 새로운 연결을 상상해서 만들지 말고, 근거가 약하면 생략.
@@ -121,7 +121,7 @@ export default async function generateBriefing(userId: string): Promise<string> 
 - **오늘의 Top 3** — 번호 붙은 액션 + 이유
 - **연결된 항목** (있을 때만) — 이메일/태스크/일정이 어떻게 얽혀있는지
 - **나머지** — 일정과 이메일 요약 2~3줄
-- 한국어, 친근한 직원 톤, 리포트 톤 X
+- 한국어, 친근한 의사결정 파트너 톤, 리포트 톤 X
 - 전체 150~300자
 
 ## 예시

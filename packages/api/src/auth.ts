@@ -252,8 +252,8 @@ async function seedDemoData() {
       },
       {
         userId: uid,
-        title: "블로그 글 초안",
-        description: "'1인 창업자가 AI 직원을 채용한 이유' 주제",
+        title: "런치 회고 초안",
+        description: "'흩어진 업무 신호를 결정 큐로 바꾼 방법' 주제",
         status: "TODO",
         priority: "LOW",
         dueDate: nextWeek,

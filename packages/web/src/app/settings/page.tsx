@@ -1493,7 +1493,9 @@ export default function SettingsPage() {
                 <p>Web Search — research, news</p>
               </div>
             </div>
-            <p className="text-xs text-stone-600 mt-1">50+ tools across 18 categories</p>
+            <p className="text-xs text-stone-600 mt-1">
+              Signal intake, approval workflows, memory, and connected work surfaces
+            </p>
           </div>
         </section>
 
