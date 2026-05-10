@@ -39,7 +39,7 @@ function VerifyEmailContent() {
   if (status === "loading") {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+        <div className="w-5 h-5 border-2 border-amber-300 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -50,23 +50,23 @@ function VerifyEmailContent() {
         {status === "success" ? (
           <>
             <h1 className="text-xl font-bold mb-3">Verification email sent!</h1>
-            <p className="text-gray-400 text-sm mb-6">
+            <p className="text-stone-400 text-sm mb-6">
               Check your inbox and click the verification link.
             </p>
-            <Link href="/inbox" className="text-sm text-blue-400 hover:text-blue-300">
+            <Link href="/inbox" className="text-sm text-amber-300 hover:text-amber-200">
               Go to Inbox
             </Link>
           </>
         ) : status === "pending" ? (
           <>
             <h1 className="text-xl font-bold mb-3">Verify your email</h1>
-            <p className="text-gray-400 text-sm mb-6">
+            <p className="text-stone-400 text-sm mb-6">
               Please verify your email address to unlock all features.
             </p>
             <button
               type="button"
               onClick={resend}
-              className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors"
+              className="bg-amber-300 hover:bg-amber-200 text-stone-950 px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
             >
               Resend Verification Email
             </button>
@@ -74,8 +74,8 @@ function VerifyEmailContent() {
         ) : (
           <>
             <h1 className="text-xl font-bold mb-3">Verification Failed</h1>
-            <p className="text-gray-400 text-sm mb-6">Invalid or expired link.</p>
-            <Link href="/login" className="text-sm text-blue-400 hover:text-blue-300">
+            <p className="text-stone-400 text-sm mb-6">Invalid or expired link.</p>
+            <Link href="/login" className="text-sm text-amber-300 hover:text-amber-200">
               Back to login
             </Link>
           </>

@@ -85,7 +85,7 @@ function LoginForm() {
   if (authLoading) {
     return (
       <main className="flex items-center justify-center min-h-[calc(100vh-3rem)]">
-        <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+        <div className="w-5 h-5 border-2 border-amber-300 border-t-transparent rounded-full animate-spin" />
       </main>
     );
   }
@@ -96,16 +96,16 @@ function LoginForm() {
         {/* Logo */}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold">
-            <span className="text-blue-400">EVE</span>
+            <span className="text-amber-300">EVE</span>
           </h1>
-          <p className="text-gray-500 text-xs mt-1.5">Your AI Chief of Staff</p>
+          <p className="text-stone-500 text-xs mt-1.5">Decision OS for Work</p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-3">
           {mode === "register" && (
             <div>
-              <label htmlFor="name" className="block text-xs font-medium text-gray-400 mb-1.5">
+              <label htmlFor="name" className="block text-xs font-medium text-stone-400 mb-1.5">
                 Name
               </label>
               <input
@@ -114,13 +114,13 @@ function LoginForm() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Your name"
-                className="w-full bg-gray-900 border border-gray-800 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition placeholder-gray-500"
+                className="w-full bg-stone-950 border border-stone-800 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25 transition placeholder-stone-500"
               />
             </div>
           )}
 
           <div>
-            <label htmlFor="email" className="block text-xs font-medium text-gray-400 mb-1.5">
+            <label htmlFor="email" className="block text-xs font-medium text-stone-400 mb-1.5">
               Email
             </label>
             <input
@@ -130,12 +130,12 @@ function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               required
-              className="w-full bg-gray-900 border border-gray-800 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition placeholder-gray-500"
+              className="w-full bg-stone-950 border border-stone-800 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25 transition placeholder-stone-500"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-xs font-medium text-gray-400 mb-1.5">
+            <label htmlFor="password" className="block text-xs font-medium text-stone-400 mb-1.5">
               Password
             </label>
             <input
@@ -146,14 +146,14 @@ function LoginForm() {
               placeholder={mode === "register" ? "At least 8 characters" : "Your password"}
               required
               minLength={mode === "register" ? 8 : undefined}
-              className="w-full bg-gray-900 border border-gray-800 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition placeholder-gray-500"
+              className="w-full bg-stone-950 border border-stone-800 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25 transition placeholder-stone-500"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading || !email || !password}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed text-white py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm shadow-blue-600/20"
+            className="w-full bg-amber-300 hover:bg-amber-200 disabled:bg-stone-900 disabled:text-stone-500 disabled:cursor-not-allowed text-stone-950 py-2.5 rounded-lg text-sm font-semibold transition-colors shadow-sm shadow-amber-300/20"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
@@ -173,7 +173,7 @@ function LoginForm() {
           <button
             type="button"
             onClick={() => setMode(mode === "login" ? "register" : "login")}
-            className="text-xs text-gray-500 hover:text-blue-400 transition-colors"
+            className="text-xs text-stone-500 hover:text-amber-300 transition-colors"
           >
             {mode === "login"
               ? "Don't have an account? Sign up"
@@ -183,7 +183,7 @@ function LoginForm() {
             <div>
               <Link
                 href="/reset-password"
-                className="text-xs text-gray-600 hover:text-blue-400 transition-colors"
+                className="text-xs text-stone-600 hover:text-amber-300 transition-colors"
               >
                 Forgot password?
               </Link>
@@ -193,15 +193,15 @@ function LoginForm() {
 
         {/* Divider */}
         <div className="flex items-center gap-3 my-5">
-          <div className="flex-1 h-px bg-gray-800/80" />
-          <span className="text-xs text-gray-600">or</span>
-          <div className="flex-1 h-px bg-gray-800/80" />
+          <div className="flex-1 h-px bg-stone-800/80" />
+          <span className="text-xs text-stone-600">or</span>
+          <div className="flex-1 h-px bg-stone-800/80" />
         </div>
 
         {/* Google login button */}
         <a
           href={`${API_BASE}/api/auth/google/login`}
-          className="flex items-center justify-center gap-3 w-full bg-white hover:bg-gray-100 text-gray-800 py-2.5 rounded-lg text-sm font-medium transition-colors border border-gray-300"
+          className="flex items-center justify-center gap-3 w-full bg-white hover:bg-stone-100 text-stone-800 py-2.5 rounded-lg text-sm font-medium transition-colors border border-stone-300"
         >
           <svg aria-hidden="true" className="w-4 h-4" viewBox="0 0 24 24">
             <path
@@ -222,17 +222,17 @@ function LoginForm() {
             />
           </svg>
           Continue with Google
-          <span className="text-[10px] text-gray-500 bg-gray-200 px-1.5 py-0.5 rounded font-normal">
+          <span className="text-[10px] text-stone-500 bg-stone-200 px-1.5 py-0.5 rounded font-normal">
             Beta
           </span>
         </a>
-        <p className="text-[10px] text-gray-600 text-center mt-1.5">
+        <p className="text-[10px] text-stone-600 text-center mt-1.5">
           Google login is in review. Email sign-up works for everyone.
         </p>
 
         {/* Back to home */}
         <div className="text-center mt-5">
-          <Link href="/" className="text-xs text-gray-600 hover:text-gray-400 transition-colors">
+          <Link href="/" className="text-xs text-stone-600 hover:text-stone-400 transition-colors">
             Back to home
           </Link>
         </div>
