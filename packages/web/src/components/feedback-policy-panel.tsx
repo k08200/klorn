@@ -50,8 +50,8 @@ const KIND_COPY: Record<
   },
   REQUIRE_DRAFT_REVIEW: {
     label: "Draft review",
-    tone: "border-sky-500/30 bg-sky-500/10 text-sky-200",
-    dot: "bg-sky-400",
+    tone: "border-teal-400/30 bg-teal-400/10 text-teal-200",
+    dot: "bg-teal-400",
     summary: "Keep reviewable",
   },
   AVOID_SUGGESTION: {
@@ -62,8 +62,8 @@ const KIND_COPY: Record<
   },
   LOWER_PRIORITY: {
     label: "Low priority",
-    tone: "border-gray-600 bg-gray-800 text-gray-300",
-    dot: "bg-gray-400",
+    tone: "border-stone-600 bg-stone-900 text-stone-300",
+    dot: "bg-stone-400",
     summary: "Stay quiet",
   },
 };
@@ -97,11 +97,11 @@ export function FeedbackPolicyPanel() {
   }, [load]);
 
   return (
-    <div className="rounded-xl border border-gray-800/60 bg-gray-900/80 p-4">
+    <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-medium">Learned policy signals</h3>
-          <p className="mt-0.5 text-xs text-gray-500">
+          <p className="mt-0.5 text-xs text-stone-500">
             {since ? `Since ${new Date(since).toLocaleDateString()}` : "Recent feedback patterns"}
           </p>
         </div>
@@ -109,7 +109,7 @@ export function FeedbackPolicyPanel() {
           type="button"
           onClick={load}
           disabled={loading}
-          className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-300 transition hover:bg-gray-700 disabled:opacity-50"
+          className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-1.5 text-xs font-medium text-stone-300 transition hover:bg-stone-700 disabled:opacity-50"
         >
           {loading ? "Loading" : "Refresh"}
         </button>
@@ -117,15 +117,15 @@ export function FeedbackPolicyPanel() {
 
       {loading ? (
         <div className="mt-4 space-y-2">
-          <div className="h-16 animate-pulse rounded-lg bg-gray-800/80" />
-          <div className="h-16 animate-pulse rounded-lg bg-gray-800/60" />
+          <div className="h-16 animate-pulse rounded-lg bg-stone-800/80" />
+          <div className="h-16 animate-pulse rounded-lg bg-stone-900/60" />
         </div>
       ) : error ? (
         <div className="mt-4 rounded-lg border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-200">
           Unable to load policy signals.
         </div>
       ) : candidates.length === 0 ? (
-        <div className="mt-4 rounded-lg border border-gray-800 bg-gray-950/30 px-3 py-3 text-sm text-gray-500">
+        <div className="mt-4 rounded-lg border border-stone-800 bg-stone-950/45 px-3 py-3 text-sm text-stone-500">
           No stable policy signals yet.
         </div>
       ) : (
@@ -135,22 +135,22 @@ export function FeedbackPolicyPanel() {
             return (
               <div
                 key={candidate.id}
-                className="rounded-lg border border-gray-800 bg-gray-950/30 px-3 py-3"
+                className="rounded-lg border border-stone-800 bg-stone-950/45 px-3 py-3"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <span className={`h-2 w-2 rounded-full ${copy.dot}`} />
-                      <span className="break-words font-mono text-xs text-gray-200">
+                      <span className="break-words font-mono text-xs text-stone-200">
                         {candidate.scope.toolName}
                       </span>
                       {candidate.scope.recipient && (
-                        <span className="break-all text-xs text-gray-500">
+                        <span className="break-all text-xs text-stone-500">
                           {candidate.scope.recipient}
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-gray-500">{copy.summary}</p>
+                    <p className="mt-1 text-xs text-stone-500">{copy.summary}</p>
                   </div>
                   <span
                     className={`shrink-0 rounded-full border px-2 py-1 text-[10px] ${copy.tone}`}
@@ -158,7 +158,7 @@ export function FeedbackPolicyPanel() {
                     {copy.label}
                   </span>
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-[10px] text-gray-500 sm:grid-cols-6">
+                <div className="mt-3 grid grid-cols-3 gap-2 text-[10px] text-stone-500 sm:grid-cols-6">
                   <SignalCount label="Approved" value={candidate.support.approved} />
                   <SignalCount label="Rejected" value={candidate.support.rejected} />
                   <SignalCount label="Edited" value={candidate.support.edited} />
@@ -166,7 +166,7 @@ export function FeedbackPolicyPanel() {
                   <SignalCount label="Snoozed" value={candidate.support.snoozed} />
                   <SignalCount label="Dismissed" value={candidate.support.dismissed} />
                 </div>
-                <div className="mt-2 flex items-center justify-between text-[10px] text-gray-600">
+                <div className="mt-2 flex items-center justify-between text-[10px] text-stone-600">
                   <span>{Math.round(candidate.confidence * 100)}% confidence</span>
                   <span>{candidate.support.total} events</span>
                 </div>
@@ -181,9 +181,9 @@ export function FeedbackPolicyPanel() {
 
 function SignalCount({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md bg-gray-900/70 px-2 py-1">
-      <div className="text-gray-600">{label}</div>
-      <div className="text-xs font-medium text-gray-300">{value}</div>
+    <div className="rounded-md bg-stone-950/70 px-2 py-1">
+      <div className="text-stone-600">{label}</div>
+      <div className="text-xs font-medium text-stone-300">{value}</div>
     </div>
   );
 }
