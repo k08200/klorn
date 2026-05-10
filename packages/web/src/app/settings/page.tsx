@@ -743,10 +743,10 @@ export default function SettingsPage() {
 
   const clearAllData = async () => {
     const ok = await confirm({
-      title: "Clear All Data",
+      title: "Clear Workspace Data",
       message:
-        "This will delete all conversations, tasks, notes, contacts, and reminders. This cannot be undone.",
-      confirmLabel: "Delete Everything",
+        "This will delete all decision threads, tasks, notes, contacts, and reminders. This cannot be undone.",
+      confirmLabel: "Delete Workspace",
       danger: true,
     });
     if (!ok) return;
@@ -1190,15 +1190,15 @@ export default function SettingsPage() {
                           >
                             <span className="font-mono text-xs">{tool}</span>
                             <span className="text-[10px] opacity-80">
-                              {enabled ? "Auto" : "Ask first"}
+                              {enabled ? "Run inside policy" : "Review first"}
                             </span>
                           </button>
                         );
                       })}
                     </div>
                     <p className="text-[10px] text-stone-500 mt-2">
-                      Enabled tools run without asking. Email replies and destructive actions always
-                      require approval and cannot be pre-approved here.
+                      Enabled actions run only inside your policy. Email replies and destructive
+                      actions always require approval and cannot be pre-approved here.
                     </p>
                   </div>
                 )}
@@ -1427,15 +1427,15 @@ export default function SettingsPage() {
           )}
         </section>
 
-        {/* Immediate Runs */}
+        {/* Manual Runs */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Immediate Runs</h2>
+          <h2 className="text-sm font-semibold text-stone-300 mb-3">Manual Runs</h2>
           <div className="space-y-3">
             <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-4 flex items-center justify-between">
               <div>
                 <h3 className="font-medium">Daily Briefing</h3>
                 <p className="text-sm text-stone-400">
-                  Generate a summary of your tasks, calendar, and emails
+                  Generate a ranked decision brief from tasks, calendar, and email signals
                 </p>
               </div>
               <button
@@ -1443,7 +1443,7 @@ export default function SettingsPage() {
                 onClick={generateBriefing}
                 className="bg-stone-900 hover:bg-stone-700 text-stone-100 px-4 py-2 rounded-lg text-sm font-medium transition border border-stone-700"
               >
-                Generate Now
+                Generate Briefing
               </button>
             </div>
           </div>
@@ -1497,7 +1497,7 @@ export default function SettingsPage() {
 
         {/* Data Management */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Data</h2>
+          <h2 className="text-sm font-semibold text-stone-300 mb-3">Workspace Data</h2>
           <div className="space-y-3">
             <Link
               href="/settings/status"
@@ -1527,8 +1527,10 @@ export default function SettingsPage() {
             </Link>
             <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-4 flex items-center justify-between">
               <div>
-                <h3 className="font-medium">Export Data</h3>
-                <p className="text-sm text-stone-400">Download all your data as JSON</p>
+                <h3 className="font-medium">Export Workspace Data</h3>
+                <p className="text-sm text-stone-400">
+                  Download decision threads, signals, memory, and actions as JSON
+                </p>
               </div>
               <button
                 type="button"
@@ -1541,14 +1543,14 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Data Reset */}
+        {/* Workspace Reset */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-red-300 mb-3">Data Reset</h2>
+          <h2 className="text-sm font-semibold text-red-300 mb-3">Workspace Reset</h2>
           <div className="bg-stone-950 border border-red-900/50 rounded-lg p-4 flex items-center justify-between">
             <div>
-              <h3 className="font-medium">Delete All Data</h3>
+              <h3 className="font-medium">Delete Workspace Data</h3>
               <p className="text-sm text-stone-400">
-                Permanently delete all conversations, tasks, notes, contacts, and reminders
+                Permanently delete decision threads, tasks, notes, contacts, and reminders
               </p>
             </div>
             <button
@@ -1556,7 +1558,7 @@ export default function SettingsPage() {
               onClick={clearAllData}
               className="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition border border-red-900/50"
             >
-              Delete All
+              Delete Workspace
             </button>
           </div>
         </section>

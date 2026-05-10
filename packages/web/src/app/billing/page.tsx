@@ -42,7 +42,7 @@ const PLANS = [
     features: [
       "Everything in Free",
       "Email send & Calendar create",
-      "Decision agent modes (Suggest + Auto)",
+      "Decision loop modes (Suggest + Policy Run)",
       "Daily briefing & Email auto-classify",
       "Email auto-reply & Pattern learning",
       "Slack & Notion integrations",
@@ -140,7 +140,8 @@ function BillingContent() {
           EVE 운영 한도와 실행 권한
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-400">
-          메시지, 토큰, 실행 모드를 한곳에서 확인하고 팀의 결정 흐름에 맞는 플랜으로 조정합니다.
+          결정 턴, 모델 사용량, 실행 모드를 한곳에서 확인하고 팀의 결정 흐름에 맞는 플랜으로
+          조정합니다.
         </p>
       </header>
 

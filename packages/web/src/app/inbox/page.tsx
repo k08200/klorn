@@ -412,7 +412,7 @@ function ActionCard({
             <RiskBadge risk={risk} />
             {action.conversationTitle && (
               <span className="min-w-0 truncate text-[11px] text-stone-600">
-                대화: {action.conversationTitle}
+                스레드: {action.conversationTitle}
               </span>
             )}
           </div>
@@ -424,7 +424,7 @@ function ActionCard({
               body={
                 reasoning.situation ||
                 action.conversationTitle ||
-                "연결된 대화와 작업 신호를 확인했어요."
+                "연결된 결정 스레드와 작업 신호를 확인했어요."
               }
             />
             <DecisionSection
@@ -491,7 +491,7 @@ function ActionCard({
                 href={`/chat/${action.conversationId}`}
                 className="text-xs text-amber-300 hover:text-amber-200 ml-auto transition"
               >
-                대화 열기 →
+                스레드 열기 →
               </Link>
             </div>
           )}
@@ -505,7 +505,7 @@ function ActionCard({
                 href={`/chat/${action.conversationId}`}
                 className="text-xs text-stone-400 hover:text-stone-200 transition shrink-0 ml-2"
               >
-                대화 열기 →
+                스레드 열기 →
               </Link>
             </div>
           )}

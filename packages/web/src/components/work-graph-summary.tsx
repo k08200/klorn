@@ -52,7 +52,8 @@ export default function WorkGraphSummaryCard() {
               지금 움직이는 업무 맥락
             </h2>
             <p className="mt-2 max-w-xl text-xs leading-5 text-stone-500">
-              EVE가 메일, 대화, 약속을 같은 일 단위로 묶어 어떤 맥락이 위험해지고 있는지 보여줍니다.
+              EVE가 메일, 결정 스레드, 약속을 같은 일 단위로 묶어 어떤 맥락이 위험해지고 있는지
+              보여줍니다.
             </p>
           </div>
 
@@ -237,7 +238,7 @@ function kindLabel(kind: WorkGraphContext["kind"]): string {
     case "email_thread":
       return "메일";
     case "chat_conversation":
-      return "대화";
+      return "결정 스레드";
     case "loose_commitment":
       return "약속";
   }
