@@ -63,9 +63,9 @@ export default function UsagePage() {
       {/* Period selector */}
       <div className="mb-6 flex gap-2">
         {[
-          { value: "week", label: "This Week" },
-          { value: "month", label: "This Month" },
-          { value: "all", label: "All Time" },
+          { value: "week", label: "이번 주" },
+          { value: "month", label: "이번 달" },
+          { value: "all", label: "전체" },
         ].map((p) => (
           <button
             key={p.value}
@@ -86,11 +86,11 @@ export default function UsagePage() {
         <>
           {/* Summary cards */}
           <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <UsageMetric label="Model Tokens" value={formatTokens(stats.summary.totalTokens)} />
-            <UsageMetric label="Decision Turns" value={String(stats.summary.messageCount)} />
-            <UsageMetric label="Est. Spend" value={`$${stats.summary.totalCost.toFixed(4)}`} />
+            <UsageMetric label="모델 토큰" value={formatTokens(stats.summary.totalTokens)} />
+            <UsageMetric label="결정 턴" value={String(stats.summary.messageCount)} />
+            <UsageMetric label="추정 비용" value={`$${stats.summary.totalCost.toFixed(4)}`} />
             <UsageMetric
-              label="Avg/Turn"
+              label="턴당 평균"
               value={
                 stats.summary.messageCount > 0
                   ? formatTokens(Math.round(stats.summary.totalTokens / stats.summary.messageCount))
@@ -102,15 +102,15 @@ export default function UsagePage() {
           {/* Daily breakdown */}
           {stats.daily.length > 0 && (
             <div className="mb-8">
-              <h2 className="mb-3 text-sm font-medium text-stone-300">Daily Ledger</h2>
+              <h2 className="mb-3 text-sm font-medium text-stone-300">일별 사용 기록</h2>
               <div className="overflow-hidden rounded-xl border border-stone-700/45 bg-stone-950/35">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-stone-700/45 text-[11px] text-stone-500">
-                      <th className="px-4 py-2 text-left font-medium">Date</th>
-                      <th className="px-4 py-2 text-right font-medium">Turns</th>
-                      <th className="px-4 py-2 text-right font-medium">Tokens</th>
-                      <th className="px-4 py-2 text-right font-medium">Cost</th>
+                      <th className="px-4 py-2 text-left font-medium">날짜</th>
+                      <th className="px-4 py-2 text-right font-medium">턴</th>
+                      <th className="px-4 py-2 text-right font-medium">토큰</th>
+                      <th className="px-4 py-2 text-right font-medium">비용</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -137,15 +137,15 @@ export default function UsagePage() {
       {/* Per-conversation usage */}
       {convUsages.length > 0 && (
         <div>
-          <h2 className="mb-3 text-sm font-medium text-stone-300">Top Decision Threads by Usage</h2>
+          <h2 className="mb-3 text-sm font-medium text-stone-300">사용량이 큰 결정 스레드</h2>
           <div className="overflow-hidden rounded-xl border border-stone-700/45 bg-stone-950/35">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-stone-700/45 text-[11px] text-stone-500">
-                  <th className="px-4 py-2 text-left font-medium">Decision Thread</th>
-                  <th className="px-4 py-2 text-right font-medium">Turns</th>
-                  <th className="px-4 py-2 text-right font-medium">Tokens</th>
-                  <th className="px-4 py-2 text-right font-medium">Cost</th>
+                  <th className="px-4 py-2 text-left font-medium">결정 스레드</th>
+                  <th className="px-4 py-2 text-right font-medium">턴</th>
+                  <th className="px-4 py-2 text-right font-medium">토큰</th>
+                  <th className="px-4 py-2 text-right font-medium">비용</th>
                 </tr>
               </thead>
               <tbody>
@@ -168,7 +168,9 @@ export default function UsagePage() {
       )}
 
       {!stats && (
-        <div className="flex items-center justify-center py-20 text-stone-500">Loading...</div>
+        <div className="flex items-center justify-center py-20 text-stone-500">
+          사용량을 불러오는 중...
+        </div>
       )}
     </div>
   );

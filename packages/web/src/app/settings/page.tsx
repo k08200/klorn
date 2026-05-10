@@ -29,9 +29,9 @@ interface ApiAgentModeOption {
 }
 
 const DEFAULT_AGENT_MODE_OPTIONS: AgentModeOption[] = [
-  { mode: "SHADOW", label: "SHADOW", description: "Prepare quietly" },
-  { mode: "SUGGEST", label: "SUGGEST", description: "Ask before action" },
-  { mode: "AUTO", label: "AUTO", description: "Run safe actions" },
+  { mode: "SHADOW", label: "SHADOW", description: "조용히 준비" },
+  { mode: "SUGGEST", label: "SUGGEST", description: "실행 전 확인" },
+  { mode: "AUTO", label: "AUTO", description: "안전 작업 실행" },
 ];
 
 function normalizeAgentMode(value: string | undefined): AgentMode {
@@ -274,7 +274,7 @@ export default function SettingsPage() {
       // Profile still saves locally; automation timezone can be retried later.
     }
     setProfileSaved(true);
-    toast("Profile saved", "success");
+    toast("프로필을 저장했습니다", "success");
     setTimeout(() => setProfileSaved(false), 2000);
   };
 
@@ -322,7 +322,7 @@ export default function SettingsPage() {
         }
       } catch (err) {
         console.error("[PUSH-SETTINGS] Error:", err);
-        toast("Push 등록 중 오류 발생", "error");
+        toast("푸시 등록 중 오류가 발생했습니다", "error");
       }
     } else if (permission === "denied") {
       toast("브라우저에서 알림이 차단되었습니다. 브라우저 설정에서 허용해주세요.", "error");
@@ -343,13 +343,13 @@ export default function SettingsPage() {
       });
     }
     setPushStatus("default");
-    toast("Push notifications disabled", "info");
+    toast("푸시 알림을 껐습니다", "info");
   };
 
   const changePassword = async () => {
     if (!currentPassword || !newPassword) return;
     if (newPassword.length < 6) {
-      toast("Password must be at least 6 characters", "error");
+      toast("비밀번호는 6자 이상이어야 합니다", "error");
       return;
     }
     setPasswordLoading(true);
@@ -358,11 +358,11 @@ export default function SettingsPage() {
         method: "POST",
         body: JSON.stringify({ currentPassword, newPassword }),
       });
-      toast("Password changed", "success");
+      toast("비밀번호를 변경했습니다", "success");
       setCurrentPassword("");
       setNewPassword("");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed";
+      const msg = err instanceof Error ? err.message : "실패";
       const match = msg.match(/API \d+: (.+)/);
       const parsed = match
         ? (() => {
@@ -381,7 +381,7 @@ export default function SettingsPage() {
   const setPasswordForOAuth = async () => {
     if (!newPassword) return;
     if (newPassword.length < 6) {
-      toast("Password must be at least 6 characters", "error");
+      toast("비밀번호는 6자 이상이어야 합니다", "error");
       return;
     }
     setPasswordLoading(true);
@@ -390,11 +390,11 @@ export default function SettingsPage() {
         method: "POST",
         body: JSON.stringify({ newPassword }),
       });
-      toast("Password set!", "success");
+      toast("비밀번호를 설정했습니다", "success");
       setNewPassword("");
       setHasPassword(true);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed";
+      const msg = err instanceof Error ? err.message : "실패";
       const match = msg.match(/API \d+: (.+)/);
       const parsed = match
         ? (() => {
@@ -412,9 +412,9 @@ export default function SettingsPage() {
 
   const disconnectGoogle = async () => {
     const ok = await confirm({
-      title: "Disconnect Google",
-      message: "This will remove Gmail and Calendar access. You can reconnect anytime.",
-      confirmLabel: "Disconnect",
+      title: "Google 연결 해제",
+      message: "Gmail과 Calendar 접근 권한을 제거합니다. 필요하면 언제든 다시 연결할 수 있어요.",
+      confirmLabel: "연결 해제",
       danger: true,
     });
     if (!ok) return;
@@ -423,9 +423,9 @@ export default function SettingsPage() {
       setGoogleConnected(false);
       setGmailPushEnabled(false);
       setGmailPushExpiresAt(null);
-      toast("Google disconnected", "info");
+      toast("Google 연결을 해제했습니다", "info");
     } catch {
-      toast("Failed to disconnect", "error");
+      toast("연결 해제에 실패했습니다", "error");
     }
   };
 
@@ -437,8 +437,8 @@ export default function SettingsPage() {
         headers: authHeaders(),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: "Request failed" }));
-        toast(body.error || "Failed to enable real-time sync", "error");
+        const body = await res.json().catch(() => ({ error: "요청 실패" }));
+        toast(body.error || "실시간 동기화를 켜지 못했습니다", "error");
         return;
       }
       const data = (await res.json()) as { expiration?: string };
@@ -446,9 +446,9 @@ export default function SettingsPage() {
       if (data.expiration) {
         setGmailPushExpiresAt(new Date(Number(data.expiration)).toISOString());
       }
-      toast("Real-time email sync enabled", "success");
+      toast("실시간 메일 동기화를 켰습니다", "success");
     } catch {
-      toast("Failed to enable real-time sync", "error");
+      toast("실시간 동기화를 켜지 못했습니다", "error");
     } finally {
       setGmailPushLoading(false);
     }
@@ -462,15 +462,15 @@ export default function SettingsPage() {
         headers: authHeaders(),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: "Request failed" }));
-        toast(body.error || "Failed to disable real-time sync", "error");
+        const body = await res.json().catch(() => ({ error: "요청 실패" }));
+        toast(body.error || "실시간 동기화를 끄지 못했습니다", "error");
         return;
       }
       setGmailPushEnabled(false);
       setGmailPushExpiresAt(null);
-      toast("Real-time email sync disabled. Polling fallback still active.", "info");
+      toast("실시간 메일 동기화를 껐습니다. 기본 폴링은 계속 동작합니다.", "info");
     } catch {
-      toast("Failed to disable real-time sync", "error");
+      toast("실시간 동기화를 끄지 못했습니다", "error");
     } finally {
       setGmailPushLoading(false);
     }
@@ -530,7 +530,7 @@ export default function SettingsPage() {
       });
     } catch {
       setAutoMarkReadEnabled(!value);
-      toast("Failed to save preference", "error");
+      toast("설정을 저장하지 못했습니다", "error");
     }
   };
 
@@ -543,7 +543,7 @@ export default function SettingsPage() {
         body: JSON.stringify({ [key]: value }),
       });
     } catch {
-      toast("Failed to save preference", "error");
+      toast("설정을 저장하지 못했습니다", "error");
     }
   };
 
@@ -554,10 +554,10 @@ export default function SettingsPage() {
         method: "PATCH",
         body: JSON.stringify({ dailyBriefing: enabled }),
       });
-      toast(enabled ? "Daily briefing enabled" : "Daily briefing disabled", "success");
+      toast(enabled ? "데일리 브리핑을 켰습니다" : "데일리 브리핑을 껐습니다", "success");
     } catch {
       setDailyBriefingEnabled(!enabled);
-      toast("Failed to save briefing setting", "error");
+      toast("브리핑 설정을 저장하지 못했습니다", "error");
     }
   };
 
@@ -568,9 +568,9 @@ export default function SettingsPage() {
         method: "PATCH",
         body: JSON.stringify({ briefingTime: value, timezone: profile.timezone }),
       });
-      toast("Briefing time saved", "success");
+      toast("브리핑 시간을 저장했습니다", "success");
     } catch {
-      toast("Failed to save briefing time", "error");
+      toast("브리핑 시간을 저장하지 못했습니다", "error");
     }
   };
 
@@ -588,7 +588,7 @@ export default function SettingsPage() {
       if (updated.alwaysAllowedTools) setAlwaysAllowedTools(updated.alwaysAllowedTools);
     } catch (err) {
       setAlwaysAllowedTools(previous);
-      toast(`Failed to update: ${err instanceof Error ? err.message : "error"}`, "error");
+      toast(`업데이트 실패: ${err instanceof Error ? err.message : "오류"}`, "error");
     }
   };
 
@@ -618,10 +618,10 @@ export default function SettingsPage() {
         method: "PATCH",
         body: JSON.stringify({ autonomousAgent: enabled }),
       });
-      toast(enabled ? "Autonomous agent enabled" : "Autonomous agent disabled", "success");
+      toast(enabled ? "자율 에이전트를 켰습니다" : "자율 에이전트를 껐습니다", "success");
     } catch {
       setAgentEnabled(!enabled);
-      toast("Failed to update", "error");
+      toast("업데이트에 실패했습니다", "error");
     }
   };
 
@@ -633,7 +633,7 @@ export default function SettingsPage() {
         body: JSON.stringify({ agentIntervalMin: min }),
       });
     } catch {
-      toast("Failed to update interval", "error");
+      toast("확인 주기를 저장하지 못했습니다", "error");
     }
   };
 
@@ -642,9 +642,9 @@ export default function SettingsPage() {
     setRunningAgent(true);
     try {
       await apiFetch<{ triggered: boolean }>("/api/automations/run-now", { method: "POST" });
-      toast("Agent triggered — check Inbox for results", "success");
+      toast("에이전트를 실행했습니다. Inbox에서 결과를 확인하세요", "success");
     } catch {
-      toast("Failed to trigger agent", "error");
+      toast("에이전트를 실행하지 못했습니다", "error");
     } finally {
       setRunningAgent(false);
     }
@@ -661,7 +661,7 @@ export default function SettingsPage() {
       toast(agentModeToast(mode), "success");
     } catch {
       setAgentMode(previousMode);
-      toast("Failed to update mode", "error");
+      toast("모드를 저장하지 못했습니다", "error");
     }
   };
 
@@ -734,7 +734,7 @@ export default function SettingsPage() {
       setGeminiApiKey("");
       toast(successMessage, "success");
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Failed to save model settings", "error");
+      toast(err instanceof Error ? err.message : "모델 설정을 저장하지 못했습니다", "error");
     } finally {
       setModelSaving(false);
     }
@@ -743,7 +743,7 @@ export default function SettingsPage() {
   const integrations: Integration[] = [
     {
       name: "Google",
-      description: "Gmail, Calendar — read emails, manage events",
+      description: "Gmail과 Calendar 신호를 읽고 일정 준비까지 연결합니다",
       connected: googleConnected,
       connectUrl: `${API_BASE}/api/auth/google?token=${typeof window !== "undefined" ? localStorage.getItem("eve-token") || "" : ""}`,
       statusUrl: `${API_BASE}/api/auth/google/status`,
@@ -751,15 +751,15 @@ export default function SettingsPage() {
     {
       name: "Slack",
       description: slackConnected
-        ? `Connected via ${slackMode === "bot_token" ? "bot token" : "webhook"} — ask EVE to send, list, or read Slack messages`
-        : "Configured by admin via SLACK_BOT_TOKEN or SLACK_WEBHOOK_URL env var",
+        ? `${slackMode === "bot_token" ? "bot token" : "webhook"} 방식으로 연결됨`
+        : "관리자가 SLACK_BOT_TOKEN 또는 SLACK_WEBHOOK_URL 환경 변수로 설정합니다",
       connected: slackConnected,
       connectUrl: slackConnected ? undefined : "slack-admin-only",
       statusUrl: `${API_BASE}/api/slack/status`,
     },
     {
       name: "Notion",
-      description: "Search pages, create documents, access databases",
+      description: "페이지 검색, 문서 작성, 데이터베이스 접근을 준비합니다",
       connected: notionConnected,
       connectUrl: notionConnected ? undefined : "notion-coming-soon",
       statusUrl: `${API_BASE}/api/notion/status`,
@@ -774,13 +774,13 @@ export default function SettingsPage() {
         headers: authHeaders(),
       });
       if (res.ok) {
-        toast("Test message sent to Slack", "success");
+        toast("Slack 테스트 메시지를 보냈습니다", "success");
       } else {
         const body = await res.json().catch(() => ({}));
-        toast(body.error || "Failed to send test message", "error");
+        toast(body.error || "테스트 메시지를 보내지 못했습니다", "error");
       }
     } catch {
-      toast("Failed to send test message", "error");
+      toast("테스트 메시지를 보내지 못했습니다", "error");
     } finally {
       setSlackTesting(false);
     }
@@ -793,15 +793,15 @@ export default function SettingsPage() {
       body: JSON.stringify({}),
     });
     const data = await res.json();
-    toast(data.briefing || "Briefing generated — check your Notes page.", "success");
+    toast(data.briefing || "브리핑을 만들었습니다. Briefing 화면에서 확인하세요.", "success");
   };
 
   const clearAllData = async () => {
     const ok = await confirm({
-      title: "Clear Workspace Data",
+      title: "워크스페이스 데이터 삭제",
       message:
-        "This will delete all decision threads, tasks, notes, contacts, and reminders. This cannot be undone.",
-      confirmLabel: "Delete Workspace",
+        "모든 결정 스레드, 할 일, 메모, 연락처, 리마인더를 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
+      confirmLabel: "워크스페이스 삭제",
       danger: true,
     });
     if (!ok) return;
@@ -809,9 +809,9 @@ export default function SettingsPage() {
       await fetch(`${API_BASE}/api/user/me/data`, { method: "DELETE", headers: authHeaders() });
       localStorage.removeItem("eve-profile");
       localStorage.removeItem("eve-pinned-chats");
-      toast("All data cleared", "info");
+      toast("워크스페이스 데이터를 삭제했습니다", "info");
     } catch {
-      toast("Failed to clear data", "error");
+      toast("데이터를 삭제하지 못했습니다", "error");
     }
   };
 
@@ -826,9 +826,9 @@ export default function SettingsPage() {
       a.download = `eve-export-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      toast("Data exported", "success");
+      toast("데이터를 내보냈습니다", "success");
     } catch {
-      toast("Export failed", "error");
+      toast("내보내기에 실패했습니다", "error");
     }
   };
 
@@ -850,25 +850,25 @@ export default function SettingsPage() {
 
         {/* Profile */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Operator Profile</h2>
+          <h2 className="text-sm font-semibold text-stone-300 mb-3">운영자 프로필</h2>
           <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-5 space-y-4">
             <div>
               <label htmlFor="profile-name" className="block text-sm text-stone-400 mb-1">
-                Display Name
+                표시 이름
               </label>
               <input
                 id="profile-name"
                 type="text"
                 value={profile.name}
                 onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
-                placeholder="Your name"
+                placeholder="이름"
                 className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition placeholder-stone-500"
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="profile-lang" className="block text-sm text-stone-400 mb-1">
-                  Language
+                  응답 언어
                 </label>
                 <select
                   id="profile-lang"
@@ -881,14 +881,14 @@ export default function SettingsPage() {
                   }
                   className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition"
                 >
-                  <option value="auto">Auto-detect</option>
-                  <option value="en">English</option>
-                  <option value="ko">Korean</option>
+                  <option value="auto">자동 감지</option>
+                  <option value="en">영어</option>
+                  <option value="ko">한국어</option>
                 </select>
               </div>
               <div>
                 <label htmlFor="profile-tz" className="block text-sm text-stone-400 mb-1">
-                  Timezone
+                  시간대
                 </label>
                 <select
                   id="profile-tz"
@@ -914,7 +914,7 @@ export default function SettingsPage() {
                     : "bg-amber-300 hover:bg-amber-200 text-stone-950"
                 }`}
               >
-                {profileSaved ? "Saved!" : "Save Profile"}
+                {profileSaved ? "저장됨" : "프로필 저장"}
               </button>
             </div>
           </div>
@@ -922,33 +922,33 @@ export default function SettingsPage() {
 
         {/* Security */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Access Security</h2>
+          <h2 className="text-sm font-semibold text-stone-300 mb-3">접근 보안</h2>
           <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-5 space-y-4">
             {hasPassword ? (
               <>
                 <div>
                   <label htmlFor="current-pw" className="block text-sm text-stone-400 mb-1">
-                    Current Password
+                    현재 비밀번호
                   </label>
                   <input
                     id="current-pw"
                     type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="Current password"
+                    placeholder="현재 비밀번호"
                     className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition placeholder-stone-500"
                   />
                 </div>
                 <div>
                   <label htmlFor="new-pw" className="block text-sm text-stone-400 mb-1">
-                    New Password
+                    새 비밀번호
                   </label>
                   <input
                     id="new-pw"
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="At least 6 characters"
+                    placeholder="6자 이상"
                     minLength={6}
                     className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition placeholder-stone-500"
                   />
@@ -960,29 +960,29 @@ export default function SettingsPage() {
                     disabled={passwordLoading || !currentPassword || !newPassword}
                     className="bg-amber-300 hover:bg-amber-200 disabled:bg-stone-700 disabled:text-stone-500 text-stone-950 px-4 py-2 rounded-lg text-sm font-medium transition"
                   >
-                    {passwordLoading ? "Changing..." : "Change Password"}
+                    {passwordLoading ? "변경 중..." : "비밀번호 변경"}
                   </button>
                 </div>
               </>
             ) : (
               <>
                 <p className="text-sm text-stone-400">
-                  You signed in with Google. Set a password to also log in with email.
+                  Google로 로그인했습니다. 이메일 로그인도 쓰려면 비밀번호를 설정하세요.
                   <br />
                   <span className="text-stone-500">
-                    Set a password below to enable email login.
+                    아래 비밀번호를 저장하면 이메일 로그인을 사용할 수 있습니다.
                   </span>
                 </p>
                 <div>
                   <label htmlFor="set-pw" className="block text-sm text-stone-400 mb-1">
-                    New Password
+                    새 비밀번호
                   </label>
                   <input
                     id="set-pw"
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="At least 6 characters"
+                    placeholder="6자 이상"
                     minLength={6}
                     className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition placeholder-stone-500"
                   />
@@ -994,7 +994,7 @@ export default function SettingsPage() {
                     disabled={passwordLoading || !newPassword}
                     className="bg-amber-300 hover:bg-amber-200 disabled:bg-stone-700 disabled:text-stone-500 text-stone-950 px-4 py-2 rounded-lg text-sm font-medium transition"
                   >
-                    {passwordLoading ? "Setting..." : "Set Password"}
+                    {passwordLoading ? "설정 중..." : "비밀번호 설정"}
                   </button>
                 </div>
               </>
@@ -1004,16 +1004,16 @@ export default function SettingsPage() {
 
         {/* Notifications */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Signal Cadence</h2>
+          <h2 className="text-sm font-semibold text-stone-300 mb-3">신호 수신 리듬</h2>
           <div className="mb-4 bg-stone-950/35 border border-stone-700/45 rounded-xl p-4 space-y-4">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="font-medium">Morning Briefing</h3>
+                <h3 className="font-medium">모닝 브리핑</h3>
                 <p className="text-sm text-stone-400">
-                  EVE sends one daily briefing at your local time, even if you stay signed in.
+                  로그인 상태와 관계없이 로컬 시간 기준으로 하루 한 번 결정 브리핑을 보냅니다.
                 </p>
                 <p className="mt-1 text-xs text-stone-500">
-                  Timezone: {profile.timezone}. Change it in Profile above.
+                  시간대: {profile.timezone}. 위 프로필에서 바꿀 수 있습니다.
                 </p>
               </div>
               <button
@@ -1033,7 +1033,7 @@ export default function SettingsPage() {
             </div>
             <div className="flex items-center gap-3 border-t border-stone-800 pt-3">
               <label htmlFor="briefing-time" className="text-sm font-medium text-stone-200">
-                Send at
+                전송 시간
               </label>
               <input
                 id="briefing-time"
@@ -1043,25 +1043,25 @@ export default function SettingsPage() {
                 onChange={(e) => updateBriefingTime(e.target.value)}
                 className="bg-stone-900 border border-stone-700 rounded px-2 py-1 text-sm text-stone-200 disabled:opacity-50"
               />
-              <span className="text-xs text-stone-500">Default is 06:00.</span>
+              <span className="text-xs text-stone-500">기본값은 06:00입니다.</span>
             </div>
           </div>
           <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-4 flex items-center justify-between">
             <div>
-              <h3 className="font-medium">Push Notifications</h3>
+              <h3 className="font-medium">푸시 알림</h3>
               <p className="text-sm text-stone-400">
                 {pushStatus === "unsupported"
-                  ? "Not supported in this browser"
+                  ? "이 브라우저에서는 지원되지 않습니다"
                   : pushStatus === "granted"
-                    ? "Enabled — you'll receive alerts for reminders, briefings, and emails"
+                    ? "켜짐 — 리마인더, 브리핑, 중요 메일 알림을 받습니다"
                     : pushStatus === "denied"
-                      ? "Blocked by browser — update in browser settings"
-                      : "Get notified about reminders, briefings, and important emails"}
+                      ? "브라우저에서 차단됨 — 브라우저 설정에서 허용해 주세요"
+                      : "리마인더, 브리핑, 중요 메일을 놓치지 않도록 알림을 받습니다"}
               </p>
             </div>
             {pushStatus === "unsupported" || pushStatus === "denied" ? (
               <span className="text-sm text-stone-500 bg-stone-900 px-3 py-1.5 rounded-lg border border-stone-700">
-                {pushStatus === "denied" ? "Blocked" : "Unavailable"}
+                {pushStatus === "denied" ? "차단됨" : "지원 안 됨"}
               </span>
             ) : pushStatus === "granted" ? (
               <button
@@ -1069,7 +1069,7 @@ export default function SettingsPage() {
                 onClick={disablePush}
                 className="text-sm text-stone-400 hover:text-red-400 bg-stone-900 hover:bg-stone-700 px-4 py-2 rounded-lg font-medium transition border border-stone-700"
               >
-                Disable
+                끄기
               </button>
             ) : (
               <button
@@ -1077,7 +1077,7 @@ export default function SettingsPage() {
                 onClick={enablePush}
                 className="bg-amber-300 hover:bg-amber-200 text-stone-950 px-4 py-2 rounded-lg text-sm font-medium transition"
               >
-                Enable
+                켜기
               </button>
             )}
           </div>
@@ -1085,37 +1085,37 @@ export default function SettingsPage() {
           {/* Granular Notification Preferences */}
           <div className="mt-4 bg-stone-950/35 border border-stone-700/45 rounded-xl p-4 space-y-3">
             <div>
-              <h3 className="font-medium">Which notifications do you want?</h3>
+              <h3 className="font-medium">어떤 신호가 방해할 만큼 중요한가요?</h3>
               <p className="text-xs text-stone-500 mt-0.5">
-                Disabled categories are suppressed for both push and in-app notifications
+                꺼둔 항목은 푸시와 앱 안 알림 모두에서 조용히 처리됩니다
               </p>
             </div>
             <div className="space-y-2">
               {[
                 {
                   key: "notifyEmailUrgent" as const,
-                  label: "Urgent email alerts",
-                  desc: "Incoming mail that EVE flags as time-sensitive",
+                  label: "긴급 메일",
+                  desc: "EVE가 시간 민감도가 높다고 판단한 새 메일",
                 },
                 {
                   key: "notifyMeeting" as const,
-                  label: "Meeting reminders",
-                  desc: "Upcoming calendar events and scrum reminders",
+                  label: "미팅 리마인더",
+                  desc: "다가오는 캘린더 이벤트와 스크럼 리마인더",
                 },
                 {
                   key: "notifyTaskDue" as const,
-                  label: "Task due soon or overdue",
-                  desc: "Deadline reminders for your tasks",
+                  label: "마감 임박/초과",
+                  desc: "할 일의 마감 리마인더",
                 },
                 {
                   key: "notifyAgentProposal" as const,
-                  label: "Agent proposals",
-                  desc: "When EVE wants your approval for an action",
+                  label: "에이전트 제안",
+                  desc: "EVE가 실행 전 승인을 요청할 때",
                 },
                 {
                   key: "notifyDailyBriefing" as const,
-                  label: "Daily briefing",
-                  desc: "Morning summary of your day",
+                  label: "데일리 브리핑",
+                  desc: "하루의 결정 브리핑",
                 },
               ].map((row) => (
                 <label
@@ -1136,9 +1136,9 @@ export default function SettingsPage() {
               ))}
             </div>
             <div className="pt-3 border-t border-stone-800">
-              <p className="text-sm font-medium text-stone-200 mb-1">Quiet hours</p>
+              <p className="text-sm font-medium text-stone-200 mb-1">조용한 시간</p>
               <p className="text-xs text-stone-500 mb-3">
-                Suppress push notifications during this window (leave empty to disable)
+                이 시간대에는 푸시 알림을 보내지 않습니다. 비워두면 제한하지 않습니다.
               </p>
               <div className="flex items-center gap-3">
                 <input
@@ -1147,7 +1147,7 @@ export default function SettingsPage() {
                   onChange={(e) => updateNotifPref("quietHoursStart", e.target.value || null)}
                   className="bg-stone-900 border border-stone-700 rounded px-2 py-1 text-sm text-stone-200"
                 />
-                <span className="text-stone-500 text-sm">to</span>
+                <span className="text-stone-500 text-sm">부터</span>
                 <input
                   type="time"
                   value={notifPrefs.quietHoursEnd || ""}
@@ -1161,19 +1161,19 @@ export default function SettingsPage() {
 
         {/* Models */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Model & API Keys</h2>
+          <h2 className="text-sm font-semibold text-stone-300 mb-3">모델과 API 키</h2>
           <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-5 space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="chat-model" className="block text-sm text-stone-400 mb-1">
-                  Chat model
+                  대화 모델
                 </label>
                 <select
                   id="chat-model"
                   value={modelSettings?.currentChatModel || ""}
                   disabled={!modelSettings || modelSaving}
                   onChange={(e) =>
-                    patchModelSettings({ chatModel: e.target.value }, "Chat model saved")
+                    patchModelSettings({ chatModel: e.target.value }, "대화 모델을 저장했습니다")
                   }
                   className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition disabled:opacity-50"
                 >
@@ -1184,19 +1184,22 @@ export default function SettingsPage() {
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-stone-500">
-                  Free defaults stay on the free model; paid models remain plan-gated.
+                  무료 기본값은 무료 모델을 유지하고, 유료 모델은 플랜 조건을 따릅니다.
                 </p>
               </div>
               <div>
                 <label htmlFor="agent-model" className="block text-sm text-stone-400 mb-1">
-                  Agent model
+                  에이전트 모델
                 </label>
                 <select
                   id="agent-model"
                   value={modelSettings?.currentAgentModel || ""}
                   disabled={!modelSettings || modelSaving || !modelSettings.agentModels.length}
                   onChange={(e) =>
-                    patchModelSettings({ agentModel: e.target.value || null }, "Agent model saved")
+                    patchModelSettings(
+                      { agentModel: e.target.value || null },
+                      "에이전트 모델을 저장했습니다",
+                    )
                   }
                   className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition disabled:opacity-50"
                 >
@@ -1207,7 +1210,7 @@ export default function SettingsPage() {
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-stone-500">
-                  Background runs use this when the selected plan allows it.
+                  백그라운드 실행은 플랜이 허용하는 경우 이 모델을 사용합니다.
                 </p>
               </div>
             </div>
@@ -1219,7 +1222,7 @@ export default function SettingsPage() {
                     OpenRouter API key
                   </label>
                   <span className="text-[11px] text-stone-500">
-                    {modelSettings?.hasOpenRouterApiKey ? "Saved" : "Not set"}
+                    {modelSettings?.hasOpenRouterApiKey ? "저장됨" : "미설정"}
                   </span>
                 </div>
                 <input
@@ -1234,10 +1237,12 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     disabled={modelSaving || !openRouterApiKey.trim()}
-                    onClick={() => patchModelSettings({ openRouterApiKey }, "OpenRouter key saved")}
+                    onClick={() =>
+                      patchModelSettings({ openRouterApiKey }, "OpenRouter 키를 저장했습니다")
+                    }
                     className="rounded-lg bg-amber-300 px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-amber-200 disabled:bg-stone-700 disabled:text-stone-500"
                   >
-                    Save
+                    저장
                   </button>
                   {modelSettings?.hasOpenRouterApiKey && (
                     <button
@@ -1246,12 +1251,12 @@ export default function SettingsPage() {
                       onClick={() =>
                         patchModelSettings(
                           { clearOpenRouterApiKey: true },
-                          "OpenRouter key removed",
+                          "OpenRouter 키를 삭제했습니다",
                         )
                       }
                       className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-1.5 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
                     >
-                      Remove
+                      삭제
                     </button>
                   )}
                 </div>
@@ -1263,7 +1268,7 @@ export default function SettingsPage() {
                     Gemini API key
                   </label>
                   <span className="text-[11px] text-stone-500">
-                    {modelSettings?.hasGeminiApiKey ? "Saved" : "Not set"}
+                    {modelSettings?.hasGeminiApiKey ? "저장됨" : "미설정"}
                   </span>
                 </div>
                 <input
@@ -1278,21 +1283,21 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     disabled={modelSaving || !geminiApiKey.trim()}
-                    onClick={() => patchModelSettings({ geminiApiKey }, "Gemini key saved")}
+                    onClick={() => patchModelSettings({ geminiApiKey }, "Gemini 키를 저장했습니다")}
                     className="rounded-lg bg-amber-300 px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-amber-200 disabled:bg-stone-700 disabled:text-stone-500"
                   >
-                    Save
+                    저장
                   </button>
                   {modelSettings?.hasGeminiApiKey && (
                     <button
                       type="button"
                       disabled={modelSaving}
                       onClick={() =>
-                        patchModelSettings({ clearGeminiApiKey: true }, "Gemini key removed")
+                        patchModelSettings({ clearGeminiApiKey: true }, "Gemini 키를 삭제했습니다")
                       }
                       className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-1.5 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
                     >
-                      Remove
+                      삭제
                     </button>
                   )}
                 </div>
@@ -1303,14 +1308,14 @@ export default function SettingsPage() {
 
         {/* Decision Agent */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Decision Agent</h2>
+          <h2 className="text-sm font-semibold text-stone-300 mb-3">결정 에이전트</h2>
           <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-medium">Execution boundary</h3>
+                <h3 className="font-medium">실행 경계</h3>
                 <p className="text-sm text-stone-400">
-                  EVE watches tasks, calendar, and mail in the background, then prepares the next
-                  decision without crossing approval limits.
+                  EVE가 백그라운드에서 할 일, 일정, 메일을 보고 다음 결정을 준비하되 승인 한계를
+                  넘지 않도록 제어합니다.
                 </p>
               </div>
               <button
@@ -1332,7 +1337,7 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 {/* Agent Mode */}
                 <div>
-                  <div className="text-sm text-stone-400 mb-2">Agent mode</div>
+                  <div className="text-sm text-stone-400 mb-2">에이전트 모드</div>
                   <div className="grid grid-cols-3 gap-2">
                     {agentModeOptions.map((option) => (
                       <button
@@ -1358,9 +1363,9 @@ export default function SettingsPage() {
                   )}
                   {agentMode === "AUTO" && (
                     <p className="text-[10px] text-emerald-200/75 mt-2">
-                      Safe internal actions like reminders, task updates, and email classification
-                      can run automatically. Email replies, calendar changes, and destructive
-                      actions require approval unless explicitly pre-approved where allowed.
+                      리마인더, 할 일 업데이트, 메일 분류처럼 낮은 위험의 내부 작업은 자동 실행할 수
+                      있습니다. 메일 답장, 일정 변경, 삭제성 작업은 명시적으로 허용하지 않는 한 승인
+                      후 진행됩니다.
                     </p>
                   )}
                 </div>
@@ -1368,9 +1373,7 @@ export default function SettingsPage() {
                 {/* Pre-approved tools — skip approval for specific MEDIUM-risk tools */}
                 {agentMode === "AUTO" && preApprovableTools.length > 0 && (
                   <div>
-                    <label className="block text-sm text-stone-400 mb-2">
-                      Always allow (skip approval)
-                    </label>
+                    <label className="block text-sm text-stone-400 mb-2">항상 허용할 작업</label>
                     <div className="space-y-2">
                       {preApprovableTools.map((tool) => {
                         const enabled = alwaysAllowedTools.includes(tool);
@@ -1387,15 +1390,15 @@ export default function SettingsPage() {
                           >
                             <span className="font-mono text-xs">{tool}</span>
                             <span className="text-[10px] opacity-80">
-                              {enabled ? "Run inside policy" : "Review first"}
+                              {enabled ? "정책 안에서 실행" : "먼저 검토"}
                             </span>
                           </button>
                         );
                       })}
                     </div>
                     <p className="text-[10px] text-stone-500 mt-2">
-                      Enabled actions run only inside your policy. Email replies and destructive
-                      actions always require approval and cannot be pre-approved here.
+                      켜둔 작업은 설정한 정책 안에서만 실행됩니다. 메일 답장과 삭제성 작업은 여기서
+                      사전 승인할 수 없습니다.
                     </p>
                   </div>
                 )}
@@ -1403,7 +1406,7 @@ export default function SettingsPage() {
                 {/* Check Interval */}
                 <div>
                   <label htmlFor="agent-interval" className="block text-sm text-stone-400 mb-1">
-                    Check interval
+                    확인 주기
                   </label>
                   <select
                     id="agent-interval"
@@ -1411,11 +1414,11 @@ export default function SettingsPage() {
                     onChange={(e) => updateAgentInterval(Number(e.target.value))}
                     className="bg-stone-900 border border-stone-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-amber-300 transition"
                   >
-                    <option value={3}>Every 3 min</option>
-                    <option value={5}>Every 5 min (default)</option>
-                    <option value={10}>Every 10 min</option>
-                    <option value={15}>Every 15 min</option>
-                    <option value={30}>Every 30 min</option>
+                    <option value={3}>3분마다</option>
+                    <option value={5}>5분마다 (기본)</option>
+                    <option value={10}>10분마다</option>
+                    <option value={15}>15분마다</option>
+                    <option value={30}>30분마다</option>
                   </select>
                 </div>
 
@@ -1432,7 +1435,7 @@ export default function SettingsPage() {
                   >
                     <span>Gmail 자동 읽음 표시</span>
                     <span className="text-[10px] opacity-80">
-                      {autoMarkReadEnabled ? "On" : "Off"}
+                      {autoMarkReadEnabled ? "켜짐" : "꺼짐"}
                     </span>
                   </button>
                   <p className="text-[10px] text-stone-500 mt-1">
@@ -1452,10 +1455,10 @@ export default function SettingsPage() {
                     disabled={runningAgent}
                     className="bg-amber-300 hover:bg-amber-200 disabled:opacity-50 text-stone-950 px-4 py-2 rounded-lg text-sm font-medium transition"
                   >
-                    {runningAgent ? "Running..." : "Run Agent Now"}
+                    {runningAgent ? "실행 중..." : "지금 에이전트 실행"}
                   </button>
                   <p className="text-[10px] text-stone-500 mt-1">
-                    Trigger the agent immediately without waiting for the next interval
+                    다음 주기를 기다리지 않고 즉시 신호를 확인합니다.
                   </p>
                 </div>
               </div>
@@ -1468,7 +1471,7 @@ export default function SettingsPage() {
                 onClick={loadAgentLogs}
                 className="text-sm text-amber-300 hover:text-amber-200 transition"
               >
-                {agentLogsLoading ? "Loading..." : "View recent activity"}
+                {agentLogsLoading ? "불러오는 중..." : "최근 활동 보기"}
               </button>
               {agentLogs.length > 0 && (
                 <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
@@ -1516,7 +1519,7 @@ export default function SettingsPage() {
 
         {/* Integrations */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Integrations</h2>
+          <h2 className="text-sm font-semibold text-stone-300 mb-3">연결</h2>
           <div className="space-y-3">
             {loading ? (
               <ListSkeleton count={3} />
@@ -1534,7 +1537,7 @@ export default function SettingsPage() {
                     <div className="flex items-center gap-3">
                       <span className="text-sm text-green-400 flex items-center gap-1">
                         <span className="w-2 h-2 bg-green-400 rounded-full" />
-                        Connected
+                        연결됨
                       </span>
                       {int.name === "Google" && (
                         <button
@@ -1542,7 +1545,7 @@ export default function SettingsPage() {
                           onClick={disconnectGoogle}
                           className="text-xs text-stone-500 hover:text-red-400 transition"
                         >
-                          Disconnect
+                          해제
                         </button>
                       )}
                       {int.name === "Slack" && (
@@ -1552,28 +1555,28 @@ export default function SettingsPage() {
                           disabled={slackTesting}
                           className="text-xs text-amber-300 hover:text-amber-200 disabled:opacity-50 transition"
                         >
-                          {slackTesting ? "Sending..." : "Send test"}
+                          {slackTesting ? "전송 중..." : "테스트 전송"}
                         </button>
                       )}
                     </div>
                   ) : int.connectUrl?.endsWith("-admin-only") ? (
                     <span className="text-sm text-stone-500 bg-stone-900 px-3 py-1.5 rounded-lg border border-stone-700">
-                      Admin only
+                      관리자 설정
                     </span>
                   ) : int.connectUrl?.endsWith("-coming-soon") ? (
                     <span className="text-sm text-stone-500 bg-stone-900 px-3 py-1.5 rounded-lg border border-stone-700">
-                      Coming Soon
+                      준비 중
                     </span>
                   ) : int.connectUrl ? (
                     <a
                       href={int.connectUrl}
                       className="bg-amber-300 hover:bg-amber-200 text-stone-950 px-4 py-2 rounded-lg text-sm font-medium transition"
                     >
-                      Connect
+                      연결
                     </a>
                   ) : (
                     <span className="text-sm text-stone-500 bg-stone-900 px-3 py-1.5 rounded-lg border border-stone-700">
-                      Coming Soon
+                      준비 중
                     </span>
                   )}
                 </div>
@@ -1584,15 +1587,15 @@ export default function SettingsPage() {
           {googleConnected && (
             <div className="mt-4 bg-stone-950/35 border border-stone-700/45 rounded-xl p-4 flex items-center justify-between">
               <div>
-                <h3 className="font-medium">Real-time email sync</h3>
+                <h3 className="font-medium">실시간 메일 동기화</h3>
                 <p className="text-sm text-stone-400">
                   {gmailPushConfigured
                     ? gmailPushEnabled
                       ? gmailPushExpiresAt
-                        ? `Gmail push active until ${new Date(gmailPushExpiresAt).toLocaleString()}. Auto-renews before expiry.`
-                        : "Gmail push active. Auto-renews before expiry."
-                      : "Subscribe to Gmail push notifications for instant delivery. Without this, EVE polls every minute."
-                    : "Admin has not configured a Pub/Sub topic on the server. Contact the administrator to enable."}
+                        ? `Gmail push가 ${new Date(gmailPushExpiresAt).toLocaleString()}까지 활성화되어 있습니다. 만료 전에 자동 갱신됩니다.`
+                        : "Gmail push가 활성화되어 있습니다. 만료 전에 자동 갱신됩니다."
+                      : "Gmail push 알림을 구독하면 메일 신호가 즉시 들어옵니다. 꺼두면 EVE가 매분 확인합니다."
+                    : "서버에 Pub/Sub 토픽이 아직 설정되지 않았습니다. 관리자에게 활성화를 요청하세요."}
                 </p>
               </div>
               {gmailPushConfigured ? (
@@ -1603,7 +1606,7 @@ export default function SettingsPage() {
                     disabled={gmailPushLoading}
                     className="bg-stone-900 hover:bg-stone-700 disabled:opacity-50 text-stone-100 px-4 py-2 rounded-lg text-sm font-medium transition border border-stone-700"
                   >
-                    {gmailPushLoading ? "…" : "Disable"}
+                    {gmailPushLoading ? "..." : "끄기"}
                   </button>
                 ) : (
                   <button
@@ -1612,12 +1615,12 @@ export default function SettingsPage() {
                     disabled={gmailPushLoading}
                     className="bg-amber-300 hover:bg-amber-200 disabled:opacity-50 text-stone-950 px-4 py-2 rounded-lg text-sm font-medium transition"
                   >
-                    {gmailPushLoading ? "…" : "Enable"}
+                    {gmailPushLoading ? "..." : "켜기"}
                   </button>
                 )
               ) : (
                 <span className="text-sm text-stone-500 bg-stone-900 px-3 py-1.5 rounded-lg border border-stone-700">
-                  Unavailable
+                  사용할 수 없음
                 </span>
               )}
             </div>
@@ -1626,13 +1629,13 @@ export default function SettingsPage() {
 
         {/* Manual Runs */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Manual Runs</h2>
+          <h2 className="text-sm font-semibold text-stone-300 mb-3">수동 실행</h2>
           <div className="space-y-3">
             <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-4 flex items-center justify-between">
               <div>
-                <h3 className="font-medium">Daily Briefing</h3>
+                <h3 className="font-medium">데일리 브리핑</h3>
                 <p className="text-sm text-stone-400">
-                  Generate a ranked decision brief from tasks, calendar, and email signals
+                  할 일, 일정, 메일 신호에서 우선순위가 매겨진 결정 브리핑을 만듭니다
                 </p>
               </div>
               <button
@@ -1640,7 +1643,7 @@ export default function SettingsPage() {
                 onClick={generateBriefing}
                 className="bg-stone-900 hover:bg-stone-700 text-stone-100 px-4 py-2 rounded-lg text-sm font-medium transition border border-stone-700"
               >
-                Generate Briefing
+                브리핑 생성
               </button>
             </div>
           </div>
@@ -1648,85 +1651,85 @@ export default function SettingsPage() {
 
         {/* Capabilities */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Execution Surface</h2>
+          <h2 className="text-sm font-semibold text-stone-300 mb-3">실행 표면</h2>
           <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-4 space-y-4">
             <div>
-              <p className="text-xs text-amber-300 font-medium mb-2">Signal intake</p>
+              <p className="text-xs text-amber-300 font-medium mb-2">신호 수집</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-sm text-stone-400">
-                <p>Email — classify urgency, sender, and reply need</p>
-                <p>Calendar — surface conflicts, prep windows, and attendance</p>
-                <p>Tasks — expose blocked, overdue, and decision-ready work</p>
-                <p>Slack & Notion — fold threads and pages into the work graph</p>
+                <p>메일 — 긴급도, 발신자, 답장 필요 여부 분류</p>
+                <p>캘린더 — 충돌, 준비 시간, 참석 맥락 표면화</p>
+                <p>할 일 — 막힌 일, 지난 마감, 결정 가능한 작업 노출</p>
+                <p>Slack과 Notion — 스레드와 문서를 업무 그래프에 연결</p>
               </div>
             </div>
             <div>
-              <p className="text-xs text-green-400 font-medium mb-2">Decision output</p>
+              <p className="text-xs text-green-400 font-medium mb-2">결정 출력</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-sm text-stone-400">
-                <p>Approval queue — review prepared replies and schedule changes</p>
-                <p>Decision cards — recommendation, risk, source context, next step</p>
-                <p>Daily briefing — ranked actions instead of a data dump</p>
-                <p>Writer — briefs, proposals, and follow-up drafts from context</p>
+                <p>승인 큐 — 준비된 답장과 일정 변경 검토</p>
+                <p>결정 카드 — 추천, 위험도, 출처 맥락, 다음 단계</p>
+                <p>데일리 브리핑 — 데이터 나열이 아닌 우선순위 액션</p>
+                <p>작성 도구 — 맥락 기반 브리프, 제안서, 후속 초안</p>
               </div>
             </div>
             <div>
-              <p className="text-xs text-rose-300 font-medium mb-2">Trust controls</p>
+              <p className="text-xs text-rose-300 font-medium mb-2">신뢰 제어</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-sm text-stone-400">
-                <p>Pre-approval rules — allow low-risk work within clear limits</p>
-                <p>Action history — inspect what ran, skipped, or needs review</p>
-                <p>Memory controls — tune the preferences EVE should remember</p>
-                <p>Notifications — choose which signals are worth interruption</p>
+                <p>사전 승인 규칙 — 낮은 위험 작업을 명확한 한계 안에서 허용</p>
+                <p>액션 기록 — 실행됨, 건너뜀, 검토 필요 상태 확인</p>
+                <p>기억 제어 — EVE가 기억해야 할 선호 조정</p>
+                <p>알림 — 방해할 가치가 있는 신호만 선택</p>
               </div>
             </div>
             <div>
-              <p className="text-xs text-teal-300 font-medium mb-2">Local work surface</p>
+              <p className="text-xs text-teal-300 font-medium mb-2">로컬 작업 표면</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-sm text-stone-400">
-                <p>Files — search, organize, and attach context when available</p>
-                <p>Screen & clipboard — capture local state for explicit requests</p>
-                <p>iMessage — prepare personal follow-through from the same queue</p>
-                <p>Web research — enrich decisions with fresh outside context</p>
+                <p>파일 — 검색, 정리, 필요한 맥락 첨부</p>
+                <p>화면과 클립보드 — 명시적 요청 시 로컬 상태 캡처</p>
+                <p>iMessage — 같은 큐에서 개인 후속 조치 준비</p>
+                <p>웹 리서치 — 최신 외부 맥락으로 결정 보강</p>
               </div>
             </div>
             <p className="text-xs text-stone-600 mt-1">
-              Signal intake, approval workflows, memory, and connected work surfaces
+              신호 수집, 승인 흐름, 기억, 연결된 작업 표면을 한 곳에서 관리합니다
             </p>
           </div>
         </section>
 
         {/* Data Management */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Workspace Data</h2>
+          <h2 className="text-sm font-semibold text-stone-300 mb-3">워크스페이스 데이터</h2>
           <div className="space-y-3">
             <Link
               href="/settings/status"
               className="flex items-center justify-between rounded-xl border border-stone-700/45 bg-stone-950/35 p-4 transition hover:border-stone-700 hover:bg-stone-950"
             >
               <div className="min-w-0">
-                <h3 className="font-medium">EVE status</h3>
+                <h3 className="font-medium">EVE 상태</h3>
                 <p className="text-sm text-stone-400">
-                  Check deployment, push, reminders, briefing, and integrations
+                  배포, 푸시, 리마인더, 브리핑, 연결 상태를 확인합니다
                 </p>
               </div>
-              <span className="ml-4 shrink-0 text-sm font-medium text-stone-400">Open →</span>
+              <span className="ml-4 shrink-0 text-sm font-medium text-stone-400">열기 →</span>
             </Link>
             <Link
               href="/settings/email-feedback"
               className="flex items-center justify-between rounded-xl border border-stone-700/45 bg-stone-950/35 p-4 transition hover:border-stone-700 hover:bg-stone-950"
             >
               <div className="min-w-0">
-                <h3 className="font-medium">Email classification corrections</h3>
+                <h3 className="font-medium">메일 분류 교정</h3>
                 <p className="text-sm text-stone-400">
                   {emailFeedbackCount === null
-                    ? "Loading corrections..."
-                    : `${emailFeedbackCount} corrections recorded`}
+                    ? "교정 기록 확인 중..."
+                    : `${emailFeedbackCount}개 교정 기록`}
                 </p>
               </div>
-              <span className="ml-4 shrink-0 text-sm font-medium text-stone-400">Review →</span>
+              <span className="ml-4 shrink-0 text-sm font-medium text-stone-400">검토 →</span>
             </Link>
             <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-4 flex items-center justify-between">
               <div>
-                <h3 className="font-medium">Export Workspace Data</h3>
+                <h3 className="font-medium">워크스페이스 데이터 내보내기</h3>
                 <p className="text-sm text-stone-400">
-                  Download decision threads, signals, memory, and actions as JSON
+                  결정 스레드, 신호, 기억, 액션 기록을 JSON으로 내려받습니다
                 </p>
               </div>
               <button
@@ -1734,7 +1737,7 @@ export default function SettingsPage() {
                 onClick={exportData}
                 className="bg-stone-900 hover:bg-stone-700 text-stone-100 px-4 py-2 rounded-lg text-sm font-medium transition border border-stone-700"
               >
-                Export
+                내보내기
               </button>
             </div>
           </div>
@@ -1742,12 +1745,12 @@ export default function SettingsPage() {
 
         {/* Workspace Reset */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-red-300 mb-3">Workspace Reset</h2>
+          <h2 className="text-sm font-semibold text-red-300 mb-3">워크스페이스 초기화</h2>
           <div className="bg-stone-950 border border-red-900/50 rounded-lg p-4 flex items-center justify-between">
             <div>
-              <h3 className="font-medium">Delete Workspace Data</h3>
+              <h3 className="font-medium">워크스페이스 데이터 삭제</h3>
               <p className="text-sm text-stone-400">
-                Permanently delete decision threads, tasks, notes, contacts, and reminders
+                결정 스레드, 할 일, 메모, 연락처, 리마인더를 영구 삭제합니다
               </p>
             </div>
             <button
@@ -1755,20 +1758,20 @@ export default function SettingsPage() {
               onClick={clearAllData}
               className="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition border border-red-900/50"
             >
-              Delete Workspace
+              워크스페이스 삭제
             </button>
           </div>
         </section>
 
         {/* About */}
         <section>
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">About</h2>
+          <h2 className="text-sm font-semibold text-stone-300 mb-3">정보</h2>
           <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-4">
             <p className="text-sm text-stone-400">
-              <span className="text-amber-300 font-medium">EVE</span> · Decision OS for Work
+              <span className="text-amber-300 font-medium">EVE</span> · 업무 결정을 위한 Decision OS
             </p>
             <p className="text-sm text-stone-500 mt-1">
-              Built for operators who need fewer scattered tabs and clearer next decisions.
+              흩어진 탭을 줄이고 다음 결정을 더 선명하게 만들기 위해 설계했습니다.
             </p>
             <p className="text-xs text-stone-600 mt-3">v0.2.0 — MVP</p>
           </div>
