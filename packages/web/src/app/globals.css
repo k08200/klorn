@@ -94,12 +94,12 @@
 .focus-ring:focus {
   outline: none;
   box-shadow:
-    0 0 0 2px #030712,
-    0 0 0 4px rgba(59, 130, 246, 0.4);
+    0 0 0 2px #10100d,
+    0 0 0 4px rgba(216, 164, 93, 0.42);
 }
 
 /* ── Selection ──────────────────────────────────── */
 ::selection {
-  background: #3b82f680;
-  color: white;
+  background: rgba(216, 164, 93, 0.5);
+  color: #10100d;
 }

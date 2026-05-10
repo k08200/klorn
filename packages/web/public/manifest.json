@@ -1,11 +1,11 @@
 {
-  "name": "EVE — Your AI Chief of Staff",
+  "name": "EVE — Decision OS for Work",
   "short_name": "EVE",
-  "description": "Your AI Chief of Staff. Triages email, preps meetings, and runs follow-ups — for $29/mo, not $200K/yr.",
+  "description": "Decision OS for work signals, approval queues, briefings, and memory.",
   "start_url": "/chat",
   "display": "standalone",
-  "background_color": "#030712",
-  "theme_color": "#3b82f6",
+  "background_color": "#10100d",
+  "theme_color": "#d8a45d",
   "icons": [
     {
       "src": "/icon-192.svg",
@@ -28,8 +28,8 @@
   ],
   "shortcuts": [
     {
-      "name": "New Chat",
-      "short_name": "Chat",
+      "name": "New decision thread",
+      "short_name": "Thread",
       "url": "/chat",
       "icons": [{ "src": "/icon-192.svg", "sizes": "192x192" }]
     },

@@ -28,11 +28,11 @@ export async function sendPasswordResetEmail(to: string, resetToken: string): Pr
       subject: "Reset your EVE password",
       html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-          <h2 style="color: #3b82f6; margin-bottom: 24px;">EVE</h2>
+          <h2 style="color: #d8a45d; margin-bottom: 24px;">EVE</h2>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
             You requested a password reset. Click the button below to set a new password.
           </p>
-          <a href="${resetUrl}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
+          <a href="${resetUrl}" style="display: inline-block; background: #d8a45d; color: #10100d; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
             Reset Password
           </a>
           <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
@@ -40,7 +40,7 @@ export async function sendPasswordResetEmail(to: string, resetToken: string): Pr
           </p>
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
           <p style="color: #9ca3af; font-size: 12px;">
-            EVE — Your First AI Employee
+            EVE — Decision OS for Work
           </p>
         </div>
       `,
@@ -91,7 +91,7 @@ export async function sendWaitlistAdminAlert(entry: {
       subject: `[EVE] New waitlist signup: ${safeEmail}`,
       html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-          <h2 style="color: #3b82f6; margin: 0 0 16px;">New early-access request</h2>
+          <h2 style="color: #d8a45d; margin: 0 0 16px;">New early-access request</h2>
           <p style="color: #374151; font-size: 14px; margin: 0 0 4px;"><strong>Email:</strong> ${safeEmail}</p>
           ${safeName ? `<p style="color: #374151; font-size: 14px; margin: 0 0 4px;"><strong>Name:</strong> ${safeName}</p>` : ""}
           ${safeUseCase ? `<p style="color: #374151; font-size: 14px; margin: 0 0 12px;"><strong>How they use email:</strong> ${safeUseCase}</p>` : ""}
@@ -126,22 +126,22 @@ export async function sendBetaInviteEmail(to: string, name?: string | null): Pro
       subject: "You're in — early access to EVE",
       html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-          <h2 style="color: #3b82f6; margin-bottom: 24px;">Welcome to EVE</h2>
+          <h2 style="color: #d8a45d; margin-bottom: 24px;">Welcome to EVE</h2>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
             ${greeting}
           </p>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-            You're approved for early access. Create your account with the email you signed up with, and EVE will start watching your Gmail and Calendar — quietly handling the low-risk stuff and only interrupting you when something actually matters.
+            You're approved for early access. Create your account with the email you signed up with, and EVE will start connecting your Gmail and Calendar into a decision queue — surfacing the context, risk, and next move before anything runs.
           </p>
-          <a href="${loginUrl}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
+          <a href="${loginUrl}" style="display: inline-block; background: #d8a45d; color: #10100d; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
             Create your account
           </a>
           <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
-            Heads-up: the first few days EVE is still learning your line. Tell it "less" or "more" and it adjusts.
+            Heads-up: the first few days EVE is still learning your decision patterns. Tell it "less" or "more" and it adjusts.
           </p>
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
           <p style="color: #9ca3af; font-size: 12px;">
-            EVE — Your AI Chief of Staff
+            EVE — Decision OS for Work
           </p>
         </div>
       `,
@@ -170,11 +170,11 @@ export async function sendVerificationEmail(to: string, verifyToken: string): Pr
       subject: "Verify your EVE account",
       html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-          <h2 style="color: #3b82f6; margin-bottom: 24px;">EVE</h2>
+          <h2 style="color: #d8a45d; margin-bottom: 24px;">EVE</h2>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
             Welcome to EVE! Please verify your email address to get started.
           </p>
-          <a href="${verifyUrl}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
+          <a href="${verifyUrl}" style="display: inline-block; background: #d8a45d; color: #10100d; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
             Verify Email
           </a>
           <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
@@ -182,7 +182,7 @@ export async function sendVerificationEmail(to: string, verifyToken: string): Pr
           </p>
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
           <p style="color: #9ca3af; font-size: 12px;">
-            EVE — Your First AI Employee
+            EVE — Decision OS for Work
           </p>
         </div>
       `,
