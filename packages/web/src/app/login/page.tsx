@@ -94,7 +94,7 @@ function LoginForm() {
   return (
     <AuthScreen
       eyebrow={mode === "login" ? "Welcome back" : "Create account"}
-      title={mode === "login" ? "결정 큐로 돌아가기" : "EVE 베타 시작하기"}
+      title={mode === "login" ? "결정 큐로 돌아가기" : "Jigeum 시작하기"}
       description={
         mode === "login"
           ? "메일, 캘린더, 작업 신호를 다시 연결하고 오늘 승인해야 할 항목부터 확인하세요."

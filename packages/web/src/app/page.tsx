@@ -20,7 +20,7 @@ const decisionCards = [
   {
     label: "행동",
     title: "오후 3-4시를 비우고 답장 초안을 준비",
-    body: "EVE가 일을 준비하고, 실행 전에는 승인을 기다립니다.",
+    body: "Jigeum이 일을 준비하고, 실행 전에는 승인을 기다립니다.",
     tone: "text-emerald-200 border-emerald-300/25 bg-emerald-300/10",
   },
 ];
@@ -47,7 +47,7 @@ const pillars = [
 ];
 
 const trustRows = [
-  ["관찰", "EVE는 아무것도 바꾸지 않고 패턴을 봅니다."],
+  ["관찰", "Jigeum은 아무것도 바꾸지 않고 패턴을 봅니다."],
   ["제안", "중요한 연결은 승인 카드가 됩니다."],
   ["초안", "답장, 리마인더, 일정 이동을 먼저 준비합니다."],
   ["승인", "외부로 나가는 일은 명시적인 승인을 기다립니다."],
@@ -165,13 +165,13 @@ export default function LandingPage() {
           <div className="flex items-center gap-2">
             <Link
               href="/login"
-              className="px-3 py-2 text-sm text-stone-300 transition hover:text-white"
+              className="whitespace-nowrap px-3 py-2 text-sm text-stone-300 transition hover:text-white"
             >
               로그인
             </Link>
             <Link
               href="/early-access"
-              className="rounded-md bg-[#f2eadc] px-4 py-2 text-sm font-semibold text-[#12100d] transition hover:bg-white"
+              className="whitespace-nowrap rounded-md bg-[#f2eadc] px-4 py-2 text-sm font-semibold text-[#12100d] transition hover:bg-white"
             >
               얼리 액세스
             </Link>
@@ -182,13 +182,13 @@ export default function LandingPage() {
           <div className="max-w-3xl">
             <p className="mb-5 inline-flex items-center gap-2 border-b border-[#d8a45d]/50 pb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[#d8a45d]">
               <Icon type="compass" className="h-4 w-4" />
-              업무를 위한 Decision OS
+              What matters now
             </p>
             <h1 className="max-w-3xl text-4xl font-semibold leading-[1.05] tracking-tight text-white sm:text-5xl md:text-7xl md:leading-[0.98] lg:text-8xl">
               앱을 확인하지 말고, 결정을 정리하세요.
             </h1>
             <p className="mt-7 max-w-2xl text-base leading-7 text-stone-300 md:text-xl md:leading-8">
-              EVE는 메일, 캘린더, 작업, 메모리의 신호를 읽고 근거가 붙은 승인 카드로 바꿉니다.
+              Jigeum은 메일, 캘린더, 작업, 메모리에서 지금 봐야 할 일만 추려줍니다.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -344,7 +344,7 @@ export default function LandingPage() {
             업무 그래프
           </p>
           <h2 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">
-            EVE는 일의 모양을 보여줘야 합니다.
+            Jigeum은 일의 모양을 보여줘야 합니다.
           </h2>
           <p className="mt-5 text-sm leading-7 text-stone-400 md:text-base">
             가장 강한 화면은 채팅이 아닙니다. 큐 뒤에 있는 지도입니다. 누가 관련되어 있고, 무엇이
@@ -401,7 +401,7 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-7xl flex-col gap-4 text-sm text-stone-500 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
             <BrandMark className="h-7 w-7" />
-            <span>EVE는 흩어진 신호를 승인 가능한 결정으로 바꿉니다.</span>
+            <span>Jigeum은 흩어진 신호를 승인 가능한 결정으로 바꿉니다.</span>
           </div>
           <div className="flex gap-5">
             <Link href="/privacy" className="transition hover:text-stone-300">

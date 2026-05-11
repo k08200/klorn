@@ -56,8 +56,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <img src="/brand/mark.svg" alt="" className="h-6 w-6" />
           <div className="min-w-0">
-            <p className="text-sm font-semibold leading-none text-stone-100">EVE</p>
-            <p className="mt-0.5 text-[10px] leading-none text-stone-500">결정 운영실</p>
+            <p className="text-sm font-semibold leading-none text-stone-100">Jigeum</p>
+            <p className="mt-0.5 text-[10px] leading-none text-stone-500">What matters now</p>
           </div>
         </div>
         <main className="relative z-10 flex-1 overflow-y-auto pb-[calc(62px+env(safe-area-inset-bottom))] md:pb-safe">

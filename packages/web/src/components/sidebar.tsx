@@ -74,7 +74,7 @@ function groupByDate(convs: Conversation[]): DateGroup[] {
 
 const NAV_ITEMS = [
   { href: "/inbox", label: "결정 큐", icon: "check" },
-  { href: "/email", label: "시그널 메일", icon: "mail" },
+  { href: "/email", label: "메일", icon: "mail" },
   { href: "/calendar", label: "캘린더", icon: "calendar" },
   { href: "/briefing", label: "브리핑", icon: "bell" },
 ];
@@ -378,7 +378,7 @@ export default function Sidebar({
           <span>
             <span className="block leading-none">Jigeum</span>
             <span className="mt-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-stone-500">
-              결정 운영실
+              What matters now
             </span>
           </span>
         </Link>
