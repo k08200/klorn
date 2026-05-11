@@ -200,7 +200,7 @@ export default function LandingPage() {
               </Link>
               <Link
                 href="/login"
-                className="inline-flex h-12 items-center justify-center rounded-md border border-white/18 px-6 text-sm font-medium text-stone-200 transition hover:border-white/35 hover:bg-white/8"
+                className="inline-flex h-12 items-center justify-center rounded-md border border-white/[0.18] px-6 text-sm font-medium text-stone-200 transition hover:border-white/[0.35] hover:bg-white/[0.08]"
               >
                 커맨드 센터 열기
               </Link>
@@ -311,32 +311,30 @@ export default function LandingPage() {
       </section>
 
       <section className="mx-auto grid max-w-7xl gap-10 px-5 py-20 md:grid-cols-[1.1fr_0.9fr] md:px-8 md:py-28">
-        <div className="rounded-lg border border-white/10 bg-[#11161c] p-4">
+        <div className="rounded-lg border border-white/10 bg-[#11161c] p-4 shadow-2xl shadow-black/25">
           <div className="relative min-h-[430px] overflow-hidden rounded-md border border-white/8 bg-[#0b0e12]">
-            <div className="absolute left-[12%] top-[18%] h-28 w-28 rounded-full border border-sky-300/25 bg-sky-300/8" />
-            <div className="absolute right-[14%] top-[16%] h-24 w-24 rounded-full border border-amber-300/25 bg-amber-300/8" />
-            <div className="absolute bottom-[16%] left-[18%] h-24 w-24 rounded-full border border-emerald-300/25 bg-emerald-300/8" />
-            <div className="absolute bottom-[20%] right-[18%] h-28 w-28 rounded-full border border-rose-300/25 bg-rose-300/8" />
-            <div className="absolute left-1/2 top-1/2 flex h-32 w-32 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-[#d8a45d]/40 bg-[#d8a45d]/12 text-[#f4d49d]">
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:44px_44px]" />
+            <div className="absolute left-1/2 top-1/2 flex h-32 w-32 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl border border-[#d8a45d]/40 bg-[#d8a45d]/12 text-[#f4d49d] shadow-2xl shadow-amber-950/30">
               <BrandMark className="h-12 w-12" />
             </div>
             <svg className="absolute inset-0 h-full w-full" viewBox="0 0 600 430" fill="none">
-              <path d="M158 112 C250 120 260 180 300 215" stroke="#d8a45d" strokeOpacity=".42" />
-              <path d="M440 105 C360 132 340 177 300 215" stroke="#d8a45d" strokeOpacity=".42" />
-              <path d="M172 326 C250 300 270 255 300 215" stroke="#d8a45d" strokeOpacity=".42" />
-              <path d="M430 310 C365 292 334 256 300 215" stroke="#d8a45d" strokeOpacity=".42" />
+              <path d="M172 112 C250 120 260 180 300 215" stroke="#d8a45d" strokeOpacity=".45" />
+              <path d="M430 112 C360 132 340 177 300 215" stroke="#d8a45d" strokeOpacity=".45" />
+              <path d="M172 318 C250 300 270 255 300 215" stroke="#d8a45d" strokeOpacity=".45" />
+              <path d="M430 318 C365 292 334 256 300 215" stroke="#d8a45d" strokeOpacity=".45" />
             </svg>
             {[
-              ["메일 스레드", "left-[8%] top-[12%]"],
-              ["캘린더", "right-[10%] top-[12%]"],
-              ["약속", "bottom-[12%] left-[13%]"],
-              ["작업 리스크", "bottom-[14%] right-[13%]"],
-            ].map(([label, pos]) => (
+              ["메일 스레드", "3개 신호", "left-[7%] top-[13%] border-sky-300/25"],
+              ["캘린더", "2개 일정", "right-[8%] top-[13%] border-amber-300/25"],
+              ["약속", "4개 열린 항목", "bottom-[13%] left-[11%] border-emerald-300/25"],
+              ["작업 리스크", "승인 필요", "bottom-[13%] right-[9%] border-rose-300/25"],
+            ].map(([label, meta, pos]) => (
               <div
                 key={label}
-                className={`absolute ${pos} rounded border border-white/10 bg-black/35 px-3 py-2 text-xs text-stone-300 backdrop-blur`}
+                className={`absolute ${pos} min-w-[128px] rounded-md border bg-black/45 px-3 py-2 text-xs text-stone-300 shadow-xl shadow-black/20 backdrop-blur`}
               >
-                {label}
+                <p className="font-medium text-stone-200">{label}</p>
+                <p className="mt-1 text-[11px] text-stone-500">{meta}</p>
               </div>
             ))}
           </div>

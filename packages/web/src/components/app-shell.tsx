@@ -30,8 +30,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex h-dvh overflow-hidden bg-[#10100d] text-stone-100">
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
       <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(217,119,6,0.14),transparent_30%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.12),transparent_28%)]" />
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:48px_48px]" />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(216,164,93,0.11)_0%,transparent_34%,rgba(20,184,166,0.08)_68%,transparent_100%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.026)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.018)_1px,transparent_1px)] bg-[size:56px_56px]" />
+        <div className="pointer-events-none absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-amber-300/35 to-transparent" />
         {/* Mobile header — pt-safe respects iPhone notch in PWA */}
         <div className="relative z-10 md:hidden flex items-center gap-3 px-4 h-12 pt-safe border-b border-stone-700/40 bg-[#10100d]/90 backdrop-blur-xl shrink-0 box-content">
           <button
@@ -59,7 +60,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <img src="/brand/mark.svg" alt="" className="h-6 w-6" />
           <div className="min-w-0">
             <p className="text-sm font-semibold leading-none text-stone-100">EVE</p>
-            <p className="mt-0.5 text-[10px] leading-none text-stone-500">Decision OS</p>
+            <p className="mt-0.5 text-[10px] leading-none text-stone-500">결정 운영실</p>
           </div>
         </div>
         <main className="relative z-10 flex-1 overflow-y-auto pb-[calc(62px+env(safe-area-inset-bottom))] md:pb-safe">

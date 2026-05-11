@@ -1,5 +1,7 @@
 <svg width="660" height="180" viewBox="0 0 660 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="180" height="180" rx="40" fill="#111827"/>
+  <rect width="180" height="180" rx="40" fill="#0B0D10"/>
+  <rect x="11" y="11" width="158" height="158" rx="30" stroke="#D8A45D" stroke-opacity=".26" stroke-width="4"/>
+  <path d="M30 90H150" stroke="#F3EFE7" stroke-opacity=".10" stroke-width="3" stroke-linecap="round"/>
   <path d="M90 30V150" stroke="#D8A45D" stroke-width="8" stroke-linecap="round"/>
   <path d="M36 100C71 94 93 77 105 45C112 77 125 95 144 100C115 104 97 121 90 150C81 121 63 104 36 100Z" fill="#F3EFE7"/>
   <path d="M60 99C77 94 89 83 95 65C99 82 108 94 121 99C105 104 94 114 90 130C85 114 75 104 60 99Z" fill="#D8A45D"/>

@@ -367,7 +367,8 @@ export default function Sidebar({
 
   const sidebarContent = (
     <div className="relative flex h-full flex-col overflow-hidden border-r border-stone-700/40 bg-[#11100d]/95 pt-safe pb-safe shadow-2xl shadow-black/25">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-[radial-gradient(circle_at_18%_0%,rgba(245,158,11,0.18),transparent_58%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[linear-gradient(180deg,rgba(216,164,93,0.14),rgba(17,16,13,0))]" />
+      <div className="pointer-events-none absolute right-0 top-0 h-full w-px bg-gradient-to-b from-amber-300/40 via-stone-700/45 to-transparent" />
       {/* Header */}
       <div className="relative flex items-center justify-between px-3 py-3">
         <Link
@@ -379,7 +380,7 @@ export default function Sidebar({
           <span>
             <span className="block leading-none">EVE</span>
             <span className="mt-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-stone-500">
-              Decision OS
+              결정 운영실
             </span>
           </span>
         </Link>

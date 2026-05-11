@@ -146,45 +146,55 @@ function InboxView() {
   const pendingCount = actions.filter((a) => a.status === "PENDING").length;
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-6 md:py-10">
-      <header className="mb-6 overflow-hidden rounded-2xl border border-amber-300/15 bg-gradient-to-br from-stone-950 via-stone-950 to-amber-950/20 p-5 md:p-6">
-        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-          <div className="max-w-2xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
-              결정 큐
-            </p>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-stone-50 md:text-3xl">
-              흩어진 신호를 승인 가능한 결정으로 정리합니다.
-            </h1>
-            <p className="mt-3 text-sm leading-6 text-stone-400">
-              EVE가 실행하기 전에 무엇을 봤고, 왜 중요하다고 판단했으며, 어떤 행동을 준비했는지
-              확인하세요.
+    <div className="mx-auto w-full max-w-5xl px-4 py-6 md:py-10">
+      <header className="mb-6 overflow-hidden rounded-2xl border border-amber-300/15 bg-stone-950/65 shadow-2xl shadow-black/20">
+        <div className="h-1 bg-gradient-to-r from-amber-300 via-stone-500 to-teal-300" />
+        <div className="p-5 md:p-6">
+          <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
+                결정 큐
+              </p>
+              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-stone-50 md:text-3xl">
+                흩어진 신호를 승인 가능한 결정으로 정리합니다.
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-stone-400">
+                EVE가 실행하기 전에 무엇을 봤고, 왜 중요하다고 판단했으며, 어떤 행동을 준비했는지
+                확인하세요.
+              </p>
+            </div>
+            <div className="shrink-0 rounded-xl border border-stone-800 bg-black/20 p-2">
+              <button
+                type="button"
+                onClick={() => load(filter)}
+                disabled={loading}
+                className="h-9 rounded-lg border border-stone-700 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
+                aria-label="결정 큐 새로고침"
+              >
+                {loading ? "..." : "새로고침"}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-xl border border-white/10 bg-black/25">
+            <QueueMetric label="승인 대기" value={pendingCount} />
+            <QueueMetric label="전체 카드" value={actions.length} />
+            <QueueMetric label="열린 약속" value={commitments.length} />
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex w-fit items-center gap-1 rounded-lg border border-stone-800 bg-stone-950/80 p-1">
+              <FilterTab
+                active={filter === "pending"}
+                label={`대기 중${pendingCount ? ` (${pendingCount})` : ""}`}
+                onClick={() => setFilter("pending")}
+              />
+              <FilterTab active={filter === "all"} label="전체" onClick={() => setFilter("all")} />
+            </div>
+            <p className="text-xs text-stone-600">
+              신호 → 판단 → 행동 순서로 승인 가능한 카드만 남깁니다.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => load(filter)}
-            disabled={loading}
-            className="h-9 shrink-0 rounded-lg border border-stone-700 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
-            aria-label="결정 큐 새로고침"
-          >
-            {loading ? "..." : "새로고침"}
-          </button>
-        </div>
-
-        <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-xl border border-white/10 bg-black/20">
-          <QueueMetric label="승인 대기" value={pendingCount} />
-          <QueueMetric label="전체 카드" value={actions.length} />
-          <QueueMetric label="열린 약속" value={commitments.length} />
-        </div>
-
-        <div className="mt-4 flex w-fit items-center gap-1 rounded-lg border border-stone-800 bg-stone-950/80 p-1">
-          <FilterTab
-            active={filter === "pending"}
-            label={`대기 중${pendingCount ? ` (${pendingCount})` : ""}`}
-            onClick={() => setFilter("pending")}
-          />
-          <FilterTab active={filter === "all"} label="전체" onClick={() => setFilter("all")} />
         </div>
       </header>
 
