@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
+import { EveSignalField } from "../../components/brand-visuals";
 import { apiFetch } from "../../lib/api";
 import { captureClientError } from "../../lib/sentry";
 
@@ -94,10 +95,10 @@ function EmailView() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
-      <header className="mb-5 overflow-hidden rounded-2xl border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
+      <header className="mb-5 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
         <div className="h-1 bg-gradient-to-r from-sky-300 via-amber-300 to-stone-600" />
         <div className="p-5 md:p-6">
-          <div className="flex items-start justify-between gap-4">
+          <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
             <div>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
                 시그널 메일
@@ -110,16 +111,19 @@ function EmailView() {
                 {source === "demo" && <span className="ml-2 text-amber-300">데모 데이터</span>}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={syncNow}
-              disabled={syncing}
-              className="shrink-0 rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
-            >
-              {syncing ? "동기화 중..." : "지금 동기화"}
-            </button>
+            <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
+              <EveSignalField className="absolute inset-0 border-0" />
+              <button
+                type="button"
+                onClick={syncNow}
+                disabled={syncing}
+                className="absolute right-3 top-3 rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
+              >
+                {syncing ? "동기화 중..." : "지금 동기화"}
+              </button>
+            </div>
           </div>
-          <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-xl border border-stone-800 bg-black/20">
+          <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
             <SignalStat label="읽지 않음" value={unreadCount} />
             <SignalStat label="긴급" value={urgentCount} />
             <SignalStat label="답장" value={replyCount} />
@@ -138,7 +142,7 @@ function EmailView() {
       )}
 
       {!loading && !error && emails.length === 0 && (
-        <div className="mt-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-center">
+        <div className="mt-4 rounded-lg border border-stone-700/45 bg-stone-950/35 p-6 text-center">
           <p className="text-sm text-stone-300">
             {filter === "all" ? "아직 들어온 메일 신호가 없어요." : "조건에 맞는 신호가 없어요."}
           </p>
@@ -200,9 +204,10 @@ function EmailRowItem({ email }: { email: EmailRow }) {
     <li>
       <Link
         href={`/email/${email.id}`}
-        className="block overflow-hidden rounded-xl border border-stone-700/45 bg-stone-950/45 transition hover:border-amber-500/30 hover:bg-amber-500/5 active:bg-stone-900/70"
+        className="relative block overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/45 transition hover:border-amber-500/30 hover:bg-amber-500/5 active:bg-stone-900/70"
       >
-        <div className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-start">
+        <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-sky-300 via-amber-300 to-stone-700" />
+        <div className="grid gap-3 p-4 pl-5 md:grid-cols-[1fr_auto] md:items-start">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <PriorityBadge priority={email.priority} />

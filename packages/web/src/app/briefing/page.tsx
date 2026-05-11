@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
+import { EveSignalField } from "../../components/brand-visuals";
 import { Markdown } from "../../components/markdown";
 import { apiFetch } from "../../lib/api";
 import { useT } from "../../lib/i18n";
@@ -163,9 +164,10 @@ function BriefingView() {
   const topActions = content ? extractTopActions(content) : [];
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-28 pt-6 md:py-10">
-      <header className="mb-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-2xl shadow-black/10">
-        <div className="flex items-start justify-between gap-4">
+    <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
+      <header className="mb-6 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
+        <div className="h-1 bg-gradient-to-r from-amber-300 via-teal-300 to-stone-600" />
+        <div className="grid gap-5 p-5 md:p-6 lg:grid-cols-[1fr_300px] lg:items-stretch">
           <div>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
               결정 브리프
@@ -178,19 +180,22 @@ function BriefingView() {
               {formattedTime && <span className="ml-2 text-stone-400">오늘 {formattedTime}</span>}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={regenerate}
-            disabled={generating}
-            className="shrink-0 rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
-          >
-            {generating ? "생성 중..." : content ? "다시 생성" : "지금 생성"}
-          </button>
-        </div>
-        <div className="mt-5 grid grid-cols-3 gap-2">
-          <BriefStat label="핵심 행동" value={topActions.length} />
-          <BriefStat label="피드백" value={Object.keys(feedback).length} />
-          <BriefStat label="상태" value={content ? "준비됨" : "비어 있음"} />
+          <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
+            <EveSignalField className="absolute inset-0 border-0" />
+            <button
+              type="button"
+              onClick={regenerate}
+              disabled={generating}
+              className="absolute right-3 top-3 rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
+            >
+              {generating ? "생성 중..." : content ? "다시 생성" : "지금 생성"}
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-2 lg:col-span-2">
+            <BriefStat label="핵심 행동" value={topActions.length} />
+            <BriefStat label="피드백" value={Object.keys(feedback).length} />
+            <BriefStat label="상태" value={content ? "준비됨" : "비어 있음"} />
+          </div>
         </div>
       </header>
 
@@ -203,7 +208,7 @@ function BriefingView() {
       )}
 
       {!loading && !error && !content && (
-        <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-center">
+        <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-6 text-center">
           <p className="mb-3 text-sm text-stone-300">아직 오늘의 브리핑이 없습니다.</p>
           <p className="mx-auto mb-4 max-w-md text-xs leading-5 text-amber-100/85">
             {t("briefing.learningMode")}
@@ -228,12 +233,13 @@ function BriefingView() {
 
       {content && (
         <div className="space-y-4">
-          <article className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-5 md:p-6">
+          <article className="relative overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/35 p-5 pl-6 md:p-6 md:pl-7">
+            <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-amber-300 via-teal-300 to-stone-700" />
             <Markdown content={content} />
           </article>
 
           {noteId && topActions.length > 0 && (
-            <section className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+            <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
               <div className="mb-3">
                 <h2 className="text-sm font-semibold text-stone-100">Top 3 피드백</h2>
                 <p className="mt-1 text-xs text-stone-500">오늘 고른 항목이 맞았는지 기록해요.</p>
@@ -281,7 +287,7 @@ function BriefingView() {
 
 function BriefStat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-xl border border-stone-700/45 bg-black/15 px-3 py-2">
+    <div className="rounded-lg border border-stone-700/45 bg-black/15 px-3 py-2">
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
         {label}
       </p>

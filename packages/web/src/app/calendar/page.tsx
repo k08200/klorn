@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
+import { EveSignalField } from "../../components/brand-visuals";
 import { API_BASE, apiFetch } from "../../lib/api";
 import { captureClientError } from "../../lib/sentry";
 
@@ -111,10 +112,10 @@ function CalendarView() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
-      <header className="mb-6 overflow-hidden rounded-2xl border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
+      <header className="mb-6 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
         <div className="h-1 bg-gradient-to-r from-teal-300 via-amber-300 to-stone-600" />
         <div className="p-5 md:p-6">
-          <div className="flex items-start justify-between gap-4">
+          <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
             <div>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
                 결정 캘린더
@@ -126,16 +127,19 @@ function CalendarView() {
                 앞으로 14일의 미팅을 보고, 준비팩과 관련 신호를 같은 흐름에서 확인합니다.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={syncNow}
-              disabled={syncing}
-              className="shrink-0 rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
-            >
-              {syncing ? "동기화 중..." : "지금 동기화"}
-            </button>
+            <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
+              <EveSignalField className="absolute inset-0 border-0" />
+              <button
+                type="button"
+                onClick={syncNow}
+                disabled={syncing}
+                className="absolute right-3 top-3 rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
+              >
+                {syncing ? "동기화 중..." : "지금 동기화"}
+              </button>
+            </div>
           </div>
-          <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-xl border border-stone-800 bg-black/20">
+          <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
             <CalendarStat label="14일" value={events.length} />
             <CalendarStat label="오늘" value={todayCount} />
             <CalendarStat
@@ -144,7 +148,7 @@ function CalendarView() {
             />
           </div>
           {nextEvent && (
-            <div className="mt-4 rounded-xl border border-amber-300/15 bg-amber-300/5 px-4 py-3">
+            <div className="mt-4 rounded-lg border border-amber-300/15 bg-amber-300/5 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300/80">
                 다음 준비 대상
               </p>
@@ -157,7 +161,7 @@ function CalendarView() {
       </header>
 
       {loading && (
-        <div className="rounded-xl border border-stone-800 bg-stone-950/35 px-4 py-5 text-center text-sm text-stone-500">
+        <div className="rounded-lg border border-stone-800 bg-stone-950/35 px-4 py-5 text-center text-sm text-stone-500">
           일정 맥락을 조립하는 중...
         </div>
       )}
@@ -175,7 +179,7 @@ function CalendarView() {
       )}
 
       {!loading && !error && events.length === 0 && (
-        <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-center">
+        <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-6 text-center">
           <p className="mb-1 text-sm text-stone-300">
             {googleConnected === false
               ? "Google Calendar가 아직 연결되지 않았어요."
@@ -269,7 +273,8 @@ function EventRow({ event }: { event: CalendarEvent }) {
   };
 
   return (
-    <li className="rounded-xl border border-stone-700/45 bg-stone-950/45 p-4 transition hover:border-amber-500/30 hover:bg-amber-500/5 active:bg-stone-900/70">
+    <li className="relative overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/45 p-4 pl-5 transition hover:border-amber-500/30 hover:bg-amber-500/5 active:bg-stone-900/70">
+      <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-teal-300 via-amber-300 to-stone-700" />
       <div className="grid gap-3 md:grid-cols-[96px_1fr]">
         <div className="rounded-lg border border-stone-800 bg-black/20 px-3 py-2 text-[12px] font-medium tabular-nums text-stone-400">
           {timeLabel}
