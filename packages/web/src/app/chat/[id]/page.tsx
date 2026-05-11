@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Markdown } from "../../../components/markdown";
 import SpeakButton from "../../../components/speak-button";
 import { useToast } from "../../../components/toast";
@@ -65,6 +65,25 @@ function ChatPageContent() {
   const prefillHandled = useRef(false);
   const { toast } = useToast();
 
+  const loadPendingActions = useCallback(
+    async (signal?: AbortSignal) => {
+      const data = await apiFetch<{ actions: PendingAction[] }>(
+        `/api/chat/conversations/${id}/pending-actions`,
+      );
+      if (signal?.aborted) return;
+      const map = new Map<string, PendingAction>();
+      for (const action of data.actions) map.set(action.messageId, action);
+      setPendingActions(map);
+    },
+    [id],
+  );
+
+  const reloadThreadState = useCallback(async () => {
+    const data = await apiFetch<{ messages: Message[] }>(`/api/chat/conversations/${id}`);
+    setMessages(data.messages);
+    await loadPendingActions();
+  }, [id, loadPendingActions]);
+
   // Load conversation + pending actions
   useEffect(() => {
     const loadController = new AbortController();
@@ -101,19 +120,14 @@ function ChatPageContent() {
       });
 
     // Fetch pending actions for this conversation
-    apiFetch<{ actions: PendingAction[] }>(`/api/chat/conversations/${id}/pending-actions`)
-      .then((data) => {
-        if (loadController.signal.aborted) return;
-        const map = new Map<string, PendingAction>();
-        for (const a of data.actions) map.set(a.messageId, a);
-        setPendingActions(map);
-      })
-      .catch((err) => captureClientError(err, { scope: "chat.load-pending-actions", id }));
+    loadPendingActions(loadController.signal).catch((err) =>
+      captureClientError(err, { scope: "chat.load-pending-actions", id }),
+    );
 
     return () => {
       loadController.abort();
     };
-  }, [id, searchParams]);
+  }, [id, searchParams, loadPendingActions]);
 
   // Intentionally do NOT abort in-flight streams on unmount or conversation
   // change. The server keeps generating and writes the final response to the
@@ -264,6 +278,7 @@ function ChatPageContent() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await processStream(res, messageContent);
+      await reloadThreadState();
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         // User cancelled — don't retry
@@ -334,6 +349,7 @@ function ChatPageContent() {
       }
 
       await processStream(res, messageContent);
+      await reloadThreadState();
     } catch (err) {
       if (!(err instanceof DOMException && err.name === "AbortError")) {
         setMessages((prev) => [
@@ -371,6 +387,7 @@ function ChatPageContent() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await processStream(res, "");
+      await reloadThreadState();
     } catch {
       setMessages((prev) => [
         ...prev,

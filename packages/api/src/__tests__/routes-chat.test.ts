@@ -2,6 +2,10 @@ import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 
+const createCompletionMock = vi.hoisted(() =>
+  vi.fn(() => ({ choices: [{ message: { content: "Title" } }] })),
+);
+
 vi.mock("../email.js", () => ({ sendVerificationEmail: vi.fn(), sendPasswordResetEmail: vi.fn() }));
 vi.mock("../gmail.js", () => ({
   getAuthUrl: vi.fn(),
@@ -20,6 +24,7 @@ vi.mock("../openai.js", () => ({
       },
     },
   },
+  createCompletion: createCompletionMock,
   resolveUserChatModel: vi.fn(() => "gpt-4o-mini"),
 }));
 vi.mock("../context-compressor.js", () => ({
@@ -63,12 +68,27 @@ type Reminder = {
   description: string | null;
   remindAt: Date;
 };
+type PendingAction = {
+  id: string;
+  conversationId: string;
+  messageId: string;
+  userId: string;
+  status: "PENDING" | "REJECTED" | "EXECUTED" | "FAILED";
+  toolName: string;
+  toolArgs: string;
+  reasoning: string | null;
+  result: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
 const convStore = new Map<string, Conv>();
 const msgStore = new Map<string, Msg>();
 const reminderStore = new Map<string, Reminder>();
+const pendingActionStore = new Map<string, PendingAction>();
 let nextConvId = 1;
 let nextMsgId = 1;
 let nextReminderId = 1;
+let nextActionId = 1;
 
 vi.mock("../db.js", () => {
   const prisma = {
@@ -132,7 +152,7 @@ vi.mock("../db.js", () => {
     user: { findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })) },
     reminder: {
       create: vi.fn(
-        async ({
+        ({
           data,
         }: {
           data: { userId: string; title: string; description?: string | null; remindAt: Date };
@@ -167,7 +187,42 @@ vi.mock("../db.js", () => {
     ...prisma,
     pendingAction: {
       groupBy: vi.fn(async () => []),
-      findMany: vi.fn(async () => []),
+      create: vi.fn(
+        ({
+          data,
+        }: {
+          data: {
+            conversationId: string;
+            messageId: string;
+            userId: string;
+            toolName: string;
+            toolArgs: string;
+            reasoning?: string | null;
+          };
+        }) => {
+          const id = `action-${nextActionId++}`;
+          const action: PendingAction = {
+            id,
+            conversationId: data.conversationId,
+            messageId: data.messageId,
+            userId: data.userId,
+            status: "PENDING",
+            toolName: data.toolName,
+            toolArgs: data.toolArgs,
+            reasoning: data.reasoning ?? null,
+            result: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+          pendingActionStore.set(id, action);
+          return action;
+        },
+      ),
+      findMany: vi.fn(({ where }: { where?: { conversationId?: string } } = {}) =>
+        [...pendingActionStore.values()].filter(
+          (action) => !where?.conversationId || action.conversationId === where.conversationId,
+        ),
+      ),
       deleteMany: vi.fn(async () => ({})),
     },
     conversationSummary: { deleteMany: vi.fn(async () => ({})) },
@@ -204,9 +259,13 @@ function resetStores() {
   convStore.clear();
   msgStore.clear();
   reminderStore.clear();
+  pendingActionStore.clear();
   nextConvId = 1;
   nextMsgId = 1;
   nextReminderId = 1;
+  nextActionId = 1;
+  createCompletionMock.mockReset();
+  createCompletionMock.mockResolvedValue({ choices: [{ message: { content: "Title" } }] });
 }
 
 describe("chat routes (conversation CRUD)", () => {
@@ -496,6 +555,73 @@ describe("chat routes (conversation CRUD)", () => {
       payload: { content: { bad: true } },
     });
     expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("turns chat propose_action tool calls into pending approval cards", async () => {
+    const { getToolsForPlan } = await import("../tool-executor.js");
+    vi.mocked(getToolsForPlan).mockReturnValue([
+      {
+        type: "function",
+        function: {
+          name: "create_task",
+          description: "Create a task",
+          parameters: { type: "object", properties: {}, required: [] },
+        },
+      },
+    ]);
+    createCompletionMock.mockImplementation((input: { tools?: unknown[] }) => {
+      if (input.tools) {
+        return {
+          choices: [
+            {
+              finish_reason: "tool_calls",
+              message: {
+                content: null,
+                tool_calls: [
+                  {
+                    id: "call-1",
+                    function: {
+                      name: "propose_action",
+                      arguments: JSON.stringify({
+                        message:
+                          "📋 상황: 운영 루프에서 지난 태스크가 확인됐어요.\n💡 판단: 오늘 처리 순서를 정해야 해요.\n✅ 제안: '운영 루프 후속 정리' 태스크를 만들어드릴까요?",
+                        toolName: "create_task",
+                        toolArgs: { title: "운영 루프 후속 정리", priority: "HIGH" },
+                        priority: "high",
+                        category: "task",
+                      }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        };
+      }
+      return { choices: [{ message: { content: "Title" } }] };
+    });
+
+    const app = await buildApp();
+    const c = await app.inject({
+      method: "POST",
+      url: "/api/chat/conversations",
+      headers: auth(),
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/chat/conversations/${c.json().id}/messages`,
+      headers: auth(),
+      payload: { content: "이걸 승인 가능한 결정 카드로 만들어줘" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain("운영 루프 후속 정리");
+    expect(pendingActionStore.size).toBe(1);
+    const action = [...pendingActionStore.values()][0];
+    expect(action.toolName).toBe("create_task");
+    expect(action.toolArgs).toContain("운영 루프 후속 정리");
+    expect(msgStore.get(action.messageId)?.content).toContain("✅ 제안");
     await app.close();
   });
 
