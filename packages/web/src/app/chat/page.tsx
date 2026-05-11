@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
+import { EveSignalField } from "../../components/brand-visuals";
 import { useToast } from "../../components/toast";
 import { API_BASE, apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
@@ -115,7 +116,7 @@ function NewChatWelcome() {
         )}
         <section>
           <div className="mb-7">
-            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-300/20 bg-amber-300/10 shadow-2xl shadow-amber-950/30">
+            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-lg border border-amber-300/20 bg-amber-300/10 shadow-2xl shadow-amber-950/30">
               <img src="/brand/mark.svg" alt="" className="h-9 w-9" />
             </div>
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-300/80">
@@ -132,10 +133,11 @@ function NewChatWelcome() {
 
           {/* Quick input */}
           <div className="relative mb-7 max-w-2xl">
+            <div className="absolute -inset-px rounded-lg bg-gradient-to-r from-amber-300/35 via-teal-300/20 to-transparent opacity-80" />
             <button
               type="button"
               onClick={() => startChat()}
-              className="group w-full rounded-2xl border border-stone-700/60 bg-stone-950/65 px-5 py-4 text-left text-sm text-stone-500 shadow-2xl shadow-black/20 transition hover:border-amber-500/45 hover:bg-stone-900/80"
+              className="group relative w-full rounded-lg border border-stone-700/60 bg-stone-950/90 px-5 py-4 text-left text-sm text-stone-500 shadow-2xl shadow-black/20 transition hover:border-amber-500/45 hover:bg-stone-900/90"
             >
               <span className="flex items-center justify-between gap-3">
                 <span>새 결정 스레드를 열고 맥락, 판단, 다음 행동을 요청하세요...</span>
@@ -166,7 +168,7 @@ function NewChatWelcome() {
                 key={s.message}
                 type="button"
                 onClick={() => startChat(s.message)}
-                className="group rounded-xl border border-stone-700/45 bg-stone-950/35 px-4 py-3.5 text-left transition hover:border-amber-500/35 hover:bg-amber-500/10"
+                className="group rounded-lg border border-stone-700/45 bg-stone-950/35 px-4 py-3.5 text-left transition hover:border-amber-500/35 hover:bg-amber-500/10"
               >
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-600">
                   {s.meta}
@@ -181,12 +183,27 @@ function NewChatWelcome() {
         </section>
 
         <section
-          className="relative overflow-hidden rounded-2xl border border-stone-700/45 bg-stone-950/55 p-4 shadow-2xl shadow-black/30"
+          className="relative overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 p-4 shadow-2xl shadow-black/30"
           aria-label="EVE 결정 미리보기"
         >
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/60 to-transparent" />
           <div className="eve-scan-line pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-amber-200/8 to-transparent" />
-          <div className="rounded-xl border border-stone-800 bg-[#0b0d10]/90 p-4">
+          <div className="mb-4 grid gap-4 md:grid-cols-[0.9fr_1.1fr]">
+            <EveSignalField className="h-48 rounded-lg" />
+            <div className="rounded-lg border border-stone-800 bg-[#0b0d10]/90 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+                Decision lens
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-stone-50">
+                신호가 모이면 카드가 됩니다.
+              </h2>
+              <p className="mt-3 text-xs leading-5 text-stone-500">
+                EVE는 메일, 일정, 메모리를 같은 장면 위에 올리고 실행 가능한 결정만 앞으로
+                끌어옵니다.
+              </p>
+            </div>
+          </div>
+          <div className="rounded-lg border border-stone-800 bg-[#0b0d10]/90 p-4">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
