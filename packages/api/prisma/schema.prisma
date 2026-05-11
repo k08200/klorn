@@ -831,6 +831,7 @@ enum FeedbackSource {
 enum FeedbackSignal {
   APPROVED
   REJECTED
+  FAILED
   EDITED
   IGNORED
   SNOOZED

@@ -95,11 +95,12 @@ describe("extractFeedbackPolicyCandidates", () => {
     const out = extractFeedbackPolicyCandidates([
       event({ id: "a", signal: "REJECTED", toolName: "schedule_meeting" }),
       event({ id: "b", signal: "DISMISSED", toolName: "schedule_meeting" }),
-      event({ id: "c", signal: "REJECTED", toolName: "schedule_meeting" }),
+      event({ id: "c", signal: "FAILED", toolName: "schedule_meeting" }),
     ]);
 
     expect(kinds(out)).toEqual(["AVOID_SUGGESTION"]);
-    expect(out[0].support.rejected).toBe(2);
+    expect(out[0].support.rejected).toBe(1);
+    expect(out[0].support.failed).toBe(1);
     expect(out[0].support.dismissed).toBe(1);
   });
 

@@ -69,6 +69,25 @@ describe("recordFeedback", () => {
     expect(call.data.evidence).toBeNull();
   });
 
+  it("records failed execution signals with evidence", async () => {
+    await recordFeedback({
+      userId: "u",
+      source: "PENDING_ACTION",
+      sourceId: "pa-failed",
+      signal: "FAILED",
+      toolName: "send_email",
+      evidence: "SMTP rejected recipient",
+    });
+    const call = createSpy.mock.calls[0]?.[0] as {
+      data: { signal: string; toolName: string | null; evidence: string | null };
+    };
+    expect(call.data).toMatchObject({
+      signal: "FAILED",
+      toolName: "send_email",
+      evidence: "SMTP rejected recipient",
+    });
+  });
+
   it("never throws when prisma fails — feedback is observability, not control flow", async () => {
     createSpy.mockRejectedValueOnce(new Error("db down"));
     await expect(

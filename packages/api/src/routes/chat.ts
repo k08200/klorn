@@ -1575,6 +1575,17 @@ export function chatRoutes(app: FastifyInstance) {
           },
         });
 
+        await recordFeedback({
+          userId,
+          source: "PENDING_ACTION",
+          sourceId: actionId,
+          signal: "FAILED",
+          toolName: action.toolName,
+          recipient: recipientFromToolArgs(action.toolArgs),
+          threadId: action.conversationId,
+          evidence: message,
+        });
+
         return reply.code(500).send({ error: message });
       }
     },
