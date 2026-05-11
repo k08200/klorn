@@ -110,36 +110,49 @@ function CalendarView() {
     .sort((a, b) => a.start.getTime() - b.start.getTime())[0]?.event;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-28 pt-6 md:py-10">
-      <header className="mb-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-2xl shadow-black/10">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-              Decision Calendar
-            </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              일정에서 준비할 결정을 찾기
-            </h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-              앞으로 14일의 미팅을 보고, 준비팩과 관련 신호를 같은 흐름에서 확인합니다.
-            </p>
+    <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
+      <header className="mb-6 overflow-hidden rounded-2xl border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
+        <div className="h-1 bg-gradient-to-r from-teal-300 via-amber-300 to-stone-600" />
+        <div className="p-5 md:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+                결정 캘린더
+              </p>
+              <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
+                일정에서 준비할 결정을 찾기
+              </h1>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+                앞으로 14일의 미팅을 보고, 준비팩과 관련 신호를 같은 흐름에서 확인합니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={syncNow}
+              disabled={syncing}
+              className="shrink-0 rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
+            >
+              {syncing ? "동기화 중..." : "지금 동기화"}
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={syncNow}
-            disabled={syncing}
-            className="shrink-0 rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
-          >
-            {syncing ? "동기화 중..." : "지금 동기화"}
-          </button>
-        </div>
-        <div className="mt-5 grid grid-cols-3 gap-2">
-          <CalendarStat label="14일" value={events.length} />
-          <CalendarStat label="오늘" value={todayCount} />
-          <CalendarStat
-            label="다음"
-            value={nextEvent ? formatTime(new Date(nextEvent.startTime)) : "-"}
-          />
+          <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-xl border border-stone-800 bg-black/20">
+            <CalendarStat label="14일" value={events.length} />
+            <CalendarStat label="오늘" value={todayCount} />
+            <CalendarStat
+              label="다음"
+              value={nextEvent ? formatTime(new Date(nextEvent.startTime)) : "-"}
+            />
+          </div>
+          {nextEvent && (
+            <div className="mt-4 rounded-xl border border-amber-300/15 bg-amber-300/5 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300/80">
+                다음 준비 대상
+              </p>
+              <p className="mt-1 truncate text-sm font-medium text-stone-100">
+                {nextEvent.title || "제목 없음"}
+              </p>
+            </div>
+          )}
         </div>
       </header>
 
@@ -198,7 +211,7 @@ function CalendarView() {
           {groups.map((g) => (
             <section key={g.key}>
               <h2 className="sticky top-0 z-10 -mx-4 bg-[#10100d]/92 px-4 py-2 text-[13px] font-medium text-stone-300 backdrop-blur-xl">
-                {g.label}
+                <span>{g.label}</span>
                 <span className="ml-2 text-[11px] font-normal text-stone-500">
                   {g.events.length}건
                 </span>
@@ -218,11 +231,11 @@ function CalendarView() {
 
 function CalendarStat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-xl border border-stone-700/45 bg-black/15 px-3 py-2">
+    <div className="border-r border-stone-800 px-4 py-3 last:border-r-0">
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
         {label}
       </p>
-      <p className="mt-1 truncate text-lg font-semibold text-stone-100">{value}</p>
+      <p className="mt-1 truncate text-2xl font-semibold text-stone-100">{value}</p>
     </div>
   );
 }
@@ -256,13 +269,15 @@ function EventRow({ event }: { event: CalendarEvent }) {
   };
 
   return (
-    <li className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-3 transition hover:border-amber-500/30 hover:bg-amber-500/5 active:bg-stone-900/70">
-      <div className="flex items-start gap-3">
-        <div className="w-20 shrink-0 pt-0.5 text-[12px] font-medium tabular-nums text-stone-400">
+    <li className="rounded-xl border border-stone-700/45 bg-stone-950/45 p-4 transition hover:border-amber-500/30 hover:bg-amber-500/5 active:bg-stone-900/70">
+      <div className="grid gap-3 md:grid-cols-[96px_1fr]">
+        <div className="rounded-lg border border-stone-800 bg-black/20 px-3 py-2 text-[12px] font-medium tabular-nums text-stone-400">
           {timeLabel}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm leading-snug text-stone-100">{event.title || "제목 없음"}</p>
+          <p className="text-sm font-medium leading-snug text-stone-100">
+            {event.title || "제목 없음"}
+          </p>
           {event.location && (
             <p className="mt-0.5 truncate text-xs text-stone-500">{event.location}</p>
           )}
@@ -291,13 +306,15 @@ function EventRow({ event }: { event: CalendarEvent }) {
               </svg>
             </a>
           )}
-          <button
-            type="button"
-            onClick={togglePrep}
-            className="ml-3 mt-1 inline-flex items-center gap-1 rounded-md border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-xs text-amber-200 transition hover:bg-amber-300/15 hover:text-amber-100"
-          >
-            준비팩
-          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={togglePrep}
+              className="inline-flex items-center gap-1 rounded-md border border-amber-300/20 bg-amber-300/10 px-2.5 py-1.5 text-xs text-amber-200 transition hover:bg-amber-300/15 hover:text-amber-100"
+            >
+              준비팩
+            </button>
+          </div>
         </div>
       </div>
       {prepOpen && (

@@ -93,34 +93,37 @@ function EmailView() {
   const replyCount = emails.filter((email) => email.needsReply).length;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-28 pt-6 md:py-10">
-      <header className="mb-5 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-2xl shadow-black/10">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-              시그널 메일
-            </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              메일 신호를 결정 단위로 정리
-            </h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-              EVE가 긴급도, 답장 필요 여부, 자동화 신호를 먼저 드러내고 실행 전 맥락으로 묶습니다.
-              {source === "demo" && <span className="ml-2 text-amber-300">데모 데이터</span>}
-            </p>
+    <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
+      <header className="mb-5 overflow-hidden rounded-2xl border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
+        <div className="h-1 bg-gradient-to-r from-sky-300 via-amber-300 to-stone-600" />
+        <div className="p-5 md:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+                시그널 메일
+              </p>
+              <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
+                메일 신호를 결정 단위로 정리
+              </h1>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+                EVE가 긴급도, 답장 필요 여부, 자동화 신호를 먼저 드러내고 실행 전 맥락으로 묶습니다.
+                {source === "demo" && <span className="ml-2 text-amber-300">데모 데이터</span>}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={syncNow}
+              disabled={syncing}
+              className="shrink-0 rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
+            >
+              {syncing ? "동기화 중..." : "지금 동기화"}
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={syncNow}
-            disabled={syncing}
-            className="shrink-0 rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
-          >
-            {syncing ? "동기화 중..." : "지금 동기화"}
-          </button>
-        </div>
-        <div className="mt-5 grid grid-cols-3 gap-2">
-          <SignalStat label="읽지 않음" value={unreadCount} />
-          <SignalStat label="긴급" value={urgentCount} />
-          <SignalStat label="답장" value={replyCount} />
+          <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-xl border border-stone-800 bg-black/20">
+            <SignalStat label="읽지 않음" value={unreadCount} />
+            <SignalStat label="긴급" value={urgentCount} />
+            <SignalStat label="답장" value={replyCount} />
+          </div>
         </div>
       </header>
 
@@ -146,7 +149,7 @@ function EmailView() {
       )}
 
       {!loading && emails.length > 0 && (
-        <ul className="mt-3 space-y-2">
+        <ul className="mt-3 space-y-2.5">
           {emails.map((e) => (
             <EmailRowItem key={e.id} email={e} />
           ))}
@@ -158,11 +161,11 @@ function EmailView() {
 
 function SignalStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-stone-700/45 bg-black/15 px-3 py-2">
+    <div className="border-r border-stone-800 px-4 py-3 last:border-r-0">
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
         {label}
       </p>
-      <p className="mt-1 text-lg font-semibold text-stone-100">{value}</p>
+      <p className="mt-1 text-2xl font-semibold text-stone-100">{value}</p>
     </div>
   );
 }
@@ -197,9 +200,9 @@ function EmailRowItem({ email }: { email: EmailRow }) {
     <li>
       <Link
         href={`/email/${email.id}`}
-        className="block rounded-xl border border-stone-700/45 bg-stone-950/35 p-3 transition hover:border-amber-500/30 hover:bg-amber-500/5 active:bg-stone-900/70"
+        className="block overflow-hidden rounded-xl border border-stone-700/45 bg-stone-950/45 transition hover:border-amber-500/30 hover:bg-amber-500/5 active:bg-stone-900/70"
       >
-        <div className="flex items-start gap-2">
+        <div className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-start">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <PriorityBadge priority={email.priority} />
@@ -208,21 +211,23 @@ function EmailRowItem({ email }: { email: EmailRow }) {
               {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300" />}
             </div>
             <p
-              className={`mt-1.5 truncate text-sm ${unread ? "font-medium text-stone-100" : "text-stone-300"}`}
+              className={`mt-2 truncate text-sm ${unread ? "font-semibold text-stone-100" : "text-stone-300"}`}
             >
               {senderName(email.from)}
             </p>
-            <p className="mt-0.5 truncate text-xs text-stone-400">{email.subject || "제목 없음"}</p>
+            <p className="mt-1 truncate text-[13px] text-stone-400">
+              {email.subject || "제목 없음"}
+            </p>
             {email.summary ? (
-              <p className="mt-1 line-clamp-2 text-[11px] text-amber-200/85">
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-amber-200/85">
                 <span className="mr-1 text-amber-300">EVE:</span>
                 {email.summary}
               </p>
             ) : email.snippet ? (
-              <p className="mt-1 line-clamp-2 text-[11px] text-stone-600">{email.snippet}</p>
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-stone-600">{email.snippet}</p>
             ) : null}
           </div>
-          <time className="shrink-0 pt-0.5 text-[11px] tabular-nums text-stone-500">
+          <time className="shrink-0 text-[11px] tabular-nums text-stone-500 md:pt-1">
             {formatRelative(email.date)}
           </time>
         </div>

@@ -29,6 +29,29 @@ interface PendingAction {
   result?: string;
 }
 
+function ThreadMetric({
+  label,
+  value,
+  tone = "idle",
+}: {
+  label: string;
+  value: number;
+  tone?: "idle" | "hot";
+}) {
+  return (
+    <div
+      className={`rounded-lg border px-2.5 py-1.5 ${
+        tone === "hot"
+          ? "border-amber-300/25 bg-amber-300/10 text-amber-100"
+          : "border-stone-700/45 bg-stone-950/35 text-stone-300"
+      }`}
+    >
+      <p className="text-[10px] text-stone-600">{label}</p>
+      <p className="text-sm font-semibold leading-none">{value}</p>
+    </div>
+  );
+}
+
 export default function ChatPage() {
   return (
     <Suspense>
@@ -340,7 +363,7 @@ function ChatPageContent() {
           {
             id: crypto.randomUUID(),
             role: "ASSISTANT",
-            content: `Message limit reached (${err.messageLimit}). Current plan: **${err.plan}**. [Upgrade](/billing)`,
+            content: `이번 달 결정 턴 한도(${err.messageLimit})에 도달했습니다. 현재 플랜: **${err.plan}**. [플랜 변경](/billing)`,
             createdAt: new Date().toISOString(),
           },
         ]);
@@ -499,11 +522,11 @@ function ChatPageContent() {
   const exportConversation = () => {
     if (messages.length === 0) return;
     const lines = messages.map((m) => {
-      const label = m.role === "USER" ? "**You**" : "**EVE**";
+      const label = m.role === "USER" ? "**나**" : "**EVE**";
       const time = new Date(m.createdAt).toLocaleString("ko-KR");
       return `### ${label} — ${time}\n\n${m.content}`;
     });
-    const md = `# EVE Conversation\n\n내보낸 시간: ${new Date().toLocaleString("ko-KR")}\n\n---\n\n${lines.join("\n\n---\n\n")}`;
+    const md = `# EVE 결정 스레드\n\n내보낸 시간: ${new Date().toLocaleString("ko-KR")}\n\n---\n\n${lines.join("\n\n---\n\n")}`;
     const blob = new Blob([md], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -565,45 +588,62 @@ function ChatPageContent() {
     setActionLoading(null);
   };
 
+  const approvalCount = [...pendingActions.values()].filter(
+    (action) => action.status === "PENDING",
+  ).length;
+  const assistantCount = messages.filter((message) => message.role === "ASSISTANT").length;
+  const userCount = messages.filter((message) => message.role === "USER").length;
+
   return (
     <div className="flex h-full flex-col">
       {/* Top bar */}
       {messages.length > 0 && (
-        <div className="flex items-center justify-between border-b border-stone-700/35 bg-[#11100d]/72 px-4 py-2 backdrop-blur-xl">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300/75">
-              결정 스레드
-            </p>
-            <p className="text-xs text-stone-500">맥락 먼저, 실행은 승인 뒤에.</p>
-          </div>
-          <button
-            type="button"
-            onClick={exportConversation}
-            className="flex items-center gap-1.5 rounded-lg border border-stone-700/40 px-2.5 py-1.5 text-xs text-stone-500 transition hover:border-stone-600 hover:bg-stone-900/60 hover:text-stone-300"
-            title="Markdown으로 내보내기"
-          >
-            <svg
-              aria-hidden="true"
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+        <div className="border-b border-stone-700/35 bg-[#11100d]/82 px-4 py-3 backdrop-blur-xl">
+          <div className="mx-auto flex max-w-4xl items-center justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300/75">
+                결정 스레드
+              </p>
+              <p className="text-xs text-stone-500">맥락 먼저, 실행은 승인 뒤에.</p>
+            </div>
+            <div className="hidden items-center gap-2 md:flex">
+              <ThreadMetric label="질문" value={userCount} />
+              <ThreadMetric label="응답" value={assistantCount} />
+              <ThreadMetric
+                label="승인"
+                value={approvalCount}
+                tone={approvalCount > 0 ? "hot" : "idle"}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={exportConversation}
+              className="flex items-center gap-1.5 rounded-lg border border-stone-700/40 px-2.5 py-1.5 text-xs text-stone-500 transition hover:border-stone-600 hover:bg-stone-900/60 hover:text-stone-300"
+              title="Markdown으로 내보내기"
             >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            내보내기
-          </button>
+              <svg
+                aria-hidden="true"
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              내보내기
+            </button>
+          </div>
         </div>
       )}
       {/* Messages */}
       <div ref={scrollAreaRef} className="relative flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
+        <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
           {loadError && (
             <div className="flex flex-col items-center justify-center min-h-[60vh]">
               <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center text-xl mb-4">
@@ -704,20 +744,20 @@ function ChatPageContent() {
                 {/* Avatar */}
                 <div className="shrink-0 pt-0.5">
                   {msg.role === "USER" ? (
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-stone-700 text-[10px] font-bold text-white">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-700 bg-stone-900 text-[10px] font-bold text-white">
                       U
                     </div>
                   ) : (
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-300 text-[10px] font-bold text-stone-950">
-                      E
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-amber-300/25 bg-amber-300/10">
+                      <img src="/brand/mark.svg" alt="" className="h-5 w-5" />
                     </div>
                   )}
                 </div>
 
                 {/* Content */}
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold text-stone-300 mb-1.5">
-                    {msg.role === "USER" ? "You" : "EVE"}
+                  <p className="mb-1.5 text-[13px] font-semibold text-stone-300">
+                    {msg.role === "USER" ? "나" : "EVE"}
                   </p>
                   {msg.role === "USER" && editingMsgId === msg.id ? (
                     <div>
@@ -758,11 +798,11 @@ function ChatPageContent() {
                       </div>
                     </div>
                   ) : msg.role === "USER" ? (
-                    <p className="text-[15px] text-stone-200 leading-relaxed whitespace-pre-wrap">
+                    <p className="whitespace-pre-wrap rounded-2xl border border-stone-700/40 bg-stone-950/45 px-4 py-3 text-[15px] leading-relaxed text-stone-200">
                       {msg.content}
                     </p>
                   ) : (
-                    <div className="text-[15px] text-stone-200 leading-relaxed">
+                    <div className="rounded-2xl border border-stone-700/35 bg-stone-950/35 px-4 py-3 text-[15px] leading-relaxed text-stone-200">
                       <Markdown content={msg.content} />
                       <div className="mt-2">
                         <SpeakButton text={msg.content} />
@@ -841,7 +881,7 @@ function ChatPageContent() {
                                 {preview}
                               </div>
                             )}
-                            <div className="space-y-2">
+                            <div className="rounded-xl border border-amber-300/15 bg-amber-300/5 p-3">
                               <div className="flex items-center gap-2">
                                 <button
                                   type="button"
@@ -877,7 +917,7 @@ function ChatPageContent() {
                                   거절
                                 </button>
                               </div>
-                              <div className="flex items-center gap-3 text-[11px]">
+                              <div className="mt-2 flex items-center gap-3 text-[11px]">
                                 <button
                                   type="button"
                                   onClick={() => handleActionApprove(action.id, true)}
@@ -1005,8 +1045,8 @@ function ChatPageContent() {
             <div className="py-5 border-t border-stone-800/30">
               <div className="flex gap-4">
                 <div className="shrink-0 pt-0.5">
-                  <div className="w-7 h-7 rounded-full bg-amber-300 flex items-center justify-center text-[10px] font-bold text-stone-950">
-                    E
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-amber-300/25 bg-amber-300/10">
+                    <img src="/brand/mark.svg" alt="" className="h-5 w-5" />
                   </div>
                 </div>
                 <div className="min-w-0 flex-1">
@@ -1045,8 +1085,8 @@ function ChatPageContent() {
             <div className="py-5 border-t border-stone-800/30">
               <div className="flex gap-4">
                 <div className="shrink-0 pt-0.5">
-                  <div className="w-7 h-7 rounded-full bg-amber-300 flex items-center justify-center text-[10px] font-bold text-stone-950">
-                    E
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-amber-300/25 bg-amber-300/10">
+                    <img src="/brand/mark.svg" alt="" className="h-5 w-5" />
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 pt-2">
@@ -1088,7 +1128,7 @@ function ChatPageContent() {
 
       {/* Input area */}
       <div className="shrink-0 px-4 pb-4 pt-2">
-        <div className="max-w-3xl mx-auto">
+        <div className="mx-auto max-w-4xl">
           {/* Suggestions */}
           {suggestions.length > 0 && !streaming && (
             <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
