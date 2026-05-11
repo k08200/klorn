@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { API_BASE, apiFetch, authHeaders } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { captureClientError } from "../lib/sentry";
-import { EveSignalField } from "./brand-visuals";
 import NotificationBell from "./notification-bell";
 import { useToast } from "./toast";
 
@@ -367,9 +366,7 @@ export default function Sidebar({
     : "";
 
   const sidebarContent = (
-    <div className="relative flex h-full flex-col overflow-hidden border-r border-stone-700/40 bg-[#11100d]/95 pt-safe pb-safe shadow-2xl shadow-black/25">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[linear-gradient(180deg,rgba(216,164,93,0.14),rgba(17,16,13,0))]" />
-      <div className="pointer-events-none absolute right-0 top-0 h-full w-px bg-gradient-to-b from-amber-300/40 via-stone-700/45 to-transparent" />
+    <div className="relative flex h-full flex-col overflow-hidden border-r border-stone-800 bg-[#111318] pt-safe pb-safe">
       {/* Header */}
       <div className="relative flex items-center justify-between px-3 py-3">
         <Link
@@ -390,7 +387,7 @@ export default function Sidebar({
           <button
             type="button"
             onClick={createChat}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-stone-700/60 bg-stone-900/40 text-stone-400 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-200"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-stone-700 bg-stone-900 text-stone-400 transition hover:border-stone-600 hover:bg-stone-800 hover:text-stone-100"
             title="새 결정 스레드"
           >
             <svg
@@ -408,16 +405,6 @@ export default function Sidebar({
               <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
             </svg>
           </button>
-        </div>
-      </div>
-
-      <div className="relative mx-3 mb-3 hidden overflow-hidden rounded-lg border border-stone-800/80 bg-black/20 p-2 md:block">
-        <EveSignalField className="h-24 rounded-md border-stone-800/80" />
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-stone-500">
-            live field
-          </span>
-          <span className="text-[10px] text-amber-200">승인 우선</span>
         </div>
       </div>
 
@@ -442,7 +429,7 @@ export default function Sidebar({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="결정 검색..."
-            className="w-full rounded-lg border border-stone-700/60 bg-stone-950/45 py-1.5 pl-8 pr-3 text-xs text-stone-300 placeholder-stone-600 transition focus:border-amber-500/50 focus:outline-none"
+            className="w-full rounded-md border border-stone-700 bg-[#0f1115] py-1.5 pl-8 pr-3 text-xs text-stone-300 placeholder-stone-600 transition focus:border-stone-500 focus:outline-none"
           />
           {search && (
             <button
@@ -464,12 +451,12 @@ export default function Sidebar({
             <Link
               href="/inbox"
               onClick={onMobileClose}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium text-amber-300/85 transition hover:bg-amber-500/10 hover:text-amber-200"
+              className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium text-stone-400 transition hover:bg-stone-800 hover:text-stone-100"
             >
-              <span className="h-2 w-2 animate-pulse rounded-full bg-amber-300" />
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
               결정 큐
               {totalPending > 0 && (
-                <span className="ml-auto rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-200">
+                <span className="ml-auto rounded-full bg-stone-800 px-1.5 py-0.5 text-[10px] font-semibold text-stone-300">
                   {totalPending}
                 </span>
               )}
@@ -481,15 +468,15 @@ export default function Sidebar({
                   key={conv.id}
                   href={`/chat/${conv.id}`}
                   onClick={onMobileClose}
-                  className={`group flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition border-l-2 ${
+                  className={`group flex items-center gap-2 rounded-md px-2 py-2 text-sm transition ${
                     isActive
-                      ? "border-amber-300 bg-amber-500/10 text-white"
-                      : "border-amber-500/30 text-stone-300 hover:border-amber-300 hover:bg-amber-500/5 hover:text-white"
+                      ? "bg-stone-800 text-white"
+                      : "text-stone-400 hover:bg-stone-800/70 hover:text-stone-100"
                   }`}
                 >
                   <span className="truncate flex-1 text-[13px]">{conv.title || "결정 카드"}</span>
                   {(conv.pendingActionCount || 0) > 0 && (
-                    <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200">
+                    <span className="shrink-0 rounded-full bg-stone-900 px-1.5 py-0.5 text-[10px] text-stone-300">
                       승인 대기 {conv.pendingActionCount}
                     </span>
                   )}
@@ -555,16 +542,16 @@ export default function Sidebar({
                     <Link
                       href={`/chat/${conv.id}`}
                       onClick={onMobileClose}
-                      className={`group flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition ${
+                      className={`group flex items-center gap-2 rounded-md px-2 py-2 text-sm transition ${
                         isActive
-                          ? "bg-stone-800/80 text-white"
-                          : "text-stone-400 hover:bg-stone-800/50 hover:text-stone-200"
+                          ? "bg-stone-800 text-white"
+                          : "text-stone-400 hover:bg-stone-800/70 hover:text-stone-200"
                       }`}
                     >
                       <span className="truncate flex-1 text-[13px] flex items-center gap-1.5">
                         {conv.source === "agent" && (
                           <span
-                            className="w-2 h-2 rounded-full bg-amber-300/70 shrink-0"
+                            className="w-2 h-2 rounded-full bg-stone-500 shrink-0"
                             title="결정 카드"
                           />
                         )}
@@ -682,16 +669,16 @@ export default function Sidebar({
                     <Link
                       href={`/chat/${conv.id}`}
                       onClick={onMobileClose}
-                      className={`group flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition ${
+                      className={`group flex items-center gap-2 rounded-md px-2 py-2 text-sm transition ${
                         isActive
-                          ? "bg-stone-800/80 text-white"
-                          : "text-stone-400 hover:bg-stone-800/50 hover:text-stone-200"
+                          ? "bg-stone-800 text-white"
+                          : "text-stone-400 hover:bg-stone-800/70 hover:text-stone-200"
                       }`}
                     >
                       <span className="truncate flex-1 text-[13px] flex items-center gap-1.5">
                         {conv.source === "agent" && (
                           <span
-                            className="w-2 h-2 rounded-full bg-amber-300/70 shrink-0"
+                            className="w-2 h-2 rounded-full bg-stone-500 shrink-0"
                             title="결정 카드"
                           />
                         )}
@@ -800,7 +787,7 @@ export default function Sidebar({
       </div>
 
       {/* Workspace nav */}
-      <div className="relative border-t border-stone-700/40 px-2 py-2">
+      <div className="relative border-t border-stone-800 px-2 py-2">
         <div className="space-y-0.5">
           {NAV_ITEMS.map((item) => {
             const badge = item.href === "/inbox" && totalPending > 0 ? totalPending : null;
@@ -809,16 +796,16 @@ export default function Sidebar({
                 key={item.href}
                 href={item.href}
                 onClick={onMobileClose}
-                className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] transition ${
+                className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition ${
                   pathname.startsWith(item.href)
-                    ? "bg-amber-500/10 text-amber-100"
-                    : "text-stone-500 hover:bg-stone-800/55 hover:text-stone-300"
+                    ? "bg-stone-800 text-stone-100"
+                    : "text-stone-500 hover:bg-stone-800/70 hover:text-stone-300"
                 }`}
               >
                 <NavIcon type={item.icon} size={14} />
                 <span className="flex-1">{item.label}</span>
                 {badge !== null && (
-                  <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-200">
+                  <span className="rounded-full bg-stone-900 px-1.5 py-0.5 text-[10px] font-semibold text-stone-300">
                     {badge}
                   </span>
                 )}

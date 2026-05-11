@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
-import { EveSignalField } from "../../components/brand-visuals";
 import { apiFetch } from "../../lib/api";
 import { captureClientError } from "../../lib/sentry";
 
@@ -95,39 +94,33 @@ function EmailView() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
-      <header className="mb-5 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
-        <div className="h-1 bg-gradient-to-r from-sky-300 via-amber-300 to-stone-600" />
-        <div className="p-5 md:p-6">
-          <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
-            <div>
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-                시그널 메일
-              </p>
-              <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-                메일 신호를 결정 단위로 정리
-              </h1>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-                EVE가 긴급도, 답장 필요 여부, 자동화 신호를 먼저 드러내고 실행 전 맥락으로 묶습니다.
-                {source === "demo" && <span className="ml-2 text-amber-300">데모 데이터</span>}
-              </p>
-            </div>
-            <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
-              <EveSignalField className="absolute inset-0 border-0" />
-              <button
-                type="button"
-                onClick={syncNow}
-                disabled={syncing}
-                className="absolute right-3 top-3 rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
-              >
-                {syncing ? "동기화 중..." : "지금 동기화"}
-              </button>
-            </div>
+      <header className="mb-5 rounded-lg border border-stone-800 bg-[#111318] p-5 shadow-xl shadow-black/10 md:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500">
+              메일
+            </p>
+            <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
+              답해야 할 메일만 먼저 보기
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+              긴급도와 답장 필요 여부를 기준으로 정리합니다.
+              {source === "demo" && <span className="ml-2 text-amber-300">데모 데이터</span>}
+            </p>
           </div>
-          <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
-            <SignalStat label="읽지 않음" value={unreadCount} />
-            <SignalStat label="긴급" value={urgentCount} />
-            <SignalStat label="답장" value={replyCount} />
-          </div>
+          <button
+            type="button"
+            onClick={syncNow}
+            disabled={syncing}
+            className="h-9 w-fit rounded-md border border-stone-700 bg-stone-900 px-3 text-xs font-medium text-stone-300 transition hover:border-stone-600 hover:bg-stone-800 hover:text-stone-100 disabled:opacity-50"
+          >
+            {syncing ? "동기화 중..." : "지금 동기화"}
+          </button>
+        </div>
+        <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-md border border-stone-800 bg-[#0f1115]">
+          <SignalStat label="읽지 않음" value={unreadCount} />
+          <SignalStat label="긴급" value={urgentCount} />
+          <SignalStat label="답장" value={replyCount} />
         </div>
       </header>
 
@@ -142,7 +135,7 @@ function EmailView() {
       )}
 
       {!loading && !error && emails.length === 0 && (
-        <div className="mt-4 rounded-lg border border-stone-700/45 bg-stone-950/35 p-6 text-center">
+        <div className="mt-4 rounded-lg border border-stone-800 bg-[#111318] p-6 text-center">
           <p className="text-sm text-stone-300">
             {filter === "all" ? "아직 들어온 메일 신호가 없어요." : "조건에 맞는 신호가 없어요."}
           </p>
@@ -186,8 +179,8 @@ function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filt
             onClick={() => onChange(f.key)}
             className={`min-h-[32px] shrink-0 rounded-full px-3 py-1.5 text-xs transition ${
               active
-                ? "bg-amber-300 text-stone-950"
-                : "border border-stone-700/55 bg-stone-950/45 text-stone-400 hover:bg-stone-900/70 hover:text-stone-200"
+                ? "bg-stone-100 text-stone-950"
+                : "border border-stone-700 bg-[#111318] text-stone-400 hover:bg-stone-800 hover:text-stone-200"
             }`}
           >
             {f.label}
@@ -204,10 +197,9 @@ function EmailRowItem({ email }: { email: EmailRow }) {
     <li>
       <Link
         href={`/email/${email.id}`}
-        className="relative block overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/45 transition hover:border-amber-500/30 hover:bg-amber-500/5 active:bg-stone-900/70"
+        className="block rounded-lg border border-stone-800 bg-[#111318] transition hover:border-stone-700 hover:bg-[#151821] active:bg-stone-900/70"
       >
-        <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-sky-300 via-amber-300 to-stone-700" />
-        <div className="grid gap-3 p-4 pl-5 md:grid-cols-[1fr_auto] md:items-start">
+        <div className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-start">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <PriorityBadge priority={email.priority} />
@@ -224,8 +216,8 @@ function EmailRowItem({ email }: { email: EmailRow }) {
               {email.subject || "제목 없음"}
             </p>
             {email.summary ? (
-              <p className="mt-2 line-clamp-2 text-xs leading-5 text-amber-200/85">
-                <span className="mr-1 text-amber-300">EVE:</span>
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-stone-400">
+                <span className="mr-1 text-stone-500">요약:</span>
                 {email.summary}
               </p>
             ) : email.snippet ? (

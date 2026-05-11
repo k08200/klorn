@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import { EveSignalField } from "../components/brand-visuals";
 import LandingRedirect from "../components/landing-redirect";
 
 type IconName = "arrow" | "compass" | "graph" | "shield" | "spark" | "thread";
@@ -143,21 +142,20 @@ function Icon({ type, className = "" }: { type: IconName; className?: string }) 
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-[#0b0d10] text-[#f8f4ec]">
+    <main className="min-h-screen bg-[#0f1115] text-[#f8f4ec]">
       <LandingRedirect />
 
-      <section className="relative min-h-[92svh] overflow-hidden">
+      <section className="relative min-h-[88svh] overflow-hidden">
         <Image
-          src="/scenes/hero-desk.png"
-          alt="조용한 책상 위에 결정 대시보드, 노트, 캘린더가 놓인 장면"
+          src="/scenes/hero-workspace-photo.jpg"
+          alt="노트북과 노트가 놓인 실제 업무 책상"
           fill
           priority
           sizes="100vw"
-          className="object-cover"
+          className="object-cover object-center"
         />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,10,12,0.92)_0%,rgba(8,10,12,0.72)_40%,rgba(8,10,12,0.18)_100%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,10,12,0.5)_0%,rgba(8,10,12,0.08)_42%,#0b0d10_100%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.036)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.024)_1px,transparent_1px)] bg-[size:64px_64px] opacity-70" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(9,10,13,0.94)_0%,rgba(9,10,13,0.78)_42%,rgba(9,10,13,0.34)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,17,21,0.1)_0%,rgba(15,17,21,0.22)_48%,#0f1115_100%)]" />
 
         <nav className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-5 py-5 md:px-8">
           <Link href="/" className="flex items-center gap-3">
@@ -180,18 +178,13 @@ export default function LandingPage() {
           </div>
         </nav>
 
-        <EveSignalField
-          className="absolute bottom-20 right-8 z-10 hidden h-[420px] w-[38vw] max-w-xl rounded-lg opacity-90 backdrop-blur-md lg:block"
-          tone="hero"
-        />
-
-        <div className="relative z-20 mx-auto flex min-h-[calc(92svh-82px)] max-w-7xl flex-col justify-center px-5 pb-20 pt-12 md:px-8">
+        <div className="relative z-20 mx-auto flex min-h-[calc(88svh-82px)] max-w-7xl flex-col justify-center px-5 pb-20 pt-12 md:px-8">
           <div className="max-w-3xl">
             <p className="mb-5 inline-flex items-center gap-2 border-b border-[#d8a45d]/50 pb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[#d8a45d]">
               <Icon type="compass" className="h-4 w-4" />
               업무를 위한 Decision OS
             </p>
-            <h1 className="max-w-3xl text-5xl font-semibold leading-[0.98] tracking-tight text-white md:text-7xl lg:text-8xl">
+            <h1 className="max-w-3xl text-4xl font-semibold leading-[1.05] tracking-tight text-white sm:text-5xl md:text-7xl md:leading-[0.98] lg:text-8xl">
               앱을 확인하지 말고, 결정을 정리하세요.
             </h1>
             <p className="mt-7 max-w-2xl text-base leading-7 text-stone-300 md:text-xl md:leading-8">
@@ -214,8 +207,8 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="mt-16 grid max-w-4xl grid-cols-3 border-y border-white/12 bg-black/18 backdrop-blur-sm">
-            {["신호 연결", "승인 우선", "메모리 학습"].map((label, index) => (
+          <div className="mt-16 grid max-w-4xl grid-cols-3 border-y border-white/12 bg-black/20 backdrop-blur-sm">
+            {["신호 연결", "승인 우선", "메모리"].map((label, index) => (
               <div key={label} className="border-white/12 px-4 py-4 md:border-r md:last:border-r-0">
                 <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-stone-500">
                   0{index + 1}
@@ -320,7 +313,6 @@ export default function LandingPage() {
       <section className="mx-auto grid max-w-7xl gap-10 px-5 py-20 md:grid-cols-[1.1fr_0.9fr] md:px-8 md:py-28">
         <div className="rounded-lg border border-white/10 bg-[#11161c] p-4 shadow-2xl shadow-black/25">
           <div className="relative min-h-[430px] overflow-hidden rounded-md border border-white/8 bg-[#0b0e12]">
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:44px_44px]" />
             <div className="absolute left-1/2 top-1/2 flex h-32 w-32 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl border border-[#d8a45d]/40 bg-[#d8a45d]/12 text-[#f4d49d] shadow-2xl shadow-amber-950/30">
               <BrandMark className="h-12 w-12" />
             </div>

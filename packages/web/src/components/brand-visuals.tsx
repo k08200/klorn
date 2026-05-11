@@ -19,54 +19,40 @@ export function EveSignalField({ className = "", tone = "panel" }: EveSignalFiel
       aria-hidden="true"
       className={`pointer-events-none relative overflow-hidden border ${
         isHero
-          ? "border-white/14 bg-black/22 shadow-2xl shadow-black/30"
-          : "border-amber-300/15 bg-stone-950/55"
+          ? "border-white/12 bg-[#111318]/72 shadow-xl shadow-black/20"
+          : "border-stone-800 bg-[#111318]"
       } ${className}`}
     >
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:28px_28px]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,transparent_46%,rgba(0,0,0,0.58)_100%)]" />
-      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" fill="none">
-        <path
-          d="M14 26 C30 10 52 12 68 30 S84 58 76 72"
-          stroke="rgba(216,164,93,0.58)"
-          strokeWidth="0.8"
-        />
-        <path
-          d="M14 26 C22 52 34 62 28 68 C43 76 60 78 76 72"
-          stroke="rgba(45,212,191,0.38)"
-          strokeWidth="0.8"
-        />
-        <path d="M40 14 C45 36 38 50 28 68" stroke="rgba(255,255,255,0.18)" strokeWidth="0.7" />
-        <path d="M68 30 C58 44 56 58 76 72" stroke="rgba(255,255,255,0.16)" strokeWidth="0.7" />
-      </svg>
-      <div className="eve-scan-line absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-amber-200/10 to-transparent" />
-
-      {SIGNAL_POINTS.map((point) => (
-        <div
-          key={point.label}
-          className="absolute -translate-x-1/2 -translate-y-1/2"
-          style={{ left: `${point.x}%`, top: `${point.y}%` }}
-        >
-          <div className="relative">
-            <span className={`block h-2.5 w-2.5 rounded-full ${point.accent}`} />
-            <span
-              className={`absolute inset-0 rounded-full ${point.accent} opacity-30 eve-pulse`}
-            />
-          </div>
-          <span className="mt-2 block -translate-x-1/2 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.16em] text-stone-400">
-            {point.label}
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent)]" />
+      <div className="relative flex h-full min-h-32 flex-col justify-between p-4">
+        <div className="flex items-center justify-between gap-4 border-b border-white/8 pb-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-500">
+            Work signals
+          </span>
+          <span className="rounded-full border border-emerald-400/20 px-2 py-0.5 text-[10px] text-emerald-200">
+            Live
           </span>
         </div>
-      ))}
-
-      <div className="absolute bottom-4 left-4 right-4 border-t border-white/10 pt-3">
-        <div className="flex items-center justify-between gap-3">
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-amber-200">
-            Signal field
-          </span>
-          <span className="h-1.5 w-16 overflow-hidden rounded-full bg-stone-800">
-            <span className="block h-full w-3/4 bg-gradient-to-r from-amber-300 to-teal-300" />
-          </span>
+        <div className="mt-3 space-y-2.5">
+          {SIGNAL_POINTS.slice(0, 4).map((point, index) => (
+            <div key={point.label} className="flex items-center gap-2.5">
+              <span className={`h-2 w-2 rounded-full ${point.accent}`} />
+              <span className="w-10 text-[10px] font-medium uppercase tracking-[0.1em] text-stone-500">
+                {point.label}
+              </span>
+              <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-stone-800">
+                <span
+                  className={`block h-full rounded-full ${point.accent}`}
+                  style={{ width: `${44 + index * 12}%` }}
+                />
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 rounded-md border border-white/8 bg-black/20 px-3 py-2">
+          <p className="text-[11px] leading-5 text-stone-400">
+            필요한 일만 큐에 올리고, 실행 전에는 근거와 승인 상태를 먼저 보여줍니다.
+          </p>
         </div>
       </div>
     </div>
