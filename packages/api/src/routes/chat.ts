@@ -17,6 +17,7 @@ import { getUserLlmCredentials } from "../llm-credentials.js";
 import { loadMemoriesForPrompt } from "../memory.js";
 import { estimateModelCostUsd } from "../model-fallback.js";
 import { createCompletion, EVE_SYSTEM_PROMPT, MODEL, resolveUserChatModel } from "../openai.js";
+import { getFeedbackPolicyContextForPrompt } from "../policy-extraction.js";
 import { scheduleReminderDeliveryCheck } from "../reminder-scheduler.js";
 import { createReminder } from "../reminders.js";
 import { Semaphore } from "../semaphore.js";
@@ -577,8 +578,14 @@ export function chatRoutes(app: FastifyInstance) {
 
       // Load user memories for retry too
       let retryMemoryContext = "";
+      let retryPolicyContext = "";
       try {
         retryMemoryContext = await loadMemoriesForPrompt(conversation.userId);
+      } catch {
+        // optional
+      }
+      try {
+        retryPolicyContext = await getFeedbackPolicyContextForPrompt(conversation.userId);
       } catch {
         // optional
       }
@@ -586,7 +593,8 @@ export function chatRoutes(app: FastifyInstance) {
       const history = [
         {
           role: "system" as const,
-          content: EVE_SYSTEM_PROMPT + retryDynamicContext + retryMemoryContext,
+          content:
+            EVE_SYSTEM_PROMPT + retryDynamicContext + retryMemoryContext + retryPolicyContext,
         },
         ...historyMessages.map((m: { role: string; content: string }) => ({
           role: m.role.toLowerCase() as "user" | "assistant",
@@ -1027,10 +1035,16 @@ export function chatRoutes(app: FastifyInstance) {
 
       // Load user memories for personalization (Claude Code memdir/ pattern)
       let memoryContext = "";
+      let policyContext = "";
       try {
         memoryContext = await loadMemoriesForPrompt(conversation.userId);
       } catch {
         // Memory loading is optional
+      }
+      try {
+        policyContext = await getFeedbackPolicyContextForPrompt(conversation.userId);
+      } catch {
+        // Feedback policy loading is optional
       }
 
       // Build message history with auto-compaction (Claude Code compact/ pattern).
@@ -1049,7 +1063,7 @@ export function chatRoutes(app: FastifyInstance) {
         return [
           {
             role: "system" as const,
-            content: EVE_SYSTEM_PROMPT + dynamicContext + memoryContext,
+            content: EVE_SYSTEM_PROMPT + dynamicContext + memoryContext + policyContext,
           },
           ...compacted,
           { role: "user" as const, content },

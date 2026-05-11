@@ -5,6 +5,12 @@ import { signToken } from "../auth.js";
 const createCompletionMock = vi.hoisted(() =>
   vi.fn(() => ({ choices: [{ message: { content: "Title" } }] })),
 );
+const getFeedbackPolicyContextForPromptMock = vi.hoisted(() =>
+  vi.fn(
+    async () =>
+      "\n\n## Learned Feedback Policy Signals\n- avoid low-confidence send_email proposals.",
+  ),
+);
 
 vi.mock("../email.js", () => ({ sendVerificationEmail: vi.fn(), sendPasswordResetEmail: vi.fn() }));
 vi.mock("../gmail.js", () => ({
@@ -33,6 +39,9 @@ vi.mock("../context-compressor.js", () => ({
   isTokenLimitError: vi.fn(() => false),
 }));
 vi.mock("../memory.js", () => ({ loadMemoriesForPrompt: vi.fn(async () => "") }));
+vi.mock("../policy-extraction.js", () => ({
+  getFeedbackPolicyContextForPrompt: getFeedbackPolicyContextForPromptMock,
+}));
 vi.mock("../push.js", () => ({ sendPushNotification: vi.fn() }));
 vi.mock("../websocket.js", () => ({ pushNotification: vi.fn() }));
 vi.mock("../tool-executor.js", () => ({
@@ -266,6 +275,10 @@ function resetStores() {
   nextActionId = 1;
   createCompletionMock.mockReset();
   createCompletionMock.mockResolvedValue({ choices: [{ message: { content: "Title" } }] });
+  getFeedbackPolicyContextForPromptMock.mockClear();
+  getFeedbackPolicyContextForPromptMock.mockResolvedValue(
+    "\n\n## Learned Feedback Policy Signals\n- avoid low-confidence send_email proposals.",
+  );
 }
 
 describe("chat routes (conversation CRUD)", () => {
@@ -622,6 +635,30 @@ describe("chat routes (conversation CRUD)", () => {
     expect(action.toolName).toBe("create_task");
     expect(action.toolArgs).toContain("운영 루프 후속 정리");
     expect(msgStore.get(action.messageId)?.content).toContain("✅ 제안");
+    await app.close();
+  });
+
+  it("includes learned feedback policy context in chat prompts", async () => {
+    const app = await buildApp();
+    const c = await app.inject({
+      method: "POST",
+      url: "/api/chat/conversations",
+      headers: auth(),
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/chat/conversations/${c.json().id}/messages`,
+      headers: auth(),
+      payload: { content: "오늘 제안할 것 있어?" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const toolCall = createCompletionMock.mock.calls.find(([input]) =>
+      Boolean((input as { tools?: unknown[] }).tools),
+    )?.[0] as { messages: Array<{ role: string; content: string }> } | undefined;
+    expect(toolCall?.messages[0].content).toContain("Learned Feedback Policy Signals");
+    expect(toolCall?.messages[0].content).toContain("avoid low-confidence send_email proposals");
+    expect(getFeedbackPolicyContextForPromptMock).toHaveBeenCalledWith("user-1");
     await app.close();
   });
 

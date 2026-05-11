@@ -2,9 +2,8 @@
  * Feedback policy extraction.
  *
  * Step 8.2 turns the append-only FeedbackEvent ledger into conservative,
- * read-only policy candidates. These candidates are not applied to agent
- * behavior yet; #170 will decide how to feed approved policy context into the
- * prompt, and #171 will give the user controls.
+ * read-only policy candidates. Prompt builders can include these as soft
+ * guidance; they never bypass approval gates or tool risk policy.
  */
 
 import type { FeedbackEvent, FeedbackSignal } from "@prisma/client";
