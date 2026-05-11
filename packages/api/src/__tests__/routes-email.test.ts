@@ -6,7 +6,6 @@ vi.mock("../email.js", () => ({ sendVerificationEmail: vi.fn(), sendPasswordRese
 vi.mock("../gmail.js", () => ({
   getAuthUrl: vi.fn(),
   getLoginAuthUrl: vi.fn(),
-  getAuthedClient: vi.fn(),
   getGoogleUserInfo: vi.fn(),
   getOAuth2Client: vi.fn(),
   getAuthedClient: vi.fn(async () => null),

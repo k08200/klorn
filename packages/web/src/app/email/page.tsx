@@ -310,9 +310,7 @@ function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
           {Math.round(profile.confidence * 100)}%
         </span>
       </div>
-      <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-stone-400">
-        {profile.summary}
-      </p>
+      <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-stone-400">{profile.summary}</p>
       <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-stone-500">
         {profile.contact && <span className="truncate">연락처 {profile.contact}</span>}
         {profile.intakeStatus && <span>{candidateIntakeLabel(profile.intakeStatus)}</span>}

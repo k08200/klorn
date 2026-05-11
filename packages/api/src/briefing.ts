@@ -6,6 +6,7 @@
  */
 
 import type { FastifyInstance } from "fastify";
+import { AGENT_SYSTEM_PROMPT } from "./agent/prompt.js";
 import { getUserId } from "./auth.js";
 import { type BriefingSignals, buildBriefingSignals } from "./briefing-signals.js";
 import { getBriefingStatus } from "./briefing-status.js";
@@ -15,7 +16,6 @@ import { recordFeedback } from "./feedback.js";
 import { listEmails } from "./gmail.js";
 import { getUserLlmCredentials } from "./llm-credentials.js";
 import { listNotes } from "./notes.js";
-import { AGENT_SYSTEM_PROMPT } from "./agent/prompt.js";
 import { createCompletion, MODEL } from "./openai.js";
 import { sendPushNotification } from "./push.js";
 import { listTasks } from "./tasks.js";

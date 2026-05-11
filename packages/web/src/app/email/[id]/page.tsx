@@ -269,18 +269,15 @@ function EmailDetailView() {
         draftId?: string;
         url?: string;
         attachedCount?: number;
-      }>(
-        `/api/email/${id}/gmail-draft`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            to: draft.to,
-            subject: draft.subject,
-            body: draft.body,
-            attachmentIds: selectedDraftAttachmentIds,
-          }),
-        },
-      );
+      }>(`/api/email/${id}/gmail-draft`, {
+        method: "POST",
+        body: JSON.stringify({
+          to: draft.to,
+          subject: draft.subject,
+          body: draft.body,
+          attachmentIds: selectedDraftAttachmentIds,
+        }),
+      });
       setGmailDraftUrl(data.url ?? "https://mail.google.com/mail/u/0/#drafts");
       setEmail((prev) =>
         prev?.candidateIntake
@@ -574,7 +571,10 @@ function AttachmentAnalysis({
       </div>
       <div className="space-y-3">
         {attachments.map((attachment) => (
-          <div key={attachment.id} className="border-t border-sky-500/15 pt-3 first:border-t-0 first:pt-0">
+          <div
+            key={attachment.id}
+            className="border-t border-sky-500/15 pt-3 first:border-t-0 first:pt-0"
+          >
             <div className="flex flex-wrap items-center gap-2">
               <span className="max-w-full truncate text-sm font-medium text-stone-100">
                 {attachment.filename}
@@ -602,7 +602,10 @@ function AttachmentAnalysis({
             {attachment.keyPoints.length > 0 && (
               <ul className="mt-2 space-y-1">
                 {attachment.keyPoints.map((point, index) => (
-                  <li key={`${attachment.id}-${index}`} className="flex gap-1.5 text-xs text-stone-400">
+                  <li
+                    key={`${attachment.id}-${index}`}
+                    className="flex gap-1.5 text-xs text-stone-400"
+                  >
                     <span className="text-sky-300/80">•</span>
                     <span>{point}</span>
                   </li>
@@ -692,7 +695,9 @@ function ReplyDraftBox({
           <h2 className="text-[11px] font-semibold uppercase tracking-wider text-stone-300">
             답장 초안
           </h2>
-          <p className="mt-1 text-xs text-stone-500">Eve가 초안을 만들고, 전송은 직접 승인합니다.</p>
+          <p className="mt-1 text-xs text-stone-500">
+            Eve가 초안을 만들고, 전송은 직접 승인합니다.
+          </p>
         </div>
         <button
           type="button"

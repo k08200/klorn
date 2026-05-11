@@ -4,7 +4,7 @@
  */
 
 import { prisma } from "./db.js";
-import { createCompletion, CHAT_SYSTEM_PROMPT, MODEL, openai } from "./openai.js";
+import { CHAT_SYSTEM_PROMPT, createCompletion, MODEL, openai } from "./openai.js";
 
 export async function writeDocument(
   userId: string,

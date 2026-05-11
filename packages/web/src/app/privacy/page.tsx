@@ -22,7 +22,9 @@ export default function PrivacyPage() {
     <main className="min-h-screen bg-[#10100d] text-white">
       <nav className="mx-auto flex max-w-4xl items-center justify-between px-6 py-5">
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-300 text-sm font-bold text-stone-950">J</div>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-300 text-sm font-bold text-stone-950">
+            J
+          </div>
           <span className="text-lg font-bold tracking-tight">Jigeum</span>
         </Link>
         <div className="flex items-center gap-5 text-sm text-stone-400">

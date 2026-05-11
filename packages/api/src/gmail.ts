@@ -327,9 +327,7 @@ function buildPlainTextRawEmail(
   }
 
   parts.push(`--${boundary}--`, "");
-  return Buffer.from(
-    parts.join("\r\n"),
-  ).toString("base64url");
+  return Buffer.from(parts.join("\r\n")).toString("base64url");
 }
 
 export async function sendEmail(userId: string, to: string, subject: string, body: string) {

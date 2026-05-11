@@ -8,10 +8,10 @@
  * 4. Incremental sync (only fetch new emails)
  */
 
-import { google, type gmail_v1 } from "googleapis";
-import { extractAttachmentContent, isReadableEmailAttachment } from "./email-attachment-text.js";
+import { type gmail_v1, google } from "googleapis";
 import { extractAndUpsertCommitmentsFromText } from "./commitment-ingestion.js";
 import { prisma } from "./db.js";
+import { extractAttachmentContent, isReadableEmailAttachment } from "./email-attachment-text.js";
 import {
   analyzePendingEmailAttachments,
   type RawEmailAttachment,

@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
 import { prisma } from "./db.js";
 import {
+  type AttachmentCandidateProfile,
   buildAttachmentCandidateProfile,
   listEmailAttachments,
-  type AttachmentCandidateProfile,
 } from "./email-attachments.js";
 
 export type CandidateIntakeStatus =

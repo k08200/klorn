@@ -102,10 +102,7 @@ function metadataText(filename: string, mimeType: string, size: number, reason: 
 }
 
 function cleanText(text: string): string | null {
-  const cleaned = text
-    .replace(/\u0000/g, "")
-    .replace(/\r\n/g, "\n")
-    .trim();
+  const cleaned = text.replaceAll(String.fromCharCode(0), "").replace(/\r\n/g, "\n").trim();
   return cleaned || null;
 }
 

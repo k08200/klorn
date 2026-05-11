@@ -315,7 +315,9 @@ export default function NotificationBell({ userId }: { userId: string }) {
           {n.title}
         </span>
         {isAgentNotification(n.title) && (
-          <span className="text-[9px] text-amber-300 bg-amber-300/10 px-1 py-0.5 rounded shrink-0">Eve</span>
+          <span className="text-[9px] text-amber-300 bg-amber-300/10 px-1 py-0.5 rounded shrink-0">
+            Eve
+          </span>
         )}
         {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-amber-300 shrink-0 ml-auto" />}
       </div>

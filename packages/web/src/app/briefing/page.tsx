@@ -352,8 +352,16 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
         </Link>
       </div>
       <div className="grid gap-2 text-xs sm:grid-cols-3">
-        <DeliveryFact label="자동 브리핑" value={auto} tone={status.automation.enabled ? "ok" : "warn"} />
-        <DeliveryFact label="앱 알림" value={notification} tone={status.notification ? "ok" : "muted"} />
+        <DeliveryFact
+          label="자동 브리핑"
+          value={auto}
+          tone={status.automation.enabled ? "ok" : "warn"}
+        />
+        <DeliveryFact
+          label="앱 알림"
+          value={notification}
+          tone={status.notification ? "ok" : "muted"}
+        />
         <DeliveryFact label="푸시" value={push.label} tone={push.tone} />
       </div>
       {push.reason && (

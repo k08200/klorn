@@ -112,8 +112,7 @@ function CandidateIntakeView() {
               후보자 자료 접수 큐
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
-              메일 첨부에서 감지한 이력서, 프로필, 포트폴리오, 오디션 자료를 검토 상태별로
-              모읍니다.
+              메일 첨부에서 감지한 이력서, 프로필, 포트폴리오, 오디션 자료를 검토 상태별로 모읍니다.
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
@@ -217,9 +216,7 @@ function CandidateCard({ candidate }: { candidate: CandidateIntake }) {
             </span>
           </div>
           <h2 className="mt-2 truncate text-sm font-semibold text-stone-100">{title}</h2>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-400">
-            {candidate.summary}
-          </p>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-400">{candidate.summary}</p>
         </div>
         <time className="shrink-0 text-[11px] tabular-nums text-stone-500">
           {formatRelative(candidate.email.receivedAt)}
@@ -236,7 +233,9 @@ function CandidateCard({ candidate }: { candidate: CandidateIntake }) {
       </div>
       <div className="mt-3 rounded-lg border border-stone-800/60 bg-black/15 px-3 py-2">
         <p className="truncate text-xs text-stone-300">{candidate.email.subject || "제목 없음"}</p>
-        <p className="mt-1 truncate text-[11px] text-stone-600">{senderName(candidate.email.from)}</p>
+        <p className="mt-1 truncate text-[11px] text-stone-600">
+          {senderName(candidate.email.from)}
+        </p>
       </div>
       {candidate.notes && (
         <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-stone-500">
