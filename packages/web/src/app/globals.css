@@ -74,6 +74,31 @@
   }
 }
 
+@keyframes eve-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.34;
+  }
+  50% {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+}
+
+@keyframes eve-drift {
+  0% {
+    background-position:
+      0 0,
+      0 0;
+  }
+  100% {
+    background-position:
+      56px 56px,
+      56px 56px;
+  }
+}
+
 .animate-slide-up {
   animation: slide-up 0.2s ease-out;
 }
@@ -88,6 +113,14 @@
 
 .eve-scan-line {
   animation: eve-scan 5.5s ease-in-out infinite;
+}
+
+.eve-pulse {
+  animation: eve-pulse 2.9s ease-out infinite;
+}
+
+.eve-field-drift {
+  animation: eve-drift 18s linear infinite;
 }
 
 /* ── Scrollbar ──────────────────────────────────── */

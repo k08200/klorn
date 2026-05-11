@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { API_BASE, apiFetch, authHeaders } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { captureClientError } from "../lib/sentry";
+import { EveSignalField } from "./brand-visuals";
 import NotificationBell from "./notification-bell";
 import { useToast } from "./toast";
 
@@ -407,6 +408,16 @@ export default function Sidebar({
               <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
             </svg>
           </button>
+        </div>
+      </div>
+
+      <div className="relative mx-3 mb-3 hidden overflow-hidden rounded-lg border border-stone-800/80 bg-black/20 p-2 md:block">
+        <EveSignalField className="h-24 rounded-md border-stone-800/80" />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-stone-500">
+            live field
+          </span>
+          <span className="text-[10px] text-amber-200">승인 우선</span>
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { EveSignalField } from "../components/brand-visuals";
 import LandingRedirect from "../components/landing-redirect";
 
 type IconName = "arrow" | "compass" | "graph" | "shield" | "spark" | "thread";
@@ -156,6 +157,7 @@ export default function LandingPage() {
         />
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,10,12,0.92)_0%,rgba(8,10,12,0.72)_40%,rgba(8,10,12,0.18)_100%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,10,12,0.5)_0%,rgba(8,10,12,0.08)_42%,#0b0d10_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.036)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.024)_1px,transparent_1px)] bg-[size:64px_64px] opacity-70" />
 
         <nav className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-5 py-5 md:px-8">
           <Link href="/" className="flex items-center gap-3">
@@ -178,7 +180,12 @@ export default function LandingPage() {
           </div>
         </nav>
 
-        <div className="relative z-10 mx-auto flex min-h-[calc(92svh-82px)] max-w-7xl flex-col justify-center px-5 pb-20 pt-12 md:px-8">
+        <EveSignalField
+          className="absolute bottom-20 right-8 z-10 hidden h-[420px] w-[38vw] max-w-xl rounded-lg opacity-90 backdrop-blur-md lg:block"
+          tone="hero"
+        />
+
+        <div className="relative z-20 mx-auto flex min-h-[calc(92svh-82px)] max-w-7xl flex-col justify-center px-5 pb-20 pt-12 md:px-8">
           <div className="max-w-3xl">
             <p className="mb-5 inline-flex items-center gap-2 border-b border-[#d8a45d]/50 pb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[#d8a45d]">
               <Icon type="compass" className="h-4 w-4" />
@@ -207,9 +214,9 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="mt-16 grid max-w-4xl grid-cols-1 border-y border-white/12 bg-black/18 backdrop-blur-sm md:grid-cols-3">
+          <div className="mt-16 grid max-w-4xl grid-cols-3 border-y border-white/12 bg-black/18 backdrop-blur-sm">
             {["신호 연결", "승인 우선", "메모리 학습"].map((label, index) => (
-              <div key={label} className="border-white/12 px-5 py-4 md:border-r md:last:border-r-0">
+              <div key={label} className="border-white/12 px-4 py-4 md:border-r md:last:border-r-0">
                 <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-stone-500">
                   0{index + 1}
                 </p>

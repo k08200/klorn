@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import BetaLearningCard from "../../components/beta-learning-card";
+import { EveSignalField } from "../../components/brand-visuals";
 import BriefingCard from "../../components/briefing-card";
 import CommandCenterSummary from "../../components/command-center-summary";
 import OperatingLoopCard from "../../components/operating-loop-card";
@@ -147,10 +148,10 @@ function InboxView() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 md:py-10">
-      <header className="mb-6 overflow-hidden rounded-2xl border border-amber-300/15 bg-stone-950/65 shadow-2xl shadow-black/20">
+      <header className="mb-6 overflow-hidden rounded-lg border border-amber-300/15 bg-stone-950/65 shadow-2xl shadow-black/20">
         <div className="h-1 bg-gradient-to-r from-amber-300 via-stone-500 to-teal-300" />
         <div className="p-5 md:p-6">
-          <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+          <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
             <div className="max-w-2xl">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
                 결정 큐
@@ -163,12 +164,13 @@ function InboxView() {
                 확인하세요.
               </p>
             </div>
-            <div className="shrink-0 rounded-xl border border-stone-800 bg-black/20 p-2">
+            <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
+              <EveSignalField className="absolute inset-0 border-0" />
               <button
                 type="button"
                 onClick={() => load(filter)}
                 disabled={loading}
-                className="h-9 rounded-lg border border-stone-700 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
+                className="absolute right-3 top-3 h-9 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 backdrop-blur transition hover:bg-stone-800 disabled:opacity-50"
                 aria-label="결정 큐 새로고침"
               >
                 {loading ? "..." : "새로고침"}
@@ -212,7 +214,7 @@ function InboxView() {
       )}
 
       {!loading && !error && actions.length === 0 && commitments.length === 0 && (
-        <div className="rounded-xl border border-stone-800 bg-stone-900/40 p-8 text-center">
+        <div className="rounded-lg border border-stone-800 bg-stone-900/40 p-8 text-center">
           <p className="text-sm text-stone-300 mb-1">
             {filter === "pending" ? "대기 중인 항목이 없어요" : "받은 일이 없어요"}
           </p>
@@ -303,7 +305,7 @@ function CommitmentCard({
   onDismiss: () => void;
 }) {
   return (
-    <article className="rounded-xl border border-stone-800 bg-stone-900/40 p-4">
+    <article className="rounded-lg border border-stone-800 bg-stone-900/40 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -402,8 +404,9 @@ function ActionCard({
   const risk = riskForTool(action.toolName);
 
   return (
-    <article className="overflow-hidden rounded-xl border border-stone-800 bg-stone-950/70">
-      <div className="border-b border-stone-800 bg-stone-900/50 px-4 py-3 md:px-5">
+    <article className="relative overflow-hidden rounded-lg border border-stone-800 bg-stone-950/70">
+      <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-amber-300 via-teal-300 to-stone-100" />
+      <div className="border-b border-stone-800 bg-stone-900/50 px-4 py-3 pl-5 md:px-5 md:pl-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-300">
@@ -415,7 +418,7 @@ function ActionCard({
         </div>
       </div>
 
-      <div className="p-4 md:p-5">
+      <div className="p-4 pl-5 md:p-5 md:pl-6">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] font-medium text-amber-200 bg-amber-300/10 border border-amber-300/20 rounded px-1.5 py-0.5">
@@ -474,15 +477,15 @@ function ActionCard({
           )}
 
           {isPending && (
-            <div className="flex flex-wrap items-center gap-2 mt-4 border-t border-stone-800 pt-4">
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-stone-800 pt-4">
               <button
                 type="button"
                 onClick={onApprove}
                 disabled={!!loading}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-amber-400 hover:bg-amber-300 text-stone-950 disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[88px]"
+                className="inline-flex min-w-[88px] items-center justify-center gap-1.5 rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading === "approve" ? (
-                  <span className="w-3 h-3 border-2 border-stone-950/30 border-t-stone-950 rounded-full animate-spin" />
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-stone-950/30 border-t-stone-950" />
                 ) : (
                   "승인"
                 )}
@@ -491,10 +494,10 @@ function ActionCard({
                 type="button"
                 onClick={onReject}
                 disabled={!!loading}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-stone-600 text-stone-300 hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[88px]"
+                className="inline-flex min-w-[88px] items-center justify-center gap-1.5 rounded-md border border-stone-600 px-4 py-2 text-sm font-medium text-stone-300 transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading === "reject" ? (
-                  <span className="w-3 h-3 border-2 border-stone-300/30 border-t-stone-200 rounded-full animate-spin" />
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-stone-300/30 border-t-stone-200" />
                 ) : (
                   "거절"
                 )}
