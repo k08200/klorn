@@ -29,11 +29,11 @@ interface Notification {
 function formatRelative(date: string): string {
   const diff = Date.now() - new Date(date).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return "방금 전";
+  if (mins < 60) return `${mins}분 전`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return `${hours}시간 전`;
+  return `${Math.floor(hours / 24)}일 전`;
 }
 
 const typeIcon: Record<string, string> = {
@@ -323,11 +323,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
       <p className="text-[13px] md:text-xs text-stone-400 mt-1 line-clamp-2 ml-6">{n.message}</p>
       <div className="flex items-center gap-2 mt-1 ml-6">
         <p className="text-[10px] text-stone-600">{formatRelative(n.createdAt)}</p>
-        {getNotificationTarget(n) && (
-          <span className="text-[10px] text-amber-300">
-            {isAgentNotification(n.title) ? "View →" : "Open →"}
-          </span>
-        )}
+        {getNotificationTarget(n) && <span className="text-[10px] text-amber-300">열기</span>}
       </div>
       {n.pendingActionId && n.pendingActionStatus === "PENDING" && (
         <div className="flex items-center gap-2 mt-2.5 ml-6">
@@ -384,7 +380,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
           </span>
           {group.unreadCount > 0 && (
             <span className="text-[10px] text-amber-200 bg-amber-300/10 px-1.5 py-0.5 rounded shrink-0">
-              {group.unreadCount} new
+              새 알림 {group.unreadCount}
             </span>
           )}
           <span className="text-[10px] text-stone-500 ml-auto shrink-0">
@@ -406,7 +402,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
       {/* Connection indicator */}
       <span
         className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-green-400" : "bg-stone-600"}`}
-        title={connected ? `Connected${tabCount > 1 ? ` (${tabCount} tabs)` : ""}` : "Disconnected"}
+        title={connected ? `연결됨${tabCount > 1 ? ` (${tabCount}개 탭)` : ""}` : "연결 끊김"}
       />
 
       <button
@@ -414,7 +410,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         type="button"
         onClick={() => setOpen(!open)}
         className={`relative text-stone-400 hover:text-white transition p-1 ${flash ? "animate-bounce" : ""}`}
-        aria-label="Notifications"
+        aria-label="알림"
       >
         <svg
           width="18"
@@ -461,10 +457,10 @@ export default function NotificationBell({ userId }: { userId: string }) {
           >
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-stone-800">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Notifications</span>
+                <span className="text-sm font-medium">알림</span>
                 {connected && (
                   <span className="text-[10px] text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded">
-                    live
+                    실시간
                   </span>
                 )}
                 {unreadCount > 0 && (
@@ -481,7 +477,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
                     disabled={actionLoading}
                     className="text-xs text-stone-500 hover:text-amber-300 transition disabled:opacity-40"
                   >
-                    {actionLoading ? "..." : "Read all"}
+                    {actionLoading ? "..." : "모두 읽음"}
                   </button>
                 )}
                 {notifications.length > 0 && (
@@ -491,14 +487,14 @@ export default function NotificationBell({ userId }: { userId: string }) {
                     disabled={actionLoading}
                     className="text-xs text-stone-500 hover:text-red-400 transition disabled:opacity-40"
                   >
-                    {actionLoading ? "..." : "Clear"}
+                    {actionLoading ? "..." : "비우기"}
                   </button>
                 )}
               </div>
             </div>
             <div className="flex-1 overflow-y-auto overscroll-contain">
               {notifications.length === 0 ? (
-                <p className="text-center text-stone-500 text-sm py-6">No notifications</p>
+                <p className="text-center text-stone-500 text-sm py-6">알림이 없습니다</p>
               ) : (
                 groups.map((group) => {
                   if (group.items.length === 1) return renderItem(group.items[0]);
@@ -514,7 +510,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             </div>
             {tabCount > 1 && (
               <div className="px-4 py-2 border-t border-stone-800 text-[10px] text-stone-500">
-                {tabCount} tabs connected
+                {tabCount}개 탭 연결됨
               </div>
             )}
           </div>,

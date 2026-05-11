@@ -14,7 +14,7 @@ function VerifyEmailContent() {
 
   useEffect(() => {
     if (token) {
-      // Redirected from email link — API handles verification via GET redirect
+      // Redirected from email link; the API handles verification through GET redirect.
       setStatus("success");
     } else if (user) {
       setStatus("pending");
@@ -49,34 +49,32 @@ function VerifyEmailContent() {
       <div className="w-full max-w-sm text-center">
         {status === "success" ? (
           <>
-            <h1 className="text-xl font-bold mb-3">Verification email sent!</h1>
-            <p className="text-stone-400 text-sm mb-6">
-              Check your inbox and click the verification link.
-            </p>
+            <h1 className="text-xl font-bold mb-3">인증 메일을 보냈습니다</h1>
+            <p className="text-stone-400 text-sm mb-6">받은 편지함에서 인증 링크를 눌러 주세요.</p>
             <Link href="/inbox" className="text-sm text-amber-300 hover:text-amber-200">
-              Go to Inbox
+              결정 큐 열기
             </Link>
           </>
         ) : status === "pending" ? (
           <>
-            <h1 className="text-xl font-bold mb-3">Verify your email</h1>
+            <h1 className="text-xl font-bold mb-3">이메일 인증이 필요합니다</h1>
             <p className="text-stone-400 text-sm mb-6">
-              Please verify your email address to unlock all features.
+              모든 기능을 사용하려면 이메일 주소를 인증해 주세요.
             </p>
             <button
               type="button"
               onClick={resend}
               className="bg-amber-300 hover:bg-amber-200 text-stone-950 px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
             >
-              Resend Verification Email
+              인증 메일 다시 보내기
             </button>
           </>
         ) : (
           <>
-            <h1 className="text-xl font-bold mb-3">Verification Failed</h1>
-            <p className="text-stone-400 text-sm mb-6">Invalid or expired link.</p>
+            <h1 className="text-xl font-bold mb-3">인증에 실패했습니다</h1>
+            <p className="text-stone-400 text-sm mb-6">링크가 만료되었거나 올바르지 않습니다.</p>
             <Link href="/login" className="text-sm text-amber-300 hover:text-amber-200">
-              Back to login
+              로그인으로 돌아가기
             </Link>
           </>
         )}

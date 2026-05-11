@@ -32,21 +32,21 @@ function LoginForm() {
     }
   }, [user, authLoading, router]);
 
-  // Handle Google OAuth error or email verification success
+  // Surface redirect feedback from Google OAuth and email verification.
   useEffect(() => {
     const error = searchParams.get("error");
     const verified = searchParams.get("verified");
     if (error) {
       const message =
         error === "google_failed"
-          ? "Google login failed. Try again."
+          ? "Google 로그인에 실패했습니다. 다시 시도해 주세요."
           : error === "session_expired"
-            ? "Your session has expired. Please sign in again."
+            ? "세션이 만료되었습니다. 다시 로그인해 주세요."
             : error;
       toast(message, "error");
     }
     if (verified) {
-      toast("Email verified! You can now sign in.", "success");
+      toast("이메일 인증이 완료되었습니다. 로그인할 수 있어요.", "success");
     }
   }, [searchParams, toast]);
 
@@ -58,10 +58,10 @@ function LoginForm() {
     try {
       if (mode === "login") {
         await login(email, password);
-        toast("Welcome back!", "success");
+        toast("다시 오신 것을 환영합니다.", "success");
       } else {
         await register(email, password, name || undefined);
-        toast("Account created!", "success");
+        toast("계정을 만들었습니다.", "success");
         router.push("/inbox");
         return;
       }
@@ -98,7 +98,7 @@ function LoginForm() {
           <h1 className="text-2xl font-bold">
             <span className="text-amber-300">EVE</span>
           </h1>
-          <p className="text-stone-500 text-xs mt-1.5">Decision OS for Work</p>
+          <p className="text-stone-500 text-xs mt-1.5">업무 결정을 위한 Decision OS</p>
         </div>
 
         {/* Form */}
@@ -106,14 +106,14 @@ function LoginForm() {
           {mode === "register" && (
             <div>
               <label htmlFor="name" className="block text-xs font-medium text-stone-400 mb-1.5">
-                Name
+                이름
               </label>
               <input
                 id="name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
+                placeholder="이름"
                 className="w-full bg-stone-950 border border-stone-800 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25 transition placeholder-stone-500"
               />
             </div>
@@ -121,7 +121,7 @@ function LoginForm() {
 
           <div>
             <label htmlFor="email" className="block text-xs font-medium text-stone-400 mb-1.5">
-              Email
+              이메일
             </label>
             <input
               id="email"
@@ -136,14 +136,14 @@ function LoginForm() {
 
           <div>
             <label htmlFor="password" className="block text-xs font-medium text-stone-400 mb-1.5">
-              Password
+              비밀번호
             </label>
             <input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={mode === "register" ? "At least 8 characters" : "Your password"}
+              placeholder={mode === "register" ? "8자 이상" : "비밀번호"}
               required
               minLength={mode === "register" ? 8 : undefined}
               className="w-full bg-stone-950 border border-stone-800 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25 transition placeholder-stone-500"
@@ -158,12 +158,12 @@ function LoginForm() {
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                {mode === "login" ? "Signing in..." : "Creating account..."}
+                {mode === "login" ? "로그인 중..." : "계정 생성 중..."}
               </span>
             ) : mode === "login" ? (
-              "Sign in"
+              "로그인"
             ) : (
-              "Create account"
+              "계정 만들기"
             )}
           </button>
         </form>
@@ -175,9 +175,7 @@ function LoginForm() {
             onClick={() => setMode(mode === "login" ? "register" : "login")}
             className="text-xs text-stone-500 hover:text-amber-300 transition-colors"
           >
-            {mode === "login"
-              ? "Don't have an account? Sign up"
-              : "Already have an account? Sign in"}
+            {mode === "login" ? "계정이 없나요? 가입하기" : "이미 계정이 있나요? 로그인"}
           </button>
           {mode === "login" && (
             <div>
@@ -185,7 +183,7 @@ function LoginForm() {
                 href="/reset-password"
                 className="text-xs text-stone-600 hover:text-amber-300 transition-colors"
               >
-                Forgot password?
+                비밀번호를 잊으셨나요?
               </Link>
             </div>
           )}
@@ -194,7 +192,7 @@ function LoginForm() {
         {/* Divider */}
         <div className="flex items-center gap-3 my-5">
           <div className="flex-1 h-px bg-stone-800/80" />
-          <span className="text-xs text-stone-600">or</span>
+          <span className="text-xs text-stone-600">또는</span>
           <div className="flex-1 h-px bg-stone-800/80" />
         </div>
 
@@ -221,19 +219,19 @@ function LoginForm() {
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
             />
           </svg>
-          Continue with Google
+          Google로 계속하기
           <span className="text-[10px] text-stone-500 bg-stone-200 px-1.5 py-0.5 rounded font-normal">
-            Beta
+            베타
           </span>
         </a>
         <p className="text-[10px] text-stone-600 text-center mt-1.5">
-          Google login is in review. Email sign-up works for everyone.
+          Google 로그인은 검토 중입니다. 이메일 가입은 바로 사용할 수 있어요.
         </p>
 
         {/* Back to home */}
         <div className="text-center mt-5">
           <Link href="/" className="text-xs text-stone-600 hover:text-stone-400 transition-colors">
-            Back to home
+            홈으로 돌아가기
           </Link>
         </div>
       </div>
