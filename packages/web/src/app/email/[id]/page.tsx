@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
+import { EveSignalField } from "../../../components/brand-visuals";
 import { apiFetch } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
 
@@ -121,19 +122,24 @@ function EmailDetailView() {
 
       {email && (
         <article>
-          <header className="mb-5 overflow-hidden rounded-2xl border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
+          <header className="mb-5 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
             <div className="h-1 bg-gradient-to-r from-sky-300 via-amber-300 to-stone-600" />
             <div className="p-5 md:p-6">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-                신호 상세
-              </p>
-              <h1 className="break-words text-xl font-semibold leading-snug tracking-tight text-stone-50 md:text-2xl">
-                {email.subject || "제목 없음"}
-              </h1>
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
-                <span className="max-w-full truncate">{email.from}</span>
-                <span className="text-stone-600">·</span>
-                <time className="shrink-0 tabular-nums">{formatFull(email.date)}</time>
+              <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
+                <div>
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+                    신호 상세
+                  </p>
+                  <h1 className="break-words text-xl font-semibold leading-snug tracking-tight text-stone-50 md:text-2xl">
+                    {email.subject || "제목 없음"}
+                  </h1>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
+                    <span className="max-w-full truncate">{email.from}</span>
+                    <span className="text-stone-600">·</span>
+                    <time className="shrink-0 tabular-nums">{formatFull(email.date)}</time>
+                  </div>
+                </div>
+                <EveSignalField className="min-h-40 rounded-lg" />
               </div>
               <div className="mt-5 grid grid-cols-3 gap-2">
                 <DetailStat label="우선순위" value={PRIORITY_LABELS[email.priority]} />
@@ -150,7 +156,7 @@ function EmailDetailView() {
             <EveAnalysis email={email} />
 
             {email.body ? (
-              <section className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+              <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
                 <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-stone-500">
                   본문
                 </h2>
@@ -159,7 +165,7 @@ function EmailDetailView() {
                 </pre>
               </section>
             ) : email.snippet ? (
-              <section className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+              <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
                 <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-stone-500">
                   미리보기
                 </h2>
@@ -175,7 +181,7 @@ function EmailDetailView() {
 
 function DetailStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-stone-700/45 bg-black/20 px-3 py-2">
+    <div className="rounded-lg border border-stone-700/45 bg-black/20 px-3 py-2">
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
         {label}
       </p>
@@ -190,7 +196,7 @@ function EveAnalysis({ email }: { email: EmailDetail }) {
 
   if (!hasAnything) {
     return (
-      <section className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+      <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
         <p className="text-xs text-stone-500">
           EVE가 아직 분석하지 않은 메일이에요. 동기화 후 잠시 뒤에 다시 확인해 주세요.
         </p>
@@ -199,54 +205,57 @@ function EveAnalysis({ email }: { email: EmailDetail }) {
   }
 
   return (
-    <section className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-300">
-          EVE 판단
-        </span>
-        <div className="flex items-center gap-1.5">
-          <PriorityPill priority={email.priority} />
-          {email.needsReply && <ReplyNeededPill />}
-          {email.category && <CategoryPill category={email.category} />}
+    <section className="relative overflow-hidden rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+      <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-sky-300 via-amber-300 to-teal-300" />
+      <div className="pl-2">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-300">
+            EVE 판단
+          </span>
+          <div className="flex items-center gap-1.5">
+            <PriorityPill priority={email.priority} />
+            {email.needsReply && <ReplyNeededPill />}
+            {email.category && <CategoryPill category={email.category} />}
+          </div>
+          <LabelFeedbackControl emailId={email.id} currentPriority={email.priority} />
         </div>
-        <LabelFeedbackControl emailId={email.id} currentPriority={email.priority} />
+
+        {email.summary && <p className="text-sm leading-relaxed text-stone-200">{email.summary}</p>}
+
+        {email.keyPoints.length > 0 && (
+          <div className="mt-3">
+            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-stone-500">
+              핵심 포인트
+            </p>
+            <ul className="space-y-1">
+              {email.keyPoints.map((k, i) => (
+                <li key={i} className="flex gap-1.5 text-xs text-stone-300">
+                  <span className="text-amber-300/75">•</span>
+                  <span>{k}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {email.actionItems.length > 0 && (
+          <div className="mt-3">
+            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-stone-500">
+              할 일
+            </p>
+            <ul className="space-y-1">
+              {email.actionItems.map((a, i) => (
+                <li key={i} className="flex gap-1.5 text-xs text-stone-300">
+                  <span className="text-amber-300/80">□</span>
+                  <span>{a}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {email.needsReply && <ReplyNeededFeedbackControl emailId={email.id} />}
       </div>
-
-      {email.summary && <p className="text-sm leading-relaxed text-stone-200">{email.summary}</p>}
-
-      {email.keyPoints.length > 0 && (
-        <div className="mt-3">
-          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-stone-500">
-            핵심 포인트
-          </p>
-          <ul className="space-y-1">
-            {email.keyPoints.map((k, i) => (
-              <li key={i} className="flex gap-1.5 text-xs text-stone-300">
-                <span className="text-amber-300/75">•</span>
-                <span>{k}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {email.actionItems.length > 0 && (
-        <div className="mt-3">
-          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-stone-500">
-            할 일
-          </p>
-          <ul className="space-y-1">
-            {email.actionItems.map((a, i) => (
-              <li key={i} className="flex gap-1.5 text-xs text-stone-300">
-                <span className="text-amber-300/80">□</span>
-                <span>{a}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {email.needsReply && <ReplyNeededFeedbackControl emailId={email.id} />}
     </section>
   );
 }
