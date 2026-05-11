@@ -68,7 +68,7 @@ function WaitlistPageInner() {
       setEntries(data.entries);
       setCounts(data.counts);
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Failed to load waitlist", "error");
+      toast(err instanceof Error ? err.message : "대기 명단을 불러오지 못했습니다.", "error");
     } finally {
       setLoading(false);
     }
@@ -91,7 +91,7 @@ function WaitlistPageInner() {
       );
       await load();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Update failed", "error");
+      toast(err instanceof Error ? err.message : "상태를 업데이트하지 못했습니다.", "error");
     } finally {
       setUpdating(null);
     }
@@ -112,10 +112,10 @@ function WaitlistPageInner() {
       <div className="mx-auto max-w-5xl">
         <header className="mb-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-sm shadow-black/20">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">
-            Access Review
+            접근 검토
           </p>
           <h1 className="mt-3 text-2xl font-semibold tracking-tight text-stone-50">
-            Early Access Waitlist
+            얼리 액세스 대기 명단
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-400">
             새 신청을 검토하고, 승인된 후보를 테스트 사용자로 넘긴 뒤 접근 상태를 기록합니다.
@@ -170,13 +170,13 @@ function WaitlistPageInner() {
                       </button>
                       <StatusBadge status={entry.status} />
                       {copiedId === entry.id && (
-                        <span className="text-xs text-amber-200">copied</span>
+                        <span className="text-xs text-amber-200">복사됨</span>
                       )}
                     </div>
                     <div className="mt-1 text-xs text-stone-500">
                       {entry.name ? `${entry.name} · ` : ""}
                       {formatDate(entry.createdAt)}
-                      {entry.approvedAt ? ` · approved ${formatDate(entry.approvedAt)}` : ""}
+                      {entry.approvedAt ? ` · 승인 ${formatDate(entry.approvedAt)}` : ""}
                     </div>
                     {entry.useCase && (
                       <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-300">
