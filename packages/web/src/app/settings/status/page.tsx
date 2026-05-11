@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
+import { EveSignalField } from "../../../components/brand-visuals";
 import { useToast } from "../../../components/toast";
 import { apiFetch } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
@@ -115,9 +116,10 @@ export default function SettingsStatusPage() {
 
   return (
     <AuthGuard>
-      <main className="mx-auto max-w-4xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
-        <header className="mb-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-2xl shadow-black/10">
-          <div className="flex items-start justify-between gap-4">
+      <main className="mx-auto max-w-5xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
+        <header className="mb-6 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
+          <div className="h-1 bg-gradient-to-r from-emerald-300 via-amber-300 to-stone-600" />
+          <div className="grid gap-5 p-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
             <div>
               <Link
                 href="/settings"
@@ -133,13 +135,16 @@ export default function SettingsStatusPage() {
                 배포, 연동, 푸시, 리마인더, 브리핑 준비 상태를 한 곳에서 확인합니다.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={load}
-              className="shrink-0 rounded-lg border border-stone-700/60 px-3 py-2 text-sm text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100"
-            >
-              새로고침
-            </button>
+            <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
+              <EveSignalField className="absolute inset-0 border-0" />
+              <button
+                type="button"
+                onClick={load}
+                className="absolute right-3 top-3 rounded-md border border-stone-700 bg-stone-950/75 px-3 py-2 text-sm text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100"
+              >
+                새로고침
+              </button>
+            </div>
           </div>
         </header>
 
@@ -171,8 +176,9 @@ export default function SettingsStatusPage() {
                 {readiness.checks.map((check) => (
                   <div
                     key={check.key}
-                    className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4"
+                    className="relative overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/35 p-4 pl-5"
                   >
+                    <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-emerald-300 via-amber-300 to-stone-700" />
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <h3 className="text-sm font-medium text-stone-100">
                         {readinessCheckLabel(check)}
@@ -203,7 +209,7 @@ export default function SettingsStatusPage() {
                 </button>
               </div>
               {diagnostics ? (
-                <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+                <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
                   <div className="mb-4 grid gap-3 sm:grid-cols-3">
                     <Metric label="푸시 구독" value={String(diagnostics.subscriptions)} />
                     <Metric label="최근 리마인더" value={String(diagnostics.reminders.length)} />
@@ -242,7 +248,7 @@ export default function SettingsStatusPage() {
                   </div>
                 </div>
               ) : (
-                <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-sm text-stone-500">
+                <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-6 text-sm text-stone-500">
                   리마인더 진단 정보를 불러올 수 없습니다.
                 </div>
               )}
@@ -268,7 +274,7 @@ function SummaryTile({
   status: CheckStatus;
 }) {
   return (
-    <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+    <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
       <p className="mb-1 text-xs text-stone-500">{label}</p>
       <p
         className={

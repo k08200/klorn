@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { EveSignalField } from "../../../components/brand-visuals";
 import { apiFetch } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
 
@@ -46,18 +47,24 @@ export default function UsagePage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
-      <header className="mb-5 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-2xl shadow-black/10">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-          Usage Ledger
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-          EVE 운영량과 추정 비용
-        </h1>
-        <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-          결정 스레드와 판단 생성에 쓰인 토큰을 기간별로 확인하고, 어떤 스레드가 비용을 만드는지
-          추적합니다.
-        </p>
+    <div className="mx-auto max-w-5xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
+      <header className="mb-5 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
+        <div className="h-1 bg-gradient-to-r from-amber-300 via-teal-300 to-stone-600" />
+        <div className="grid gap-5 p-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+              Usage Ledger
+            </p>
+            <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
+              EVE 운영량과 추정 비용
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+              결정 스레드와 판단 생성에 쓰인 토큰을 기간별로 확인하고, 어떤 스레드가 비용을 만드는지
+              추적합니다.
+            </p>
+          </div>
+          <EveSignalField className="min-h-40 rounded-lg" />
+        </div>
       </header>
 
       {/* Period selector */}
@@ -103,8 +110,8 @@ export default function UsagePage() {
           {stats.daily.length > 0 && (
             <div className="mb-8">
               <h2 className="mb-3 text-sm font-medium text-stone-300">일별 사용 기록</h2>
-              <div className="overflow-hidden rounded-xl border border-stone-700/45 bg-stone-950/35">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto rounded-lg border border-stone-700/45 bg-stone-950/35">
+                <table className="w-full min-w-[560px] text-sm">
                   <thead>
                     <tr className="border-b border-stone-700/45 text-[11px] text-stone-500">
                       <th className="px-4 py-2 text-left font-medium">날짜</th>
@@ -138,8 +145,8 @@ export default function UsagePage() {
       {convUsages.length > 0 && (
         <div>
           <h2 className="mb-3 text-sm font-medium text-stone-300">사용량이 큰 결정 스레드</h2>
-          <div className="overflow-hidden rounded-xl border border-stone-700/45 bg-stone-950/35">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-lg border border-stone-700/45 bg-stone-950/35">
+            <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-stone-700/45 text-[11px] text-stone-500">
                   <th className="px-4 py-2 text-left font-medium">결정 스레드</th>
@@ -178,7 +185,8 @@ export default function UsagePage() {
 
 function UsageMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+    <div className="relative overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/35 p-4 pl-5">
+      <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-amber-300 via-teal-300 to-stone-700" />
       <p className="mb-1 text-[11px] text-stone-500">{label}</p>
       <p className="text-lg font-semibold text-stone-100">{value}</p>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { EveSignalField } from "../../../components/brand-visuals";
 import { apiFetch } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
 
@@ -52,21 +53,27 @@ export default function MemoryPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
-      <header className="mb-5 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-2xl shadow-black/10">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-          Memory Graph
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-          EVE가 판단에 쓰는 기억
-        </h1>
-        <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-          승인 방식, 선호, 반복되는 업무 맥락을 확인하고 필요 없는 기억은 지웁니다.
-        </p>
-        <div className="mt-5 grid grid-cols-3 gap-2">
-          <MemoryStat label="전체" value={stats.total} />
-          <MemoryStat label="표시" value={memories.length} />
-          <MemoryStat label="유형" value={stats.byType.length} />
+    <div className="mx-auto max-w-5xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
+      <header className="mb-5 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
+        <div className="h-1 bg-gradient-to-r from-teal-300 via-amber-300 to-stone-600" />
+        <div className="grid gap-5 p-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+              Memory Graph
+            </p>
+            <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
+              EVE가 판단에 쓰는 기억
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+              승인 방식, 선호, 반복되는 업무 맥락을 확인하고 필요 없는 기억은 지웁니다.
+            </p>
+          </div>
+          <EveSignalField className="min-h-40 rounded-lg" />
+          <div className="grid grid-cols-3 gap-2 lg:col-span-2">
+            <MemoryStat label="전체" value={stats.total} />
+            <MemoryStat label="표시" value={memories.length} />
+            <MemoryStat label="유형" value={stats.byType.length} />
+          </div>
         </div>
       </header>
 
@@ -109,7 +116,7 @@ export default function MemoryPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="기억 검색..."
-          className="w-full rounded-xl border border-stone-700/60 bg-stone-950/45 px-4 py-2.5 text-sm text-stone-300 placeholder-stone-600 transition focus:border-amber-500/50 focus:outline-none"
+          className="w-full rounded-lg border border-stone-700/60 bg-stone-950/45 px-4 py-2.5 text-sm text-stone-300 placeholder-stone-600 transition focus:border-amber-500/50 focus:outline-none"
         />
       </div>
 
@@ -123,8 +130,9 @@ export default function MemoryPage() {
           return (
             <div
               key={m.id}
-              className="group rounded-xl border border-stone-700/45 bg-stone-950/35 p-4 transition hover:border-amber-500/30 hover:bg-amber-500/5"
+              className="group relative overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/35 p-4 pl-5 transition hover:border-amber-500/30 hover:bg-amber-500/5"
             >
+              <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-teal-300 via-amber-300 to-stone-700" />
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="mb-1.5 flex items-center gap-2">
@@ -168,7 +176,7 @@ export default function MemoryPage() {
         })}
 
         {memories.length === 0 && (
-          <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 py-12 text-center">
+          <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 py-12 text-center">
             <p className="mb-1 text-sm text-stone-400">아직 저장된 기억이 없습니다</p>
             <p className="text-xs text-stone-600">
               일을 처리하면서 EVE가 결정 선호와 반복 맥락을 기억합니다.
@@ -182,7 +190,7 @@ export default function MemoryPage() {
 
 function MemoryStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-stone-700/45 bg-black/15 px-3 py-2">
+    <div className="rounded-lg border border-stone-700/45 bg-black/15 px-3 py-2">
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
         {label}
       </p>
