@@ -3,6 +3,7 @@ import {
   extractFeedbackPolicyCandidates,
   type FeedbackPolicyCandidateKind,
   formatFeedbackPolicyCandidatesForPrompt,
+  selectFeedbackPolicyCandidatesForPrompt,
 } from "../policy-extraction.js";
 
 type FeedbackPolicyEvent = Parameters<typeof extractFeedbackPolicyCandidates>[0][number];
@@ -148,5 +149,52 @@ describe("extractFeedbackPolicyCandidates", () => {
       { minEvents: 2 },
     );
     expect(formatFeedbackPolicyCandidatesForPrompt(candidates, { minConfidence: 0.96 })).toBe("");
+  });
+
+  it("keeps non-ignored learned signals when one candidate is explicitly active", () => {
+    const candidates = extractFeedbackPolicyCandidates([
+      event({ id: "a", toolName: "send_email", recipient: "sarah@example.com" }),
+      event({ id: "b", toolName: "send_email", recipient: "sarah@example.com" }),
+      event({ id: "c", toolName: "send_email", recipient: "sarah@example.com" }),
+      event({ id: "d", signal: "REJECTED", toolName: "schedule_meeting" }),
+      event({ id: "e", signal: "FAILED", toolName: "schedule_meeting" }),
+      event({ id: "f", signal: "DISMISSED", toolName: "schedule_meeting" }),
+      event({ id: "g", signal: "IGNORED", toolName: "notify_user" }),
+      event({ id: "h", signal: "SNOOZED", toolName: "notify_user" }),
+      event({ id: "i", signal: "IGNORED", toolName: "notify_user" }),
+    ]);
+    const active = candidates.find((candidate) => candidate.kind === "ALLOW_AFTER_SUGGESTION");
+    const ignored = candidates.find((candidate) => candidate.kind === "LOWER_PRIORITY");
+    expect(active).toBeDefined();
+    expect(ignored).toBeDefined();
+
+    const selected = selectFeedbackPolicyCandidatesForPrompt(candidates, [
+      { candidateId: active?.id ?? "", action: "ACTIVE" },
+      { candidateId: ignored?.id ?? "", action: "IGNORED" },
+    ]);
+
+    expect(selected.map((candidate) => candidate.kind)).toEqual([
+      "ALLOW_AFTER_SUGGESTION",
+      "AVOID_SUGGESTION",
+    ]);
+    expect(selected[0].active).toBe(true);
+  });
+
+  it("includes explicitly active candidates even under the default confidence cutoff", () => {
+    const [candidate] = extractFeedbackPolicyCandidates(
+      [
+        event({ id: "a", signal: "REJECTED", toolName: "schedule_meeting" }),
+        event({ id: "b", signal: "FAILED", toolName: "schedule_meeting" }),
+      ],
+      { minEvents: 2 },
+    );
+    if (!candidate) throw new Error("expected a policy candidate");
+
+    expect(
+      formatFeedbackPolicyCandidatesForPrompt([{ ...candidate, active: true, confidence: 0.55 }]),
+    ).toContain("Learned Feedback Policy Signals");
+    expect(
+      formatFeedbackPolicyCandidatesForPrompt([{ ...candidate, active: false, confidence: 0.55 }]),
+    ).toBe("");
   });
 });
