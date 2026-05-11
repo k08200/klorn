@@ -29,6 +29,7 @@ interface PolicyCandidate {
     ignored: number;
     snoozed: number;
     dismissed: number;
+    failed: number;
     total: number;
   };
 }
@@ -154,7 +155,8 @@ export default function FeedbackPolicyStudio() {
                   </p>
                   <p className="mt-2 text-[11px] text-stone-600">
                     승인 {candidate.support.approved} · 거절 {candidate.support.rejected} · 수정{" "}
-                    {candidate.support.edited} · 총 {candidate.support.total}
+                    {candidate.support.edited} · 실패 {candidate.support.failed} · 총{" "}
+                    {candidate.support.total}
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-2 md:flex-col">

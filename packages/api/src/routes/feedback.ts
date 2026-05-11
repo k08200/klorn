@@ -1,9 +1,8 @@
 /**
  * Feedback ledger inspection API.
  *
- * Read-only for now. #169 derives policy candidates from the ledger, while
- * #170/#171 decide how those candidates become agent context and user-facing
- * controls.
+ * Exposes raw feedback inspection, derived policy candidates, and user
+ * preferences that decide which learned candidates become prompt guidance.
  */
 import type { FeedbackSignal, FeedbackSource } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
@@ -24,6 +23,7 @@ const ALLOWED_SIGNALS = new Set<FeedbackSignal>([
   "IGNORED",
   "SNOOZED",
   "DISMISSED",
+  "FAILED",
 ]);
 
 const preferenceBodySchema = {

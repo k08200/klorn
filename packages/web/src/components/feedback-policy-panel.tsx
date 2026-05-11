@@ -26,6 +26,7 @@ interface FeedbackPolicyCandidate {
     ignored: number;
     snoozed: number;
     dismissed: number;
+    failed: number;
     total: number;
     distinctRecipients: number;
   };
@@ -162,6 +163,7 @@ export function FeedbackPolicyPanel() {
                   <SignalCount label="승인" value={candidate.support.approved} />
                   <SignalCount label="거절" value={candidate.support.rejected} />
                   <SignalCount label="수정" value={candidate.support.edited} />
+                  <SignalCount label="실패" value={candidate.support.failed} tone="critical" />
                   <SignalCount label="무시" value={candidate.support.ignored} />
                   <SignalCount label="미룸" value={candidate.support.snoozed} />
                   <SignalCount label="닫음" value={candidate.support.dismissed} />
@@ -179,11 +181,23 @@ export function FeedbackPolicyPanel() {
   );
 }
 
-function SignalCount({ label, value }: { label: string; value: number }) {
+function SignalCount({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: number;
+  tone?: "default" | "critical";
+}) {
   return (
     <div className="rounded-md bg-stone-950/70 px-2 py-1">
-      <div className="text-stone-600">{label}</div>
-      <div className="text-xs font-medium text-stone-300">{value}</div>
+      <div className={tone === "critical" ? "text-red-400/70" : "text-stone-600"}>{label}</div>
+      <div
+        className={`text-xs font-medium ${tone === "critical" ? "text-red-300" : "text-stone-300"}`}
+      >
+        {value}
+      </div>
     </div>
   );
 }

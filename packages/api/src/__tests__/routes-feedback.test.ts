@@ -160,6 +160,22 @@ describe("feedback routes", () => {
     await app.close();
   });
 
+  it("filters failed feedback signals for execution diagnostics", async () => {
+    seed({ id: "approved", signal: "APPROVED" });
+    seed({ id: "failed", signal: "FAILED" });
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/feedback?signal=FAILED",
+      headers: auth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().events.map((e: { id: string }) => e.id)).toEqual(["failed"]);
+    await app.close();
+  });
+
   it("ignores unknown filter values without erroring", async () => {
     seed({ id: "ok" });
     const app = await buildApp();
