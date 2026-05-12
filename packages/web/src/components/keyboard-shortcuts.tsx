@@ -5,11 +5,11 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
 
 const SHORTCUTS = [
-  { keys: ["Cmd", "K"], label: "명령 팔레트" },
-  { keys: ["Cmd", "N"], label: "새 결정 스레드" },
-  { keys: ["Cmd", "B"], label: "브리핑으로 이동" },
-  { keys: ["Cmd", "/"], label: "단축키 보기" },
-  { keys: ["Esc"], label: "창 닫기" },
+  { keys: ["Cmd", "K"], label: "Command palette" },
+  { keys: ["Cmd", "N"], label: "New decision thread" },
+  { keys: ["Cmd", "B"], label: "Open briefing" },
+  { keys: ["Cmd", "/"], label: "Show shortcuts" },
+  { keys: ["Esc"], label: "Close window" },
 ];
 
 export default function KeyboardShortcuts() {
@@ -61,7 +61,7 @@ export default function KeyboardShortcuts() {
         className="bg-stone-950 border border-stone-700 rounded-xl p-6 w-full max-w-sm"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="font-semibold mb-4">키보드 단축키</h3>
+        <h3 className="font-semibold mb-4">Keyboard shortcuts</h3>
         <div className="space-y-3">
           {SHORTCUTS.map((s) => (
             <div key={s.label} className="flex items-center justify-between">
@@ -80,7 +80,7 @@ export default function KeyboardShortcuts() {
           ))}
         </div>
         <p className="text-xs text-stone-600 mt-4 text-center">
-          Esc를 누르거나 바깥 영역을 클릭하면 닫혀요.
+          Press Esc or click outside to close.
         </p>
       </div>
     </div>

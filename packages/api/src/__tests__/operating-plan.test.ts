@@ -30,13 +30,13 @@ describe("buildOperatingPlanFromSignals", () => {
             toolName: "send_email",
             label: "send email: PartnerCo",
             conversationId: "chat-1",
-            reasoning: "투자자 답장을 보내기 전 승인 필요",
+            reasoning: "Approve before sending the investor reply",
             decision: {
               priority: 100,
               confidence: 0.9,
-              suggestedAction: "답장 초안을 확인하고 승인",
-              costOfIgnoring: "투자자 후속 조치가 하루 더 밀립니다.",
-              evidence: [{ label: "근거", value: "승인 대기" }],
+              suggestedAction: "Review and approve the draft reply",
+              costOfIgnoring: "Investor follow-up slips another day.",
+              evidence: [{ label: "Evidence", value: "Awaiting approval" }],
             },
           },
         ],
@@ -45,16 +45,16 @@ describe("buildOperatingPlanFromSignals", () => {
 
     expect(plan.mode).toBe("clear_decisions");
     expect(plan.primaryAction).toBe("send email: PartnerCo");
-    expect(plan.metrics.find((metric) => metric.label === "결정")).toMatchObject({
+    expect(plan.metrics.find((metric) => metric.label === "Decisions")).toMatchObject({
       value: 1,
       tone: "critical",
     });
     expect(plan.nextMoves[0]).toMatchObject({
       href: "/chat/chat-1",
-      label: "승인 필요",
-      reason: "답장 초안을 확인하고 승인",
+      label: "Needs approval",
+      reason: "Review and approve the draft reply",
     });
-    expect(plan.nextMoves[0].prompt).toContain("승인 가능한 결정 카드");
+    expect(plan.nextMoves[0].prompt).toContain("approval-ready decision card");
     expect(plan.nextMoves[0].prompt).toContain("/chat/chat-1");
   });
 
@@ -74,7 +74,7 @@ describe("buildOperatingPlanFromSignals", () => {
             people: [{ name: "Minsu", email: "minsu@example.com" }],
             lastActivityAt: new Date(NOW - 60_000).toISOString(),
             risk: "high",
-            reasons: ["긴급 메일", "지난 약속"],
+            reasons: ["Urgent mail", "Overdue commitment"],
             signals: {
               emails: 1,
               unreadEmails: 1,
@@ -91,14 +91,14 @@ describe("buildOperatingPlanFromSignals", () => {
     expect(plan.mode).toBe("recover_risk");
     expect(plan.nextMoves[0]).toMatchObject({
       title: "PartnerCo renewal",
-      label: "위험 맥락",
+      label: "Risk context",
       href: "/email/email-1",
     });
     expect(plan.nextMoves[0].prompt).toContain("Work Graph");
     expect(plan.watchlist[0]).toMatchObject({
       id: "email:thread-1",
       risk: "high",
-      reason: "긴급 메일",
+      reason: "Urgent mail",
     });
   });
 
@@ -142,7 +142,7 @@ describe("buildOperatingPlanFromSignals", () => {
     });
     expect(plan.nextMoves[0]).toMatchObject({
       source: "playbook",
-      label: "활성 Playbook",
+      label: "Active playbook",
     });
   });
 

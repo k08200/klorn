@@ -149,7 +149,7 @@ describe("buildWorkGraphSummary", () => {
       name: "Minsu",
       email: "minsu@example.com",
     });
-    expect(summary.contexts[0].reasons).toContain("지난 약속");
+    expect(summary.contexts[0].reasons).toContain("Overdue commitment");
   });
 
   it("groups pending actions into their chat conversation context", async () => {

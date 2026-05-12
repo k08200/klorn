@@ -120,7 +120,7 @@ function emptySignals(): WorkGraphSignals {
 }
 
 function normalizeSubject(subject: string): string {
-  return subject.replace(/^(\s*(re|fw|fwd)\s*:\s*)+/i, "").trim() || "(제목 없음)";
+  return subject.replace(/^(\s*(re|fw|fwd)\s*:\s*)+/i, "").trim() || "(No subject)";
 }
 
 function parsePerson(raw: string): WorkGraphPerson | null {
@@ -207,8 +207,8 @@ function addEmail(contexts: Map<string, MutableContext>, email: EmailRow): void 
   ctx.signals.emails++;
   if (!email.isRead) ctx.signals.unreadEmails++;
   if (email.priority === "URGENT") ctx.signals.urgentEmails++;
-  if (!email.isRead) pushReason(ctx, "읽지 않은 메일");
-  if (email.priority === "URGENT") pushReason(ctx, "긴급 메일");
+  if (!email.isRead) pushReason(ctx, "Unread mail");
+  if (email.priority === "URGENT") pushReason(ctx, "Urgent mail");
   addPerson(ctx, parsePerson(email.from));
 }
 
@@ -219,7 +219,7 @@ function addConversation(
   getOrCreate(contexts, {
     id: `chat:${conversation.id}`,
     kind: "chat_conversation",
-    title: conversation.title?.trim() || "제목 없는 대화",
+    title: conversation.title?.trim() || "Untitled thread",
     subtitle: "Chat",
     href: `/chat/${conversation.id}`,
     lastActivityAt: conversation.updatedAt || conversation.createdAt,
@@ -231,13 +231,13 @@ function addPendingAction(contexts: Map<string, MutableContext>, action: Pending
   const ctx = getOrCreate(contexts, {
     id: `chat:${action.conversationId}`,
     kind: "chat_conversation",
-    title: "제목 없는 대화",
+    title: "Untitled thread",
     subtitle: "Chat",
     href: `/chat/${action.conversationId}`,
     lastActivityAt: action.createdAt,
   });
   ctx.signals.pendingActions++;
-  pushReason(ctx, `승인 대기: ${action.toolName.replace(/_/g, " ")}`);
+  pushReason(ctx, `Awaiting approval: ${action.toolName.replace(/_/g, " ")}`);
 }
 
 function commitmentContextInput(commitment: CommitmentRow): Parameters<typeof createContext>[0] {
@@ -245,7 +245,7 @@ function commitmentContextInput(commitment: CommitmentRow): Parameters<typeof cr
     return {
       id: `chat:${commitment.threadId}`,
       kind: "chat_conversation",
-      title: "제목 없는 대화",
+      title: "Untitled thread",
       subtitle: "Chat",
       href: `/chat/${commitment.threadId}`,
       lastActivityAt: commitment.updatedAt || commitment.createdAt,
@@ -279,10 +279,10 @@ function addCommitment(
   if (commitment.status !== "OPEN") return;
   const ctx = getOrCreate(contexts, commitmentContextInput(commitment));
   ctx.signals.commitments++;
-  pushReason(ctx, commitment.dueText ? `약속: ${commitment.dueText}` : "열린 약속");
+  pushReason(ctx, commitment.dueText ? `Commitment: ${commitment.dueText}` : "Open commitment");
   if (commitment.dueAt && commitment.dueAt.getTime() < now) {
     ctx.signals.overdueCommitments++;
-    pushReason(ctx, "지난 약속");
+    pushReason(ctx, "Overdue commitment");
   }
   if (commitment.counterpartyName) {
     addPerson(ctx, { name: commitment.counterpartyName, email: null });

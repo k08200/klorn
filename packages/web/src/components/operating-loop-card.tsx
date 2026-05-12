@@ -193,7 +193,7 @@ function MoveRow({ move }: { move: OperatingPlanMove }) {
   const body = (
     <article className="rounded-xl border border-stone-800 bg-stone-900/35 p-3 transition hover:border-amber-300/25 hover:bg-stone-900/55">
       <div className="flex flex-wrap items-center gap-2">
-        <ToneBadge tone={move.tone} label={move.label} />
+        <ToneBadge tone={move.tone} label={displayText(move.label)} />
         <span className="text-[11px] text-stone-600">{sourceLabel(move.source)}</span>
       </div>
       {move.href ? (
@@ -259,7 +259,7 @@ function LoopMetric({ metric }: { metric: OperatingPlanMetric }) {
   return (
     <div className="border-r border-white/10 px-2 py-2 last:border-r-0">
       <p className={`text-lg font-semibold ${metricColor(metric.tone)}`}>{metric.value}</p>
-      <p className="mt-0.5 truncate text-[10px] text-stone-600">{metric.label}</p>
+      <p className="mt-0.5 truncate text-[10px] text-stone-600">{displayText(metric.label)}</p>
     </div>
   );
 }
@@ -271,7 +271,51 @@ function displayText(value: string): string {
     .replace(/EVE는/g, "Jigeum은")
     .replace(/Eve는/g, "Jigeum은")
     .replace(/\bEVE\b/g, "Jigeum")
-    .replace(/\bEve\b/g, "Jigeum");
+    .replace(/\bEve\b/g, "Jigeum")
+    .replace(
+      /먼저 승인 대기 결정을 비우면 오늘 루프가 풀립니다\./g,
+      "Clear the decisions waiting for approval first.",
+    )
+    .replace(
+      /위험해진 업무 맥락을 먼저 회수해야 합니다\./g,
+      "Recover the work contexts that are drifting into risk.",
+    )
+    .replace(
+      /오늘 일정과 마감 기준으로 실행 순서를 잡았습니다\./g,
+      "The day is ordered around meetings and due work.",
+    )
+    .replace(
+      /큰 화재는 없고, 열린 약속을 조용히 정리할 차례입니다\./g,
+      "No major fires. Clean up the open commitments quietly.",
+    )
+    .replace(
+      /새 신호가 들어오면 Jigeum이 다시 운영 계획을 갱신합니다\./g,
+      "Jigeum will refresh the plan when new signals arrive.",
+    )
+    .replace(/상단 결정 카드부터 확인하세요\./g, "Start with the first decision card.")
+    .replace(
+      /여러 신호가 같은 업무 맥락으로 묶였습니다\./g,
+      "Multiple signals are tied to the same work context.",
+    )
+    .replace(/최근 활동과 열린 신호가 있습니다\./g, "Recent activity and open signals are present.")
+    .replace(/읽지 않은 메일/g, "Unread mail")
+    .replace(/긴급 메일/g, "Urgent mail")
+    .replace(/승인 대기/g, "Awaiting approval")
+    .replace(/위험 맥락/g, "Risk context")
+    .replace(/관찰 맥락/g, "Watch context")
+    .replace(/지난 약속/g, "Overdue commitment")
+    .replace(/열린 약속/g, "Open commitment")
+    .replace(/추천 Playbook/g, "Recommended playbook")
+    .replace(/활성 Playbook/g, "Active playbook")
+    .replace(/결정 제안/g, "Decision proposal")
+    .replace(/승인 필요/g, "Needs approval")
+    .replace(/지난 일/g, "Overdue work")
+    .replace(/오늘 일정/g, "Today")
+    .replace(/약속/g, "Commitment")
+    .replace(/^결정$/g, "Decisions")
+    .replace(/위험 맥락/g, "Risk")
+    .replace(/지난 항목/g, "Overdue")
+    .replace(/오늘 신호/g, "Today");
 }
 
 function ToneBadge({ tone, label }: { tone: OperatingPlanTone; label: string }) {

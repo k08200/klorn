@@ -76,15 +76,15 @@ function evidence(
 
 function pendingActionCost(pa: PendingActionLike): string {
   if (pa.toolName === "send_email") {
-    return "답장이 늦어지면 관계나 일정 리스크가 커질 수 있어요.";
+    return "A late reply could create relationship or scheduling risk.";
   }
   if (pa.toolName === "create_event") {
-    return "일정이 고정되지 않으면 준비 시간과 후속 작업이 밀릴 수 있어요.";
+    return "If the time is not confirmed, prep and follow-up work may slip.";
   }
   if (pa.toolName.startsWith("delete_")) {
-    return "삭제 결정이 맞는지 확인하지 않으면 되돌리기 어려운 손실이 생길 수 있어요.";
+    return "Confirm the delete decision first because it may be hard to undo.";
   }
-  return "결정이 대기 상태로 남으면 관련 업무 흐름도 멈춰요.";
+  return "If the decision stays pending, the related workstream may stall.";
 }
 
 /**
@@ -217,11 +217,11 @@ function priorityForTask(task: TaskLike, isOverdue: boolean): number {
 }
 
 function taskCost(task: TaskLike, isOverdue: boolean): string {
-  if (isOverdue) return "마감이 지나 관련 후속 작업이나 약속이 밀릴 수 있어요.";
+  if (isOverdue) return "The due date has passed, so related follow-ups may slip.";
   if (task.priority === "URGENT" || task.priority === "HIGH") {
-    return "오늘 처리하지 않으면 높은 우선순위 작업이 내일로 넘어가요.";
+    return "If it is not handled today, high-priority work rolls into tomorrow.";
   }
-  return "오늘 마감이라 놓치면 작업 큐가 밀릴 수 있어요.";
+  return "It is due today, so missing it can back up the work queue.";
 }
 
 /**
@@ -383,7 +383,8 @@ export async function upsertAttentionForCalendarEvent(
         autonomyLevel: AUTOPILOT_LEVEL.OBSERVE,
         title: event.title,
         suggestedAction: "prepare meeting",
-        costOfIgnoring: "회의 전에 맥락을 놓치면 답변, 자료, 약속 확인이 늦어질 수 있어요.",
+        costOfIgnoring:
+          "If meeting context is missed, replies, materials, and commitments may be delayed.",
         evidence: evidence("CALENDAR_EVENT", event.id, [
           { label: "Start time", value: event.startTime.toISOString() },
           { label: "Queue type", value: type },
@@ -396,7 +397,8 @@ export async function upsertAttentionForCalendarEvent(
         autonomyLevel: AUTOPILOT_LEVEL.OBSERVE,
         title: event.title,
         suggestedAction: "prepare meeting",
-        costOfIgnoring: "회의 전에 맥락을 놓치면 답변, 자료, 약속 확인이 늦어질 수 있어요.",
+        costOfIgnoring:
+          "If meeting context is missed, replies, materials, and commitments may be delayed.",
         evidence: evidence("CALENDAR_EVENT", event.id, [
           { label: "Start time", value: event.startTime.toISOString() },
           { label: "Queue type", value: type },
@@ -459,7 +461,7 @@ export async function upsertAttentionForNotification(notif: NotificationLike): P
         title: notif.title,
         body: notif.message,
         suggestedAction: "review proposal",
-        costOfIgnoring: "확인하지 않으면 EVE가 준비한 후속 조치가 대기 상태로 남아요.",
+        costOfIgnoring: "If it is not reviewed, the prepared follow-up stays waiting.",
         evidence: evidence("NOTIFICATION", notif.id, [
           { label: "Notification type", value: notif.type },
           { label: "Unread", value: String(!notif.isRead) },
@@ -472,7 +474,7 @@ export async function upsertAttentionForNotification(notif: NotificationLike): P
         title: notif.title,
         body: notif.message,
         suggestedAction: "review proposal",
-        costOfIgnoring: "확인하지 않으면 EVE가 준비한 후속 조치가 대기 상태로 남아요.",
+        costOfIgnoring: "If it is not reviewed, the prepared follow-up stays waiting.",
         evidence: evidence("NOTIFICATION", notif.id, [
           { label: "Notification type", value: notif.type },
           { label: "Unread", value: String(!notif.isRead) },
@@ -546,13 +548,13 @@ function commitmentCost(
   c: CommitmentLike,
 ): string {
   if (type === "COMMITMENT_OVERDUE")
-    return "약속 기한이 지나 신뢰나 후속 일정에 영향을 줄 수 있어요.";
+    return "The commitment is overdue and may affect trust or downstream timing.";
   if (type === "COMMITMENT_UNCONFIRMED") {
-    return "기한이 불명확해서 지금 확인하지 않으면 나중에 놓칠 가능성이 커요.";
+    return "The due date is unclear, so it is easy to miss unless it is confirmed now.";
   }
   return c.owner === "COUNTERPARTY"
-    ? "상대가 하기로 한 일이 제때 오지 않으면 다음 결정이 막힐 수 있어요."
-    : "내가 하기로 한 일을 놓치면 상대방의 다음 작업이 지연될 수 있어요.";
+    ? "If the counterparty does not deliver on time, the next decision may stall."
+    : "If this slips, the other side may be blocked on their next step.";
 }
 
 export async function upsertAttentionForCommitment(
