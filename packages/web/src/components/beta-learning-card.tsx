@@ -80,13 +80,13 @@ export default function BetaLearningCard() {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">
-            Beta learning
+            초기 학습
           </p>
           <h2 className="mt-2 text-base font-semibold text-stone-100">
-            Eve가 처음 2-3일 동안 메일과 일정 패턴을 학습합니다.
+            Jigeum이 처음 2-3일 동안 메일과 일정 패턴을 학습합니다.
           </h2>
           <p className="mt-2 text-sm leading-6 text-stone-400">
-            처음 브리핑은 다소 보수적일 수 있고, 사용할수록 Top 3가 더 정확해져요.
+            처음 브리핑은 다소 보수적일 수 있고, 사용할수록 핵심 항목이 더 정확해져요.
           </p>
         </div>
 

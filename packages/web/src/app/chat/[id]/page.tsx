@@ -135,11 +135,11 @@ function ChatPageContent() {
       })
       .catch((err) => {
         if (loadController.signal.aborted) return;
-        const msg = err instanceof Error ? err.message : "Could not load this thread.";
+        const msg = err instanceof Error ? err.message : "스레드를 불러오지 못했어요.";
         if (msg.includes("403") || msg.includes("Forbidden")) {
-          setLoadError("You do not have access to this thread. Try another account.");
+          setLoadError("이 스레드에 접근할 수 없어요. 다른 계정으로 다시 시도해주세요.");
         } else if (msg.includes("404") || msg.includes("not found")) {
-          setLoadError("Thread not found.");
+          setLoadError("스레드를 찾을 수 없어요.");
         } else {
           setLoadError(msg);
         }
@@ -366,7 +366,7 @@ function ChatPageContent() {
           {
             id: crypto.randomUUID(),
             role: "ASSISTANT",
-            content: `You reached this month's decision-turn limit (${err.messageLimit}). Current plan: **${err.plan}**. [Change plan](/billing)`,
+            content: `이번 달 결정 턴 한도(${err.messageLimit}회)에 도달했어요. 현재 플랜: **${err.plan}**. [플랜 변경](/billing)`,
             createdAt: new Date().toISOString(),
           },
         ]);
@@ -519,17 +519,17 @@ function ChatPageContent() {
 
   const copyMessage = (content: string) => {
     navigator.clipboard.writeText(content);
-    toast("Copied.", "success");
+    toast("복사했어요.", "success");
   };
 
   const exportConversation = () => {
     if (messages.length === 0) return;
     const lines = messages.map((m) => {
-      const label = m.role === "USER" ? "**You**" : "**Jigeum**";
-      const time = new Date(m.createdAt).toLocaleString("en-US");
+      const label = m.role === "USER" ? "**나**" : "**Jigeum**";
+      const time = new Date(m.createdAt).toLocaleString("ko-KR");
       return `### ${label} — ${time}\n\n${m.content}`;
     });
-    const md = `# Jigeum Decision Thread\n\nExported: ${new Date().toLocaleString("en-US")}\n\n---\n\n${lines.join("\n\n---\n\n")}`;
+    const md = `# Jigeum 결정 스레드\n\n내보낸 시각: ${new Date().toLocaleString("ko-KR")}\n\n---\n\n${lines.join("\n\n---\n\n")}`;
     const blob = new Blob([md], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -537,7 +537,7 @@ function ChatPageContent() {
     a.download = `jigeum-chat-${id.slice(0, 8)}.md`;
     a.click();
     URL.revokeObjectURL(url);
-    toast("Exported as Markdown.", "success");
+    toast("Markdown으로 내보냈어요.", "success");
   };
 
   const handleActionApprove = async (actionId: string, autoAllow = false) => {
@@ -553,21 +553,21 @@ function ChatPageContent() {
         if (action) next.set(action.messageId, { ...action, status: "EXECUTED" });
         return next;
       });
-      toast("Executed.", "success");
+      toast("실행했어요.", "success");
       // Reload messages to get the follow-up message
       apiFetch<{ messages: Message[] }>(`/api/chat/conversations/${id}`)
         .then((data) => setMessages(data.messages))
         .catch((err) => captureClientError(err, { scope: "chat.reload-after-action", id }));
     } catch {
-      toast("Execution failed.", "error");
+      toast("실행하지 못했어요.", "error");
     }
     setActionLoading(null);
   };
 
   const handleActionReject = async (actionId: string, neverSuggest = false) => {
     const reason = neverSuggest
-      ? "Do not suggest again"
-      : window.prompt("Optional: why reject this?");
+      ? "다시 제안하지 않기"
+      : window.prompt("거절 이유가 있으면 적어주세요.");
     if (reason === null) return;
     setActionLoading(actionId);
     try {
@@ -586,7 +586,7 @@ function ChatPageContent() {
         .then((data) => setMessages(data.messages))
         .catch((err) => captureClientError(err, { scope: "chat.reload-after-action", id }));
     } catch {
-      toast("Could not process the action.", "error");
+      toast("액션을 처리하지 못했어요.", "error");
     }
     setActionLoading(null);
   };
@@ -605,15 +605,15 @@ function ChatPageContent() {
           <div className="mx-auto flex max-w-4xl items-center justify-between gap-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300/75">
-                Decision thread
+                결정 스레드
               </p>
-              <p className="text-xs text-stone-500">Context first. Action after approval.</p>
+              <p className="text-xs text-stone-500">맥락을 먼저 보고, 실행은 승인 뒤에 진행합니다.</p>
             </div>
             <div className="hidden items-center gap-2 md:flex">
-              <ThreadMetric label="Prompts" value={userCount} />
-              <ThreadMetric label="Replies" value={assistantCount} />
+              <ThreadMetric label="요청" value={userCount} />
+              <ThreadMetric label="답변" value={assistantCount} />
               <ThreadMetric
-                label="Approvals"
+                label="승인"
                 value={approvalCount}
                 tone={approvalCount > 0 ? "hot" : "idle"}
               />
@@ -622,7 +622,7 @@ function ChatPageContent() {
               type="button"
               onClick={exportConversation}
               className="flex items-center gap-1.5 rounded-lg border border-stone-700/40 px-2.5 py-1.5 text-xs text-stone-500 transition hover:border-stone-600 hover:bg-stone-900/60 hover:text-stone-300"
-              title="Export as Markdown"
+              title="Markdown으로 내보내기"
             >
               <svg
                 aria-hidden="true"
@@ -639,7 +639,7 @@ function ChatPageContent() {
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
-              Export
+              내보내기
             </button>
           </div>
         </div>
@@ -668,7 +668,7 @@ function ChatPageContent() {
               </div>
               <p className="text-stone-300 text-sm mb-4">{loadError}</p>
               <a href="/chat" className="text-sm text-amber-300 hover:text-amber-200 transition">
-                Back to threads
+                스레드로 돌아가기
               </a>
             </div>
           )}
@@ -676,36 +676,36 @@ function ChatPageContent() {
             <div className="flex min-h-[60vh] flex-col items-center justify-center">
               <img src="/brand/mark.svg" alt="" className="mb-4 h-12 w-12" />
               <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-300/75">
-                New decision thread
+                새 결정 스레드
               </p>
               <h2 className="mb-2 text-center text-2xl font-semibold tracking-tight text-stone-100">
-                Start with the outcome you need.
+                필요한 결과부터 시작하세요.
               </h2>
               <p className="mb-8 max-w-md text-center text-sm leading-6 text-stone-500">
-                Jigeum reads the live work context, explains why it matters, and turns it into an
-                approval-ready next move.
+                Jigeum은 지금의 업무 맥락을 읽고, 왜 중요한지 설명한 뒤 승인 가능한 다음 행동으로
+                정리합니다.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
                 {[
                   {
                     code: "01",
-                    title: "Plan today's decisions",
-                    prompt: "Prioritize the decisions I need to handle today.",
+                    title: "오늘 결정할 일 정리",
+                    prompt: "오늘 내가 처리해야 할 결정을 우선순위로 정리해줘.",
                   },
                   {
                     code: "02",
-                    title: "Track hidden risk",
-                    prompt: "Find risky signals across mail, calendar, and tasks.",
+                    title: "숨은 리스크 추적",
+                    prompt: "메일, 캘린더, 작업에서 위험 신호를 찾아줘.",
                   },
                   {
                     code: "03",
-                    title: "Prepare today",
-                    prompt: "Review today's meetings and prepare context and questions.",
+                    title: "오늘 일정 준비",
+                    prompt: "오늘 미팅을 훑고 필요한 맥락과 질문을 준비해줘.",
                   },
                   {
                     code: "04",
-                    title: "Draft the next action",
-                    prompt: "Find threads that need follow-up and draft the next action.",
+                    title: "다음 액션 초안",
+                    prompt: "후속 조치가 필요한 스레드를 찾고 다음 액션을 써줘.",
                   },
                 ].map((starter) => (
                   <button
@@ -760,7 +760,7 @@ function ChatPageContent() {
                 {/* Content */}
                 <div className="min-w-0 flex-1">
                   <p className="mb-1.5 text-[13px] font-semibold text-stone-300">
-                    {msg.role === "USER" ? "You" : "Jigeum"}
+                    {msg.role === "USER" ? "나" : "Jigeum"}
                   </p>
                   {msg.role === "USER" && editingMsgId === msg.id ? (
                     <div>
@@ -786,7 +786,7 @@ function ChatPageContent() {
                           onClick={() => submitEditMessage(idx)}
                           className="px-3 py-1 text-xs bg-amber-300 text-stone-950 rounded-lg hover:bg-amber-200 transition"
                         >
-                          Save and resend
+                          저장 후 다시 보내기
                         </button>
                         <button
                           type="button"
@@ -796,7 +796,7 @@ function ChatPageContent() {
                           }}
                           className="px-3 py-1 text-xs text-stone-400 hover:text-stone-200 transition"
                         >
-                          Cancel
+                          취소
                         </button>
                       </div>
                     </div>
@@ -832,11 +832,11 @@ function ChatPageContent() {
                         const preview = (() => {
                           const name = action.toolName;
                           if (name === "send_email")
-                            return `To: ${args.to || "?"} · ${args.subject || "Untitled"}`;
+                            return `받는 사람: ${args.to || "?"} · ${args.subject || "제목 없음"}`;
                           if (name === "create_event")
-                            return `${args.title || "Event"} · ${args.startTime ? new Date(args.startTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}${args.location ? ` · ${args.location}` : ""}`;
-                          if (name === "create_task") return args.title || "New task";
-                          if (name === "create_note") return args.title || "New note";
+                            return `${args.title || "일정"} · ${args.startTime ? new Date(args.startTime).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}${args.location ? ` · ${args.location}` : ""}`;
+                          if (name === "create_task") return args.title || "새 작업";
+                          if (name === "create_note") return args.title || "새 메모";
                           if (name === "create_contact")
                             return `${args.name || "?"} ${args.email ? `(${args.email})` : ""}`;
                           if (
@@ -851,8 +851,8 @@ function ChatPageContent() {
                                   ? "note_id"
                                   : "contact_id";
                             const label =
-                              action.targetLabel || args[idKey] || args.id || "Item not found";
-                            return `Delete: ${label}`;
+                              action.targetLabel || args[idKey] || args.id || "항목을 찾을 수 없음";
+                            return `삭제: ${label}`;
                           }
                           if (
                             name === "update_task" ||
@@ -866,8 +866,8 @@ function ChatPageContent() {
                                   ? "note_id"
                                   : "contact_id";
                             const label =
-                              action.targetLabel || args[idKey] || args.id || "Item not found";
-                            return `Update: ${label}`;
+                              action.targetLabel || args[idKey] || args.id || "항목을 찾을 수 없음";
+                            return `수정: ${label}`;
                           }
                           return null;
                         })();
@@ -903,7 +903,7 @@ function ChatPageContent() {
                                       <polyline points="20 6 9 17 4 12" />
                                     </svg>
                                   )}
-                                  Approve
+                                  승인
                                 </button>
                                 <button
                                   type="button"
@@ -911,7 +911,7 @@ function ChatPageContent() {
                                   disabled={isLoading}
                                   className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg border border-stone-600 text-stone-300 hover:bg-stone-800 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
                                 >
-                                  Reject
+                                  거절
                                 </button>
                               </div>
                               <div className="mt-2 flex items-center gap-3 text-[11px]">
@@ -921,7 +921,7 @@ function ChatPageContent() {
                                   disabled={isLoading}
                                   className="text-amber-300 hover:text-amber-200 disabled:opacity-50 transition"
                                 >
-                                  Always allow this tool
+                                  이 도구는 항상 허용
                                 </button>
                                 <span className="text-stone-700">|</span>
                                 <button
@@ -930,7 +930,7 @@ function ChatPageContent() {
                                   disabled={isLoading}
                                   className="text-stone-500 hover:text-red-400 disabled:opacity-50 transition"
                                 >
-                                  Do not suggest again
+                                  다시 제안하지 않기
                                 </button>
                               </div>
                             </div>
@@ -939,9 +939,9 @@ function ChatPageContent() {
                       }
 
                       const statusLabel: Record<string, { text: string; color: string }> = {
-                        EXECUTED: { text: "Executed", color: "text-emerald-400" },
-                        REJECTED: { text: "Rejected", color: "text-stone-500" },
-                        FAILED: { text: "Failed", color: "text-red-400" },
+                        EXECUTED: { text: "실행됨", color: "text-emerald-400" },
+                        REJECTED: { text: "거절됨", color: "text-stone-500" },
+                        FAILED: { text: "실패", color: "text-red-400" },
                       };
                       const status = statusLabel[action.status];
                       if (!status) return null;
@@ -964,8 +964,8 @@ function ChatPageContent() {
                         type="button"
                         onClick={() => copyMessage(msg.content)}
                         className="p-1.5 rounded-md text-stone-500 hover:text-stone-300 hover:bg-stone-800 transition"
-                        title="Copy"
-                        aria-label="Copy message"
+                        title="복사"
+                        aria-label="메시지 복사"
                       >
                         <svg
                           aria-hidden="true"
@@ -987,8 +987,8 @@ function ChatPageContent() {
                           type="button"
                           onClick={() => startEditMessage(msg)}
                           className="p-1.5 rounded-md text-stone-500 hover:text-stone-300 hover:bg-stone-800 transition"
-                          title="Edit"
-                          aria-label="Edit message"
+                          title="수정"
+                          aria-label="메시지 수정"
                         >
                           <svg
                             aria-hidden="true"
@@ -1011,8 +1011,8 @@ function ChatPageContent() {
                           type="button"
                           onClick={() => retryMessage(idx)}
                           className="p-1.5 rounded-md text-stone-500 hover:text-stone-300 hover:bg-stone-800 transition"
-                          title="Retry"
-                          aria-label="Retry response"
+                          title="다시 시도"
+                          aria-label="답변 다시 시도"
                         >
                           <svg
                             aria-hidden="true"
@@ -1104,7 +1104,7 @@ function ChatPageContent() {
             type="button"
             onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}
             className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-stone-800 hover:bg-stone-700 border border-stone-600 text-stone-300 rounded-full w-9 h-9 flex items-center justify-center shadow-lg transition"
-            aria-label="Scroll to bottom"
+            aria-label="맨 아래로 이동"
           >
             <svg
               aria-hidden="true"
@@ -1220,7 +1220,7 @@ function ChatPageContent() {
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Ask for a decision, evidence trail, or next action..."
+              placeholder="필요한 결정, 근거, 다음 액션을 요청하세요..."
               rows={1}
               className="w-full bg-transparent px-5 pt-4 pb-2 text-[15px] resize-none focus:outline-none placeholder-stone-500 max-h-[200px]"
             />
@@ -1237,7 +1237,7 @@ function ChatPageContent() {
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   className="p-2 rounded-lg text-stone-500 hover:text-stone-300 hover:bg-stone-800/50 transition"
-                  title="Attach file"
+                  title="파일 첨부"
                 >
                   <svg
                     aria-hidden="true"
@@ -1267,7 +1267,7 @@ function ChatPageContent() {
                   type="button"
                   onClick={() => abortRef.current?.abort()}
                   className="p-2 rounded-lg bg-stone-700 hover:bg-stone-600 text-white transition"
-                  title="Stop"
+                  title="중지"
                 >
                   <svg
                     aria-hidden="true"
@@ -1285,7 +1285,7 @@ function ChatPageContent() {
                   onClick={sendMessage}
                   disabled={!input.trim() && !attachment}
                   className="rounded-lg bg-amber-300 p-2 text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-700 disabled:text-stone-500"
-                  title="Send"
+                  title="보내기"
                 >
                   <svg
                     aria-hidden="true"
@@ -1307,7 +1307,7 @@ function ChatPageContent() {
           </div>
 
           <p className="mt-2 text-center text-[11px] text-stone-600">
-            Jigeum prepares the reasoning first. Real-world action waits for approval.
+            Jigeum은 판단 근거를 먼저 준비하고, 실제 실행은 승인 뒤에 진행합니다.
           </p>
         </div>
       </div>

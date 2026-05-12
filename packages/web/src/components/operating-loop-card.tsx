@@ -56,7 +56,7 @@ export default function OperatingLoopCard() {
   return (
     <section
       className="mb-6 overflow-hidden rounded-2xl border border-amber-300/15 bg-stone-950/70"
-      aria-label="EVE 운영 루프"
+      aria-label="Jigeum 운영 루프"
     >
       <div className="border-b border-stone-800 bg-gradient-to-br from-stone-950 via-stone-950 to-amber-950/25 p-4 md:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -67,7 +67,9 @@ export default function OperatingLoopCard() {
             <h2 className="mt-2 text-xl font-semibold tracking-tight text-stone-50">
               {modeLabel(plan.mode)}
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-400">{plan.headline}</p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-400">
+              {displayText(plan.headline)}
+            </p>
           </div>
           <div className="grid grid-cols-4 overflow-hidden rounded-xl border border-white/10 bg-black/20 md:min-w-[320px]">
             {plan.metrics.map((metric) => (
@@ -79,7 +81,9 @@ export default function OperatingLoopCard() {
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone-500">
             먼저 할 일
           </p>
-          <p className="mt-1 text-sm font-medium text-amber-100">{plan.primaryAction}</p>
+          <p className="mt-1 text-sm font-medium text-amber-100">
+            {displayText(plan.primaryAction)}
+          </p>
         </div>
       </div>
 
@@ -168,7 +172,9 @@ function DecisionOutcomeRow({ outcome }: { outcome: OperatingPlanOutcome }) {
         className="block rounded-lg border border-stone-800/80 bg-black/20 px-2.5 py-2 transition hover:border-emerald-300/25 hover:bg-stone-900/60"
       >
         <div className="flex items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-xs font-medium text-stone-300">{outcome.title}</p>
+          <p className="min-w-0 truncate text-xs font-medium text-stone-300">
+            {displayText(outcome.title)}
+          </p>
           <span className={`shrink-0 text-[10px] ${outcomeStatusClass(outcome.status)}`}>
             {outcomeStatusLabel(outcome.status)}
           </span>
@@ -183,7 +189,7 @@ function DecisionOutcomeRow({ outcome }: { outcome: OperatingPlanOutcome }) {
 }
 
 function MoveRow({ move }: { move: OperatingPlanMove }) {
-  const chatHref = `/chat?prefill=${encodeURIComponent(move.prompt)}`;
+  const chatHref = `/chat?prefill=${encodeURIComponent(displayText(move.prompt))}`;
   const body = (
     <article className="rounded-xl border border-stone-800 bg-stone-900/35 p-3 transition hover:border-amber-300/25 hover:bg-stone-900/55">
       <div className="flex flex-wrap items-center gap-2">
@@ -195,12 +201,16 @@ function MoveRow({ move }: { move: OperatingPlanMove }) {
           href={move.href}
           className="mt-2 block break-words text-sm font-medium text-stone-100"
         >
-          {move.title}
+          {displayText(move.title)}
         </Link>
       ) : (
-        <p className="mt-2 break-words text-sm font-medium text-stone-100">{move.title}</p>
+        <p className="mt-2 break-words text-sm font-medium text-stone-100">
+          {displayText(move.title)}
+        </p>
       )}
-      <p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500">{move.reason}</p>
+      <p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500">
+        {displayText(move.reason)}
+      </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Link
           href={chatHref}
@@ -226,10 +236,14 @@ function WatchRow({ context }: { context: OperatingPlanWatchContext }) {
   const body = (
     <div className="rounded-lg border border-stone-800/80 bg-black/20 px-2.5 py-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="min-w-0 truncate text-xs font-medium text-stone-300">{context.title}</p>
+        <p className="min-w-0 truncate text-xs font-medium text-stone-300">
+          {displayText(context.title)}
+        </p>
         <span className="shrink-0 text-[10px] text-stone-600">{riskLabel(context.risk)}</span>
       </div>
-      <p className="mt-1 line-clamp-1 text-[11px] text-stone-600">{context.reason}</p>
+      <p className="mt-1 line-clamp-1 text-[11px] text-stone-600">
+        {displayText(context.reason)}
+      </p>
     </div>
   );
   return context.href ? (
@@ -250,6 +264,16 @@ function LoopMetric({ metric }: { metric: OperatingPlanMetric }) {
       <p className="mt-0.5 truncate text-[10px] text-stone-600">{metric.label}</p>
     </div>
   );
+}
+
+function displayText(value: string): string {
+  return value
+    .replace(/EVE가/g, "Jigeum이")
+    .replace(/Eve가/g, "Jigeum이")
+    .replace(/EVE는/g, "Jigeum은")
+    .replace(/Eve는/g, "Jigeum은")
+    .replace(/\bEVE\b/g, "Jigeum")
+    .replace(/\bEve\b/g, "Jigeum");
 }
 
 function ToneBadge({ tone, label }: { tone: OperatingPlanTone; label: string }) {

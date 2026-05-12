@@ -21,20 +21,20 @@ export default function CommandPalette() {
   const commands: Command[] = [
     {
       id: "approval-queue",
-      label: "Open decision queue",
-      sublabel: "Review decisions waiting for approval",
+      label: "결정함 열기",
+      sublabel: "승인 대기 중인 결정을 확인",
       action: () => router.push("/inbox"),
     },
     {
       id: "chat",
-      label: "Open threads",
-      sublabel: "Continue the current work context",
+      label: "스레드 열기",
+      sublabel: "현재 업무 맥락 이어가기",
       action: () => router.push("/chat"),
     },
     {
       id: "new-chat",
-      label: "New decision thread",
-      sublabel: "Start from a fresh work context",
+      label: "새 결정 스레드",
+      sublabel: "새 업무 맥락에서 시작",
       action: () => {
         apiFetch<{ id: string }>("/api/chat/conversations", {
           method: "POST",
@@ -45,26 +45,26 @@ export default function CommandPalette() {
     },
     {
       id: "briefing",
-      label: "Open daily briefing",
-      sublabel: "Review today's signal summary",
+      label: "오늘 브리핑 열기",
+      sublabel: "오늘의 신호 요약 확인",
       action: () => router.push("/briefing"),
     },
     {
       id: "settings",
-      label: "Open control plane",
-      sublabel: "Manage integrations, trust, and memory",
+      label: "설정 열기",
+      sublabel: "연동, 신뢰, 메모리 관리",
       action: () => router.push("/settings"),
     },
     {
       id: "billing",
-      label: "Open plan and usage",
-      sublabel: "Check limits and billing status",
+      label: "플랜 및 사용량 열기",
+      sublabel: "한도와 결제 상태 확인",
       action: () => router.push("/billing"),
     },
     {
       id: "shortcuts",
-      label: "Keyboard shortcuts",
-      sublabel: "View shortcut list (Cmd+/)",
+      label: "키보드 단축키",
+      sublabel: "단축키 목록 보기 (Cmd+/)",
       action: () => {
         window.dispatchEvent(new KeyboardEvent("keydown", { key: "/", metaKey: true }));
       },
@@ -124,7 +124,7 @@ export default function CommandPalette() {
       <button
         type="button"
         className="absolute inset-0 bg-black/60"
-        aria-label="Close command palette"
+        aria-label="명령 팔레트 닫기"
         onClick={() => setOpen(false)}
       />
       <div className="relative w-full max-w-md rounded-xl border border-stone-700 bg-stone-900 shadow-2xl">
@@ -134,13 +134,13 @@ export default function CommandPalette() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search decisions, screens, or settings..."
+            placeholder="결정, 화면, 설정 검색..."
             className="w-full bg-transparent text-sm focus:outline-none placeholder-stone-500"
           />
         </div>
         <div className="max-h-64 overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <p className="text-sm text-stone-500 px-4 py-3">No matching commands</p>
+            <p className="text-sm text-stone-500 px-4 py-3">일치하는 명령이 없어요.</p>
           ) : (
             filtered.map((cmd, i) => (
               <button
@@ -164,8 +164,8 @@ export default function CommandPalette() {
           )}
         </div>
         <div className="border-t border-stone-800 px-4 py-2 flex items-center justify-between text-[10px] text-stone-600">
-          <span>Arrows to move, Enter to open</span>
-          <span>Esc to close</span>
+          <span>화살표로 이동, Enter로 열기</span>
+          <span>Esc로 닫기</span>
         </div>
       </div>
     </div>

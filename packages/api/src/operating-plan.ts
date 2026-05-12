@@ -276,7 +276,7 @@ function headlineFor(mode: OperatingPlanMode): string {
 
 function primaryActionFor(mode: OperatingPlanMode, moves: OperatingPlanMove[]): string {
   if (moves[0]) return moves[0].title;
-  if (mode === "maintain_flow") return "새 신호가 들어오면 EVE가 다시 운영 계획을 갱신합니다.";
+  if (mode === "maintain_flow") return "새 신호가 들어오면 Jigeum이 다시 운영 계획을 갱신합니다.";
   return "상단 결정 카드부터 확인하세요.";
 }
 
@@ -286,7 +286,7 @@ function moveFromAttention(item: AttentionItem): OperatingPlanMove {
     item.decision.suggestedAction ||
     item.decision.costOfIgnoring ||
     item.decision.evidence[0]?.value ||
-    "EVE가 지금 처리할 우선 신호로 판단했습니다.";
+    "Jigeum이 지금 처리할 우선 신호로 판단했습니다.";
   return {
     id: `attention:${item.kind}:${item.id}`,
     title,

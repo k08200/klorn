@@ -160,8 +160,8 @@ function InboxView() {
                 흩어진 신호를 승인 가능한 결정으로 정리합니다.
               </h1>
               <p className="mt-3 text-sm leading-6 text-stone-400">
-                EVE가 실행하기 전에 무엇을 봤고, 왜 중요하다고 판단했으며, 어떤 행동을 준비했는지
-                확인하세요.
+                Jigeum이 실행하기 전에 무엇을 봤고, 왜 중요하다고 판단했으며, 어떤 행동을
+                준비했는지 확인하세요.
               </p>
             </div>
             <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
@@ -218,7 +218,9 @@ function InboxView() {
           <p className="text-sm text-stone-300 mb-1">
             {filter === "pending" ? "대기 중인 항목이 없어요" : "받은 일이 없어요"}
           </p>
-          <p className="text-xs text-stone-500">Eve가 새로운 제안을 만들면 여기에 표시돼요.</p>
+          <p className="text-xs text-stone-500">
+            Jigeum이 새로운 제안을 만들면 여기에 표시돼요.
+          </p>
         </div>
       )}
 

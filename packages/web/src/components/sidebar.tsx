@@ -53,11 +53,11 @@ function groupByDate(convs: Conversation[]): DateGroup[] {
   const monthAgo = new Date(today.getTime() - 30 * 86400000);
 
   const groups: DateGroup[] = [
-    { label: "Today", items: [] },
-    { label: "Yesterday", items: [] },
-    { label: "Previous 7 days", items: [] },
-    { label: "Previous 30 days", items: [] },
-    { label: "Older", items: [] },
+    { label: "오늘", items: [] },
+    { label: "어제", items: [] },
+    { label: "최근 7일", items: [] },
+    { label: "최근 30일", items: [] },
+    { label: "이전", items: [] },
   ];
 
   for (const conv of convs) {
@@ -73,10 +73,10 @@ function groupByDate(convs: Conversation[]): DateGroup[] {
 }
 
 const NAV_ITEMS = [
-  { href: "/inbox", label: "Queue", icon: "check" },
-  { href: "/email", label: "Mail", icon: "mail" },
-  { href: "/calendar", label: "Calendar", icon: "calendar" },
-  { href: "/briefing", label: "Briefing", icon: "bell" },
+  { href: "/inbox", label: "결정함", icon: "check" },
+  { href: "/email", label: "메일", icon: "mail" },
+  { href: "/calendar", label: "캘린더", icon: "calendar" },
+  { href: "/briefing", label: "브리핑", icon: "bell" },
 ];
 
 function NavIcon({ type, size = 16 }: { type: string; size?: number }) {
@@ -281,7 +281,7 @@ export default function Sidebar({
         router.push("/chat");
       }
     } catch {
-      toast("Could not delete the thread.", "error");
+      toast("스레드를 삭제하지 못했어요.", "error");
       setDeleteConfirm(null);
     }
   };
@@ -310,7 +310,7 @@ export default function Sidebar({
       if (!res.ok) throw new Error();
       setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title: editTitle } : c)));
     } catch {
-      toast("Could not rename the thread.", "error");
+      toast("스레드 이름을 바꾸지 못했어요.", "error");
     }
     setEditingId(null);
   };
@@ -334,7 +334,7 @@ export default function Sidebar({
       setConversations((prev) =>
         prev.map((c) => (c.id === conv.id ? { ...c, pinned: !newPinned } : c)),
       );
-      toast("Could not update the pin state.", "error");
+      toast("고정 상태를 업데이트하지 못했어요.", "error");
     }
   };
 
@@ -378,7 +378,7 @@ export default function Sidebar({
           <span>
             <span className="block leading-none">Jigeum</span>
             <span className="mt-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-stone-500">
-              What matters now
+              지금 중요한 것
             </span>
           </span>
         </Link>
@@ -388,7 +388,7 @@ export default function Sidebar({
             type="button"
             onClick={createChat}
             className="flex h-8 w-8 items-center justify-center rounded-md border border-stone-700 bg-stone-900 text-stone-400 transition hover:border-stone-600 hover:bg-stone-800 hover:text-stone-100"
-            title="New decision thread"
+            title="새 결정 스레드"
           >
             <svg
               aria-hidden="true"
@@ -428,7 +428,7 @@ export default function Sidebar({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search decisions..."
+            placeholder="결정 스레드 검색..."
             className="w-full rounded-md border border-stone-700 bg-[#0f1115] py-1.5 pl-8 pr-3 text-xs text-stone-300 placeholder-stone-600 transition focus:border-stone-500 focus:outline-none"
           />
           {search && (
@@ -454,7 +454,7 @@ export default function Sidebar({
               className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium text-stone-400 transition hover:bg-stone-800 hover:text-stone-100"
             >
               <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              Decision queue
+              결정함
               {totalPending > 0 && (
                 <span className="ml-auto rounded-full bg-stone-800 px-1.5 py-0.5 text-[10px] font-semibold text-stone-300">
                   {totalPending}
@@ -475,11 +475,11 @@ export default function Sidebar({
                   }`}
                 >
                   <span className="truncate flex-1 text-[13px]">
-                    {conv.title || "Decision card"}
+                    {conv.title || "결정 카드"}
                   </span>
                   {(conv.pendingActionCount || 0) > 0 && (
                     <span className="shrink-0 rounded-full bg-stone-900 px-1.5 py-0.5 text-[10px] text-stone-300">
-                      Pending {conv.pendingActionCount}
+                      대기 {conv.pendingActionCount}
                     </span>
                   )}
                 </Link>
@@ -491,7 +491,9 @@ export default function Sidebar({
         {/* Deep search results (message content search) */}
         {searchResults.length > 0 && (
           <div className="mb-3">
-            <p className="text-[11px] font-medium text-stone-500 px-2 py-1.5">Found in threads</p>
+            <p className="text-[11px] font-medium text-stone-500 px-2 py-1.5">
+              스레드에서 찾음
+            </p>
             {searchResults.slice(0, 5).map((r) => (
               <Link
                 key={r.messageId}
@@ -523,7 +525,7 @@ export default function Sidebar({
               >
                 <path d="M16 2l5 5-3.2 3.2 1.2 7.8-4-4-4 4 1.2-7.8L9 7l5-5z" />
               </svg>
-              Pinned
+              고정됨
             </p>
             {pinned.map((conv) => {
               const isActive = activeConvId === conv.id;
@@ -552,10 +554,10 @@ export default function Sidebar({
                         {conv.source === "agent" && (
                           <span
                             className="w-2 h-2 rounded-full bg-stone-500 shrink-0"
-                            title="Decision card"
+                            title="결정 카드"
                           />
                         )}
-                        {conv.title || "New decision thread"}
+                        {conv.title || "새 결정 스레드"}
                       </span>
                       <span
                         className={`hidden md:flex items-center gap-0.5 shrink-0 ${isActive ? "md:visible" : "md:invisible md:group-hover/conv:visible"}`}
@@ -564,7 +566,7 @@ export default function Sidebar({
                           type="button"
                           onClick={(e) => togglePin(e, conv)}
                           className="p-0.5 text-yellow-500 hover:text-yellow-400 transition"
-                          title="Unpin"
+                          title="고정 해제"
                         >
                           <svg
                             aria-hidden="true"
@@ -581,7 +583,7 @@ export default function Sidebar({
                           type="button"
                           onClick={(e) => startRename(e, conv)}
                           className="p-0.5 text-stone-500 hover:text-stone-300 transition"
-                          title="Rename"
+                          title="이름 변경"
                         >
                           <svg
                             aria-hidden="true"
@@ -602,7 +604,7 @@ export default function Sidebar({
                           type="button"
                           onClick={(e) => confirmDelete(e, conv.id)}
                           className="p-0.5 text-stone-500 hover:text-red-400 transition"
-                          title="Delete"
+                          title="삭제"
                         >
                           <svg
                             aria-hidden="true"
@@ -624,7 +626,7 @@ export default function Sidebar({
                         type="button"
                         onClick={(e) => confirmDelete(e, conv.id)}
                         className="md:hidden flex items-center justify-center min-w-[44px] min-h-[44px] -my-2 -mr-2 text-stone-500 active:text-red-400 transition shrink-0"
-                        aria-label="Delete thread"
+                        aria-label="스레드 삭제"
                       >
                         <svg
                           aria-hidden="true"
@@ -679,10 +681,10 @@ export default function Sidebar({
                         {conv.source === "agent" && (
                           <span
                             className="w-2 h-2 rounded-full bg-stone-500 shrink-0"
-                            title="Decision card"
+                            title="결정 카드"
                           />
                         )}
-                        {conv.title || "New decision thread"}
+                        {conv.title || "새 결정 스레드"}
                       </span>
                       <span
                         className={`hidden md:flex items-center gap-0.5 shrink-0 ${isActive ? "md:visible" : "md:invisible md:group-hover/conv:visible"}`}
@@ -691,7 +693,7 @@ export default function Sidebar({
                           type="button"
                           onClick={(e) => togglePin(e, conv)}
                           className="p-0.5 text-stone-500 hover:text-yellow-500 transition"
-                          title="Pin"
+                          title="고정"
                         >
                           <svg
                             aria-hidden="true"
@@ -711,7 +713,7 @@ export default function Sidebar({
                           type="button"
                           onClick={(e) => startRename(e, conv)}
                           className="p-0.5 text-stone-500 hover:text-stone-300 transition"
-                          title="Rename"
+                          title="이름 변경"
                         >
                           <svg
                             aria-hidden="true"
@@ -732,7 +734,7 @@ export default function Sidebar({
                           type="button"
                           onClick={(e) => confirmDelete(e, conv.id)}
                           className="p-0.5 text-stone-500 hover:text-red-400 transition"
-                          title="Delete"
+                          title="삭제"
                         >
                           <svg
                             aria-hidden="true"
@@ -754,7 +756,7 @@ export default function Sidebar({
                         type="button"
                         onClick={(e) => confirmDelete(e, conv.id)}
                         className="md:hidden flex items-center justify-center min-w-[44px] min-h-[44px] -my-2 -mr-2 text-stone-500 active:text-red-400 transition shrink-0"
-                        aria-label="Delete thread"
+                        aria-label="스레드 삭제"
                       >
                         <svg
                           aria-hidden="true"
@@ -781,7 +783,7 @@ export default function Sidebar({
 
         {filtered.length === 0 && (
           <p className="text-xs text-stone-600 px-3 py-4">
-            {search ? "No matching decision threads" : "No decision threads yet"}
+            {search ? "일치하는 결정 스레드가 없어요." : "아직 결정 스레드가 없어요."}
           </p>
         )}
       </div>
@@ -823,7 +825,7 @@ export default function Sidebar({
               }`}
             >
               <NavIcon type="settings" size={14} />
-              Admin
+              관리자
             </Link>
           )}
         </div>
@@ -833,21 +835,21 @@ export default function Sidebar({
       {deleteConfirm && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm rounded-lg">
           <div className="bg-stone-900 border border-stone-700 rounded-xl p-4 mx-4 shadow-2xl max-w-[220px]">
-            <p className="text-sm text-stone-200 mb-3">Delete this thread?</p>
+            <p className="text-sm text-stone-200 mb-3">이 스레드를 삭제할까요?</p>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setDeleteConfirm(null)}
                 className="flex-1 px-3 py-1.5 text-xs text-stone-400 bg-stone-800 hover:bg-stone-700 rounded-lg transition"
               >
-                Cancel
+                취소
               </button>
               <button
                 type="button"
                 onClick={() => deleteConversation(deleteConfirm)}
                 className="flex-1 px-3 py-1.5 text-xs text-white bg-red-600 hover:bg-red-500 rounded-lg transition"
               >
-                Delete
+                삭제
               </button>
             </div>
           </div>
@@ -893,7 +895,7 @@ export default function Sidebar({
                   }}
                   className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
                 >
-                  Control plane
+                  설정
                 </Link>
                 <Link
                   href="/billing"
@@ -903,7 +905,7 @@ export default function Sidebar({
                   }}
                   className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
                 >
-                  Plan and billing
+                  플랜 및 결제
                 </Link>
                 <Link
                   href="/settings/memory"
@@ -913,7 +915,7 @@ export default function Sidebar({
                   }}
                   className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
                 >
-                  Memory
+                  메모리
                 </Link>
                 <Link
                   href="/settings/usage"
@@ -923,7 +925,7 @@ export default function Sidebar({
                   }}
                   className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
                 >
-                  Usage
+                  사용량
                 </Link>
                 <Link
                   href="/settings/email-feedback"
@@ -933,7 +935,7 @@ export default function Sidebar({
                   }}
                   className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
                 >
-                  Email feedback
+                  이메일 피드백
                 </Link>
                 <div className="border-t border-stone-800 my-1" />
                 <button
@@ -944,7 +946,7 @@ export default function Sidebar({
                   }}
                   className="w-[calc(100%-0.5rem)] text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-md mx-1 transition"
                 >
-                  Log out
+                  로그아웃
                 </button>
               </div>
             )}
@@ -954,7 +956,7 @@ export default function Sidebar({
             href="/login"
             className="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm text-stone-400 hover:bg-stone-800/50 hover:text-white transition"
           >
-            Login
+            로그인
           </Link>
         )}
       </div>
