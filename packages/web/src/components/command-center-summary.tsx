@@ -45,7 +45,7 @@ export default function CommandCenterSummary() {
   }
 
   return (
-    <section className="mb-6 space-y-4" aria-label="커맨드 센터 요약">
+    <section className="mb-6 space-y-4" aria-label="Command center summary">
       {data.top3.length > 0 && <Top3Section items={data.top3} />}
       {todayHasContent && <TodaySectionView section={data.today} />}
     </section>
@@ -56,7 +56,7 @@ function Top3Section({ items }: { items: AttentionItem[] }) {
   return (
     <div className="rounded-xl border border-stone-800 bg-stone-900/40 p-4">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-stone-100">지금 봐야 할 것</h2>
+        <h2 className="text-sm font-semibold text-stone-100">Needs attention now</h2>
         <span className="text-[11px] text-stone-500">Top {items.length}</span>
       </div>
       <ol className="space-y-2">
@@ -113,12 +113,12 @@ function DecisionTrace({ item }: { item: AttentionItem }) {
     <div className="mt-2 grid gap-1.5 rounded-md border border-stone-800/70 bg-black/20 p-2">
       {decision.costOfIgnoring && (
         <p className="line-clamp-2 text-[11px] leading-4 text-stone-400">
-          놓치면: {decision.costOfIgnoring}
+          If missed: {decision.costOfIgnoring}
         </p>
       )}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="rounded border border-stone-800 px-1.5 py-0.5 text-[10px] text-stone-500">
-          신뢰도 {Math.round(decision.confidence * 100)}%
+          Confidence {Math.round(decision.confidence * 100)}%
         </span>
         {decision.suggestedAction && (
           <span className="rounded border border-amber-300/20 bg-amber-300/10 px-1.5 py-0.5 text-[10px] text-amber-200">
@@ -142,30 +142,36 @@ function badgeFor(item: AttentionItem): { label: string; className: string } {
   switch (item.kind) {
     case "pending_action":
       return {
-        label: "승인 필요",
+        label: "Needs approval",
         className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
       };
     case "overdue_task":
-      return { label: "지난 일", className: "text-red-300 bg-red-500/10 border-red-500/20" };
+      return { label: "Overdue", className: "text-red-300 bg-red-500/10 border-red-500/20" };
     case "today_event":
-      return { label: "곧 시작", className: "text-amber-200 bg-amber-300/10 border-amber-300/20" };
+      return {
+        label: "Starting soon",
+        className: "text-amber-200 bg-amber-300/10 border-amber-300/20",
+      };
     case "agent_proposal":
       return {
-        label: "결정 제안",
+        label: "Decision proposal",
         className: "text-amber-200 bg-amber-300/10 border-amber-300/20",
       };
     case "commitment":
       if (item.attentionType === "COMMITMENT_OVERDUE") {
-        return { label: "약속 지남", className: "text-red-300 bg-red-500/10 border-red-500/20" };
+        return {
+          label: "Commitment overdue",
+          className: "text-red-300 bg-red-500/10 border-red-500/20",
+        };
       }
       if (item.attentionType === "COMMITMENT_UNCONFIRMED") {
         return {
-          label: "약속 확인",
+          label: "Needs confirmation",
           className: "text-violet-300 bg-violet-400/10 border-violet-400/20",
         };
       }
       return {
-        label: "약속 예정",
+        label: "Commitment due",
         className: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
       };
   }
@@ -178,7 +184,7 @@ function bodyFor(item: AttentionItem): { title: string; subtitle: string | null 
     case "overdue_task":
       return {
         title: item.title,
-        subtitle: `${item.daysOverdue}일 지남`,
+        subtitle: `${item.daysOverdue}d overdue`,
       };
     case "today_event":
       return {
@@ -215,13 +221,13 @@ function hrefFor(item: AttentionItem): string | null {
 function ownerLabel(owner: string): string | null {
   switch (owner) {
     case "USER":
-      return "내가 한 약속";
+      return "Your commitment";
     case "COUNTERPARTY":
-      return "상대가 한 약속";
+      return "Counterparty commitment";
     case "TEAM":
-      return "팀 약속";
+      return "Team commitment";
     case "UNKNOWN":
-      return "확인 필요";
+      return "Needs owner";
     default:
       return null;
   }
@@ -245,27 +251,27 @@ function formatEventSubtitle(
   minutesAway: number,
   location: string | null,
 ): string {
-  const time = new Date(startTime).toLocaleTimeString("ko-KR", {
+  const time = new Date(startTime).toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
   });
   const inMin =
     minutesAway <= 0
-      ? "진행 중"
+      ? "in progress"
       : minutesAway < 60
-        ? `${minutesAway}분 뒤`
-        : `${Math.round(minutesAway / 60)}시간 뒤`;
+        ? `in ${minutesAway}m`
+        : `in ${Math.round(minutesAway / 60)}h`;
   return location ? `${time} · ${inMin} · ${location}` : `${time} · ${inMin}`;
 }
 
 function TodaySectionView({ section }: { section: TodaySection }) {
   return (
     <div className="rounded-xl border border-stone-800 bg-stone-900/40 p-4">
-      <h2 className="text-sm font-semibold text-stone-100 mb-3">오늘 챙겨야 할 것</h2>
+      <h2 className="text-sm font-semibold text-stone-100 mb-3">Today at a glance</h2>
       <div className="space-y-3">
         {section.events.length > 0 && (
           <SubList
-            label="오늘 일정"
+            label="Today's events"
             items={section.events.map((e) => ({
               key: e.id,
               primary: e.title,
@@ -275,7 +281,7 @@ function TodaySectionView({ section }: { section: TodaySection }) {
         )}
         {section.overdueTasks.length > 0 && (
           <SubList
-            label="지난 마감"
+            label="Overdue"
             tone="warn"
             items={section.overdueTasks.map((t) => ({
               key: t.id,
@@ -286,7 +292,7 @@ function TodaySectionView({ section }: { section: TodaySection }) {
         )}
         {section.todayTasks.length > 0 && (
           <SubList
-            label="오늘 마감"
+            label="Due today"
             items={section.todayTasks.map((t) => ({
               key: t.id,
               primary: t.title,
@@ -325,7 +331,7 @@ function SubList({ label, items, tone }: { label: string; items: SubListItem[]; 
           </li>
         ))}
         {items.length > 3 && (
-          <li className="text-[11px] text-stone-600 px-2">+ {items.length - 3}개 더</li>
+          <li className="text-[11px] text-stone-600 px-2">+ {items.length - 3} more</li>
         )}
       </ul>
     </div>
@@ -333,18 +339,18 @@ function SubList({ label, items, tone }: { label: string; items: SubListItem[]; 
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function priorityLabel(p: string): string | null {
   const up = p.toUpperCase();
-  if (up === "URGENT") return "긴급";
-  if (up === "HIGH") return "높음";
-  if (up === "MEDIUM") return "보통";
-  if (up === "LOW") return "낮음";
+  if (up === "URGENT") return "Urgent";
+  if (up === "HIGH") return "High";
+  if (up === "MEDIUM") return "Medium";
+  if (up === "LOW") return "Low";
   return null;
 }

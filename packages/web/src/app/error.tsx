@@ -10,11 +10,11 @@ function ErrorPage({
   return (
     <main className="flex flex-col items-center justify-center min-h-[60vh] px-6">
       <p className="mb-4 rounded-full border border-red-400/20 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-200">
-        화면 일시 정지
+        Screen paused
       </p>
-      <h1 className="text-xl font-semibold mb-2">결정 화면에서 오류가 발생했습니다.</h1>
+      <h1 className="text-xl font-semibold mb-2">Something went wrong in this workspace view.</h1>
       <p className="text-stone-400 text-sm mb-2 text-center max-w-md">
-        최신 맥락을 다시 구성한 뒤 이어서 진행할 수 있습니다.
+        Rebuild the latest context and continue from the workspace.
       </p>
       {error.message && (
         <p className="text-xs text-stone-600 mb-6 font-mono bg-stone-950 border border-stone-800 rounded px-3 py-1.5 max-w-md truncate">
@@ -26,7 +26,7 @@ function ErrorPage({
         onClick={reset}
         className="bg-amber-300 hover:bg-amber-200 text-stone-950 px-5 py-2.5 rounded-lg text-sm font-medium transition"
       >
-        다시 시도
+        Try again
       </button>
     </main>
   );

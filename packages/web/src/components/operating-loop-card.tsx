@@ -56,13 +56,13 @@ export default function OperatingLoopCard() {
   return (
     <section
       className="mb-6 overflow-hidden rounded-2xl border border-amber-300/15 bg-stone-950/70"
-      aria-label="Jigeum 운영 루프"
+      aria-label="Jigeum operating loop"
     >
       <div className="border-b border-stone-800 bg-gradient-to-br from-stone-950 via-stone-950 to-amber-950/25 p-4 md:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
-              운영 루프
+              Operating loop
             </p>
             <h2 className="mt-2 text-xl font-semibold tracking-tight text-stone-50">
               {modeLabel(plan.mode)}
@@ -79,7 +79,7 @@ export default function OperatingLoopCard() {
         </div>
         <div className="mt-4 rounded-xl border border-stone-800 bg-black/20 px-3 py-2.5">
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone-500">
-            먼저 할 일
+            First move
           </p>
           <p className="mt-1 text-sm font-medium text-amber-100">
             {displayText(plan.primaryAction)}
@@ -90,7 +90,7 @@ export default function OperatingLoopCard() {
       <div className="grid gap-3 p-3 md:grid-cols-[1.4fr_1fr] md:p-4">
         <section>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-stone-100">다음 움직임</h3>
+            <h3 className="text-sm font-semibold text-stone-100">Next moves</h3>
             <span className="text-[11px] text-stone-600">{plan.nextMoves.length}</span>
           </div>
           <ul className="space-y-2">
@@ -107,11 +107,11 @@ export default function OperatingLoopCard() {
           {plan.playbookNudge && (
             <div className="rounded-xl border border-stone-800 bg-stone-900/35 p-3">
               <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-amber-200">
-                플레이북
+                Playbook
               </p>
               <p className="mt-2 text-sm font-medium text-stone-100">{plan.playbookNudge.name}</p>
               <p className="mt-1 text-xs leading-5 text-stone-500">
-                {plan.playbookNudge.active ? "활성화됨" : "추천됨"} · 신뢰도{" "}
+                {plan.playbookNudge.active ? "Active" : "Recommended"} · Confidence{" "}
                 {Math.round(plan.playbookNudge.confidence * 100)}%
                 {plan.playbookNudge.nextStep ? ` · ${plan.playbookNudge.nextStep}` : ""}
               </p>
@@ -120,7 +120,7 @@ export default function OperatingLoopCard() {
           {plan.watchlist.length > 0 && (
             <div className="rounded-xl border border-stone-800 bg-stone-900/35 p-3">
               <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone-500">
-                워치리스트
+                Watchlist
               </p>
               <ul className="mt-2 space-y-2">
                 {plan.watchlist.map((context) => (
@@ -141,16 +141,16 @@ function DecisionPulseCard({ pulse }: { pulse: OperatingPlanDecisionPulse }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-emerald-200">
-            최근 결정
+            Recent decisions
           </p>
-          <p className="mt-1 text-xs text-stone-500">{pulse.windowHours}시간 결과</p>
+          <p className="mt-1 text-xs text-stone-500">{pulse.windowHours}h outcome</p>
         </div>
         <div className="shrink-0 text-right text-[11px] leading-5 text-stone-500">
           <p>
-            실행 <span className="font-semibold text-emerald-200">{pulse.executed}</span>
+            Done <span className="font-semibold text-emerald-200">{pulse.executed}</span>
           </p>
           <p>
-            거절 <span className="font-semibold text-stone-300">{pulse.rejected}</span> · 실패{" "}
+            Rejected <span className="font-semibold text-stone-300">{pulse.rejected}</span> · Failed{" "}
             <span className="font-semibold text-red-200">{pulse.failed}</span>
           </p>
         </div>
@@ -216,14 +216,14 @@ function MoveRow({ move }: { move: OperatingPlanMove }) {
           href={chatHref}
           className="rounded-md border border-amber-300/25 bg-amber-300/10 px-2.5 py-1.5 text-xs font-medium text-amber-100 transition hover:bg-amber-300/15"
         >
-          스레드로 준비
+          Prepare thread
         </Link>
         {move.href && (
           <Link
             href={move.href}
             className="rounded-md border border-stone-700 px-2.5 py-1.5 text-xs text-stone-400 transition hover:bg-stone-800"
           >
-            원본 보기
+            View source
           </Link>
         )}
       </div>
@@ -285,37 +285,37 @@ function ToneBadge({ tone, label }: { tone: OperatingPlanTone; label: string }) 
 function modeLabel(mode: OperatingPlan["mode"]): string {
   switch (mode) {
     case "clear_decisions":
-      return "결정 정리 모드";
+      return "Decision clearing mode";
     case "recover_risk":
-      return "리스크 회수 모드";
+      return "Risk recovery mode";
     case "prepare_day":
-      return "오늘 준비 모드";
+      return "Day preparation mode";
     case "maintain_flow":
-      return "흐름 유지 모드";
+      return "Flow maintenance mode";
   }
 }
 
 function sourceLabel(source: OperatingPlanMove["source"]): string {
   switch (source) {
     case "attention":
-      return "결정 카드";
+      return "Decision card";
     case "work_context":
-      return "업무 그래프";
+      return "Work graph";
     case "playbook":
-      return "플레이북";
+      return "Playbook";
   }
 }
 
 function riskLabel(risk: OperatingPlanWatchContext["risk"]): string {
-  if (risk === "high") return "높음";
-  if (risk === "medium") return "보통";
-  return "낮음";
+  if (risk === "high") return "High";
+  if (risk === "medium") return "Medium";
+  return "Low";
 }
 
 function outcomeStatusLabel(status: OperatingPlanOutcome["status"]): string {
-  if (status === "executed") return "실행";
-  if (status === "rejected") return "거절";
-  return "실패";
+  if (status === "executed") return "Done";
+  if (status === "rejected") return "Rejected";
+  return "Failed";
 }
 
 function outcomeStatusClass(status: OperatingPlanOutcome["status"]): string {

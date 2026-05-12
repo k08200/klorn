@@ -43,15 +43,15 @@ interface CandidateIntake {
 }
 
 const STATUS_FILTERS: Array<{ status: CandidateStatus; label: string }> = [
-  { status: "ALL", label: "전체" },
-  { status: "NEEDS_ANALYSIS", label: "분석 필요" },
-  { status: "NEEDS_INFO", label: "정보 확인" },
-  { status: "READY_TO_REVIEW", label: "검토 대기" },
-  { status: "REVIEWING", label: "검토 중" },
-  { status: "CONTACTED", label: "연락 완료" },
-  { status: "SHORTLISTED", label: "보류/후보" },
-  { status: "REJECTED", label: "거절" },
-  { status: "ARCHIVED", label: "보관" },
+  { status: "ALL", label: "All" },
+  { status: "NEEDS_ANALYSIS", label: "Needs analysis" },
+  { status: "NEEDS_INFO", label: "Needs info" },
+  { status: "READY_TO_REVIEW", label: "Ready" },
+  { status: "REVIEWING", label: "Reviewing" },
+  { status: "CONTACTED", label: "Contacted" },
+  { status: "SHORTLISTED", label: "Shortlisted" },
+  { status: "REJECTED", label: "Rejected" },
+  { status: "ARCHIVED", label: "Archived" },
 ];
 
 export default function CandidateIntakePage() {
@@ -83,7 +83,7 @@ function CandidateIntakeView() {
       setCandidates(data.candidates);
     } catch (err) {
       captureClientError(err, { scope: "email.candidates.load", status: nextStatus });
-      setError("후보자 큐를 불러오지 못했어요.");
+      setError("Could not load candidate intake.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -109,10 +109,11 @@ function CandidateIntakeView() {
               Candidate Intake
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              후보자 자료 접수 큐
+              Candidate intake queue
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
-              메일 첨부에서 감지한 이력서, 프로필, 포트폴리오, 오디션 자료를 검토 상태별로 모읍니다.
+              Review resumes, profiles, portfolios, and audition materials detected in mail
+              attachments.
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
@@ -120,7 +121,7 @@ function CandidateIntakeView() {
               href="/email"
               className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100"
             >
-              메일 목록
+              Mail
             </Link>
             <button
               type="button"
@@ -128,7 +129,7 @@ function CandidateIntakeView() {
               disabled={refreshing}
               className="rounded-lg border border-emerald-400/30 px-3 py-1.5 text-xs text-emerald-200 transition hover:bg-emerald-400/10 disabled:opacity-50"
             >
-              {refreshing ? "갱신 중..." : "후보자 재스캔"}
+              {refreshing ? "Refreshing..." : "Rescan candidates"}
             </button>
           </div>
         </div>
@@ -159,7 +160,7 @@ function CandidateIntakeView() {
         })}
       </div>
 
-      {loading && <p className="px-1 py-3 text-sm text-stone-500">로딩 중...</p>}
+      {loading && <p className="px-1 py-3 text-sm text-stone-500">Loading...</p>}
 
       {error && (
         <div className="mt-3 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -169,9 +170,9 @@ function CandidateIntakeView() {
 
       {!loading && !error && candidates.length === 0 && (
         <div className="mt-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-center">
-          <p className="text-sm text-stone-300">아직 후보자 자료가 잡히지 않았어요.</p>
+          <p className="text-sm text-stone-300">No candidate materials yet.</p>
           <p className="mt-1 text-xs text-stone-600">
-            Gmail 동기화 후 첨부 분석이 끝나면 이 큐에 자동으로 쌓입니다.
+            They will appear here after Gmail sync and attachment analysis finish.
           </p>
         </div>
       )}
@@ -199,7 +200,7 @@ function QueueStat({ label, value }: { label: string; value: number }) {
 }
 
 function CandidateCard({ candidate }: { candidate: CandidateIntake }) {
-  const title = [candidate.name || "이름 미확인", candidate.role].filter(Boolean).join(" · ");
+  const title = [candidate.name || "Name unknown", candidate.role].filter(Boolean).join(" · ");
   return (
     <Link
       href={`/email/${candidate.emailId}`}
@@ -223,23 +224,23 @@ function CandidateCard({ candidate }: { candidate: CandidateIntake }) {
         </time>
       </div>
       <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-stone-500">
-        {candidate.contact && <span className="truncate">연락처 {candidate.contact}</span>}
-        <span>파일 {candidate.evidenceFiles.length}개</span>
+        {candidate.contact && <span className="truncate">Contact {candidate.contact}</span>}
+        <span>{candidate.evidenceFiles.length} files</span>
         {candidate.missingFields.length > 0 && (
           <span className="text-amber-300/80">
-            추가 확인 {candidate.missingFields.map(candidateMissingLabel).join(", ")}
+            Missing {candidate.missingFields.map(candidateMissingLabel).join(", ")}
           </span>
         )}
       </div>
       <div className="mt-3 rounded-lg border border-stone-800/60 bg-black/15 px-3 py-2">
-        <p className="truncate text-xs text-stone-300">{candidate.email.subject || "제목 없음"}</p>
+        <p className="truncate text-xs text-stone-300">{candidate.email.subject || "No subject"}</p>
         <p className="mt-1 truncate text-[11px] text-stone-600">
           {senderName(candidate.email.from)}
         </p>
       </div>
       {candidate.notes && (
         <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-stone-500">
-          메모: {candidate.notes}
+          Notes: {candidate.notes}
         </p>
       )}
     </Link>
@@ -248,24 +249,24 @@ function CandidateCard({ candidate }: { candidate: CandidateIntake }) {
 
 function candidateStatusLabel(status: string): string {
   const labels: Record<string, string> = {
-    NEEDS_ANALYSIS: "분석 필요",
-    NEEDS_INFO: "정보 확인",
-    READY_TO_REVIEW: "검토 대기",
-    REVIEWING: "검토 중",
-    CONTACTED: "연락 완료",
-    SHORTLISTED: "보류/후보",
-    REJECTED: "거절",
-    ARCHIVED: "보관",
+    NEEDS_ANALYSIS: "Needs analysis",
+    NEEDS_INFO: "Needs info",
+    READY_TO_REVIEW: "Ready",
+    REVIEWING: "Reviewing",
+    CONTACTED: "Contacted",
+    SHORTLISTED: "Shortlisted",
+    REJECTED: "Rejected",
+    ARCHIVED: "Archived",
   };
   return labels[status] || status;
 }
 
 function candidateMissingLabel(field: string): string {
   const labels: Record<string, string> = {
-    name: "이름",
-    contact: "연락처",
-    role: "역할",
-    portfolio: "포트폴리오",
+    name: "name",
+    contact: "contact",
+    role: "role",
+    portfolio: "portfolio",
   };
   return labels[field] || field;
 }
@@ -281,12 +282,12 @@ function formatRelative(iso: string): string {
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return "방금";
-  if (diffMin < 60) return `${diffMin}분 전`;
+  if (diffMin < 1) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
   const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}시간 전`;
+  if (diffHr < 24) return `${diffHr}h ago`;
   const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString("ko-KR", {
+  return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     ...(sameYear ? {} : { year: "2-digit" }),

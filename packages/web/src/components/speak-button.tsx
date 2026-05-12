@@ -61,7 +61,7 @@ export default function SpeakButton({ text, className }: SpeakButtonProps) {
       className={`transition ${className || ""} ${
         speaking ? "text-amber-300" : "text-stone-600 hover:text-stone-300"
       }`}
-      title={speaking ? "읽기 중지" : "소리 내어 읽기"}
+      title={speaking ? "Stop reading" : "Read aloud"}
     >
       <svg
         aria-hidden="true"

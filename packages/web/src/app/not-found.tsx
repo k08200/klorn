@@ -4,22 +4,22 @@ export default function NotFound() {
   return (
     <main className="flex flex-col items-center justify-center min-h-[60vh] px-6">
       <p className="text-6xl font-bold text-stone-700 mb-4">404</p>
-      <h1 className="text-xl font-semibold mb-2">화면을 찾을 수 없습니다</h1>
+      <h1 className="text-xl font-semibold mb-2">Screen not found</h1>
       <p className="text-stone-400 text-sm mb-8 text-center max-w-md">
-        해당 결정 화면이 없거나 이 워크스페이스 밖으로 이동했습니다.
+        This decision screen is unavailable or outside the current workspace.
       </p>
       <div className="flex gap-3">
         <Link
           href="/inbox"
           className="bg-amber-300 hover:bg-amber-200 text-stone-950 px-5 py-2.5 rounded-lg text-sm font-medium transition"
         >
-          결정 큐 열기
+          Open decision queue
         </Link>
         <Link
           href="/briefing"
           className="bg-stone-900 hover:bg-stone-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition border border-stone-700"
         >
-          일일 브리핑
+          Daily briefing
         </Link>
       </div>
     </main>

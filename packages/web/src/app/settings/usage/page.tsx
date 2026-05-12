@@ -65,11 +65,10 @@ function UsagePageContent() {
               Usage Ledger
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              EVE 운영량과 추정 비용
+              Jigeum usage and estimated cost
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-              결정 스레드와 판단 생성에 쓰인 토큰을 기간별로 확인하고, 어떤 스레드가 비용을 만드는지
-              추적합니다.
+              Review decision threads, model tokens, and the conversations driving workspace cost.
             </p>
           </div>
           <EveSignalField className="min-h-40 rounded-lg" />
@@ -79,9 +78,9 @@ function UsagePageContent() {
       {/* Period selector */}
       <div className="mb-6 flex gap-2">
         {[
-          { value: "week", label: "이번 주" },
-          { value: "month", label: "이번 달" },
-          { value: "all", label: "전체" },
+          { value: "week", label: "This week" },
+          { value: "month", label: "This month" },
+          { value: "all", label: "All time" },
         ].map((p) => (
           <button
             key={p.value}
@@ -102,11 +101,11 @@ function UsagePageContent() {
         <>
           {/* Summary cards */}
           <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <UsageMetric label="모델 토큰" value={formatTokens(stats.summary.totalTokens)} />
-            <UsageMetric label="결정 턴" value={String(stats.summary.messageCount)} />
-            <UsageMetric label="추정 비용" value={`$${stats.summary.totalCost.toFixed(4)}`} />
+            <UsageMetric label="Model tokens" value={formatTokens(stats.summary.totalTokens)} />
+            <UsageMetric label="Decision turns" value={String(stats.summary.messageCount)} />
+            <UsageMetric label="Estimated cost" value={`$${stats.summary.totalCost.toFixed(4)}`} />
             <UsageMetric
-              label="턴당 평균"
+              label="Avg per turn"
               value={
                 stats.summary.messageCount > 0
                   ? formatTokens(Math.round(stats.summary.totalTokens / stats.summary.messageCount))
@@ -118,15 +117,15 @@ function UsagePageContent() {
           {/* Daily breakdown */}
           {stats.daily.length > 0 && (
             <div className="mb-8">
-              <h2 className="mb-3 text-sm font-medium text-stone-300">일별 사용 기록</h2>
+              <h2 className="mb-3 text-sm font-medium text-stone-300">Daily usage</h2>
               <div className="overflow-x-auto rounded-lg border border-stone-700/45 bg-stone-950/35">
                 <table className="w-full min-w-[560px] text-sm">
                   <thead>
                     <tr className="border-b border-stone-700/45 text-[11px] text-stone-500">
-                      <th className="px-4 py-2 text-left font-medium">날짜</th>
-                      <th className="px-4 py-2 text-right font-medium">턴</th>
-                      <th className="px-4 py-2 text-right font-medium">토큰</th>
-                      <th className="px-4 py-2 text-right font-medium">비용</th>
+                      <th className="px-4 py-2 text-left font-medium">Date</th>
+                      <th className="px-4 py-2 text-right font-medium">Turns</th>
+                      <th className="px-4 py-2 text-right font-medium">Tokens</th>
+                      <th className="px-4 py-2 text-right font-medium">Cost</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -153,15 +152,15 @@ function UsagePageContent() {
       {/* Per-conversation usage */}
       {convUsages.length > 0 && (
         <div>
-          <h2 className="mb-3 text-sm font-medium text-stone-300">사용량이 큰 결정 스레드</h2>
+          <h2 className="mb-3 text-sm font-medium text-stone-300">Highest-usage threads</h2>
           <div className="overflow-x-auto rounded-lg border border-stone-700/45 bg-stone-950/35">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-stone-700/45 text-[11px] text-stone-500">
-                  <th className="px-4 py-2 text-left font-medium">결정 스레드</th>
-                  <th className="px-4 py-2 text-right font-medium">턴</th>
-                  <th className="px-4 py-2 text-right font-medium">토큰</th>
-                  <th className="px-4 py-2 text-right font-medium">비용</th>
+                  <th className="px-4 py-2 text-left font-medium">Decision thread</th>
+                  <th className="px-4 py-2 text-right font-medium">Turns</th>
+                  <th className="px-4 py-2 text-right font-medium">Tokens</th>
+                  <th className="px-4 py-2 text-right font-medium">Cost</th>
                 </tr>
               </thead>
               <tbody>
@@ -185,7 +184,7 @@ function UsagePageContent() {
 
       {!stats && (
         <div className="flex items-center justify-center py-20 text-stone-500">
-          사용량을 불러오는 중...
+          Loading usage...
         </div>
       )}
     </div>

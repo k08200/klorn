@@ -44,7 +44,7 @@ function ForgotPasswordForm() {
       });
       setSent(true);
     } catch {
-      toast("재설정 링크를 보내지 못했습니다.", "error");
+      toast("Could not send the reset link.", "error");
     }
     setLoading(false);
   };
@@ -53,23 +53,22 @@ function ForgotPasswordForm() {
     return (
       <AuthScreen
         eyebrow="Password reset"
-        title="메일을 확인하세요"
-        description="해당 이메일 계정이 있다면 비밀번호 재설정 링크를 보냈습니다."
+        title="Check your email"
+        description="If that email account exists, we sent a password reset link."
         footer={
           <Link href="/login" className="transition hover:text-stone-300">
-            로그인으로 돌아가기
+            Back to login
           </Link>
         }
       >
         <div className="border-y border-stone-800/80 py-5 text-sm leading-6 text-stone-300">
-          링크는 보안을 위해 제한된 시간 동안만 사용할 수 있습니다. 메일이 보이지 않으면 스팸함도
-          확인해 주세요.
+          The link is only valid for a limited time. Check spam if it does not appear.
         </div>
         <Link
           href="/login"
           className="mt-5 flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
         >
-          로그인 화면 열기
+          Open login
         </Link>
       </AuthScreen>
     );
@@ -78,18 +77,18 @@ function ForgotPasswordForm() {
   return (
     <AuthScreen
       eyebrow="Password reset"
-      title="비밀번호 재설정"
-      description="계정 이메일을 입력하면 안전한 재설정 링크를 보내드립니다."
+      title="Reset password"
+      description="Enter your account email and we will send a secure reset link."
       footer={
         <Link href="/login" className="transition hover:text-stone-300">
-          로그인으로 돌아가기
+          Back to login
         </Link>
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="email" className="mb-1.5 block text-xs font-medium text-stone-400">
-            이메일
+            Email
           </label>
           <input
             id="email"
@@ -107,7 +106,7 @@ function ForgotPasswordForm() {
           disabled={loading || !email}
           className="flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-800 disabled:text-stone-500"
         >
-          {loading ? "전송 중..." : "재설정 링크 보내기"}
+          {loading ? "Sending..." : "Send reset link"}
         </button>
       </form>
     </AuthScreen>
@@ -124,7 +123,7 @@ function NewPasswordForm({ token }: { token: string }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirm) {
-      toast("비밀번호가 일치하지 않습니다.", "error");
+      toast("Passwords do not match.", "error");
       return;
     }
     setLoading(true);
@@ -135,7 +134,7 @@ function NewPasswordForm({ token }: { token: string }) {
       });
       setDone(true);
     } catch (err) {
-      toast(err instanceof Error ? err.message : "재설정에 실패했습니다.", "error");
+      toast(err instanceof Error ? err.message : "Reset failed.", "error");
     }
     setLoading(false);
   };
@@ -144,14 +143,14 @@ function NewPasswordForm({ token }: { token: string }) {
     return (
       <AuthScreen
         eyebrow="Password updated"
-        title="비밀번호 재설정 완료"
-        description="비밀번호가 정상적으로 변경되었습니다. 이제 새 비밀번호로 로그인할 수 있습니다."
+        title="Password reset complete"
+        description="Your password was changed. You can now log in with the new password."
       >
         <Link
           href="/login"
           className="flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
         >
-          로그인
+          Log in
         </Link>
       </AuthScreen>
     );
@@ -160,25 +159,25 @@ function NewPasswordForm({ token }: { token: string }) {
   return (
     <AuthScreen
       eyebrow="New password"
-      title="새 비밀번호 설정"
-      description="다음 로그인부터 사용할 새 비밀번호를 입력하세요."
+      title="Set a new password"
+      description="Enter the password you will use for your next login."
       footer={
         <Link href="/login" className="transition hover:text-stone-300">
-          로그인으로 돌아가기
+          Back to login
         </Link>
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="password" className="mb-1.5 block text-xs font-medium text-stone-400">
-            새 비밀번호
+            New password
           </label>
           <input
             id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="6자 이상"
+            placeholder="At least 6 characters"
             required
             minLength={6}
             className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
@@ -187,14 +186,14 @@ function NewPasswordForm({ token }: { token: string }) {
 
         <div>
           <label htmlFor="confirm" className="mb-1.5 block text-xs font-medium text-stone-400">
-            비밀번호 확인
+            Confirm password
           </label>
           <input
             id="confirm"
             type="password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
-            placeholder="비밀번호 다시 입력"
+            placeholder="Re-enter password"
             required
             minLength={6}
             className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
@@ -206,7 +205,7 @@ function NewPasswordForm({ token }: { token: string }) {
           disabled={loading || !password || !confirm}
           className="flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-800 disabled:text-stone-500"
         >
-          {loading ? "재설정 중..." : "비밀번호 재설정"}
+          {loading ? "Resetting..." : "Reset password"}
         </button>
       </form>
     </AuthScreen>

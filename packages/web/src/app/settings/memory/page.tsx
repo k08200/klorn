@@ -17,11 +17,11 @@ interface Memory {
 }
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  PREFERENCE: { label: "선호", color: "text-amber-200 bg-amber-500/10 border-amber-500/25" },
-  FACT: { label: "사실", color: "text-teal-200 bg-teal-500/10 border-teal-500/25" },
-  DECISION: { label: "결정", color: "text-rose-200 bg-rose-500/10 border-rose-500/25" },
-  CONTEXT: { label: "맥락", color: "text-emerald-200 bg-emerald-500/10 border-emerald-500/25" },
-  FEEDBACK: { label: "피드백", color: "text-stone-200 bg-stone-500/10 border-stone-500/25" },
+  PREFERENCE: { label: "Preference", color: "text-amber-200 bg-amber-500/10 border-amber-500/25" },
+  FACT: { label: "Fact", color: "text-teal-200 bg-teal-500/10 border-teal-500/25" },
+  DECISION: { label: "Decision", color: "text-rose-200 bg-rose-500/10 border-rose-500/25" },
+  CONTEXT: { label: "Context", color: "text-emerald-200 bg-emerald-500/10 border-emerald-500/25" },
+  FEEDBACK: { label: "Feedback", color: "text-stone-200 bg-stone-500/10 border-stone-500/25" },
 };
 
 export default function MemoryPage() {
@@ -71,17 +71,17 @@ function MemoryPageContent() {
               Memory Graph
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              EVE가 판단에 쓰는 기억
+              Memory used for decisions
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-              승인 방식, 선호, 반복되는 업무 맥락을 확인하고 필요 없는 기억은 지웁니다.
+              Review approval preferences, recurring work context, and remove stale memories.
             </p>
           </div>
           <EveSignalField className="min-h-40 rounded-lg" />
           <div className="grid grid-cols-3 gap-2 lg:col-span-2">
-            <MemoryStat label="전체" value={stats.total} />
-            <MemoryStat label="표시" value={memories.length} />
-            <MemoryStat label="유형" value={stats.byType.length} />
+            <MemoryStat label="Total" value={stats.total} />
+            <MemoryStat label="Shown" value={memories.length} />
+            <MemoryStat label="Types" value={stats.byType.length} />
           </div>
         </div>
       </header>
@@ -97,7 +97,7 @@ function MemoryPageContent() {
               : "border-stone-700/55 bg-stone-950/45 text-stone-400 hover:bg-stone-900/70 hover:text-stone-200"
           }`}
         >
-          전체 ({stats.total})
+          All ({stats.total})
         </button>
         {Object.entries(TYPE_LABELS).map(([type, { label, color }]) => {
           const count = stats.byType.find((b) => b.type === type)?._count || 0;
@@ -124,7 +124,7 @@ function MemoryPageContent() {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="기억 검색..."
+          placeholder="Search memory..."
           className="w-full rounded-lg border border-stone-700/60 bg-stone-950/45 px-4 py-2.5 text-sm text-stone-300 placeholder-stone-600 transition focus:border-amber-500/50 focus:outline-none"
         />
       </div>
@@ -154,15 +154,15 @@ function MemoryPageContent() {
                   </div>
                   <p className="text-sm leading-relaxed text-stone-200">{m.content}</p>
                   <p className="mt-2 text-[11px] text-stone-600">
-                    업데이트: {new Date(m.updatedAt).toLocaleDateString("ko-KR")}
-                    {m.source && ` | 출처: ${m.source}`}
+                    Updated: {new Date(m.updatedAt).toLocaleDateString("en-US")}
+                    {m.source && ` | Source: ${m.source}`}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => deleteMemory(m.id)}
                   className="rounded-md p-1.5 text-stone-600 opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
-                  title="기억 삭제"
+                  title="Delete memory"
                 >
                   <svg
                     aria-hidden="true"
@@ -186,9 +186,9 @@ function MemoryPageContent() {
 
         {memories.length === 0 && (
           <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 py-12 text-center">
-            <p className="mb-1 text-sm text-stone-400">아직 저장된 기억이 없습니다</p>
+            <p className="mb-1 text-sm text-stone-400">No saved memories yet</p>
             <p className="text-xs text-stone-600">
-              일을 처리하면서 EVE가 결정 선호와 반복 맥락을 기억합니다.
+              Jigeum will learn decision preferences and recurring context as work gets handled.
             </p>
           </div>
         )}

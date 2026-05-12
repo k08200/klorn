@@ -52,7 +52,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 onClick={() => handleClose(false)}
                 className="px-4 py-2 rounded-lg text-sm text-stone-400 hover:text-white transition"
               >
-                취소
+                Cancel
               </button>
               <button
                 type="button"
@@ -63,7 +63,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                     : "bg-amber-300 hover:bg-amber-200 text-stone-950"
                 }`}
               >
-                {options.confirmLabel || "확인"}
+                {options.confirmLabel || "Confirm"}
               </button>
             </div>
           </div>

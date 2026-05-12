@@ -16,15 +16,15 @@ export interface NotificationGroup<T extends GroupableNotification> {
   unreadCount: number;
 }
 
-const TYPE_LABELS_KO: Record<string, string> = {
-  reminder: "알림",
-  calendar: "일정",
-  email: "메일",
-  task: "할 일",
-  meeting: "미팅",
-  briefing: "브리핑",
-  agent_proposal: "Eve 제안",
-  insight: "인사이트",
+const TYPE_LABELS: Record<string, string> = {
+  reminder: "Reminder",
+  calendar: "Calendar",
+  email: "Mail",
+  task: "Task",
+  meeting: "Meeting",
+  briefing: "Briefing",
+  agent_proposal: "Jigeum proposal",
+  insight: "Insight",
 };
 
 const AGENT_PREFIX = "[Eve]";
@@ -35,7 +35,7 @@ export function isAgentNotification(title: string): boolean {
 }
 
 export function getTypeLabel(type: string): string {
-  return TYPE_LABELS_KO[type] ?? type;
+  return TYPE_LABELS[type] ?? type;
 }
 
 function isStandalone(n: GroupableNotification): boolean {

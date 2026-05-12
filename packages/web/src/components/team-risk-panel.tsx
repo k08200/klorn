@@ -120,9 +120,9 @@ export function TeamRiskPanel() {
       setNewWorkspaceName("");
       setWorkspaces((current) => [workspace, ...current]);
       setSelectedId(workspace.id);
-      toast("워크스페이스를 만들었습니다.", "success");
+      toast("Workspace created.", "success");
     } catch {
-      toast("워크스페이스를 만들지 못했습니다.", "error");
+      toast("Could not create workspace.", "error");
     } finally {
       setCreating(false);
     }
@@ -132,15 +132,13 @@ export function TeamRiskPanel() {
 
   return (
     <section className="mb-8">
-      <h2 className="mb-3 text-sm font-semibold text-stone-300">팀 모드</h2>
+      <h2 className="mb-3 text-sm font-semibold text-stone-300">Team mode</h2>
       <div className="space-y-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h3 className="font-medium">팀 리스크 레이더</h3>
+            <h3 className="font-medium">Team risk radar</h3>
             <p className="mt-0.5 text-sm text-stone-400">
-              {selected
-                ? `${selected.name} · 멤버 ${selected.memberCount}명`
-                : "워크스페이스 리스크"}
+              {selected ? `${selected.name} · ${selected.memberCount} members` : "Workspace risk"}
             </p>
           </div>
           {workspaces.length > 0 && (
@@ -165,7 +163,7 @@ export function TeamRiskPanel() {
             <input
               value={newWorkspaceName}
               onChange={(event) => setNewWorkspaceName(event.target.value)}
-              placeholder="워크스페이스 이름"
+              placeholder="Workspace name"
               className="w-full rounded-lg border border-stone-700 bg-stone-900 px-4 py-2.5 text-sm placeholder-stone-500 transition focus:border-amber-300 focus:outline-none"
             />
             <button
@@ -173,22 +171,22 @@ export function TeamRiskPanel() {
               disabled={creating || newWorkspaceName.trim().length < 2}
               className="rounded-lg bg-amber-300 px-4 py-2 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:bg-stone-700 disabled:text-stone-500"
             >
-              {creating ? "만드는 중..." : "워크스페이스 만들기"}
+              {creating ? "Creating..." : "Create workspace"}
             </button>
           </form>
         ) : (
           <>
             <div className="grid grid-cols-3 gap-2">
-              <Metric label="높음" value={summary.highRiskCount} tone="text-red-300" />
-              <Metric label="중간" value={summary.mediumRiskCount} tone="text-amber-300" />
-              <Metric label="공유" value={summary.sharedContextCount} tone="text-teal-300" />
+              <Metric label="High" value={summary.highRiskCount} tone="text-red-300" />
+              <Metric label="Medium" value={summary.mediumRiskCount} tone="text-amber-300" />
+              <Metric label="Shared" value={summary.sharedContextCount} tone="text-teal-300" />
             </div>
 
             {riskLoading ? (
               <div className="h-20 animate-pulse rounded-lg bg-stone-800/70" />
             ) : summary.risks.length === 0 ? (
               <div className="rounded-lg border border-stone-800 bg-stone-950/45 px-3 py-3 text-sm text-stone-500">
-                지금은 팀 리스크가 없습니다.
+                No team risk right now.
               </div>
             ) : (
               <div className="space-y-2">
@@ -211,7 +209,7 @@ function RiskRow({ risk }: { risk: TeamRiskItem }) {
         <RiskBadge risk={risk.context.risk} />
         {risk.sharedWith > 0 && (
           <span className="rounded border border-teal-400/20 bg-teal-400/10 px-1.5 py-0.5 text-[10px] text-teal-300">
-            공유됨
+            Shared
           </span>
         )}
         <span className="text-[11px] text-stone-500">{risk.member.name || risk.member.email}</span>
@@ -237,20 +235,20 @@ function RiskBadge({ risk }: { risk: WorkGraphRisk }) {
   if (risk === "high") {
     return (
       <span className="rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-300">
-        높음
+        High
       </span>
     );
   }
   if (risk === "medium") {
     return (
       <span className="rounded border border-amber-400/20 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
-        중간
+        Medium
       </span>
     );
   }
   return (
     <span className="rounded border border-stone-700 bg-stone-900 px-1.5 py-0.5 text-[10px] font-medium text-stone-300">
-      낮음
+      Low
     </span>
   );
 }

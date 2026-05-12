@@ -35,9 +35,9 @@ const PRIORITY_STYLES: Record<EmailPriority, string> = {
 
 function PriorityPill({ priority }: { priority: EmailPriority }) {
   const label = {
-    URGENT: "긴급",
-    NORMAL: "보통",
-    LOW: "낮음",
+    URGENT: "Urgent",
+    NORMAL: "Normal",
+    LOW: "Low",
   }[priority];
 
   return (
@@ -64,7 +64,7 @@ export function EmailFeedbackList() {
       })
       .catch((err) => {
         captureClientError(err, { scope: "email-feedback.load" });
-        setError("메일 교정 기록을 불러오지 못했습니다.");
+        setError("Could not load mail correction history.");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -88,10 +88,10 @@ export function EmailFeedbackList() {
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-medium text-stone-300">
-            {loading ? "교정 로그 확인 중..." : `${count}개 교정 기록`}
+            {loading ? "Checking correction log..." : `${count} correction records`}
           </p>
           <p className="mt-1 text-sm text-stone-500">
-            이 교정 기록이 EVE의 메일 판단 기준을 더 날카롭게 만듭니다.
+            These corrections sharpen how Jigeum judges mail priority and reply need.
           </p>
         </div>
         {exportHref && (
@@ -100,14 +100,14 @@ export function EmailFeedbackList() {
             download="jigeum-email-feedback-fixtures.json"
             className="inline-flex w-fit items-center rounded-lg border border-stone-700/60 bg-stone-950/45 px-3 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-500/35 hover:bg-amber-500/10"
           >
-            JSON 내보내기
+            Export JSON
           </a>
         )}
       </div>
 
       {error && (
         <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">
-          교정 로그를 불러오지 못했습니다.
+          Could not load correction log.
         </div>
       )}
 
@@ -124,9 +124,10 @@ export function EmailFeedbackList() {
 
       {!loading && !error && fixtures.length === 0 && (
         <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 px-5 py-10 text-center">
-          <p className="text-sm font-medium text-stone-300">아직 수정한 분류가 없어요.</p>
+          <p className="text-sm font-medium text-stone-300">No corrected classifications yet.</p>
           <p className="mt-2 text-sm text-stone-500">
-            메일 화면에서 분류 결과가 틀렸을 때 &quot;분류 틀림&quot;을 누르면 여기에 기록됩니다.
+            When a mail classification is wrong, mark it from the mail screen and it will appear
+            here.
           </p>
         </div>
       )}

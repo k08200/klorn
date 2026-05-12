@@ -85,7 +85,7 @@ export default function VoiceButton({ onTranscript, className }: VoiceButtonProp
       className={`transition ${className || ""} ${
         listening ? "text-red-400 animate-pulse" : "text-stone-500 hover:text-white"
       }`}
-      title={listening ? "듣기 중지" : "음성 명령"}
+      title={listening ? "Stop listening" : "Voice command"}
     >
       <svg
         aria-hidden="true"
@@ -98,7 +98,7 @@ export default function VoiceButton({ onTranscript, className }: VoiceButtonProp
         strokeLinecap="round"
         strokeLinejoin="round"
         role="img"
-        aria-label={listening ? "마이크 활성화됨" : "마이크"}
+        aria-label={listening ? "Microphone active" : "Microphone"}
       >
         <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
         <path d="M19 10v2a7 7 0 0 1-14 0v-2" />

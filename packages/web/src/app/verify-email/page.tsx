@@ -50,35 +50,35 @@ function VerifyEmailContent() {
       eyebrow="Email verification"
       title={
         status === "success"
-          ? "인증 메일을 보냈습니다"
+          ? "Verification email sent"
           : status === "pending"
-            ? "이메일 인증이 필요합니다"
-            : "인증에 실패했습니다"
+            ? "Verify your email"
+            : "Verification failed"
       }
       description={
         status === "success"
-          ? "받은 편지함에서 인증 링크를 누르면 EVE의 전체 결정 흐름을 사용할 수 있습니다."
+          ? "Open the verification link in your inbox to use the full Jigeum workspace."
           : status === "pending"
-            ? "모든 기능을 사용하려면 계정 이메일 주소를 먼저 인증해 주세요."
-            : "링크가 만료되었거나 올바르지 않습니다. 다시 로그인해서 새 인증 메일을 받아주세요."
+            ? "Verify your account email to unlock every workspace feature."
+            : "This link expired or is invalid. Log in again and request a new verification email."
       }
       footer={
         <Link href="/login" className="transition hover:text-stone-300">
-          로그인으로 돌아가기
+          Back to login
         </Link>
       }
     >
       <div className="space-y-4">
         <div className="rounded-md border border-stone-700/60 bg-black/20 p-4">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-stone-500">
-            다음 단계
+            Next step
           </p>
           <p className="mt-2 text-sm leading-6 text-stone-300">
             {status === "success"
-              ? "메일함에서 EVE 인증 메일을 열고 링크를 누르세요. 인증 후 결정 큐로 이동할 수 있습니다."
+              ? "Open the Jigeum verification email and follow the link. After verification, you can return to your decision queue."
               : status === "pending"
-                ? "메일이 보이지 않으면 다시 보내기를 눌러 새 링크를 받으세요."
-                : "로그인 화면으로 돌아가 계정 상태를 확인한 뒤 인증 메일을 다시 요청하세요."}
+                ? "If the email is missing, send a new verification link."
+                : "Return to login, check the account state, then request a new verification email."}
           </p>
         </div>
 
@@ -87,7 +87,7 @@ function VerifyEmailContent() {
             href="/inbox"
             className="flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
           >
-            결정 큐 열기
+            Open decision queue
           </Link>
         ) : status === "pending" ? (
           <button
@@ -95,14 +95,14 @@ function VerifyEmailContent() {
             onClick={resend}
             className="flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
           >
-            인증 메일 다시 보내기
+            Resend verification email
           </button>
         ) : (
           <Link
             href="/login"
             className="flex h-11 w-full items-center justify-center rounded-md border border-stone-700 bg-stone-900/70 text-sm font-semibold text-stone-100 transition hover:border-stone-500"
           >
-            로그인으로 돌아가기
+            Back to login
           </Link>
         )}
       </div>

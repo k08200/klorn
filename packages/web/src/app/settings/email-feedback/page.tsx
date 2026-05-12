@@ -14,14 +14,14 @@ export default function EmailFeedbackPage() {
           <div className="grid gap-5 p-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
             <div>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-                피드백 랩
+                Feedback lab
               </p>
               <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-                메일 판단 교정 로그
+                Mail judgment correction log
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-                사용자가 고친 우선순위와 답장 필요 판단을 모아, EVE가 어떤 운영 규칙을 배워야 하는지
-                확인합니다.
+                Review corrected priority and reply-needed decisions so Jigeum can learn better
+                operating rules.
               </p>
             </div>
             <EveSignalField className="min-h-40 rounded-lg" />

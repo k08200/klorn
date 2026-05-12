@@ -61,8 +61,8 @@ export default function PushOnboardingBanner() {
       if (permission !== "granted") {
         setError(
           permission === "denied"
-            ? "iPhone 설정 → Jigeum → 알림에서 허용해주세요"
-            : "알림 권한이 필요합니다",
+            ? "Allow notifications in iPhone Settings → Jigeum → Notifications"
+            : "Notification permission is required",
         );
         setSubmitting(false);
         return;
@@ -100,7 +100,7 @@ export default function PushOnboardingBanner() {
       setShow(false);
     } catch (err) {
       console.error("[PUSH-BANNER] enable failed:", err);
-      setError(err instanceof Error ? err.message : "알림 등록 실패");
+      setError(err instanceof Error ? err.message : "Notification registration failed");
     } finally {
       setSubmitting(false);
     }
@@ -111,15 +111,17 @@ export default function PushOnboardingBanner() {
   return (
     <div
       role="dialog"
-      aria-label="푸시 알림 켜기"
+      aria-label="Enable push notifications"
       className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[90] w-[min(94vw,420px)] bg-stone-950 border border-stone-700 rounded-2xl shadow-2xl shadow-black/60 px-4 py-3.5 flex items-start gap-3 animate-slide-up pb-safe"
     >
       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-300 to-stone-700 flex items-center justify-center text-base shrink-0">
         <span aria-hidden="true">🔔</span>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-stone-100">Jigeum 알림 켜기</p>
-        <p className="text-xs text-stone-400 mt-0.5">브리핑과 긴급 메일을 폰으로 바로 받아보세요</p>
+        <p className="text-sm font-medium text-stone-100">Enable Jigeum notifications</p>
+        <p className="text-xs text-stone-400 mt-0.5">
+          Get briefings and urgent mail on your phone.
+        </p>
         {error && <p className="text-xs text-red-400 mt-1.5">{error}</p>}
         <div className="flex gap-2 mt-2.5">
           <button
@@ -128,7 +130,7 @@ export default function PushOnboardingBanner() {
             disabled={submitting}
             className="px-3 py-1.5 text-xs font-medium bg-amber-300 hover:bg-amber-200 disabled:bg-stone-700 disabled:text-stone-500 text-stone-950 rounded-lg transition"
           >
-            {submitting ? "켜는 중..." : "알림 켜기"}
+            {submitting ? "Enabling..." : "Enable notifications"}
           </button>
           <button
             type="button"
@@ -136,7 +138,7 @@ export default function PushOnboardingBanner() {
             disabled={submitting}
             className="px-3 py-1.5 text-xs font-medium text-stone-400 hover:text-stone-200 transition"
           >
-            나중에
+            Later
           </button>
         </div>
       </div>
@@ -144,7 +146,7 @@ export default function PushOnboardingBanner() {
         type="button"
         onClick={dismiss}
         disabled={submitting}
-        aria-label="닫기"
+        aria-label="Close"
         className="text-stone-500 hover:text-stone-200 transition text-lg leading-none -mr-1 -mt-0.5"
       >
         ×
