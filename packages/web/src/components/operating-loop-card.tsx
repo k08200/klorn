@@ -107,11 +107,11 @@ export default function OperatingLoopCard() {
           {plan.playbookNudge && (
             <div className="rounded-xl border border-stone-800 bg-stone-900/35 p-3">
               <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-amber-200">
-                플레이북
+                Playbook
               </p>
               <p className="mt-2 text-sm font-medium text-stone-100">{plan.playbookNudge.name}</p>
               <p className="mt-1 text-xs leading-5 text-stone-500">
-                {plan.playbookNudge.active ? "적용 중" : "추천"} · 신뢰도{" "}
+                {plan.playbookNudge.active ? "Active" : "Recommended"} · Confidence{" "}
                 {Math.round(plan.playbookNudge.confidence * 100)}%
                 {plan.playbookNudge.nextStep ? ` · ${plan.playbookNudge.nextStep}` : ""}
               </p>
@@ -141,16 +141,16 @@ function DecisionPulseCard({ pulse }: { pulse: OperatingPlanDecisionPulse }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-emerald-200">
-            최근 결정
+            Recent decisions
           </p>
-          <p className="mt-1 text-xs text-stone-500">최근 {pulse.windowHours}시간 결과</p>
+          <p className="mt-1 text-xs text-stone-500">Last {pulse.windowHours}h outcomes</p>
         </div>
         <div className="shrink-0 text-right text-[11px] leading-5 text-stone-500">
           <p>
-            완료 <span className="font-semibold text-emerald-200">{pulse.executed}</span>
+            Done <span className="font-semibold text-emerald-200">{pulse.executed}</span>
           </p>
           <p>
-            거절 <span className="font-semibold text-stone-300">{pulse.rejected}</span> · 실패{" "}
+            Rejected <span className="font-semibold text-stone-300">{pulse.rejected}</span> · Failed{" "}
             <span className="font-semibold text-red-200">{pulse.failed}</span>
           </p>
         </div>
@@ -354,24 +354,24 @@ function modeLabel(mode: OperatingPlan["mode"]): string {
 function sourceLabel(source: OperatingPlanMove["source"]): string {
   switch (source) {
     case "attention":
-      return "결정 카드";
+      return "Decision card";
     case "work_context":
-      return "업무 그래프";
+      return "Work graph";
     case "playbook":
-      return "플레이북";
+      return "Playbook";
   }
 }
 
 function riskLabel(risk: OperatingPlanWatchContext["risk"]): string {
-  if (risk === "high") return "높음";
-  if (risk === "medium") return "보통";
-  return "낮음";
+  if (risk === "high") return "High";
+  if (risk === "medium") return "Medium";
+  return "Low";
 }
 
 function outcomeStatusLabel(status: OperatingPlanOutcome["status"]): string {
-  if (status === "executed") return "완료";
-  if (status === "rejected") return "거절";
-  return "실패";
+  if (status === "executed") return "Done";
+  if (status === "rejected") return "Rejected";
+  return "Failed";
 }
 
 function outcomeStatusClass(status: OperatingPlanOutcome["status"]): string {
