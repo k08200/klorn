@@ -1,7 +1,7 @@
 {
   "name": "Jigeum — What matters now at work",
   "short_name": "Jigeum",
-  "description": "업무 신호, 승인 큐, 브리핑, 메모리를 지금 결정 가능한 흐름으로 정리합니다.",
+  "description": "Jigeum turns work signals, approval queues, briefings, and memory into decisions you can act on.",
   "start_url": "/chat",
   "display": "standalone",
   "background_color": "#10100d",
@@ -28,14 +28,14 @@
   ],
   "shortcuts": [
     {
-      "name": "새 결정 스레드",
-      "short_name": "스레드",
+      "name": "New decision thread",
+      "short_name": "Thread",
       "url": "/chat",
       "icons": [{ "src": "/icon-192.svg", "sizes": "192x192" }]
     },
     {
-      "name": "오늘 브리핑",
-      "short_name": "브리핑",
+      "name": "Today briefing",
+      "short_name": "Briefing",
       "url": "/briefing"
     }
   ]

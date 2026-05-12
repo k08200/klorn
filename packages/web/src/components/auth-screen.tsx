@@ -21,16 +21,16 @@ export default function AuthScreen({
   title,
   description,
   children,
-  asideTitle = "결정 가능한 업무 신호만 남깁니다",
-  asideBody = "Jigeum은 메일, 캘린더, 작업의 흐름을 읽고 실행 전 확인할 수 있는 승인 카드로 정리합니다.",
+  asideTitle = "Keep only the work that needs a decision",
+  asideBody = "Jigeum reads mail, calendar, and task signals, then turns them into cards you can inspect before anything happens.",
   asideItems = [
-    { label: "신호", value: "메일과 일정의 변경점 감지" },
-    { label: "맥락", value: "사람, 마감, 프로젝트 연결" },
-    { label: "승인", value: "외부 실행 전 근거 확인" },
+    { label: "Signal", value: "Detect meaningful changes across mail and calendar" },
+    { label: "Context", value: "Connect people, deadlines, and projects" },
+    { label: "Approval", value: "Review evidence before external action" },
   ],
   footer,
   navCtaHref = "/early-access",
-  navCtaLabel = "얼리 액세스",
+  navCtaLabel = "Early access",
 }: AuthScreenProps) {
   return (
     <main className="min-h-screen overflow-hidden bg-[#0f1115] text-stone-50">
@@ -44,7 +44,7 @@ export default function AuthScreen({
             className="whitespace-nowrap text-stone-400 transition hover:text-stone-100"
             href="/"
           >
-            홈
+            Home
           </Link>
           <Link
             className="whitespace-nowrap rounded-md border border-stone-700 px-3 py-2 text-stone-300 transition hover:border-stone-500 hover:text-stone-100"
