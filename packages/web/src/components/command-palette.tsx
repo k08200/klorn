@@ -21,20 +21,20 @@ export default function CommandPalette() {
   const commands: Command[] = [
     {
       id: "approval-queue",
-      label: "결정 큐 열기",
-      sublabel: "승인 대기 결정을 검토합니다",
+      label: "Open decision queue",
+      sublabel: "Review decisions waiting for approval",
       action: () => router.push("/inbox"),
     },
     {
       id: "chat",
-      label: "결정 스레드 열기",
-      sublabel: "현재 업무 맥락을 이어갑니다",
+      label: "Open threads",
+      sublabel: "Continue the current work context",
       action: () => router.push("/chat"),
     },
     {
       id: "new-chat",
-      label: "새 결정 스레드",
-      sublabel: "새 업무 맥락으로 시작합니다",
+      label: "New decision thread",
+      sublabel: "Start from a fresh work context",
       action: () => {
         apiFetch<{ id: string }>("/api/chat/conversations", {
           method: "POST",
@@ -45,26 +45,26 @@ export default function CommandPalette() {
     },
     {
       id: "briefing",
-      label: "일일 브리핑 열기",
-      sublabel: "오늘의 신호 요약을 확인합니다",
+      label: "Open daily briefing",
+      sublabel: "Review today's signal summary",
       action: () => router.push("/briefing"),
     },
     {
       id: "settings",
-      label: "컨트롤 플레인 열기",
-      sublabel: "연동, 신뢰, 메모리를 관리합니다",
+      label: "Open control plane",
+      sublabel: "Manage integrations, trust, and memory",
       action: () => router.push("/settings"),
     },
     {
       id: "billing",
-      label: "요금제와 사용량 열기",
-      sublabel: "한도와 결제 상태를 확인합니다",
+      label: "Open plan and usage",
+      sublabel: "Check limits and billing status",
       action: () => router.push("/billing"),
     },
     {
       id: "shortcuts",
-      label: "키보드 단축키",
-      sublabel: "단축키 목록을 봅니다 (Cmd+/)",
+      label: "Keyboard shortcuts",
+      sublabel: "View shortcut list (Cmd+/)",
       action: () => {
         window.dispatchEvent(new KeyboardEvent("keydown", { key: "/", metaKey: true }));
       },
@@ -124,7 +124,7 @@ export default function CommandPalette() {
       <button
         type="button"
         className="absolute inset-0 bg-black/60"
-        aria-label="커맨드 팔레트 닫기"
+        aria-label="Close command palette"
         onClick={() => setOpen(false)}
       />
       <div className="relative w-full max-w-md rounded-xl border border-stone-700 bg-stone-900 shadow-2xl">
@@ -134,13 +134,13 @@ export default function CommandPalette() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="결정, 화면, 설정을 검색하세요..."
+            placeholder="Search decisions, screens, or settings..."
             className="w-full bg-transparent text-sm focus:outline-none placeholder-stone-500"
           />
         </div>
         <div className="max-h-64 overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <p className="text-sm text-stone-500 px-4 py-3">일치하는 항목이 없습니다</p>
+            <p className="text-sm text-stone-500 px-4 py-3">No matching commands</p>
           ) : (
             filtered.map((cmd, i) => (
               <button
@@ -164,8 +164,8 @@ export default function CommandPalette() {
           )}
         </div>
         <div className="border-t border-stone-800 px-4 py-2 flex items-center justify-between text-[10px] text-stone-600">
-          <span>화살표로 이동, Enter로 열기</span>
-          <span>Esc로 닫기</span>
+          <span>Arrows to move, Enter to open</span>
+          <span>Esc to close</span>
         </div>
       </div>
     </div>

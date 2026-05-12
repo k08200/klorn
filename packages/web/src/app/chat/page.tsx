@@ -35,7 +35,7 @@ function NewChatWelcome() {
         });
         router.push(`/chat/${conv.id}?prefill=${encodeURIComponent(prefill)}`);
       } catch {
-        toast("결정 스레드를 만들지 못했습니다.", "error");
+        toast("Could not create a decision thread.", "error");
       }
     })();
   }, [searchParams, router, toast]);
@@ -52,40 +52,40 @@ function NewChatWelcome() {
         router.push(`/chat/${conv.id}`);
       }
     } catch {
-      toast("결정 스레드를 만들지 못했습니다.", "error");
+      toast("Could not create a decision thread.", "error");
     }
   };
 
   const suggestions = [
     {
-      label: "오늘 결정 정리",
-      message: "오늘 내가 처리해야 할 결정을 우선순위로 정리해줘.",
-      meta: "큐",
+      label: "Plan today's decisions",
+      message: "Prioritize the decisions I need to handle today.",
+      meta: "Queue",
     },
     {
-      label: "숨은 리스크 찾기",
-      message: "메일, 일정, 할 일에서 놓치면 위험한 신호를 찾아줘.",
-      meta: "신호",
+      label: "Find hidden risk",
+      message: "Find risky signals across mail, calendar, and tasks.",
+      meta: "Signal",
     },
     {
-      label: "미팅 준비",
-      message: "오늘 미팅을 보고 준비해야 할 맥락과 질문을 정리해줘.",
-      meta: "맥락",
+      label: "Prep meetings",
+      message: "Review today's meetings and prepare the context and questions.",
+      meta: "Context",
     },
     {
-      label: "후속 액션 작성",
-      message: "후속 조치가 필요한 스레드를 찾아 다음 액션을 초안으로 만들어줘.",
-      meta: "행동",
+      label: "Draft follow-ups",
+      message: "Find threads that need follow-up and draft the next action.",
+      meta: "Action",
     },
     {
-      label: "집중 시간 확보",
-      message: "가장 중요한 일 하나를 골라 집중 시간을 잡는 결정을 만들어줘.",
-      meta: "시간",
+      label: "Protect focus time",
+      message: "Pick the most important work and suggest a focus block.",
+      meta: "Time",
     },
     {
-      label: "운영 규칙 저장",
-      message: "내가 Jigeum의 승인과 자동 실행을 어떻게 다루길 원하는지 기억해줘.",
-      meta: "메모리",
+      label: "Save operating rules",
+      message: "Remember how I want Jigeum to handle approvals and automation.",
+      meta: "Memory",
     },
   ];
 
@@ -104,9 +104,12 @@ function NewChatWelcome() {
               i
             </span>
             <div>
-              <p className="text-sm font-medium text-stone-100">Google을 연결하면 더 정확해져요</p>
+              <p className="text-sm font-medium text-stone-100">
+                Connect Google for better context
+              </p>
               <p className="text-xs text-stone-500">
-                Gmail과 Calendar 신호를 연결해 결정 카드, 알림, 일정 준비를 자동으로 구성합니다
+                Jigeum can use Gmail and Calendar to prepare decision cards, alerts, and meeting
+                prep.
               </p>
             </div>
           </a>
@@ -117,13 +120,13 @@ function NewChatWelcome() {
               <img src="/brand/mark.svg" alt="" className="h-9 w-9" />
             </div>
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500">
-              새 스레드
+              New thread
             </p>
             <h1 className="max-w-xl text-4xl font-semibold leading-tight tracking-tight text-stone-50 sm:text-5xl">
-              오늘 처리할 일을 정리하세요.
+              Start with the decision you need.
             </h1>
             <p className="mt-4 max-w-xl text-sm leading-6 text-stone-500">
-              메일, 일정, 작업에서 지금 봐야 할 내용을 모아 다음 행동으로 정리합니다.
+              Ask Jigeum to connect the relevant mail, meetings, tasks, and next moves.
             </p>
           </div>
 
@@ -135,7 +138,7 @@ function NewChatWelcome() {
               className="group relative w-full rounded-lg border border-stone-700 bg-[#111318] px-5 py-4 text-left text-sm text-stone-500 shadow-xl shadow-black/10 transition hover:border-stone-600 hover:bg-stone-900"
             >
               <span className="flex items-center justify-between gap-3">
-                <span>새 결정 스레드를 열고 맥락, 판단, 다음 행동을 요청하세요...</span>
+                <span>Open a thread and ask for context, judgment, or a next action...</span>
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-stone-950 transition group-hover:bg-white">
                   <svg
                     aria-hidden="true"

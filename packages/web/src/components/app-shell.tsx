@@ -36,7 +36,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             type="button"
             onClick={() => setMobileOpen(true)}
             className="flex items-center justify-center min-w-[44px] min-h-[44px] -ml-2 text-stone-400 hover:text-white active:text-white transition"
-            aria-label="메뉴"
+            aria-label="Menu"
           >
             <svg
               aria-hidden="true"

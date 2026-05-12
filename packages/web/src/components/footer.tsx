@@ -9,17 +9,17 @@ export default function Footer() {
             <span className="text-amber-300/80 font-medium">Jigeum</span> v0.2.0
           </span>
           <span className="hidden sm:inline text-stone-800">|</span>
-          <span className="hidden sm:inline">Decision OS 워크스페이스</span>
+          <span className="hidden sm:inline">Decision workspace</span>
         </div>
         <div className="flex items-center gap-3 text-[11px] text-stone-600">
           <Link href="/billing" className="hover:text-stone-400 transition-colors">
-            플랜
+            Plan
           </Link>
           <Link href="/settings" className="hover:text-stone-400 transition-colors">
-            컨트롤 플레인
+            Control plane
           </Link>
           <span className="hidden sm:inline text-stone-800">|</span>
-          <span className="hidden sm:inline">Cmd+K 화면 검색</span>
+          <span className="hidden sm:inline">Cmd+K to search</span>
         </div>
       </div>
     </footer>
