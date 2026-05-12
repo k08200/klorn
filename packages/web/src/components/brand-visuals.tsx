@@ -51,7 +51,8 @@ export function EveSignalField({ className = "", tone = "panel" }: EveSignalFiel
         </div>
         <div className="mt-4 rounded-md border border-white/8 bg-black/20 px-3 py-2">
           <p className="text-[11px] leading-5 text-stone-400">
-            필요한 일만 큐에 올리고, 실행 전에는 근거와 승인 상태를 먼저 보여줍니다.
+            Only the work that needs attention enters the queue, with evidence and approval state
+            shown before action.
           </p>
         </div>
       </div>

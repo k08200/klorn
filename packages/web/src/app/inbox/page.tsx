@@ -77,7 +77,7 @@ function InboxView() {
       setCommitments(commitmentData.commitments);
     } catch (err) {
       captureClientError(err, { scope: "inbox.load" });
-      setError("받은 일을 불러오지 못했어요.");
+      setError("Could not load the queue.");
     } finally {
       setLoading(false);
     }
@@ -102,7 +102,7 @@ function InboxView() {
       setActions((prev) => prev.map((a) => (a.id === actionId ? { ...a, status: "EXECUTED" } : a)));
     } catch (err) {
       captureClientError(err, { scope: "inbox.approve", actionId });
-      alert("승인 실행에 실패했어요. 잠시 후 다시 시도해주세요.");
+      alert("Could not approve this action. Please try again.");
     } finally {
       setActionLoading((prev) => ({ ...prev, [actionId]: null }));
     }
@@ -119,7 +119,7 @@ function InboxView() {
       setActions((prev) => prev.map((a) => (a.id === actionId ? { ...a, status: "REJECTED" } : a)));
     } catch (err) {
       captureClientError(err, { scope: "inbox.reject", actionId });
-      alert("거절에 실패했어요. 잠시 후 다시 시도해주세요.");
+      alert("Could not reject this action. Please try again.");
     } finally {
       setActionLoading((prev) => ({ ...prev, [actionId]: null }));
     }
@@ -274,9 +274,9 @@ function CommitmentSection({
   onDismiss: (id: string) => void;
 }) {
   return (
-    <section className="mb-6" aria-label="약속 장부">
+    <section className="mb-6" aria-label="약속 기록">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-sm font-semibold text-stone-100">챙길 약속</h2>
+        <h2 className="text-sm font-semibold text-stone-100">추적할 약속</h2>
         <span className="text-[11px] text-stone-500">{commitments.length}</span>
       </div>
       <ul className="space-y-2">
@@ -346,7 +346,7 @@ function CommitmentCard({
           {loading === "dismiss" ? (
             <span className="w-3 h-3 border-2 border-stone-300/30 border-t-stone-200 rounded-full animate-spin" />
           ) : (
-            "숨김"
+            "숨기기"
           )}
         </button>
         <span className="ml-auto text-[11px] text-stone-600">
@@ -412,7 +412,7 @@ function ActionCard({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-300">
-              결정 카드
+              Decision card
             </span>
             <StatusBadge status={action.status} />
           </div>
@@ -437,11 +437,11 @@ function ActionCard({
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <DecisionSection
               label="신호"
-              title="EVE가 본 신호"
+              title="Jigeum이 찾은 것"
               body={
                 reasoning.situation ||
                 action.conversationTitle ||
-                "연결된 결정 스레드와 작업 신호를 확인했어요."
+                "Jigeum이 연결된 스레드와 업무 신호를 확인했어요."
               }
             />
             <DecisionSection
@@ -450,12 +450,12 @@ function ActionCard({
               body={
                 reasoning.judgment ||
                 action.reasoning ||
-                "실행 전 사용자의 확인이 필요한 변경이에요."
+                "실행 전에 검토가 필요한 변화예요."
               }
             />
             <DecisionSection
               label="행동"
-              title="준비된 행동"
+              title="준비된 액션"
               body={reasoning.proposal || preview || action.toolName.replace(/_/g, " ")}
             />
           </div>
@@ -463,12 +463,16 @@ function ActionCard({
           {emailPreview && (
             <div className="mt-4 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-medium text-amber-300">전송 전 승인 필요</span>
+                <span className="text-[11px] font-medium text-amber-300">
+                  보내기 전 승인이 필요해요
+                </span>
                 <span className="text-[11px] text-stone-500">send_email</span>
               </div>
-              <p className="mt-2 text-xs text-stone-300 break-words">To: {emailPreview.to}</p>
+              <p className="mt-2 text-xs text-stone-300 break-words">
+                받는 사람: {emailPreview.to}
+              </p>
               <p className="mt-1 text-xs text-stone-400 break-words">
-                Subject: {emailPreview.subject}
+                제목: {emailPreview.subject}
               </p>
               {emailPreview.body && (
                 <p className="mt-2 text-xs leading-relaxed text-stone-300 line-clamp-4 whitespace-pre-wrap">
@@ -545,15 +549,15 @@ function DecisionSection({ label, title, body }: { label: string; title: string;
 function RiskBadge({ risk }: { risk: "low" | "medium" | "high" }) {
   const map = {
     low: {
-      label: "낮은 위험",
+      label: "Low risk",
       className: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
     },
     medium: {
-      label: "승인 필요",
+      label: "Needs approval",
       className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
     },
     high: {
-      label: "높은 위험",
+      label: "High risk",
       className: "text-red-300 bg-red-500/10 border-red-500/20",
     },
   }[risk];
@@ -624,17 +628,17 @@ function commitmentOwnerEntry(owner: CommitmentItem["owner"]): {
       };
     case "COUNTERPARTY":
       return {
-        label: "상대 약속",
+        label: "상대방",
         className: "text-amber-200 bg-amber-300/10 border-amber-300/20",
       };
     case "TEAM":
       return {
-        label: "팀 약속",
+        label: "팀",
         className: "text-amber-200 bg-amber-300/10 border-amber-300/20",
       };
     case "UNKNOWN":
       return {
-        label: "확인 필요",
+        label: "검토 필요",
         className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
       };
   }
@@ -642,8 +646,8 @@ function commitmentOwnerEntry(owner: CommitmentItem["owner"]): {
 
 function commitmentKindLabel(kind: CommitmentItem["kind"]): string {
   const labels: Record<CommitmentItem["kind"], string> = {
-    DELIVERABLE: "전달",
-    FOLLOW_UP: "후속",
+    DELIVERABLE: "산출물",
+    FOLLOW_UP: "후속 조치",
     DECISION: "결정",
     MEETING: "미팅",
     REVIEW: "검토",
@@ -659,7 +663,7 @@ function commitmentDueLabel(commitment: CommitmentItem): string {
       day: "numeric",
     });
   }
-  return "마감 확인 필요";
+  return "기한 확인 필요";
 }
 
 function StatusBadge({ status }: { status: PendingActionItem["status"] }) {
@@ -669,7 +673,10 @@ function StatusBadge({ status }: { status: PendingActionItem["status"] }) {
       label: "실행됨",
       className: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
     },
-    REJECTED: { label: "거절됨", className: "text-stone-400 bg-stone-500/10 border-stone-500/20" },
+    REJECTED: {
+      label: "거절됨",
+      className: "text-stone-400 bg-stone-500/10 border-stone-500/20",
+    },
     FAILED: { label: "실패", className: "text-red-300 bg-red-500/10 border-red-500/20" },
   };
   const entry = map[status];
@@ -696,7 +703,7 @@ function buildPreview(
     return typeof v === "string" ? v : undefined;
   };
   if (toolName === "send_email") {
-    return `To: ${pick("to") || "?"} · ${pick("subject") || "제목 없음"}`;
+    return `받는 사람: ${pick("to") || "?"} · ${pick("subject") || "제목 없음"}`;
   }
   if (toolName === "create_event") {
     const start = pick("startTime");
@@ -709,7 +716,7 @@ function buildPreview(
         })
       : "";
     const loc = pick("location");
-    return `${pick("title") || "이벤트"}${when ? ` · ${when}` : ""}${loc ? ` · ${loc}` : ""}`;
+    return `${pick("title") || "일정"}${when ? ` · ${when}` : ""}${loc ? ` · ${loc}` : ""}`;
   }
   if (toolName === "create_task" || toolName === "create_note") {
     return pick("title") || "제목 없음";
@@ -764,7 +771,7 @@ function buildEmailPreview(
 function formatRelative(date: string): string {
   const diff = Date.now() - new Date(date).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "방금";
+  if (mins < 1) return "방금 전";
   if (mins < 60) return `${mins}분 전`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}시간 전`;
