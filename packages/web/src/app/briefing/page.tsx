@@ -212,14 +212,14 @@ function BriefingView() {
         <div className="grid gap-5 p-5 md:p-6 lg:grid-cols-[1fr_300px] lg:items-stretch">
           <div>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-              브리핑
+              Briefing
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              오늘을 결정으로 압축합니다
+              Compress today into decisions
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-              Jigeum이 메일, 미팅, 작업을 승인할 일, 미룰 일, 다음 행동으로 정리합니다.
-              {formattedTime && <span className="ml-2 text-stone-400">오늘 {formattedTime}</span>}
+              Jigeum summarizes mail, meetings, and tasks into what to approve, defer, or do next.
+              {formattedTime && <span className="ml-2 text-stone-400">Today {formattedTime}</span>}
             </p>
           </div>
           <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
@@ -230,20 +230,20 @@ function BriefingView() {
               disabled={generating}
               className="absolute right-3 top-3 rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
             >
-              {generating ? "생성 중..." : content ? "다시 생성" : "지금 만들기"}
+              {generating ? "Generating..." : content ? "Regenerate" : "Generate now"}
             </button>
           </div>
           <div className="grid grid-cols-3 gap-2 lg:col-span-2">
-            <BriefStat label="액션" value={topActions.length} />
-            <BriefStat label="피드백" value={Object.keys(feedback).length} />
-            <BriefStat label="상태" value={content ? "준비됨" : "비어 있음"} />
+            <BriefStat label="Actions" value={topActions.length} />
+            <BriefStat label="Feedback" value={Object.keys(feedback).length} />
+            <BriefStat label="Status" value={content ? "Ready" : "Empty"} />
           </div>
         </div>
       </header>
 
       {status && <BriefingDeliveryStatus status={status} />}
 
-      {loading && <p className="text-sm text-stone-500">로딩 중...</p>}
+      {loading && <p className="text-sm text-stone-500">Loading...</p>}
 
       {error && (
         <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -253,16 +253,16 @@ function BriefingView() {
 
       {!loading && !error && !content && (
         <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-6 text-center">
-          <p className="mb-3 text-sm text-stone-300">아직 오늘 브리핑이 없어요.</p>
+          <p className="mb-3 text-sm text-stone-300">No briefing for today yet.</p>
           <p className="mx-auto mb-4 max-w-md text-xs leading-5 text-amber-100/85">
             {t("briefing.learningMode")}
           </p>
           <p className="mb-4 text-xs text-stone-500">
-            자동 브리핑 시간은{" "}
+            You can change the automatic briefing time in{" "}
             <Link href="/settings" className="text-amber-300 hover:underline">
-              설정
+              settings
             </Link>
-            에서 바꿀 수 있어요.
+            .
           </p>
           <button
             type="button"
@@ -270,7 +270,7 @@ function BriefingView() {
             disabled={generating}
             className="rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
           >
-            {generating ? "생성 중..." : "지금 만들기"}
+            {generating ? "Generating..." : "Generate now"}
           </button>
         </div>
       )}
@@ -343,33 +343,33 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
         hour: "2-digit",
         minute: "2-digit",
       })
-    : "아직 없음";
+    : "None yet";
 
   return (
     <section className="mb-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-stone-100">브리핑 전달</h2>
+        <h2 className="text-sm font-semibold text-stone-100">Briefing delivery</h2>
         <Link href="/settings" className="text-xs text-amber-300 hover:underline">
-          설정
+          Settings
         </Link>
       </div>
       <div className="grid gap-2 text-xs sm:grid-cols-3">
         <DeliveryFact
-          label="자동화"
+          label="Automation"
           value={auto}
           tone={status.automation.enabled ? "ok" : "warn"}
         />
         <DeliveryFact
-          label="앱 알림"
+          label="App alert"
           value={notification}
           tone={status.notification ? "ok" : "muted"}
         />
-        <DeliveryFact label="푸시" value={push.label} tone={push.tone} />
+        <DeliveryFact label="Push" value={push.label} tone={push.tone} />
       </div>
       {push.reason && (
         <p className="mt-3 text-[11px] leading-5 text-stone-500">
-          푸시 사유: {pushReasonLabel(push.reason)}. 브라우저 권한, 구독 상태, VAPID 키 또는 조용한
-          시간이 전달을 막고 있을 수 있어요.
+          Push reason: {pushReasonLabel(push.reason)}. Browser permission, subscription state, VAPID
+          keys, or quiet hours may be blocking delivery.
         </p>
       )}
     </section>
@@ -404,20 +404,20 @@ function pushStateCopy(
 ): { label: string; tone: "ok" | "warn" | "muted"; reason: string | null } {
   switch (state) {
     case "received":
-      return { label: "수신됨", tone: "ok", reason };
+      return { label: "Received", tone: "ok", reason };
     case "accepted":
-      return { label: "전송됨", tone: "ok", reason };
+      return { label: "Sent", tone: "ok", reason };
     case "pending":
-      return { label: "대기 중", tone: "warn", reason };
+      return { label: "Pending", tone: "warn", reason };
     case "failed":
-      return { label: "실패", tone: "warn", reason };
+      return { label: "Failed", tone: "warn", reason };
     case "skipped":
-      return { label: "건너뜀", tone: "warn", reason };
+      return { label: "Skipped", tone: "warn", reason };
     case "not_sent":
-      return { label: "아직 전송 안 됨", tone: "muted", reason };
+      return { label: "Not sent yet", tone: "muted", reason };
     case "no_subscription":
       return {
-        label: "브라우저 구독 없음",
+        label: "No browser subscription",
         tone: "warn",
         reason: reason ?? "no_subscriptions",
       };
@@ -426,10 +426,10 @@ function pushStateCopy(
 
 function pushReasonLabel(reason: string): string {
   const labels: Record<string, string> = {
-    no_subscriptions: "브라우저 푸시 구독이 없어요",
-    permission_denied: "브라우저 알림 권한이 차단돼 있어요",
-    quiet_hours: "조용한 시간대예요",
-    vapid_missing: "푸시 키 설정이 필요해요",
+    no_subscriptions: "No browser push subscription",
+    permission_denied: "Browser notifications are blocked",
+    quiet_hours: "Quiet hours are active",
+    vapid_missing: "Push keys need configuration",
   };
   return labels[reason] || reason;
 }
