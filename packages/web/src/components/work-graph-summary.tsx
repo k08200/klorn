@@ -92,7 +92,9 @@ function ContextCard({ context }: { context: WorkGraphContext }) {
               {formatRelative(context.lastActivityAt)}
             </span>
           </div>
-          <p className="mt-2 break-words text-sm font-semibold text-stone-100">{context.title}</p>
+          <p className="mt-2 break-words text-sm font-semibold text-stone-100">
+            {displayText(context.title)}
+          </p>
           <p className="mt-1 line-clamp-2 text-xs text-stone-400">
             {subtitleFor(context) || "No connected signals"}
           </p>
@@ -124,7 +126,7 @@ function ContextCard({ context }: { context: WorkGraphContext }) {
             <ul className="space-y-1.5">
               {reasons.map((reason) => (
                 <li key={reason} className="text-xs leading-5 text-stone-400">
-                  {reason}
+                  {displayText(reason)}
                 </li>
               ))}
             </ul>
@@ -246,8 +248,8 @@ function kindLabel(kind: WorkGraphContext["kind"]): string {
 
 function subtitleFor(context: WorkGraphContext): string | null {
   const people = peopleLabels(context).slice(0, 2).join(", ");
-  const reasons = context.reasons.slice(0, 2).join(" · ");
-  return [people, reasons].filter(Boolean).join(" · ") || context.subtitle;
+  const reasons = context.reasons.slice(0, 2).map(displayText).join(" · ");
+  return [people, reasons].filter(Boolean).join(" · ") || displayText(context.subtitle || "");
 }
 
 function signalChips(context: WorkGraphContext): string[] {
@@ -278,6 +280,17 @@ function summarizeContexts(contexts: WorkGraphContext[]): { signals: number; hig
     },
     { signals: 0, highRisk: 0 },
   );
+}
+
+function displayText(value: string): string {
+  return value
+    .replace(/읽지 않은 메일/g, "Unread mail")
+    .replace(/긴급 메일/g, "Urgent mail")
+    .replace(/승인 대기/g, "Awaiting approval")
+    .replace(/약속:/g, "Commitment:")
+    .replace(/열린 약속/g, "Open commitment")
+    .replace(/지난 약속/g, "Overdue commitment")
+    .replace(/제목 없는 대화/g, "Untitled thread");
 }
 
 function formatRelative(date: string): string {

@@ -149,17 +149,17 @@ export function buildOperatingPlanFromSignals(input: {
     primaryAction: primaryActionFor(mode, nextMoves),
     metrics: [
       {
-        label: "결정",
+        label: "Decisions",
         value: pendingDecisionCount,
         tone: pendingDecisionCount ? "critical" : "steady",
       },
       {
-        label: "위험 맥락",
+        label: "Risk",
         value: highRiskContexts.length,
         tone: highRiskContexts.length ? "warn" : "steady",
       },
-      { label: "지난 항목", value: overdueCount, tone: overdueCount ? "critical" : "steady" },
-      { label: "오늘 신호", value: todayCount, tone: todayCount ? "warn" : "steady" },
+      { label: "Overdue", value: overdueCount, tone: overdueCount ? "critical" : "steady" },
+      { label: "Today", value: todayCount, tone: todayCount ? "warn" : "steady" },
     ],
     nextMoves,
     watchlist: [...highRiskContexts, ...mediumRiskContexts].slice(0, 3).map(watchFromContext),
@@ -264,20 +264,20 @@ function modeFor(input: {
 function headlineFor(mode: OperatingPlanMode): string {
   switch (mode) {
     case "clear_decisions":
-      return "먼저 승인 대기 결정을 비우면 오늘 루프가 풀립니다.";
+      return "Clear the decisions waiting for approval first.";
     case "recover_risk":
-      return "위험해진 업무 맥락을 먼저 회수해야 합니다.";
+      return "Recover the work contexts that are drifting into risk.";
     case "prepare_day":
-      return "오늘 일정과 마감 기준으로 실행 순서를 잡았습니다.";
+      return "The day is ordered around meetings and due work.";
     case "maintain_flow":
-      return "큰 화재는 없고, 열린 약속을 조용히 정리할 차례입니다.";
+      return "No major fires. Clean up the open commitments quietly.";
   }
 }
 
 function primaryActionFor(mode: OperatingPlanMode, moves: OperatingPlanMove[]): string {
   if (moves[0]) return moves[0].title;
-  if (mode === "maintain_flow") return "새 신호가 들어오면 Jigeum이 다시 운영 계획을 갱신합니다.";
-  return "상단 결정 카드부터 확인하세요.";
+  if (mode === "maintain_flow") return "Jigeum will refresh the plan when new signals arrive.";
+  return "Start with the first decision card.";
 }
 
 function moveFromAttention(item: AttentionItem): OperatingPlanMove {
@@ -286,7 +286,7 @@ function moveFromAttention(item: AttentionItem): OperatingPlanMove {
     item.decision.suggestedAction ||
     item.decision.costOfIgnoring ||
     item.decision.evidence[0]?.value ||
-    "Jigeum이 지금 처리할 우선 신호로 판단했습니다.";
+    "Jigeum ranked this as the signal to handle now.";
   return {
     id: `attention:${item.kind}:${item.id}`,
     title,
@@ -309,16 +309,16 @@ function moveFromContext(context: WorkGraphContext): OperatingPlanMove {
   return {
     id: `context:${context.id}`,
     title: context.title,
-    reason: context.reasons[0] || "여러 신호가 같은 업무 맥락으로 묶였습니다.",
+    reason: context.reasons[0] || "Multiple signals are tied to the same work context.",
     href: context.href,
     prompt: promptForMove({
       title: context.title,
-      reason: context.reasons[0] || "여러 신호가 같은 업무 맥락으로 묶였습니다.",
-      label: context.risk === "high" ? "위험 맥락" : "관찰 맥락",
+      reason: context.reasons[0] || "Multiple signals are tied to the same work context.",
+      label: context.risk === "high" ? "Risk context" : "Watch context",
       href: context.href,
       source: "Work Graph",
     }),
-    label: context.risk === "high" ? "위험 맥락" : "관찰 맥락",
+    label: context.risk === "high" ? "Risk context" : "Watch context",
     tone: context.risk === "high" ? "warn" : "steady",
     source: "work_context",
   };
@@ -329,17 +329,17 @@ function moveFromPlaybook(recommendation: PlaybookRecommendation | null): Operat
   const step = recommendation.suggestedFirstActions[0];
   return {
     id: `playbook:${recommendation.playbook.id}`,
-    title: step?.title || `${recommendation.playbook.name} 실행 점검`,
+    title: step?.title || `Review ${recommendation.playbook.name}`,
     reason: recommendation.reasons[0] || recommendation.playbook.bestFor,
     href: null,
     prompt: promptForMove({
-      title: step?.title || `${recommendation.playbook.name} 실행 점검`,
+      title: step?.title || `Review ${recommendation.playbook.name}`,
       reason: recommendation.reasons[0] || recommendation.playbook.bestFor,
-      label: recommendation.playbook.active ? "활성 Playbook" : "추천 Playbook",
+      label: recommendation.playbook.active ? "Active playbook" : "Recommended playbook",
       href: null,
       source: recommendation.playbook.name,
     }),
-    label: recommendation.playbook.active ? "활성 Playbook" : "추천 Playbook",
+    label: recommendation.playbook.active ? "Active playbook" : "Recommended playbook",
     tone: recommendation.playbook.active ? "warn" : "steady",
     source: "playbook",
   };
@@ -352,13 +352,13 @@ function promptForMove(input: {
   href: string | null;
   source: string;
 }): string {
-  const location = input.href ? `\n관련 위치: ${input.href}` : "";
+  const location = input.href ? `\nSource link: ${input.href}` : "";
   return [
-    `Operating Loop에서 "${input.title}"를 다음 움직임으로 골랐어.`,
-    `분류: ${input.label}`,
-    `출처: ${input.source}`,
-    `근거: ${input.reason}${location}`,
-    "이걸 실행 전 승인 가능한 결정 카드로 정리하고, 필요한 초안/체크리스트/리스크를 만들어줘.",
+    `The Operating Loop picked "${input.title}" as the next move.`,
+    `Category: ${input.label}`,
+    `Source: ${input.source}`,
+    `Reason: ${input.reason}${location}`,
+    "Turn this into an approval-ready decision card with any needed draft, checklist, and risk notes.",
   ].join("\n");
 }
 
@@ -368,7 +368,7 @@ function watchFromContext(context: WorkGraphContext): OperatingPlanWatchContext 
     title: context.title,
     href: context.href,
     risk: context.risk,
-    reason: context.reasons[0] || "최근 활동과 열린 신호가 있습니다.",
+    reason: context.reasons[0] || "Recent activity and open signals are present.",
   };
 }
 
@@ -417,15 +417,15 @@ function attentionHref(item: AttentionItem): string | null {
 function attentionLabel(item: AttentionItem): string {
   switch (item.kind) {
     case "pending_action":
-      return "승인 필요";
+      return "Needs approval";
     case "overdue_task":
-      return "지난 일";
+      return "Overdue work";
     case "today_event":
-      return "오늘 일정";
+      return "Today";
     case "agent_proposal":
-      return "결정 제안";
+      return "Decision proposal";
     case "commitment":
-      return item.attentionType === "COMMITMENT_OVERDUE" ? "지난 약속" : "약속";
+      return item.attentionType === "COMMITMENT_OVERDUE" ? "Overdue commitment" : "Commitment";
   }
 }
 

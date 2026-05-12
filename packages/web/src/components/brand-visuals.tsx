@@ -4,11 +4,11 @@ interface EveSignalFieldProps {
 }
 
 const SIGNAL_POINTS = [
-  { label: "메일", x: 14, y: 26, accent: "bg-sky-300" },
-  { label: "일정", x: 40, y: 14, accent: "bg-amber-300" },
-  { label: "작업", x: 68, y: 30, accent: "bg-emerald-300" },
-  { label: "기억", x: 28, y: 68, accent: "bg-teal-300" },
-  { label: "확인", x: 76, y: 72, accent: "bg-stone-100" },
+  { label: "Mail", x: 14, y: 26, accent: "bg-sky-300" },
+  { label: "Calendar", x: 40, y: 14, accent: "bg-amber-300" },
+  { label: "Work", x: 68, y: 30, accent: "bg-emerald-300" },
+  { label: "Memory", x: 28, y: 68, accent: "bg-teal-300" },
+  { label: "Review", x: 76, y: 72, accent: "bg-stone-100" },
 ];
 
 export function EveSignalField({ className = "", tone = "panel" }: EveSignalFieldProps) {
@@ -27,10 +27,10 @@ export function EveSignalField({ className = "", tone = "panel" }: EveSignalFiel
       <div className="relative flex h-full min-h-32 flex-col justify-between p-4">
         <div className="flex items-center justify-between gap-4 border-b border-white/8 pb-3">
           <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-500">
-            업무 신호
+            Work signals
           </span>
           <span className="rounded-full border border-emerald-400/20 px-2 py-0.5 text-[10px] text-emerald-200">
-            실시간
+            Live
           </span>
         </div>
         <div className="mt-3 space-y-2.5">
