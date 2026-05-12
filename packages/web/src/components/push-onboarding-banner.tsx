@@ -61,8 +61,8 @@ export default function PushOnboardingBanner() {
       if (permission !== "granted") {
         setError(
           permission === "denied"
-            ? "Allow notifications in iPhone Settings → Jigeum → Notifications"
-            : "Notification permission is required",
+            ? "iPhone 설정 → Jigeum → 알림에서 허용해 주세요"
+            : "알림 권한이 필요해요",
         );
         setSubmitting(false);
         return;
@@ -130,7 +130,7 @@ export default function PushOnboardingBanner() {
             disabled={submitting}
             className="px-3 py-1.5 text-xs font-medium bg-amber-300 hover:bg-amber-200 disabled:bg-stone-700 disabled:text-stone-500 text-stone-950 rounded-lg transition"
           >
-            {submitting ? "Enabling..." : "Enable notifications"}
+            {submitting ? "켜는 중..." : "알림 켜기"}
           </button>
           <button
             type="button"
@@ -138,7 +138,7 @@ export default function PushOnboardingBanner() {
             disabled={submitting}
             className="px-3 py-1.5 text-xs font-medium text-stone-400 hover:text-stone-200 transition"
           >
-            Later
+            나중에
           </button>
         </div>
       </div>
@@ -146,7 +146,7 @@ export default function PushOnboardingBanner() {
         type="button"
         onClick={dismiss}
         disabled={submitting}
-        aria-label="Close"
+        aria-label="닫기"
         className="text-stone-500 hover:text-stone-200 transition text-lg leading-none -mr-1 -mt-0.5"
       >
         ×

@@ -103,9 +103,9 @@ export default function BetaLearningCard() {
             type="button"
             onClick={dismiss}
             className="rounded-lg border border-stone-700 px-2.5 py-1.5 text-xs text-stone-400 transition hover:bg-stone-800 hover:text-stone-200"
-            aria-label="Hide beta learning guide"
+            aria-label="베타 학습 안내 숨기기"
           >
-            Dismiss
+            닫기
           </button>
         </div>
       </div>
@@ -134,7 +134,7 @@ export default function BetaLearningCard() {
 
       {syncFailed && (
         <p className="mt-3 text-xs text-amber-300">
-          Initial analysis failed briefly. Refresh or reopen this page shortly to retry.
+          초기 분석이 잠시 실패했어요. 곧 새로고침하거나 다시 열면 재시도됩니다.
         </p>
       )}
     </section>

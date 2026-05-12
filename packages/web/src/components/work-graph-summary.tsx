@@ -40,20 +40,20 @@ export default function WorkGraphSummaryCard() {
   return (
     <section
       className="mb-6 overflow-hidden rounded-2xl border border-stone-800 bg-stone-950/70"
-      aria-label="Work graph summary"
+      aria-label="업무 그래프 요약"
     >
       <div className="border-b border-stone-800 bg-gradient-to-br from-stone-950 via-stone-950 to-amber-950/20 p-4 md:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">
-              Work graph
+              업무 그래프
             </p>
             <h2 className="mt-2 text-lg font-semibold tracking-tight text-stone-100">
-              Active work context
+              진행 중인 업무 맥락
             </h2>
             <p className="mt-2 max-w-xl text-xs leading-5 text-stone-500">
-              Jigeum groups mail, decision threads, and commitments into the same work context so
-              risk is easier to see.
+              Jigeum이 메일, 결정 스레드, 약속을 같은 일 단위로 묶어 어떤 맥락이 위험해지고 있는지
+              보여줍니다.
             </p>
           </div>
 
@@ -224,14 +224,14 @@ function RiskBadge({ risk }: { risk: WorkGraphRisk }) {
 function riskEntry(risk: WorkGraphRisk): { label: string; className: string } {
   switch (risk) {
     case "high":
-      return { label: "High", className: "text-red-300 bg-red-500/10 border-red-500/20" };
+      return { label: "높음", className: "text-red-300 bg-red-500/10 border-red-500/20" };
     case "medium":
       return {
-        label: "Medium",
+        label: "보통",
         className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
       };
     case "low":
-      return { label: "Low", className: "text-stone-400 bg-stone-500/10 border-stone-500/20" };
+      return { label: "낮음", className: "text-stone-400 bg-stone-500/10 border-stone-500/20" };
   }
 }
 
@@ -296,9 +296,9 @@ function displayText(value: string): string {
 function formatRelative(date: string): string {
   const diff = Date.now() - new Date(date).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return "방금";
+  if (mins < 60) return `${mins}분 전`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return `${hours}시간 전`;
+  return `${Math.floor(hours / 24)}일 전`;
 }

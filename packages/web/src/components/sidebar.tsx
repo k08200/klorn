@@ -176,16 +176,20 @@ export default function Sidebar({
   const [search, setSearch] = useState("");
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const loadConversations = useCallback(() => {
+    if (authLoading || !user) {
+      setConversations([]);
+      return;
+    }
     apiFetch<{ conversations: Conversation[] }>("/api/chat/conversations")
       .then((data) => setConversations(data.conversations))
       .catch((err) => captureClientError(err, { scope: "sidebar.load-conversations" }));
-  }, []);
+  }, [authLoading, user]);
 
   useEffect(() => {
     loadConversations();
@@ -856,7 +860,12 @@ export default function Sidebar({
 
       {/* User */}
       <div className="border-t border-stone-800/40 p-2" ref={userMenuRef}>
-        {user ? (
+        {authLoading ? (
+          <div className="flex items-center gap-2.5 rounded-lg px-2 py-2">
+            <div className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-stone-800" />
+            <div className="h-3 w-24 animate-pulse rounded bg-stone-800" />
+          </div>
+        ) : user ? (
           <div className="relative">
             <button
               type="button"

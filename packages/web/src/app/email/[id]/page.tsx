@@ -315,10 +315,10 @@ function EmailDetailView() {
           <line x1="19" y1="12" x2="5" y2="12" />
           <polyline points="12 19 5 12 12 5" />
         </svg>
-        Mail
+        메일
       </Link>
 
-      {loading && <p className="text-sm text-stone-500">Loading...</p>}
+      {loading && <p className="text-sm text-stone-500">로딩 중...</p>}
 
       {error && (
         <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -334,10 +334,10 @@ function EmailDetailView() {
               <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
                 <div>
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-                    Signal detail
+                    신호 상세
                   </p>
                   <h1 className="break-words text-xl font-semibold leading-snug tracking-tight text-stone-50 md:text-2xl">
-                    {email.subject || "No subject"}
+                    {email.subject || "제목 없음"}
                   </h1>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
                     <span className="max-w-full truncate">{email.from}</span>
@@ -348,10 +348,10 @@ function EmailDetailView() {
                 <EveSignalField className="min-h-40 rounded-lg" />
               </div>
               <div className="mt-5 grid grid-cols-3 gap-2">
-                <DetailStat label="Priority" value={PRIORITY_LABELS[email.priority]} />
-                <DetailStat label="Reply" value={email.needsReply ? "Needed" : "No signal"} />
+                <DetailStat label="우선순위" value={PRIORITY_LABELS[email.priority]} />
+                <DetailStat label="답장" value={email.needsReply ? "필요" : "신호 없음"} />
                 <DetailStat
-                  label="Category"
+                  label="분류"
                   value={email.category ? categoryLabel(email.category) : "-"}
                 />
               </div>
@@ -364,7 +364,7 @@ function EmailDetailView() {
             {email.body ? (
               <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
                 <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-stone-500">
-                  Body
+                  본문
                 </h2>
                 <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-stone-200">
                   {email.body}
@@ -401,10 +401,10 @@ function CandidateProfileCard({
     <section className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
-          Candidate card
+          후보 카드
         </h2>
         <span className="text-[11px] text-stone-500">
-          Confidence {Math.round(profile.confidence * 100)}%
+          신뢰도 {Math.round(profile.confidence * 100)}%
         </span>
       </div>
       <div className="mb-3 rounded-lg border border-emerald-500/15 bg-black/15 px-3 py-2">
@@ -435,12 +435,12 @@ function CandidateProfileCard({
       </div>
       <p className="text-sm font-medium leading-relaxed text-stone-100">{profile.summary}</p>
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-3">
-        <ProfileFact label="Name" value={profile.name} />
-        <ProfileFact label="Role" value={profile.role} />
-        <ProfileFact label="Contact" value={profile.contact} />
-        <ProfileFact label="Age" value={profile.age} />
-        <ProfileFact label="Height" value={profile.height} />
-        <ProfileFact label="Files" value={`${profile.evidenceFiles.length}`} />
+        <ProfileFact label="이름" value={profile.name} />
+        <ProfileFact label="역할" value={profile.role} />
+        <ProfileFact label="연락처" value={profile.contact} />
+        <ProfileFact label="나이" value={profile.age} />
+        <ProfileFact label="키" value={profile.height} />
+        <ProfileFact label="파일" value={`${profile.evidenceFiles.length}`} />
       </div>
       {profile.skills.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -470,14 +470,14 @@ function CandidateProfileCard({
       )}
       <label className="mt-3 block">
         <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-stone-600">
-          Review note
+          검토 메모
         </span>
         <textarea
           defaultValue={intake?.notes ?? ""}
           rows={2}
           onBlur={(e) => onUpdate({ notes: e.target.value || null })}
           className="w-full rounded-lg border border-emerald-500/15 bg-black/15 px-3 py-2 text-xs leading-5 text-stone-300 outline-none transition focus:border-emerald-400/35"
-          placeholder="Review note"
+          placeholder="검토 메모"
         />
       </label>
     </section>
@@ -485,14 +485,14 @@ function CandidateProfileCard({
 }
 
 const CANDIDATE_STATUS_OPTIONS: Array<{ status: CandidateIntakeStatus; label: string }> = [
-  { status: "NEEDS_ANALYSIS", label: "Needs analysis" },
-  { status: "NEEDS_INFO", label: "Needs info" },
-  { status: "READY_TO_REVIEW", label: "Ready" },
-  { status: "REVIEWING", label: "Reviewing" },
-  { status: "CONTACTED", label: "Contacted" },
-  { status: "SHORTLISTED", label: "Shortlisted" },
-  { status: "REJECTED", label: "Rejected" },
-  { status: "ARCHIVED", label: "Archived" },
+  { status: "NEEDS_ANALYSIS", label: "분석 필요" },
+  { status: "NEEDS_INFO", label: "정보 확인" },
+  { status: "READY_TO_REVIEW", label: "검토 대기" },
+  { status: "REVIEWING", label: "검토 중" },
+  { status: "CONTACTED", label: "연락 완료" },
+  { status: "SHORTLISTED", label: "후보 등록" },
+  { status: "REJECTED", label: "거절됨" },
+  { status: "ARCHIVED", label: "보관됨" },
 ];
 
 function candidatePipelineToIntakeStatus(
@@ -555,17 +555,17 @@ function AttachmentAnalysis({
     <section className="mt-5 rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-sky-300">
-          Attachment analysis
+          첨부 분석
         </h2>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-stone-500">{attachments.length} files</span>
+          <span className="text-[11px] text-stone-500">파일 {attachments.length}개</span>
           <button
             type="button"
             onClick={onReanalyze}
             disabled={reanalyzing}
             className="rounded border border-sky-400/25 bg-sky-400/10 px-2 py-1 text-[11px] text-sky-200 transition hover:bg-sky-400/15 disabled:opacity-50"
           >
-            {reanalyzing ? "Analyzing..." : "Analyze again"}
+            {reanalyzing ? "분석 중..." : "다시 분석"}
           </button>
         </div>
       </div>
@@ -593,7 +593,7 @@ function AttachmentAnalysis({
                 disabled={downloading === attachment.id}
                 className="rounded border border-stone-700/70 bg-stone-950/45 px-2 py-0.5 text-[10px] text-stone-400 transition hover:border-sky-400/30 hover:text-sky-200 disabled:opacity-50"
               >
-                {downloading === attachment.id ? "Downloading" : "Download original"}
+                {downloading === attachment.id ? "다운로드 중" : "원본 다운로드"}
               </button>
             </div>
             {attachment.summary && (
@@ -693,10 +693,10 @@ function ReplyDraftBox({
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-[11px] font-semibold uppercase tracking-wider text-stone-300">
-            Reply draft
+            답장 초안
           </h2>
           <p className="mt-1 text-xs text-stone-500">
-            Jigeum drafts the reply. You approve before sending.
+            Jigeum이 초안을 만들고, 전송은 직접 승인합니다.
           </p>
         </div>
         <button
@@ -705,7 +705,7 @@ function ReplyDraftBox({
           disabled={drafting}
           className="rounded-lg border border-amber-500/30 px-3 py-1.5 text-xs text-amber-200 transition hover:bg-amber-500/10 disabled:opacity-50"
         >
-          {drafting ? "Drafting..." : draft ? "Draft again" : "Create draft"}
+          {drafting ? "작성 중..." : draft ? "다시 작성" : "초안 만들기"}
         </button>
       </div>
       <input
@@ -719,7 +719,7 @@ function ReplyDraftBox({
           <div className="grid gap-2 text-xs sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-600">
-                To
+                받는 사람
               </span>
               <input
                 value={draft.to}
@@ -729,7 +729,7 @@ function ReplyDraftBox({
             </label>
             <label className="block">
               <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-600">
-                Subject
+                제목
               </span>
               <input
                 value={draft.subject}
@@ -748,7 +748,7 @@ function ReplyDraftBox({
             <div className="rounded-lg border border-stone-800/70 bg-black/15 px-3 py-2">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <span className="text-[10px] font-medium uppercase tracking-wider text-stone-600">
-                  Include original attachments
+                  원본 첨부 포함
                 </span>
                 <button
                   type="button"
@@ -761,7 +761,7 @@ function ReplyDraftBox({
                   }
                   className="text-[11px] text-sky-300 transition hover:text-sky-200"
                 >
-                  {selectedCount === attachments.length ? "Clear all" : "Select all"}
+                  {selectedCount === attachments.length ? "모두 해제" : "모두 선택"}
                 </button>
               </div>
               <div className="grid gap-1.5 sm:grid-cols-2">
@@ -796,7 +796,7 @@ function ReplyDraftBox({
                   rel="noreferrer"
                   className="rounded-lg border border-emerald-400/30 px-3 py-1.5 text-xs font-medium text-emerald-200 transition hover:bg-emerald-400/10"
                 >
-                  Open Gmail draft
+                  Gmail 초안 열기
                 </a>
               )}
               <button
@@ -806,10 +806,10 @@ function ReplyDraftBox({
                 className="rounded-lg border border-sky-400/30 px-3 py-1.5 text-xs font-medium text-sky-200 transition hover:bg-sky-400/10 disabled:opacity-50"
               >
                 {savingGmailDraft
-                  ? "Saving..."
+                  ? "저장 중..."
                   : selectedCount > 0
-                    ? `Save Gmail draft + ${selectedCount} attachments`
-                    : "Save Gmail draft"}
+                    ? `Gmail 초안 저장 + 첨부 ${selectedCount}개`
+                    : "Gmail 초안 저장"}
               </button>
               <button
                 type="button"
@@ -817,7 +817,7 @@ function ReplyDraftBox({
                 disabled={sending || !draft.to || !draft.subject || !draft.body}
                 className="rounded-lg bg-amber-300 px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
               >
-                {sending ? "Sending..." : "Send this reply"}
+                {sending ? "전송 중..." : "이 답장 보내기"}
               </button>
             </div>
           </div>
@@ -846,7 +846,7 @@ function EveAnalysis({ email }: { email: EmailDetail }) {
     return (
       <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
         <p className="text-xs text-stone-500">
-          Jigeum has not analyzed this mail yet. Check again shortly after sync.
+          Jigeum이 아직 분석하지 않은 메일이에요. 동기화 후 잠시 뒤에 다시 확인해 주세요.
         </p>
       </section>
     );
@@ -858,7 +858,7 @@ function EveAnalysis({ email }: { email: EmailDetail }) {
       <div className="pl-2">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-300">
-            Jigeum analysis
+            Jigeum 판단
           </span>
           <div className="flex items-center gap-1.5">
             <PriorityPill priority={email.priority} />
@@ -911,15 +911,15 @@ function EveAnalysis({ email }: { email: EmailDetail }) {
 function ReplyNeededPill() {
   return (
     <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-400/30 bg-amber-400/10 text-amber-300 font-medium">
-      Reply needed
+      답장 필요
     </span>
   );
 }
 
 const PRIORITY_LABELS: Record<EmailPriority, string> = {
-  URGENT: "Urgent",
-  NORMAL: "Normal",
-  LOW: "Low",
+  URGENT: "긴급",
+  NORMAL: "보통",
+  LOW: "낮음",
 };
 
 function LabelFeedbackControl({
@@ -959,7 +959,7 @@ function LabelFeedbackControl({
       setOpen(false);
     } catch (err) {
       captureClientError(err, { scope: "email.feedback.submit", emailId, correctedPriority });
-      setError("Could not report it. Try again shortly.");
+      setError("보고하지 못했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
       setSubmitting(null);
     }
@@ -969,7 +969,7 @@ function LabelFeedbackControl({
     return (
       <span className="text-[11px] text-emerald-300/80 inline-flex items-center gap-1">
         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-        Reported: {PRIORITY_LABELS[feedback.originalPriority]} →{" "}
+        보고됨: {PRIORITY_LABELS[feedback.originalPriority]} →{" "}
         {PRIORITY_LABELS[feedback.correctedPriority]}
       </span>
     );
@@ -982,7 +982,7 @@ function LabelFeedbackControl({
         onClick={() => setOpen(true)}
         className="text-[11px] text-stone-500 underline-offset-2 hover:text-stone-300 hover:underline"
       >
-        Wrong label
+        분류 틀림
       </button>
     );
   }
@@ -993,7 +993,7 @@ function LabelFeedbackControl({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[11px] text-stone-500">Actual priority:</span>
+      <span className="text-[11px] text-stone-500">실제 우선순위:</span>
       {options.map((p) => (
         <button
           key={p}
@@ -1014,7 +1014,7 @@ function LabelFeedbackControl({
         disabled={!!submitting}
         className="text-[11px] text-stone-500 hover:text-stone-300"
       >
-        Cancel
+        취소
       </button>
       {error && <span className="text-[11px] text-red-300">{error}</span>}
     </div>
@@ -1062,23 +1062,23 @@ function ReplyNeededFeedbackControl({ emailId }: { emailId: string }) {
       });
     } catch (err) {
       captureClientError(err, { scope: "email.reply-needed-feedback.submit", emailId, choice });
-      setError("Could not save.");
+      setError("저장하지 못했어요.");
     } finally {
       setSubmitting(null);
     }
   };
 
   const options: Array<{ choice: ReplyNeededChoice; label: string }> = [
-    { choice: "needed", label: "Correct" },
-    { choice: "not_needed", label: "Not needed" },
-    { choice: "later", label: "Later" },
-    { choice: "done", label: "Handled" },
+    { choice: "needed", label: "맞음" },
+    { choice: "not_needed", label: "필요 없음" },
+    { choice: "later", label: "나중에" },
+    { choice: "done", label: "처리함" },
   ];
 
   return (
     <div className="mt-4 border-t border-amber-500/10 pt-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] text-stone-500">Reply-needed judgment:</span>
+        <span className="text-[11px] text-stone-500">답장 필요 판단:</span>
         {options.map((option) => {
           const selected = feedback?.choice === option.choice;
           return (
@@ -1110,7 +1110,7 @@ function PriorityPill({ priority }: { priority: EmailDetail["priority"] }) {
     URGENT: "bg-red-500/15 text-red-300 border-red-500/30",
     LOW: "bg-stone-900 text-stone-500 border-stone-800",
   };
-  const labels = { URGENT: "Urgent", LOW: "Low" };
+  const labels = { URGENT: "긴급", LOW: "낮음" };
   return (
     <span
       className={`text-[10px] px-1.5 py-0.5 rounded border ${styles[priority as "URGENT" | "LOW"]} font-medium`}
@@ -1131,91 +1131,91 @@ function CategoryPill({ category }: { category: string }) {
 
 function categoryLabel(category: string): string {
   const labelMap: Record<string, string> = {
-    business: "Business",
-    engineering: "Engineering",
-    automated: "Automated",
-    newsletter: "Newsletter",
-    meeting: "Meeting",
-    billing: "Billing",
-    conversation: "Conversation",
-    other: "Other",
+    business: "비즈니스",
+    engineering: "엔지니어링",
+    automated: "자동 메일",
+    newsletter: "뉴스레터",
+    meeting: "미팅",
+    billing: "결제",
+    conversation: "대화",
+    other: "기타",
   };
   return labelMap[category] || category;
 }
 
 function attachmentCategoryLabel(category: string): string {
   const labelMap: Record<string, string> = {
-    resume: "Resume",
-    profile: "Profile",
-    portfolio: "Portfolio",
-    audition: "Audition",
-    contract: "Contract",
-    invoice: "Invoice",
-    proposal: "Proposal",
-    schedule: "Schedule",
-    image: "Image",
-    document: "Document",
-    other: "Other",
+    resume: "이력서",
+    profile: "프로필",
+    portfolio: "포트폴리오",
+    audition: "오디션",
+    contract: "계약서",
+    invoice: "청구서",
+    proposal: "제안서",
+    schedule: "일정",
+    image: "이미지",
+    document: "문서",
+    other: "기타",
   };
   return labelMap[category] || category;
 }
 
 function attachmentStatusLabel(status: string): string {
   const labelMap: Record<string, string> = {
-    ANALYZED: "Analyzed",
-    FALLBACK: "Fallback analysis",
-    PENDING: "Pending",
-    UNSUPPORTED: "Text extraction limited",
+    ANALYZED: "분석 완료",
+    FALLBACK: "기본 분석",
+    PENDING: "대기 중",
+    UNSUPPORTED: "텍스트 추출 제한",
   };
   return labelMap[status] || status.toLowerCase();
 }
 
 function candidateMissingLabel(key: string): string {
   const labelMap: Record<string, string> = {
-    name: "name",
-    contact: "contact",
-    role: "role",
-    portfolio: "portfolio link",
+    name: "이름",
+    contact: "연락처",
+    role: "역할",
+    portfolio: "포트폴리오 링크",
   };
   return labelMap[key] || key;
 }
 
 function candidatePipelineLabel(status: AttachmentCandidateProfile["pipelineStatus"]): string {
   const labels: Record<AttachmentCandidateProfile["pipelineStatus"], string> = {
-    ready_to_review: "Ready to review",
-    needs_info: "Needs more info",
-    needs_analysis: "Needs analysis",
+    ready_to_review: "검토 대기",
+    needs_info: "정보 추가 필요",
+    needs_analysis: "분석 필요",
   };
   return labels[status];
 }
 
 function fieldLabel(key: string): string {
   const labelMap: Record<string, string> = {
-    name: "Name",
-    role: "Role",
-    contact: "Contact",
-    email: "Email",
-    phone: "Phone",
-    age: "Age",
-    height: "Height",
-    skills: "Skills",
-    links: "Links",
-    deadline: "Deadline",
-    amount: "Amount",
-    availability: "Availability",
+    name: "이름",
+    role: "역할",
+    contact: "연락처",
+    email: "이메일",
+    phone: "전화",
+    age: "나이",
+    height: "키",
+    skills: "기술",
+    links: "링크",
+    deadline: "마감",
+    amount: "금액",
+    availability: "가능 시간",
   };
   return labelMap[key] || key;
 }
 
 function formatBytes(size: number | null): string {
-  if (!size || size <= 0) return "Unknown size";
+  if (!size || size <= 0) return "크기 알 수 없음";
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function formatFull(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", {
+  return new Date(iso).toLocaleString("ko-KR", {
     month: "short",
     day: "numeric",
     hour: "2-digit",

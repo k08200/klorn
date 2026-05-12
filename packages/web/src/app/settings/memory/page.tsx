@@ -17,11 +17,11 @@ interface Memory {
 }
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  PREFERENCE: { label: "Preference", color: "text-amber-200 bg-amber-500/10 border-amber-500/25" },
-  FACT: { label: "Fact", color: "text-teal-200 bg-teal-500/10 border-teal-500/25" },
-  DECISION: { label: "Decision", color: "text-rose-200 bg-rose-500/10 border-rose-500/25" },
-  CONTEXT: { label: "Context", color: "text-emerald-200 bg-emerald-500/10 border-emerald-500/25" },
-  FEEDBACK: { label: "Feedback", color: "text-stone-200 bg-stone-500/10 border-stone-500/25" },
+  PREFERENCE: { label: "선호", color: "text-amber-200 bg-amber-500/10 border-amber-500/25" },
+  FACT: { label: "사실", color: "text-teal-200 bg-teal-500/10 border-teal-500/25" },
+  DECISION: { label: "결정", color: "text-rose-200 bg-rose-500/10 border-rose-500/25" },
+  CONTEXT: { label: "맥락", color: "text-emerald-200 bg-emerald-500/10 border-emerald-500/25" },
+  FEEDBACK: { label: "피드백", color: "text-stone-200 bg-stone-500/10 border-stone-500/25" },
 };
 
 export default function MemoryPage() {
@@ -68,20 +68,20 @@ function MemoryPageContent() {
         <div className="grid gap-5 p-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
           <div>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-              Memory Graph
+              메모리 그래프
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              Memory used for decisions
+              Jigeum이 판단에 쓰는 기억
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-              Review approval preferences, recurring work context, and remove stale memories.
+              승인 선호, 반복되는 업무 맥락을 검토하고 오래된 기억을 정리합니다.
             </p>
           </div>
           <EveSignalField className="min-h-40 rounded-lg" />
           <div className="grid grid-cols-3 gap-2 lg:col-span-2">
-            <MemoryStat label="Total" value={stats.total} />
-            <MemoryStat label="Shown" value={memories.length} />
-            <MemoryStat label="Types" value={stats.byType.length} />
+            <MemoryStat label="전체" value={stats.total} />
+            <MemoryStat label="표시" value={memories.length} />
+            <MemoryStat label="유형" value={stats.byType.length} />
           </div>
         </div>
       </header>
@@ -162,7 +162,7 @@ function MemoryPageContent() {
                   type="button"
                   onClick={() => deleteMemory(m.id)}
                   className="rounded-md p-1.5 text-stone-600 opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
-                  title="Delete memory"
+                  title="기억 삭제"
                 >
                   <svg
                     aria-hidden="true"
@@ -186,9 +186,9 @@ function MemoryPageContent() {
 
         {memories.length === 0 && (
           <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 py-12 text-center">
-            <p className="mb-1 text-sm text-stone-400">No saved memories yet</p>
+            <p className="mb-1 text-sm text-stone-400">아직 저장된 기억이 없어요.</p>
             <p className="text-xs text-stone-600">
-              Jigeum will learn decision preferences and recurring context as work gets handled.
+              일을 처리하면서 Jigeum이 결정 선호와 반복 맥락을 기억합니다.
             </p>
           </div>
         )}

@@ -113,12 +113,12 @@ function DecisionTrace({ item }: { item: AttentionItem }) {
     <div className="mt-2 grid gap-1.5 rounded-md border border-stone-800/70 bg-black/20 p-2">
       {decision.costOfIgnoring && (
         <p className="line-clamp-2 text-[11px] leading-4 text-stone-400">
-          If missed: {displayText(decision.costOfIgnoring)}
+          놓치면: {displayText(decision.costOfIgnoring)}
         </p>
       )}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="rounded border border-stone-800 px-1.5 py-0.5 text-[10px] text-stone-500">
-          Confidence {Math.round(decision.confidence * 100)}%
+          신뢰도 {Math.round(decision.confidence * 100)}%
         </span>
         {decision.suggestedAction && (
           <span className="rounded border border-amber-300/20 bg-amber-300/10 px-1.5 py-0.5 text-[10px] text-amber-200">
@@ -142,14 +142,14 @@ function badgeFor(item: AttentionItem): { label: string; className: string } {
   switch (item.kind) {
     case "pending_action":
       return {
-        label: "Needs approval",
+        label: "승인 필요",
         className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
       };
     case "overdue_task":
-      return { label: "Overdue", className: "text-red-300 bg-red-500/10 border-red-500/20" };
+      return { label: "기한 지남", className: "text-red-300 bg-red-500/10 border-red-500/20" };
     case "today_event":
       return {
-        label: "Starting soon",
+        label: "곧 시작",
         className: "text-amber-200 bg-amber-300/10 border-amber-300/20",
       };
     case "agent_proposal":
@@ -187,7 +187,7 @@ function bodyFor(item: AttentionItem): { title: string; subtitle: string | null 
     case "overdue_task":
       return {
         title: displayText(item.title),
-        subtitle: `${item.daysOverdue}d overdue`,
+        subtitle: `${item.daysOverdue}일 지남`,
       };
     case "today_event":
       return {
@@ -229,13 +229,13 @@ function hrefFor(item: AttentionItem): string | null {
 function ownerLabel(owner: string): string | null {
   switch (owner) {
     case "USER":
-      return "Your commitment";
+      return "내 약속";
     case "COUNTERPARTY":
-      return "Counterparty commitment";
+      return "상대방 약속";
     case "TEAM":
-      return "Team commitment";
+      return "팀 약속";
     case "UNKNOWN":
-      return "Needs owner";
+      return "담당자 확인 필요";
     default:
       return null;
   }
@@ -257,66 +257,66 @@ function stripEvePrefix(title: string): string {
 function displayText(value: string): string {
   return value
     .replace(
-      /기한이 불명확해서 지금 확인하지 않으면 나중에 놓칠 가능성이 커요\./g,
-      "The due date is unclear, so it is easy to miss unless it is confirmed now.",
+      /The due date is unclear, so it is easy to miss unless it is confirmed now\./g,
+      "기한이 불명확해서 지금 확인하지 않으면 나중에 놓칠 가능성이 커요.",
     )
     .replace(
-      /약속 기한이 지나 신뢰나 후속 일정에 영향을 줄 수 있어요\./g,
-      "The commitment is overdue and may affect trust or downstream timing.",
+      /The commitment is overdue and may affect trust or downstream timing\./g,
+      "약속 기한이 지나 신뢰나 후속 일정에 영향을 줄 수 있어요.",
     )
     .replace(
-      /상대가 하기로 한 일이 제때 오지 않으면 다음 결정이 막힐 수 있어요\./g,
-      "If the counterparty does not deliver on time, the next decision may stall.",
+      /If the counterparty does not deliver on time, the next decision may stall\./g,
+      "상대가 하기로 한 일이 제때 오지 않으면 다음 결정이 막힐 수 있어요.",
     )
     .replace(
-      /내가 하기로 한 일을 놓치면 상대방의 다음 작업이 지연될 수 있어요\./g,
-      "If this slips, the other side may be blocked on their next step.",
+      /If this slips, the other side may be blocked on their next step\./g,
+      "내가 하기로 한 일을 놓치면 상대방의 다음 작업이 지연될 수 있어요.",
     )
     .replace(
-      /답장이 늦어지면 관계나 일정 리스크가 커질 수 있어요\./g,
-      "A late reply could create relationship or scheduling risk.",
+      /A late reply could create relationship or scheduling risk\./g,
+      "답장이 늦어지면 관계나 일정 리스크가 커질 수 있어요.",
     )
     .replace(
-      /일정이 고정되지 않으면 준비 시간과 후속 작업이 밀릴 수 있어요\./g,
-      "If the time is not confirmed, prep and follow-up work may slip.",
+      /If the time is not confirmed, prep and follow-up work may slip\./g,
+      "일정이 고정되지 않으면 준비 시간과 후속 작업이 밀릴 수 있어요.",
     )
     .replace(
-      /삭제 결정이 맞는지 확인하지 않으면 되돌리기 어려운 손실이 생길 수 있어요\./g,
-      "Confirm the delete decision first because it may be hard to undo.",
+      /Confirm the delete decision first because it may be hard to undo\./g,
+      "삭제 결정이 맞는지 확인하지 않으면 되돌리기 어려운 손실이 생길 수 있어요.",
     )
     .replace(
-      /결정이 대기 상태로 남으면 관련 업무 흐름도 멈춰요\./g,
-      "If the decision stays pending, the related workstream may stall.",
+      /If the decision stays pending, the related workstream may stall\./g,
+      "결정이 대기 상태로 남으면 관련 업무 흐름도 멈춰요.",
     )
     .replace(
-      /마감이 지나 관련 후속 작업이나 약속이 밀릴 수 있어요\./g,
-      "The due date has passed, so related follow-ups may slip.",
+      /The due date has passed, so related follow-ups may slip\./g,
+      "마감이 지나 관련 후속 작업이나 약속이 밀릴 수 있어요.",
     )
     .replace(
-      /오늘 처리하지 않으면 높은 우선순위 작업이 내일로 넘어가요\./g,
-      "If it is not handled today, high-priority work rolls into tomorrow.",
+      /If it is not handled today, high-priority work rolls into tomorrow\./g,
+      "오늘 처리하지 않으면 높은 우선순위 작업이 내일로 넘어가요.",
     )
     .replace(
-      /오늘 마감이라 놓치면 작업 큐가 밀릴 수 있어요\./g,
-      "It is due today, so missing it can back up the work queue.",
+      /It is due today, so missing it can back up the work queue\./g,
+      "오늘 마감이라 놓치면 작업 큐가 밀릴 수 있어요.",
     )
     .replace(
-      /회의 전에 맥락을 놓치면 답변, 자료, 약속 확인이 늦어질 수 있어요\./g,
-      "If meeting context is missed, replies, materials, and commitments may be delayed.",
+      /If meeting context is missed, replies, materials, and commitments may be delayed\./g,
+      "회의 전에 맥락을 놓치면 답변, 자료, 약속 확인이 늦어질 수 있어요.",
     )
     .replace(
-      /확인하지 않으면 EVE가 준비한 후속 조치가 대기 상태로 남아요\./g,
-      "If it is not reviewed, the prepared follow-up stays waiting.",
+      /If it is not reviewed, the prepared follow-up stays waiting\./g,
+      "확인하지 않으면 Jigeum이 준비한 후속 조치가 대기 상태로 남아요.",
     )
-    .replace(/답장 초안을 확인하고 승인/g, "Review and approve the draft reply")
-    .replace(/근거/g, "Evidence")
-    .replace(/승인 대기/g, "Awaiting approval")
-    .replace(/읽지 않은 메일/g, "Unread mail")
-    .replace(/긴급 메일/g, "Urgent mail")
-    .replace(/지난 약속/g, "Overdue commitment")
-    .replace(/열린 약속/g, "Open commitment")
-    .replace(/상대방/g, "Counterparty")
-    .replace(/내 약속/g, "Your commitment")
+    .replace(/Review and approve the draft reply/g, "답장 초안을 확인하고 승인")
+    .replace(/Evidence/g, "근거")
+    .replace(/Awaiting approval/g, "승인 대기")
+    .replace(/Unread mail/g, "읽지 않은 메일")
+    .replace(/Urgent mail/g, "긴급 메일")
+    .replace(/Overdue commitment/g, "지난 약속")
+    .replace(/Open commitment/g, "열린 약속")
+    .replace(/Counterparty/g, "상대방")
+    .replace(/Your commitment/g, "내 약속")
     .replace(/\bEVE\b/g, "Jigeum")
     .replace(/\bEve\b/g, "Jigeum");
 }
@@ -326,27 +326,27 @@ function formatEventSubtitle(
   minutesAway: number,
   location: string | null,
 ): string {
-  const time = new Date(startTime).toLocaleTimeString("en-US", {
+  const time = new Date(startTime).toLocaleTimeString("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
   });
   const inMin =
     minutesAway <= 0
-      ? "in progress"
+      ? "진행 중"
       : minutesAway < 60
-        ? `in ${minutesAway}m`
-        : `in ${Math.round(minutesAway / 60)}h`;
+        ? `${minutesAway}분 후`
+        : `${Math.round(minutesAway / 60)}시간 후`;
   return location ? `${time} · ${inMin} · ${location}` : `${time} · ${inMin}`;
 }
 
 function TodaySectionView({ section }: { section: TodaySection }) {
   return (
     <div className="rounded-xl border border-stone-800 bg-stone-900/40 p-4">
-      <h2 className="text-sm font-semibold text-stone-100 mb-3">Today at a glance</h2>
+      <h2 className="text-sm font-semibold text-stone-100 mb-3">오늘 한눈에 보기</h2>
       <div className="space-y-3">
         {section.events.length > 0 && (
           <SubList
-            label="Today's events"
+            label="오늘 일정"
             items={section.events.map((e) => ({
               key: e.id,
               primary: e.title,
@@ -356,7 +356,7 @@ function TodaySectionView({ section }: { section: TodaySection }) {
         )}
         {section.overdueTasks.length > 0 && (
           <SubList
-            label="Overdue"
+            label="기한 지남"
             tone="warn"
             items={section.overdueTasks.map((t) => ({
               key: t.id,
@@ -367,7 +367,7 @@ function TodaySectionView({ section }: { section: TodaySection }) {
         )}
         {section.todayTasks.length > 0 && (
           <SubList
-            label="Due today"
+            label="오늘 마감"
             items={section.todayTasks.map((t) => ({
               key: t.id,
               primary: t.title,
@@ -406,7 +406,7 @@ function SubList({ label, items, tone }: { label: string; items: SubListItem[]; 
           </li>
         ))}
         {items.length > 3 && (
-          <li className="text-[11px] text-stone-600 px-2">+ {items.length - 3} more</li>
+          <li className="text-[11px] text-stone-600 px-2">외 {items.length - 3}개</li>
         )}
       </ul>
     </div>
@@ -414,18 +414,18 @@ function SubList({ label, items, tone }: { label: string; items: SubListItem[]; 
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return new Date(iso).toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
 }
 
 function priorityLabel(p: string): string | null {
   const up = p.toUpperCase();
-  if (up === "URGENT") return "Urgent";
-  if (up === "HIGH") return "High";
-  if (up === "MEDIUM") return "Medium";
-  if (up === "LOW") return "Low";
+  if (up === "URGENT") return "긴급";
+  if (up === "HIGH") return "높음";
+  if (up === "MEDIUM") return "보통";
+  if (up === "LOW") return "낮음";
   return null;
 }

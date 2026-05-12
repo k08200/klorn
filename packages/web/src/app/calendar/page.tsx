@@ -55,7 +55,7 @@ function CalendarView() {
       setEvents(data.events);
     } catch (err) {
       captureClientError(err, { scope: "calendar.load" });
-      setError("Could not load calendar events.");
+      setError("캘린더 일정을 불러오지 못했어요.");
     } finally {
       setLoading(false);
     }
@@ -91,20 +91,20 @@ function CalendarView() {
       setGoogleConnected(true);
       setSyncMessage(
         synced > 0
-          ? `Imported ${synced} events from Google Calendar.`
-          : "Google Calendar synced. No events in the next 14 days.",
+          ? `Google Calendar에서 ${synced}개 일정을 가져왔어요.`
+          : "Google Calendar 동기화 완료. 앞으로 14일 일정이 없습니다.",
       );
       await loadEvents();
     } catch (err) {
       captureClientError(err, { scope: "calendar.sync" });
-      setError("Could not sync Google Calendar.");
+      setError("Google Calendar 동기화에 실패했어요.");
     } finally {
       setSyncing(false);
     }
   };
 
   const groups = groupByDay(events);
-  const todayCount = groups.find((group) => group.label === "Today")?.events.length ?? 0;
+  const todayCount = groups.find((group) => group.label === "오늘")?.events.length ?? 0;
   const nextEvent = events
     .map((event) => ({ event, start: new Date(event.startTime) }))
     .filter(({ start }) => start.getTime() >= Date.now())
@@ -118,13 +118,13 @@ function CalendarView() {
           <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
             <div>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-                Calendar
+                캘린더
               </p>
               <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-                Find the meetings that need preparation
+                준비가 필요한 미팅을 찾습니다
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-                Review the next 14 days of meetings with prep packs and related work signals.
+                앞으로 14일의 미팅을 준비 자료와 관련 업무 신호와 함께 확인하세요.
               </p>
             </div>
             <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
@@ -135,25 +135,25 @@ function CalendarView() {
                 disabled={syncing}
                 className="absolute right-3 top-3 rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
               >
-                {syncing ? "Syncing..." : "Sync now"}
+                {syncing ? "동기화 중..." : "지금 동기화"}
               </button>
             </div>
           </div>
           <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
-            <CalendarStat label="14 days" value={events.length} />
-            <CalendarStat label="Today" value={todayCount} />
+            <CalendarStat label="14일" value={events.length} />
+            <CalendarStat label="오늘" value={todayCount} />
             <CalendarStat
-              label="Next"
+              label="다음"
               value={nextEvent ? formatTime(new Date(nextEvent.startTime)) : "-"}
             />
           </div>
           {nextEvent && (
             <div className="mt-4 rounded-lg border border-amber-300/15 bg-amber-300/5 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300/80">
-                Next prep target
+                다음 준비 대상
               </p>
               <p className="mt-1 truncate text-sm font-medium text-stone-100">
-                {nextEvent.title || "Untitled"}
+                {nextEvent.title || "제목 없음"}
               </p>
             </div>
           )}
@@ -162,7 +162,7 @@ function CalendarView() {
 
       {loading && (
         <div className="rounded-lg border border-stone-800 bg-stone-950/35 px-4 py-5 text-center text-sm text-stone-500">
-          Assembling calendar context...
+          일정 맥락을 조립하는 중...
         </div>
       )}
 
@@ -182,20 +182,20 @@ function CalendarView() {
         <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-6 text-center">
           <p className="mb-1 text-sm text-stone-300">
             {googleConnected === false
-              ? "Google Calendar is not connected yet."
-              : "No events in the next 14 days."}
+              ? "Google Calendar가 아직 연결되지 않았어요."
+              : "앞으로 14일 일정이 없습니다."}
           </p>
           <p className="mb-4 text-xs text-stone-500">
             {googleConnected === false
-              ? "Connect and sync so Jigeum can brief from your real calendar."
-              : "Google is connected. An empty calendar will stay empty in the briefing."}
+              ? "연결 후 동기화하면 Jigeum이 실제 캘린더 상태를 기준으로 브리핑합니다."
+              : "Google 연결은 정상입니다. 캘린더가 비어 있으면 빈 상태 그대로 브리핑에 반영됩니다."}
           </p>
           {googleConnected === false ? (
             <a
               href={`${API_BASE}/api/auth/google?token=${getStoredAuthToken() || ""}`}
               className="inline-flex rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200"
             >
-              Connect Google
+              Google 연결
             </a>
           ) : (
             <button
@@ -204,7 +204,7 @@ function CalendarView() {
               disabled={syncing}
               className="rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
             >
-              {syncing ? "Syncing..." : "Sync again"}
+              {syncing ? "동기화 중..." : "다시 동기화"}
             </button>
           )}
         </div>
@@ -251,7 +251,7 @@ function EventRow({ event }: { event: CalendarEvent }) {
   const [prepError, setPrepError] = useState<string | null>(null);
   const start = new Date(event.startTime);
   const end = new Date(event.endTime);
-  const timeLabel = event.allDay ? "All day" : `${formatTime(start)}–${formatTime(end)}`;
+  const timeLabel = event.allDay ? "하루 종일" : `${formatTime(start)}–${formatTime(end)}`;
 
   const togglePrep = async () => {
     if (prepOpen) {
@@ -266,7 +266,7 @@ function EventRow({ event }: { event: CalendarEvent }) {
       setPrep(await apiFetch<MeetingPrepPack>(`/api/calendar/${event.id}/prep-pack`));
     } catch (err) {
       captureClientError(err, { scope: "calendar.prep_pack", eventId: event.id });
-      setPrepError("Could not build the prep pack.");
+      setPrepError("미팅 준비 자료를 만들지 못했어요.");
     } finally {
       setPrepLoading(false);
     }
@@ -281,7 +281,7 @@ function EventRow({ event }: { event: CalendarEvent }) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium leading-snug text-stone-100">
-            {event.title || "Untitled"}
+            {event.title || "제목 없음"}
           </p>
           {event.location && (
             <p className="mt-0.5 truncate text-xs text-stone-500">{event.location}</p>
@@ -293,7 +293,7 @@ function EventRow({ event }: { event: CalendarEvent }) {
               rel="noopener noreferrer"
               className="mt-1 inline-flex items-center gap-1 text-xs text-amber-300 hover:text-amber-200"
             >
-              Join meeting
+              미팅 참여
               <svg
                 aria-hidden="true"
                 width="11"
@@ -317,14 +317,14 @@ function EventRow({ event }: { event: CalendarEvent }) {
               onClick={togglePrep}
               className="inline-flex items-center gap-1 rounded-md border border-amber-300/20 bg-amber-300/10 px-2.5 py-1.5 text-xs text-amber-200 transition hover:bg-amber-300/15 hover:text-amber-100"
             >
-              Prep pack
+              준비 자료
             </button>
           </div>
         </div>
       </div>
       {prepOpen && (
         <div className="mt-3 rounded-lg border border-stone-800 bg-black/20 p-3">
-          {prepLoading && <p className="text-xs text-stone-500">Gathering meeting evidence...</p>}
+          {prepLoading && <p className="text-xs text-stone-500">미팅 근거를 모으는 중...</p>}
           {prepError && <p className="text-xs text-red-300">{prepError}</p>}
           {prep && (
             <div className="space-y-3">
@@ -337,8 +337,8 @@ function EventRow({ event }: { event: CalendarEvent }) {
                   {readinessLabel(prep.readiness)}
                 </span>
                 <span className="text-[11px] text-stone-500">
-                  {prep.relatedEmails.length} mail · {prep.openTasks.length} tasks ·{" "}
-                  {prep.openCommitments.length} commitments
+                  메일 {prep.relatedEmails.length} · 작업 {prep.openTasks.length} · 약속{" "}
+                  {prep.openCommitments.length}
                 </span>
               </div>
               <ul className="space-y-1.5">
@@ -353,7 +353,7 @@ function EventRow({ event }: { event: CalendarEvent }) {
               </ul>
               {prep.relatedEmails.length > 0 && (
                 <div>
-                  <p className="mb-1 text-[11px] font-medium text-stone-500">Related mail</p>
+                  <p className="mb-1 text-[11px] font-medium text-stone-500">관련 메일</p>
                   <ul className="space-y-1">
                     {prep.relatedEmails.map((email) => (
                       <li key={email.id} className="truncate text-xs text-stone-300">
@@ -365,7 +365,7 @@ function EventRow({ event }: { event: CalendarEvent }) {
               )}
               {prep.openTasks.length > 0 && (
                 <div>
-                  <p className="mb-1 text-[11px] font-medium text-stone-500">Before the meeting</p>
+                  <p className="mb-1 text-[11px] font-medium text-stone-500">미팅 전 할 일</p>
                   <ul className="space-y-1">
                     {prep.openTasks.map((task) => (
                       <li key={task.id} className="truncate text-xs text-stone-300">
@@ -386,11 +386,11 @@ function EventRow({ event }: { event: CalendarEvent }) {
 function readinessLabel(readiness: MeetingPrepPack["readiness"]): string {
   switch (readiness) {
     case "ready":
-      return "Ready";
+      return "준비됨";
     case "watch":
-      return "Watch";
+      return "관찰";
     case "needs_review":
-      return "Needs prep";
+      return "준비 필요";
   }
 }
 
@@ -406,7 +406,7 @@ function readinessClass(readiness: MeetingPrepPack["readiness"]): string {
 }
 
 function formatTime(d: Date): string {
-  return d.toLocaleTimeString("en-US", {
+  return d.toLocaleTimeString("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -435,9 +435,9 @@ function dayKeyFor(d: Date): string {
 }
 
 function dayLabel(d: Date, today: Date, tomorrow: Date): string {
-  if (sameDay(d, today)) return "Today";
-  if (sameDay(d, tomorrow)) return "Tomorrow";
-  return d.toLocaleDateString("en-US", {
+  if (sameDay(d, today)) return "오늘";
+  if (sameDay(d, tomorrow)) return "내일";
+  return d.toLocaleDateString("ko-KR", {
     month: "long",
     day: "numeric",
     weekday: "short",

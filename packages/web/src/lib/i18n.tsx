@@ -71,7 +71,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "chat.send": "Send",
     // Briefing
     "briefing.learningMode":
-      "Eve is learning your email and calendar patterns for the first 2-3 days. Top 3 picks get sharper as you use it.",
+      "Jigeum is learning your email and calendar patterns for the first 2-3 days. Key picks get sharper as you use it.",
     // Common
     "common.loading": "Loading...",
     "common.cancel": "Cancel",
@@ -81,7 +81,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "common.or": "or",
     // Skills
     "skills.title": "Skills",
-    "skills.subtitle": "Reusable workflows Eve can run for you",
+    "skills.subtitle": "Reusable workflows Jigeum can run for you",
     "skills.newSkill": "+ New Skill",
     "skills.edit": "Edit Skill",
     "skills.name": "Skill name",
@@ -172,7 +172,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "chat.send": "전송",
     // Briefing
     "briefing.learningMode":
-      "Eve는 처음 2-3일 동안 메일과 일정 패턴을 학습합니다. 사용할수록 Top 3가 더 정확해져요.",
+      "Jigeum이 처음 2-3일 동안 메일과 일정 패턴을 학습합니다. 사용할수록 핵심 항목이 더 정확해져요.",
     // Common
     "common.loading": "로딩 중...",
     "common.cancel": "취소",
@@ -182,7 +182,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "common.or": "또는",
     // Skills
     "skills.title": "스킬",
-    "skills.subtitle": "Eve가 반복 실행할 수 있는 워크플로우",
+    "skills.subtitle": "Jigeum이 반복 실행할 수 있는 워크플로우",
     "skills.newSkill": "+ 새 스킬",
     "skills.edit": "스킬 수정",
     "skills.name": "스킬 이름",
