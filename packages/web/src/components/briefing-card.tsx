@@ -134,7 +134,7 @@ export default function BriefingCard() {
             href="/briefing"
             className="shrink-0 rounded-lg border border-stone-700 px-3 py-1.5 text-xs text-stone-300 transition hover:bg-stone-800"
           >
-            열기
+            Open
           </Link>
         ) : (
           <button
@@ -143,7 +143,7 @@ export default function BriefingCard() {
             disabled={generating}
             className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-black transition hover:bg-stone-200 disabled:opacity-50"
           >
-            {generating ? "생성 중..." : "지금 생성"}
+            {generating ? "Generating..." : "Create now"}
           </button>
         )}
       </div>
@@ -152,12 +152,12 @@ export default function BriefingCard() {
 }
 
 function emptyMessage(status: BriefingStatus): string {
-  if (status.automation.reason === "disabled") return "자동 브리핑이 꺼져 있어요.";
-  if (status.automation.reason === "no_config") return "브리핑 설정이 아직 끝나지 않았어요.";
+  if (status.automation.reason === "disabled") return "Automatic briefing is off.";
+  if (status.automation.reason === "no_config") return "Briefing settings are not finished yet.";
   if (status.automation.briefingTime) {
-    return `${status.automation.briefingTime}에 자동 브리핑이 준비돼요.`;
+    return `Automatic briefing will be ready at ${status.automation.briefingTime}.`;
   }
-  return "오늘 브리핑은 아직 없어요.";
+  return "No briefing for today yet.";
 }
 
 function pushMeta(
@@ -166,11 +166,11 @@ function pushMeta(
 ): { label: string; className: string; dotClassName: string } {
   switch (state) {
     case "received":
-      return { label: "도착", className: "text-emerald-300", dotClassName: "bg-emerald-400" };
+      return { label: "Received", className: "text-emerald-300", dotClassName: "bg-emerald-400" };
     case "accepted":
-      return { label: "발송됨", className: "text-sky-300", dotClassName: "bg-sky-400" };
+      return { label: "Sent", className: "text-sky-300", dotClassName: "bg-sky-400" };
     case "failed":
-      return { label: "실패", className: "text-red-300", dotClassName: "bg-red-400" };
+      return { label: "Failed", className: "text-red-300", dotClassName: "bg-red-400" };
     case "skipped":
       return {
         label: skipReasonLabel(reason),
@@ -178,12 +178,12 @@ function pushMeta(
         dotClassName: "bg-amber-300",
       };
     case "pending":
-      return { label: "대기 중", className: "text-stone-400", dotClassName: "bg-stone-500" };
+      return { label: "Pending", className: "text-stone-400", dotClassName: "bg-stone-500" };
     case "not_sent":
-      return { label: "미발송", className: "text-stone-500", dotClassName: "bg-stone-600" };
+      return { label: "Not sent", className: "text-stone-500", dotClassName: "bg-stone-600" };
     case "no_subscription":
       return {
-        label: "구독 기기 없음",
+        label: "No browser subscription",
         className: "text-stone-500",
         dotClassName: "bg-stone-600",
       };
@@ -191,11 +191,11 @@ function pushMeta(
 }
 
 function skipReasonLabel(reason: string | null): string {
-  if (!reason) return "건너뜀";
-  if (reason === "user_preferences_or_quiet_hours") return "방해 금지 시간";
-  if (reason.startsWith("rate_limited")) return "전송 제한";
-  if (reason === "missing_vapid_keys") return "푸시 설정 필요";
-  return "건너뜀";
+  if (!reason) return "Skipped";
+  if (reason === "user_preferences_or_quiet_hours") return "Quiet hours";
+  if (reason.startsWith("rate_limited")) return "Rate limited";
+  if (reason === "missing_vapid_keys") return "Push setup needed";
+  return "Skipped";
 }
 
 function formatTime(value: string): string {

@@ -171,7 +171,7 @@ function InboxView() {
                 onClick={() => load(filter)}
                 disabled={loading}
                 className="absolute right-3 top-3 h-9 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 backdrop-blur transition hover:bg-stone-800 disabled:opacity-50"
-                aria-label="결정함 새로고침"
+                aria-label="Refresh decision queue"
               >
                 {loading ? "..." : "Refresh"}
               </button>
@@ -541,15 +541,15 @@ function DecisionSection({ label, title, body }: { label: string; title: string;
 function RiskBadge({ risk }: { risk: "low" | "medium" | "high" }) {
   const map = {
     low: {
-      label: "낮은 위험",
+      label: "Low risk",
       className: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
     },
     medium: {
-      label: "승인 필요",
+      label: "Approval needed",
       className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
     },
     high: {
-      label: "높은 위험",
+      label: "High risk",
       className: "text-red-300 bg-red-500/10 border-red-500/20",
     },
   }[risk];
