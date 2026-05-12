@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -93,27 +94,27 @@ export default function PwaPrompts() {
       {/* Offline indicator */}
       {offline && (
         <div className="fixed top-0 left-0 right-0 z-[100] bg-amber-400 text-stone-950 text-center py-1.5 text-xs font-medium pt-[calc(env(safe-area-inset-top)+0.375rem)]">
-          오프라인 상태예요. 저장된 화면은 볼 수 있지만 실시간 신호는 잠시 멈출 수 있어요.
+          You are offline. Saved screens still work, but live signals may pause.
         </div>
       )}
 
       {/* Update available banner */}
       {updateAvailable && (
         <div className="fixed bottom-20 left-1/2 z-[100] flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-xl border border-stone-700 bg-stone-950 px-4 py-3 shadow-2xl shadow-black/60 animate-slide-up">
-          <div className="text-sm text-stone-200">새 Jigeum 빌드가 준비됐어요</div>
+          <div className="text-sm text-stone-200">A new Jigeum build is ready</div>
           <button
             type="button"
             onClick={handleUpdate}
             className="px-3 py-1 text-xs font-medium bg-amber-300 hover:bg-amber-200 text-stone-950 rounded-lg transition whitespace-nowrap"
           >
-            새로고침
+            Refresh
           </button>
           <button
             type="button"
             onClick={() => setUpdateAvailable(false)}
             className="text-stone-500 hover:text-stone-300 transition text-sm"
           >
-            나중에
+            Later
           </button>
         </div>
       )}
@@ -122,18 +123,18 @@ export default function PwaPrompts() {
       {showInstall && (
         <div className="fixed bottom-20 left-1/2 z-[100] flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-xl border border-amber-300/20 bg-stone-950 px-4 py-3 shadow-2xl shadow-black/60 animate-slide-up sm:max-w-md">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f5f0e8]">
-            <img src="/brand/mark.svg" alt="" className="h-9 w-9" />
+            <Image src="/brand/mark.svg" alt="" width={36} height={36} className="h-9 w-9" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-stone-200">Jigeum 설치</p>
-            <p className="text-xs text-stone-500">홈 화면에서 결정함을 바로 열 수 있어요</p>
+            <p className="text-sm font-medium text-stone-200">Install Jigeum</p>
+            <p className="text-xs text-stone-500">Open your decision queue from the home screen.</p>
           </div>
           <button
             type="button"
             onClick={handleInstall}
             className="px-3 py-1.5 text-xs font-medium bg-white text-stone-950 hover:bg-stone-200 rounded-lg transition whitespace-nowrap"
           >
-            설치
+            Install
           </button>
           <button
             type="button"

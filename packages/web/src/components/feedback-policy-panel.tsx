@@ -44,28 +44,28 @@ const KIND_COPY: Record<
   { label: string; tone: string; dot: string; summary: string }
 > = {
   ALLOW_AFTER_SUGGESTION: {
-    label: "반복 승인",
+    label: "Repeated approval",
     tone: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
     dot: "bg-emerald-400",
-    summary: "더 높은 신뢰도로 제안",
+    summary: "Suggest with higher confidence",
   },
   REQUIRE_DRAFT_REVIEW: {
-    label: "검토 유지",
+    label: "Keep review",
     tone: "border-sky-400/30 bg-sky-400/10 text-sky-200",
     dot: "bg-sky-400",
-    summary: "실행 전 초안 검토",
+    summary: "Review draft before execution",
   },
   AVOID_SUGGESTION: {
-    label: "반복 거절",
+    label: "Repeated rejection",
     tone: "border-rose-500/30 bg-rose-500/10 text-rose-200",
     dot: "bg-rose-400",
-    summary: "제안 빈도 낮춤",
+    summary: "Reduce suggestion frequency",
   },
   LOWER_PRIORITY: {
-    label: "우선순위 낮춤",
+    label: "Lower priority",
     tone: "border-stone-600 bg-stone-900 text-stone-300",
     dot: "bg-stone-400",
-    summary: "조용히 관찰",
+    summary: "Watch quietly",
   },
 };
 
@@ -101,9 +101,11 @@ export function FeedbackPolicyPanel() {
     <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-medium">학습된 운영 신호</h3>
+          <h3 className="font-medium">Learned operating signals</h3>
           <p className="mt-0.5 text-xs text-stone-500">
-            {since ? `${new Date(since).toLocaleDateString("ko-KR")}부터` : "최근 피드백 패턴"}
+            {since
+              ? `Since ${new Date(since).toLocaleDateString("en-US")}`
+              : "Recent feedback patterns"}
           </p>
         </div>
         <button
@@ -112,7 +114,7 @@ export function FeedbackPolicyPanel() {
           disabled={loading}
           className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-1.5 text-xs font-medium text-stone-300 transition hover:bg-stone-700 disabled:opacity-50"
         >
-          {loading ? "확인 중" : "새로고침"}
+          {loading ? "Checking" : "Refresh"}
         </button>
       </div>
 
@@ -160,17 +162,17 @@ export function FeedbackPolicyPanel() {
                   </span>
                 </div>
                 <div className="mt-3 grid grid-cols-3 gap-2 text-[10px] text-stone-500 sm:grid-cols-6">
-                  <SignalCount label="승인" value={candidate.support.approved} />
-                  <SignalCount label="거절" value={candidate.support.rejected} />
-                  <SignalCount label="수정" value={candidate.support.edited} />
-                  <SignalCount label="실패" value={candidate.support.failed} tone="critical" />
-                  <SignalCount label="무시" value={candidate.support.ignored} />
-                  <SignalCount label="미룸" value={candidate.support.snoozed} />
-                  <SignalCount label="닫음" value={candidate.support.dismissed} />
+                  <SignalCount label="Approved" value={candidate.support.approved} />
+                  <SignalCount label="Rejected" value={candidate.support.rejected} />
+                  <SignalCount label="Edited" value={candidate.support.edited} />
+                  <SignalCount label="Failed" value={candidate.support.failed} tone="critical" />
+                  <SignalCount label="Ignored" value={candidate.support.ignored} />
+                  <SignalCount label="Snoozed" value={candidate.support.snoozed} />
+                  <SignalCount label="Closed" value={candidate.support.dismissed} />
                 </div>
                 <div className="mt-2 flex items-center justify-between text-[10px] text-stone-600">
-                  <span>신뢰도 {Math.round(candidate.confidence * 100)}%</span>
-                  <span>이벤트 {candidate.support.total}개</span>
+                  <span>Confidence {Math.round(candidate.confidence * 100)}%</span>
+                  <span>{candidate.support.total} events</span>
                 </div>
               </div>
             );
