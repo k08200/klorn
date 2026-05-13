@@ -56,7 +56,7 @@ export default function Modal({ open, onClose, title, children, footer, size = "
             type="button"
             onClick={onClose}
             className="text-stone-500 hover:text-stone-300 transition p-1 rounded-lg hover:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-300/35"
-            aria-label="Close"
+            aria-label="닫기"
           >
             <svg
               width="16"
