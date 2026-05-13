@@ -13,7 +13,7 @@ export default function NotFound() {
           href="/inbox"
           className="bg-amber-300 hover:bg-amber-200 text-stone-950 px-5 py-2.5 rounded-lg text-sm font-medium transition"
         >
-          결정함 열기
+          결정 큐 열기
         </Link>
         <Link
           href="/briefing"

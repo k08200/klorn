@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+body {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
 /* iOS safe-area helpers (notch + home indicator).
    Uses env(safe-area-inset-*) which evaluates to 0 when not in a PWA. */
 .pt-safe {

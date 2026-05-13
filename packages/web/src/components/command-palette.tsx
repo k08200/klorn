@@ -21,7 +21,7 @@ export default function CommandPalette() {
   const commands: Command[] = [
     {
       id: "approval-queue",
-      label: "결정함 열기",
+      label: "결정 큐 열기",
       sublabel: "승인을 기다리는 결정을 검토",
       action: () => router.push("/inbox"),
     },

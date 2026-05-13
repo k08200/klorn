@@ -94,7 +94,7 @@ function LoginForm() {
   return (
     <AuthScreen
       eyebrow={mode === "login" ? "다시 시작하기" : "계정 만들기"}
-      title={mode === "login" ? "결정함으로 돌아가기" : "Jigeum 시작하기"}
+      title={mode === "login" ? "결정 큐로 돌아가기" : "Jigeum 시작하기"}
       description={
         mode === "login"
           ? "메일, 캘린더, 할 일 신호를 다시 연결하고 오늘 승인할 일을 확인하세요."
@@ -198,7 +198,7 @@ function LoginForm() {
               {mode === "login" ? "로그인 중..." : "계정 생성 중..."}
             </span>
           ) : mode === "login" ? (
-            "결정함 열기"
+            "결정 큐 열기"
           ) : (
             "계정 만들기"
           )}

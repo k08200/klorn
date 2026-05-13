@@ -59,7 +59,7 @@ export default function PlaybookRecommendations() {
   };
 
   return (
-    <section className="mb-6" aria-label="Jigeum recommended playbooks">
+    <section className="mb-6" aria-label="Jigeum 추천 플레이북">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-stone-100">추천 플레이북</h2>
         <span className="text-[11px] text-stone-500">{data.recommendations.length}</span>
@@ -113,10 +113,10 @@ function PlaybookCard({
             )}
           </div>
           <p className="mt-2 truncate text-sm font-medium text-stone-100">
-            {recommendation.playbook.name}
+            {displayText(recommendation.playbook.name)}
           </p>
           <p className="mt-1 line-clamp-1 text-xs text-stone-400">
-            {recommendation.reasons[0] || recommendation.playbook.bestFor}
+            {displayText(recommendation.reasons[0] || recommendation.playbook.bestFor)}
           </p>
         </div>
         <span className="shrink-0 rounded border border-stone-700 bg-stone-950/40 px-2 py-1 text-[11px] text-stone-400">
@@ -132,7 +132,7 @@ function PlaybookCard({
             key={step.id}
             className="rounded border border-stone-800 px-1.5 py-0.5 text-[11px] text-stone-400"
           >
-            {step.title}
+            {displayText(step.title)}
           </span>
         ))}
       </div>
@@ -146,7 +146,7 @@ function PlaybookCard({
             : "border-amber-300/25 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15"
         }`}
       >
-        {updating ? "Saving..." : active ? "Pause" : "Activate"}
+        {updating ? "저장 중..." : active ? "일시 중지" : "적용"}
       </button>
     </article>
   );
@@ -160,7 +160,7 @@ function ContextLink({ context }: { context: PlaybookContextHit }) {
         <p className="min-w-0 truncate text-xs text-stone-300">{context.title}</p>
       </div>
       <p className="mt-1 line-clamp-1 text-[11px] text-stone-500">
-        {context.matchedKeywords.slice(0, 3).join(" · ")}
+        {context.matchedKeywords.slice(0, 3).map(displayText).join(" · ")}
       </p>
     </div>
   );
@@ -184,17 +184,27 @@ function domainMeta(domain: JigeumPlaybookDomain): { label: string; className: s
   switch (domain) {
     case "investment":
       return {
-        label: "Investment",
+        label: "투자",
         className: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
       };
     case "customer_success":
-      return { label: "CS", className: "border-sky-400/20 bg-sky-400/10 text-sky-300" };
+      return { label: "고객", className: "border-sky-400/20 bg-sky-400/10 text-sky-300" };
     case "launch":
       return {
-        label: "Launch",
+        label: "런칭",
         className: "border-fuchsia-400/20 bg-fuchsia-400/10 text-fuchsia-300",
       };
     case "hiring":
-      return { label: "Hiring", className: "border-amber-400/20 bg-amber-400/10 text-amber-300" };
+      return { label: "채용", className: "border-amber-400/20 bg-amber-400/10 text-amber-300" };
   }
+}
+
+function displayText(value: string | null | undefined): string {
+  return (value ?? "")
+    .replace(/Investor Ops/g, "투자자 대응")
+    .replace(/Investment/g, "투자")
+    .replace(/Medium-risk matching context/g, "중간 리스크 맥락과 일치")
+    .replace(/Review investor-facing risks/g, "투자자 대응 리스크 검토")
+    .replace(/Prepare update pack/g, "업데이트 자료 준비")
+    .replace(/venture/g, "벤처");
 }

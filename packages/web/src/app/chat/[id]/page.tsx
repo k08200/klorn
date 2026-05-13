@@ -676,7 +676,7 @@ function ChatPageContent() {
           )}
           {!loadError && messages.length === 0 && !streaming && (
             <div className="flex min-h-[60vh] flex-col items-center justify-center">
-              <img src="/brand/mark.svg" alt="" className="mb-4 h-12 w-12" />
+              <img src="/brand/mark.svg?v=flow-5" alt="" className="mb-4 h-12 w-12" />
               <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-300/75">
                 새 결정 스레드
               </p>
@@ -754,7 +754,7 @@ function ChatPageContent() {
                     </div>
                   ) : (
                     <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-amber-300/25 bg-amber-300/10">
-                      <img src="/brand/mark.svg" alt="" className="h-5 w-5" />
+                      <img src="/brand/mark.svg?v=flow-5" alt="" className="h-5 w-5" />
                     </div>
                   )}
                 </div>
@@ -1045,7 +1045,7 @@ function ChatPageContent() {
               <div className="flex gap-4">
                 <div className="shrink-0 pt-0.5">
                   <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-amber-300/25 bg-amber-300/10">
-                    <img src="/brand/mark.svg" alt="" className="h-5 w-5" />
+                    <img src="/brand/mark.svg?v=flow-5" alt="" className="h-5 w-5" />
                   </div>
                 </div>
                 <div className="min-w-0 flex-1">
@@ -1085,7 +1085,7 @@ function ChatPageContent() {
               <div className="flex gap-4">
                 <div className="shrink-0 pt-0.5">
                   <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-amber-300/25 bg-amber-300/10">
-                    <img src="/brand/mark.svg" alt="" className="h-5 w-5" />
+                    <img src="/brand/mark.svg?v=flow-5" alt="" className="h-5 w-5" />
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 pt-2">

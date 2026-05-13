@@ -51,7 +51,7 @@ export function EveSignalField({ className = "", tone = "panel" }: EveSignalFiel
         </div>
         <div className="mt-4 rounded-md border border-white/8 bg-black/20 px-3 py-2">
           <p className="text-[11px] leading-5 text-stone-400">
-            주의가 필요한 일만 근거와 승인 상태를 갖춘 채 결정함에 들어옵니다.
+            주의가 필요한 일만 근거와 승인 상태를 갖춘 채 결정 큐에 들어옵니다.
           </p>
         </div>
       </div>

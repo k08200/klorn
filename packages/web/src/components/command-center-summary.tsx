@@ -266,7 +266,16 @@ function stripEvePrefix(title: string): string {
 }
 
 function displayText(value: string | null | undefined): string {
-  return (value ?? "")
+  const text = value ?? "";
+  if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
+    return new Date(text).toLocaleString("ko-KR", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+  return text
     .replace(
       /The due date is unclear, so it is easy to miss unless it is confirmed now\./g,
       "기한이 불명확해서 지금 확인하지 않으면 놓치기 쉽습니다.",
@@ -320,6 +329,17 @@ function displayText(value: string | null | undefined): string {
       "검토하지 않으면 준비된 후속 조치가 계속 대기합니다.",
     )
     .replace(/Review and approve the draft reply/g, "답장 초안 검토 및 승인")
+    .replace(/Review investor-facing risks/g, "투자자 대응 리스크 검토")
+    .replace(/Prepare update pack/g, "업데이트 자료 준비")
+    .replace(/review task/g, "검토 작업")
+    .replace(/Decision Card/g, "결정 카드")
+    .replace(/Work Graph/g, "업무 그래프")
+    .replace(/Priority/g, "우선순위")
+    .replace(/Due date/g, "기한")
+    .replace(/\bURGENT\b/g, "긴급")
+    .replace(/\bHIGH\b/g, "높음")
+    .replace(/\bMEDIUM\b/g, "보통")
+    .replace(/\bLOW\b/g, "낮음")
     .replace(/Evidence/g, "근거")
     .replace(/Awaiting approval/g, "승인 대기")
     .replace(/Unread mail/g, "읽지 않은 메일")
@@ -425,11 +445,11 @@ function SubList({ label, items, tone }: { label: string; items: SubListItem[]; 
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return new Date(iso).toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
 }
 
 function priorityLabel(p: string): string | null {

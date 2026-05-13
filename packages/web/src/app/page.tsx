@@ -5,21 +5,21 @@ type IconName = "arrow" | "compass" | "graph" | "shield" | "thread";
 
 const decisionCards = [
   {
-    label: "Signal",
-    title: "Investor asked for revised metrics",
-    body: "Jigeum connects the email, tomorrow's meeting, and the open deck work.",
+    label: "신호",
+    title: "투자자가 수정 지표를 요청했습니다",
+    body: "메일, 내일 미팅, 아직 열린 자료 작업을 한 결정으로 묶습니다.",
     tone: "text-sky-200 border-sky-300/25 bg-sky-300/10",
   },
   {
-    label: "Context",
-    title: "The deck is still in progress",
-    body: "Unanswered mail and unfinished work point to the same meeting risk.",
+    label: "맥락",
+    title: "피치덱 수정이 아직 남아 있습니다",
+    body: "답장하지 않은 메일과 미완료 작업이 같은 미팅 리스크를 가리킵니다.",
     tone: "text-amber-200 border-amber-300/25 bg-amber-300/10",
   },
   {
-    label: "Action",
-    title: "Hold 3-4 PM and prepare a reply",
-    body: "Jigeum drafts the next step and waits before anything leaves the workspace.",
+    label: "행동",
+    title: "오후 3-4시를 비우고 답장 초안을 준비",
+    body: "외부로 나가기 전 승인 가능한 다음 행동으로 정리합니다.",
     tone: "text-emerald-200 border-emerald-300/25 bg-emerald-300/10",
   },
 ];
@@ -27,56 +27,40 @@ const decisionCards = [
 const pillars = [
   {
     icon: "thread" as const,
-    label: "Capture",
-    title: "Reads the work surface",
-    body: "Inbox, calendar, tasks, and memory become one calm view of what needs attention.",
+    label: "수집",
+    title: "업무 신호를 읽습니다",
+    body: "메일, 일정, 작업, 기억을 오늘 봐야 할 한 화면으로 정리합니다.",
   },
   {
     icon: "graph" as const,
-    label: "Connect",
-    title: "Turns noise into context",
-    body: "People, deadlines, threads, and promises are grouped around the work they affect.",
+    label: "연결",
+    title: "소음을 맥락으로 바꿉니다",
+    body: "사람, 기한, 스레드, 약속을 영향을 주는 업무 기준으로 묶습니다.",
   },
   {
     icon: "shield" as const,
-    label: "Approve",
-    title: "Keeps action inspectable",
-    body: "Important moves come with evidence, risk, and a clear approval path.",
+    label: "승인",
+    title: "행동 전에 확인하게 합니다",
+    body: "중요한 실행에는 근거, 리스크, 승인 경로가 함께 붙습니다.",
   },
 ];
 
 const trustRows = [
-  ["Observe", "Jigeum watches for patterns without changing your workspace."],
-  ["Prepare", "Important signals become concise decision cards."],
-  ["Draft", "Replies, reminders, and schedule moves are prepared first."],
-  ["Approve", "External actions wait for explicit confirmation."],
+  ["관찰", "업무 공간을 바꾸지 않고 중요한 패턴만 감지합니다."],
+  ["정리", "중요한 신호를 짧은 결정 카드로 압축합니다."],
+  ["초안", "답장, 리마인더, 일정 변경은 먼저 초안으로 둡니다."],
+  ["승인", "외부 실행은 명확한 확인 뒤에만 진행합니다."],
 ];
 
 function BrandMark({ className = "" }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      viewBox="0 0 40 40"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <rect width="40" height="40" rx="9" fill="#F5F0E8" />
-      <path
-        d="M24.5 9.2h5.6v13.1c0 5.8-4 9.4-9.8 9.4-5.4 0-9.1-2.9-10-7.6l5.3-1.6c.7 2.8 2.3 4.2 5 4.2 2.6 0 3.9-1.6 3.9-4.6V9.2Z"
-        fill="#151515"
-      />
-      <path d="M12.3 9.2h9v5h-9v-5Z" fill="#151515" />
-      <path d="M9 20h10.3" stroke="#C7A46A" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
+  return <img className={className} src="/brand/mark.svg?v=flow-5" alt="" />;
 }
 
 function HeroProductScene() {
   const rows = [
-    ["Reply", "OpenRouter Team", "Video generation, workspaces, 35 new models", "2m"],
-    ["Security", "Vercel Security", "Review env vars before the production deploy", "18m"],
-    ["Meeting", "Mina Kim", "Prep questions for tomorrow's partner call", "1h"],
+    ["답장", "OpenRouter Team", "모델 업데이트 메일 답장 필요", "2분"],
+    ["보안", "Vercel Security", "배포 전 환경 변수 검토", "18분"],
+    ["회의", "Mina Kim", "내일 파트너 콜 질문 준비", "1시간"],
   ];
 
   return (
@@ -99,7 +83,7 @@ function HeroProductScene() {
                   <p className="text-[10px] text-stone-500">지금 중요한 것</p>
                 </div>
               </div>
-              {["결정함", "메일", "캘린더", "브리핑"].map((item, index) => (
+              {["결정 큐", "메일", "캘린더", "브리핑"].map((item, index) => (
                 <div
                   key={item}
                   className={`mb-1 rounded-md px-3 py-2 text-sm ${
@@ -114,7 +98,7 @@ function HeroProductScene() {
               <div className="mb-6 flex items-end justify-between gap-6">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
-                    결정함
+                    결정 큐
                   </p>
                   <h2 className="mt-2 text-3xl font-semibold tracking-tight text-white">
                     오늘의 다음 행동
@@ -223,7 +207,7 @@ function MobilePreview() {
       <div className="mb-4 flex items-center justify-between border-b border-white/8 pb-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500">
-            결정함
+            결정 큐
           </p>
           <p className="mt-1 text-lg font-semibold text-white">주의가 필요한 항목 3개</p>
         </div>
@@ -261,13 +245,13 @@ export default function LandingPage() {
               href="/login"
               className="whitespace-nowrap px-3 py-2 text-sm text-stone-300 transition hover:text-white"
             >
-              Login
+              로그인
             </Link>
             <Link
               href="/early-access"
               className="whitespace-nowrap rounded-md bg-[#f2eadc] px-4 py-2 text-sm font-semibold text-[#12100d] transition hover:bg-white"
             >
-              Early access
+              얼리 액세스
             </Link>
           </div>
         </nav>
@@ -276,7 +260,7 @@ export default function LandingPage() {
           <div className="max-w-3xl">
             <p className="mb-5 inline-flex items-center gap-2 border-b border-[#d8a45d]/50 pb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[#d8a45d]">
               <Icon type="compass" className="h-4 w-4" />
-              Decision queue for work
+              Decision queue
             </p>
             <h1 className="max-w-3xl text-4xl font-semibold leading-[1.04] tracking-tight text-white sm:text-5xl md:text-7xl md:leading-[0.98] lg:text-8xl">
               중요한 일만 남기고, 바로 판단하세요.
@@ -308,14 +292,13 @@ export default function LandingPage() {
       <section className="mx-auto grid max-w-7xl gap-10 px-5 py-20 md:grid-cols-[0.82fr_1.18fr] md:px-8 md:py-28">
         <div>
           <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-[#d8a45d]">
-            결정함
+            결정 큐
           </p>
           <h2 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">
-            One clean card for the work that matters.
+            중요한 일은 카드 하나로 충분합니다.
           </h2>
           <p className="mt-5 max-w-xl text-sm leading-7 text-stone-400 md:text-base">
-            Jigeum should not feel like another inbox. It gives each important action a reason,
-            source context, and a clear path to approve or edit.
+            또 하나의 인박스가 아니라, 근거와 맥락이 붙은 결정 카드만 남깁니다.
           </p>
         </div>
 
@@ -324,14 +307,12 @@ export default function LandingPage() {
             <div className="mb-4 flex items-center justify-between gap-4 border-b border-white/8 pb-4">
               <div>
                 <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-stone-500">
-                  Decision card
+                  결정 카드
                 </p>
-                <h3 className="mt-1 text-lg font-semibold text-white">
-                  Prepare investor follow-up
-                </h3>
+                <h3 className="mt-1 text-lg font-semibold text-white">투자자 후속 대응 준비</h3>
               </div>
               <span className="rounded border border-amber-300/20 bg-amber-300/10 px-2.5 py-1 text-xs font-medium text-amber-200">
-                Approval needed
+                승인 필요
               </span>
             </div>
 
@@ -361,19 +342,19 @@ export default function LandingPage() {
                 type="button"
                 className="h-10 rounded-md bg-[#d8a45d] px-4 text-sm font-semibold text-[#11100d]"
               >
-                Approve action
+                승인
               </button>
               <button
                 type="button"
                 className="h-10 rounded-md border border-white/12 px-4 text-sm font-medium text-stone-300"
               >
-                Edit first
+                먼저 수정
               </button>
               <button
                 type="button"
                 className="h-10 rounded-md px-4 text-sm font-medium text-stone-500"
               >
-                Dismiss
+                보류
               </button>
             </div>
           </div>
@@ -401,10 +382,10 @@ export default function LandingPage() {
         <div className="grid gap-8 md:grid-cols-[0.8fr_1.2fr] md:items-start">
           <div>
             <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-[#d8a45d]">
-              Trust model
+              실행 원칙
             </p>
             <h2 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">
-              Quiet by default. Clear when it acts.
+              조용히 준비하고, 실행 전에는 분명하게.
             </h2>
           </div>
           <div className="grid overflow-hidden rounded-lg border border-white/10 md:grid-cols-4">
@@ -426,19 +407,19 @@ export default function LandingPage() {
 
       <section className="mx-auto max-w-7xl px-5 pb-24 text-center md:px-8 md:pb-32">
         <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-[#d8a45d]">
-          Built for decisive work
+          결정이 필요한 일을 위해
         </p>
         <h2 className="mx-auto max-w-3xl text-4xl font-semibold tracking-tight text-white md:text-6xl">
-          The next inbox is a decision queue.
+          다음 인박스는 결정 큐입니다.
         </h2>
         <p className="mx-auto mt-6 max-w-2xl text-sm leading-7 text-stone-400 md:text-base">
-          A place where context, evidence, and action line up before the day gets noisy.
+          하루가 복잡해지기 전에 맥락, 근거, 행동을 한 줄로 맞춥니다.
         </p>
         <Link
           href="/early-access"
           className="mt-9 inline-flex h-12 items-center justify-center gap-2 rounded-md bg-[#f2eadc] px-6 text-sm font-semibold text-[#11100d] transition hover:bg-white"
         >
-          Request early access
+          얼리 액세스 신청
           <Icon type="arrow" className="h-4 w-4" />
         </Link>
       </section>
@@ -447,14 +428,14 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-7xl flex-col gap-4 text-sm text-stone-500 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
             <BrandMark className="h-7 w-7" />
-            <span>Jigeum turns scattered work signals into decisions you can trust.</span>
+            <span>Jigeum은 흩어진 업무 신호를 믿고 실행할 결정으로 바꿉니다.</span>
           </div>
           <div className="flex gap-5">
             <Link href="/privacy" className="transition hover:text-stone-300">
-              Privacy
+              개인정보
             </Link>
             <Link href="/terms" className="transition hover:text-stone-300">
-              Terms
+              약관
             </Link>
           </div>
         </div>

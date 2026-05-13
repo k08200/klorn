@@ -123,11 +123,17 @@ export default function PwaPrompts() {
       {showInstall && (
         <div className="fixed bottom-20 left-1/2 z-[100] flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-xl border border-amber-300/20 bg-stone-950 px-4 py-3 shadow-2xl shadow-black/60 animate-slide-up sm:max-w-md">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f5f0e8]">
-            <Image src="/brand/mark.svg" alt="" width={36} height={36} className="h-9 w-9" />
+            <Image
+              src="/brand/mark.svg?v=flow-5"
+              alt=""
+              width={36}
+              height={36}
+              className="h-9 w-9"
+            />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-stone-200">Jigeum 설치</p>
-            <p className="text-xs text-stone-500">홈 화면에서 결정함을 바로 열 수 있어요.</p>
+            <p className="text-xs text-stone-500">홈 화면에서 결정 큐를 바로 열 수 있어요.</p>
           </div>
           <button
             type="button"

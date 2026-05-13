@@ -14,7 +14,7 @@ const TABS: Tab[] = [
   { href: "/calendar", label: "일정", icon: "calendar" },
   { href: "/email", label: "메일", icon: "email" },
   { href: "/briefing", label: "브리핑", icon: "briefing" },
-  { href: "/inbox", label: "큐", icon: "inbox" },
+  { href: "/inbox", label: "결정", icon: "inbox" },
 ];
 
 export default function BottomTabs() {
