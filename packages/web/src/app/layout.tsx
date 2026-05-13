@@ -10,21 +10,19 @@ import ServiceWorkerRegister from "../components/sw-register";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Jigeum - What matters now at work",
-  description:
-    "Jigeum turns email, calendar, tasks, and memory into what matters now: decision cards you can inspect, approve, and trust.",
+  title: "Jigeum - 지금 중요한 일",
+  description: "Jigeum은 메일, 캘린더, 할 일, 기억을 지금 봐야 할 결정 카드로 정리합니다.",
   manifest: "/manifest.json",
   openGraph: {
-    title: "Jigeum - What matters now at work",
-    description:
-      "A quiet operating layer for work signals, decision context, approvals, and memory.",
+    title: "Jigeum - 지금 중요한 일",
+    description: "업무 신호, 결정 맥락, 승인, 기억을 조용히 정리하는 작업 레이어입니다.",
     siteName: "Jigeum",
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Jigeum - What matters now at work",
-    description: "Turn scattered work signals into decisions with context, approval, and memory.",
+    title: "Jigeum - 지금 중요한 일",
+    description: "흩어진 업무 신호를 맥락, 승인, 기억이 있는 결정으로 바꿉니다.",
   },
   appleWebApp: {
     capable: true,

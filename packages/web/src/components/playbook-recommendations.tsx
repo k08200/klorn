@@ -61,7 +61,7 @@ export default function PlaybookRecommendations() {
   return (
     <section className="mb-6" aria-label="Jigeum recommended playbooks">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-stone-100">Recommended playbooks</h2>
+        <h2 className="text-sm font-semibold text-stone-100">추천 플레이북</h2>
         <span className="text-[11px] text-stone-500">{data.recommendations.length}</span>
       </div>
       <div className="space-y-2">
@@ -108,7 +108,7 @@ function PlaybookCard({
             </span>
             {active && (
               <span className="rounded border border-emerald-400/20 bg-emerald-400/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
-                Active
+                적용 중
               </span>
             )}
           </div>

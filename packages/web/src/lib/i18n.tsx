@@ -272,11 +272,11 @@ function detectLocale(): Locale {
     const lang = navigator.language || "";
     if (lang.startsWith("ko")) return "ko";
   }
-  return "en";
+  return "ko";
 }
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>("en");
+  const [locale, setLocaleState] = useState<Locale>("ko");
 
   useEffect(() => {
     setLocaleState(detectLocale());
@@ -297,7 +297,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   const t = useCallback(
     (key: string, vars?: Record<string, string>): string => {
-      let str = translations[locale]?.[key] || translations.en[key] || key;
+      let str = translations[locale]?.[key] || translations.ko[key] || translations.en[key] || key;
       if (vars) {
         for (const [k, v] of Object.entries(vars)) {
           str = str.replace(`{${k}}`, v);

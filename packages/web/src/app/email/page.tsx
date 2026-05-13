@@ -56,11 +56,11 @@ interface ListResponse {
 }
 
 const FILTERS: { key: Filter; label: string; query: string }[] = [
-  { key: "all", label: "All signals", query: "" },
-  { key: "reply-needed", label: "Needs reply", query: "filter=reply-needed" },
-  { key: "urgent", label: "Urgent", query: "filter=urgent" },
-  { key: "unread", label: "Unread", query: "filter=unread" },
-  { key: "automated", label: "Automated", query: "category=automated" },
+  { key: "all", label: "전체 신호", query: "" },
+  { key: "reply-needed", label: "답장 필요", query: "filter=reply-needed" },
+  { key: "urgent", label: "긴급", query: "filter=urgent" },
+  { key: "unread", label: "읽지 않음", query: "filter=unread" },
+  { key: "automated", label: "자동 메일", query: "category=automated" },
 ];
 
 export default function EmailPage() {
@@ -87,11 +87,11 @@ function EmailView() {
       const q = FILTERS.find((x) => x.key === f)?.query || "";
       const path = `/api/email${q ? `?${q}` : ""}`;
       const data = await apiFetch<ListResponse>(path);
-      setEmails(data.emails);
-      setSource(data.source);
+      setEmails(Array.isArray(data.emails) ? data.emails : []);
+      setSource(data.source ?? null);
     } catch (err) {
       captureClientError(err, { scope: "email.load", filter: f });
-      setError("Could not load mail signals.");
+      setError("메일 신호를 불러오지 못했어요.");
     } finally {
       setLoading(false);
     }
@@ -109,7 +109,7 @@ function EmailView() {
       await load(filter);
     } catch (err) {
       captureClientError(err, { scope: "email.sync" });
-      setError("Could not sync Gmail.");
+      setError("Gmail 동기화를 완료하지 못했어요.");
     } finally {
       setSyncing(false);
     }
@@ -126,7 +126,7 @@ function EmailView() {
       await load(filter);
     } catch (err) {
       captureClientError(err, { scope: "email.attachments.analyzeAll" });
-      setError("Could not rerun attachment analysis.");
+      setError("첨부 분석을 다시 실행하지 못했어요.");
     } finally {
       setReanalyzing(false);
     }
@@ -143,14 +143,14 @@ function EmailView() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500">
-              Mail
+              메일
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              See the mail that needs action first
+              지금 처리할 메일을 먼저 봅니다
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-              Organized by urgency, reply need, and attachment context.
-              {source === "demo" && <span className="ml-2 text-amber-300">Demo data</span>}
+              긴급도, 답장 필요 여부, 첨부 맥락 기준으로 정리합니다.
+              {source === "demo" && <span className="ml-2 text-amber-300">데모 데이터</span>}
             </p>
           </div>
           <button
@@ -159,19 +159,19 @@ function EmailView() {
             disabled={syncing}
             className="h-9 w-fit rounded-md border border-stone-700 bg-stone-900 px-3 text-xs font-medium text-stone-300 transition hover:border-stone-600 hover:bg-stone-800 hover:text-stone-100 disabled:opacity-50"
           >
-            {syncing ? "Syncing..." : "Sync now"}
+            {syncing ? "동기화 중..." : "지금 동기화"}
           </button>
         </div>
         <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-md border border-stone-800 bg-[#0f1115]">
-          <SignalStat label="Unread" value={unreadCount} />
-          <SignalStat label="Urgent" value={urgentCount} />
-          <SignalStat label="Replies" value={replyCount} />
+          <SignalStat label="읽지 않음" value={unreadCount} />
+          <SignalStat label="긴급" value={urgentCount} />
+          <SignalStat label="답장" value={replyCount} />
         </div>
       </header>
 
       <FilterTabs current={filter} onChange={setFilter} />
 
-      {loading && <p className="px-1 py-3 text-sm text-stone-500">Loading...</p>}
+      {loading && <p className="px-1 py-3 text-sm text-stone-500">불러오는 중...</p>}
 
       {error && (
         <div className="mt-3 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -182,10 +182,10 @@ function EmailView() {
       {!loading && !error && emails.length === 0 && (
         <div className="mt-4 rounded-lg border border-stone-800 bg-[#111318] p-6 text-center">
           <p className="text-sm text-stone-300">
-            {filter === "all" ? "No mail signals yet." : "No signals match this filter."}
+            {filter === "all" ? "아직 메일 신호가 없어요." : "이 필터에 맞는 신호가 없어요."}
           </p>
           <p className="mt-1 text-xs text-stone-600">
-            Once sync finishes, mail that needs attention will rise to the top.
+            동기화가 끝나면 주의가 필요한 메일이 위로 올라옵니다.
           </p>
         </div>
       )}
@@ -256,17 +256,17 @@ function EmailRowItem({ email }: { email: EmailRow }) {
               {(email.attachmentCandidateCount ?? 0) > 0 && <CandidateBadge />}
               {(email.attachmentCount ?? 0) > 0 && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded border border-sky-400/30 bg-sky-400/10 text-sky-300 font-medium shrink-0">
-                  Attachments {email.attachmentCount}
+                  첨부 {email.attachmentCount}
                 </span>
               )}
               {(email.attachmentPendingCount ?? 0) > 0 && (
                 <span className="shrink-0 rounded border border-stone-600 bg-stone-900/70 px-1.5 py-0.5 text-[10px] font-medium text-stone-400">
-                  Pending {email.attachmentPendingCount}
+                  대기 {email.attachmentPendingCount}
                 </span>
               )}
               {(email.attachmentFallbackCount ?? 0) > 0 && (
                 <span className="shrink-0 rounded border border-amber-400/25 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
-                  Basic analysis {email.attachmentFallbackCount}
+                  기본 분석 {email.attachmentFallbackCount}
                 </span>
               )}
               {email.category && <CategoryBadge category={email.category} />}
@@ -277,10 +277,10 @@ function EmailRowItem({ email }: { email: EmailRow }) {
             >
               {senderName(from)}
             </p>
-            <p className="mt-1 truncate text-[13px] text-stone-400">{subject || "Untitled"}</p>
+            <p className="mt-1 truncate text-[13px] text-stone-400">{subject || "제목 없음"}</p>
             {summary ? (
               <p className="mt-2 line-clamp-2 text-xs leading-5 text-stone-400">
-                <span className="mr-1 text-stone-500">Summary:</span>
+                <span className="mr-1 text-stone-500">요약:</span>
                 {summary}
               </p>
             ) : snippet ? (
@@ -300,10 +300,10 @@ function EmailRowItem({ email }: { email: EmailRow }) {
 }
 
 function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
-  const title = [profile.name || "Name unknown", profile.role].filter(Boolean).join(" · ");
+  const title = [profile.name || "이름 미확인", profile.role].filter(Boolean).join(" · ");
   const missing =
-    profile.missingFields.length > 0
-      ? `Needs: ${profile.missingFields.map(candidateMissingLabel).join(", ")}`
+    (profile.missingFields?.length ?? 0) > 0
+      ? `필요: ${profile.missingFields.map(candidateMissingLabel).join(", ")}`
       : null;
   return (
     <div className="mt-2 rounded-lg border border-emerald-500/15 bg-emerald-500/5 px-2.5 py-2">
@@ -315,9 +315,9 @@ function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
       </div>
       <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-stone-400">{profile.summary}</p>
       <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-stone-500">
-        {profile.contact && <span className="truncate">Contact {profile.contact}</span>}
+        {profile.contact && <span className="truncate">연락처 {profile.contact}</span>}
         {profile.intakeStatus && <span>{candidateIntakeLabel(profile.intakeStatus)}</span>}
-        <span>Files {profile.evidenceCount}</span>
+        <span>파일 {profile.evidenceCount}</span>
         {missing && <span className="text-amber-300/80">{missing}</span>}
       </div>
     </div>
@@ -326,31 +326,31 @@ function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
 
 function candidateIntakeLabel(status: string): string {
   const labels: Record<string, string> = {
-    NEEDS_ANALYSIS: "Needs analysis",
-    NEEDS_INFO: "Needs info",
-    READY_TO_REVIEW: "Ready to review",
-    REVIEWING: "Reviewing",
-    CONTACTED: "Contacted",
-    SHORTLISTED: "Shortlisted",
-    REJECTED: "Rejected",
-    ARCHIVED: "Archived",
+    NEEDS_ANALYSIS: "분석 필요",
+    NEEDS_INFO: "정보 필요",
+    READY_TO_REVIEW: "검토 준비",
+    REVIEWING: "검토 중",
+    CONTACTED: "연락 완료",
+    SHORTLISTED: "후보군",
+    REJECTED: "거절됨",
+    ARCHIVED: "보관됨",
   };
   return labels[status] || status;
 }
 
 function candidateMissingLabel(field: string): string {
   const labels: Record<string, string> = {
-    name: "name",
-    contact: "contact",
-    role: "role",
-    portfolio: "portfolio",
+    name: "이름",
+    contact: "연락처",
+    role: "역할",
+    portfolio: "포트폴리오",
   };
   return labels[field] || field;
 }
 function ReplyNeededBadge() {
   return (
     <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-400/30 bg-amber-400/10 text-amber-300 font-medium shrink-0">
-      Needs reply
+      답장 필요
     </span>
   );
 }
@@ -358,7 +358,7 @@ function ReplyNeededBadge() {
 function CandidateBadge() {
   return (
     <span className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-400/30 bg-emerald-400/10 text-emerald-300 font-medium shrink-0">
-      Candidate
+      후보
     </span>
   );
 }
@@ -369,7 +369,7 @@ function PriorityBadge({ priority }: { priority: EmailRow["priority"] }) {
     NORMAL: "bg-stone-800 text-stone-400 border-stone-700",
     LOW: "bg-stone-900 text-stone-500 border-stone-800",
   } as const;
-  const labels = { URGENT: "Urgent", NORMAL: "Normal", LOW: "Low" } as const;
+  const labels = { URGENT: "긴급", NORMAL: "보통", LOW: "낮음" } as const;
   if (priority === "NORMAL") return null;
   return (
     <span
@@ -382,14 +382,14 @@ function PriorityBadge({ priority }: { priority: EmailRow["priority"] }) {
 
 function CategoryBadge({ category }: { category: string }) {
   const labelMap: Record<string, string> = {
-    business: "Business",
-    engineering: "Engineering",
-    automated: "Automated",
-    newsletter: "Newsletter",
-    meeting: "Meeting",
-    billing: "Billing",
-    conversation: "Conversation",
-    other: "Other",
+    business: "비즈니스",
+    engineering: "엔지니어링",
+    automated: "자동 메일",
+    newsletter: "뉴스레터",
+    meeting: "회의",
+    billing: "결제",
+    conversation: "대화",
+    other: "기타",
   };
   const label = labelMap[category] || category;
   return (
@@ -407,13 +407,14 @@ function senderName(raw: string): string {
 
 function formatRelative(iso: string): string {
   const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "방금";
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffMin < 1) return "방금";
+  if (diffMin < 60) return `${diffMin}분 전`;
   const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffHr < 24) return `${diffHr}시간 전`;
   const sameYear = d.getFullYear() === now.getFullYear();
   return d.toLocaleDateString("en-US", {
     month: "short",

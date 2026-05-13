@@ -107,14 +107,14 @@ export default function PwaPrompts() {
             onClick={handleUpdate}
             className="px-3 py-1 text-xs font-medium bg-amber-300 hover:bg-amber-200 text-stone-950 rounded-lg transition whitespace-nowrap"
           >
-            Refresh
+            새로고침
           </button>
           <button
             type="button"
             onClick={() => setUpdateAvailable(false)}
             className="text-stone-500 hover:text-stone-300 transition text-sm"
           >
-            Later
+            나중에
           </button>
         </div>
       )}
@@ -126,15 +126,15 @@ export default function PwaPrompts() {
             <Image src="/brand/mark.svg" alt="" width={36} height={36} className="h-9 w-9" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-stone-200">Install Jigeum</p>
-            <p className="text-xs text-stone-500">Open your decision queue from the home screen.</p>
+            <p className="text-sm font-medium text-stone-200">Jigeum 설치</p>
+            <p className="text-xs text-stone-500">홈 화면에서 결정함을 바로 열 수 있어요.</p>
           </div>
           <button
             type="button"
             onClick={handleInstall}
             className="px-3 py-1.5 text-xs font-medium bg-white text-stone-950 hover:bg-stone-200 rounded-lg transition whitespace-nowrap"
           >
-            Install
+            설치
           </button>
           <button
             type="button"

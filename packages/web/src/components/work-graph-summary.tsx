@@ -16,7 +16,10 @@ export default function WorkGraphSummaryCard() {
       const summary = await apiFetch<WorkGraphSummary>("/api/work-graph/summary?limit=3").catch(
         () => EMPTY_SUMMARY,
       );
-      setData(summary);
+      setData({
+        generatedAt: summary.generatedAt ?? "",
+        contexts: Array.isArray(summary.contexts) ? summary.contexts : [],
+      });
     } finally {
       setLoading(false);
     }
@@ -40,27 +43,27 @@ export default function WorkGraphSummaryCard() {
   return (
     <section
       className="mb-6 overflow-hidden rounded-2xl border border-stone-800 bg-stone-950/70"
-      aria-label="Work graph summary"
+      aria-label="업무 그래프 요약"
     >
       <div className="border-b border-stone-800 bg-gradient-to-br from-stone-950 via-stone-950 to-amber-950/20 p-4 md:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">
-              Work graph
+              업무 그래프
             </p>
             <h2 className="mt-2 text-lg font-semibold tracking-tight text-stone-100">
-              Active work context
+              진행 중인 업무 맥락
             </h2>
             <p className="mt-2 max-w-xl text-xs leading-5 text-stone-500">
-              Jigeum groups mail, decision threads, and commitments into the same work context so
-              risk is easier to see.
+              Jigeum이 메일, 결정 스레드, 약속을 같은 업무 맥락으로 묶어 리스크를 더 쉽게 보이게
+              합니다.
             </p>
           </div>
 
           <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-white/10 bg-black/20 md:min-w-[240px]">
-            <GraphMetric label="Contexts" value={data.contexts.length} />
-            <GraphMetric label="Signals" value={totals.signals} />
-            <GraphMetric label="Risk" value={totals.highRisk} />
+            <GraphMetric label="맥락" value={data.contexts.length} />
+            <GraphMetric label="신호" value={totals.signals} />
+            <GraphMetric label="리스크" value={totals.highRisk} />
           </div>
         </div>
       </div>
@@ -77,9 +80,11 @@ export default function WorkGraphSummaryCard() {
 }
 
 function ContextCard({ context }: { context: WorkGraphContext }) {
+  const legacyContext = context as WorkGraphContext & { lastSignalAt?: string };
   const chips = signalChips(context);
   const people = peopleLabels(context);
-  const reasons = context.reasons.slice(0, 2);
+  const reasons = (context.reasons ?? []).slice(0, 2);
+  const lastActivityAt = context.lastActivityAt ?? legacyContext.lastSignalAt;
 
   const body = (
     <article className="rounded-xl border border-stone-800 bg-stone-900/40 p-4 transition hover:border-amber-300/30 hover:bg-stone-900/60">
@@ -88,15 +93,13 @@ function ContextCard({ context }: { context: WorkGraphContext }) {
           <div className="flex flex-wrap items-center gap-2">
             <RiskBadge risk={context.risk} />
             <span className="text-[11px] text-stone-500">{kindLabel(context.kind)}</span>
-            <span className="text-[11px] text-stone-600">
-              {formatRelative(context.lastActivityAt)}
-            </span>
+            <span className="text-[11px] text-stone-600">{formatRelative(lastActivityAt)}</span>
           </div>
           <p className="mt-2 break-words text-sm font-semibold text-stone-100">
             {displayText(context.title)}
           </p>
           <p className="mt-1 line-clamp-2 text-xs text-stone-400">
-            {subtitleFor(context) || "No connected signals"}
+            {subtitleFor(context) || "연결된 신호가 없어요"}
           </p>
         </div>
 
@@ -104,7 +107,7 @@ function ContextCard({ context }: { context: WorkGraphContext }) {
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <ContextPanel label="Signals">
+        <ContextPanel label="신호">
           {chips.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               {chips.map((chip) => (
@@ -117,11 +120,11 @@ function ContextCard({ context }: { context: WorkGraphContext }) {
               ))}
             </div>
           ) : (
-            <p className="text-xs text-stone-500">No clear signals yet.</p>
+            <p className="text-xs text-stone-500">아직 뚜렷한 신호가 없어요.</p>
           )}
         </ContextPanel>
 
-        <ContextPanel label="Why it appears">
+        <ContextPanel label="보이는 이유">
           {reasons.length > 0 ? (
             <ul className="space-y-1.5">
               {reasons.map((reason) => (
@@ -131,14 +134,14 @@ function ContextCard({ context }: { context: WorkGraphContext }) {
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-stone-500">Shown from recent activity.</p>
+            <p className="text-xs text-stone-500">최근 활동을 기준으로 표시했어요.</p>
           )}
         </ContextPanel>
       </div>
 
       {people.length > 0 && (
         <div className="mt-3 flex items-center gap-2 border-t border-stone-800 pt-3">
-          <span className="shrink-0 text-[11px] text-stone-600">People</span>
+          <span className="shrink-0 text-[11px] text-stone-600">사람</span>
           <div className="flex min-w-0 flex-wrap gap-1.5">
             {people.map((person) => (
               <span
@@ -224,48 +227,48 @@ function RiskBadge({ risk }: { risk: WorkGraphRisk }) {
 function riskEntry(risk: WorkGraphRisk): { label: string; className: string } {
   switch (risk) {
     case "high":
-      return { label: "High", className: "text-red-300 bg-red-500/10 border-red-500/20" };
+      return { label: "높음", className: "text-red-300 bg-red-500/10 border-red-500/20" };
     case "medium":
       return {
-        label: "Medium",
+        label: "보통",
         className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
       };
     case "low":
-      return { label: "Low", className: "text-stone-400 bg-stone-500/10 border-stone-500/20" };
+      return { label: "낮음", className: "text-stone-400 bg-stone-500/10 border-stone-500/20" };
   }
 }
 
 function kindLabel(kind: WorkGraphContext["kind"]): string {
   switch (kind) {
     case "email_thread":
-      return "Mail";
+      return "메일";
     case "chat_conversation":
-      return "Decision thread";
+      return "결정 스레드";
     case "loose_commitment":
-      return "Commitment";
+      return "약속";
   }
 }
 
 function subtitleFor(context: WorkGraphContext): string | null {
   const people = peopleLabels(context).slice(0, 2).join(", ");
-  const reasons = context.reasons.slice(0, 2).map(displayText).join(" · ");
+  const reasons = (context.reasons ?? []).slice(0, 2).map(displayText).join(" · ");
   return [people, reasons].filter(Boolean).join(" · ") || displayText(context.subtitle || "");
 }
 
 function signalChips(context: WorkGraphContext): string[] {
   const chips: string[] = [];
-  if (context.signals.pendingActions) chips.push(`Approvals ${context.signals.pendingActions}`);
-  if (context.signals.overdueCommitments)
-    chips.push(`Overdue commitments ${context.signals.overdueCommitments}`);
-  if (context.signals.commitments) chips.push(`Commitments ${context.signals.commitments}`);
-  if (context.signals.urgentEmails) chips.push(`Urgent mail ${context.signals.urgentEmails}`);
-  if (context.signals.unreadEmails) chips.push(`Unread ${context.signals.unreadEmails}`);
-  if (chips.length === 0 && context.signals.emails) chips.push(`Mail ${context.signals.emails}`);
+  const signals = context.signals ?? {};
+  if (signals.pendingActions) chips.push(`승인 ${signals.pendingActions}`);
+  if (signals.overdueCommitments) chips.push(`지난 약속 ${signals.overdueCommitments}`);
+  if (signals.commitments) chips.push(`약속 ${signals.commitments}`);
+  if (signals.urgentEmails) chips.push(`긴급 메일 ${signals.urgentEmails}`);
+  if (signals.unreadEmails) chips.push(`읽지 않음 ${signals.unreadEmails}`);
+  if (chips.length === 0 && signals.emails) chips.push(`메일 ${signals.emails}`);
   return chips.slice(0, 4);
 }
 
 function peopleLabels(context: WorkGraphContext): string[] {
-  return context.people
+  return (context.people ?? [])
     .map((person) => person.name || person.email)
     .filter((person): person is string => Boolean(person))
     .slice(0, 3);
@@ -274,7 +277,10 @@ function peopleLabels(context: WorkGraphContext): string[] {
 function summarizeContexts(contexts: WorkGraphContext[]): { signals: number; highRisk: number } {
   return contexts.reduce(
     (acc, context) => {
-      acc.signals += Object.values(context.signals).reduce((sum, value) => sum + value, 0);
+      acc.signals += Object.values(context.signals ?? {}).reduce(
+        (sum, value) => sum + Number(value ?? 0),
+        0,
+      );
       if (context.risk === "high") acc.highRisk++;
       return acc;
     },
@@ -282,23 +288,25 @@ function summarizeContexts(contexts: WorkGraphContext[]): { signals: number; hig
   );
 }
 
-function displayText(value: string): string {
-  return value
-    .replace(/읽지 않은 메일/g, "Unread mail")
-    .replace(/긴급 메일/g, "Urgent mail")
-    .replace(/승인 대기/g, "Awaiting approval")
-    .replace(/약속:/g, "Commitment:")
-    .replace(/열린 약속/g, "Open commitment")
-    .replace(/지난 약속/g, "Overdue commitment")
-    .replace(/제목 없는 대화/g, "Untitled thread");
+function displayText(value: string | null | undefined): string {
+  return (value ?? "")
+    .replace(/Unread mail/g, "읽지 않은 메일")
+    .replace(/Urgent mail/g, "긴급 메일")
+    .replace(/Awaiting approval/g, "승인 대기")
+    .replace(/Commitment:/g, "약속:")
+    .replace(/Open commitment/g, "열린 약속")
+    .replace(/Overdue commitment/g, "지난 약속")
+    .replace(/Untitled thread/g, "제목 없는 대화");
 }
 
-function formatRelative(date: string): string {
+function formatRelative(date: string | null | undefined): string {
+  if (!date) return "방금";
   const diff = Date.now() - new Date(date).getTime();
+  if (!Number.isFinite(diff)) return "방금";
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return "방금";
+  if (mins < 60) return `${mins}분 전`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return `${hours}시간 전`;
+  return `${Math.floor(hours / 24)}일 전`;
 }

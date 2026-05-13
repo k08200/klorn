@@ -30,30 +30,30 @@ export default function BetaLearningCard() {
 
   const steps: Array<{ label: string; detail: string; state: StepState }> = [
     {
-      label: "Google connected",
-      detail: connected ? "Gmail and Calendar are available." : "Analysis starts after connection.",
+      label: "Google 연결",
+      detail: connected ? "Gmail과 Calendar를 사용할 수 있어요." : "연결 후 분석이 시작됩니다.",
       state: connected ? "done" : "active",
     },
     {
-      label: "Recent mail checked",
+      label: "최근 메일 확인",
       detail: syncDone
         ? initSync.emails > 0
-          ? `${initSync.emails} new emails included.`
-          : "Recent mail is up to date."
+          ? `새 메일 ${initSync.emails}개를 포함했어요.`
+          : "최근 메일이 최신 상태입니다."
         : syncing
-          ? "Finding reply signals."
-          : "Checks automatically after connection.",
+          ? "답장 신호를 찾는 중입니다."
+          : "연결 후 자동으로 확인합니다.",
       state: !connected ? "pending" : syncFailed ? "failed" : syncDone ? "done" : "active",
     },
     {
-      label: "Calendar checked",
+      label: "캘린더 확인",
       detail: syncDone
         ? initSync.calendar > 0
-          ? `${initSync.calendar} events in the next 30 days included.`
-          : "The next 30 days are empty or already up to date."
+          ? `앞으로 30일의 일정 ${initSync.calendar}개를 포함했어요.`
+          : "앞으로 30일 일정이 없거나 이미 최신입니다."
         : syncing
-          ? "Organizing meeting and preparation signals."
-          : "Checks once more before briefing.",
+          ? "회의와 준비 신호를 정리하는 중입니다."
+          : "브리핑 전에 한 번 더 확인합니다.",
       state: !connected ? "pending" : syncFailed ? "failed" : syncDone ? "done" : "pending",
     },
   ];
@@ -80,13 +80,13 @@ export default function BetaLearningCard() {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">
-            Initial learning
+            초기 학습
           </p>
           <h2 className="mt-2 text-base font-semibold text-stone-100">
-            Jigeum learns mail and calendar patterns during the first 2-3 days.
+            Jigeum은 처음 2-3일 동안 메일과 캘린더 패턴을 배웁니다.
           </h2>
           <p className="mt-2 text-sm leading-6 text-stone-400">
-            Early briefings may be conservative. The Top 3 gets sharper as you use the workspace.
+            초반 브리핑은 보수적일 수 있어요. 워크스페이스를 쓸수록 상위 3개가 더 정확해집니다.
           </p>
         </div>
 
@@ -96,16 +96,16 @@ export default function BetaLearningCard() {
               href="/settings"
               className="rounded-lg border border-amber-300/40 px-3 py-1.5 text-xs font-medium text-amber-100 transition hover:bg-amber-300/10"
             >
-              Connect
+              연결
             </Link>
           )}
           <button
             type="button"
             onClick={dismiss}
             className="rounded-lg border border-stone-700 px-2.5 py-1.5 text-xs text-stone-400 transition hover:bg-stone-800 hover:text-stone-200"
-            aria-label="Dismiss beta learning guide"
+            aria-label="초기 학습 안내 닫기"
           >
-            Dismiss
+            닫기
           </button>
         </div>
       </div>
@@ -134,7 +134,8 @@ export default function BetaLearningCard() {
 
       {syncFailed && (
         <p className="mt-3 text-xs text-amber-300">
-          Initial analysis hit a temporary issue. Refresh or reopen shortly and Jigeum will retry.
+          초기 분석에서 일시 문제가 있었어요. 잠시 뒤 새로고침하거나 다시 열면 Jigeum이
+          재시도합니다.
         </p>
       )}
     </section>

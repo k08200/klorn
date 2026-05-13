@@ -21,20 +21,20 @@ export default function CommandPalette() {
   const commands: Command[] = [
     {
       id: "approval-queue",
-      label: "Open decision queue",
-      sublabel: "Review decisions waiting for approval",
+      label: "결정함 열기",
+      sublabel: "승인을 기다리는 결정을 검토",
       action: () => router.push("/inbox"),
     },
     {
       id: "chat",
-      label: "Open threads",
-      sublabel: "Continue the current work context",
+      label: "스레드 열기",
+      sublabel: "현재 업무 맥락 이어가기",
       action: () => router.push("/chat"),
     },
     {
       id: "new-chat",
-      label: "New decision thread",
-      sublabel: "Start a new work context",
+      label: "새 결정 스레드",
+      sublabel: "새 업무 맥락 시작",
       action: () => {
         apiFetch<{ id: string }>("/api/chat/conversations", {
           method: "POST",

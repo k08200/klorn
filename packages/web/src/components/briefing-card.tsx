@@ -66,7 +66,12 @@ export default function BriefingCard() {
   const refresh = useCallback(async () => {
     try {
       const data = await apiFetch<BriefingStatus>("/api/briefing/status").catch(() => EMPTY_STATUS);
-      setStatus(data);
+      setStatus({
+        ...EMPTY_STATUS,
+        ...data,
+        push: { ...EMPTY_STATUS.push, ...data.push },
+        automation: { ...EMPTY_STATUS.automation, ...data.automation },
+      });
     } finally {
       setLoading(false);
     }
@@ -94,7 +99,7 @@ export default function BriefingCard() {
       await refresh();
     } catch (err) {
       captureClientError(err, { scope: "briefing-card.generate" });
-      setError("Could not create the briefing.");
+      setError("브리핑을 만들지 못했어요.");
     } finally {
       setGenerating(false);
     }
@@ -109,14 +114,17 @@ export default function BriefingCard() {
   }
 
   const push = pushMeta(status.push.state, status.push.reason);
-  const time = status.note ? formatTime(status.note.createdAt) : status.automation.briefingTime;
+  const time =
+    status.note?.createdAt && !Number.isNaN(new Date(status.note.createdAt).getTime())
+      ? formatTime(status.note.createdAt)
+      : status.automation.briefingTime;
 
   return (
     <section className="mb-6 rounded-xl border border-stone-800 bg-stone-900/40 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-stone-100">Today briefing</h2>
+            <h2 className="text-sm font-semibold text-stone-100">오늘 브리핑</h2>
             <span className={`inline-flex items-center gap-1 text-[11px] ${push.className}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${push.dotClassName}`} />
               {push.label}
@@ -134,7 +142,7 @@ export default function BriefingCard() {
             href="/briefing"
             className="shrink-0 rounded-lg border border-stone-700 px-3 py-1.5 text-xs text-stone-300 transition hover:bg-stone-800"
           >
-            Open
+            열기
           </Link>
         ) : (
           <button
@@ -143,7 +151,7 @@ export default function BriefingCard() {
             disabled={generating}
             className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-black transition hover:bg-stone-200 disabled:opacity-50"
           >
-            {generating ? "Generating..." : "Create now"}
+            {generating ? "생성 중..." : "지금 만들기"}
           </button>
         )}
       </div>
@@ -152,12 +160,12 @@ export default function BriefingCard() {
 }
 
 function emptyMessage(status: BriefingStatus): string {
-  if (status.automation.reason === "disabled") return "Automatic briefing is off.";
-  if (status.automation.reason === "no_config") return "Briefing settings are not finished yet.";
+  if (status.automation.reason === "disabled") return "자동 브리핑이 꺼져 있어요.";
+  if (status.automation.reason === "no_config") return "브리핑 설정이 아직 끝나지 않았어요.";
   if (status.automation.briefingTime) {
-    return `Automatic briefing will be ready at ${status.automation.briefingTime}.`;
+    return `자동 브리핑은 ${status.automation.briefingTime}에 준비됩니다.`;
   }
-  return "No briefing for today yet.";
+  return "아직 오늘 브리핑이 없어요.";
 }
 
 function pushMeta(
@@ -166,11 +174,11 @@ function pushMeta(
 ): { label: string; className: string; dotClassName: string } {
   switch (state) {
     case "received":
-      return { label: "Received", className: "text-emerald-300", dotClassName: "bg-emerald-400" };
+      return { label: "수신됨", className: "text-emerald-300", dotClassName: "bg-emerald-400" };
     case "accepted":
-      return { label: "Sent", className: "text-sky-300", dotClassName: "bg-sky-400" };
+      return { label: "전송됨", className: "text-sky-300", dotClassName: "bg-sky-400" };
     case "failed":
-      return { label: "Failed", className: "text-red-300", dotClassName: "bg-red-400" };
+      return { label: "실패", className: "text-red-300", dotClassName: "bg-red-400" };
     case "skipped":
       return {
         label: skipReasonLabel(reason),
@@ -178,12 +186,12 @@ function pushMeta(
         dotClassName: "bg-amber-300",
       };
     case "pending":
-      return { label: "Pending", className: "text-stone-400", dotClassName: "bg-stone-500" };
+      return { label: "대기", className: "text-stone-400", dotClassName: "bg-stone-500" };
     case "not_sent":
-      return { label: "Not sent", className: "text-stone-500", dotClassName: "bg-stone-600" };
+      return { label: "미전송", className: "text-stone-500", dotClassName: "bg-stone-600" };
     case "no_subscription":
       return {
-        label: "No browser subscription",
+        label: "브라우저 구독 없음",
         className: "text-stone-500",
         dotClassName: "bg-stone-600",
       };
@@ -191,15 +199,15 @@ function pushMeta(
 }
 
 function skipReasonLabel(reason: string | null): string {
-  if (!reason) return "Skipped";
-  if (reason === "user_preferences_or_quiet_hours") return "Quiet hours";
-  if (reason.startsWith("rate_limited")) return "Rate limited";
-  if (reason === "missing_vapid_keys") return "Push setup needed";
-  return "Skipped";
+  if (!reason) return "건너뜀";
+  if (reason === "user_preferences_or_quiet_hours") return "조용한 시간";
+  if (reason.startsWith("rate_limited")) return "전송 제한";
+  if (reason === "missing_vapid_keys") return "푸시 설정 필요";
+  return "건너뜀";
 }
 
 function formatTime(value: string): string {
-  return new Date(value).toLocaleTimeString("en-US", {
+  return new Date(value).toLocaleTimeString("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
   });

@@ -88,7 +88,7 @@ function HeroProductScene() {
             <span className="h-2.5 w-2.5 rounded-full bg-stone-700" />
             <span className="h-2.5 w-2.5 rounded-full bg-stone-700" />
             <span className="h-2.5 w-2.5 rounded-full bg-stone-700" />
-            <span className="ml-4 text-xs font-medium text-stone-500">Jigeum / Today</span>
+            <span className="ml-4 text-xs font-medium text-stone-500">Jigeum / 오늘</span>
           </div>
           <div className="grid h-[496px] grid-cols-[210px_1fr]">
             <aside className="border-r border-stone-800 bg-[#111318] p-4">
@@ -96,10 +96,10 @@ function HeroProductScene() {
                 <BrandMark className="h-8 w-8" />
                 <div>
                   <p className="text-sm font-semibold text-stone-100">Jigeum</p>
-                  <p className="text-[10px] text-stone-500">What matters now</p>
+                  <p className="text-[10px] text-stone-500">지금 중요한 것</p>
                 </div>
               </div>
-              {["Decision queue", "Mail", "Calendar", "Briefing"].map((item, index) => (
+              {["결정함", "메일", "캘린더", "브리핑"].map((item, index) => (
                 <div
                   key={item}
                   className={`mb-1 rounded-md px-3 py-2 text-sm ${
@@ -114,10 +114,10 @@ function HeroProductScene() {
               <div className="mb-6 flex items-end justify-between gap-6">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
-                    Decision queue
+                    결정함
                   </p>
                   <h2 className="mt-2 text-3xl font-semibold tracking-tight text-white">
-                    Today's next moves
+                    오늘의 다음 행동
                   </h2>
                 </div>
                 <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-stone-800 bg-[#111318] text-center">
@@ -128,7 +128,7 @@ function HeroProductScene() {
                     >
                       <p className="text-lg font-semibold text-stone-100">{value}</p>
                       <p className="text-[10px] text-stone-500">
-                        {["signals", "replies", "approvals"][index]}
+                        {["신호", "답장", "승인"][index]}
                       </p>
                     </div>
                   ))}
@@ -223,19 +223,19 @@ function MobilePreview() {
       <div className="mb-4 flex items-center justify-between border-b border-white/8 pb-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500">
-            Decision queue
+            결정함
           </p>
-          <p className="mt-1 text-lg font-semibold text-white">3 items need attention</p>
+          <p className="mt-1 text-lg font-semibold text-white">주의가 필요한 항목 3개</p>
         </div>
         <span className="rounded border border-amber-300/25 bg-amber-300/10 px-2 py-1 text-xs text-amber-200">
-          Live
+          실시간
         </span>
       </div>
       <div className="space-y-3">
-        {["Reply to investor", "Review deploy risk", "Prep partner call"].map((item) => (
+        {["투자자에게 답장", "배포 위험 검토", "파트너 콜 준비"].map((item) => (
           <div key={item} className="rounded-md border border-white/8 bg-black/20 px-3 py-3">
             <p className="text-sm font-medium text-stone-100">{item}</p>
-            <p className="mt-1 text-xs text-stone-500">Evidence attached · approval ready</p>
+            <p className="mt-1 text-xs text-stone-500">근거 첨부됨 · 승인 준비</p>
           </div>
         ))}
       </div>
@@ -309,7 +309,7 @@ export default function LandingPage() {
       <section className="mx-auto grid max-w-7xl gap-10 px-5 py-20 md:grid-cols-[0.82fr_1.18fr] md:px-8 md:py-28">
         <div>
           <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-[#d8a45d]">
-            Decision queue
+            결정함
           </p>
           <h2 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">
             One clean card for the work that matters.

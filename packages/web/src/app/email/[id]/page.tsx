@@ -156,7 +156,7 @@ function EmailDetailView() {
       }
     } catch (err) {
       captureClientError(err, { scope: "email.detail", id });
-      setError("Could not load this mail.");
+      setError("이 메일을 불러오지 못했어요.");
     } finally {
       setLoading(false);
     }
@@ -325,10 +325,10 @@ function EmailDetailView() {
           <line x1="19" y1="12" x2="5" y2="12" />
           <polyline points="12 19 5 12 12 5" />
         </svg>
-        Mail
+        메일
       </Link>
 
-      {loading && <p className="text-sm text-stone-500">Loading...</p>}
+      {loading && <p className="text-sm text-stone-500">불러오는 중...</p>}
 
       {error && (
         <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -344,10 +344,10 @@ function EmailDetailView() {
               <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
                 <div>
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-                    Signal detail
+                    신호 상세
                   </p>
                   <h1 className="break-words text-xl font-semibold leading-snug tracking-tight text-stone-50 md:text-2xl">
-                    {displayEmail?.subject || "No subject"}
+                    {displayEmail?.subject || "제목 없음"}
                   </h1>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
                     <span className="max-w-full truncate">{displayEmail?.from}</span>
@@ -358,10 +358,10 @@ function EmailDetailView() {
                 <EveSignalField className="min-h-40 rounded-lg" />
               </div>
               <div className="mt-5 grid grid-cols-3 gap-2">
-                <DetailStat label="Priority" value={PRIORITY_LABELS[email.priority]} />
-                <DetailStat label="Reply" value={email.needsReply ? "Needed" : "No signal"} />
+                <DetailStat label="우선순위" value={PRIORITY_LABELS[email.priority]} />
+                <DetailStat label="답장" value={email.needsReply ? "필요" : "신호 없음"} />
                 <DetailStat
-                  label="Category"
+                  label="분류"
                   value={email.category ? categoryLabel(email.category) : "-"}
                 />
               </div>
@@ -374,7 +374,7 @@ function EmailDetailView() {
             {displayEmail?.body ? (
               <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
                 <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-stone-500">
-                  Body
+                  본문
                 </h2>
                 <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-stone-200">
                   {displayEmail.body}
@@ -383,7 +383,7 @@ function EmailDetailView() {
             ) : displayEmail?.snippet ? (
               <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
                 <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-stone-500">
-                  Preview
+                  미리보기
                 </h2>
                 <p className="text-sm text-stone-300">{displayEmail.snippet}</p>
               </section>
@@ -411,15 +411,15 @@ function CandidateProfileCard({
     <section className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
-          Candidate card
+          후보자 카드
         </h2>
         <span className="text-[11px] text-stone-500">
-          Confidence {Math.round(profile.confidence * 100)}%
+          신뢰도 {Math.round(profile.confidence * 100)}%
         </span>
       </div>
       <div className="mb-3 rounded-lg border border-emerald-500/15 bg-black/15 px-3 py-2">
         <p className="text-[10px] font-medium uppercase tracking-wider text-emerald-300/70">
-          Pipeline
+          파이프라인
         </p>
         <p className="mt-1 text-xs font-medium text-emerald-100">
           {candidatePipelineLabel(profile.pipelineStatus)}
@@ -445,12 +445,12 @@ function CandidateProfileCard({
       </div>
       <p className="text-sm font-medium leading-relaxed text-stone-100">{profile.summary}</p>
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-3">
-        <ProfileFact label="Name" value={profile.name} />
-        <ProfileFact label="Role" value={profile.role} />
-        <ProfileFact label="Contact" value={profile.contact} />
-        <ProfileFact label="Age" value={profile.age} />
-        <ProfileFact label="Height" value={profile.height} />
-        <ProfileFact label="Files" value={`${profile.evidenceFiles.length}`} />
+        <ProfileFact label="이름" value={profile.name} />
+        <ProfileFact label="역할" value={profile.role} />
+        <ProfileFact label="연락처" value={profile.contact} />
+        <ProfileFact label="나이" value={profile.age} />
+        <ProfileFact label="키" value={profile.height} />
+        <ProfileFact label="파일" value={`${profile.evidenceFiles.length}`} />
       </div>
       {profile.skills.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -475,19 +475,19 @@ function CandidateProfileCard({
       )}
       {profile.missingFields.length > 0 && (
         <p className="mt-3 text-[11px] text-amber-300/80">
-          Missing: {profile.missingFields.map(candidateMissingLabel).join(", ")}
+          부족한 정보: {profile.missingFields.map(candidateMissingLabel).join(", ")}
         </p>
       )}
       <label className="mt-3 block">
         <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-stone-600">
-          Review notes
+          검토 메모
         </span>
         <textarea
           defaultValue={intake?.notes ?? ""}
           rows={2}
           onBlur={(e) => onUpdate({ notes: e.target.value || null })}
           className="w-full rounded-lg border border-emerald-500/15 bg-black/15 px-3 py-2 text-xs leading-5 text-stone-300 outline-none transition focus:border-emerald-400/35"
-          placeholder="Review notes"
+          placeholder="검토 메모"
         />
       </label>
     </section>
@@ -495,14 +495,14 @@ function CandidateProfileCard({
 }
 
 const CANDIDATE_STATUS_OPTIONS: Array<{ status: CandidateIntakeStatus; label: string }> = [
-  { status: "NEEDS_ANALYSIS", label: "Needs analysis" },
-  { status: "NEEDS_INFO", label: "Needs info" },
-  { status: "READY_TO_REVIEW", label: "Ready to review" },
-  { status: "REVIEWING", label: "Reviewing" },
-  { status: "CONTACTED", label: "Contacted" },
-  { status: "SHORTLISTED", label: "Shortlisted" },
-  { status: "REJECTED", label: "Rejected" },
-  { status: "ARCHIVED", label: "Archived" },
+  { status: "NEEDS_ANALYSIS", label: "분석 필요" },
+  { status: "NEEDS_INFO", label: "정보 필요" },
+  { status: "READY_TO_REVIEW", label: "검토 준비" },
+  { status: "REVIEWING", label: "검토 중" },
+  { status: "CONTACTED", label: "연락함" },
+  { status: "SHORTLISTED", label: "후보 유지" },
+  { status: "REJECTED", label: "거절됨" },
+  { status: "ARCHIVED", label: "보관됨" },
 ];
 
 function candidatePipelineToIntakeStatus(
@@ -1081,8 +1081,8 @@ function ReplyNeededFeedbackControl({ emailId }: { emailId: string }) {
   const options: Array<{ choice: ReplyNeededChoice; label: string }> = [
     { choice: "needed", label: "Correct" },
     { choice: "not_needed", label: "Not needed" },
-    { choice: "later", label: "Later" },
-    { choice: "done", label: "Done" },
+    { choice: "later", label: "나중에" },
+    { choice: "done", label: "완료" },
   ];
 
   return (
@@ -1172,42 +1172,42 @@ function attachmentCategoryLabel(category: string): string {
 
 function attachmentStatusLabel(status: string): string {
   const labelMap: Record<string, string> = {
-    ANALYZED: "Analyzed",
-    FALLBACK: "Basic analysis",
-    PENDING: "Pending",
-    UNSUPPORTED: "Text extraction limited",
+    ANALYZED: "분석됨",
+    FALLBACK: "기본 분석",
+    PENDING: "대기 중",
+    UNSUPPORTED: "텍스트 추출 제한",
   };
   return labelMap[status] || status.toLowerCase();
 }
 
 function candidateMissingLabel(key: string): string {
   const labelMap: Record<string, string> = {
-    name: "name",
-    contact: "contact",
-    role: "role",
-    portfolio: "portfolio link",
+    name: "이름",
+    contact: "연락처",
+    role: "역할",
+    portfolio: "포트폴리오 링크",
   };
   return labelMap[key] || key;
 }
 
 function candidatePipelineLabel(status: AttachmentCandidateProfile["pipelineStatus"]): string {
   const labels: Record<AttachmentCandidateProfile["pipelineStatus"], string> = {
-    ready_to_review: "Ready to review",
-    needs_info: "Needs info",
-    needs_analysis: "Needs analysis",
+    ready_to_review: "검토 준비",
+    needs_info: "정보 필요",
+    needs_analysis: "분석 필요",
   };
   return labels[status];
 }
 
 function fieldLabel(key: string): string {
   const labelMap: Record<string, string> = {
-    name: "Name",
-    role: "Role",
-    contact: "Contact",
-    email: "Email",
-    phone: "Phone",
-    age: "Age",
-    height: "Height",
+    name: "이름",
+    role: "역할",
+    contact: "연락처",
+    email: "이메일",
+    phone: "전화",
+    age: "나이",
+    height: "키",
     skills: "Skills",
     links: "Links",
     deadline: "Deadline",

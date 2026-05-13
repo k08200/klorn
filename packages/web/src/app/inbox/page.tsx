@@ -20,6 +20,7 @@ interface PendingActionItem {
   status: "PENDING" | "REJECTED" | "EXECUTED" | "FAILED";
   toolName: string;
   toolArgs: string;
+  preview?: string | null;
   /** Server-resolved human label (task title, contact name, …) — null when n/a */
   targetLabel: string | null;
   reasoning: string | null;
@@ -73,11 +74,11 @@ function InboxView() {
         apiFetch<{ actions: PendingActionItem[] }>(`/api/chat/pending-actions${qs}`),
         apiFetch<{ commitments: CommitmentItem[] }>("/api/commitments?status=OPEN&limit=8"),
       ]);
-      setActions(actionData.actions);
-      setCommitments(commitmentData.commitments);
+      setActions(Array.isArray(actionData.actions) ? actionData.actions : []);
+      setCommitments(Array.isArray(commitmentData.commitments) ? commitmentData.commitments : []);
     } catch (err) {
       captureClientError(err, { scope: "inbox.load" });
-      setError("Could not load the queue.");
+      setError("결정함을 불러오지 못했어요.");
     } finally {
       setLoading(false);
     }
@@ -102,7 +103,7 @@ function InboxView() {
       setActions((prev) => prev.map((a) => (a.id === actionId ? { ...a, status: "EXECUTED" } : a)));
     } catch (err) {
       captureClientError(err, { scope: "inbox.approve", actionId });
-      alert("Could not approve this action. Please try again.");
+      alert("이 작업을 승인하지 못했어요. 다시 시도해 주세요.");
     } finally {
       setActionLoading((prev) => ({ ...prev, [actionId]: null }));
     }
@@ -119,7 +120,7 @@ function InboxView() {
       setActions((prev) => prev.map((a) => (a.id === actionId ? { ...a, status: "REJECTED" } : a)));
     } catch (err) {
       captureClientError(err, { scope: "inbox.reject", actionId });
-      alert("Could not reject this action. Please try again.");
+      alert("이 작업을 거절하지 못했어요. 다시 시도해 주세요.");
     } finally {
       setActionLoading((prev) => ({ ...prev, [actionId]: null }));
     }
@@ -138,7 +139,7 @@ function InboxView() {
       window.dispatchEvent(new Event("conversations-updated"));
     } catch (err) {
       captureClientError(err, { scope: "inbox.commitment_status", commitmentId, status });
-      alert("Could not update the commitment. Try again in a moment.");
+      alert("약속 상태를 업데이트하지 못했어요. 잠시 뒤 다시 시도해 주세요.");
     } finally {
       setCommitmentLoading((prev) => ({ ...prev, [commitmentId]: null }));
     }
@@ -154,14 +155,13 @@ function InboxView() {
           <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
             <div className="max-w-2xl">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
-                Decision queue
+                결정함
               </p>
               <h1 className="mt-3 text-2xl font-semibold tracking-tight text-stone-50 md:text-3xl">
-                Turn scattered work signals into decisions you can approve.
+                흩어진 업무 신호를 바로 승인할 수 있는 결정으로 바꿉니다.
               </h1>
               <p className="mt-3 text-sm leading-6 text-stone-400">
-                Review what Jigeum found, why it matters, and which action is ready before anything
-                moves.
+                실행 전에 Jigeum이 무엇을 찾았고, 왜 중요한지, 어떤 행동이 준비됐는지 확인하세요.
               </p>
             </div>
             <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
@@ -171,30 +171,30 @@ function InboxView() {
                 onClick={() => load(filter)}
                 disabled={loading}
                 className="absolute right-3 top-3 h-9 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 backdrop-blur transition hover:bg-stone-800 disabled:opacity-50"
-                aria-label="Refresh decision queue"
+                aria-label="결정함 새로고침"
               >
-                {loading ? "..." : "Refresh"}
+                {loading ? "..." : "새로고침"}
               </button>
             </div>
           </div>
 
           <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-xl border border-white/10 bg-black/25">
-            <QueueMetric label="Awaiting approval" value={pendingCount} />
-            <QueueMetric label="Total cards" value={actions.length} />
-            <QueueMetric label="Open commitments" value={commitments.length} />
+            <QueueMetric label="승인 대기" value={pendingCount} />
+            <QueueMetric label="전체 카드" value={actions.length} />
+            <QueueMetric label="열린 약속" value={commitments.length} />
           </div>
 
           <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex w-fit items-center gap-1 rounded-lg border border-stone-800 bg-stone-950/80 p-1">
               <FilterTab
                 active={filter === "pending"}
-                label={`Pending${pendingCount ? ` (${pendingCount})` : ""}`}
+                label={`대기${pendingCount ? ` (${pendingCount})` : ""}`}
                 onClick={() => setFilter("pending")}
               />
-              <FilterTab active={filter === "all"} label="All" onClick={() => setFilter("all")} />
+              <FilterTab active={filter === "all"} label="전체" onClick={() => setFilter("all")} />
             </div>
             <p className="text-xs text-stone-600">
-              Signal, judgment, and action stay visible before approval.
+              승인 전에 신호, 판단, 실행 내용을 모두 볼 수 있습니다.
             </p>
           </div>
         </div>
@@ -204,7 +204,7 @@ function InboxView() {
       <BetaLearningCard />
 
       {loading && actions.length === 0 && (
-        <p className="text-sm text-stone-500 py-8 text-center">Loading...</p>
+        <p className="text-sm text-stone-500 py-8 text-center">불러오는 중...</p>
       )}
 
       {error && (
@@ -216,16 +216,16 @@ function InboxView() {
       {!loading && !error && actions.length === 0 && commitments.length === 0 && (
         <div className="rounded-lg border border-stone-800 bg-stone-900/40 p-8 text-center">
           <p className="text-sm text-stone-300 mb-1">
-            {filter === "pending" ? "Nothing is waiting." : "No queue items yet."}
+            {filter === "pending" ? "기다리는 항목이 없어요." : "아직 결정함 항목이 없어요."}
           </p>
-          <p className="text-xs text-stone-500">New Jigeum proposals will appear here.</p>
+          <p className="text-xs text-stone-500">새 Jigeum 제안이 여기에 나타납니다.</p>
         </div>
       )}
 
       {actions.length > 0 && (
-        <section className="mb-6" aria-label="Decision queue">
+        <section className="mb-6" aria-label="결정함">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold text-stone-100">Decision cards</h2>
+            <h2 className="text-sm font-semibold text-stone-100">결정 카드</h2>
             <span className="text-[11px] text-stone-500">{actions.length}</span>
           </div>
           <ul className="space-y-3">
@@ -272,9 +272,9 @@ function CommitmentSection({
   onDismiss: (id: string) => void;
 }) {
   return (
-    <section className="mb-6" aria-label="Commitment ledger">
+    <section className="mb-6" aria-label="약속 장부">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-sm font-semibold text-stone-100">Tracked commitments</h2>
+        <h2 className="text-sm font-semibold text-stone-100">추적 중인 약속</h2>
         <span className="text-[11px] text-stone-500">{commitments.length}</span>
       </div>
       <ul className="space-y-2">
@@ -332,7 +332,7 @@ function CommitmentCard({
           {loading === "done" ? (
             <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           ) : (
-            "Done"
+            "완료"
           )}
         </button>
         <button
@@ -344,11 +344,11 @@ function CommitmentCard({
           {loading === "dismiss" ? (
             <span className="w-3 h-3 border-2 border-stone-300/30 border-t-stone-200 rounded-full animate-spin" />
           ) : (
-            "Hide"
+            "숨기기"
           )}
         </button>
         <span className="ml-auto text-[11px] text-stone-600">
-          Confidence {Math.round(commitment.confidence * 100)}%
+          신뢰도 {Math.round((commitment.confidence ?? 0.72) * 100)}%
         </span>
       </div>
     </article>
@@ -397,11 +397,13 @@ function ActionCard({
   onApprove: () => void;
   onReject: () => void;
 }) {
-  const preview = buildPreview(action.toolName, action.toolArgs, action.targetLabel);
-  const emailPreview = action.toolName === "send_email" ? buildEmailPreview(action.toolArgs) : null;
+  const toolName = action.toolName || "prepared_action";
+  const toolArgs = action.toolArgs || "{}";
+  const preview = buildPreview(toolName, toolArgs, action.targetLabel);
+  const emailPreview = toolName === "send_email" ? buildEmailPreview(toolArgs) : null;
   const reasoning = splitReasoning(action.reasoning);
   const isPending = action.status === "PENDING";
-  const risk = riskForTool(action.toolName);
+  const risk = riskForTool(toolName);
 
   return (
     <article className="relative overflow-hidden rounded-lg border border-stone-800 bg-stone-950/70">
@@ -410,7 +412,7 @@ function ActionCard({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-300">
-              Decision card
+              결정 카드
             </span>
             <StatusBadge status={action.status} />
           </div>
@@ -422,49 +424,54 @@ function ActionCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] font-medium text-amber-200 bg-amber-300/10 border border-amber-300/20 rounded px-1.5 py-0.5">
-              {action.toolName.replace(/_/g, " ")}
+              {toolName === "prepared_action" ? "준비된 작업" : toolName.replace(/_/g, " ")}
             </span>
             <RiskBadge risk={risk} />
             {action.conversationTitle && (
               <span className="min-w-0 truncate text-[11px] text-stone-600">
-                Thread: {action.conversationTitle}
+                스레드: {action.conversationTitle}
               </span>
             )}
           </div>
 
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <DecisionSection
-              label="Signal"
-              title="What Jigeum found"
+              label="신호"
+              title="Jigeum이 찾은 것"
               body={
                 reasoning.situation ||
                 action.conversationTitle ||
-                "Jigeum checked the connected thread and work signals."
+                "Jigeum이 연결된 스레드와 업무 신호를 확인했습니다."
               }
             />
             <DecisionSection
-              label="Judgment"
-              title="Why it matters"
-              body={reasoning.judgment || action.reasoning || "This needs review before action."}
+              label="판단"
+              title="왜 중요한가"
+              body={reasoning.judgment || action.reasoning || "실행 전에 검토가 필요합니다."}
             />
             <DecisionSection
-              label="Action"
-              title="Prepared move"
-              body={reasoning.proposal || preview || action.toolName.replace(/_/g, " ")}
+              label="실행"
+              title="준비된 움직임"
+              body={
+                reasoning.proposal ||
+                preview ||
+                action.preview ||
+                (toolName === "prepared_action" ? "준비된 작업" : toolName.replace(/_/g, " "))
+              }
             />
           </div>
 
           {emailPreview && (
             <div className="mt-4 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-medium text-amber-300">
-                  Approval required before sending
-                </span>
+                <span className="text-[11px] font-medium text-amber-300">보내기 전 승인 필요</span>
                 <span className="text-[11px] text-stone-500">send_email</span>
               </div>
-              <p className="mt-2 text-xs text-stone-300 break-words">To: {emailPreview.to}</p>
+              <p className="mt-2 text-xs text-stone-300 break-words">
+                받는 사람: {emailPreview.to}
+              </p>
               <p className="mt-1 text-xs text-stone-400 break-words">
-                Subject: {emailPreview.subject}
+                제목: {emailPreview.subject}
               </p>
               {emailPreview.body && (
                 <p className="mt-2 text-xs leading-relaxed text-stone-300 line-clamp-4 whitespace-pre-wrap">
@@ -485,7 +492,7 @@ function ActionCard({
                 {loading === "approve" ? (
                   <span className="h-3 w-3 animate-spin rounded-full border-2 border-stone-950/30 border-t-stone-950" />
                 ) : (
-                  "Approve"
+                  "승인"
                 )}
               </button>
               <button
@@ -497,14 +504,14 @@ function ActionCard({
                 {loading === "reject" ? (
                   <span className="h-3 w-3 animate-spin rounded-full border-2 border-stone-300/30 border-t-stone-200" />
                 ) : (
-                  "Reject"
+                  "거절"
                 )}
               </button>
               <Link
                 href={`/chat/${action.conversationId}`}
                 className="text-xs text-amber-300 hover:text-amber-200 ml-auto transition"
               >
-                Open thread →
+                스레드 열기 →
               </Link>
             </div>
           )}
@@ -518,7 +525,7 @@ function ActionCard({
                 href={`/chat/${action.conversationId}`}
                 className="text-xs text-stone-400 hover:text-stone-200 transition shrink-0 ml-2"
               >
-                Open thread →
+                스레드 열기 →
               </Link>
             </div>
           )}
@@ -541,15 +548,15 @@ function DecisionSection({ label, title, body }: { label: string; title: string;
 function RiskBadge({ risk }: { risk: "low" | "medium" | "high" }) {
   const map = {
     low: {
-      label: "Low risk",
+      label: "낮은 리스크",
       className: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
     },
     medium: {
-      label: "Approval needed",
+      label: "승인 필요",
       className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
     },
     high: {
-      label: "High risk",
+      label: "높은 리스크",
       className: "text-red-300 bg-red-500/10 border-red-500/20",
     },
   }[risk];
@@ -615,22 +622,22 @@ function commitmentOwnerEntry(owner: CommitmentItem["owner"]): {
   switch (owner) {
     case "USER":
       return {
-        label: "Mine",
+        label: "내 약속",
         className: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
       };
     case "COUNTERPARTY":
       return {
-        label: "Counterparty",
+        label: "상대방",
         className: "text-amber-200 bg-amber-300/10 border-amber-300/20",
       };
     case "TEAM":
       return {
-        label: "Team",
+        label: "팀",
         className: "text-amber-200 bg-amber-300/10 border-amber-300/20",
       };
     case "UNKNOWN":
       return {
-        label: "Needs owner",
+        label: "담당자 필요",
         className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
       };
   }
@@ -638,11 +645,11 @@ function commitmentOwnerEntry(owner: CommitmentItem["owner"]): {
 
 function commitmentKindLabel(kind: CommitmentItem["kind"]): string {
   const labels: Record<CommitmentItem["kind"], string> = {
-    DELIVERABLE: "Deliverable",
-    FOLLOW_UP: "Follow-up",
-    DECISION: "Decision",
-    MEETING: "Meeting",
-    REVIEW: "Review",
+    DELIVERABLE: "전달물",
+    FOLLOW_UP: "후속 조치",
+    DECISION: "결정",
+    MEETING: "회의",
+    REVIEW: "검토",
   };
   return labels[kind];
 }
@@ -650,26 +657,26 @@ function commitmentKindLabel(kind: CommitmentItem["kind"]): string {
 function commitmentDueLabel(commitment: CommitmentItem): string {
   if (commitment.dueText) return commitment.dueText;
   if (commitment.dueAt) {
-    return new Date(commitment.dueAt).toLocaleDateString("en-US", {
+    return new Date(commitment.dueAt).toLocaleDateString("ko-KR", {
       month: "short",
       day: "numeric",
     });
   }
-  return "Due date unconfirmed";
+  return "기한 미확인";
 }
 
 function StatusBadge({ status }: { status: PendingActionItem["status"] }) {
   const map: Record<PendingActionItem["status"], { label: string; className: string }> = {
-    PENDING: { label: "Pending", className: "text-amber-300 bg-amber-400/10 border-amber-400/20" },
+    PENDING: { label: "대기", className: "text-amber-300 bg-amber-400/10 border-amber-400/20" },
     EXECUTED: {
-      label: "Done",
+      label: "완료",
       className: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
     },
     REJECTED: {
-      label: "Rejected",
+      label: "거절됨",
       className: "text-stone-400 bg-stone-500/10 border-stone-500/20",
     },
-    FAILED: { label: "Failed", className: "text-red-300 bg-red-500/10 border-red-500/20" },
+    FAILED: { label: "실패", className: "text-red-300 bg-red-500/10 border-red-500/20" },
   };
   const entry = map[status];
   return (
@@ -695,12 +702,12 @@ function buildPreview(
     return typeof v === "string" ? v : undefined;
   };
   if (toolName === "send_email") {
-    return `To: ${pick("to") || "?"} · ${pick("subject") || "No subject"}`;
+    return `받는 사람: ${pick("to") || "?"} · ${pick("subject") || "제목 없음"}`;
   }
   if (toolName === "create_event") {
     const start = pick("startTime");
     const when = start
-      ? new Date(start).toLocaleString("en-US", {
+      ? new Date(start).toLocaleString("ko-KR", {
           month: "short",
           day: "numeric",
           hour: "2-digit",
@@ -708,10 +715,10 @@ function buildPreview(
         })
       : "";
     const loc = pick("location");
-    return `${pick("title") || "Event"}${when ? ` · ${when}` : ""}${loc ? ` · ${loc}` : ""}`;
+    return `${pick("title") || "일정"}${when ? ` · ${when}` : ""}${loc ? ` · ${loc}` : ""}`;
   }
   if (toolName === "create_task" || toolName === "create_note") {
-    return pick("title") || "Untitled";
+    return pick("title") || "제목 없음";
   }
   if (toolName === "create_contact") {
     const email = pick("email");
@@ -726,7 +733,7 @@ function buildPreview(
         : toolName === "delete_note"
           ? "note_id"
           : "contact_id";
-    return `Delete: ${targetLabel || pick(idKey) || "?"}`;
+    return `삭제: ${targetLabel || pick(idKey) || "?"}`;
   }
   if (toolName === "update_task" || toolName === "update_note" || toolName === "update_contact") {
     const idKey =
@@ -735,7 +742,7 @@ function buildPreview(
         : toolName === "update_note"
           ? "note_id"
           : "contact_id";
-    return `Update: ${targetLabel || pick(idKey) || "?"}`;
+    return `수정: ${targetLabel || pick(idKey) || "?"}`;
   }
   return null;
 }
@@ -755,7 +762,7 @@ function buildEmailPreview(
   };
   return {
     to: pick("to") || pick("recipient") || "?",
-    subject: pick("subject") || "No subject",
+    subject: pick("subject") || "제목 없음",
     body: pick("body") || pick("message"),
   };
 }
@@ -763,9 +770,9 @@ function buildEmailPreview(
 function formatRelative(date: string): string {
   const diff = Date.now() - new Date(date).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return "방금";
+  if (mins < 60) return `${mins}분 전`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return `${hours}시간 전`;
+  return `${Math.floor(hours / 24)}일 전`;
 }

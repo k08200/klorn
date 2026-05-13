@@ -35,9 +35,9 @@ const PRIORITY_STYLES: Record<EmailPriority, string> = {
 
 function PriorityPill({ priority }: { priority: EmailPriority }) {
   const label = {
-    URGENT: "Urgent",
-    NORMAL: "Normal",
-    LOW: "Low",
+    URGENT: "긴급",
+    NORMAL: "보통",
+    LOW: "낮음",
   }[priority];
 
   return (
@@ -58,13 +58,14 @@ export function EmailFeedbackList() {
   useEffect(() => {
     apiFetch<EmailFeedbackResponse>("/api/email/feedback?limit=50")
       .then((data) => {
-        setFixtures(data.fixtures);
-        setCount(data.count);
+        const nextFixtures = Array.isArray(data.fixtures) ? data.fixtures : [];
+        setFixtures(nextFixtures);
+        setCount(Number.isFinite(data.count) ? data.count : nextFixtures.length);
         setError(null);
       })
       .catch((err) => {
         captureClientError(err, { scope: "email-feedback.load" });
-        setError("Could not load mail correction history.");
+        setError("메일 교정 기록을 불러오지 못했어요.");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -88,10 +89,10 @@ export function EmailFeedbackList() {
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-medium text-stone-300">
-            {loading ? "Checking correction log..." : `${count} corrections`}
+            {loading ? "교정 기록 확인 중..." : `교정 ${count}개`}
           </p>
           <p className="mt-1 text-sm text-stone-500">
-            These corrections sharpen how Jigeum judges mail priority and reply intent.
+            교정 기록은 Jigeum이 메일 우선순위와 답장 의도를 더 정확히 판단하는 데 쓰입니다.
           </p>
         </div>
         {exportHref && (
@@ -100,14 +101,14 @@ export function EmailFeedbackList() {
             download="jigeum-email-feedback-fixtures.json"
             className="inline-flex w-fit items-center rounded-lg border border-stone-700/60 bg-stone-950/45 px-3 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-500/35 hover:bg-amber-500/10"
           >
-            Export JSON
+            JSON 내보내기
           </a>
         )}
       </div>
 
       {error && (
         <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">
-          Could not load correction history.
+          메일 교정 기록을 불러오지 못했어요.
         </div>
       )}
 
@@ -124,10 +125,9 @@ export function EmailFeedbackList() {
 
       {!loading && !error && fixtures.length === 0 && (
         <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 px-5 py-10 text-center">
-          <p className="text-sm font-medium text-stone-300">No corrected classifications yet.</p>
+          <p className="text-sm font-medium text-stone-300">아직 교정된 분류가 없어요.</p>
           <p className="mt-2 text-sm text-stone-500">
-            When a mail classification is wrong, mark it from the mail screen and it will appear
-            here.
+            메일 화면에서 분류가 틀렸다고 표시하면 여기에서 다시 확인할 수 있어요.
           </p>
         </div>
       )}
@@ -161,7 +161,7 @@ export function EmailFeedbackList() {
                 )}
               </div>
 
-              {fixture.capturedHeuristic.signals.length > 0 && (
+              {(fixture.capturedHeuristic.signals?.length ?? 0) > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {fixture.capturedHeuristic.signals.slice(0, 6).map((signal) => (
                     <span

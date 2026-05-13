@@ -4,11 +4,11 @@ interface EveSignalFieldProps {
 }
 
 const SIGNAL_POINTS = [
-  { label: "Mail", x: 14, y: 26, accent: "bg-sky-300" },
-  { label: "Calendar", x: 40, y: 14, accent: "bg-amber-300" },
-  { label: "Work", x: 68, y: 30, accent: "bg-emerald-300" },
-  { label: "Memory", x: 28, y: 68, accent: "bg-teal-300" },
-  { label: "Review", x: 76, y: 72, accent: "bg-stone-100" },
+  { label: "메일", x: 14, y: 26, accent: "bg-sky-300" },
+  { label: "캘린더", x: 40, y: 14, accent: "bg-amber-300" },
+  { label: "업무", x: 68, y: 30, accent: "bg-emerald-300" },
+  { label: "메모리", x: 28, y: 68, accent: "bg-teal-300" },
+  { label: "검토", x: 76, y: 72, accent: "bg-stone-100" },
 ];
 
 export function EveSignalField({ className = "", tone = "panel" }: EveSignalFieldProps) {
@@ -27,10 +27,10 @@ export function EveSignalField({ className = "", tone = "panel" }: EveSignalFiel
       <div className="relative flex h-full min-h-32 flex-col justify-between p-4">
         <div className="flex items-center justify-between gap-4 border-b border-white/8 pb-3">
           <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-500">
-            Work signals
+            업무 신호
           </span>
           <span className="rounded-full border border-emerald-400/20 px-2 py-0.5 text-[10px] text-emerald-200">
-            Live
+            실시간
           </span>
         </div>
         <div className="mt-3 space-y-2.5">
@@ -51,8 +51,7 @@ export function EveSignalField({ className = "", tone = "panel" }: EveSignalFiel
         </div>
         <div className="mt-4 rounded-md border border-white/8 bg-black/20 px-3 py-2">
           <p className="text-[11px] leading-5 text-stone-400">
-            Only the work that needs attention enters the queue, with evidence and approval state
-            shown before action.
+            주의가 필요한 일만 근거와 승인 상태를 갖춘 채 결정함에 들어옵니다.
           </p>
         </div>
       </div>

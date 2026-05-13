@@ -80,10 +80,10 @@ function CandidateIntakeView() {
       const data = await apiFetch<{ candidates: CandidateIntake[] }>(
         `/api/email/candidates?${params.toString()}`,
       );
-      setCandidates(data.candidates);
+      setCandidates(Array.isArray(data.candidates) ? data.candidates : []);
     } catch (err) {
       captureClientError(err, { scope: "email.candidates.load", status: nextStatus });
-      setError("Could not load candidate intake.");
+      setError("후보자 접수를 불러오지 못했어요.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -108,12 +108,9 @@ function CandidateIntakeView() {
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
               후보자 접수
             </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              Candidate intake queue
-            </h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-stone-50">후보자 접수함</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
-              Review resumes, profiles, portfolios, and audition materials detected in mail
-              attachments.
+              메일 첨부에서 감지한 이력서, 프로필, 포트폴리오, 오디션 자료를 검토합니다.
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
@@ -121,7 +118,7 @@ function CandidateIntakeView() {
               href="/email"
               className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100"
             >
-              Mail
+              메일
             </Link>
             <button
               type="button"
@@ -172,7 +169,7 @@ function CandidateIntakeView() {
         <div className="mt-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-center">
           <p className="text-sm text-stone-300">아직 후보자 자료가 잡히지 않았어요.</p>
           <p className="mt-1 text-xs text-stone-600">
-            They will appear here after Gmail sync and attachment analysis finish.
+            Gmail 동기화와 첨부 분석이 끝나면 여기에 표시됩니다.
           </p>
         </div>
       )}
@@ -200,6 +197,14 @@ function QueueStat({ label, value }: { label: string; value: number }) {
 }
 
 function CandidateCard({ candidate }: { candidate: CandidateIntake }) {
+  const email = candidate.email ?? {
+    id: candidate.emailId,
+    from: candidate.emailAddress ?? "",
+    subject: "제목 없음",
+    snippet: null,
+    receivedAt: candidate.updatedAt ?? new Date().toISOString(),
+    isRead: true,
+  };
   const title = [candidate.name || "이름 미확인", candidate.role].filter(Boolean).join(" · ");
   return (
     <Link
@@ -220,27 +225,25 @@ function CandidateCard({ candidate }: { candidate: CandidateIntake }) {
           <p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-400">{candidate.summary}</p>
         </div>
         <time className="shrink-0 text-[11px] tabular-nums text-stone-500">
-          {formatRelative(candidate.email.receivedAt)}
+          {formatRelative(email.receivedAt)}
         </time>
       </div>
       <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-stone-500">
         {candidate.contact && <span className="truncate">연락처 {candidate.contact}</span>}
-        <span>{candidate.evidenceFiles.length} files</span>
-        {candidate.missingFields.length > 0 && (
+        <span>파일 {candidate.evidenceFiles?.length ?? 0}개</span>
+        {(candidate.missingFields?.length ?? 0) > 0 && (
           <span className="text-amber-300/80">
-            Missing {candidate.missingFields.map(candidateMissingLabel).join(", ")}
+            부족한 정보 {candidate.missingFields.map(candidateMissingLabel).join(", ")}
           </span>
         )}
       </div>
       <div className="mt-3 rounded-lg border border-stone-800/60 bg-black/15 px-3 py-2">
-        <p className="truncate text-xs text-stone-300">{candidate.email.subject || "제목 없음"}</p>
-        <p className="mt-1 truncate text-[11px] text-stone-600">
-          {senderName(candidate.email.from)}
-        </p>
+        <p className="truncate text-xs text-stone-300">{email.subject || "제목 없음"}</p>
+        <p className="mt-1 truncate text-[11px] text-stone-600">{senderName(email.from)}</p>
       </div>
       {candidate.notes && (
         <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-stone-500">
-          Notes: {candidate.notes}
+          메모: {candidate.notes}
         </p>
       )}
     </Link>
@@ -251,6 +254,7 @@ function candidateStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     NEEDS_ANALYSIS: "분석 필요",
     NEEDS_INFO: "정보 확인",
+    READY: "준비됨",
     READY_TO_REVIEW: "검토 대기",
     REVIEWING: "검토 중",
     CONTACTED: "연락 완료",

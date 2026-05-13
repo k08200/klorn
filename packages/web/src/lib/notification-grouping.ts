@@ -17,14 +17,14 @@ export interface NotificationGroup<T extends GroupableNotification> {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  reminder: "Reminder",
-  calendar: "Calendar",
-  email: "Mail",
-  task: "Task",
-  meeting: "Meeting",
-  briefing: "Briefing",
-  agent_proposal: "Jigeum proposal",
-  insight: "Insight",
+  reminder: "리마인더",
+  calendar: "캘린더",
+  email: "메일",
+  task: "할 일",
+  meeting: "회의",
+  briefing: "브리핑",
+  agent_proposal: "Jigeum 제안",
+  insight: "인사이트",
 };
 
 const AGENT_PREFIX = "[Eve]";

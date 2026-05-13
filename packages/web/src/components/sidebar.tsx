@@ -53,11 +53,11 @@ function groupByDate(convs: Conversation[]): DateGroup[] {
   const monthAgo = new Date(today.getTime() - 30 * 86400000);
 
   const groups: DateGroup[] = [
-    { label: "Today", items: [] },
-    { label: "Yesterday", items: [] },
-    { label: "Previous 7 days", items: [] },
-    { label: "Previous 30 days", items: [] },
-    { label: "Older", items: [] },
+    { label: "오늘", items: [] },
+    { label: "어제", items: [] },
+    { label: "지난 7일", items: [] },
+    { label: "지난 30일", items: [] },
+    { label: "이전", items: [] },
   ];
 
   for (const conv of convs) {
@@ -73,10 +73,10 @@ function groupByDate(convs: Conversation[]): DateGroup[] {
 }
 
 const NAV_ITEMS = [
-  { href: "/inbox", label: "Decision queue", icon: "check" },
-  { href: "/email", label: "Mail", icon: "mail" },
-  { href: "/calendar", label: "Calendar", icon: "calendar" },
-  { href: "/briefing", label: "Briefing", icon: "bell" },
+  { href: "/inbox", label: "결정함", icon: "check" },
+  { href: "/email", label: "메일", icon: "mail" },
+  { href: "/calendar", label: "캘린더", icon: "calendar" },
+  { href: "/briefing", label: "브리핑", icon: "bell" },
 ];
 
 function NavIcon({ type, size = 16 }: { type: string; size?: number }) {
@@ -382,7 +382,7 @@ export default function Sidebar({
           <span>
             <span className="block leading-none">Jigeum</span>
             <span className="mt-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-stone-500">
-              What matters now
+              지금 중요한 것
             </span>
           </span>
         </Link>
@@ -392,7 +392,7 @@ export default function Sidebar({
             type="button"
             onClick={createChat}
             className="flex h-8 w-8 items-center justify-center rounded-md border border-stone-700 bg-stone-900 text-stone-400 transition hover:border-stone-600 hover:bg-stone-800 hover:text-stone-100"
-            title="New decision thread"
+            title="새 결정 스레드"
           >
             <svg
               aria-hidden="true"
@@ -432,7 +432,7 @@ export default function Sidebar({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search threads..."
+            placeholder="결정 스레드 검색..."
             className="w-full rounded-md border border-stone-700 bg-[#0f1115] py-1.5 pl-8 pr-3 text-xs text-stone-300 placeholder-stone-600 transition focus:border-stone-500 focus:outline-none"
           />
           {search && (
@@ -458,7 +458,7 @@ export default function Sidebar({
               className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium text-stone-400 transition hover:bg-stone-800 hover:text-stone-100"
             >
               <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              Decision queue
+              결정함
               {totalPending > 0 && (
                 <span className="ml-auto rounded-full bg-stone-800 px-1.5 py-0.5 text-[10px] font-semibold text-stone-300">
                   {totalPending}
@@ -478,12 +478,10 @@ export default function Sidebar({
                       : "text-stone-400 hover:bg-stone-800/70 hover:text-stone-100"
                   }`}
                 >
-                  <span className="truncate flex-1 text-[13px]">
-                    {conv.title || "Decision card"}
-                  </span>
+                  <span className="truncate flex-1 text-[13px]">{conv.title || "결정 카드"}</span>
                   {(conv.pendingActionCount || 0) > 0 && (
                     <span className="shrink-0 rounded-full bg-stone-900 px-1.5 py-0.5 text-[10px] text-stone-300">
-                      Pending {conv.pendingActionCount}
+                      대기 {conv.pendingActionCount}
                     </span>
                   )}
                 </Link>
@@ -556,10 +554,10 @@ export default function Sidebar({
                         {conv.source === "agent" && (
                           <span
                             className="w-2 h-2 rounded-full bg-stone-500 shrink-0"
-                            title="Decision card"
+                            title="결정 카드"
                           />
                         )}
-                        {conv.title || "New decision thread"}
+                        {conv.title || "새 결정 스레드"}
                       </span>
                       <span
                         className={`hidden md:flex items-center gap-0.5 shrink-0 ${isActive ? "md:visible" : "md:invisible md:group-hover/conv:visible"}`}
@@ -606,7 +604,7 @@ export default function Sidebar({
                           type="button"
                           onClick={(e) => confirmDelete(e, conv.id)}
                           className="p-0.5 text-stone-500 hover:text-red-400 transition"
-                          title="Delete"
+                          title="삭제"
                         >
                           <svg
                             aria-hidden="true"
@@ -628,7 +626,7 @@ export default function Sidebar({
                         type="button"
                         onClick={(e) => confirmDelete(e, conv.id)}
                         className="md:hidden flex items-center justify-center min-w-[44px] min-h-[44px] -my-2 -mr-2 text-stone-500 active:text-red-400 transition shrink-0"
-                        aria-label="Delete thread"
+                        aria-label="스레드 삭제"
                       >
                         <svg
                           aria-hidden="true"
@@ -683,10 +681,10 @@ export default function Sidebar({
                         {conv.source === "agent" && (
                           <span
                             className="w-2 h-2 rounded-full bg-stone-500 shrink-0"
-                            title="Decision card"
+                            title="결정 카드"
                           />
                         )}
-                        {conv.title || "New decision thread"}
+                        {conv.title || "새 결정 스레드"}
                       </span>
                       <span
                         className={`hidden md:flex items-center gap-0.5 shrink-0 ${isActive ? "md:visible" : "md:invisible md:group-hover/conv:visible"}`}
@@ -736,7 +734,7 @@ export default function Sidebar({
                           type="button"
                           onClick={(e) => confirmDelete(e, conv.id)}
                           className="p-0.5 text-stone-500 hover:text-red-400 transition"
-                          title="Delete"
+                          title="삭제"
                         >
                           <svg
                             aria-hidden="true"
@@ -758,7 +756,7 @@ export default function Sidebar({
                         type="button"
                         onClick={(e) => confirmDelete(e, conv.id)}
                         className="md:hidden flex items-center justify-center min-w-[44px] min-h-[44px] -my-2 -mr-2 text-stone-500 active:text-red-400 transition shrink-0"
-                        aria-label="Delete thread"
+                        aria-label="스레드 삭제"
                       >
                         <svg
                           aria-hidden="true"
@@ -785,7 +783,7 @@ export default function Sidebar({
 
         {filtered.length === 0 && (
           <p className="text-xs text-stone-600 px-3 py-4">
-            {search ? "No matching threads." : "No decision threads yet."}
+            {search ? "맞는 스레드가 없어요." : "아직 결정 스레드가 없어요."}
           </p>
         )}
       </div>
@@ -837,21 +835,21 @@ export default function Sidebar({
       {deleteConfirm && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm rounded-lg">
           <div className="bg-stone-900 border border-stone-700 rounded-xl p-4 mx-4 shadow-2xl max-w-[220px]">
-            <p className="text-sm text-stone-200 mb-3">Delete this thread?</p>
+            <p className="text-sm text-stone-200 mb-3">이 스레드를 삭제할까요?</p>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setDeleteConfirm(null)}
                 className="flex-1 px-3 py-1.5 text-xs text-stone-400 bg-stone-800 hover:bg-stone-700 rounded-lg transition"
               >
-                Cancel
+                취소
               </button>
               <button
                 type="button"
                 onClick={() => deleteConversation(deleteConfirm)}
                 className="flex-1 px-3 py-1.5 text-xs text-white bg-red-600 hover:bg-red-500 rounded-lg transition"
               >
-                Delete
+                삭제
               </button>
             </div>
           </div>
@@ -902,7 +900,7 @@ export default function Sidebar({
                   }}
                   className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
                 >
-                  Settings
+                  설정
                 </Link>
                 <Link
                   href="/billing"
@@ -912,7 +910,7 @@ export default function Sidebar({
                   }}
                   className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
                 >
-                  Plan and billing
+                  플랜과 결제
                 </Link>
                 <Link
                   href="/settings/memory"
@@ -922,7 +920,7 @@ export default function Sidebar({
                   }}
                   className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
                 >
-                  Memory
+                  메모리
                 </Link>
                 <Link
                   href="/settings/usage"
@@ -932,7 +930,7 @@ export default function Sidebar({
                   }}
                   className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
                 >
-                  Usage
+                  사용량
                 </Link>
                 <Link
                   href="/settings/email-feedback"
@@ -942,7 +940,7 @@ export default function Sidebar({
                   }}
                   className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
                 >
-                  Email feedback
+                  메일 피드백
                 </Link>
                 <div className="border-t border-stone-800 my-1" />
                 <button
@@ -953,7 +951,7 @@ export default function Sidebar({
                   }}
                   className="w-[calc(100%-0.5rem)] text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-md mx-1 transition"
                 >
-                  Log out
+                  로그아웃
                 </button>
               </div>
             )}
@@ -963,7 +961,7 @@ export default function Sidebar({
             href="/login"
             className="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm text-stone-400 hover:bg-stone-800/50 hover:text-white transition"
           >
-            Log in
+            로그인
           </Link>
         )}
       </div>
