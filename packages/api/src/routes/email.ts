@@ -2161,7 +2161,7 @@ export async function emailRoutes(app: FastifyInstance) {
 
   // ─── Mark Read/Unread (syncs to Gmail) ──────────────────────────────
   // PATCH /api/email/:id/read
-  app.patch("/:id/read", async (request) => {
+  app.patch("/:id/read", { preHandler: requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
     const { isRead } = (request.body as { isRead?: boolean }) || {};
@@ -2170,7 +2170,7 @@ export async function emailRoutes(app: FastifyInstance) {
     const email = await prisma.emailMessage.findFirst({
       where: { userId: uid, OR: [{ id }, { gmailId: id }] },
     });
-    if (!email) return { error: "Email not found" };
+    if (!email) return reply.code(404).send({ error: "Email not found" });
 
     // Sync to Gmail first, then update DB
     await toggleReadGmail(uid, email.gmailId, readVal).catch(() => {
@@ -2185,7 +2185,7 @@ export async function emailRoutes(app: FastifyInstance) {
 
   // ─── Star/Unstar (syncs to Gmail) ─────────────────────────────────────
   // PATCH /api/email/:id/star
-  app.patch("/:id/star", async (request) => {
+  app.patch("/:id/star", { preHandler: requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
     const { isStarred } = (request.body as { isStarred?: boolean }) || {};
@@ -2194,7 +2194,7 @@ export async function emailRoutes(app: FastifyInstance) {
     const email = await prisma.emailMessage.findFirst({
       where: { userId: uid, OR: [{ id }, { gmailId: id }] },
     });
-    if (!email) return { error: "Email not found" };
+    if (!email) return reply.code(404).send({ error: "Email not found" });
 
     await toggleStarGmail(uid, email.gmailId, starVal).catch(() => {});
     await prisma.emailMessage.update({
@@ -2206,7 +2206,7 @@ export async function emailRoutes(app: FastifyInstance) {
 
   // ─── Delete (trash in Gmail + remove from DB) ─────────────────────────
   // DELETE /api/email/:id
-  app.delete("/:id", async (request, reply) => {
+  app.delete("/:id", { preHandler: requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
 
@@ -2235,7 +2235,7 @@ export async function emailRoutes(app: FastifyInstance) {
 
   // ─── Archive (remove from inbox in Gmail + remove from DB) ────────────
   // POST /api/email/:id/archive
-  app.post("/:id/archive", async (request, reply) => {
+  app.post("/:id/archive", { preHandler: requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
 

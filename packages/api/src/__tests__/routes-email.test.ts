@@ -40,6 +40,7 @@ vi.mock("../db.js", () => {
       findFirst: vi.fn(async () => null),
       count: vi.fn(async () => 0),
       groupBy: vi.fn(async () => []),
+      update: vi.fn(async () => ({})),
       updateMany: vi.fn(async () => ({ count: 0 })),
       deleteMany: vi.fn(async () => ({ count: 0 })),
     },
@@ -301,6 +302,62 @@ describe("email routes (demo mode)", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe("Invalid email priority");
+    await app.close();
+  });
+
+  it("toggles a synced email star from the detail action", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.emailMessage.findFirst).mockResolvedValueOnce({
+      id: "email-1",
+      gmailId: "gmail-1",
+      userId: "user-1",
+      isStarred: false,
+    });
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/email/email-1/star",
+      headers: auth(),
+      payload: { isStarred: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true });
+    expect(prisma.emailMessage.update).toHaveBeenCalledWith({
+      where: { id: "email-1" },
+      data: { isStarred: true },
+    });
+    await app.close();
+  });
+
+  it("requires auth for synced email detail mutations", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/email/email-1/star",
+      payload: { isStarred: true },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error).toBe("Authentication required");
+    await app.close();
+  });
+
+  it("returns not found for missing synced email detail mutations", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.emailMessage.findFirst).mockResolvedValueOnce(null);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/email/missing-email/star",
+      headers: auth(),
+      payload: { isStarred: true },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toBe("Email not found");
     await app.close();
   });
 
