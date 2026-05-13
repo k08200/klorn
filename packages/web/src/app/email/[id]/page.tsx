@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { EveSignalField } from "../../../components/brand-visuals";
@@ -28,6 +28,7 @@ interface EmailDetail {
   actionItems: string[];
   sentiment: string | null;
   isRead?: boolean;
+  isStarred?: boolean;
   needsReply?: boolean;
   attachmentCount?: number;
   attachments?: EmailAttachment[];
@@ -180,13 +181,14 @@ export default function EmailDetailPage() {
 
 function EmailDetailView() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const id = params?.id;
   const shouldMarkRead = searchParams?.get("markRead") === "true";
   const [email, setEmail] = useState<EmailDetail | null>(null);
   const [thread, setThread] = useState<ThreadDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [markingRead, setMarkingRead] = useState(false);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [ocring, setOcring] = useState(false);
@@ -216,8 +218,10 @@ function EmailDetailView() {
         setSelectedDraftAttachmentIds([]);
         setIncludeBriefAttachment((data.attachments?.length ?? 0) > 0);
         if (data.threadId) {
-          apiFetch<ThreadDetail>(`/api/email/thread/${encodeURIComponent(data.threadId)}`)
-            .then(setThread)
+          apiFetch<ThreadDetail | { error: string }>(
+            `/api/email/thread/${encodeURIComponent(data.threadId)}`,
+          )
+            .then((threadData) => setThread("error" in threadData ? null : threadData))
             .catch((err) => captureClientError(err, { scope: "email.thread.load", id }));
         } else {
           setThread(null);
@@ -443,21 +447,71 @@ function EmailDetailView() {
     }
   };
 
-  const markReadNow = async () => {
-    if (!id || markingRead) return;
-    setMarkingRead(true);
+  const toggleRead = async () => {
+    if (!id || !email || actionBusy) return;
+    const nextRead = !email.isRead;
+    setActionBusy("read");
     setError(null);
     try {
       await apiFetch(`/api/email/${id}/read`, {
         method: "PATCH",
-        body: JSON.stringify({ isRead: true }),
+        body: JSON.stringify({ isRead: nextRead }),
       });
-      setEmail((prev) => (prev ? { ...prev, isRead: true } : prev));
+      setEmail((prev) => (prev ? { ...prev, isRead: nextRead } : prev));
     } catch (err) {
-      captureClientError(err, { scope: "email.mark-read", id });
-      setError("읽음 처리하지 못했어요.");
+      captureClientError(err, { scope: "email.detail.toggle-read", id, nextRead });
+      setError(nextRead ? "읽음 처리하지 못했어요." : "읽지 않음으로 되돌리지 못했어요.");
     } finally {
-      setMarkingRead(false);
+      setActionBusy(null);
+    }
+  };
+
+  const toggleStar = async () => {
+    if (!id || !email || actionBusy) return;
+    const nextStarred = !email.isStarred;
+    setActionBusy("star");
+    setError(null);
+    try {
+      await apiFetch(`/api/email/${id}/star`, {
+        method: "PATCH",
+        body: JSON.stringify({ isStarred: nextStarred }),
+      });
+      setEmail((prev) => (prev ? { ...prev, isStarred: nextStarred } : prev));
+    } catch (err) {
+      captureClientError(err, { scope: "email.detail.toggle-star", id, nextStarred });
+      setError(nextStarred ? "별표를 추가하지 못했어요." : "별표를 해제하지 못했어요.");
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
+  const archiveEmailNow = async () => {
+    if (!id || actionBusy) return;
+    setActionBusy("archive");
+    setError(null);
+    try {
+      await apiFetch(`/api/email/${id}/archive`, { method: "POST" });
+      router.push("/email");
+    } catch (err) {
+      captureClientError(err, { scope: "email.detail.archive", id });
+      setError("메일을 보관하지 못했어요.");
+      setActionBusy(null);
+    }
+  };
+
+  const deleteEmailNow = async () => {
+    if (!id || actionBusy) return;
+    const confirmed = window.confirm("이 메일을 휴지통으로 이동할까요?");
+    if (!confirmed) return;
+    setActionBusy("delete");
+    setError(null);
+    try {
+      await apiFetch(`/api/email/${id}`, { method: "DELETE" });
+      router.push("/email");
+    } catch (err) {
+      captureClientError(err, { scope: "email.detail.delete", id });
+      setError("메일을 삭제하지 못했어요.");
+      setActionBusy(null);
     }
   };
 
@@ -497,6 +551,14 @@ function EmailDetailView() {
           <header className="mb-5 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
             <div className="h-1 bg-gradient-to-r from-[#7DD3FC] via-[#FF6B4A] to-stone-600" />
             <div className="p-5 md:p-6">
+              <EmailActionToolbar
+                busyAction={actionBusy}
+                email={email}
+                onArchive={archiveEmailNow}
+                onDelete={deleteEmailNow}
+                onToggleRead={toggleRead}
+                onToggleStar={toggleStar}
+              />
               <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
                 <div>
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#FF6B4A]/80">
@@ -511,16 +573,6 @@ function EmailDetailView() {
                     <time className="shrink-0 tabular-nums">{formatFull(email.date)}</time>
                     <span className="text-stone-600">·</span>
                     <span>{email.isRead ? "읽음" : "읽지 않음 유지"}</span>
-                    {!email.isRead && (
-                      <button
-                        type="button"
-                        onClick={markReadNow}
-                        disabled={markingRead}
-                        className="rounded border border-[#FF6B4A]/25 bg-[#FF6B4A]/10 px-2 py-0.5 text-[11px] text-[#FFB09C] transition hover:bg-[#FF6B4A]/15 disabled:opacity-50"
-                      >
-                        {markingRead ? "처리 중" : "읽음 처리"}
-                      </button>
-                    )}
                   </div>
                 </div>
                 <EveSignalField className="min-h-40 rounded-lg" />
@@ -611,6 +663,101 @@ function EmailDetailView() {
         </article>
       )}
     </div>
+  );
+}
+
+function EmailActionToolbar({
+  busyAction,
+  email,
+  onArchive,
+  onDelete,
+  onToggleRead,
+  onToggleStar,
+}: {
+  busyAction: string | null;
+  email: EmailDetail;
+  onArchive: () => void;
+  onDelete: () => void;
+  onToggleRead: () => void;
+  onToggleStar: () => void;
+}) {
+  const disabled = busyAction !== null;
+  const isDemo = email.id.startsWith("demo-");
+  const actionDisabled = disabled || isDemo;
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-stone-800/70 bg-black/20 px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2 text-xs text-stone-500">
+        <span
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+            email.isRead ? "bg-stone-600" : "bg-[#FF6B4A]"
+          }`}
+        />
+        <span className="truncate">
+          {isDemo ? "데모 메일" : email.isRead ? "읽은 메일" : "읽지 않은 메일"}
+          {email.isStarred ? " · 별표됨" : ""}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        <EmailActionButton
+          busy={busyAction === "read"}
+          disabled={actionDisabled}
+          onClick={onToggleRead}
+        >
+          {email.isRead ? "안읽음" : "읽음"}
+        </EmailActionButton>
+        <EmailActionButton
+          busy={busyAction === "star"}
+          disabled={actionDisabled}
+          onClick={onToggleStar}
+        >
+          {email.isStarred ? "별표 해제" : "별표"}
+        </EmailActionButton>
+        <EmailActionButton
+          busy={busyAction === "archive"}
+          disabled={actionDisabled}
+          onClick={onArchive}
+        >
+          보관
+        </EmailActionButton>
+        <EmailActionButton
+          busy={busyAction === "delete"}
+          danger
+          disabled={actionDisabled}
+          onClick={onDelete}
+        >
+          삭제
+        </EmailActionButton>
+      </div>
+    </div>
+  );
+}
+
+function EmailActionButton({
+  busy,
+  children,
+  danger = false,
+  disabled,
+  onClick,
+}: {
+  busy: boolean;
+  children: string;
+  danger?: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`h-8 rounded-md border px-2.5 text-xs font-medium transition disabled:opacity-50 ${
+        danger
+          ? "border-red-500/25 bg-red-500/10 text-red-200 hover:bg-red-500/15"
+          : "border-stone-700/70 bg-stone-950/50 text-stone-300 hover:border-stone-600 hover:bg-white/5"
+      }`}
+    >
+      {busy ? "처리 중" : children}
+    </button>
   );
 }
 
