@@ -23,15 +23,15 @@ interface WaitlistResponse {
 type Filter = "PENDING" | "APPROVED" | "REJECTED" | "ALL";
 
 const FILTERS: Array<{ key: Filter; label: string }> = [
-  { key: "PENDING", label: "대기" },
-  { key: "APPROVED", label: "승인" },
-  { key: "REJECTED", label: "거절" },
-  { key: "ALL", label: "전체" },
+  { key: "PENDING", label: "Pending" },
+  { key: "APPROVED", label: "Approved" },
+  { key: "REJECTED", label: "Rejected" },
+  { key: "ALL", label: "All" },
 ];
 
 function formatDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleString("ko-KR", {
+    return new Date(iso).toLocaleString("en-US", {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -68,7 +68,7 @@ function WaitlistPageInner() {
       setEntries(data.entries);
       setCounts(data.counts);
     } catch (err) {
-      toast(err instanceof Error ? err.message : "대기열을 불러오지 못했어요.", "error");
+      toast(err instanceof Error ? err.message : "Could not load the waitlist.", "error");
     } finally {
       setLoading(false);
     }
@@ -87,15 +87,15 @@ function WaitlistPageInner() {
       });
       toast(
         status === "APPROVED"
-          ? "승인했어요."
+          ? "Approved."
           : status === "REJECTED"
-            ? "거절했어요."
-            : "대기로 되돌렸어요.",
+            ? "Rejected."
+            : "Moved back to pending.",
         "success",
       );
       await load();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "상태를 업데이트하지 못했어요.", "error");
+      toast(err instanceof Error ? err.message : "Could not update status.", "error");
     } finally {
       setUpdating(null);
     }
@@ -107,7 +107,7 @@ function WaitlistPageInner() {
       setCopiedId(entry.id);
       setTimeout(() => setCopiedId((id) => (id === entry.id ? null : id)), 1500);
     } catch {
-      toast("이메일을 복사하지 못했어요.", "error");
+      toast("Could not copy email.", "error");
     }
   };
 
@@ -116,13 +116,14 @@ function WaitlistPageInner() {
       <div className="mx-auto max-w-5xl">
         <header className="mb-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-sm shadow-black/20">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">
-            접근 검토
+            Access review
           </p>
           <h1 className="mt-3 text-2xl font-semibold tracking-tight text-stone-50">
-            얼리 액세스 대기열
+            Early access waitlist
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-400">
-            새 신청을 검토하고 승인된 후보를 테스트로 옮기며 접근 상태를 정리합니다.
+            Review new requests, move approved candidates into testing, and keep access status
+            clear.
           </p>
         </header>
 
@@ -149,10 +150,10 @@ function WaitlistPageInner() {
         </section>
 
         {loading ? (
-          <p className="text-sm text-stone-500">불러오는 중...</p>
+          <p className="text-sm text-stone-500">Loading...</p>
         ) : entries.length === 0 ? (
           <p className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-sm text-stone-400">
-            이 상태의 신청이 없어요.
+            No requests in this state.
           </p>
         ) : (
           <ul className="space-y-3">
@@ -168,19 +169,19 @@ function WaitlistPageInner() {
                         type="button"
                         onClick={() => copyEmail(entry)}
                         className="break-all text-base font-semibold text-stone-50 transition hover:text-amber-200"
-                        title="이메일 복사"
+                        title="Copy email"
                       >
                         {entry.email}
                       </button>
                       <StatusBadge status={entry.status} />
                       {copiedId === entry.id && (
-                        <span className="text-xs text-amber-200">복사됨</span>
+                        <span className="text-xs text-amber-200">Copied</span>
                       )}
                     </div>
                     <div className="mt-1 text-xs text-stone-500">
                       {entry.name ? `${entry.name} · ` : ""}
                       {formatDate(entry.createdAt)}
-                      {entry.approvedAt ? ` · 승인 ${formatDate(entry.approvedAt)}` : ""}
+                      {entry.approvedAt ? ` · approved ${formatDate(entry.approvedAt)}` : ""}
                     </div>
                     {entry.useCase && (
                       <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-300">
@@ -197,7 +198,7 @@ function WaitlistPageInner() {
                         disabled={updating === entry.id}
                         className="rounded-lg bg-amber-300 px-3 py-1.5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:opacity-60"
                       >
-                        승인
+                        Approve
                       </button>
                     )}
                     {entry.status !== "REJECTED" && (
@@ -207,7 +208,7 @@ function WaitlistPageInner() {
                         disabled={updating === entry.id}
                         className="rounded-lg border border-stone-700 px-3 py-1.5 text-sm text-stone-300 transition hover:border-red-400/50 hover:text-red-200 disabled:opacity-60"
                       >
-                        거절
+                        Reject
                       </button>
                     )}
                     {entry.status !== "PENDING" && (
@@ -217,7 +218,7 @@ function WaitlistPageInner() {
                         disabled={updating === entry.id}
                         className="rounded-lg border border-stone-700 px-3 py-1.5 text-sm text-stone-300 transition hover:border-stone-500 disabled:opacity-60"
                       >
-                        대기로
+                        Move to pending
                       </button>
                     )}
                   </div>
@@ -233,12 +234,12 @@ function WaitlistPageInner() {
 
 function StatusBadge({ status }: { status: WaitlistEntry["status"] }) {
   const map: Record<WaitlistEntry["status"], { label: string; cls: string }> = {
-    PENDING: { label: "대기", cls: "border-amber-500/40 bg-amber-500/10 text-amber-200" },
+    PENDING: { label: "Pending", cls: "border-amber-500/40 bg-amber-500/10 text-amber-200" },
     APPROVED: {
-      label: "승인",
+      label: "Approved",
       cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
     },
-    REJECTED: { label: "거절", cls: "border-stone-600 bg-stone-700/30 text-stone-400" },
+    REJECTED: { label: "Rejected", cls: "border-stone-600 bg-stone-700/30 text-stone-400" },
   };
   const s = map[status];
   return (

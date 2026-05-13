@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "이용약관 - Jigeum",
-  description: "Jigeum 베타 이용약관입니다.",
+  title: "Terms of Service - Jigeum",
+  description: "Jigeum beta terms of service.",
 };
 
-const updatedAt = "2026년 5월 4일";
+const updatedAt = "May 4, 2026";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -29,10 +29,10 @@ export default function TermsPage() {
         </Link>
         <div className="flex items-center gap-5 text-sm text-stone-400">
           <Link href="/privacy" className="transition hover:text-white">
-            개인정보
+            Privacy
           </Link>
           <Link href="/login" className="transition hover:text-white">
-            로그인
+            Log in
           </Link>
         </div>
       </nav>
@@ -42,90 +42,91 @@ export default function TermsPage() {
           TERMS OF SERVICE
         </p>
         <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
-          Jigeum 베타 이용약관
+          Jigeum Beta Terms
         </h1>
         <p className="mt-5 max-w-2xl text-sm leading-6 text-stone-400">
-          최종 업데이트: {updatedAt}. 이 약관은 Jigeum 베타에 적용됩니다. Jigeum을 사용하면 본
-          약관과 개인정보 처리방침에 동의한 것으로 봅니다.
+          Last updated: {updatedAt}. These terms apply to the Jigeum beta. By using Jigeum, you
+          agree to these terms and the Privacy Policy.
         </p>
 
         <div className="mt-12 space-y-10">
-          <Section title="베타 제품">
+          <Section title="Beta Product">
             <p>
-              Jigeum은 현재 베타 제품입니다. 기능은 변경되거나 일시적으로 실패하거나 사용량 제한을
-              받거나 제거될 수 있습니다. Jigeum은 요약, 분류, 리마인더, 회의 준비, 제안 작업에서
-              실수할 수 있습니다.
+              Jigeum is currently a beta product. Features may change, fail temporarily, be rate
+              limited, or be removed. Jigeum can make mistakes in summaries, classification,
+              reminders, meeting preparation, and proposed actions.
             </p>
           </Section>
 
-          <Section title="사용자의 책임">
+          <Section title="Your Responsibilities">
             <ul className="list-disc space-y-2 pl-5">
-              <li>Jigeum에 연결하는 계정과 데이터에 대한 책임은 사용자에게 있습니다.</li>
-              <li>본인이 소유했거나 연결 권한이 있는 계정에만 Jigeum을 사용하세요.</li>
-              <li>중요한 결과물은 사용하거나 신뢰하기 전에 직접 검토하세요.</li>
+              <li>You are responsible for the accounts and data you connect to Jigeum.</li>
+              <li>Use Jigeum only with accounts you own or are authorized to connect.</li>
+              <li>Review important outputs before using or relying on them.</li>
               <li>
-                법률, 계약, 개인정보 권리, 플랫폼 규칙을 위반하는 방식으로 Jigeum을 사용하지 마세요.
+                Do not use Jigeum in ways that violate law, contracts, privacy rights, or platform
+                rules.
               </li>
             </ul>
           </Section>
 
-          <Section title="승인과 자동화">
+          <Section title="Approval and Automation">
             <p>
-              Jigeum은 리마인더, 브리핑, 분류, 알림, 승인 제안을 만들 수 있습니다. 이메일 전송을
-              포함한 민감한 작업은 실행 전에 사용자의 검토와 승인이 필요합니다. 사용자가 승인한
-              작업에 대한 책임은 사용자에게 있습니다.
+              Jigeum may create reminders, briefings, classifications, notifications, and approval
+              proposals. Sensitive actions, including sending email, require your review and
+              approval before execution. You are responsible for actions you approve.
             </p>
           </Section>
 
-          <Section title="Google 서비스">
+          <Section title="Google Services">
             <p>
-              Gmail 또는 Google Calendar를 연결하면 Jigeum 기능 제공에 필요한 Google 데이터 접근을
-              허용하는 것입니다. Google 계정 설정에서 언제든지 Jigeum의 Google 접근 권한을 철회할 수
-              있습니다.
+              When you connect Gmail or Google Calendar, you authorize Jigeum to access Google data
+              needed to provide Jigeum features. You can revoke Jigeum's Google access at any time
+              from your Google account settings.
             </p>
           </Section>
 
-          <Section title="전문 조언 아님">
+          <Section title="Not Professional Advice">
             <p>
-              Jigeum은 업무 정리, 문안 초안 작성, 결정 우선순위 판단을 도울 수 있습니다. Jigeum은
-              법률, 금융, 의료, 고용 또는 기타 전문 조언을 제공하지 않습니다. 중요한 정보는 실행 전
-              직접 확인하세요.
+              Jigeum can help organize work, draft language, and prioritize decisions. Jigeum does
+              not provide legal, financial, medical, employment, or other professional advice.
+              Verify important information before acting on it.
             </p>
           </Section>
 
-          <Section title="가용성과 데이터 손실">
+          <Section title="Availability and Data Loss">
             <p>
-              Jigeum을 안정적으로 유지하기 위해 노력하지만 베타는 가동 시간 보장 없이 제공됩니다.
-              베타 한계, 제3자 장애, 사용자 설정으로 인한 알림 누락, 동기화 지연, 부정확한 결과,
-              데이터 손실에 대해서는 책임지지 않습니다.
+              We work to keep Jigeum reliable, but the beta is provided without uptime guarantees.
+              We are not responsible for missed notifications, sync delays, inaccurate results, or
+              data loss caused by beta limitations, third-party outages, or user configuration.
             </p>
           </Section>
 
-          <Section title="계정 삭제">
+          <Section title="Account Deletion">
             <p>
-              Jigeum 계정 데이터 삭제를 요청하려면{" "}
+              To request deletion of Jigeum account data, contact{" "}
               <a className="text-amber-200 hover:text-amber-100" href="mailto:k0820086@gmail.com">
                 k0820086@gmail.com
               </a>
-              으로 연락해 주세요. Jigeum 계정 데이터를 삭제해도 Google 또는 다른 제3자 서비스의
-              데이터가 자동으로 삭제되지는 않습니다.
+              . Deleting Jigeum account data does not automatically delete data from Google or other
+              third-party services.
             </p>
           </Section>
 
-          <Section title="변경">
+          <Section title="Changes">
             <p>
-              Jigeum이 변경됨에 따라 이 약관도 업데이트될 수 있습니다. 업데이트 후 Jigeum을 계속
-              사용하면 변경된 약관에 동의한 것으로 봅니다.
+              These terms may be updated as Jigeum changes. If you continue using Jigeum after an
+              update, you agree to the updated terms.
             </p>
           </Section>
 
-          <Section title="문의">
+          <Section title="Contact">
             <p>
-              약관 관련 질문은{" "}
+              For questions about these terms, contact{" "}
               <a className="text-amber-200 hover:text-amber-100" href="mailto:k0820086@gmail.com">
                 k0820086@gmail.com
               </a>
-              으로 연락해 주세요.
+              .
             </p>
           </Section>
         </div>

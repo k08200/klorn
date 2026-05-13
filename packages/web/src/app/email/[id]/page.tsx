@@ -282,7 +282,7 @@ function EmailDetailView() {
       }
     } catch (err) {
       captureClientError(err, { scope: "email.detail", id });
-      setError("메일을 불러오지 못했어요.");
+      setError("Could not load the email.");
     } finally {
       setLoading(false);
     }
@@ -319,7 +319,7 @@ function EmailDetailView() {
       );
     } catch (err) {
       captureClientError(err, { scope: "email.attachments.reanalyze", id });
-      setError("첨부파일을 다시 분석하지 못했어요.");
+      setError("Could not reanalyze attachments.");
     } finally {
       setReanalyzing(false);
     }
@@ -343,7 +343,7 @@ function EmailDetailView() {
       setEmail((prev) => (prev ? { ...prev, candidateIntake: data.candidateIntake } : prev));
     } catch (err) {
       captureClientError(err, { scope: "email.candidate-intake.update", id });
-      setError("후보자 상태를 저장하지 못했어요.");
+      setError("Could not save candidate status.");
     } finally {
       setUpdatingCandidate(false);
     }
@@ -376,7 +376,7 @@ function EmailDetailView() {
       );
     } catch (err) {
       captureClientError(err, { scope: "email.attachments.ocr", id });
-      setError("OCR/비전 분석을 실행하지 못했어요. Gmail 연결과 AI 키를 확인해 주세요.");
+      setError("Could not run OCR/vision analysis. Check Gmail connection and the AI key.");
     } finally {
       setOcring(false);
     }
@@ -420,7 +420,7 @@ function EmailDetailView() {
       );
     } catch (err) {
       captureClientError(err, { scope: "email.attachment-correction", id });
-      setError("첨부 분석 수정사항을 저장하지 못했어요.");
+      setError("Could not save attachment analysis changes.");
     } finally {
       setSavingAttachmentCorrection(null);
     }
@@ -439,7 +439,7 @@ function EmailDetailView() {
       setGmailDraftUrl(null);
     } catch (err) {
       captureClientError(err, { scope: "email.reply-draft", id });
-      setError("답장 초안을 만들지 못했어요.");
+      setError("Could not draft a reply.");
     } finally {
       setDrafting(false);
     }
@@ -457,7 +457,7 @@ function EmailDetailView() {
       setDraft(null);
     } catch (err) {
       captureClientError(err, { scope: "email.reply-draft.send", id });
-      setError("답장을 보내지 못했어요. 주소와 본문을 확인해 주세요.");
+      setError("Could not send the reply. Check the address and body.");
     } finally {
       setSendingDraft(false);
     }
@@ -494,7 +494,7 @@ function EmailDetailView() {
       );
     } catch (err) {
       captureClientError(err, { scope: "email.reply-draft.gmail-draft", id });
-      setError("Gmail 초안으로 저장하지 못했어요. Gmail 연결과 권한을 확인해 주세요.");
+      setError("Could not save a Gmail draft. Check Gmail connection and permissions.");
     } finally {
       setSavingGmailDraft(false);
     }
@@ -513,7 +513,7 @@ function EmailDetailView() {
       setEmail((prev) => (prev ? { ...prev, isRead: nextRead } : prev));
     } catch (err) {
       captureClientError(err, { scope: "email.detail.toggle-read", id, nextRead });
-      setError(nextRead ? "읽음 처리하지 못했어요." : "읽지 않음으로 되돌리지 못했어요.");
+      setError(nextRead ? "Could not mark as read." : "Could not mark as unread.");
     } finally {
       setActionBusy(null);
     }
@@ -532,13 +532,13 @@ function EmailDetailView() {
       setEmail((prev) => (prev ? { ...prev, isStarred: nextStarred } : prev));
     } catch (err) {
       captureClientError(err, { scope: "email.detail.toggle-star", id, nextStarred });
-      setError(nextStarred ? "별표를 추가하지 못했어요." : "별표를 해제하지 못했어요.");
+      setError(nextStarred ? "Could not add star." : "Could not remove star.");
     } finally {
       setActionBusy(null);
     }
   };
 
-  const goToNextOrList = (nextMessage: string, doneMessage = "큐를 모두 처리했어요.") => {
+  const goToNextOrList = (nextMessage: string, doneMessage = "Queue complete.") => {
     if (nextEmail) {
       toast(nextMessage, "success");
       const params = new URLSearchParams({ markRead: "false", queue });
@@ -555,26 +555,26 @@ function EmailDetailView() {
     setError(null);
     try {
       await apiFetch(`/api/email/${id}/archive`, { method: "POST" });
-      goToNextOrList("보관했어요. 다음 메일로 이동합니다.", "보관했어요. 큐를 모두 처리했습니다.");
+      goToNextOrList("Archived. Moving to the next email.", "Archived. Queue complete.");
     } catch (err) {
       captureClientError(err, { scope: "email.detail.archive", id });
-      setError("메일을 보관하지 못했어요.");
+      setError("Could not archive this email.");
       setActionBusy(null);
     }
   };
 
   const deleteEmailNow = async () => {
     if (!id || actionBusy) return;
-    const confirmed = window.confirm("이 메일을 휴지통으로 이동할까요?");
+    const confirmed = window.confirm("Move this email to trash?");
     if (!confirmed) return;
     setActionBusy("delete");
     setError(null);
     try {
       await apiFetch(`/api/email/${id}`, { method: "DELETE" });
-      goToNextOrList("삭제했어요. 다음 메일로 이동합니다.", "삭제했어요. 큐를 모두 처리했습니다.");
+      goToNextOrList("Deleted. Moving to the next email.", "Deleted. Queue complete.");
     } catch (err) {
       captureClientError(err, { scope: "email.detail.delete", id });
-      setError("메일을 삭제하지 못했어요.");
+      setError("Could not delete this email.");
       setActionBusy(null);
     }
   };
@@ -599,10 +599,10 @@ function EmailDetailView() {
           <line x1="19" y1="12" x2="5" y2="12" />
           <polyline points="12 19 5 12 12 5" />
         </svg>
-        메일 목록
+        Mail list
       </Link>
 
-      {loading && <p className="text-sm text-stone-500">로딩 중...</p>}
+      {loading && <p className="text-sm text-stone-500">Loading...</p>}
 
       {error && (
         <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -621,33 +621,33 @@ function EmailDetailView() {
                 nextEmail={nextEmail}
                 onArchive={archiveEmailNow}
                 onDelete={deleteEmailNow}
-                onOpenNext={() => goToNextOrList("다음 메일로 이동합니다.")}
+                onOpenNext={() => goToNextOrList("Moving to the next email.")}
                 onToggleRead={toggleRead}
                 onToggleStar={toggleStar}
               />
               <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
                 <div>
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#FF6B4A]/80">
-                    신호 상세
+                    Signal detail
                   </p>
                   <h1 className="break-words text-xl font-semibold leading-snug tracking-tight text-stone-50 md:text-2xl">
-                    {email.subject || "제목 없음"}
+                    {email.subject || "No subject"}
                   </h1>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
                     <span className="max-w-full truncate">{email.from}</span>
                     <span className="text-stone-600">·</span>
                     <time className="shrink-0 tabular-nums">{formatFull(email.date)}</time>
                     <span className="text-stone-600">·</span>
-                    <span>{email.isRead ? "읽음" : "읽지 않음 유지"}</span>
+                    <span>{email.isRead ? "Read" : "Kept unread"}</span>
                   </div>
                 </div>
                 <EveSignalField className="min-h-40 rounded-lg" />
               </div>
               <div className="mt-5 grid grid-cols-3 gap-2">
-                <DetailStat label="우선순위" value={PRIORITY_LABELS[email.priority]} />
-                <DetailStat label="답장" value={email.needsReply ? "필요" : "신호 없음"} />
+                <DetailStat label="Priority" value={PRIORITY_LABELS[email.priority]} />
+                <DetailStat label="Reply" value={email.needsReply ? "Needed" : "No signal"} />
                 <DetailStat
-                  label="분류"
+                  label="Category"
                   value={email.category ? categoryLabel(email.category) : "-"}
                 />
               </div>
@@ -711,7 +711,7 @@ function EmailDetailView() {
             {email.body ? (
               <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
                 <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-stone-500">
-                  본문
+                  Body
                 </h2>
                 <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-stone-200">
                   {email.body}
@@ -720,7 +720,7 @@ function EmailDetailView() {
             ) : email.snippet ? (
               <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
                 <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-stone-500">
-                  미리보기
+                  Preview
                 </h2>
                 <p className="text-sm text-stone-300">{email.snippet}</p>
               </section>
@@ -763,9 +763,9 @@ function EmailActionToolbar({
           }`}
         />
         <span className="truncate">
-          {isDemo ? "데모 메일" : email.isRead ? "읽은 메일" : "읽지 않은 메일"}
-          {email.isStarred ? " · 별표됨" : ""}
-          {nextEmail ? ` · 다음: ${senderName(nextEmail.from)}` : ""}
+          {isDemo ? "Demo email" : email.isRead ? "Read email" : "Unread email"}
+          {email.isStarred ? " · Starred" : ""}
+          {nextEmail ? ` · Next: ${senderName(nextEmail.from)}` : ""}
         </span>
       </div>
       <div className="flex flex-wrap gap-1.5">
@@ -774,21 +774,21 @@ function EmailActionToolbar({
           disabled={actionDisabled}
           onClick={onToggleRead}
         >
-          {email.isRead ? "안읽음" : "읽음"}
+          {email.isRead ? "Unread" : "Read"}
         </EmailActionButton>
         <EmailActionButton
           busy={busyAction === "star"}
           disabled={actionDisabled}
           onClick={onToggleStar}
         >
-          {email.isStarred ? "별표 해제" : "별표"}
+          {email.isStarred ? "Unstar" : "Star"}
         </EmailActionButton>
         <EmailActionButton
           busy={busyAction === "archive"}
           disabled={actionDisabled}
           onClick={onArchive}
         >
-          보관
+          Archive
         </EmailActionButton>
         <EmailActionButton
           busy={busyAction === "delete"}
@@ -796,11 +796,11 @@ function EmailActionToolbar({
           disabled={actionDisabled}
           onClick={onDelete}
         >
-          삭제
+          Delete
         </EmailActionButton>
         {nextEmail && (
           <EmailActionButton busy={false} disabled={disabled} onClick={onOpenNext}>
-            다음
+            Next
           </EmailActionButton>
         )}
       </div>
@@ -832,7 +832,7 @@ function EmailActionButton({
           : "border-stone-700/70 bg-stone-950/50 text-stone-300 hover:border-stone-600 hover:bg-white/5"
       }`}
     >
-      {busy ? "처리 중" : children}
+      {busy ? "Working" : children}
     </button>
   );
 }
@@ -853,15 +853,15 @@ function CandidateProfileCard({
     <section className="mt-5 rounded-xl border border-orange-500/20 bg-orange-500/5 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[#FF8A70]">
-          후보자 카드
+          Candidate card
         </h2>
         <span className="text-[11px] text-stone-500">
-          신뢰도 {Math.round(profile.confidence * 100)}%
+          Confidence {Math.round(profile.confidence * 100)}%
         </span>
       </div>
       <div className="mb-3 rounded-lg border border-orange-500/15 bg-black/15 px-3 py-2">
         <p className="text-[10px] font-medium uppercase tracking-wider text-[#FF8A70]/70">
-          파이프라인
+          Pipeline
         </p>
         <p className="mt-1 text-xs font-medium text-[#FFE2D7]">
           {candidatePipelineLabel(profile.pipelineStatus)}
@@ -887,12 +887,12 @@ function CandidateProfileCard({
       </div>
       <p className="text-sm font-medium leading-relaxed text-stone-100">{profile.summary}</p>
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-3">
-        <ProfileFact label="이름" value={profile.name} />
-        <ProfileFact label="역할" value={profile.role} />
-        <ProfileFact label="연락처" value={profile.contact} />
-        <ProfileFact label="나이" value={profile.age} />
-        <ProfileFact label="신장" value={profile.height} />
-        <ProfileFact label="파일" value={`${profile.evidenceFiles.length}개`} />
+        <ProfileFact label="Name" value={profile.name} />
+        <ProfileFact label="Role" value={profile.role} />
+        <ProfileFact label="Contact" value={profile.contact} />
+        <ProfileFact label="Age" value={profile.age} />
+        <ProfileFact label="Height" value={profile.height} />
+        <ProfileFact label="Files" value={`${profile.evidenceFiles.length}`} />
       </div>
       {profile.skills.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -917,12 +917,12 @@ function CandidateProfileCard({
       )}
       {profile.missingFields.length > 0 && (
         <p className="mt-3 text-[11px] text-[#FF6B4A]/80">
-          추가 확인 필요: {profile.missingFields.map(candidateMissingLabel).join(", ")}
+          Needs follow-up: {profile.missingFields.map(candidateMissingLabel).join(", ")}
         </p>
       )}
       {profile.manualReviewFiles.length > 0 && (
         <div className="mt-3 rounded-lg border border-rose-400/25 bg-rose-400/10 px-3 py-2">
-          <p className="text-[11px] font-medium text-rose-200">원본 확인 필요</p>
+          <p className="text-[11px] font-medium text-rose-200">Source review needed</p>
           <ul className="mt-1 space-y-1">
             {profile.manualReviewFiles.map((file) => (
               <li key={`${file.filename}-${file.reason}`} className="text-[11px] text-rose-100/80">
@@ -941,7 +941,7 @@ function CandidateProfileCard({
           rows={2}
           onBlur={(e) => onUpdate({ notes: e.target.value || null })}
           className="w-full rounded-lg border border-orange-500/15 bg-black/15 px-3 py-2 text-xs leading-5 text-stone-300 outline-none transition focus:border-[#FF6B4A]/35"
-          placeholder="검토 메모"
+          placeholder="Review note"
         />
       </label>
     </section>
@@ -949,14 +949,14 @@ function CandidateProfileCard({
 }
 
 const CANDIDATE_STATUS_OPTIONS: Array<{ status: CandidateIntakeStatus; label: string }> = [
-  { status: "NEEDS_ANALYSIS", label: "분석 필요" },
-  { status: "NEEDS_INFO", label: "정보 확인" },
-  { status: "READY_TO_REVIEW", label: "검토 대기" },
-  { status: "REVIEWING", label: "검토 중" },
-  { status: "CONTACTED", label: "연락 완료" },
-  { status: "SHORTLISTED", label: "보류/후보" },
-  { status: "REJECTED", label: "거절" },
-  { status: "ARCHIVED", label: "보관" },
+  { status: "NEEDS_ANALYSIS", label: "Needs analysis" },
+  { status: "NEEDS_INFO", label: "Needs info" },
+  { status: "READY_TO_REVIEW", label: "Ready to review" },
+  { status: "REVIEWING", label: "Reviewing" },
+  { status: "CONTACTED", label: "Contacted" },
+  { status: "SHORTLISTED", label: "Shortlisted" },
+  { status: "REJECTED", label: "Rejected" },
+  { status: "ARCHIVED", label: "Archived" },
 ];
 
 function candidatePipelineToIntakeStatus(
@@ -993,9 +993,9 @@ function ThreadContextPanel({
     <section className="mb-5 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-stone-100">스레드 맥락</h2>
+          <h2 className="text-sm font-semibold text-stone-100">Thread context</h2>
           <p className="mt-1 text-xs text-stone-500">
-            이전 대화 {thread.messageCount}개를 함께 보고 답장 맥락을 확인합니다.
+            Review {thread.messageCount} earlier messages to understand the reply context.
           </p>
         </div>
       </div>
@@ -1018,11 +1018,11 @@ function ThreadContextPanel({
                 </time>
               </div>
               <p className="mt-1 truncate text-[11px] text-stone-500">
-                {message.summary || message.snippet || message.subject || "요약 없음"}
+                {message.summary || message.snippet || message.subject || "No summary"}
               </p>
               {message.actionItems.length > 0 && (
                 <p className="mt-1 text-[10px] text-[#FF8A70]">
-                  할 일 {message.actionItems.length}개
+                  {message.actionItems.length} tasks
                 </p>
               )}
             </li>
@@ -1085,7 +1085,7 @@ function AttachmentAnalysis({
       URL.revokeObjectURL(url);
     } catch (err) {
       captureClientError(err, { scope: "email.attachment.brief.download", emailId });
-      alert("첨부 분석 요약 파일을 만들지 못했어요.");
+      alert("Could not create the attachment brief.");
     } finally {
       setDownloading(null);
     }
@@ -1111,7 +1111,7 @@ function AttachmentAnalysis({
       URL.revokeObjectURL(url);
     } catch (err) {
       captureClientError(err, { scope: "email.attachment.download", attachmentId: attachment.id });
-      alert("첨부 원본을 내려받지 못했어요. Gmail 연결 상태를 확인해 주세요.");
+      alert("Could not download the original attachment. Check Gmail connection.");
     } finally {
       setDownloading(null);
     }
@@ -1155,7 +1155,7 @@ function AttachmentAnalysis({
         attachmentId: attachment.id,
         target,
       });
-      alert(err instanceof Error ? err.message : "첨부파일 변환에 실패했어요.");
+      alert(err instanceof Error ? err.message : "Attachment conversion failed.");
     } finally {
       setConverting(null);
     }
@@ -1165,17 +1165,17 @@ function AttachmentAnalysis({
     <section className="mt-5 rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[#7DD3FC]">
-          첨부 분석
+          Attachment analysis
         </h2>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-stone-500">{attachments.length}개 파일</span>
+          <span className="text-[11px] text-stone-500">{attachments.length} files</span>
           <button
             type="button"
             onClick={downloadBrief}
             disabled={downloading === "brief"}
             className="rounded border border-[#FF6B4A]/25 bg-[#FF6B4A]/10 px-2 py-1 text-[11px] text-[#FFB09C] transition hover:bg-[#FF6B4A]/15 disabled:opacity-50"
           >
-            {downloading === "brief" ? "생성 중..." : "요약 파일 받기"}
+            {downloading === "brief" ? "Creating..." : "Download brief"}
           </button>
           <button
             type="button"
@@ -1183,7 +1183,7 @@ function AttachmentAnalysis({
             disabled={reanalyzing}
             className="rounded border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 px-2 py-1 text-[11px] text-sky-200 transition hover:bg-[#7DD3FC]/15 disabled:opacity-50"
           >
-            {reanalyzing ? "분석 중..." : "다시 분석"}
+            {reanalyzing ? "Analyzing..." : "Reanalyze"}
           </button>
           <button
             type="button"
@@ -1191,7 +1191,7 @@ function AttachmentAnalysis({
             disabled={ocring}
             className="rounded border border-[#FF6B4A]/25 bg-[#FF6B4A]/10 px-2 py-1 text-[11px] text-[#FFB09C] transition hover:bg-[#FF6B4A]/15 disabled:opacity-50"
           >
-            {ocring ? "OCR 중..." : "OCR/비전"}
+            {ocring ? "Running OCR..." : "OCR/vision"}
           </button>
         </div>
       </div>
@@ -1215,7 +1215,7 @@ function AttachmentAnalysis({
               </span>
               {attachmentNeedsManualReview(attachment) && (
                 <span className="rounded border border-rose-400/25 bg-rose-400/10 px-1.5 py-0.5 text-[10px] text-rose-200">
-                  원본 확인
+                  Source review
                 </span>
               )}
               <button
@@ -1224,7 +1224,7 @@ function AttachmentAnalysis({
                 disabled={downloading === attachment.id}
                 className="rounded border border-stone-700/70 bg-stone-950/45 px-2 py-0.5 text-[10px] text-stone-400 transition hover:border-[#7DD3FC]/30 hover:text-sky-200 disabled:opacity-50"
               >
-                {downloading === attachment.id ? "받는 중" : "원본 받기"}
+                {downloading === attachment.id ? "Downloading" : "Download original"}
               </button>
               <div className="flex items-center gap-1 rounded border border-stone-700/60 bg-stone-950/45 p-0.5">
                 <select
@@ -1236,7 +1236,7 @@ function AttachmentAnalysis({
                     }))
                   }
                   className="max-w-20 bg-transparent px-1 py-0.5 text-[10px] text-stone-400 outline-none"
-                  aria-label={`${attachment.filename} 변환 형식`}
+                  aria-label={`${attachment.filename} conversion format`}
                 >
                   {ATTACHMENT_CONVERSION_TARGETS.map((target) => (
                     <option key={target.value} value={target.value}>
@@ -1253,7 +1253,7 @@ function AttachmentAnalysis({
                   }
                   className="rounded bg-[#7DD3FC] px-2 py-0.5 text-[10px] font-medium text-stone-950 transition hover:bg-sky-200 disabled:opacity-50"
                 >
-                  {converting?.startsWith(`${attachment.id}:`) ? "변환 중" : "변환"}
+                  {converting?.startsWith(`${attachment.id}:`) ? "Converting" : "Convert"}
                 </button>
               </div>
             </div>
@@ -1295,7 +1295,7 @@ function AttachmentAnalysis({
             {attachment.textPreview && (
               <details className="mt-2 rounded-lg border border-stone-800/70 bg-black/15 px-3 py-2">
                 <summary className="cursor-pointer text-[11px] font-medium text-stone-500">
-                  변환 텍스트 미리보기
+                  Converted text preview
                 </summary>
                 <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-sans text-[11px] leading-relaxed text-stone-500">
                   {attachment.textPreview}
@@ -1304,7 +1304,7 @@ function AttachmentAnalysis({
             )}
             {attachment.analysisError && (
               <p className="mt-2 text-[11px] leading-relaxed text-[#FF6B4A]/70">
-                보조 분석으로 처리됨: {attachment.analysisError}
+                Processed with fallback analysis: {attachment.analysisError}
               </p>
             )}
             <div className="mt-2">
@@ -1313,7 +1313,7 @@ function AttachmentAnalysis({
                 onClick={() => setEditingId(editingId === attachment.id ? null : attachment.id)}
                 className="rounded border border-stone-700/70 bg-stone-950/45 px-2 py-1 text-[10px] text-stone-400 transition hover:border-[#FF6B4A]/30 hover:text-[#FFB09C]"
               >
-                {editingId === attachment.id ? "수정 닫기" : "분석 수정"}
+                {editingId === attachment.id ? "Close edit" : "Edit analysis"}
               </button>
             </div>
             {editingId === attachment.id && (
@@ -1460,20 +1460,20 @@ function AttachmentCorrectionForm({
       <div className="mt-2">
         <div className="mb-1 flex items-center justify-between gap-2">
           <span className="block text-[10px] uppercase tracking-wider text-stone-600">
-            추출 필드
+            Extracted fields
           </span>
           <button
             type="button"
             onClick={() => setFields((prev) => [...prev, { key: "", value: "" }])}
             className="text-[11px] text-[#7DD3FC] transition hover:text-sky-200"
           >
-            필드 추가
+            Add field
           </button>
         </div>
         <div className="space-y-1.5">
           {fields.length === 0 && (
             <p className="rounded border border-stone-800/70 bg-black/15 px-2 py-2 text-[11px] text-stone-500">
-              아직 추출된 필드가 없어요. 필요한 값을 직접 추가할 수 있습니다.
+              No extracted fields yet. Add any needed value manually.
             </p>
           )}
           {fields.map((field, index) => (
@@ -1490,7 +1490,7 @@ function AttachmentCorrectionForm({
                     ),
                   )
                 }
-                placeholder="필드명"
+                placeholder="Field"
                 className="rounded border border-stone-700/60 bg-black/20 px-2 py-1.5 text-xs text-stone-300 outline-none focus:border-orange-500/40"
               />
               <input
@@ -1502,7 +1502,7 @@ function AttachmentCorrectionForm({
                     ),
                   )
                 }
-                placeholder="값"
+                placeholder="Value"
                 className="rounded border border-stone-700/60 bg-black/20 px-2 py-1.5 text-xs text-stone-300 outline-none focus:border-orange-500/40"
               />
               <button
@@ -1512,7 +1512,7 @@ function AttachmentCorrectionForm({
                 }
                 className="rounded border border-stone-700/60 px-2 py-1.5 text-[11px] text-stone-500 transition hover:border-rose-400/30 hover:text-rose-200"
               >
-                삭제
+                Delete
               </button>
             </div>
           ))}
@@ -1526,7 +1526,7 @@ function AttachmentCorrectionForm({
           disabled={saving}
           className="rounded bg-[#FF6B4A] px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-[#FFB09C] disabled:opacity-50"
         >
-          {saving ? "저장 중..." : "수정 저장"}
+          {saving ? "Saving..." : "Save changes"}
         </button>
       </div>
     </div>
@@ -1558,103 +1558,114 @@ type EmailWorkMode =
   | "freelance";
 
 const WORK_MODE_OPTIONS: Array<{ value: EmailWorkMode; label: string }> = [
-  { value: "founder", label: "창업자" },
-  { value: "sales", label: "세일즈" },
-  { value: "recruiting", label: "채용/캐스팅" },
-  { value: "legal", label: "법무" },
-  { value: "finance", label: "재무" },
+  { value: "founder", label: "Founder" },
+  { value: "sales", label: "Sales" },
+  { value: "recruiting", label: "Recruiting" },
+  { value: "legal", label: "Legal" },
+  { value: "finance", label: "Finance" },
   { value: "pm", label: "PM" },
-  { value: "support", label: "고객지원" },
-  { value: "ops", label: "운영/행사" },
-  { value: "real_estate", label: "부동산" },
-  { value: "freelance", label: "프리랜서" },
+  { value: "support", label: "Support" },
+  { value: "ops", label: "Ops/events" },
+  { value: "real_estate", label: "Real estate" },
+  { value: "freelance", label: "Freelance" },
 ];
 
 const MODE_INTENTS: Record<EmailWorkMode, Array<{ label: string; intent: string }>> = {
   founder: [
     {
-      label: "투자자 후속",
-      intent: "투자자에게 핵심 업데이트를 짧게 공유하고 다음 미팅 가능 시간을 물어봐 주세요.",
+      label: "Investor follow-up",
+      intent: "Share a brief investor update and ask for possible times for the next meeting.",
     },
     {
-      label: "VIP 빠른 회신",
-      intent: "중요한 관계를 놓치지 않도록 감사 인사와 다음 행동을 분명히 담아 답장해 주세요.",
+      label: "VIP quick reply",
+      intent:
+        "Reply with thanks and a clear next action so the important relationship is not dropped.",
     },
   ],
   sales: [
     {
-      label: "미팅 잡기",
-      intent: "고객 맥락을 반영해 discovery 또는 후속 미팅 가능한 시간을 제안해 주세요.",
+      label: "Book meeting",
+      intent: "Use the customer context and suggest times for a discovery or follow-up meeting.",
     },
-    { label: "갱신/가격", intent: "갱신 일정, 가격 조건, 다음 승인 단계를 정중히 확인해 주세요." },
+    {
+      label: "Renewal/pricing",
+      intent: "Confirm renewal timing, pricing terms, and the next approval step.",
+    },
   ],
   recruiting: [],
   legal: [
     {
-      label: "검토 접수",
+      label: "Review intake",
       intent:
-        "법무 검토가 필요하다는 점을 확인하고, 확정 의견은 검토 후 전달하겠다고 안전하게 답장해 주세요.",
+        "Confirm that legal review is needed and that a final answer will follow after review.",
     },
     {
-      label: "계약 정보 요청",
-      intent: "계약 검토에 필요한 당사자, 기한, 서명 상태, 변경 요청 사항을 요청해 주세요.",
+      label: "Request contract info",
+      intent:
+        "Ask for parties, deadline, signature status, and requested changes needed for contract review.",
     },
   ],
   finance: [
     {
-      label: "송장 확인",
-      intent: "송장 수령을 확인하고 지급 예정일, 누락된 세금/계좌/PO 정보가 있으면 요청해 주세요.",
+      label: "Confirm invoice",
+      intent: "Confirm receipt of the invoice and ask for any missing tax, bank, or PO details.",
     },
     {
-      label: "결제 이슈",
-      intent: "결제 실패나 미지급 상태를 확인하고 필요한 증빙과 다음 처리 일정을 안내해 주세요.",
+      label: "Payment issue",
+      intent:
+        "Confirm the failed or unpaid payment, request evidence if needed, and share the next timeline.",
     },
   ],
   pm: [
     {
-      label: "이슈 접수",
-      intent: "고객/이해관계자 이슈를 접수했고 영향도와 재현 정보, 원하는 마감일을 확인해 주세요.",
+      label: "Issue intake",
+      intent: "Acknowledge the issue and ask for impact, repro details, and desired deadline.",
     },
     {
-      label: "결정 요청",
-      intent: "현재 결정해야 할 항목, 선택지, 필요한 입력을 간단히 정리해 답장해 주세요.",
+      label: "Decision request",
+      intent: "Summarize what needs a decision, the options, and the input required.",
     },
   ],
   support: [
     {
-      label: "문의 접수",
-      intent: "문의 접수를 알리고 문제 재현 정보, 계정 정보, 긴급도를 정중히 요청해 주세요.",
+      label: "Support intake",
+      intent: "Acknowledge the request and ask for repro details, account info, and urgency.",
     },
     {
-      label: "에스컬레이션",
-      intent: "문제를 내부에 에스컬레이션했고 다음 업데이트 시점을 명확히 안내해 주세요.",
+      label: "Escalate",
+      intent: "Say the issue has been escalated internally and give the next update time.",
     },
   ],
   ops: [
     {
-      label: "일정 확인",
-      intent: "일정, 장소, 준비물, 담당자, 마감 시간을 확인하는 답장을 작성해 주세요.",
+      label: "Confirm logistics",
+      intent: "Confirm schedule, location, prep items, owner, and deadline.",
     },
-    { label: "벤더 후속", intent: "견적/계약/납품 일정과 누락된 자료를 벤더에게 확인해 주세요." },
+    {
+      label: "Vendor follow-up",
+      intent: "Ask the vendor about quote, contract, delivery timeline, and missing materials.",
+    },
   ],
   real_estate: [
     {
-      label: "방문 일정",
-      intent: "매물 방문 가능 시간과 선호 조건을 확인하고 다음 약속을 제안해 주세요.",
+      label: "Tour schedule",
+      intent:
+        "Ask for available tour times and preferred criteria, then propose the next appointment.",
     },
     {
-      label: "계약 단계",
-      intent: "계약/대출/검사/마감 일정에서 필요한 다음 자료를 정리해 요청해 주세요.",
+      label: "Contract stage",
+      intent: "Request the next materials needed for contract, loan, inspection, or closing.",
     },
   ],
   freelance: [
     {
-      label: "범위 확인",
-      intent: "작업 범위, 산출물, 수정 횟수, 일정, 견적 확인이 필요하다고 답장해 주세요.",
+      label: "Confirm scope",
+      intent: "Ask to confirm scope, deliverables, revisions, timeline, and quote.",
     },
     {
-      label: "피드백 수렴",
-      intent: "피드백을 확인했고 반영 범위와 다음 전달 일정을 명확히 안내해 주세요.",
+      label: "Collect feedback",
+      intent:
+        "Acknowledge feedback and clarify what will be applied and when the next version arrives.",
     },
   ],
 };
@@ -1670,15 +1681,13 @@ function buildQuickReplyIntents(
 
   if (missing.length > 0 || manualFiles.length > 0) {
     intents.push({
-      label: "자료 보완 요청",
+      label: "Request missing materials",
       intent: [
-        "지원 자료 검토 중입니다.",
+        "I am reviewing the application materials.",
         manualFiles.length > 0
-          ? `다음 파일은 내용을 정확히 읽기 어려워서 읽기 가능한 PDF/DOCX/HWPX 형식으로 다시 요청해 주세요: ${manualFiles.join(", ")}.`
+          ? `Ask them to resend these files in readable PDF/DOCX/HWPX format: ${manualFiles.join(", ")}.`
           : "",
-        missing.length > 0
-          ? `추가로 확인이 필요한 정보도 정중히 요청해 주세요: ${missing.join(", ")}.`
-          : "",
+        missing.length > 0 ? `Also ask for these missing details: ${missing.join(", ")}.` : "",
       ]
         .filter(Boolean)
         .join(" "),
@@ -1687,16 +1696,16 @@ function buildQuickReplyIntents(
 
   if (profile.pipelineStatus === "ready_to_review") {
     intents.push({
-      label: "접수 확인",
+      label: "Confirm intake",
       intent:
-        "지원 자료 접수와 검토 진행을 정중히 안내하고, 이후 일정이나 결과는 확인 후 다시 연락하겠다고 답장해 주세요.",
+        "Confirm receipt of the materials, say review is in progress, and promise to follow up with timing or results.",
     });
   }
 
   intents.push({
-    label: "오디션 일정 문의",
+    label: "Ask audition times",
     intent:
-      "프로필을 확인했고 가능한 오디션 일정, 연락 가능한 시간, 추가 포트폴리오 링크가 있다면 공유해 달라고 정중히 물어봐 주세요.",
+      "Say the profile was reviewed and ask for possible audition times, contact availability, and any portfolio links.",
   });
 
   return intents.slice(0, 4);
@@ -1756,10 +1765,10 @@ function ReplyDraftBox({
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-[11px] font-semibold uppercase tracking-wider text-stone-300">
-            답장 초안
+            Reply draft
           </h2>
           <p className="mt-1 text-xs text-stone-500">
-            Eve가 초안을 만들고, 전송은 직접 승인합니다.
+            Eve drafts it. You approve before anything is sent.
           </p>
         </div>
         <button
@@ -1768,13 +1777,13 @@ function ReplyDraftBox({
           disabled={drafting}
           className="rounded-lg border border-orange-500/30 px-3 py-1.5 text-xs text-[#FFB09C] transition hover:bg-orange-500/10 disabled:opacity-50"
         >
-          {drafting ? "작성 중..." : draft ? "다시 작성" : "초안 만들기"}
+          {drafting ? "Drafting..." : draft ? "Regenerate" : "Draft reply"}
         </button>
       </div>
       <input
         value={intent}
         onChange={(e) => onIntentChange(e.target.value)}
-        placeholder="예: 프로필 확인했고 다음 오디션 일정 가능 여부를 물어봐"
+        placeholder="Example: confirm the profile was reviewed and ask for next audition availability"
         className="mb-3 w-full rounded-lg border border-stone-700/60 bg-black/20 px-3 py-2 text-xs text-stone-300 placeholder-stone-600 outline-none transition focus:border-orange-500/40"
       />
       <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
@@ -1848,16 +1857,16 @@ function ReplyDraftBox({
                 />
                 <span>
                   <span className="block text-[11px] font-medium text-[#FFB09C]">
-                    첨부 분석 요약 파일 함께 첨부
+                    Attach the attachment analysis brief
                   </span>
                   <span className="mt-0.5 block text-[10px] leading-4 text-stone-500">
-                    후보자 카드, 핵심 포인트, 추출 필드를 txt 브리프로 변환합니다.
+                    Converts the candidate card, key points, and extracted fields into a txt brief.
                   </span>
                 </span>
               </label>
               <div className="mb-2 flex items-center justify-between gap-3">
                 <span className="text-[10px] font-medium uppercase tracking-wider text-stone-600">
-                  원본 첨부 함께 저장
+                  Save original attachments too
                 </span>
                 <button
                   type="button"
@@ -1870,7 +1879,7 @@ function ReplyDraftBox({
                   }
                   className="text-[11px] text-[#7DD3FC] transition hover:text-sky-200"
                 >
-                  {selectedCount === attachments.length ? "전체 해제" : "전체 선택"}
+                  {selectedCount === attachments.length ? "Clear all" : "Select all"}
                 </button>
               </div>
               <div className="grid gap-1.5 sm:grid-cols-2">
@@ -1905,7 +1914,7 @@ function ReplyDraftBox({
                   rel="noreferrer"
                   className="rounded-lg border border-[#FF6B4A]/30 px-3 py-1.5 text-xs font-medium text-[#FFB09C] transition hover:bg-[#FF6B4A]/10"
                 >
-                  Gmail 초안 열기
+                  Open Gmail draft
                 </a>
               )}
               <button
@@ -1915,10 +1924,10 @@ function ReplyDraftBox({
                 className="rounded-lg border border-[#7DD3FC]/30 px-3 py-1.5 text-xs font-medium text-sky-200 transition hover:bg-[#7DD3FC]/10 disabled:opacity-50"
               >
                 {savingGmailDraft
-                  ? "저장 중..."
+                  ? "Saving..."
                   : draftAttachmentCount > 0
-                    ? `Gmail 초안 저장 + 첨부 ${draftAttachmentCount}`
-                    : "Gmail 초안 저장"}
+                    ? `Save Gmail draft + ${draftAttachmentCount} attachments`
+                    : "Save Gmail draft"}
               </button>
               <button
                 type="button"
@@ -1926,7 +1935,7 @@ function ReplyDraftBox({
                 disabled={sending || !draft.to || !draft.subject || !draft.body}
                 className="rounded-lg bg-[#FF6B4A] px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-[#FFB09C] disabled:opacity-50"
               >
-                {sending ? "전송 중..." : "이 내용으로 보내기"}
+                {sending ? "Sending..." : "Send this reply"}
               </button>
             </div>
           </div>
@@ -1961,7 +1970,7 @@ function EveAnalysis({
     return (
       <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
         <p className="text-xs text-stone-500">
-          Eve가 아직 분석하지 않은 메일이에요. 동기화 후 잠시 뒤에 다시 확인해 주세요.
+          Eve has not analyzed this email yet. Sync, then check again shortly.
         </p>
       </section>
     );
@@ -1973,7 +1982,7 @@ function EveAnalysis({
       <div className="pl-2">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-[#FF6B4A]">
-            EVE 판단
+            EVE judgment
           </span>
           <div className="flex items-center gap-1.5">
             <PriorityPill priority={email.priority} />
@@ -1992,7 +2001,7 @@ function EveAnalysis({
         {email.keyPoints.length > 0 && (
           <div className="mt-3">
             <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-stone-500">
-              핵심 포인트
+              Key points
             </p>
             <ul className="space-y-1">
               {email.keyPoints.map((k, i) => (
@@ -2008,7 +2017,7 @@ function EveAnalysis({
         {email.actionItems.length > 0 && (
           <div className="mt-3">
             <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-stone-500">
-              할 일
+              Action items
             </p>
             <ul className="space-y-1">
               {email.actionItems.map((a, i) => (
@@ -2030,15 +2039,15 @@ function EveAnalysis({
 function ReplyNeededPill() {
   return (
     <span className="text-[10px] px-1.5 py-0.5 rounded border border-[#FF6B4A]/30 bg-[#FF6B4A]/10 text-[#FF6B4A] font-medium">
-      답장 필요
+      Needs reply
     </span>
   );
 }
 
 const PRIORITY_LABELS: Record<EmailPriority, string> = {
-  URGENT: "긴급",
-  NORMAL: "보통",
-  LOW: "낮음",
+  URGENT: "Urgent",
+  NORMAL: "Normal",
+  LOW: "Low",
 };
 
 function LabelFeedbackControl({
@@ -2081,7 +2090,7 @@ function LabelFeedbackControl({
       setOpen(false);
     } catch (err) {
       captureClientError(err, { scope: "email.feedback.submit", emailId, correctedPriority });
-      setError("보고하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      setError("Could not report this. Please try again soon.");
     } finally {
       setSubmitting(null);
     }
@@ -2091,7 +2100,7 @@ function LabelFeedbackControl({
     return (
       <span className="text-[11px] text-[#FF8A70]/80 inline-flex items-center gap-1">
         <span className="h-1.5 w-1.5 rounded-full bg-[#FF6B4A]" />
-        보고됨: {PRIORITY_LABELS[feedback.originalPriority]} →{" "}
+        Reported: {PRIORITY_LABELS[feedback.originalPriority]} {"->"}{" "}
         {PRIORITY_LABELS[feedback.correctedPriority]}
       </span>
     );
@@ -2104,7 +2113,7 @@ function LabelFeedbackControl({
         onClick={() => setOpen(true)}
         className="text-[11px] text-stone-500 underline-offset-2 hover:text-stone-300 hover:underline"
       >
-        분류 틀림
+        Wrong label
       </button>
     );
   }
@@ -2115,7 +2124,7 @@ function LabelFeedbackControl({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[11px] text-stone-500">실제 우선순위:</span>
+      <span className="text-[11px] text-stone-500">Actual priority:</span>
       {options.map((p) => (
         <button
           key={p}
@@ -2136,7 +2145,7 @@ function LabelFeedbackControl({
         disabled={!!submitting}
         className="text-[11px] text-stone-500 hover:text-stone-300"
       >
-        취소
+        Cancel
       </button>
       {error && <span className="text-[11px] text-red-300">{error}</span>}
     </div>
@@ -2184,26 +2193,26 @@ function ReplyNeededFeedbackControl({ emailId }: { emailId: string }) {
       });
     } catch (err) {
       captureClientError(err, { scope: "email.reply-needed-feedback.submit", emailId, choice });
-      setError("저장하지 못했어요.");
+      setError("Could not save.");
     } finally {
       setSubmitting(null);
     }
   };
 
   const options: Array<{ choice: ReplyNeededChoice; label: string }> = [
-    { choice: "today", label: "오늘 답장" },
-    { choice: "waiting_on_me", label: "내가 처리" },
-    { choice: "waiting_on_them", label: "상대 대기" },
-    { choice: "needed", label: "답장 필요" },
-    { choice: "not_needed", label: "필요 없음" },
-    { choice: "later", label: "나중에" },
-    { choice: "done", label: "완료" },
+    { choice: "today", label: "Reply today" },
+    { choice: "waiting_on_me", label: "On me" },
+    { choice: "waiting_on_them", label: "Waiting on them" },
+    { choice: "needed", label: "Reply needed" },
+    { choice: "not_needed", label: "Not needed" },
+    { choice: "later", label: "Later" },
+    { choice: "done", label: "Done" },
   ];
 
   return (
     <div className="mt-4 border-t border-orange-500/10 pt-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] text-stone-500">답장 필요 판단:</span>
+        <span className="text-[11px] text-stone-500">Reply-needed judgment:</span>
         {options.map((option) => {
           const selected = feedback?.choice === option.choice;
           return (
@@ -2235,7 +2244,7 @@ function PriorityPill({ priority }: { priority: EmailDetail["priority"] }) {
     URGENT: "bg-red-500/15 text-red-300 border-red-500/30",
     LOW: "bg-stone-900 text-stone-500 border-stone-800",
   };
-  const labels = { URGENT: "긴급", LOW: "낮음" };
+  const labels = { URGENT: "Urgent", LOW: "Low" };
   return (
     <span
       className={`text-[10px] px-1.5 py-0.5 rounded border ${styles[priority as "URGENT" | "LOW"]} font-medium`}
@@ -2256,41 +2265,41 @@ function CategoryPill({ category }: { category: string }) {
 
 function categoryLabel(category: string): string {
   const labelMap: Record<string, string> = {
-    business: "비즈니스",
-    engineering: "엔지니어링",
-    automated: "자동화",
-    newsletter: "뉴스레터",
-    meeting: "미팅",
-    billing: "청구",
-    conversation: "대화",
-    other: "기타",
+    business: "Business",
+    engineering: "Engineering",
+    automated: "Automated",
+    newsletter: "Newsletter",
+    meeting: "Meeting",
+    billing: "Billing",
+    conversation: "Conversation",
+    other: "Other",
   };
   return labelMap[category] || category;
 }
 
 function attachmentCategoryLabel(category: string): string {
   const labelMap: Record<string, string> = {
-    resume: "이력서",
-    profile: "프로필",
-    portfolio: "포트폴리오",
-    audition: "오디션",
-    contract: "계약서",
-    invoice: "청구",
-    proposal: "제안서",
-    schedule: "일정",
-    image: "이미지",
-    document: "문서",
-    other: "기타",
+    resume: "Resume",
+    profile: "Profile",
+    portfolio: "Portfolio",
+    audition: "Audition",
+    contract: "Contract",
+    invoice: "Invoice",
+    proposal: "Proposal",
+    schedule: "Schedule",
+    image: "Image",
+    document: "Document",
+    other: "Other",
   };
   return labelMap[category] || category;
 }
 
 function attachmentStatusLabel(status: string): string {
   const labelMap: Record<string, string> = {
-    ANALYZED: "분석 완료",
-    FALLBACK: "보조 분석",
-    PENDING: "분석 대기",
-    UNSUPPORTED: "본문 추출 제한",
+    ANALYZED: "Analyzed",
+    FALLBACK: "Fallback",
+    PENDING: "Pending",
+    UNSUPPORTED: "Limited extraction",
   };
   return labelMap[status] || status.toLowerCase();
 }
@@ -2301,63 +2310,63 @@ function attachmentNeedsManualReview(attachment: EmailAttachment): boolean {
 
 function attachmentManualReviewReason(attachment: EmailAttachment): string | null {
   if (attachment.analysisStatus === "UNSUPPORTED")
-    return "본문 추출이 제한되어 원본 확인이 필요합니다.";
-  if (attachment.analysisStatus === "PENDING") return "아직 분석 대기 상태입니다.";
+    return "Text extraction is limited, so source review is needed.";
+  if (attachment.analysisStatus === "PENDING") return "Analysis is still pending.";
   if (attachment.analysisStatus === "FALLBACK")
-    return "AI 분석 실패 후 보조 분석으로 처리되어 원본 확인을 권장합니다.";
+    return "Fallback analysis was used after AI analysis failed. Source review is recommended.";
   const preview = attachment.textPreview ?? "";
-  if (/OCR 분석 대기/.test(preview)) return "이미지 파일이라 OCR 또는 원본 확인이 필요합니다.";
-  if (/텍스트 레이어 없음|추출 실패/.test(preview))
-    return "자동 텍스트 추출이 불완전해 원본 확인이 필요합니다.";
+  if (/OCR pending/i.test(preview)) return "This image needs OCR or source review.";
+  if (/no text layer|extraction failed/i.test(preview))
+    return "Automatic text extraction is incomplete, so source review is needed.";
   return null;
 }
 
 function candidateMissingLabel(key: string): string {
   const labelMap: Record<string, string> = {
-    name: "이름",
-    contact: "연락처",
-    role: "역할",
-    portfolio: "포트폴리오 링크",
+    name: "Name",
+    contact: "Contact",
+    role: "Role",
+    portfolio: "Portfolio link",
   };
   return labelMap[key] || key;
 }
 
 function candidatePipelineLabel(status: AttachmentCandidateProfile["pipelineStatus"]): string {
   const labels: Record<AttachmentCandidateProfile["pipelineStatus"], string> = {
-    ready_to_review: "검토 가능",
-    needs_info: "정보 보강 필요",
-    needs_analysis: "분석 확인 필요",
+    ready_to_review: "Ready to review",
+    needs_info: "Needs info",
+    needs_analysis: "Needs analysis",
   };
   return labels[status];
 }
 
 function fieldLabel(key: string): string {
   const labelMap: Record<string, string> = {
-    name: "이름",
-    role: "역할",
-    contact: "연락처",
-    email: "이메일",
-    phone: "전화",
-    age: "나이",
-    height: "신장",
-    skills: "특기",
-    links: "링크",
-    deadline: "마감",
-    amount: "금액",
-    availability: "가능 일정",
+    name: "Name",
+    role: "Role",
+    contact: "Contact",
+    email: "Email",
+    phone: "Phone",
+    age: "Age",
+    height: "Height",
+    skills: "Skills",
+    links: "Links",
+    deadline: "Deadline",
+    amount: "Amount",
+    availability: "Availability",
   };
   return labelMap[key] || key;
 }
 
 function formatBytes(size: number | null): string {
-  if (!size || size <= 0) return "크기 미상";
+  if (!size || size <= 0) return "Unknown size";
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function formatFull(iso: string): string {
-  return new Date(iso).toLocaleString("ko-KR", {
+  return new Date(iso).toLocaleString("en-US", {
     month: "short",
     day: "numeric",
     hour: "2-digit",

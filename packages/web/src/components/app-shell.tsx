@@ -36,7 +36,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             type="button"
             onClick={() => setMobileOpen(true)}
             className="flex items-center justify-center min-w-[44px] min-h-[44px] -ml-2 text-stone-400 hover:text-white active:text-white transition"
-            aria-label="메뉴"
+            aria-label="Menu"
           >
             <svg
               aria-hidden="true"
@@ -57,7 +57,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <img src="/brand/mark.svg?v=flow-5" alt="" className="h-6 w-6" />
           <div className="min-w-0">
             <p className="text-sm font-semibold leading-none text-stone-100">Jigeum</p>
-            <p className="mt-0.5 text-[10px] leading-none text-stone-500">결정 큐</p>
+            <p className="mt-0.5 text-[10px] leading-none text-stone-500">Decision queue</p>
           </div>
         </div>
         <main className="relative z-10 flex-1 overflow-y-auto pb-[calc(62px+env(safe-area-inset-bottom))] md:pb-safe">

@@ -38,7 +38,7 @@ function NewChatWelcome() {
         });
         router.push(`/chat/${conv.id}?prefill=${encodeURIComponent(prefill)}`);
       } catch {
-        toast("결정 스레드를 만들지 못했어요.", "error");
+        toast("Could not create a decision thread.", "error");
       }
     })();
   }, [searchParams, router, toast]);
@@ -55,40 +55,41 @@ function NewChatWelcome() {
         router.push(`/chat/${conv.id}`);
       }
     } catch {
-      toast("결정 스레드를 만들지 못했어요.", "error");
+      toast("Could not create a decision thread.", "error");
     }
   };
 
   const suggestions = [
     {
-      label: "오늘 우선순위 정리",
-      message: "오늘 메일, 회의, 작업을 보고 먼저 처리할 결정을 순서대로 정리해줘.",
-      meta: "큐",
+      label: "Prioritize today",
+      message:
+        "Review today's mail, meetings, and tasks, then rank the decisions I should handle first.",
+      meta: "Queue",
     },
     {
-      label: "숨은 리스크 찾기",
-      message: "메일, 일정, 작업에서 급해지거나 막힐 수 있는 항목을 찾아줘.",
-      meta: "신호",
+      label: "Find hidden risks",
+      message: "Find mail, calendar, or task items that could become urgent or blocked.",
+      meta: "Signal",
     },
     {
-      label: "회의 준비",
-      message: "오늘 회의를 보고 가져가야 할 맥락, 질문, 후속 조치를 정리해줘.",
-      meta: "맥락",
+      label: "Prep meetings",
+      message: "Review today's meetings and list the context, questions, and follow-ups I need.",
+      meta: "Context",
     },
     {
-      label: "후속 조치 초안",
-      message: "후속 조치가 필요한 스레드를 찾고 다음 행동 초안을 써줘.",
-      meta: "행동",
+      label: "Draft follow-ups",
+      message: "Find threads that need follow-up and draft the next action.",
+      meta: "Action",
     },
     {
-      label: "집중 시간 확보",
-      message: "가장 중요한 일을 고르고 현재 일정 사이에 집중 시간을 제안해줘.",
-      meta: "시간",
+      label: "Protect focus time",
+      message: "Pick the most important work and suggest focus blocks around my current schedule.",
+      meta: "Time",
     },
     {
-      label: "운영 규칙 저장",
-      message: "내 워크스페이스에서 승인, 자동화, 위험한 행동을 어떻게 처리할지 기억해줘.",
-      meta: "기억",
+      label: "Save operating rules",
+      message: "Remember how my workspace should handle approvals, automation, and risky actions.",
+      meta: "Memory",
     },
   ];
 
@@ -108,10 +109,10 @@ function NewChatWelcome() {
             </span>
             <div>
               <p className="text-sm font-medium text-stone-100">
-                Google을 연결하면 맥락이 더 정확해집니다
+                Connect Google for better context
               </p>
               <p className="text-xs text-stone-500">
-                Gmail과 Calendar 신호를 결정 카드, 리마인더, 회의 준비로 바꿀 수 있어요.
+                Turn Gmail and Calendar signals into decision cards, reminders, and meeting prep.
               </p>
             </div>
           </a>
@@ -122,13 +123,13 @@ function NewChatWelcome() {
               <img src="/brand/mark.svg?v=flow-5" alt="" className="h-9 w-9" />
             </div>
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500">
-              새 스레드
+              New thread
             </p>
             <h1 className="max-w-xl text-4xl font-semibold leading-tight tracking-tight text-stone-50 sm:text-5xl">
-              지금 앞에 있는 결정부터 시작하세요.
+              Start with the decision in front of you.
             </h1>
             <p className="mt-4 max-w-xl text-sm leading-6 text-stone-500">
-              관련 메일, 회의, 작업, 다음 행동을 한 곳에 연결해 달라고 요청하세요.
+              Ask Jigeum to connect the relevant mail, meetings, tasks, and next actions.
             </p>
           </div>
 
@@ -140,7 +141,7 @@ function NewChatWelcome() {
               className="group relative w-full rounded-lg border border-stone-700 bg-[#111318] px-5 py-4 text-left text-sm text-stone-500 shadow-xl shadow-black/10 transition hover:border-stone-600 hover:bg-stone-900"
             >
               <span className="flex items-center justify-between gap-3">
-                <span>스레드를 열고 맥락, 판단, 다음 행동을 요청하세요...</span>
+                <span>Open a thread and ask for context, judgment, and next action...</span>
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-stone-950 transition group-hover:bg-white">
                   <svg
                     aria-hidden="true"

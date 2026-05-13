@@ -21,16 +21,16 @@ export default function AuthScreen({
   title,
   description,
   children,
-  asideTitle = "결정이 필요한 일만 남깁니다",
-  asideBody = "Jigeum은 메일, 캘린더, 할 일 신호를 읽고 실행 전에 확인할 수 있는 카드로 바꿉니다.",
+  asideTitle = "Keep only the work that needs a decision",
+  asideBody = "Jigeum reads mail, calendar, and task signals, then turns them into cards you can review before anything runs.",
   asideItems = [
-    { label: "신호", value: "메일과 캘린더의 의미 있는 변화를 감지" },
-    { label: "맥락", value: "사람, 기한, 프로젝트를 연결" },
-    { label: "승인", value: "외부 실행 전 근거 검토" },
+    { label: "Signal", value: "Detect meaningful changes in mail and calendar" },
+    { label: "Context", value: "Connect people, deadlines, and projects" },
+    { label: "Approval", value: "Review evidence before external execution" },
   ],
   footer,
   navCtaHref = "/early-access",
-  navCtaLabel = "얼리 액세스",
+  navCtaLabel = "Early access",
 }: AuthScreenProps) {
   return (
     <main className="min-h-screen overflow-hidden bg-[#0f1115] text-stone-50">
@@ -44,7 +44,7 @@ export default function AuthScreen({
             className="whitespace-nowrap text-stone-400 transition hover:text-stone-100"
             href="/"
           >
-            홈
+            Home
           </Link>
           <Link
             className="whitespace-nowrap rounded-md border border-stone-700 px-3 py-2 text-stone-300 transition hover:border-stone-500 hover:text-stone-100"
@@ -59,7 +59,7 @@ export default function AuthScreen({
         <aside className="hidden lg:block">
           <div className="max-w-xl">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
-              결정 큐
+              Decision queue
             </p>
             <h2 className="mt-4 text-5xl font-semibold leading-[1.02] tracking-tight text-white">
               {asideTitle}

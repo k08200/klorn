@@ -40,14 +40,14 @@ function LoginForm() {
     if (error) {
       const message =
         error === "google_failed"
-          ? "Google 로그인을 완료하지 못했어요. 다시 시도해 주세요."
+          ? "Google sign-in could not be completed. Please try again."
           : error === "session_expired"
-            ? "세션이 만료됐어요. 다시 로그인해 주세요."
+            ? "Your session expired. Please sign in again."
             : error;
       toast(message, "error");
     }
     if (verified) {
-      toast("이메일 인증이 끝났어요. 이제 로그인할 수 있어요.", "success");
+      toast("Email verified. You can sign in now.", "success");
     }
   }, [searchParams, toast]);
 
@@ -59,15 +59,15 @@ function LoginForm() {
     try {
       if (mode === "login") {
         await login(email, password);
-        toast("다시 오신 걸 환영해요.", "success");
+        toast("Welcome back.", "success");
       } else {
         await register(email, password, name || undefined);
-        toast("계정을 만들었어요.", "success");
+        toast("Account created.", "success");
         router.push("/inbox");
         return;
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "문제가 생겼어요.";
+      const msg = err instanceof Error ? err.message : "Something went wrong.";
       const match = msg.match(/API \d+: (.+)/);
       const parsed = match
         ? (() => {
@@ -93,16 +93,16 @@ function LoginForm() {
 
   return (
     <AuthScreen
-      eyebrow={mode === "login" ? "다시 시작하기" : "계정 만들기"}
-      title={mode === "login" ? "결정 큐로 돌아가기" : "Jigeum 시작하기"}
+      eyebrow={mode === "login" ? "Welcome back" : "Create account"}
+      title={mode === "login" ? "Return to your decision queue" : "Start with Jigeum"}
       description={
         mode === "login"
-          ? "메일, 캘린더, 할 일 신호를 다시 연결하고 오늘 승인할 일을 확인하세요."
-          : "팀 신호를 근거가 붙은 결정 카드로 바꾸려면 계정을 만들어 주세요."
+          ? "Reconnect your work signals and review what needs approval today."
+          : "Create an account to turn team signals into evidence-backed decision cards."
       }
       footer={
         <Link href="/" className="transition hover:text-stone-300">
-          홈으로 돌아가기
+          Back to home
         </Link>
       }
     >
@@ -114,7 +114,7 @@ function LoginForm() {
             mode === "login" ? "bg-stone-100 text-stone-950" : "text-stone-500 hover:text-stone-200"
           }`}
         >
-          로그인
+          Log in
         </button>
         <button
           type="button"
@@ -125,7 +125,7 @@ function LoginForm() {
               : "text-stone-500 hover:text-stone-200"
           }`}
         >
-          가입
+          Sign up
         </button>
       </div>
 
@@ -133,14 +133,14 @@ function LoginForm() {
         {mode === "register" && (
           <div>
             <label htmlFor="name" className="mb-1.5 block text-xs font-medium text-stone-400">
-              이름
+              Name
             </label>
             <input
               id="name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="이름"
+              placeholder="Name"
               className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
             />
           </div>
@@ -148,7 +148,7 @@ function LoginForm() {
 
         <div>
           <label htmlFor="email" className="mb-1.5 block text-xs font-medium text-stone-400">
-            이메일
+            Email
           </label>
           <input
             id="email"
@@ -164,14 +164,14 @@ function LoginForm() {
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-3">
             <label htmlFor="password" className="block text-xs font-medium text-stone-400">
-              비밀번호
+              Password
             </label>
             {mode === "login" && (
               <Link
                 href="/reset-password"
                 className="text-xs text-stone-500 transition hover:text-amber-300"
               >
-                비밀번호 재설정
+                Reset password
               </Link>
             )}
           </div>
@@ -180,7 +180,7 @@ function LoginForm() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder={mode === "register" ? "8자 이상" : "비밀번호"}
+            placeholder={mode === "register" ? "At least 8 characters" : "Password"}
             required
             minLength={mode === "register" ? 8 : undefined}
             className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
@@ -195,19 +195,19 @@ function LoginForm() {
           {loading ? (
             <span className="flex items-center justify-center gap-2">
               <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-stone-950 border-t-transparent" />
-              {mode === "login" ? "로그인 중..." : "계정 생성 중..."}
+              {mode === "login" ? "Signing in..." : "Creating account..."}
             </span>
           ) : mode === "login" ? (
-            "결정 큐 열기"
+            "Open decision queue"
           ) : (
-            "계정 만들기"
+            "Create account"
           )}
         </button>
       </form>
 
       <div className="my-5 flex items-center gap-3">
         <div className="h-px flex-1 bg-stone-800/80" />
-        <span className="text-xs text-stone-600">또는</span>
+        <span className="text-xs text-stone-600">or</span>
         <div className="h-px flex-1 bg-stone-800/80" />
       </div>
 
@@ -233,23 +233,23 @@ function LoginForm() {
             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
           />
         </svg>
-        Google로 계속
+        Continue with Google
         <span className="rounded bg-stone-200 px-1.5 py-0.5 text-[10px] font-normal text-stone-500">
-          베타
+          Beta
         </span>
       </a>
       <p className="mt-3 text-center text-[11px] leading-5 text-stone-600">
-        Google 로그인은 검토 중입니다. 지금은 이메일 가입을 사용할 수 있어요.
+        Google sign-in is under review. Email sign-up is available now.
       </p>
 
       <div className="mt-5 border-t border-stone-800/80 pt-4 text-center text-xs text-stone-500">
-        {mode === "login" ? "계정이 필요하세요?" : "이미 계정이 있나요?"}{" "}
+        {mode === "login" ? "Need an account?" : "Already have an account?"}{" "}
         <button
           type="button"
           onClick={() => setMode(mode === "login" ? "register" : "login")}
           className="font-medium text-amber-300 transition hover:text-amber-200"
         >
-          {mode === "login" ? "가입으로 전환" : "로그인으로 전환"}
+          {mode === "login" ? "Switch to sign-up" : "Switch to log-in"}
         </button>
       </div>
     </AuthScreen>

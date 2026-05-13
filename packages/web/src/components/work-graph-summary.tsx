@@ -43,27 +43,27 @@ export default function WorkGraphSummaryCard() {
   return (
     <section
       className="mb-6 overflow-hidden rounded-2xl border border-stone-800 bg-stone-950/70"
-      aria-label="업무 그래프 요약"
+      aria-label="Work graph summary"
     >
       <div className="border-b border-stone-800 bg-gradient-to-br from-stone-950 via-stone-950 to-amber-950/20 p-4 md:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">
-              업무 그래프
+              Work graph
             </p>
             <h2 className="mt-2 text-lg font-semibold tracking-tight text-stone-100">
-              진행 중인 업무 맥락
+              Active work contexts
             </h2>
             <p className="mt-2 max-w-xl text-xs leading-5 text-stone-500">
-              Jigeum이 메일, 결정 스레드, 약속을 같은 업무 맥락으로 묶어 리스크를 더 쉽게 보이게
-              합니다.
+              Jigeum groups mail, decision threads, and commitments into one work context so risk is
+              easier to see.
             </p>
           </div>
 
           <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-white/10 bg-black/20 md:min-w-[240px]">
-            <GraphMetric label="맥락" value={data.contexts.length} />
-            <GraphMetric label="신호" value={totals.signals} />
-            <GraphMetric label="리스크" value={totals.highRisk} />
+            <GraphMetric label="Contexts" value={data.contexts.length} />
+            <GraphMetric label="Signals" value={totals.signals} />
+            <GraphMetric label="Risk" value={totals.highRisk} />
           </div>
         </div>
       </div>
@@ -99,7 +99,7 @@ function ContextCard({ context }: { context: WorkGraphContext }) {
             {displayText(context.title)}
           </p>
           <p className="mt-1 line-clamp-2 text-xs text-stone-400">
-            {subtitleFor(context) || "연결된 신호가 없어요"}
+            {subtitleFor(context) || "No linked signals yet"}
           </p>
         </div>
 
@@ -107,7 +107,7 @@ function ContextCard({ context }: { context: WorkGraphContext }) {
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <ContextPanel label="신호">
+        <ContextPanel label="Signals">
           {chips.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               {chips.map((chip) => (
@@ -120,11 +120,11 @@ function ContextCard({ context }: { context: WorkGraphContext }) {
               ))}
             </div>
           ) : (
-            <p className="text-xs text-stone-500">아직 뚜렷한 신호가 없어요.</p>
+            <p className="text-xs text-stone-500">No clear signals yet.</p>
           )}
         </ContextPanel>
 
-        <ContextPanel label="보이는 이유">
+        <ContextPanel label="Why it appears">
           {reasons.length > 0 ? (
             <ul className="space-y-1.5">
               {reasons.map((reason) => (
@@ -134,14 +134,14 @@ function ContextCard({ context }: { context: WorkGraphContext }) {
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-stone-500">최근 활동을 기준으로 표시했어요.</p>
+            <p className="text-xs text-stone-500">Shown from recent activity.</p>
           )}
         </ContextPanel>
       </div>
 
       {people.length > 0 && (
         <div className="mt-3 flex items-center gap-2 border-t border-stone-800 pt-3">
-          <span className="shrink-0 text-[11px] text-stone-600">사람</span>
+          <span className="shrink-0 text-[11px] text-stone-600">People</span>
           <div className="flex min-w-0 flex-wrap gap-1.5">
             {people.map((person) => (
               <span
@@ -227,25 +227,25 @@ function RiskBadge({ risk }: { risk: WorkGraphRisk }) {
 function riskEntry(risk: WorkGraphRisk): { label: string; className: string } {
   switch (risk) {
     case "high":
-      return { label: "높음", className: "text-red-300 bg-red-500/10 border-red-500/20" };
+      return { label: "High", className: "text-red-300 bg-red-500/10 border-red-500/20" };
     case "medium":
       return {
-        label: "보통",
+        label: "Medium",
         className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
       };
     case "low":
-      return { label: "낮음", className: "text-stone-400 bg-stone-500/10 border-stone-500/20" };
+      return { label: "Low", className: "text-stone-400 bg-stone-500/10 border-stone-500/20" };
   }
 }
 
 function kindLabel(kind: WorkGraphContext["kind"]): string {
   switch (kind) {
     case "email_thread":
-      return "메일";
+      return "Mail";
     case "chat_conversation":
-      return "결정 스레드";
+      return "Decision thread";
     case "loose_commitment":
-      return "약속";
+      return "Commitment";
   }
 }
 
@@ -258,12 +258,12 @@ function subtitleFor(context: WorkGraphContext): string | null {
 function signalChips(context: WorkGraphContext): string[] {
   const chips: string[] = [];
   const signals = context.signals ?? {};
-  if (signals.pendingActions) chips.push(`승인 ${signals.pendingActions}`);
-  if (signals.overdueCommitments) chips.push(`지난 약속 ${signals.overdueCommitments}`);
-  if (signals.commitments) chips.push(`약속 ${signals.commitments}`);
-  if (signals.urgentEmails) chips.push(`긴급 메일 ${signals.urgentEmails}`);
-  if (signals.unreadEmails) chips.push(`읽지 않음 ${signals.unreadEmails}`);
-  if (chips.length === 0 && signals.emails) chips.push(`메일 ${signals.emails}`);
+  if (signals.pendingActions) chips.push(`Approval ${signals.pendingActions}`);
+  if (signals.overdueCommitments) chips.push(`Overdue commitment ${signals.overdueCommitments}`);
+  if (signals.commitments) chips.push(`Commitment ${signals.commitments}`);
+  if (signals.urgentEmails) chips.push(`Urgent mail ${signals.urgentEmails}`);
+  if (signals.unreadEmails) chips.push(`Unread ${signals.unreadEmails}`);
+  if (chips.length === 0 && signals.emails) chips.push(`Mail ${signals.emails}`);
   return chips.slice(0, 4);
 }
 
@@ -289,24 +289,17 @@ function summarizeContexts(contexts: WorkGraphContext[]): { signals: number; hig
 }
 
 function displayText(value: string | null | undefined): string {
-  return (value ?? "")
-    .replace(/Unread mail/g, "읽지 않은 메일")
-    .replace(/Urgent mail/g, "긴급 메일")
-    .replace(/Awaiting approval/g, "승인 대기")
-    .replace(/Commitment:/g, "약속:")
-    .replace(/Open commitment/g, "열린 약속")
-    .replace(/Overdue commitment/g, "지난 약속")
-    .replace(/Untitled thread/g, "제목 없는 대화");
+  return value ?? "";
 }
 
 function formatRelative(date: string | null | undefined): string {
-  if (!date) return "방금";
+  if (!date) return "Just now";
   const diff = Date.now() - new Date(date).getTime();
-  if (!Number.isFinite(diff)) return "방금";
+  if (!Number.isFinite(diff)) return "Just now";
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "방금";
-  if (mins < 60) return `${mins}분 전`;
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}시간 전`;
-  return `${Math.floor(hours / 24)}일 전`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }

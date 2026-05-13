@@ -59,9 +59,9 @@ export default function PlaybookRecommendations() {
   };
 
   return (
-    <section className="mb-6" aria-label="Jigeum 추천 플레이북">
+    <section className="mb-6" aria-label="Jigeum recommended playbooks">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-stone-100">추천 플레이북</h2>
+        <h2 className="text-sm font-semibold text-stone-100">Recommended Playbooks</h2>
         <span className="text-[11px] text-stone-500">{data.recommendations.length}</span>
       </div>
       <div className="space-y-2">
@@ -108,7 +108,7 @@ function PlaybookCard({
             </span>
             {active && (
               <span className="rounded border border-emerald-400/20 bg-emerald-400/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
-                적용 중
+                Active
               </span>
             )}
           </div>
@@ -146,7 +146,7 @@ function PlaybookCard({
             : "border-amber-300/25 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15"
         }`}
       >
-        {updating ? "저장 중..." : active ? "일시 중지" : "적용"}
+        {updating ? "Saving..." : active ? "Pause" : "Apply"}
       </button>
     </article>
   );
@@ -184,27 +184,27 @@ function domainMeta(domain: JigeumPlaybookDomain): { label: string; className: s
   switch (domain) {
     case "investment":
       return {
-        label: "투자",
+        label: "Investors",
         className: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
       };
     case "customer_success":
-      return { label: "고객", className: "border-sky-400/20 bg-sky-400/10 text-sky-300" };
+      return { label: "Customers", className: "border-sky-400/20 bg-sky-400/10 text-sky-300" };
     case "launch":
       return {
-        label: "런칭",
+        label: "Launch",
         className: "border-fuchsia-400/20 bg-fuchsia-400/10 text-fuchsia-300",
       };
     case "hiring":
-      return { label: "채용", className: "border-amber-400/20 bg-amber-400/10 text-amber-300" };
+      return { label: "Hiring", className: "border-amber-400/20 bg-amber-400/10 text-amber-300" };
   }
 }
 
 function displayText(value: string | null | undefined): string {
   return (value ?? "")
-    .replace(/Investor Ops/g, "투자자 대응")
-    .replace(/Investment/g, "투자")
-    .replace(/Medium-risk matching context/g, "중간 리스크 맥락과 일치")
-    .replace(/Review investor-facing risks/g, "투자자 대응 리스크 검토")
-    .replace(/Prepare update pack/g, "업데이트 자료 준비")
-    .replace(/venture/g, "벤처");
+    .replace(/Investor Ops/g, "Investor Ops")
+    .replace(/Investment/g, "Investment")
+    .replace(/Medium-risk matching context/g, "Medium-risk context match")
+    .replace(/Review investor-facing risks/g, "Review investor-facing risks")
+    .replace(/Prepare update pack/g, "Prepare update pack")
+    .replace(/venture/g, "venture");
 }

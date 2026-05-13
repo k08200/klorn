@@ -39,7 +39,7 @@ export default function SpeakButton({ text, className }: SpeakButtonProps) {
     if (!clean) return;
 
     const utterance = new SpeechSynthesisUtterance(clean);
-    utterance.lang = /[가-힣]/.test(clean) ? "ko-KR" : "en-US";
+    utterance.lang = "en-US";
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
 

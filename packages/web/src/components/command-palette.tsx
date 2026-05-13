@@ -21,20 +21,20 @@ export default function CommandPalette() {
   const commands: Command[] = [
     {
       id: "approval-queue",
-      label: "결정 큐 열기",
-      sublabel: "승인을 기다리는 결정을 검토",
+      label: "Open decision queue",
+      sublabel: "Review decisions waiting for approval",
       action: () => router.push("/inbox"),
     },
     {
       id: "chat",
-      label: "스레드 열기",
-      sublabel: "현재 업무 맥락 이어가기",
+      label: "Open threads",
+      sublabel: "Continue the current work context",
       action: () => router.push("/chat"),
     },
     {
       id: "new-chat",
-      label: "새 결정 스레드",
-      sublabel: "새 업무 맥락 시작",
+      label: "New decision thread",
+      sublabel: "Start a new work context",
       action: () => {
         apiFetch<{ id: string }>("/api/chat/conversations", {
           method: "POST",
@@ -45,26 +45,26 @@ export default function CommandPalette() {
     },
     {
       id: "briefing",
-      label: "브리핑 열기",
-      sublabel: "오늘의 업무 신호 요약 확인",
+      label: "Open briefing",
+      sublabel: "Review today's work signals",
       action: () => router.push("/briefing"),
     },
     {
       id: "settings",
-      label: "설정 열기",
-      sublabel: "연결, 실행 경계, 기억 관리",
+      label: "Open settings",
+      sublabel: "Connections, guardrails, and memory",
       action: () => router.push("/settings"),
     },
     {
       id: "billing",
-      label: "플랜과 사용량 열기",
-      sublabel: "한도와 결제 상태 확인",
+      label: "Open plan and usage",
+      sublabel: "Check limits and billing status",
       action: () => router.push("/billing"),
     },
     {
       id: "shortcuts",
-      label: "키보드 단축키",
-      sublabel: "단축키 목록 보기 (Cmd+/)",
+      label: "Keyboard shortcuts",
+      sublabel: "Show shortcut list (Cmd+/)",
       action: () => {
         window.dispatchEvent(new KeyboardEvent("keydown", { key: "/", metaKey: true }));
       },

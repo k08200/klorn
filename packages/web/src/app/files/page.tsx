@@ -25,23 +25,23 @@ type FileConversionTarget =
   | "dxf";
 
 const TARGETS: Array<{ value: FileConversionTarget; label: string; hint: string }> = [
-  { value: "pdf", label: "PDF", hint: "문서 출력" },
-  { value: "docx", label: "DOCX", hint: "워드 문서" },
-  { value: "xlsx", label: "XLSX", hint: "표 형식" },
-  { value: "png", label: "PNG", hint: "이미지" },
-  { value: "jpg", label: "JPG", hint: "이미지" },
-  { value: "webp", label: "WEBP", hint: "이미지" },
-  { value: "dwg", label: "DWG", hint: "PDF 도면용" },
-  { value: "dxf", label: "DXF", hint: "CAD 교환" },
-  { value: "txt", label: "TXT", hint: "추출 텍스트" },
-  { value: "md", label: "MD", hint: "요약 문서" },
-  { value: "json", label: "JSON", hint: "구조화 데이터" },
-  { value: "yaml", label: "YAML", hint: "설정/교환" },
-  { value: "csv", label: "CSV", hint: "필드 표" },
-  { value: "html", label: "HTML", hint: "웹 문서" },
-  { value: "xml", label: "XML", hint: "교환 문서" },
-  { value: "svg", label: "SVG", hint: "요약 이미지" },
-  { value: "rtf", label: "RTF", hint: "리치 텍스트" },
+  { value: "pdf", label: "PDF", hint: "Document output" },
+  { value: "docx", label: "DOCX", hint: "Word document" },
+  { value: "xlsx", label: "XLSX", hint: "Table format" },
+  { value: "png", label: "PNG", hint: "Image" },
+  { value: "jpg", label: "JPG", hint: "Image" },
+  { value: "webp", label: "WEBP", hint: "Image" },
+  { value: "dwg", label: "DWG", hint: "PDF drawings" },
+  { value: "dxf", label: "DXF", hint: "CAD exchange" },
+  { value: "txt", label: "TXT", hint: "Extracted text" },
+  { value: "md", label: "MD", hint: "Summary doc" },
+  { value: "json", label: "JSON", hint: "Structured data" },
+  { value: "yaml", label: "YAML", hint: "Config exchange" },
+  { value: "csv", label: "CSV", hint: "Field table" },
+  { value: "html", label: "HTML", hint: "Web document" },
+  { value: "xml", label: "XML", hint: "Exchange doc" },
+  { value: "svg", label: "SVG", hint: "Summary image" },
+  { value: "rtf", label: "RTF", hint: "Rich text" },
 ];
 
 interface ConversionCapability {
@@ -211,7 +211,7 @@ function FileConverter() {
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error || `품질 테스트 실패: ${res.status}`);
+        throw new Error(body?.error || `Quality test failed: ${res.status}`);
       }
       const report = (await res.json()) as QualityReport;
       setQualityReport(report);
@@ -220,7 +220,7 @@ function FileConverter() {
       );
     } catch (err) {
       captureClientError(err, { scope: "files.quality-tests" });
-      setMessage(err instanceof Error ? err.message : "품질 테스트를 실행하지 못했어요.");
+      setMessage(err instanceof Error ? err.message : "Could not run quality tests.");
     } finally {
       setQualityRunning(false);
     }
@@ -251,7 +251,7 @@ function FileConverter() {
             alternatives?: ConversionAlternative[];
           } | null;
           setConversionAlternatives(validAlternatives(body?.alternatives));
-          throw new Error(body?.error || `ZIP 변환 실패: ${res.status}`);
+          throw new Error(body?.error || `ZIP conversion failed: ${res.status}`);
         }
         const filename =
           filenameFromContentDisposition(res.headers.get("Content-Disposition")) ||
@@ -264,7 +264,7 @@ function FileConverter() {
           fileCount: files.length,
         });
         await loadHistory();
-        setMessage(`${files.length}개 파일 변환 결과를 ZIP으로 생성했어요.`);
+        setMessage(`Created a ZIP with ${files.length} converted files.`);
         return;
       }
 
@@ -286,7 +286,7 @@ function FileConverter() {
           alternatives?: ConversionAlternative[];
         } | null;
         setConversionAlternatives(validAlternatives(body?.alternatives));
-        throw new Error(`${file.name}: ${body?.error || `변환 실패: ${res.status}`}`);
+        throw new Error(`${file.name}: ${body?.error || `Conversion failed: ${res.status}`}`);
       }
       const filename =
         filenameFromContentDisposition(res.headers.get("Content-Disposition")) ||
@@ -299,14 +299,14 @@ function FileConverter() {
         fileCount: 1,
       });
       await loadHistory();
-      setMessage(`${file.name} 파일을 ${target.toUpperCase()} 형식으로 변환했어요.`);
+      setMessage(`Converted ${file.name} to ${target.toUpperCase()}.`);
     } catch (err) {
       captureClientError(err, {
         scope: "files.convert",
         target,
         filenames: files.map((file) => file.name),
       });
-      setMessage(err instanceof Error ? err.message : "파일 변환에 실패했어요.");
+      setMessage(err instanceof Error ? err.message : "File conversion failed.");
     } finally {
       setBusy(false);
     }
@@ -340,12 +340,12 @@ function FileConverter() {
         headers: authHeaders(),
       });
       if (!res.ok) {
-        throw new Error("변환 결과가 만료됐어요. 다시 변환해 주세요.");
+        throw new Error("This conversion result expired. Convert it again.");
       }
       await downloadResponseBlob(res, item.filename);
     } catch (err) {
       captureClientError(err, { scope: "files.history.download", resultId: item.resultId });
-      setMessage(err instanceof Error ? err.message : "이전 변환 결과를 내려받지 못했어요.");
+      setMessage(err instanceof Error ? err.message : "Could not download the previous result.");
     }
   };
 
@@ -372,7 +372,7 @@ function FileConverter() {
               size: file.size,
               status: "unsupported" as const,
               quality: "unsupported" as const,
-              preview: "미리보기를 생성하지 못했어요.",
+              preview: "Could not generate a preview.",
             };
           }
           return (await res.json()) as FilePreview;
@@ -395,11 +395,11 @@ function FileConverter() {
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-8 text-stone-100">
       <div className="mb-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#FF8A70]">
-          파일 도구
+          File tools
         </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">파일 변환</h1>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">File conversion</h1>
         <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-          파일을 선택하고 필요한 출력 형식만 고르면 됩니다.
+          Choose files, then pick the output format you need.
         </p>
       </div>
 
@@ -407,10 +407,10 @@ function FileConverter() {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
-              변환 엔진 상태
+              Conversion engine status
             </h2>
             <p className="mt-1 text-xs text-stone-600">
-              실제 변환 엔진 연결과 원본 보존 가능 범위를 확인합니다.
+              Check engine connectivity and source preservation before conversion.
             </p>
           </div>
           <button
@@ -419,7 +419,7 @@ function FileConverter() {
             disabled={qualityRunning}
             className="rounded-md border border-white/10 bg-[#090B10] px-3 py-2 text-xs text-stone-300 transition hover:border-[#FF6B4A]/30 hover:text-[#FFE2D7] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {qualityRunning ? "테스트 중..." : "품질 테스트 실행"}
+            {qualityRunning ? "Testing..." : "Run quality tests"}
           </button>
         </div>
         <div className="grid gap-2 md:grid-cols-2">
@@ -442,18 +442,16 @@ function FileConverter() {
               </p>
             </div>
           ))}
-          {engines.length === 0 && (
-            <p className="text-xs text-stone-600">엔진 상태를 불러오는 중입니다.</p>
-          )}
+          {engines.length === 0 && <p className="text-xs text-stone-600">Loading engine status.</p>}
         </div>
         {qualityReport && (
           <div className="mt-4 rounded-lg border border-white/10 bg-[#090B10] p-3">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-medium text-stone-200">
-                품질 점수 {qualityReport.score}점
+                Quality score {qualityReport.score}
               </p>
               <p className="text-[10px] text-stone-600">
-                통과 {qualityReport.passed} · 보류 {qualityReport.blocked} · 실패{" "}
+                Passed {qualityReport.passed} · Blocked {qualityReport.blocked} · Failed{" "}
                 {qualityReport.failed}
               </p>
             </div>
@@ -491,8 +489,8 @@ function FileConverter() {
                     : "border-white/10 bg-[#090B10] text-stone-500 hover:border-[#FF6B4A]/30 hover:text-[#FFB09C]"
                 }`}
               >
-                {report.score}점 ·{" "}
-                {new Date(report.createdAt ?? report.generatedAt).toLocaleTimeString("ko-KR", {
+                {report.score} ·{" "}
+                {new Date(report.createdAt ?? report.generatedAt).toLocaleTimeString("en-US", {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
@@ -522,10 +520,10 @@ function FileConverter() {
             }}
           />
           <span className="block text-sm font-medium text-stone-200">
-            {files.length > 0 ? `${files.length}개 파일 선택됨` : "변환할 파일 선택"}
+            {files.length > 0 ? `${files.length} files selected` : "Choose files to convert"}
           </span>
           <span className="mt-1 block text-xs text-stone-500">
-            PDF, 문서, 텍스트, 표, 이미지, 도면 파일을 필요한 형식으로 변환합니다.
+            Convert PDFs, docs, text, tables, images, and drawings into the format you need.
           </span>
           {selectedFileNames && (
             <span className="mx-auto mt-2 block max-w-2xl truncate text-[11px] text-stone-600">
@@ -538,9 +536,9 @@ function FileConverter() {
           <div className="mt-4 rounded-lg border border-white/10 bg-[#090B10] p-3">
             <div className="mb-2 flex items-center justify-between gap-3">
               <h2 className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
-                미리보기
+                Preview
               </h2>
-              {previewing && <span className="text-[11px] text-[#7DD3FC]">추출 중...</span>}
+              {previewing && <span className="text-[11px] text-[#7DD3FC]">Extracting...</span>}
             </div>
             <div className="space-y-2">
               {previews.map((preview) => (
@@ -580,7 +578,7 @@ function FileConverter() {
                           }`}
                           title={item.reason}
                         >
-                          추천 {item.target.toUpperCase()}
+                          Use {item.target.toUpperCase()}
                         </button>
                       ))}
                     </div>
@@ -613,10 +611,10 @@ function FileConverter() {
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs leading-5 text-stone-500">
             {selectedTargetUnavailable
-              ? `${selectedCapability.description} 현재 서버 변환 엔진 연결이 필요합니다.`
+              ? `${selectedCapability.description} Server conversion engine connection is required.`
               : selectedCapability
                 ? selectedCapability.description
-                : "파일 형식에 맞는 변환 대상을 선택해 주세요."}
+                : "Choose a conversion target for this file type."}
           </p>
           <button
             type="button"
@@ -625,12 +623,12 @@ function FileConverter() {
             className="rounded-md bg-[#FF6B4A] px-4 py-2 text-sm font-medium text-[#190B07] transition hover:bg-[#FF8A70] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {selectedTargetUnavailable
-              ? "엔진 연결 필요"
+              ? "Engine required"
               : busy
-                ? "변환 중..."
+                ? "Converting..."
                 : files.length > 1
-                  ? "ZIP으로 변환"
-                  : "변환하기"}
+                  ? "Convert to ZIP"
+                  : "Convert"}
           </button>
         </div>
         {message && (
@@ -640,7 +638,7 @@ function FileConverter() {
         )}
         {conversionAlternatives.length > 0 && (
           <div className="mt-3 rounded-lg border border-[#FF6B4A]/20 bg-[#FF6B4A]/5 px-3 py-2">
-            <p className="text-[11px] font-medium text-[#FFE2D7]">대체 변환 추천</p>
+            <p className="text-[11px] font-medium text-[#FFE2D7]">Suggested alternatives</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {conversionAlternatives.map((item) => (
                 <button
@@ -648,7 +646,7 @@ function FileConverter() {
                   type="button"
                   onClick={() => {
                     setTarget(item.target);
-                    setMessage(`${item.target.toUpperCase()} 형식으로 다시 시도할 수 있어요.`);
+                    setMessage(`Try again as ${item.target.toUpperCase()}.`);
                     setConversionAlternatives([]);
                   }}
                   className="rounded border border-[#FF6B4A]/25 bg-black/20 px-2 py-1 text-[10px] text-[#FFE2D7] transition hover:border-[#FFB09C]/50"
@@ -666,9 +664,9 @@ function FileConverter() {
         <section className="mt-5 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
-              최근 변환
+              Recent conversions
             </h2>
-            <span className="text-[10px] text-stone-600">서버에 저장된 변환 결과</span>
+            <span className="text-[10px] text-stone-600">Stored conversion results</span>
           </div>
           <div className="space-y-2">
             {history.map((item) => (
@@ -679,8 +677,8 @@ function FileConverter() {
                 <div className="min-w-0">
                   <p className="truncate text-xs font-medium text-stone-200">{item.filename}</p>
                   <p className="mt-0.5 text-[10px] text-stone-600">
-                    {item.target.toUpperCase()} · {item.fileCount}개 ·{" "}
-                    {new Date(item.createdAt).toLocaleTimeString("ko-KR", {
+                    {item.target.toUpperCase()} · {item.fileCount} files ·{" "}
+                    {new Date(item.createdAt).toLocaleTimeString("en-US", {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
@@ -692,7 +690,7 @@ function FileConverter() {
                   onClick={() => downloadHistoryItem(item)}
                   className="rounded border border-stone-700/70 bg-stone-950/45 px-2 py-1 text-[10px] text-stone-400 transition hover:border-[#7DD3FC]/30 hover:text-sky-200"
                 >
-                  다시 받기
+                  Download again
                 </button>
               </div>
             ))}
@@ -707,7 +705,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(reader.error ?? new Error("파일을 읽지 못했어요."));
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read the file."));
     reader.readAsDataURL(file);
   });
 }
@@ -728,7 +726,11 @@ async function downloadResponseBlob(res: Response, fallbackFilename: string) {
 function capabilityBadge(capability: ConversionCapability | undefined) {
   if (!capability) return null;
   const label =
-    capability.mode === "builtin" ? "내장" : capability.available ? "엔진 연결" : "엔진 필요";
+    capability.mode === "builtin"
+      ? "Built in"
+      : capability.available
+        ? "Engine connected"
+        : "Engine needed";
   return (
     <span
       className={`mt-1 inline-flex rounded border px-1.5 py-0.5 text-[9px] ${
@@ -743,9 +745,9 @@ function capabilityBadge(capability: ConversionCapability | undefined) {
 }
 
 function engineStatusLabel(engine: ConversionEngineStatus): string {
-  if (!engine.available) return "연결 필요";
-  if (engine.source === "env") return "설정 연결";
-  return "자동 감지";
+  if (!engine.available) return "Needs setup";
+  if (engine.source === "env") return "Configured";
+  return "Auto detected";
 }
 
 function engineStatusClass(engine: ConversionEngineStatus): string {
@@ -755,10 +757,10 @@ function engineStatusClass(engine: ConversionEngineStatus): string {
 }
 
 function qualityStatusLabel(status: QualityScenarioResult["status"]): string {
-  if (status === "pass") return "통과";
-  if (status === "warn") return "주의";
-  if (status === "blocked") return "보류";
-  return "실패";
+  if (status === "pass") return "Pass";
+  if (status === "warn") return "Warn";
+  if (status === "blocked") return "Blocked";
+  return "Failed";
 }
 
 function qualityStatusClass(status: QualityScenarioResult["status"]): string {
@@ -769,9 +771,9 @@ function qualityStatusClass(status: QualityScenarioResult["status"]): string {
 }
 
 function qualityLabel(quality: FilePreview["quality"]): string {
-  if (quality === "readable") return "본문 추출";
-  if (quality === "metadata") return "메타데이터";
-  return "추출 제한";
+  if (quality === "readable") return "Text extracted";
+  if (quality === "metadata") return "Metadata";
+  return "Limited extraction";
 }
 
 function qualityClass(quality: FilePreview["quality"]): string {

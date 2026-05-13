@@ -80,22 +80,22 @@ interface AttachmentQuality {
 }
 
 const STATUS_FILTERS: Array<{ status: CandidateStatus; label: string }> = [
-  { status: "ALL", label: "전체" },
-  { status: "NEEDS_ANALYSIS", label: "분석 필요" },
-  { status: "NEEDS_INFO", label: "정보 확인" },
-  { status: "READY_TO_REVIEW", label: "검토 대기" },
-  { status: "REVIEWING", label: "검토 중" },
-  { status: "CONTACTED", label: "연락 완료" },
-  { status: "SHORTLISTED", label: "보류/후보" },
-  { status: "REJECTED", label: "거절" },
-  { status: "ARCHIVED", label: "보관" },
+  { status: "ALL", label: "All" },
+  { status: "NEEDS_ANALYSIS", label: "Needs analysis" },
+  { status: "NEEDS_INFO", label: "Needs info" },
+  { status: "READY_TO_REVIEW", label: "Ready" },
+  { status: "REVIEWING", label: "Reviewing" },
+  { status: "CONTACTED", label: "Contacted" },
+  { status: "SHORTLISTED", label: "Shortlisted" },
+  { status: "REJECTED", label: "Rejected" },
+  { status: "ARCHIVED", label: "Archived" },
 ];
 
 const ATTENTION_FILTERS: Array<{ value: AttentionFilter; label: string }> = [
-  { value: "all", label: "전체 자료" },
-  { value: "manual_review", label: "원본 확인" },
-  { value: "duplicates", label: "중복 의심" },
-  { value: "incomplete", label: "정보 부족" },
+  { value: "all", label: "All materials" },
+  { value: "manual_review", label: "Source check" },
+  { value: "duplicates", label: "Possible duplicates" },
+  { value: "incomplete", label: "Missing info" },
 ];
 
 export default function CandidateIntakePage() {
@@ -142,7 +142,7 @@ function CandidateIntakeView() {
           status: nextStatus,
           attention: nextAttention,
         });
-        setError("후보자 큐를 불러오지 못했어요.");
+        setError("Could not load the candidate queue.");
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -194,7 +194,7 @@ function CandidateIntakeView() {
       setSelectedIds(new Set());
     } catch (err) {
       captureClientError(err, { scope: "email.candidates.bulk-status", status: nextStatus });
-      setError("선택한 후보자 상태를 변경하지 못했어요.");
+      setError("Could not update the selected candidate status.");
     } finally {
       setBulkUpdating(false);
     }
@@ -223,7 +223,7 @@ function CandidateIntakeView() {
       URL.revokeObjectURL(url);
     } catch (err) {
       captureClientError(err, { scope: "email.candidates.export", status, attention });
-      setError("후보자 CSV를 만들지 못했어요.");
+      setError("Could not create the candidate CSV.");
     } finally {
       setExporting(false);
     }
@@ -252,10 +252,11 @@ function CandidateIntakeView() {
               Candidate Intake
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              후보자 자료 접수 큐
+              Candidate intake queue
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
-              메일 첨부에서 감지한 이력서, 프로필, 포트폴리오, 오디션 자료를 검토 상태별로 모읍니다.
+              Resumes, profiles, portfolios, and audition materials found in email attachments are
+              grouped by review state.
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
@@ -263,7 +264,7 @@ function CandidateIntakeView() {
               href="/email"
               className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-orange-500/40 hover:bg-orange-500/10 hover:text-[#FFE2D7]"
             >
-              메일 목록
+              Email list
             </Link>
             <button
               type="button"
@@ -271,7 +272,7 @@ function CandidateIntakeView() {
               disabled={refreshing}
               className="rounded-lg border border-[#FF6B4A]/30 px-3 py-1.5 text-xs text-[#FFB09C] transition hover:bg-[#FF6B4A]/10 disabled:opacity-50"
             >
-              {refreshing ? "갱신 중..." : "후보자 재스캔"}
+              {refreshing ? "Refreshing..." : "Rescan candidates"}
             </button>
             <button
               type="button"
@@ -279,30 +280,30 @@ function CandidateIntakeView() {
               disabled={exporting}
               className="rounded-lg border border-[#7DD3FC]/30 px-3 py-1.5 text-xs text-sky-200 transition hover:bg-[#7DD3FC]/10 disabled:opacity-50"
             >
-              {exporting ? "내보내는 중..." : "CSV 내보내기"}
+              {exporting ? "Exporting..." : "Export CSV"}
             </button>
           </div>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <QueueStat label="정보 필요" value={needsCount} />
-          <QueueStat label="검토 가능" value={readyCount} />
-          <QueueStat label="중복" value={duplicateCount} />
-          <QueueStat label="원본" value={manualReviewCount} />
+          <QueueStat label="Needs info" value={needsCount} />
+          <QueueStat label="Ready" value={readyCount} />
+          <QueueStat label="Duplicates" value={duplicateCount} />
+          <QueueStat label="Source checks" value={manualReviewCount} />
         </div>
         {quality && (
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <QueueStat label="AI 품질" value={`${Math.round(quality.qualityScore * 100)}%`} />
-            <QueueStat label="분석됨" value={quality.analyzedCount} />
-            <QueueStat label="교정됨" value={quality.correctedCount} />
-            <QueueStat label="실패" value={quality.failedCount + quality.manualReviewCount} />
+            <QueueStat label="AI quality" value={`${Math.round(quality.qualityScore * 100)}%`} />
+            <QueueStat label="Analyzed" value={quality.analyzedCount} />
+            <QueueStat label="Corrected" value={quality.correctedCount} />
+            <QueueStat label="Failed" value={quality.failedCount + quality.manualReviewCount} />
           </div>
         )}
         {quality?.correctionSummary && quality.correctionSummary.total > 0 && (
           <div className="mt-3 rounded-xl border border-[#FF6B4A]/15 bg-[#FF6B4A]/5 px-3 py-2 text-[11px] text-[#FFE2D7]/80">
-            최근 수정 {quality.correctionSummary.total}건 · 카테고리{" "}
-            {quality.correctionSummary.categoryCorrectionCount}건 · 필드{" "}
-            {quality.correctionSummary.fieldCorrectionCount}건 · 요약{" "}
-            {quality.correctionSummary.summaryCorrectionCount}건 · 안정도{" "}
+            Recent corrections {quality.correctionSummary.total} · categories{" "}
+            {quality.correctionSummary.categoryCorrectionCount} · fields{" "}
+            {quality.correctionSummary.fieldCorrectionCount} · summaries{" "}
+            {quality.correctionSummary.summaryCorrectionCount} · stability{" "}
             {Math.round(quality.correctionSummary.categoryStability * 100)}%/
             {Math.round(quality.correctionSummary.fieldStability * 100)}%
           </div>
@@ -375,7 +376,7 @@ function CandidateIntakeView() {
               onClick={toggleAllVisible}
               className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-[#FF6B4A]/35 hover:bg-[#FF6B4A]/10 hover:text-[#FFE2D7]"
             >
-              {selectedCount > 0 ? `선택 ${selectedCount}개` : "현재 목록 선택"}
+              {selectedCount > 0 ? `${selectedCount} selected` : "Select visible"}
             </button>
             {selectedCount > 0 && (
               <button
@@ -383,28 +384,28 @@ function CandidateIntakeView() {
                 onClick={() => setSelectedIds(new Set())}
                 className="rounded-lg px-3 py-1.5 text-xs text-stone-500 transition hover:bg-stone-800/70 hover:text-stone-200"
               >
-                해제
+                Clear
               </button>
             )}
           </div>
           <div className="flex flex-wrap gap-2">
             <BulkStatusButton
-              label="검토 중"
+              label="Reviewing"
               disabled={selectedCount === 0 || bulkUpdating}
               onClick={() => bulkUpdateStatus("REVIEWING")}
             />
             <BulkStatusButton
-              label="보류/후보"
+              label="Shortlist"
               disabled={selectedCount === 0 || bulkUpdating}
               onClick={() => bulkUpdateStatus("SHORTLISTED")}
             />
             <BulkStatusButton
-              label="연락 완료"
+              label="Contacted"
               disabled={selectedCount === 0 || bulkUpdating}
               onClick={() => bulkUpdateStatus("CONTACTED")}
             />
             <BulkStatusButton
-              label="보관"
+              label="Archive"
               disabled={selectedCount === 0 || bulkUpdating}
               onClick={() => bulkUpdateStatus("ARCHIVED")}
             />
@@ -412,7 +413,7 @@ function CandidateIntakeView() {
         </div>
       )}
 
-      {loading && <p className="px-1 py-3 text-sm text-stone-500">로딩 중...</p>}
+      {loading && <p className="px-1 py-3 text-sm text-stone-500">Loading...</p>}
 
       {error && (
         <div className="mt-3 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -422,9 +423,9 @@ function CandidateIntakeView() {
 
       {!loading && !error && candidates.length === 0 && (
         <div className="mt-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-center">
-          <p className="text-sm text-stone-300">아직 후보자 자료가 잡히지 않았어요.</p>
+          <p className="text-sm text-stone-300">No candidate materials yet.</p>
           <p className="mt-1 text-xs text-stone-600">
-            Gmail 동기화 후 첨부 분석이 끝나면 이 큐에 자동으로 쌓입니다.
+            After Gmail sync and attachment analysis, candidate signals appear here automatically.
           </p>
         </div>
       )}
@@ -486,7 +487,7 @@ function CandidateCard({
   selected: boolean;
   onToggle: () => void;
 }) {
-  const title = [candidate.name || "이름 미확인", candidate.role].filter(Boolean).join(" · ");
+  const title = [candidate.name || "Unknown name", candidate.role].filter(Boolean).join(" · ");
   return (
     <article
       className={`rounded-xl border p-4 transition ${
@@ -501,7 +502,7 @@ function CandidateCard({
           checked={selected}
           onChange={onToggle}
           className="mt-1 h-4 w-4 rounded border-stone-600 bg-stone-950 text-[#FF8A70]"
-          aria-label={`${title} 선택`}
+          aria-label={`Select ${title}`}
         />
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -513,7 +514,7 @@ function CandidateCard({
             </span>
             {candidate.duplicateCount > 1 && (
               <span className="rounded border border-[#FF6B4A]/25 bg-[#FF6B4A]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#FFB09C]">
-                중복 의심 {candidate.duplicateCount}
+                Possible duplicate {candidate.duplicateCount}
               </span>
             )}
           </div>
@@ -525,46 +526,46 @@ function CandidateCard({
         </time>
       </div>
       <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-stone-500">
-        {candidate.contact && <span className="truncate">연락처 {candidate.contact}</span>}
-        <span>파일 {candidate.evidenceFiles.length}개</span>
+        {candidate.contact && <span className="truncate">Contact {candidate.contact}</span>}
+        <span>{candidate.evidenceFiles.length} files</span>
         {candidate.evidenceFiles.some((file) => file.needsManualReview) && (
           <span className="text-rose-300/80">
-            원본 확인 {candidate.evidenceFiles.filter((file) => file.needsManualReview).length}개
+            Source check {candidate.evidenceFiles.filter((file) => file.needsManualReview).length}
           </span>
         )}
         {candidate.duplicateCount > 1 && (
           <span className="text-[#FF6B4A]/80">
-            중복 기준 {candidate.duplicateReasons.map(candidateDuplicateLabel).join(", ")}
+            Duplicate match {candidate.duplicateReasons.map(candidateDuplicateLabel).join(", ")}
           </span>
         )}
         {candidate.missingFields.length > 0 && (
           <span className="text-[#FF6B4A]/80">
-            추가 확인 {candidate.missingFields.map(candidateMissingLabel).join(", ")}
+            Missing {candidate.missingFields.map(candidateMissingLabel).join(", ")}
           </span>
         )}
       </div>
       <div className="mt-3 rounded-lg border border-stone-800/60 bg-black/15 px-3 py-2">
-        <p className="truncate text-xs text-stone-300">{candidate.email.subject || "제목 없음"}</p>
+        <p className="truncate text-xs text-stone-300">{candidate.email.subject || "Untitled"}</p>
         <p className="mt-1 truncate text-[11px] text-stone-600">
           {senderName(candidate.email.from)}
         </p>
       </div>
       {candidate.notes && (
         <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-stone-500">
-          메모: {candidate.notes}
+          Notes: {candidate.notes}
         </p>
       )}
       <Link
         href={`/email/candidates/${candidate.emailId}`}
         className="mt-3 inline-flex rounded-lg border border-stone-700/55 px-3 py-1.5 text-xs text-stone-300 transition hover:border-[#FF6B4A]/35 hover:bg-[#FF6B4A]/10 hover:text-[#FFE2D7]"
       >
-        후보 상세
+        Candidate details
       </Link>
       <Link
         href={`/email/${candidate.emailId}`}
         className="ml-2 mt-3 inline-flex rounded-lg border border-stone-700/55 px-3 py-1.5 text-xs text-stone-500 transition hover:border-[#FF6B4A]/35 hover:bg-[#FF6B4A]/10 hover:text-[#FFE2D7]"
       >
-        메일
+        Email
       </Link>
     </article>
   );
@@ -572,34 +573,34 @@ function CandidateCard({
 
 function candidateStatusLabel(status: string): string {
   const labels: Record<string, string> = {
-    NEEDS_ANALYSIS: "분석 필요",
-    NEEDS_INFO: "정보 확인",
-    READY_TO_REVIEW: "검토 대기",
-    REVIEWING: "검토 중",
-    CONTACTED: "연락 완료",
-    SHORTLISTED: "보류/후보",
-    REJECTED: "거절",
-    ARCHIVED: "보관",
+    NEEDS_ANALYSIS: "Needs analysis",
+    NEEDS_INFO: "Needs info",
+    READY_TO_REVIEW: "Ready",
+    REVIEWING: "Reviewing",
+    CONTACTED: "Contacted",
+    SHORTLISTED: "Shortlisted",
+    REJECTED: "Rejected",
+    ARCHIVED: "Archived",
   };
   return labels[status] || status;
 }
 
 function candidateMissingLabel(field: string): string {
   const labels: Record<string, string> = {
-    name: "이름",
-    contact: "연락처",
-    role: "역할",
-    portfolio: "포트폴리오",
+    name: "Name",
+    contact: "Contact",
+    role: "Role",
+    portfolio: "Portfolio",
   };
   return labels[field] || field;
 }
 
 function candidateDuplicateLabel(reason: string): string {
   const labels: Record<string, string> = {
-    same_email: "이메일",
-    same_phone: "전화번호",
-    same_name_and_role: "이름+역할",
-    same_name: "이름",
+    same_email: "Email",
+    same_phone: "Phone",
+    same_name_and_role: "Name + role",
+    same_name: "Name",
   };
   return labels[reason] || reason;
 }
@@ -615,12 +616,12 @@ function formatRelative(iso: string): string {
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return "방금";
-  if (diffMin < 60) return `${diffMin}분 전`;
+  if (diffMin < 1) return "Just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
   const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}시간 전`;
+  if (diffHr < 24) return `${diffHr}h ago`;
   const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString("ko-KR", {
+  return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     ...(sameYear ? {} : { year: "2-digit" }),

@@ -10,19 +10,19 @@ import ServiceWorkerRegister from "../components/sw-register";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Jigeum - 지금 중요한 일",
-  description: "Jigeum은 메일, 캘린더, 할 일, 기억을 지금 봐야 할 결정 카드로 정리합니다.",
+  title: "Jigeum - Decision Queue for Work",
+  description: "Jigeum turns mail, calendar, tasks, and memory into clear decision cards.",
   manifest: "/manifest.json",
   openGraph: {
-    title: "Jigeum - 지금 중요한 일",
-    description: "업무 신호, 결정 맥락, 승인, 기억을 조용히 정리하는 작업 레이어입니다.",
+    title: "Jigeum - Decision Queue for Work",
+    description: "A quiet work layer for signals, decision context, approvals, and memory.",
     siteName: "Jigeum",
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Jigeum - 지금 중요한 일",
-    description: "흩어진 업무 신호를 맥락, 승인, 기억이 있는 결정으로 바꿉니다.",
+    title: "Jigeum - Decision Queue for Work",
+    description: "Turn scattered work signals into decisions with context, approval, and memory.",
   },
   appleWebApp: {
     capable: true,
@@ -40,7 +40,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko">
+    <html lang="en">
       <body className="bg-[#10100d] text-stone-100 antialiased">
         <Providers>
           <KeyboardShortcuts />

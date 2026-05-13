@@ -61,14 +61,14 @@ interface EmailDetail {
 }
 
 const STATUSES: Array<{ value: CandidateStatus; label: string }> = [
-  { value: "NEEDS_ANALYSIS", label: "분석 필요" },
-  { value: "NEEDS_INFO", label: "정보 확인" },
-  { value: "READY_TO_REVIEW", label: "검토 대기" },
-  { value: "REVIEWING", label: "검토 중" },
-  { value: "CONTACTED", label: "연락 완료" },
-  { value: "SHORTLISTED", label: "보류/후보" },
-  { value: "REJECTED", label: "거절" },
-  { value: "ARCHIVED", label: "보관" },
+  { value: "NEEDS_ANALYSIS", label: "Needs analysis" },
+  { value: "NEEDS_INFO", label: "Needs info" },
+  { value: "READY_TO_REVIEW", label: "Ready" },
+  { value: "REVIEWING", label: "Reviewing" },
+  { value: "CONTACTED", label: "Contacted" },
+  { value: "SHORTLISTED", label: "Shortlisted" },
+  { value: "REJECTED", label: "Rejected" },
+  { value: "ARCHIVED", label: "Archived" },
 ];
 
 export default function CandidateDetailPage() {
@@ -98,7 +98,7 @@ function CandidateDetailView() {
       setNotes(data.candidateIntake?.notes ?? "");
     } catch (err) {
       captureClientError(err, { scope: "email.candidate-detail.load", emailId });
-      setError("후보자 정보를 불러오지 못했어요.");
+      setError("Could not load candidate details.");
     } finally {
       setLoading(false);
     }
@@ -120,7 +120,7 @@ function CandidateDetailView() {
       setEmail((prev) => (prev ? { ...prev, candidateIntake: data.candidateIntake } : prev));
     } catch (err) {
       captureClientError(err, { scope: "email.candidate-detail.update", emailId });
-      setError("후보자 상태를 저장하지 못했어요.");
+      setError("Could not save candidate status.");
     } finally {
       setSaving(false);
     }
@@ -135,19 +135,19 @@ function CandidateDetailView() {
           href="/email/candidates"
           className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 hover:border-[#FF6B4A]/35 hover:text-[#FFE2D7]"
         >
-          후보 큐
+          Candidate queue
         </Link>
         {email && (
           <Link
             href={`/email/${email.id}`}
             className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 hover:border-[#FF6B4A]/35 hover:text-[#FFE2D7]"
           >
-            원본 메일
+            Source email
           </Link>
         )}
       </div>
 
-      {loading && <p className="text-sm text-stone-500">로딩 중...</p>}
+      {loading && <p className="text-sm text-stone-500">Loading...</p>}
       {error && (
         <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
           {error}
@@ -163,7 +163,7 @@ function CandidateDetailView() {
                   Candidate CRM
                 </p>
                 <h1 className="mt-2 text-2xl font-semibold text-stone-50">
-                  {[profile.name || "이름 미확인", profile.role].filter(Boolean).join(" · ")}
+                  {[profile.name || "Unknown name", profile.role].filter(Boolean).join(" · ")}
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-stone-400">{profile.summary}</p>
               </div>
@@ -173,14 +173,16 @@ function CandidateDetailView() {
             </div>
 
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
-              <Fact label="연락처" value={profile.contact} />
-              <Fact label="나이/생년" value={profile.age} />
-              <Fact label="신장" value={profile.height} />
-              <Fact label="상태" value={pipelineLabel(profile.pipelineStatus)} />
+              <Fact label="Contact" value={profile.contact} />
+              <Fact label="Age / birth year" value={profile.age} />
+              <Fact label="Height" value={profile.height} />
+              <Fact label="Status" value={pipelineLabel(profile.pipelineStatus)} />
             </div>
 
-            {profile.skills.length > 0 && <ChipBlock title="특기/언어" values={profile.skills} />}
-            {profile.links.length > 0 && <ChipBlock title="링크" values={profile.links} />}
+            {profile.skills.length > 0 && (
+              <ChipBlock title="Skills / languages" values={profile.skills} />
+            )}
+            {profile.links.length > 0 && <ChipBlock title="Links" values={profile.links} />}
 
             {(profile.missingFields.length > 0 || profile.manualReviewFiles.length > 0) && (
               <div className="mt-5 rounded-lg border border-[#FF6B4A]/20 bg-[#FF6B4A]/10 p-3">
@@ -195,7 +197,7 @@ function CandidateDetailView() {
 
             <div className="mt-5 space-y-2">
               <h2 className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
-                증거 파일
+                Evidence files
               </h2>
               {profile.evidenceFiles.map((file) => (
                 <div
@@ -208,7 +210,7 @@ function CandidateDetailView() {
                       {file.category || "document"} · {file.analysisStatus}
                     </span>
                     {file.needsManualReview && (
-                      <span className="text-[10px] text-rose-300">원본 확인</span>
+                      <span className="text-[10px] text-rose-300">Source check</span>
                     )}
                   </div>
                   {file.summary && (
@@ -221,7 +223,7 @@ function CandidateDetailView() {
 
           <aside className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
             <h2 className="text-[11px] font-semibold uppercase tracking-wider text-stone-300">
-              검토 상태
+              Review status
             </h2>
             <div className="mt-3 grid gap-2">
               {STATUSES.map((status) => (
@@ -257,10 +259,10 @@ function CandidateDetailView() {
               disabled={saving}
               className="mt-2 w-full rounded-lg bg-[#FF8A70] px-3 py-2 text-xs font-medium text-stone-950 transition hover:bg-[#FFB09C] disabled:opacity-50"
             >
-              {saving ? "저장 중..." : "메모 저장"}
+              {saving ? "Saving..." : "Save notes"}
             </button>
             <div className="mt-4 rounded-lg border border-stone-800/70 bg-black/15 px-3 py-2">
-              <p className="text-xs text-stone-300">{email.subject || "제목 없음"}</p>
+              <p className="text-xs text-stone-300">{email.subject || "Untitled"}</p>
               <p className="mt-1 text-[11px] text-stone-600">{email.from}</p>
             </div>
           </aside>
@@ -298,7 +300,7 @@ function ChipBlock({ title, values }: { title: string; values: string[] }) {
 }
 
 function pipelineLabel(status: CandidateProfile["pipelineStatus"]): string {
-  if (status === "needs_analysis") return "분석 필요";
-  if (status === "needs_info") return "정보 확인";
-  return "검토 가능";
+  if (status === "needs_analysis") return "Needs analysis";
+  if (status === "needs_info") return "Needs info";
+  return "Ready to review";
 }

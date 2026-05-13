@@ -56,9 +56,9 @@ interface ReminderDiagnostics {
 }
 
 const STATUS_LABELS: Record<CheckStatus, string> = {
-  ok: "정상",
-  warning: "설정 필요",
-  error: "확인 필요",
+  ok: "OK",
+  warning: "Needs setup",
+  error: "Needs review",
 };
 
 const STATUS_CLASSES: Record<CheckStatus, string> = {
@@ -122,13 +122,13 @@ export default function SettingsStatusPage() {
         { method: "POST" },
       );
       toast(
-        `리마인더 확인 완료: ${result.found}개 중 ${result.delivered}개 전달`,
+        `Reminder check complete: delivered ${result.delivered} of ${result.found}`,
         result.failed > 0 ? "error" : "success",
       );
       await load();
     } catch (err) {
       captureClientError(err, { scope: "settings.status.deliver-due" });
-      toast("리마인더 전달 상태를 확인하지 못했어요.", "error");
+      toast("Could not check reminder delivery.", "error");
     } finally {
       setDelivering(false);
     }
@@ -145,14 +145,15 @@ export default function SettingsStatusPage() {
                 href="/settings"
                 className="mb-3 inline-flex rounded-full border border-stone-700/45 px-3 py-1.5 text-xs text-stone-400 transition hover:border-amber-500/35 hover:text-stone-100"
               >
-                설정으로 돌아가기
+                Back to settings
               </Link>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-                운영 상태
+                Ops status
               </p>
-              <h1 className="text-2xl font-semibold tracking-tight text-stone-50">Jigeum 상태</h1>
+              <h1 className="text-2xl font-semibold tracking-tight text-stone-50">Jigeum status</h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-                배포, 연동, 푸시, 리마인더, 브리핑 준비 상태를 한곳에서 확인합니다.
+                Check deployment, integrations, push, reminders, and briefing readiness in one
+                compact view.
               </p>
             </div>
             <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
@@ -162,36 +163,36 @@ export default function SettingsStatusPage() {
                 onClick={load}
                 className="absolute right-3 top-3 rounded-md border border-stone-700 bg-stone-950/75 px-3 py-2 text-sm text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100"
               >
-                새로고침
+                Refresh
               </button>
             </div>
           </div>
         </header>
 
         {loading && !readiness ? (
-          <div className="py-20 text-center text-sm text-stone-500">상태 확인 중...</div>
+          <div className="py-20 text-center text-sm text-stone-500">Checking status...</div>
         ) : readiness ? (
           <>
             <section className="mb-6 grid gap-3 sm:grid-cols-3">
               <SummaryTile
-                label="전체"
+                label="Overall"
                 value={STATUS_LABELS[readiness.status]}
                 status={readiness.status}
               />
               <SummaryTile
-                label="API 커밋"
-                value={readiness.system.commit ? readiness.system.commit.slice(0, 8) : "알 수 없음"}
+                label="API commit"
+                value={readiness.system.commit ? readiness.system.commit.slice(0, 8) : "Unknown"}
                 status={readiness.system.commit ? "ok" : "warning"}
               />
               <SummaryTile
-                label="가동 시간"
+                label="Uptime"
                 value={formatDuration(readiness.system.uptime)}
                 status="ok"
               />
             </section>
 
             <section className="mb-8">
-              <h2 className="mb-3 text-sm font-semibold text-stone-300">준비 상태 확인</h2>
+              <h2 className="mb-3 text-sm font-semibold text-stone-300">Readiness checks</h2>
               <div className="grid gap-3 sm:grid-cols-2">
                 {readiness.checks.map((check) => (
                   <div
@@ -218,36 +219,39 @@ export default function SettingsStatusPage() {
 
             <section className="mb-8">
               <div className="mb-3 flex items-center justify-between gap-4">
-                <h2 className="text-sm font-semibold text-stone-300">리마인더 진단</h2>
+                <h2 className="text-sm font-semibold text-stone-300">Reminder diagnostics</h2>
                 <button
                   type="button"
                   onClick={deliverDue}
                   disabled={delivering}
                   className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-sm text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {delivering ? "확인 중..." : "마감 리마인더 확인"}
+                  {delivering ? "Checking..." : "Check due reminders"}
                 </button>
               </div>
               {diagnostics ? (
                 <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
                   <div className="mb-4 grid gap-3 sm:grid-cols-3">
-                    <Metric label="푸시 구독" value={String(diagnostics.subscriptions)} />
-                    <Metric label="최근 리마인더" value={String(diagnostics.reminders.length)} />
-                    <Metric label="푸시 전송" value={String(diagnostics.pushDeliveries.length)} />
+                    <Metric label="Push subscriptions" value={String(diagnostics.subscriptions)} />
+                    <Metric label="Recent reminders" value={String(diagnostics.reminders.length)} />
+                    <Metric
+                      label="Push deliveries"
+                      value={String(diagnostics.pushDeliveries.length)}
+                    />
                   </div>
                   <div className="grid gap-4 lg:grid-cols-3">
                     <DiagnosticsList
-                      title="리마인더"
-                      empty="최근 리마인더가 없어요"
+                      title="Reminders"
+                      empty="No recent reminders"
                       rows={diagnostics.reminders.map((r) => ({
                         id: r.id,
                         title: r.title,
-                        meta: `${r.status}${r.due ? " | 마감" : ""} | ${formatDate(r.remindAt)}`,
+                        meta: `${r.status}${r.due ? " | due" : ""} | ${formatDate(r.remindAt)}`,
                       }))}
                     />
                     <DiagnosticsList
-                      title="알림"
-                      empty="리마인더 알림이 없어요"
+                      title="Notifications"
+                      empty="No reminder notifications"
                       rows={diagnostics.notifications.map((n) => ({
                         id: n.id,
                         title: n.title,
@@ -255,16 +259,16 @@ export default function SettingsStatusPage() {
                       }))}
                     />
                     <DiagnosticsList
-                      title="푸시"
-                      empty="최근 푸시 전송이 없어요"
+                      title="Push"
+                      empty="No recent push deliveries"
                       rows={diagnostics.pushDeliveries.map((d) => ({
                         id: d.id,
                         title: d.title,
                         meta: `${d.status}${d.skipReason ? ` | ${d.skipReason}` : ""} | ${
                           d.receivedAt
-                            ? "수신됨"
+                            ? "received"
                             : d.acceptedAt
-                              ? "전송됨"
+                              ? "sent"
                               : formatDate(d.createdAt)
                         }`,
                       }))}
@@ -273,14 +277,14 @@ export default function SettingsStatusPage() {
                 </div>
               ) : (
                 <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-6 text-sm text-stone-500">
-                  리마인더 진단을 불러오지 못했어요.
+                  Could not load reminder diagnostics.
                 </div>
               )}
             </section>
           </>
         ) : (
           <div className="rounded-lg border border-red-900/50 bg-red-950/20 p-6 text-sm text-red-300">
-            Jigeum 상태를 불러오지 못했어요.
+            Could not load Jigeum status.
           </div>
         )}
       </main>
@@ -330,14 +334,14 @@ function detailNumber(check: ReadinessCheck, key: string): number | null {
 
 function readinessCheckLabel(check: ReadinessCheck): string {
   const labels: Record<string, string> = {
-    db: "데이터베이스",
-    devices: "로그인된 기기",
-    push: "푸시 알림",
-    google: "Google 계정",
-    automations: "자동화 설정",
-    reminders: "리마인더",
-    briefing: "일일 브리핑",
-    data: "동기화 데이터",
+    db: "Database",
+    devices: "Signed-in devices",
+    push: "Push notifications",
+    google: "Google account",
+    automations: "Automation settings",
+    reminders: "Reminders",
+    briefing: "Daily briefing",
+    data: "Synced data",
   };
   return labels[check.key] ?? check.label;
 }
@@ -345,34 +349,38 @@ function readinessCheckLabel(check: ReadinessCheck): string {
 function readinessCheckMessage(check: ReadinessCheck): string {
   switch (check.key) {
     case "db":
-      return check.status === "ok" ? "연결됨" : "연결하지 못했어요";
+      return check.status === "ok" ? "Connected" : "Could not connect";
     case "devices": {
       const count = detailNumber(check, "count") ?? 0;
-      return count > 0 ? `활성 기기 ${count}개` : "로그인된 기기가 없어요";
+      return count > 0 ? `${count} active device${count === 1 ? "" : "s"}` : "No signed-in devices";
     }
     case "push": {
       const subscriptions = detailNumber(check, "subscriptions") ?? 0;
-      if (check.status === "error") return "VAPID 키가 필요해요";
-      return subscriptions > 0 ? `푸시 구독 ${subscriptions}개 등록됨` : "푸시 구독이 없어요";
+      if (check.status === "error") return "VAPID key required";
+      return subscriptions > 0
+        ? `${subscriptions} push subscription${subscriptions === 1 ? "" : "s"} registered`
+        : "No push subscriptions";
     }
     case "google":
-      return check.status === "ok" ? "연결됨" : "연결 안 됨";
+      return check.status === "ok" ? "Connected" : "Not connected";
     case "automations":
-      return check.status === "ok" ? "설정됨" : "자동화 설정 필요";
+      return check.status === "ok" ? "Configured" : "Automation setup required";
     case "reminders": {
       const overdue = detailNumber(check, "overdue") ?? 0;
-      return overdue > 0 ? `기다리는 리마인더 ${overdue}개` : "지난 리마인더가 없어요";
+      return overdue > 0
+        ? `${overdue} waiting reminder${overdue === 1 ? "" : "s"}`
+        : "No overdue reminders";
     }
     case "briefing":
-      if (check.message.startsWith("Generated today")) return "오늘 브리핑 생성됨";
-      if (check.message.startsWith("Enabled for")) return "브리핑 자동화 켜짐";
-      return "브리핑 자동화 꺼짐";
+      if (check.message.startsWith("Generated today")) return "Briefing generated today";
+      if (check.message.startsWith("Enabled for")) return "Briefing automation on";
+      return "Briefing automation off";
     case "data": {
       const emails = detailNumber(check, "emails") ?? 0;
       const events = detailNumber(check, "upcomingCalendarEvents") ?? 0;
       return emails > 0 || events > 0
-        ? `메일 ${emails}개, 예정 일정 ${events}개`
-        : "아직 동기화된 메일이나 캘린더 데이터가 없어요";
+        ? `${emails} emails, ${events} upcoming events`
+        : "No synced mail or calendar data yet";
     }
     default:
       return check.message;
@@ -417,15 +425,15 @@ function DiagnosticsList({
 }
 
 function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}초`;
+  if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}분`;
+  if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
-  return `${hours}시간 ${minutes % 60}분`;
+  return `${hours}h ${minutes % 60}m`;
 }
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("ko-KR", {
+  return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     hour: "2-digit",

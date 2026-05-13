@@ -91,18 +91,18 @@ interface BulkActionResponse {
 }
 
 const FILTERS: { key: Filter; label: string; query: string }[] = [
-  { key: "all", label: "전체 신호", query: "" },
-  { key: "reply-needed", label: "답장 필요", query: "filter=reply-needed" },
-  { key: "urgent", label: "긴급", query: "filter=urgent" },
-  { key: "unread", label: "읽지 않음", query: "filter=unread" },
-  { key: "attachments", label: "첨부", query: "filter=attachments" },
-  { key: "candidates", label: "후보자", query: "filter=candidates" },
-  { key: "finance", label: "재무", query: "category=billing" },
-  { key: "legal", label: "법무", query: "search=contract" },
-  { key: "sales", label: "세일즈", query: "category=business" },
-  { key: "support", label: "지원", query: "search=support" },
-  { key: "threads", label: "스레드", query: "" },
-  { key: "automated", label: "자동화", query: "category=automated" },
+  { key: "all", label: "All signals", query: "" },
+  { key: "reply-needed", label: "Needs reply", query: "filter=reply-needed" },
+  { key: "urgent", label: "Urgent", query: "filter=urgent" },
+  { key: "unread", label: "Unread", query: "filter=unread" },
+  { key: "attachments", label: "Attachments", query: "filter=attachments" },
+  { key: "candidates", label: "Candidates", query: "filter=candidates" },
+  { key: "finance", label: "Finance", query: "category=billing" },
+  { key: "legal", label: "Legal", query: "search=contract" },
+  { key: "sales", label: "Sales", query: "category=business" },
+  { key: "support", label: "Support", query: "search=support" },
+  { key: "threads", label: "Threads", query: "" },
+  { key: "automated", label: "Automated", query: "category=automated" },
 ];
 
 const WORK_QUEUES: Array<{
@@ -113,45 +113,45 @@ const WORK_QUEUES: Array<{
 }> = [
   {
     key: "finance",
-    title: "재무 문서",
-    description: "청구, 송장, 결제 실패, 계약 금액",
+    title: "Finance docs",
+    description: "Billing, invoices, failed payments, contract amounts",
     count: (emails) =>
       emails.filter((email) =>
         `${email.category ?? ""} ${email.subject} ${email.summary ?? ""} ${email.snippet ?? ""}`
           .toLowerCase()
-          .match(/billing|invoice|payment|receipt|청구|송장|결제|영수증/),
+          .match(/billing|invoice|payment|receipt/),
       ).length,
   },
   {
     key: "legal",
-    title: "법무 검토",
-    description: "계약, 규제, 서명, 리스크",
+    title: "Legal review",
+    description: "Contracts, compliance, signatures, risk",
     count: (emails) =>
       emails.filter((email) =>
         `${email.subject} ${email.summary ?? ""} ${email.snippet ?? ""}`.match(
-          /계약|서명|법무|규제|contract|legal|signature|compliance/i,
+          /contract|legal|signature|compliance/i,
         ),
       ).length,
   },
   {
     key: "sales",
-    title: "매출/고객",
-    description: "고객 답장, 갱신, 가격, 미팅 후속",
+    title: "Revenue and customers",
+    description: "Customer replies, renewals, pricing, meeting follow-up",
     count: (emails) =>
       emails.filter((email) =>
         `${email.category ?? ""} ${email.subject} ${email.summary ?? ""}`.match(
-          /business|customer|sales|renewal|pricing|고객|가격|갱신|제안/i,
+          /business|customer|sales|renewal|pricing|proposal/i,
         ),
       ).length,
   },
   {
     key: "support",
-    title: "지원/이슈",
-    description: "버그, 장애, 불만, 에스컬레이션",
+    title: "Support issues",
+    description: "Bugs, incidents, complaints, escalations",
     count: (emails) =>
       emails.filter((email) =>
         `${email.subject} ${email.summary ?? ""} ${email.snippet ?? ""}`.match(
-          /bug|issue|error|support|blocked|장애|오류|문의|불만|지원/i,
+          /bug|issue|error|support|blocked|complaint/i,
         ),
       ).length,
   },
@@ -204,7 +204,7 @@ function EmailView() {
       }
     } catch (err) {
       captureClientError(err, { scope: "email.load", filter: f });
-      setError("메일을 불러오지 못했어요.");
+      setError("Could not load mail.");
     } finally {
       setLoading(false);
     }
@@ -227,7 +227,7 @@ function EmailView() {
       await load(filter, appliedSearch);
     } catch (err) {
       captureClientError(err, { scope: "email.sync" });
-      setError("Gmail 동기화에 실패했어요.");
+      setError("Gmail sync failed.");
     } finally {
       setSyncing(false);
     }
@@ -244,7 +244,7 @@ function EmailView() {
       await load(filter, appliedSearch);
     } catch (err) {
       captureClientError(err, { scope: "email.attachments.analyzeAll" });
-      setError("첨부파일 분석을 다시 실행하지 못했어요.");
+      setError("Could not rerun attachment analysis.");
     } finally {
       setReanalyzing(false);
     }
@@ -289,11 +289,11 @@ function EmailView() {
       setEmails((prev) => updateEmailsAfterBulk(prev, ids, action, options.priority));
       setSelectedIds(new Set());
       if (data.failed && data.failed.length > 0) {
-        setError(`${data.failed.length}개 메일은 처리하지 못했어요. 다시 시도해 주세요.`);
+        setError(`${data.failed.length} messages could not be processed. Please try again.`);
       }
     } catch (err) {
       captureClientError(err, { scope: "email.bulk", action });
-      setError("선택한 메일을 처리하지 못했어요.");
+      setError("Could not process the selected mail.");
     } finally {
       setBulkBusy(false);
     }
@@ -311,14 +311,14 @@ function EmailView() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#FF8A70]">
-              메일
+              Mail
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              답해야 할 메일만 먼저 보기
+              See mail that needs an answer first
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-              긴급도와 답장 필요 여부를 기준으로 정리합니다.
-              {source === "demo" && <span className="ml-2 text-[#FF6B4A]">데모 데이터</span>}
+              Organized by urgency and reply need.
+              {source === "demo" && <span className="ml-2 text-[#FF6B4A]">Demo data</span>}
             </p>
           </div>
           <button
@@ -327,7 +327,7 @@ function EmailView() {
             disabled={syncing}
             className="h-9 w-fit rounded-md border border-white/10 bg-[#090B10] px-3 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:bg-white/5 hover:text-stone-100 disabled:opacity-50"
           >
-            {syncing ? "동기화 중..." : "지금 동기화"}
+            {syncing ? "Syncing..." : "Sync now"}
           </button>
           <button
             type="button"
@@ -335,14 +335,14 @@ function EmailView() {
             disabled={reanalyzing}
             className="h-9 w-fit rounded-md border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 px-3 text-xs font-medium text-sky-100 transition hover:bg-[#7DD3FC]/15 disabled:opacity-50"
           >
-            {reanalyzing ? "첨부 분석 중..." : "첨부 다시 분석"}
+            {reanalyzing ? "Analyzing..." : "Reanalyze attachments"}
           </button>
         </div>
         <div className="mt-5 grid grid-cols-4 overflow-hidden rounded-md border border-white/10 bg-[#090B10]">
-          <SignalStat label="읽지 않음" value={unreadCount} />
-          <SignalStat label="긴급" value={urgentCount} />
-          <SignalStat label="답장" value={replyCount} />
-          <SignalStat label="첨부" value={attachmentCount} />
+          <SignalStat label="Unread" value={unreadCount} />
+          <SignalStat label="Urgent" value={urgentCount} />
+          <SignalStat label="Replies" value={replyCount} />
+          <SignalStat label="Files" value={attachmentCount} />
         </div>
       </header>
 
@@ -350,14 +350,14 @@ function EmailView() {
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="발신자, 본문, 첨부 텍스트, 추출 필드 검색"
+          placeholder="Search sender, body, attachment text, extracted fields"
           className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#090B10] px-3 text-sm text-stone-200 outline-none transition placeholder:text-stone-600 focus:border-[#FF6B4A]/45"
         />
         <button
           type="submit"
           className="h-10 rounded-lg bg-[#FF6B4A] px-4 text-sm font-medium text-stone-950 transition hover:bg-[#FFB09C]"
         >
-          검색
+          Search
         </button>
         {appliedSearch && (
           <button
@@ -368,7 +368,7 @@ function EmailView() {
             }}
             className="h-10 rounded-lg border border-white/10 bg-[#11161A] px-3 text-xs text-stone-400 transition hover:bg-white/5"
           >
-            초기화
+            Clear
           </button>
         )}
       </form>
@@ -392,7 +392,7 @@ function EmailView() {
               {queue.description}
             </span>
             <span className="mt-2 block text-xs text-[#FF8A70]">
-              현재 화면 신호 {queue.count(emails)}
+              Current signals {queue.count(emails)}
             </span>
           </button>
         ))}
@@ -403,12 +403,12 @@ function EmailView() {
           href="/email/candidates"
           className="mt-3 flex items-center justify-between rounded-lg border border-orange-500/20 bg-orange-500/5 px-4 py-3 text-sm text-[#FFB09C] transition hover:bg-orange-500/10"
         >
-          <span>후보자 접수 큐에서 {candidateCount}개 후보 신호를 검토할 수 있어요.</span>
-          <span className="text-xs">열기</span>
+          <span>Review {candidateCount} candidate signals in the intake queue.</span>
+          <span className="text-xs">Open</span>
         </Link>
       )}
 
-      {loading && <p className="px-1 py-3 text-sm text-stone-500">로딩 중...</p>}
+      {loading && <p className="px-1 py-3 text-sm text-stone-500">Loading...</p>}
 
       {error && (
         <div className="mt-3 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -419,10 +419,10 @@ function EmailView() {
       {!loading && !error && filter !== "threads" && emails.length === 0 && (
         <div className="mt-4 rounded-lg border border-white/10 bg-[#11161A] p-6 text-center">
           <p className="text-sm text-stone-300">
-            {filter === "all" ? "아직 들어온 메일 신호가 없어요." : "조건에 맞는 신호가 없어요."}
+            {filter === "all" ? "No mail signals yet." : "No signals match this filter."}
           </p>
           <p className="mt-1 text-xs text-stone-600">
-            동기화가 끝나면 실행이 필요한 메일만 먼저 떠오릅니다.
+            After sync, mail that needs action rises to the top.
           </p>
         </div>
       )}
@@ -454,7 +454,7 @@ function EmailView() {
 
       {!loading && filter === "threads" && threads.length === 0 && !error && (
         <div className="mt-4 rounded-lg border border-white/10 bg-[#11161A] p-6 text-center">
-          <p className="text-sm text-stone-300">조건에 맞는 스레드가 없어요.</p>
+          <p className="text-sm text-stone-300">No threads match this filter.</p>
         </div>
       )}
 
@@ -512,31 +512,31 @@ function BulkActionBar({
           onClick={onToggleAll}
           className="h-8 rounded-md border border-white/10 bg-[#11161A] px-2.5 text-xs font-medium text-stone-300 transition hover:bg-white/5"
         >
-          {allVisibleSelected ? "전체 해제" : "현재 화면 선택"}
+          {allVisibleSelected ? "Clear page" : "Select page"}
         </button>
         <span className="text-xs text-stone-500">
-          {selectedCount > 0 ? `${selectedCount}개 선택됨` : `현재 화면 ${totalVisible}개`}
+          {selectedCount > 0 ? `${selectedCount} selected` : `${totalVisible} on this page`}
         </span>
       </div>
       {selectedCount > 0 && (
         <div className="flex flex-wrap gap-1.5">
           <BulkButton disabled={busy} onClick={() => onApply("mark-read")}>
-            읽음
+            Mark read
           </BulkButton>
           <BulkButton disabled={busy} onClick={() => onApply("mark-unread")}>
-            안읽음
+            Mark unread
           </BulkButton>
           <BulkButton
             disabled={busy}
             onClick={() => onApply("set-priority", { priority: "URGENT" })}
           >
-            긴급
+            Urgent
           </BulkButton>
           <BulkButton disabled={busy} onClick={() => onApply("set-priority", { priority: "LOW" })}>
-            낮음
+            Low
           </BulkButton>
           <BulkButton disabled={busy} danger onClick={() => onApply("archive")}>
-            보관
+            Archive
           </BulkButton>
           <button
             type="button"
@@ -544,7 +544,7 @@ function BulkActionBar({
             disabled={busy}
             className="h-8 rounded-md px-2.5 text-xs text-stone-500 transition hover:bg-white/5 disabled:opacity-50"
           >
-            취소
+            Cancel
           </button>
         </div>
       )}
@@ -632,7 +632,7 @@ function EmailRowItem({
       <button
         type="button"
         aria-pressed={selected}
-        aria-label={`${email.subject || "제목 없음"} 선택`}
+        aria-label={`Select ${email.subject || "No subject"}`}
         onClick={() => onToggleSelected(email.id)}
         className={`mt-4 h-5 w-5 rounded border transition ${
           selected
@@ -653,11 +653,11 @@ function EmailRowItem({
               {senderName(email.from)}
             </p>
             <p className="mt-1 truncate text-[13px] text-stone-400">
-              {email.subject || "제목 없음"}
+              {email.subject || "No subject"}
             </p>
             {email.summary ? (
               <p className="mt-2 line-clamp-2 text-xs leading-5 text-stone-400">
-                <span className="mr-1 text-stone-500">요약:</span>
+                <span className="mr-1 text-stone-500">Summary:</span>
                 {email.summary}
               </p>
             ) : email.snippet ? (
@@ -684,17 +684,17 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
       {(email.attachmentCandidateCount ?? 0) > 0 && <CandidateBadge />}
       {(email.attachmentCount ?? 0) > 0 && (
         <span className="shrink-0 rounded border border-[#7DD3FC]/30 bg-[#7DD3FC]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#7DD3FC]">
-          첨부 {email.attachmentCount}
+          Files {email.attachmentCount}
         </span>
       )}
       {(email.attachmentPendingCount ?? 0) > 0 && (
         <span className="shrink-0 rounded border border-stone-600 bg-stone-900/70 px-1.5 py-0.5 text-[10px] font-medium text-stone-400">
-          분석 대기 {email.attachmentPendingCount}
+          Pending {email.attachmentPendingCount}
         </span>
       )}
       {(email.attachmentFallbackCount ?? 0) > 0 && (
         <span className="shrink-0 rounded border border-[#FF6B4A]/25 bg-[#FF6B4A]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#FF6B4A]">
-          기본 분석 {email.attachmentFallbackCount}
+          Fallback {email.attachmentFallbackCount}
         </span>
       )}
       {email.category && <CategoryBadge category={email.category} />}
@@ -716,15 +716,15 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
               <PriorityBadge priority={thread.latestPriority} />
               {thread.hasUnread && (
                 <span className="rounded border border-[#FF6B4A]/30 bg-[#FF6B4A]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#FF6B4A]">
-                  읽지 않음
+                  Unread
                 </span>
               )}
               <span className="rounded border border-stone-700 bg-stone-900/60 px-1.5 py-0.5 text-[10px] text-stone-400">
-                {thread.messageCount}개 메일
+                {thread.messageCount} messages
               </span>
             </div>
             <p className="mt-2 truncate text-sm font-semibold text-stone-100">
-              {thread.subject || "제목 없음"}
+              {thread.subject || "No subject"}
             </p>
             <p className="mt-1 truncate text-[12px] text-stone-500">
               {thread.participants.map(senderName).join(", ")}
@@ -747,10 +747,10 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
 }
 
 function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
-  const title = [profile.name || "이름 미확인", profile.role].filter(Boolean).join(" · ");
+  const title = [profile.name || "Name missing", profile.role].filter(Boolean).join(" · ");
   const missing =
     profile.missingFields.length > 0
-      ? `추가 확인: ${profile.missingFields.map(candidateMissingLabel).join(", ")}`
+      ? `Needs: ${profile.missingFields.map(candidateMissingLabel).join(", ")}`
       : null;
   return (
     <div className="mt-2 rounded-lg border border-orange-500/15 bg-orange-500/5 px-2.5 py-2">
@@ -762,9 +762,9 @@ function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
       </div>
       <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-stone-400">{profile.summary}</p>
       <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-stone-500">
-        {profile.contact && <span className="truncate">연락처 {profile.contact}</span>}
+        {profile.contact && <span className="truncate">Contact {profile.contact}</span>}
         {profile.intakeStatus && <span>{candidateIntakeLabel(profile.intakeStatus)}</span>}
-        <span>파일 {profile.evidenceCount}개</span>
+        <span>Files {profile.evidenceCount}</span>
         {missing && <span className="text-[#FF6B4A]/80">{missing}</span>}
       </div>
     </div>
@@ -773,31 +773,31 @@ function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
 
 function candidateIntakeLabel(status: string): string {
   const labels: Record<string, string> = {
-    NEEDS_ANALYSIS: "분석 필요",
-    NEEDS_INFO: "정보 확인",
-    READY_TO_REVIEW: "검토 대기",
-    REVIEWING: "검토 중",
-    CONTACTED: "연락 완료",
-    SHORTLISTED: "보류/후보",
-    REJECTED: "거절",
-    ARCHIVED: "보관",
+    NEEDS_ANALYSIS: "Needs analysis",
+    NEEDS_INFO: "Needs info",
+    READY_TO_REVIEW: "Ready to review",
+    REVIEWING: "Reviewing",
+    CONTACTED: "Contacted",
+    SHORTLISTED: "Shortlisted",
+    REJECTED: "Rejected",
+    ARCHIVED: "Archived",
   };
   return labels[status] || status;
 }
 
 function candidateMissingLabel(field: string): string {
   const labels: Record<string, string> = {
-    name: "이름",
-    contact: "연락처",
-    role: "역할",
-    portfolio: "포트폴리오",
+    name: "Name",
+    contact: "Contact",
+    role: "Role",
+    portfolio: "Portfolio",
   };
   return labels[field] || field;
 }
 function ReplyNeededBadge() {
   return (
     <span className="text-[10px] px-1.5 py-0.5 rounded border border-[#FF6B4A]/30 bg-[#FF6B4A]/10 text-[#FF6B4A] font-medium shrink-0">
-      답장 필요
+      Needs reply
     </span>
   );
 }
@@ -805,7 +805,7 @@ function ReplyNeededBadge() {
 function CandidateBadge() {
   return (
     <span className="text-[10px] px-1.5 py-0.5 rounded border border-[#FF6B4A]/30 bg-[#FF6B4A]/10 text-[#FF8A70] font-medium shrink-0">
-      후보자
+      Candidate
     </span>
   );
 }
@@ -816,7 +816,7 @@ function PriorityBadge({ priority }: { priority: EmailRow["priority"] }) {
     NORMAL: "bg-stone-800 text-stone-400 border-stone-700",
     LOW: "bg-stone-900 text-stone-500 border-stone-800",
   } as const;
-  const labels = { URGENT: "긴급", NORMAL: "일반", LOW: "낮음" } as const;
+  const labels = { URGENT: "Urgent", NORMAL: "Normal", LOW: "Low" } as const;
   if (priority === "NORMAL") return null;
   return (
     <span
@@ -829,14 +829,14 @@ function PriorityBadge({ priority }: { priority: EmailRow["priority"] }) {
 
 function CategoryBadge({ category }: { category: string }) {
   const labelMap: Record<string, string> = {
-    business: "비즈니스",
-    engineering: "엔지니어링",
-    automated: "자동화",
-    newsletter: "뉴스레터",
-    meeting: "미팅",
-    billing: "청구",
-    conversation: "대화",
-    other: "기타",
+    business: "Business",
+    engineering: "Engineering",
+    automated: "Automated",
+    newsletter: "Newsletter",
+    meeting: "Meeting",
+    billing: "Billing",
+    conversation: "Conversation",
+    other: "Other",
   };
   const label = labelMap[category] || category;
   return (
@@ -857,12 +857,12 @@ function formatRelative(iso: string): string {
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return "방금";
-  if (diffMin < 60) return `${diffMin}분 전`;
+  if (diffMin < 1) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
   const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}시간 전`;
+  if (diffHr < 24) return `${diffHr}h ago`;
   const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString("ko-KR", {
+  return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     ...(sameYear ? {} : { year: "2-digit" }),

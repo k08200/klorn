@@ -37,8 +37,8 @@ function normalizePlan(
   return {
     ...EMPTY_PLAN,
     ...raw,
-    headline: raw.headline ?? "지금 흐름을 유지하면 됩니다.",
-    primaryAction: raw.primaryAction ?? "가장 먼저 처리할 카드부터 확인하세요.",
+    headline: raw.headline ?? "Keep the current flow moving.",
+    primaryAction: raw.primaryAction ?? "Start with the first decision card.",
     metrics: Array.isArray(raw.metrics) ? raw.metrics : [],
     nextMoves: Array.isArray(raw.nextMoves)
       ? raw.nextMoves.map((move, index) => normalizeMove(move, index))
@@ -63,14 +63,14 @@ function normalizeMove(move: Partial<OperatingPlanMove>, index: number): Operati
   };
   return {
     id: move.id ?? `move_${index}`,
-    label: move.label ?? "다음 움직임",
+    label: move.label ?? "Next move",
     tone:
       move.tone ??
       (legacy.priority === "high" ? "critical" : legacy.priority === "medium" ? "warn" : "steady"),
     source: move.source ?? legacy.surface ?? "attention",
-    title: move.title ?? "준비된 작업",
-    reason: move.reason ?? legacy.rationale ?? "검토할 업무 신호가 있습니다.",
-    prompt: move.prompt ?? move.title ?? "이 업무를 이어서 준비해줘",
+    title: move.title ?? "Prepared work",
+    reason: move.reason ?? legacy.rationale ?? "There are work signals to review.",
+    prompt: move.prompt ?? move.title ?? "Help me prepare the next step for this work.",
     href: move.href ?? null,
   };
 }
@@ -81,7 +81,7 @@ function normalizeOutcome(
 ): OperatingPlanOutcome {
   return {
     id: outcome.id ?? `outcome_${index}`,
-    title: outcome.title ?? "최근 결정",
+    title: outcome.title ?? "Recent decision",
     status: outcome.status ?? "executed",
     toolName: outcome.toolName ?? "decision",
     result: outcome.result ?? null,
@@ -121,13 +121,13 @@ export default function OperatingLoopCard() {
   return (
     <section
       className="mb-6 overflow-hidden rounded-2xl border border-amber-300/15 bg-stone-950/70"
-      aria-label="Jigeum 운영 루프"
+      aria-label="Jigeum operating loop"
     >
       <div className="border-b border-stone-800 bg-gradient-to-br from-stone-950 via-stone-950 to-amber-950/25 p-4 md:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
-              운영 루프
+              Operating loop
             </p>
             <h2 className="mt-2 text-xl font-semibold tracking-tight text-stone-50">
               {modeLabel(plan.mode)}
@@ -144,7 +144,7 @@ export default function OperatingLoopCard() {
         </div>
         <div className="mt-4 rounded-xl border border-stone-800 bg-black/20 px-3 py-2.5">
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone-500">
-            첫 움직임
+            First move
           </p>
           <p className="mt-1 text-sm font-medium text-amber-100">
             {displayText(plan.primaryAction)}
@@ -155,7 +155,7 @@ export default function OperatingLoopCard() {
       <div className="grid gap-3 p-3 md:grid-cols-[1.4fr_1fr] md:p-4">
         <section>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-stone-100">다음 움직임</h3>
+            <h3 className="text-sm font-semibold text-stone-100">Next moves</h3>
             <span className="text-[11px] text-stone-600">{plan.nextMoves.length}</span>
           </div>
           <ul className="space-y-2">
@@ -172,11 +172,11 @@ export default function OperatingLoopCard() {
           {plan.playbookNudge && (
             <div className="rounded-xl border border-stone-800 bg-stone-900/35 p-3">
               <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-amber-200">
-                플레이북
+                Playbook
               </p>
               <p className="mt-2 text-sm font-medium text-stone-100">{plan.playbookNudge.name}</p>
               <p className="mt-1 text-xs leading-5 text-stone-500">
-                {plan.playbookNudge.active ? "적용 중" : "추천"} · 신뢰도{" "}
+                {plan.playbookNudge.active ? "Active" : "Recommended"} · Confidence{" "}
                 {Math.round(plan.playbookNudge.confidence * 100)}%
                 {plan.playbookNudge.nextStep ? ` · ${plan.playbookNudge.nextStep}` : ""}
               </p>
@@ -185,7 +185,7 @@ export default function OperatingLoopCard() {
           {plan.watchlist.length > 0 && (
             <div className="rounded-xl border border-stone-800 bg-stone-900/35 p-3">
               <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone-500">
-                관찰 목록
+                Watchlist
               </p>
               <ul className="mt-2 space-y-2">
                 {plan.watchlist.map((context) => (
@@ -206,16 +206,16 @@ function DecisionPulseCard({ pulse }: { pulse: OperatingPlanDecisionPulse }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-emerald-200">
-            최근 결정
+            Recent decisions
           </p>
-          <p className="mt-1 text-xs text-stone-500">최근 {pulse.windowHours}시간 결과</p>
+          <p className="mt-1 text-xs text-stone-500">Last {pulse.windowHours}h results</p>
         </div>
         <div className="shrink-0 text-right text-[11px] leading-5 text-stone-500">
           <p>
-            완료 <span className="font-semibold text-emerald-200">{pulse.executed}</span>
+            Done <span className="font-semibold text-emerald-200">{pulse.executed}</span>
           </p>
           <p>
-            거절 <span className="font-semibold text-stone-300">{pulse.rejected}</span> · 실패{" "}
+            Rejected <span className="font-semibold text-stone-300">{pulse.rejected}</span> · Failed{" "}
             <span className="font-semibold text-red-200">{pulse.failed}</span>
           </p>
         </div>
@@ -247,7 +247,7 @@ function DecisionOutcomeRow({ outcome }: { outcome: OperatingPlanOutcome }) {
         <p className="mt-1 truncate text-[11px] text-stone-600">
           {outcome.toolName && outcome.toolName !== "decision"
             ? outcome.toolName.replace(/_/g, " ")
-            : "결정"}
+            : "Decision"}
           {outcome.result ? ` · ${outcome.result}` : ""}
         </p>
       </Link>
@@ -283,14 +283,14 @@ function MoveRow({ move }: { move: OperatingPlanMove }) {
           href={chatHref}
           className="rounded-md border border-amber-300/25 bg-amber-300/10 px-2.5 py-1.5 text-xs font-medium text-amber-100 transition hover:bg-amber-300/15"
         >
-          스레드 준비
+          Prepare thread
         </Link>
         {move.href && (
           <Link
             href={move.href}
             className="rounded-md border border-stone-700 px-2.5 py-1.5 text-xs text-stone-400 transition hover:bg-stone-800"
           >
-            원문 보기
+            View source
           </Link>
         )}
       </div>
@@ -332,72 +332,7 @@ function LoopMetric({ metric }: { metric: OperatingPlanMetric }) {
 }
 
 function displayText(value: string | null | undefined): string {
-  return (value ?? "")
-    .replace(/EVE가/g, "Jigeum이")
-    .replace(/Eve가/g, "Jigeum이")
-    .replace(/EVE는/g, "Jigeum은")
-    .replace(/Eve는/g, "Jigeum은")
-    .replace(/\bEVE\b/g, "Jigeum")
-    .replace(/\bEve\b/g, "Jigeum")
-    .replace(
-      /The Operating Loop picked "([^"]+)" as the next move\./g,
-      '운영 루프가 "$1"을 다음 움직임으로 골랐어요.',
-    )
-    .replace(/Category:/g, "분류:")
-    .replace(/Source:/g, "출처:")
-    .replace(/Reason:/g, "근거:")
-    .replace(/Source link:/g, "관련 위치:")
-    .replace(
-      /Turn this into an approval-ready decision card with any needed draft, checklist, and risk notes\./g,
-      "이걸 실행 전 승인 가능한 결정 카드로 정리하고, 필요한 초안/체크리스트/리스크를 만들어줘.",
-    )
-    .replace(
-      /Clear the decisions waiting for approval first\./g,
-      "먼저 승인 대기 결정을 비우면 오늘 루프가 풀립니다.",
-    )
-    .replace(
-      /Recover the work contexts that are drifting into risk\./g,
-      "위험해진 업무 맥락을 먼저 회수해야 합니다.",
-    )
-    .replace(
-      /The day is ordered around meetings and due work\./g,
-      "오늘 일정과 마감 기준으로 실행 순서를 잡았습니다.",
-    )
-    .replace(
-      /No major fires\. Clean up the open commitments quietly\./g,
-      "큰 화재는 없고, 열린 약속을 조용히 정리할 차례입니다.",
-    )
-    .replace(
-      /Jigeum will refresh the plan when new signals arrive\./g,
-      "새 신호가 들어오면 Jigeum이 다시 운영 계획을 갱신합니다.",
-    )
-    .replace(/Start with the first decision card\./g, "상단 결정 카드부터 확인하세요.")
-    .replace(
-      /Multiple signals are tied to the same work context\./g,
-      "여러 신호가 같은 업무 맥락으로 묶였습니다.",
-    )
-    .replace(/Recent activity and open signals are present\./g, "최근 활동과 열린 신호가 있습니다.")
-    .replace(/Unread mail/g, "읽지 않은 메일")
-    .replace(/Urgent mail/g, "긴급 메일")
-    .replace(/review task/g, "검토 작업")
-    .replace(/Decision Card/g, "결정 카드")
-    .replace(/Work Graph/g, "업무 그래프")
-    .replace(/Review investor-facing risks/g, "투자자 대응 리스크 검토")
-    .replace(/Awaiting approval/g, "승인 대기")
-    .replace(/Risk context/g, "위험 맥락")
-    .replace(/Watch context/g, "관찰 맥락")
-    .replace(/Overdue commitment/g, "지난 약속")
-    .replace(/Open commitment/g, "열린 약속")
-    .replace(/Recommended playbook/g, "추천 플레이북")
-    .replace(/Active playbook/g, "활성 플레이북")
-    .replace(/Decision proposal/g, "결정 제안")
-    .replace(/Needs approval/g, "승인 필요")
-    .replace(/Overdue work/g, "지난 일")
-    .replace(/Today/g, "오늘")
-    .replace(/Commitment/g, "약속")
-    .replace(/^Decisions$/g, "결정")
-    .replace(/Risk/g, "위험")
-    .replace(/Overdue/g, "지난 항목");
+  return (value ?? "").replace(/\bEVE\b/g, "Jigeum").replace(/\bEve\b/g, "Jigeum");
 }
 
 function ToneBadge({ tone, label }: { tone: OperatingPlanTone; label: string }) {
@@ -411,37 +346,37 @@ function ToneBadge({ tone, label }: { tone: OperatingPlanTone; label: string }) 
 function modeLabel(mode: OperatingPlan["mode"]): string {
   switch (mode) {
     case "clear_decisions":
-      return "결정 정리 모드";
+      return "Decision clearing mode";
     case "recover_risk":
-      return "리스크 회복 모드";
+      return "Risk recovery mode";
     case "prepare_day":
-      return "하루 준비 모드";
+      return "Day prep mode";
     case "maintain_flow":
-      return "흐름 유지 모드";
+      return "Maintain flow mode";
   }
 }
 
 function sourceLabel(source: OperatingPlanMove["source"]): string {
   switch (source) {
     case "attention":
-      return "결정 카드";
+      return "Decision card";
     case "work_context":
-      return "업무 그래프";
+      return "Work graph";
     case "playbook":
-      return "플레이북";
+      return "Playbook";
   }
 }
 
 function riskLabel(risk: OperatingPlanWatchContext["risk"]): string {
-  if (risk === "high") return "높음";
-  if (risk === "medium") return "보통";
-  return "낮음";
+  if (risk === "high") return "High";
+  if (risk === "medium") return "Medium";
+  return "Low";
 }
 
 function outcomeStatusLabel(status: OperatingPlanOutcome["status"]): string {
-  if (status === "executed") return "완료";
-  if (status === "rejected") return "거절";
-  return "실패";
+  if (status === "executed") return "Done";
+  if (status === "rejected") return "Rejected";
+  return "Failed";
 }
 
 function outcomeStatusClass(status: OperatingPlanOutcome["status"]): string {
