@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useAuth } from "../lib/auth";
 import BottomTabs from "./bottom-tabs";
 import Sidebar from "./sidebar";
 
@@ -16,13 +17,38 @@ const NO_SIDEBAR_ROUTES = [
   "/early-access",
 ];
 
+const APP_SHELL_ROUTES = [
+  "/admin",
+  "/billing",
+  "/briefing",
+  "/calendar",
+  "/chat",
+  "/email",
+  "/files",
+  "/inbox",
+  "/settings",
+];
+
+function isAppShellRoute(pathname: string): boolean {
+  return APP_SHELL_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user, loading } = useAuth();
 
-  const showSidebar = !NO_SIDEBAR_ROUTES.includes(pathname);
+  const showSidebar = !NO_SIDEBAR_ROUTES.includes(pathname) && isAppShellRoute(pathname);
 
   if (!showSidebar) {
+    return <>{children}</>;
+  }
+
+  if (loading) {
+    return <SessionTransition label="Checking session" />;
+  }
+
+  if (!user) {
     return <>{children}</>;
   }
 
@@ -66,5 +92,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <BottomTabs />
       </div>
     </div>
+  );
+}
+
+function SessionTransition({ label }: { label: string }) {
+  return (
+    <main
+      className="flex min-h-dvh items-center justify-center bg-[#0f1115] px-6 text-stone-100"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex flex-col items-center gap-4 text-center">
+        <img src="/brand/mark.svg?v=flow-5" alt="" className="h-10 w-10" />
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-300 border-t-transparent" />
+        <p className="text-sm text-stone-400">{label}...</p>
+      </div>
+    </main>
   );
 }

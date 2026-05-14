@@ -99,7 +99,8 @@ function LoginForm() {
     >
       {nextPath !== "/inbox" && (
         <div className="mb-4 rounded-md border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100">
-          Sign in to continue to <span className="font-medium text-amber-50">{nextPath}</span>.
+          Sign in to continue to{" "}
+          <span className="font-medium text-amber-50">{returnDestinationLabel(nextPath)}</span>.
         </div>
       )}
 
@@ -263,4 +264,22 @@ function safeNextPath(value: string | null): string {
   if (!value.startsWith("/") || value.startsWith("//")) return "/inbox";
   if (value.startsWith("/login")) return "/inbox";
   return value;
+}
+
+function returnDestinationLabel(path: string): string {
+  const cleanPath = path.split("?")[0] || path;
+  if (cleanPath === "/inbox") return "Decision queue";
+  if (cleanPath === "/chat" || cleanPath.startsWith("/chat/")) return "Decision thread";
+  if (cleanPath === "/email" || cleanPath.startsWith("/email/")) return "Mail";
+  if (cleanPath === "/calendar") return "Calendar";
+  if (cleanPath === "/briefing") return "Briefing";
+  if (cleanPath === "/settings") return "Settings";
+  if (cleanPath.startsWith("/settings/memory")) return "Memory settings";
+  if (cleanPath.startsWith("/settings/usage")) return "Usage settings";
+  if (cleanPath.startsWith("/settings/status")) return "System status";
+  if (cleanPath.startsWith("/settings/email-feedback")) return "Mail feedback";
+  if (cleanPath === "/billing") return "Plan and billing";
+  if (cleanPath === "/files") return "Files";
+  if (cleanPath === "/admin" || cleanPath.startsWith("/admin/")) return "Admin";
+  return path;
 }

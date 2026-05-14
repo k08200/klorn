@@ -1,34 +1,33 @@
 import { expect, test } from "@playwright/test";
 
-const PROTECTED_ROUTES = [
-  "/dashboard",
-  "/chat",
-  "/tasks",
-  "/notes",
-  "/calendar",
-  "/email",
-  "/contacts",
-  "/reminders",
-  "/skills",
-  "/settings",
-  "/notifications",
-  "/workspace",
-  "/billing",
-];
+const PROTECTED_ROUTES = ["/chat", "/calendar", "/email", "/settings", "/billing"];
+
+const LEGACY_PROTECTED_ROUTES = [
+  ["/dashboard", "/inbox"],
+  ["/tasks", "/inbox"],
+  ["/notes", "/files"],
+  ["/contacts", "/email/candidates"],
+  ["/reminders", "/inbox"],
+  ["/skills", "/settings/memory"],
+  ["/notifications", "/briefing"],
+  ["/workspace", "/files"],
+] as const;
 
 test.describe("Protected routes", () => {
   for (const route of PROTECTED_ROUTES) {
     test(`${route} is protected from unauthenticated access`, async ({ page }) => {
       await page.goto(route);
-      await page.waitForTimeout(1500);
-      const url = page.url();
-      const showsLogin = await page
-        .locator('input[type="email"]')
-        .isVisible()
-        .catch(() => false);
-      // Either redirected to login, shows login form, or the page itself is AuthGuard-wrapped
-      const isProtected = url.includes("/login") || showsLogin || url.includes(route);
-      expect(isProtected).toBeTruthy();
+      await expect(page).toHaveURL(new RegExp(`/login\\?next=${encodeURIComponent(route)}`));
+      await expect(page.locator('input[type="email"]')).toBeVisible();
+      await expect(page.getByText("No decision threads yet.")).toHaveCount(0);
+    });
+  }
+
+  for (const [route, destination] of LEGACY_PROTECTED_ROUTES) {
+    test(`${route} redirects to ${destination} before sign in`, async ({ page }) => {
+      await page.goto(route);
+      await expect(page).toHaveURL(new RegExp(`/login\\?next=${encodeURIComponent(destination)}`));
+      await expect(page.locator('input[type="email"]')).toBeVisible();
     });
   }
 
