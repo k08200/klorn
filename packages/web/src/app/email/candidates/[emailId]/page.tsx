@@ -268,6 +268,37 @@ function CandidateDetailView() {
           </aside>
         </main>
       )}
+      {email && !profile && !loading && (
+        <main className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#FF8A70]/80">
+            Candidate CRM
+          </p>
+          <h1 className="mt-2 text-2xl font-semibold text-stone-50">No candidate profile yet</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
+            Jigeum found this message, but the attachments have not produced a structured profile.
+            Open the source email, reanalyze attachments, or add notes while the review state is
+            still clear.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link
+              href={`/email/${email.id}`}
+              className="inline-flex min-h-11 items-center rounded-lg bg-[#FF8A70] px-4 text-sm font-medium text-stone-950 transition hover:bg-[#FFB09C]"
+            >
+              Open source email
+            </Link>
+            <Link
+              href="/email/candidates"
+              className="inline-flex min-h-11 items-center rounded-lg border border-stone-700/60 px-4 text-sm text-stone-300 hover:border-[#FF6B4A]/35 hover:text-[#FFE2D7]"
+            >
+              Back to queue
+            </Link>
+          </div>
+          <div className="mt-5 rounded-lg border border-stone-800/70 bg-black/15 px-3 py-2">
+            <p className="text-xs text-stone-300">{email.subject || "Untitled"}</p>
+            <p className="mt-1 text-[11px] text-stone-600">{email.from}</p>
+          </div>
+        </main>
+      )}
     </div>
   );
 }

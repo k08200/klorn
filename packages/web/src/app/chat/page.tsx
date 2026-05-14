@@ -141,7 +141,7 @@ function NewChatWelcome() {
               className="group relative w-full rounded-lg border border-stone-700 bg-[#111318] px-5 py-4 text-left text-sm text-stone-500 shadow-xl shadow-black/10 transition hover:border-stone-600 hover:bg-stone-900"
             >
               <span className="flex items-center justify-between gap-3">
-                <span>Open a thread and ask for context, judgment, and next action...</span>
+                <span>Create a blank decision thread</span>
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-stone-950 transition group-hover:bg-white">
                   <svg
                     aria-hidden="true"

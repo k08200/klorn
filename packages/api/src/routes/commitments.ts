@@ -1,7 +1,7 @@
 /**
  * Commitment ledger API.
  *
- * Lets the user see and triage every commitment Eve has detected. Reads come
+ * Lets the user see and triage every commitment Jigeum has detected. Reads come
  * straight from the canonical `Commitment` table — `AttentionItem` is just
  * the projection layer for "what's relevant right now," not the source.
  */

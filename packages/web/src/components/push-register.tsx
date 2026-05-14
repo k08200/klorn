@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { API_BASE, authHeaders } from "../lib/api";
+import { API_BASE, authHeaders, getStoredAuthToken } from "../lib/api";
 
 /**
  * Registers the browser for push notifications using the /sw.js service worker.
@@ -9,7 +9,7 @@ import { API_BASE, authHeaders } from "../lib/api";
  */
 export default function PushRegister() {
   useEffect(() => {
-    console.log("[PUSH] PushRegister mounted");
+    if (!getStoredAuthToken()) return;
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
       console.warn("[PUSH] SW or PushManager not available");
       return;

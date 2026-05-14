@@ -33,7 +33,7 @@ export default function AuthScreen({
   navCtaLabel = "Early access",
 }: AuthScreenProps) {
   return (
-    <main className="min-h-screen overflow-hidden bg-[#0f1115] text-stone-50">
+    <main className="min-h-screen overflow-x-hidden bg-[#0f1115] text-stone-50">
       <nav className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-6">
         <Link href="/" className="flex items-center gap-3">
           <img src="/brand/mark.svg?v=flow-5" alt="" className="h-8 w-8" />
@@ -41,7 +41,7 @@ export default function AuthScreen({
         </Link>
         <div className="flex items-center gap-3 text-sm">
           <Link
-            className="whitespace-nowrap text-stone-400 transition hover:text-stone-100"
+            className="inline-flex min-h-11 items-center whitespace-nowrap text-stone-400 transition hover:text-stone-100"
             href="/"
           >
             Home
@@ -55,7 +55,7 @@ export default function AuthScreen({
         </div>
       </nav>
 
-      <section className="relative z-10 mx-auto grid min-h-[calc(100svh-76px)] max-w-6xl items-center gap-8 px-5 pb-16 pt-6 sm:px-6 lg:grid-cols-[1fr_0.9fr]">
+      <section className="relative z-10 mx-auto grid min-h-[calc(100svh-76px)] max-w-6xl items-start gap-8 px-5 pb-16 pt-6 sm:px-6 lg:grid-cols-[1fr_0.9fr] lg:items-center">
         <aside className="hidden lg:block">
           <div className="max-w-xl">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
@@ -93,7 +93,7 @@ export default function AuthScreen({
             <p className="mt-3 text-sm leading-6 text-stone-400">{description}</p>
           </div>
 
-          <div className="rounded-lg border border-stone-800 bg-[#111318] p-5 shadow-xl shadow-black/20">
+          <div className="rounded-lg border border-stone-800 bg-[#111318] p-4 shadow-xl shadow-black/20 sm:p-5">
             {children}
           </div>
 

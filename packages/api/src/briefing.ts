@@ -1,5 +1,5 @@
 /**
- * Daily Briefing — Eve's autonomous planning feature
+ * Daily Briefing - Jigeum's autonomous planning feature
  *
  * Aggregates tasks, calendar events, and recent emails into a daily summary.
  * Can be triggered manually or via cron.
@@ -97,7 +97,7 @@ function findUserBriefingNote(userId: string, noteId: string) {
 export default async function generateBriefing(userId: string): Promise<string> {
   const data = await gatherBriefingData(userId);
 
-  const today = new Date().toLocaleDateString("ko-KR", {
+  const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
     month: "long",
@@ -107,48 +107,49 @@ export default async function generateBriefing(userId: string): Promise<string> 
   // The brief is the user's first read of the day — it has to make them feel
   // "someone thought about my day." Data dumps fail that bar. This prompt asks
   // the model to *decide* what matters and surface connections across domains.
-  const briefingPrompt = `오늘은 ${today}. 사용자가 자리에 앉자마자 읽는 1분짜리 아침 브리핑을 써줘.
+  const briefingPrompt = `Today is ${today}. Write the one-minute morning briefing the user reads before work starts.
 
-## 너의 역할
-데이터를 요약하는 게 아니라, **오늘 뭐부터 해야 할지 결정**하는 것. 조용한 의사결정 파트너처럼 맥락과 다음 수를 짚어줘.
+## Role
+Do not merely summarize data. Decide what matters first. Sound like a calm decision partner who connects context, risk, and the next move.
 
-## 반드시 할 것
-1. **도메인 연결**: "서버가 미리 찾은 신호"의 crossLinks를 우선 근거로 삼아 이메일·캘린더·태스크를 엮어서 언급. 새로운 연결을 상상해서 만들지 말고, 근거가 약하면 생략.
-2. **Top 3 액션**: "서버가 미리 찾은 신호"의 topActions 순서를 기본값으로 사용. 순서를 임의로 바꾸지 말고, 표현만 자연스럽게 다듬어. 각각 한 줄 이유.
-3. **빈 시간 활용**: 캘린더가 비어있으면 "여유 있으니 X하기 좋아요"처럼 능동 제안.
-4. **반드시 생략**: "데이터를 전달받았다", "X 일정이 없습니다" 같은 메타 코멘트. 유저는 그거 알 필요 없음.
+## Must do
+1. **Cross-domain links**: Use crossLinks, deadlines, and urgentItems from "Server-detected signals" when connecting mail, calendar, tasks, or notes. Do not invent weak links.
+2. **Top 3 actions**: Keep the topActions order from "Server-detected signals" as the default. Improve the wording, but do not reshuffle the priority unless the data clearly contradicts it.
+3. **Open time**: If the calendar is light, suggest a useful focus block.
+4. **Omit meta comments**: Do not say "I received data" or "there are no events." The user only needs the decision.
 
-## 출력 형식
-- 첫 줄: 오늘 하루 한 줄 요약 (예: "오늘 미팅 1건, 답장 밀린 게 2개 있어요")
-- **오늘의 Top 3** — 번호 붙은 액션 + 이유
-- **연결된 항목** (있을 때만) — 이메일/태스크/일정이 어떻게 얽혀있는지
-- **나머지** — 일정과 이메일 요약 2~3줄
-- 한국어, 친근한 의사결정 파트너 톤, 리포트 톤 X
-- 전체 150~300자
+## Output
+- First line: a one-sentence summary of the day.
+- **Top 3 Today** - numbered actions with one short reason each.
+- **Connected items** - only if useful; explain how mail/tasks/calendar relate.
+- **Everything else** - 2 or 3 short bullets for lower-priority context.
+- English only.
+- Calm, direct, decision-partner tone. Not a report.
+- 120-220 words.
 
-## 예시
-오늘은 미팅 1건, 답장 밀린 게 2개 있어요.
+## Example
+One investor reply and a 3 PM meeting shape the day.
 
-**오늘의 Top 3**
-1. 오전에 김○○님 답장 쓰기 — 48시간 지났고 내일 미팅 리드타임이라 급함
-2. 오후 3시 Zoom 전에 Notion 자료 읽기 — 회의 효율 위해 15분만 투자
-3. 피치덱 2시간 블록 확보 — 다음 주 투자자 미팅 앞두고 밀림
+**Top 3 Today**
+1. Reply to Alpha Capital this morning - the follow-up is already tied to tomorrow's meeting.
+2. Read the Notion notes before the 3 PM Zoom - fifteen minutes now will make the call cleaner.
+3. Block two hours for the deck - next week's partner meeting needs a tighter version.
 
-**연결**
-- Vercel 배포 실패 이메일 → "deploy 수정" 태스크와 같은 건. Top 1 답장과 별개로 오전 중 처리 권장.
+**Connected items**
+- The Vercel security email and the open deployment task are the same risk. Handle them before the investor reply expands.
 
-**나머지**
-- 15:00 Zoom 외 일정 없음
-- 읽지 않은 이메일 중 긴급 없음
+**Everything else**
+- No other meeting needs prep.
+- The remaining mail can wait until the afternoon.
 
 ---
 
-## 서버가 미리 찾은 신호
-이 섹션은 결정적 규칙으로 만든 근거다. 연결된 항목을 말할 때는 가능한 한 이 안의 crossLinks, deadlines, urgentItems를 사용해.
-오늘의 Top 3는 topActions를 우선 사용해. LLM은 톤을 다듬는 역할이고, 새로운 Top 3를 재선정하지 않는다.
+## Server-detected signals
+This section is rule-based evidence. Use crossLinks, deadlines, and urgentItems here when naming connected work.
+Use topActions as the primary Top 3 source. The model's job is to make the wording useful, not to invent a new priority list.
 Signals: ${JSON.stringify(data.signals)}
 
-## 오늘 데이터
+## Today's data
 Tasks: ${JSON.stringify(data.tasks)}
 Calendar: ${JSON.stringify(data.events)}
 Emails: ${JSON.stringify(data.emails)}
@@ -200,7 +201,7 @@ export async function createDailyBriefingDelivery(userId: string): Promise<{
   const note = await prisma.note.create({
     data: {
       userId,
-      title: `Daily Briefing — ${new Date().toLocaleDateString("ko-KR")}`,
+      title: `Daily Briefing — ${new Date().toLocaleDateString("en-US")}`,
       content: briefing,
     },
     select: { id: true, createdAt: true },
@@ -439,7 +440,7 @@ async function todayRangeForUser(userId: string): Promise<{ gte: Date; lt: Date 
   return { gte, lt };
 }
 
-// Tool for Eve to generate briefing on demand
+// Tool for Jigeum to generate briefing on demand
 export const BRIEFING_TOOLS = [
   {
     type: "function" as const,

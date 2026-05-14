@@ -1,5 +1,5 @@
 /**
- * Document Writer for Eve — generate reports, proposals, emails drafts, etc.
+ * Document Writer for Jigeum - generate reports, proposals, emails drafts, etc.
  * Results are saved as Notes.
  */
 
@@ -28,7 +28,7 @@ export async function writeDocument(
   const prompt = `${instruction} about: ${topic}
 ${details ? `\nAdditional context: ${details}` : ""}
 
-Write in Korean unless the topic is clearly English-oriented.
+Write in English unless the user explicitly asks for another language.
 Be professional, clear, and well-structured. Use markdown formatting.`;
 
   if (!openai) {

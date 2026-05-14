@@ -683,7 +683,7 @@ describe("chat routes (conversation CRUD)", () => {
     const reminder = [...reminderStore.values()][0];
     expect(reminder.title).toBe("테스트");
     expect(reminder.remindAt.getTime()).toBeGreaterThanOrEqual(before + 55_000);
-    expect(res.body).toContain("알림을 보낼게요");
+    expect(res.body).toContain("I will remind you");
     await app.close();
   });
 });

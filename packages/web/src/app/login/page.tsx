@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import AuthScreen from "../../components/auth-screen";
 import { useToast } from "../../components/toast";
-import { API_BASE } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 
 export default function LoginPage() {
@@ -110,7 +109,7 @@ function LoginForm() {
         <button
           type="button"
           onClick={() => setMode("login")}
-          className={`h-9 rounded px-3 text-sm font-medium transition ${
+          className={`h-11 rounded px-3 text-sm font-medium transition ${
             mode === "login" ? "bg-stone-100 text-stone-950" : "text-stone-500 hover:text-stone-200"
           }`}
         >
@@ -119,7 +118,7 @@ function LoginForm() {
         <button
           type="button"
           onClick={() => setMode("register")}
-          className={`h-9 rounded px-3 text-sm font-medium transition ${
+          className={`h-11 rounded px-3 text-sm font-medium transition ${
             mode === "register"
               ? "bg-stone-100 text-stone-950"
               : "text-stone-500 hover:text-stone-200"
@@ -169,7 +168,7 @@ function LoginForm() {
             {mode === "login" && (
               <Link
                 href="/reset-password"
-                className="text-xs text-stone-500 transition hover:text-amber-300"
+                className="inline-flex min-h-10 items-center text-xs text-stone-500 transition hover:text-amber-300"
               >
                 Reset password
               </Link>
@@ -211,9 +210,10 @@ function LoginForm() {
         <div className="h-px flex-1 bg-stone-800/80" />
       </div>
 
-      <a
-        href={`${API_BASE}/api/auth/google/login`}
-        className="flex h-11 w-full items-center justify-center gap-3 rounded-md border border-stone-300 bg-white text-sm font-medium text-stone-800 transition hover:bg-stone-100"
+      <button
+        type="button"
+        disabled
+        className="flex h-11 w-full cursor-not-allowed items-center justify-center gap-3 rounded-md border border-stone-700 bg-stone-900 text-sm font-medium text-stone-500"
       >
         <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24">
           <path
@@ -233,11 +233,11 @@ function LoginForm() {
             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
           />
         </svg>
-        Continue with Google
+        Google sign-in coming soon
         <span className="rounded bg-stone-200 px-1.5 py-0.5 text-[10px] font-normal text-stone-500">
           Beta
         </span>
-      </a>
+      </button>
       <p className="mt-3 text-center text-[11px] leading-5 text-stone-600">
         Google sign-in is under review. Email sign-up is available now.
       </p>

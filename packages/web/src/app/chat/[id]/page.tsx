@@ -732,7 +732,9 @@ function ChatPageContent() {
                       <p className="text-sm font-medium text-stone-300 transition group-hover:text-white">
                         {starter.title}
                       </p>
-                      <p className="mt-0.5 line-clamp-1 text-xs text-stone-600">{starter.prompt}</p>
+                      <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-stone-600">
+                        {starter.prompt}
+                      </p>
                     </div>
                   </button>
                 ))}
@@ -1204,10 +1206,10 @@ function ChatPageContent() {
                   >
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                   </svg>
-                  <div className="min-w-0">
+                  <div className="flex min-w-0 flex-col">
                     <span className="text-sm text-white">{skill.name}</span>
                     {skill.description && (
-                      <span className="text-xs text-stone-500 ml-2">{skill.description}</span>
+                      <span className="mt-0.5 text-xs text-stone-500">{skill.description}</span>
                     )}
                   </div>
                 </button>

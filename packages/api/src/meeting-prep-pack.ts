@@ -166,27 +166,33 @@ function buildChecklist(input: {
   let risk = 0;
 
   if (!input.event.description?.trim()) {
-    checklist.push("아젠다/목적 확인 필요");
+    checklist.push("Confirm the agenda or meeting purpose.");
     risk++;
   }
   if (!input.event.meetingLink && !input.event.location) {
-    checklist.push("참여 링크 또는 장소 확인 필요");
+    checklist.push("Add a meeting link or location.");
     risk++;
   }
   const dueTasks = input.openTasks.filter((task) => isDueBeforeMeeting(task, input.event));
   if (dueTasks.length > 0) {
-    checklist.push(`미팅 전 처리할 일 ${dueTasks.length}개 확인`);
+    checklist.push(
+      `Review ${dueTasks.length} task${dueTasks.length === 1 ? "" : "s"} due before this meeting.`,
+    );
     risk++;
   }
   const overdueCommitments = input.openCommitments.filter((c) => isCommitmentOverdue(c, input.now));
   if (overdueCommitments.length > 0) {
-    checklist.push(`지난 약속 ${overdueCommitments.length}개 정리`);
+    checklist.push(
+      `Resolve ${overdueCommitments.length} overdue commitment${overdueCommitments.length === 1 ? "" : "s"}.`,
+    );
     risk++;
   }
   if (input.relatedEmails.length > 0) {
-    checklist.push(`관련 메일 ${input.relatedEmails.length}건 훑기`);
+    checklist.push(
+      `Skim ${input.relatedEmails.length} related email${input.relatedEmails.length === 1 ? "" : "s"}.`,
+    );
   }
-  if (checklist.length === 0) checklist.push("준비 리스크 없음");
+  if (checklist.length === 0) checklist.push("No prep risk detected.");
 
   const readiness: MeetingPrepReadiness =
     risk >= 2 ? "needs_review" : risk === 1 ? "watch" : "ready";

@@ -115,10 +115,10 @@ describe("buildMeetingPrepPack", () => {
     expect(pack?.openCommitments).toHaveLength(1);
     expect(pack?.checklist).toEqual(
       expect.arrayContaining([
-        "아젠다/목적 확인 필요",
-        "참여 링크 또는 장소 확인 필요",
-        "미팅 전 처리할 일 1개 확인",
-        "지난 약속 1개 정리",
+        "Confirm the agenda or meeting purpose.",
+        "Add a meeting link or location.",
+        "Review 1 task due before this meeting.",
+        "Resolve 1 overdue commitment.",
       ]),
     );
   });

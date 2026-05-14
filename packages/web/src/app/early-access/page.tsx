@@ -16,6 +16,11 @@ export default function EarlyAccessPage() {
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const resetFormError = () => {
+    if (errorMsg) setErrorMsg(null);
+    if (status === "error") setStatus("idle");
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -55,7 +60,7 @@ export default function EarlyAccessPage() {
       setStatus(body.alreadyOnList ? "already" : "success");
     } catch (_err) {
       setStatus("error");
-      setErrorMsg("Network error. Please try again shortly.");
+      setErrorMsg("Waitlist service is offline. Please try again shortly.");
     }
   };
 
@@ -77,11 +82,17 @@ export default function EarlyAccessPage() {
       ]}
       footer={
         <span>
-          <Link href="/privacy" className="transition hover:text-stone-300">
+          <Link
+            href="/privacy"
+            className="inline-flex min-h-10 items-center px-1 transition hover:text-stone-300"
+          >
             Privacy
           </Link>
           <span className="mx-2 text-stone-700">/</span>
-          <Link href="/terms" className="transition hover:text-stone-300">
+          <Link
+            href="/terms"
+            className="inline-flex min-h-10 items-center px-1 transition hover:text-stone-300"
+          >
             Terms
           </Link>
         </span>
@@ -102,15 +113,15 @@ export default function EarlyAccessPage() {
           <div className="mt-5 grid grid-cols-2 gap-3">
             <Link
               href="/"
-              className="flex h-10 items-center justify-center rounded-md border border-stone-700 text-sm text-stone-300 transition hover:border-stone-500"
+              className="flex h-10 items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
             >
-              Home
+              Back home
             </Link>
             <Link
               href="/login"
-              className="flex h-10 items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
+              className="flex h-10 items-center justify-center rounded-md border border-stone-700 text-sm text-stone-300 transition hover:border-stone-500"
             >
-              Log in
+              Log in after approval
             </Link>
           </div>
         </div>
@@ -126,7 +137,10 @@ export default function EarlyAccessPage() {
               required
               autoComplete="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                resetFormError();
+                setEmail(e.target.value);
+              }}
               className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
               placeholder="you@example.com"
             />
@@ -134,14 +148,17 @@ export default function EarlyAccessPage() {
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-stone-400" htmlFor="name">
-              Name
+              Name (optional)
             </label>
             <input
               id="name"
               type="text"
               autoComplete="name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                resetFormError();
+                setName(e.target.value);
+              }}
               maxLength={120}
               className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
               placeholder="Optional"
@@ -150,16 +167,19 @@ export default function EarlyAccessPage() {
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-stone-400" htmlFor="useCase">
-              How does mail show up in your work?
+              Work pattern (optional)
             </label>
-            <input
+            <textarea
               id="useCase"
-              type="text"
               value={useCase}
-              onChange={(e) => setUseCase(e.target.value)}
+              onChange={(e) => {
+                resetFormError();
+                setUseCase(e.target.value);
+              }}
               maxLength={500}
-              className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
-              placeholder="Example: 50+ emails/day, follow-ups, meeting prep"
+              rows={3}
+              className="w-full resize-none rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+              placeholder="Example: 50+ emails/day, follow-ups, meeting prep."
             />
             <p className="mt-2 text-xs leading-5 text-stone-500">
               This helps us understand which workflow to tune first.
@@ -182,11 +202,17 @@ export default function EarlyAccessPage() {
 
           <p className="text-xs leading-5 text-stone-500">
             By applying, you agree to the{" "}
-            <Link href="/privacy" className="underline hover:text-stone-300">
+            <Link
+              href="/privacy"
+              className="inline-flex min-h-10 items-center underline hover:text-stone-300"
+            >
               Privacy Policy
             </Link>{" "}
             and{" "}
-            <Link href="/terms" className="underline hover:text-stone-300">
+            <Link
+              href="/terms"
+              className="inline-flex min-h-10 items-center underline hover:text-stone-300"
+            >
               Terms
             </Link>
             .

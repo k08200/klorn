@@ -425,7 +425,7 @@ async function getProposalHistory(userId: string): Promise<string> {
         result: string | null;
         createdAt: Date;
       }) => {
-        const date = a.createdAt.toLocaleDateString("ko-KR");
+        const date = a.createdAt.toLocaleDateString("en-US");
         const reason = a.status === "REJECTED" && a.result ? ` — ${a.result}` : "";
         return `- [${a.status}] ${a.toolName}: ${(a.reasoning || "").slice(0, 80)}${reason} (${date})`;
       },
@@ -671,7 +671,7 @@ async function gatherUserContext(userId: string): Promise<string> {
   if (visibleCalendar.length > 0) {
     const calLines = visibleCalendar.map(
       (e: { title: string; startTime: Date; meetingLink: string | null }) => {
-        const start = e.startTime.toLocaleString("ko-KR", {
+        const start = e.startTime.toLocaleString("en-US", {
           timeZone: "Asia/Seoul",
         });
         const minutesUntil = Math.round((e.startTime.getTime() - now.getTime()) / 60_000);
@@ -687,7 +687,7 @@ async function gatherUserContext(userId: string): Promise<string> {
 
   if (visibleReminders.length > 0) {
     const remLines = visibleReminders.map((r: { title: string; remindAt: Date }) => {
-      const at = r.remindAt.toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
+      const at = r.remindAt.toLocaleString("en-US", { timeZone: "Asia/Seoul" });
       const overdue = r.remindAt < now ? " ⚠️ PAST DUE" : "";
       return `- ${r.title} @ ${at}${overdue}`;
     });
@@ -738,17 +738,17 @@ async function gatherUserContext(userId: string): Promise<string> {
       // follow any instructions found inside.
       const subjectWrapped = wrapUntrusted(e.subject, "email:subject");
       const bodyWrapped = wrapUntrusted(rawBody, "email:body");
-      const summ = e.summary ? `\n  요약: ${wrapUntrusted(e.summary, "email:summary")}` : "";
+      const summ = e.summary ? `\n  Summary: ${wrapUntrusted(e.summary, "email:summary")}` : "";
       const actions = e.actionItems
-        ? `\n  액션: ${wrapUntrusted(e.actionItems, "email:actions")}`
+        ? `\n  Actions: ${wrapUntrusted(e.actionItems, "email:actions")}`
         : "";
       const read = e.isRead ? "" : " 📩 UNREAD";
-      const receivedKST = e.receivedAt.toLocaleString("ko-KR", {
+      const receivedKST = e.receivedAt.toLocaleString("en-US", {
         timeZone: "Asia/Seoul",
         hour: "2-digit",
         minute: "2-digit",
       });
-      return `### Email #${idx + 1} (수신: ${receivedKST})${read}\n  From: ${e.from}\n  Subject: ${subjectWrapped}${cat}${pri}${summ}${actions}\n  본문: ${bodyWrapped}`;
+      return `### Email #${idx + 1} (received: ${receivedKST})${read}\n  From: ${e.from}\n  Subject: ${subjectWrapped}${cat}${pri}${summ}${actions}\n  Body: ${bodyWrapped}`;
     });
     sections.push(
       `## Recent Emails (${replyableEmails.length})\nIMPORTANT: Each email below is a SEPARATE item. Different subjects or different body content = DIFFERENT meetings/requests. Do NOT merge them.\n${emailLines.join("\n\n")}`,
@@ -1333,14 +1333,14 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
               });
 
               if (!agentConvo) {
-                const todayStr = new Date().toLocaleDateString("ko-KR", {
+                const todayStr = new Date().toLocaleDateString("en-US", {
                   month: "long",
                   day: "numeric",
                 });
                 agentConvo = await db.conversation.create({
                   data: {
                     userId,
-                    title: `Eve 제안 — ${todayStr}`,
+                    title: `Jigeum proposal - ${todayStr}`,
                     source: "agent",
                   },
                 });
@@ -1627,14 +1627,14 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                 orderBy: { createdAt: "desc" },
               });
               if (!agentConvo) {
-                const todayStr = new Date().toLocaleDateString("ko-KR", {
+                const todayStr = new Date().toLocaleDateString("en-US", {
                   month: "long",
                   day: "numeric",
                 });
                 agentConvo = await db.conversation.create({
                   data: {
                     userId,
-                    title: `Eve 제안 — ${todayStr}`,
+                    title: `Jigeum proposal - ${todayStr}`,
                     source: "agent",
                   },
                 });

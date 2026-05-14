@@ -71,8 +71,11 @@ describe("email attachment candidate profile", () => {
 
     expect(profile?.pipelineStatus).toBe("needs_analysis");
     expect(profile?.manualReviewFiles).toEqual([
-      expect.objectContaining({ filename: "headshot-profile.jpg", reason: "이미지 OCR 필요" }),
-      expect.objectContaining({ filename: "actor-profile.hwp", reason: "본문 추출 제한" }),
+      expect.objectContaining({ filename: "headshot-profile.jpg", reason: "Image OCR needed" }),
+      expect.objectContaining({
+        filename: "actor-profile.hwp",
+        reason: "Text extraction unavailable",
+      }),
     ]);
     expect(profile?.evidenceFiles.every((file) => file.needsManualReview)).toBe(true);
   });
@@ -98,7 +101,7 @@ describe("email attachment candidate profile", () => {
     expect(profile?.evidenceFiles.map((file) => file.filename)).toEqual(["headshot_leejiyoon.jpg"]);
     expect(profile?.pipelineStatus).toBe("needs_analysis");
     expect(profile?.manualReviewFiles).toEqual([
-      expect.objectContaining({ filename: "headshot_leejiyoon.jpg", reason: "이미지 OCR 필요" }),
+      expect.objectContaining({ filename: "headshot_leejiyoon.jpg", reason: "Image OCR needed" }),
     ]);
   });
 

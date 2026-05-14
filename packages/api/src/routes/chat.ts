@@ -269,7 +269,7 @@ function parseDirectReminderRequest(
       .replace(/(알림|알려줘|보내줘|설정해줘|리마인더|리마인드|해줘|줘|remind me|remind)/gi, "")
       .replace(/^[에\s]+/, "")
       .replace(/\s+/g, " ")
-      .trim() || "테스트 알림";
+      .trim() || "Test reminder";
 
   return { title, remindAt };
 }
@@ -468,8 +468,8 @@ export function chatRoutes(app: FastifyInstance) {
       let md = `# ${title}\n\n_Exported: ${date}_\n\n---\n\n`;
 
       for (const msg of convo.messages) {
-        const role = msg.role === "USER" ? "You" : "Eve";
-        md += `**${role}** _(${new Date(msg.createdAt).toLocaleString("ko-KR")})_\n\n${msg.content}\n\n---\n\n`;
+        const role = msg.role === "USER" ? "You" : "Jigeum";
+        md += `**${role}** _(${new Date(msg.createdAt).toLocaleString("en-US")})_\n\n${msg.content}\n\n---\n\n`;
       }
 
       return reply
@@ -555,7 +555,7 @@ export function chatRoutes(app: FastifyInstance) {
       try {
         const now = new Date();
         const kstTime = now.toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 16);
-        retryContextParts.push(`현재 시각: ${kstTime} KST`);
+        retryContextParts.push(`Current time: ${kstTime} KST`);
         const pendingTasks = await prisma.task.findMany({
           where: { userId: conversation.userId, status: { not: "DONE" } },
           orderBy: { dueDate: "asc" },
@@ -565,16 +565,18 @@ export function chatRoutes(app: FastifyInstance) {
           const taskList = pendingTasks
             .map(
               (t: (typeof pendingTasks)[number]) =>
-                `- ${t.title}${t.dueDate ? ` (마감: ${t.dueDate.toLocaleDateString("ko-KR")})` : ""}${t.priority === "URGENT" || t.priority === "HIGH" ? ` [${t.priority}]` : ""}`,
+                `- ${t.title}${t.dueDate ? ` (due: ${t.dueDate.toLocaleDateString("en-US")})` : ""}${t.priority === "URGENT" || t.priority === "HIGH" ? ` [${t.priority}]` : ""}`,
             )
             .join("\n");
-          retryContextParts.push(`진행 중인 태스크:\n${taskList}`);
+          retryContextParts.push(`Open tasks:\n${taskList}`);
         }
       } catch {
         // optional
       }
       const retryDynamicContext =
-        retryContextParts.length > 0 ? `\n\n[현재 상황]\n${retryContextParts.join("\n\n")}` : "";
+        retryContextParts.length > 0
+          ? `\n\n[Current context]\n${retryContextParts.join("\n\n")}`
+          : "";
 
       // Load user memories for retry too
       let retryMemoryContext = "";
@@ -908,11 +910,14 @@ export function chatRoutes(app: FastifyInstance) {
         console.log(
           `[REMINDER] Direct chat reminder created: ${result.reminder.id} remindAt=${result.reminder.remindAt} timer=${directTimerScheduled ? "scheduled" : "scheduler-only"}`,
         );
-        const fullResponse = `${directReminder.remindAt.toLocaleString("ko-KR", {
-          timeZone: "Asia/Seoul",
-          hour: "2-digit",
-          minute: "2-digit",
-        })}에 "${result.reminder.title}" 알림을 보낼게요.`;
+        const fullResponse = `I will remind you at ${directReminder.remindAt.toLocaleString(
+          "en-US",
+          {
+            timeZone: "Asia/Seoul",
+            hour: "2-digit",
+            minute: "2-digit",
+          },
+        )} KST: "${result.reminder.title}".`;
 
         await prisma.message.create({
           data: {
@@ -985,12 +990,12 @@ export function chatRoutes(app: FastifyInstance) {
       const allowedToolNames = new Set(baseTools.map((tool) => tool.function.name));
       const tools = [...baseTools, PROPOSE_ACTION_TOOL];
 
-      // Build dynamic context so Eve knows the current situation
+      // Build dynamic context so Jigeum knows the current situation.
       const contextParts: string[] = [];
       try {
         const now = new Date();
         const kstTime2 = now.toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 16);
-        contextParts.push(`현재 시각: ${kstTime2} KST`);
+        contextParts.push(`Current time: ${kstTime2} KST`);
 
         // Pending tasks
         const pendingTasks = await prisma.task.findMany({
@@ -1002,10 +1007,10 @@ export function chatRoutes(app: FastifyInstance) {
           const taskList = pendingTasks
             .map(
               (t: (typeof pendingTasks)[number]) =>
-                `- ${t.title}${t.dueDate ? ` (마감: ${t.dueDate.toLocaleDateString("ko-KR")})` : ""}${t.priority === "URGENT" || t.priority === "HIGH" ? ` [${t.priority}]` : ""}`,
+                `- ${t.title}${t.dueDate ? ` (due: ${t.dueDate.toLocaleDateString("en-US")})` : ""}${t.priority === "URGENT" || t.priority === "HIGH" ? ` [${t.priority}]` : ""}`,
             )
             .join("\n");
-          contextParts.push(`진행 중인 태스크:\n${taskList}`);
+          contextParts.push(`Open tasks:\n${taskList}`);
         }
 
         // Today's upcoming reminders
@@ -1024,14 +1029,14 @@ export function chatRoutes(app: FastifyInstance) {
           const reminderList = upcomingReminders
             .map((r: (typeof upcomingReminders)[number]) => `- ${r.title}`)
             .join("\n");
-          contextParts.push(`오늘 리마인더:\n${reminderList}`);
+          contextParts.push(`Today's reminders:\n${reminderList}`);
         }
       } catch {
         // Context loading is optional — don't break chat if it fails
       }
 
       const dynamicContext =
-        contextParts.length > 0 ? `\n\n[현재 상황]\n${contextParts.join("\n\n")}` : "";
+        contextParts.length > 0 ? `\n\n[Current context]\n${contextParts.join("\n\n")}` : "";
 
       // Load user memories for personalization (Claude Code memdir/ pattern)
       let memoryContext = "";
@@ -1523,7 +1528,7 @@ export function chatRoutes(app: FastifyInstance) {
           data: {
             conversationId: action.conversationId,
             role: "ASSISTANT",
-            content: `${action.toolName.replace(/_/g, " ")} 실행 완료했어요.`,
+            content: `${action.toolName.replace(/_/g, " ")} completed.`,
             metadata: JSON.stringify({ source: "agent", actionResult: true }),
           },
         });
@@ -1584,7 +1589,7 @@ export function chatRoutes(app: FastifyInstance) {
           data: {
             conversationId: action.conversationId,
             role: "ASSISTANT",
-            content: `실행 실패: ${message}`,
+            content: `Execution failed: ${message}`,
             metadata: JSON.stringify({ source: "agent", actionFailed: true }),
           },
         });
@@ -1632,7 +1637,7 @@ export function chatRoutes(app: FastifyInstance) {
         where: { id: actionId, status: "PENDING" },
         data: {
           status: "REJECTED",
-          result: reason ? `거절 사유: ${reason}` : "User rejected without reason",
+          result: reason ? `Rejected: ${reason}` : "User rejected without reason",
         },
       });
       if (claimed.count === 0) {
@@ -1642,8 +1647,8 @@ export function chatRoutes(app: FastifyInstance) {
 
       // Add a follow-up message (include reason if provided)
       const rejectMsg = reason
-        ? `알겠어요, "${reason}" — 이 제안은 취소할게요. 다음엔 참고할게요.`
-        : "알겠어요, 이 제안은 취소할게요.";
+        ? `Understood. I rejected this suggestion: "${reason}".`
+        : "Understood. I rejected this suggestion.";
 
       await db.message.create({
         data: {
@@ -1681,7 +1686,7 @@ export function chatRoutes(app: FastifyInstance) {
               userId,
               "FEEDBACK",
               `never_suggest_${action.toolName}`,
-              `User explicitly asked Eve to never propose ${action.toolName} actions.`,
+              `User explicitly asked Jigeum to never propose ${action.toolName} actions.`,
               "user",
             ),
           )

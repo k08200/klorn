@@ -255,10 +255,10 @@ function FileConverter() {
         }
         const filename =
           filenameFromContentDisposition(res.headers.get("Content-Disposition")) ||
-          `eve-converted-${target}.zip`;
+          `jigeum-converted-${target}.zip`;
         await downloadResponseBlob(res, filename);
         rememberConversionResult({
-          resultId: res.headers.get("X-Eve-Conversion-Id"),
+          resultId: conversionIdFromHeaders(res.headers),
           filename,
           target,
           fileCount: files.length,
@@ -293,7 +293,7 @@ function FileConverter() {
         convertedFilename(file.name, target);
       await downloadResponseBlob(res, filename);
       rememberConversionResult({
-        resultId: res.headers.get("X-Eve-Conversion-Id"),
+        resultId: conversionIdFromHeaders(res.headers),
         filename,
         target,
         fileCount: 1,
@@ -505,6 +505,7 @@ function FileConverter() {
           <input
             type="file"
             multiple
+            aria-label="Choose files to convert"
             className="sr-only"
             onChange={(event) => {
               const nextFiles = Array.from(event.target.files ?? []);
@@ -828,12 +829,21 @@ function validAlternatives(value: ConversionAlternative[] | undefined): Conversi
     : [];
 }
 
-const CONVERSION_HISTORY_KEY = "eve-file-conversion-history";
+const CONVERSION_HISTORY_KEY = "jigeum-file-conversion-history";
+const LEGACY_CONVERSION_HISTORY_KEY = "eve-file-conversion-history";
+
+function conversionIdFromHeaders(headers: Headers): string | null {
+  return headers.get("X-Jigeum-Conversion-Id") ?? headers.get("X-Eve-Conversion-Id");
+}
 
 function readConversionHistory(): ConversionHistoryItem[] {
   if (typeof window === "undefined") return [];
   try {
-    const parsed = JSON.parse(localStorage.getItem(CONVERSION_HISTORY_KEY) || "[]");
+    const raw =
+      localStorage.getItem(CONVERSION_HISTORY_KEY) ||
+      localStorage.getItem(LEGACY_CONVERSION_HISTORY_KEY) ||
+      "[]";
+    const parsed = JSON.parse(raw);
     return Array.isArray(parsed)
       ? parsed.filter(
           (item): item is ConversionHistoryItem =>

@@ -134,7 +134,7 @@ function CalendarView() {
                 type="button"
                 onClick={syncNow}
                 disabled={syncing}
-                className="absolute right-3 top-3 rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
+                className="absolute right-3 top-3 inline-flex min-h-11 items-center rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
               >
                 {syncing ? "Syncing..." : "Sync now"}
               </button>
@@ -194,7 +194,7 @@ function CalendarView() {
           {googleConnected === false ? (
             <a
               href={`${API_BASE}/api/auth/google?token=${getStoredAuthToken() || ""}`}
-              className="inline-flex rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200"
+              className="inline-flex min-h-11 items-center rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200"
             >
               Connect Google
             </a>
@@ -203,7 +203,7 @@ function CalendarView() {
               type="button"
               onClick={syncNow}
               disabled={syncing}
-              className="rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
+              className="min-h-11 rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
             >
               {syncing ? "Syncing..." : "Sync again"}
             </button>
@@ -299,7 +299,7 @@ function EventRow({ event }: { event: CalendarEvent }) {
               href={event.meetingLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-1 inline-flex items-center gap-1 text-xs text-amber-300 hover:text-amber-200"
+              className="mt-1 inline-flex min-h-11 items-center gap-1 text-xs text-amber-300 hover:text-amber-200"
             >
               Join meeting
               <svg
@@ -323,7 +323,9 @@ function EventRow({ event }: { event: CalendarEvent }) {
             <button
               type="button"
               onClick={togglePrep}
-              className="inline-flex items-center gap-1 rounded-md border border-amber-300/20 bg-amber-300/10 px-2.5 py-1.5 text-xs text-amber-200 transition hover:bg-amber-300/15 hover:text-amber-100"
+              aria-expanded={prepOpen}
+              aria-label={`Toggle prep pack for ${event.title || "untitled event"}`}
+              className="inline-flex min-h-11 items-center gap-1 rounded-md border border-amber-300/20 bg-amber-300/10 px-2.5 py-1.5 text-xs text-amber-200 transition hover:bg-amber-300/15 hover:text-amber-100"
             >
               Prep pack
             </button>
@@ -414,10 +416,9 @@ function readinessClass(readiness: MeetingPrepPack["readiness"]): string {
 }
 
 function formatTime(d: Date): string {
-  return d.toLocaleTimeString("ko-KR", {
+  return d.toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false,
   });
 }
 

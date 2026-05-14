@@ -399,7 +399,7 @@ export function buildAttachmentCandidateProfile(
     .map((file) => ({
       filename: file.filename,
       status: file.analysisStatus,
-      reason: file.reviewReason ?? "원본 확인 필요",
+      reason: file.reviewReason ?? "Source review needed",
     }));
 
   const missingFields = (
@@ -414,11 +414,11 @@ export function buildAttachmentCandidateProfile(
     .map(([key]) => key);
 
   const summaryParts = [
-    name ? `${name}` : "이름 미확인 후보자",
-    role ? `${role} 지원/관련` : null,
-    height ? `신장 ${height}` : null,
-    age ? `나이 ${age}` : null,
-    skills.length > 0 ? `특기 ${skills.slice(0, 3).join(", ")}` : null,
+    name ? `${name}` : "Unnamed candidate",
+    role ? `${role} candidate` : null,
+    height ? `Height ${height}` : null,
+    age ? `Age ${age}` : null,
+    skills.length > 0 ? `Skills ${skills.slice(0, 3).join(", ")}` : null,
   ].filter(Boolean);
 
   const confidenceSignals = [
@@ -464,13 +464,13 @@ export function buildAttachmentCandidateProfile(
 }
 
 function manualReviewReason(attachment: EmailAttachmentView): string | null {
-  if (attachment.analysisStatus === "UNSUPPORTED") return "본문 추출 제한";
-  if (attachment.analysisStatus === "PENDING") return "분석 대기";
-  if (attachment.analysisStatus === "FALLBACK") return "AI 분석 실패 후 보조 분석";
-  if (attachment.analysisStatus === "VISION_FAILED") return "비전/OCR 분석 실패";
+  if (attachment.analysisStatus === "UNSUPPORTED") return "Text extraction unavailable";
+  if (attachment.analysisStatus === "PENDING") return "Analysis pending";
+  if (attachment.analysisStatus === "FALLBACK") return "Fallback analysis after AI failure";
+  if (attachment.analysisStatus === "VISION_FAILED") return "Vision/OCR analysis failed";
   const preview = attachment.textPreview ?? "";
-  if (/OCR 분석 대기/.test(preview)) return "이미지 OCR 필요";
-  if (/텍스트 레이어 없음|추출 실패/.test(preview)) return "원본 텍스트 확인 필요";
+  if (/OCR 분석 대기/.test(preview)) return "Image OCR needed";
+  if (/텍스트 레이어 없음|추출 실패/.test(preview)) return "Source text review needed";
   return null;
 }
 
@@ -478,19 +478,19 @@ function candidateNextAction(
   status: AttachmentCandidateProfile["pipelineStatus"],
   missingFields: string[],
 ): string {
-  if (status === "needs_analysis") return "첨부파일을 다시 분석하거나 원본을 확인하세요.";
+  if (status === "needs_analysis") return "Re-run attachment analysis or review the source file.";
   if (status === "needs_info") {
-    return `${missingFields.map(candidateMissingLabel).join(", ")} 정보를 확인하세요.`;
+    return `Confirm missing fields: ${missingFields.map(candidateMissingLabel).join(", ")}.`;
   }
-  return "후보자 자료를 검토하고 다음 연락 여부를 결정하세요.";
+  return "Review the candidate materials and decide whether to follow up.";
 }
 
 function candidateMissingLabel(field: string): string {
   const labels: Record<string, string> = {
-    name: "이름",
-    contact: "연락처",
-    role: "역할",
-    portfolio: "포트폴리오",
+    name: "name",
+    contact: "contact",
+    role: "role",
+    portfolio: "portfolio",
   };
   return labels[field] || field;
 }
@@ -634,13 +634,13 @@ async function analyzeAttachment(input: {
       messages: [
         {
           role: "system",
-          content: `You analyze email attachments for a Korean work assistant named Eve.
+          content: `You analyze email attachments for a work assistant named Jigeum.
 
 Return ONLY JSON:
 {
-  "summary": "Korean one-line summary, <=90 chars",
+  "summary": "English one-line summary, <=90 chars",
   "category": "resume|profile|portfolio|audition|contract|invoice|proposal|schedule|image|document|other",
-  "keyPoints": ["Korean bullet, <=45 chars"],
+  "keyPoints": ["English bullet, <=45 chars"],
   "extractedFields": {
     "name": "person/company if present",
     "role": "role/job/title if present",
@@ -777,7 +777,7 @@ function heuristicAttachmentAnalysis(
   return {
     summary: firstLine
       ? `${filename}: ${firstLine.slice(0, 80)}`
-      : `${filename}: ${categoryLabel(category)} 첨부파일`,
+      : `${filename}: ${categoryLabel(category)} attachment`,
     category,
     keyPoints: extractHeuristicKeyPoints(text),
     extractedFields: extractHeuristicFields(text),
@@ -809,19 +809,19 @@ function inferAttachmentCategory(filename: string, mimeType: string, text: strin
 
 function categoryLabel(category: string): string {
   const labels: Record<string, string> = {
-    resume: "이력서",
-    profile: "프로필",
-    portfolio: "포트폴리오",
-    audition: "오디션 자료",
-    contract: "계약서",
-    invoice: "청구/견적 자료",
-    proposal: "제안서",
-    schedule: "일정 자료",
-    image: "이미지",
-    document: "문서",
-    other: "기타",
+    resume: "Resume",
+    profile: "Profile",
+    portfolio: "Portfolio",
+    audition: "Audition material",
+    contract: "Contract",
+    invoice: "Invoice or quote",
+    proposal: "Proposal",
+    schedule: "Schedule",
+    image: "Image",
+    document: "Document",
+    other: "Other",
   };
-  return labels[category] || "문서";
+  return labels[category] || "Document";
 }
 
 function extractHeuristicKeyPoints(text: string): string[] {
@@ -874,9 +874,9 @@ function extractHeuristicFields(text: string): Record<string, string> {
 }
 
 function inferCandidateRole(text: string): string | null {
-  if (/(?:배우|연기자|actor|performer)/i.test(text)) return "배우";
-  if (/(?:모델|model)/i.test(text)) return "모델";
-  if (/(?:댄서|무용|dancer)/i.test(text)) return "댄서";
-  if (/(?:가수|보컬|singer|vocal)/i.test(text)) return "가수";
+  if (/(?:배우|연기자|actor|performer)/i.test(text)) return "Actor";
+  if (/(?:모델|model)/i.test(text)) return "Model";
+  if (/(?:댄서|무용|dancer)/i.test(text)) return "Dancer";
+  if (/(?:가수|보컬|singer|vocal)/i.test(text)) return "Singer";
   return null;
 }
