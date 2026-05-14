@@ -325,7 +325,7 @@ function EmailView() {
             type="button"
             onClick={syncNow}
             disabled={syncing}
-            className="h-9 w-fit rounded-md border border-white/10 bg-[#090B10] px-3 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:bg-white/5 hover:text-stone-100 disabled:opacity-50"
+            className="min-h-11 w-fit rounded-md border border-white/10 bg-[#090B10] px-3 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:bg-white/5 hover:text-stone-100 disabled:opacity-50"
           >
             {syncing ? "Syncing..." : "Sync now"}
           </button>
@@ -333,7 +333,7 @@ function EmailView() {
             type="button"
             onClick={reanalyzeAttachments}
             disabled={reanalyzing}
-            className="h-9 w-fit rounded-md border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 px-3 text-xs font-medium text-sky-100 transition hover:bg-[#7DD3FC]/15 disabled:opacity-50"
+            className="min-h-11 w-fit rounded-md border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 px-3 text-xs font-medium text-sky-100 transition hover:bg-[#7DD3FC]/15 disabled:opacity-50"
           >
             {reanalyzing ? "Analyzing..." : "Reanalyze attachments"}
           </button>
@@ -424,6 +424,24 @@ function EmailView() {
           <p className="mt-1 text-xs text-stone-600">
             After sync, mail that needs action rises to the top.
           </p>
+          {filter === "all" && (
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <Link
+                href="/settings"
+                className="inline-flex min-h-11 items-center rounded-md bg-[#FF8A70] px-4 text-xs font-medium text-stone-950 transition hover:bg-[#FFB09C]"
+              >
+                Connect Google
+              </Link>
+              <button
+                type="button"
+                onClick={syncNow}
+                disabled={syncing}
+                className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100 disabled:opacity-50"
+              >
+                {syncing ? "Syncing..." : "Sync now"}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

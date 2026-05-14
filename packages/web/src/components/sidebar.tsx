@@ -179,6 +179,7 @@ export default function Sidebar({
   const { user, logout, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [creatingChat, setCreatingChat] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const loadConversations = useCallback(() => {
@@ -223,6 +224,8 @@ export default function Sidebar({
   }, []);
 
   const createChat = async () => {
+    if (creatingChat) return;
+    setCreatingChat(true);
     try {
       const conv = await apiFetch<{ id: string }>("/api/chat/conversations", {
         method: "POST",
@@ -230,8 +233,11 @@ export default function Sidebar({
       });
       router.push(`/chat/${conv.id}`);
       onMobileClose();
-    } catch {
-      // ignore
+    } catch (err) {
+      captureClientError(err, { scope: "sidebar.create-chat" });
+      toast("Could not create a thread. Check your connection.", "error");
+    } finally {
+      setCreatingChat(false);
     }
   };
 
@@ -391,8 +397,10 @@ export default function Sidebar({
           <button
             type="button"
             onClick={createChat}
-            className="flex h-8 w-8 items-center justify-center rounded-md border border-stone-700 bg-stone-900 text-stone-400 transition hover:border-stone-600 hover:bg-stone-800 hover:text-stone-100"
+            disabled={creatingChat}
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-stone-700 bg-stone-900 text-stone-400 transition hover:border-stone-600 hover:bg-stone-800 hover:text-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
             title="New decision thread"
+            aria-label={creatingChat ? "Creating decision thread" : "New decision thread"}
           >
             <svg
               aria-hidden="true"

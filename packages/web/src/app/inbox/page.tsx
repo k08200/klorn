@@ -9,6 +9,7 @@ import BriefingCard from "../../components/briefing-card";
 import CommandCenterSummary from "../../components/command-center-summary";
 import OperatingLoopCard from "../../components/operating-loop-card";
 import PlaybookRecommendations from "../../components/playbook-recommendations";
+import { useToast } from "../../components/toast";
 import WorkGraphSummaryCard from "../../components/work-graph-summary";
 import { apiFetch } from "../../lib/api";
 import { captureClientError } from "../../lib/sentry";
@@ -64,24 +65,38 @@ function InboxView() {
   const [commitmentLoading, setCommitmentLoading] = useState<
     Record<string, "done" | "dismiss" | null>
   >({});
+  const { toast } = useToast();
 
   const load = useCallback(async (statusFilter: StatusFilter) => {
     setLoading(true);
     setError(null);
-    try {
-      const qs = statusFilter === "all" ? "?status=all" : "";
-      const [actionData, commitmentData] = await Promise.all([
-        apiFetch<{ actions: PendingActionItem[] }>(`/api/chat/pending-actions${qs}`),
-        apiFetch<{ commitments: CommitmentItem[] }>("/api/commitments?status=OPEN&limit=8"),
-      ]);
+    const qs = statusFilter === "all" ? "?status=all" : "";
+    const [actionResult, commitmentResult] = await Promise.allSettled([
+      apiFetch<{ actions: PendingActionItem[] }>(`/api/chat/pending-actions${qs}`),
+      apiFetch<{ commitments: CommitmentItem[] }>("/api/commitments?status=OPEN&limit=8"),
+    ]);
+
+    if (actionResult.status === "fulfilled") {
+      const actionData = actionResult.value;
       setActions(Array.isArray(actionData.actions) ? actionData.actions : []);
-      setCommitments(Array.isArray(commitmentData.commitments) ? commitmentData.commitments : []);
-    } catch (err) {
-      captureClientError(err, { scope: "inbox.load" });
-      setError("Could not load the decision queue.");
-    } finally {
-      setLoading(false);
+    } else {
+      captureClientError(actionResult.reason, { scope: "inbox.load.actions" });
+      setActions([]);
     }
+
+    if (commitmentResult.status === "fulfilled") {
+      const commitmentData = commitmentResult.value;
+      setCommitments(Array.isArray(commitmentData.commitments) ? commitmentData.commitments : []);
+    } else {
+      captureClientError(commitmentResult.reason, { scope: "inbox.load.commitments" });
+      setCommitments([]);
+    }
+
+    if (actionResult.status === "rejected" || commitmentResult.status === "rejected") {
+      setError("Could not load the decision queue.");
+    }
+
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -100,10 +115,15 @@ function InboxView() {
     setActionLoading((prev) => ({ ...prev, [actionId]: "approve" }));
     try {
       await apiFetch(`/api/chat/pending-actions/${actionId}/approve`, { method: "POST" });
-      setActions((prev) => prev.map((a) => (a.id === actionId ? { ...a, status: "EXECUTED" } : a)));
+      setActions((prev) =>
+        filter === "pending"
+          ? prev.filter((a) => a.id !== actionId)
+          : prev.map((a) => (a.id === actionId ? { ...a, status: "EXECUTED" } : a)),
+      );
+      toast("Action approved.", "success");
     } catch (err) {
       captureClientError(err, { scope: "inbox.approve", actionId });
-      alert("Could not approve this action. Please try again.");
+      toast("Could not approve this action. Please try again.", "error");
     } finally {
       setActionLoading((prev) => ({ ...prev, [actionId]: null }));
     }
@@ -117,10 +137,15 @@ function InboxView() {
         method: "POST",
         body: JSON.stringify({}),
       });
-      setActions((prev) => prev.map((a) => (a.id === actionId ? { ...a, status: "REJECTED" } : a)));
+      setActions((prev) =>
+        filter === "pending"
+          ? prev.filter((a) => a.id !== actionId)
+          : prev.map((a) => (a.id === actionId ? { ...a, status: "REJECTED" } : a)),
+      );
+      toast("Suggestion rejected.", "success");
     } catch (err) {
       captureClientError(err, { scope: "inbox.reject", actionId });
-      alert("Could not reject this action. Please try again.");
+      toast("Could not reject this action. Please try again.", "error");
     } finally {
       setActionLoading((prev) => ({ ...prev, [actionId]: null }));
     }
@@ -219,7 +244,30 @@ function InboxView() {
           <p className="text-sm text-stone-300 mb-1">
             {filter === "pending" ? "No pending items." : "No decision queue items yet."}
           </p>
-          <p className="text-xs text-stone-500">New Jigeum proposals will appear here.</p>
+          <p className="mx-auto max-w-md text-xs leading-5 text-stone-500">
+            Connect work signals or start a decision thread so Jigeum has mail, meetings, and tasks
+            to turn into cards.
+          </p>
+          <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
+            <Link
+              href="/settings"
+              className="inline-flex min-h-11 items-center justify-center rounded-md bg-amber-300 px-4 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
+            >
+              Connect Google
+            </Link>
+            <Link
+              href="/chat"
+              className="inline-flex min-h-11 items-center justify-center rounded-md border border-stone-700 px-4 text-sm font-medium text-stone-300 transition hover:bg-stone-800"
+            >
+              Start a thread
+            </Link>
+            <Link
+              href="/email"
+              className="inline-flex min-h-11 items-center justify-center rounded-md border border-stone-700 px-4 text-sm font-medium text-stone-300 transition hover:bg-stone-800"
+            >
+              Open mail
+            </Link>
+          </div>
         </div>
       )}
 
@@ -708,7 +756,7 @@ function buildPreview(
   if (toolName === "create_event") {
     const start = pick("startTime");
     const when = start
-      ? new Date(start).toLocaleString("ko-KR", {
+      ? new Date(start).toLocaleString("en-US", {
           month: "short",
           day: "numeric",
           hour: "2-digit",

@@ -9,16 +9,16 @@ test.describe("Landing page CTAs and conversion paths", () => {
     expect(errors).toHaveLength(0);
   });
 
-  test("Get Started Free CTA leads to login with register intent", async ({ page }) => {
+  test("early access CTA leads to the application form", async ({ page }) => {
     await page.goto("/");
-    const cta = page.locator('a:has-text("Get Started Free")').first();
+    const cta = page.getByRole("link", { name: "Request early access from hero" });
     await cta.click();
-    await expect(page).toHaveURL(/\/login/);
+    await expect(page).toHaveURL(/\/early-access/);
   });
 
-  test("Sign in link in nav leads to login", async ({ page }) => {
+  test("log in link in nav leads to login", async ({ page }) => {
     await page.goto("/");
-    await page.click('nav a:has-text("Sign in")');
+    await page.getByRole("navigation").getByRole("link", { name: "Log in" }).click();
     await expect(page).toHaveURL(/\/login/);
   });
 

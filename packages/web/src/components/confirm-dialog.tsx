@@ -43,9 +43,19 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       {children}
       {options && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[110] px-4">
-          <div className="bg-stone-950 border border-stone-700 rounded-xl p-6 w-full max-w-sm animate-slide-up">
-            <h3 className="font-semibold mb-2">{options.title}</h3>
-            <p className="text-sm text-stone-400 mb-6">{options.message}</p>
+          <div
+            className="bg-stone-950 border border-stone-700 rounded-xl p-6 w-full max-w-sm animate-slide-up"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-dialog-title"
+            aria-describedby="confirm-dialog-message"
+          >
+            <h3 id="confirm-dialog-title" className="font-semibold mb-2">
+              {options.title}
+            </h3>
+            <p id="confirm-dialog-message" className="text-sm text-stone-400 mb-6">
+              {options.message}
+            </p>
             <div className="flex gap-2 justify-end">
               <button
                 type="button"

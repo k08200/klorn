@@ -16,6 +16,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
+  authError: "api_unavailable" | null;
   googleConnected: boolean | null;
   initSync: InitSyncState;
   login: (email: string, password: string) => Promise<void>;
@@ -56,6 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<"api_unavailable" | null>(null);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
   const [initSync, setInitSync] = useState<InitSyncState>(INIT_SYNC_IDLE);
   const router = useRouter();
@@ -111,9 +113,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             runInitialSync(stored);
           }
         })
-        .catch(() => {
-          clearStoredAuthToken();
-          setToken(null);
+        .catch((err) => {
+          const isUnauthorized = err instanceof Error && err.message.startsWith("API 401:");
+          if (isUnauthorized) {
+            clearStoredAuthToken();
+            setToken(null);
+          } else {
+            setAuthError("api_unavailable");
+          }
         })
         .finally(() => setLoading(false));
     } else {
@@ -130,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setStoredAuthToken(data.token);
       setToken(data.token);
       setUser(data.user);
+      setAuthError(null);
       router.push("/inbox");
 
       // Trigger bootstrap sync. If Google is not connected yet, the card can show that clearly.
@@ -147,6 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setStoredAuthToken(data.token);
       setToken(data.token);
       setUser(data.user);
+      setAuthError(null);
       setGoogleConnected(false);
       router.push("/inbox");
     },
@@ -168,6 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         );
         console.log("[auth] loginWithToken: /api/auth/me success", data.user?.email);
         setUser(data.user);
+        setAuthError(null);
         setGoogleConnected(data.user.googleConnected ?? true);
       } catch (err) {
         console.error("[auth] loginWithToken: /api/auth/me FAILED", err);
@@ -187,6 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearStoredAuthToken();
     setToken(null);
     setUser(null);
+    setAuthError(null);
     setGoogleConnected(null);
     setInitSync(INIT_SYNC_IDLE);
     router.push("/login");
@@ -198,6 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         token,
         loading,
+        authError,
         googleConnected,
         initSync,
         login,

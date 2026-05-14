@@ -139,7 +139,7 @@ function HeroProductScene() {
           </div>
         </div>
       </div>
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,#0f1115_0%,rgba(15,17,21,0.95)_39%,rgba(15,17,21,0.48)_74%,rgba(15,17,21,0.78)_100%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,#0f1115_0%,rgba(15,17,21,0.94)_39%,rgba(15,17,21,0.34)_74%,rgba(15,17,21,0.64)_100%)]" />
       <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#0f1115] to-transparent" />
     </div>
   );
@@ -243,13 +243,13 @@ export default function LandingPage() {
           <div className="flex items-center gap-2">
             <Link
               href="/login"
-              className="whitespace-nowrap px-3 py-2 text-sm text-stone-300 transition hover:text-white"
+              className="inline-flex min-h-11 items-center whitespace-nowrap px-3 text-sm text-stone-300 transition hover:text-white"
             >
               Log in
             </Link>
             <Link
               href="/early-access"
-              className="whitespace-nowrap rounded-md bg-[#f2eadc] px-4 py-2 text-sm font-semibold text-[#12100d] transition hover:bg-white"
+              className="inline-flex min-h-11 items-center whitespace-nowrap rounded-md bg-[#f2eadc] px-4 text-sm font-semibold text-[#12100d] transition hover:bg-white"
             >
               Early access
             </Link>
@@ -272,6 +272,7 @@ export default function LandingPage() {
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/early-access"
+                aria-label="Request early access from hero"
                 className="inline-flex h-12 items-center justify-center gap-2 rounded-md bg-[#d8a45d] px-6 text-sm font-semibold text-[#11100d] transition hover:bg-[#f0c982]"
               >
                 Request early access
@@ -281,7 +282,7 @@ export default function LandingPage() {
                 href="/login"
                 className="inline-flex h-12 items-center justify-center rounded-md border border-white/[0.18] px-6 text-sm font-medium text-stone-200 transition hover:border-white/[0.35] hover:bg-white/[0.08]"
               >
-                Open command center
+                Log in
               </Link>
             </div>
           </div>
@@ -341,19 +342,19 @@ export default function LandingPage() {
             <div className="mt-4 flex flex-col gap-2 border-t border-white/8 pt-4 sm:flex-row">
               <button
                 type="button"
-                className="h-10 rounded-md bg-[#d8a45d] px-4 text-sm font-semibold text-[#11100d]"
+                className="h-11 rounded-md bg-[#d8a45d] px-4 text-sm font-semibold text-[#11100d]"
               >
                 Approve
               </button>
               <button
                 type="button"
-                className="h-10 rounded-md border border-white/12 px-4 text-sm font-medium text-stone-300"
+                className="h-11 rounded-md border border-white/12 px-4 text-sm font-medium text-stone-300"
               >
                 Edit first
               </button>
               <button
                 type="button"
-                className="h-10 rounded-md px-4 text-sm font-medium text-stone-500"
+                className="h-11 rounded-md px-4 text-sm font-medium text-stone-500"
               >
                 Hold
               </button>
@@ -418,6 +419,7 @@ export default function LandingPage() {
         </p>
         <Link
           href="/early-access"
+          aria-label="Request early access from final section"
           className="mt-9 inline-flex h-12 items-center justify-center gap-2 rounded-md bg-[#f2eadc] px-6 text-sm font-semibold text-[#11100d] transition hover:bg-white"
         >
           Request early access
@@ -432,10 +434,16 @@ export default function LandingPage() {
             <span>Jigeum turns scattered work signals into decisions you can trust.</span>
           </div>
           <div className="flex gap-5">
-            <Link href="/privacy" className="transition hover:text-stone-300">
+            <Link
+              href="/privacy"
+              className="inline-flex min-h-10 items-center transition hover:text-stone-300"
+            >
               Privacy
             </Link>
-            <Link href="/terms" className="transition hover:text-stone-300">
+            <Link
+              href="/terms"
+              className="inline-flex min-h-10 items-center transition hover:text-stone-300"
+            >
               Terms
             </Link>
           </div>

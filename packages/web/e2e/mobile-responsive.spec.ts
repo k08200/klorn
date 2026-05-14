@@ -44,13 +44,13 @@ test.describe("Mobile responsive — no horizontal overflow", () => {
     }
   });
 
-  test("CTA buttons are tappable size on mobile (>= 40px tall)", async ({ page }) => {
+  test("CTA buttons are tappable size on mobile (>= 44px tall)", async ({ page }) => {
     await page.goto("/");
-    const cta = page.locator('a:has-text("Get Started Free")').first();
+    const cta = page.getByRole("link", { name: "Request early access from hero" });
     const box = await cta.boundingBox();
     expect(box).not.toBeNull();
     if (box) {
-      expect(box.height).toBeGreaterThanOrEqual(36);
+      expect(box.height).toBeGreaterThanOrEqual(44);
     }
   });
 });

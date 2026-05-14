@@ -4,8 +4,8 @@ test.describe("Landing page", () => {
   test("displays Jigeum hero with concept message", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("link", { name: "JIGEUM" })).toBeVisible();
-    await expect(page.locator("h1")).toContainText("Stop checking apps");
-    await expect(page.locator("h1")).toContainText("Clear decisions");
+    await expect(page.locator("h1")).toContainText("Decide what matters");
+    await expect(page.locator("h1")).toContainText("before work scatters");
   });
 
   test("shows early access CTA", async ({ page }) => {
@@ -17,14 +17,18 @@ test.describe("Landing page", () => {
 
   test("shows decision queue example", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Prepare investor follow-up" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Investor follow-up ready" })).toBeVisible();
     await expect(page.getByText("Approval needed")).toBeVisible();
   });
 
   test("shows work graph and trust ladder sections", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: /Jigeum should show the shape/ })).toBeVisible();
-    await expect(page.getByRole("heading", { name: /Trust is a ladder/ })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "The important work fits on one card." }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Prepare quietly. Confirm clearly." }),
+    ).toBeVisible();
   });
 
   test("no pricing section visible", async ({ page }) => {

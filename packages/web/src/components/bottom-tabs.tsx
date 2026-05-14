@@ -32,8 +32,9 @@ export default function BottomTabs() {
             <li key={tab.href}>
               <Link
                 href={tab.href}
+                aria-current={active ? "page" : undefined}
                 className={`flex min-h-[62px] flex-col items-center justify-center gap-1 py-2 text-[10px] transition ${
-                  active ? "text-[#FF8A70]" : "text-stone-500"
+                  active ? "text-[#FF8A70]" : "text-stone-400"
                 }`}
               >
                 <TabIcon type={tab.icon} active={active} />

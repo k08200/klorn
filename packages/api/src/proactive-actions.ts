@@ -1,7 +1,7 @@
 /**
  * Proactive Actions — Rule-based autonomous behaviors that run without LLM calls.
  *
- * These are the actions that make Eve feel like a quiet decision layer:
+ * These are the actions that make Jigeum feel like a quiet decision layer:
  * 1. Unanswered email detection → reminder + follow-up draft suggestion
  * 2. Pre-meeting briefing → push notification 1 hour before
  * 3. Overdue task alerts → push notification
@@ -58,12 +58,12 @@ async function checkUnansweredEmails(userId: string): Promise<void> {
   if (existing) return;
 
   const emailList = unanswered
-    .map((e) => `• ${senderName(e.from)} — "${truncate(e.subject || "제목 없음", 40)}"`)
+    .map((e) => `• ${senderName(e.from)} — "${truncate(e.subject || "Untitled", 40)}"`)
     .join("\n");
 
   const top = unanswered[0];
-  const title = `답장 대기 ${unanswered.length}건`;
-  const message = `가장 오래된 건: ${senderName(top.from)} — "${truncate(top.subject || "제목 없음", 40)}"\n\n${emailList}`;
+  const title = `${unanswered.length} reply pending`;
+  const message = `Oldest thread: ${senderName(top.from)} — "${truncate(top.subject || "Untitled", 40)}"\n\n${emailList}`;
 
   await notify(userId, "email_followup", title, message, "/briefing");
 }
@@ -106,7 +106,7 @@ async function checkUpcomingMeetings(userId: string): Promise<void> {
     });
     if (existing) continue;
 
-    const time = event.startTime.toLocaleTimeString("ko-KR", {
+    const time = event.startTime.toLocaleTimeString("en-US", {
       timeZone: "Asia/Seoul",
       hour: "2-digit",
       minute: "2-digit",
@@ -157,7 +157,7 @@ async function checkOverdueTasks(userId: string): Promise<void> {
 
   const taskList = overdue
     .map((t) => {
-      const due = t.dueDate ? t.dueDate.toLocaleDateString("ko-KR") : "";
+      const due = t.dueDate ? t.dueDate.toLocaleDateString("en-US") : "";
       return `- ${t.title} (due: ${due})`;
     })
     .join("\n");
@@ -247,7 +247,7 @@ async function checkEndOfDayReview(userId: string): Promise<void> {
   }
   if (tomorrowMeetings.length > 0) {
     const meetingList = tomorrowMeetings.map((m) => {
-      const time = m.startTime.toLocaleTimeString("ko-KR", {
+      const time = m.startTime.toLocaleTimeString("en-US", {
         timeZone: "Asia/Seoul",
         hour: "2-digit",
         minute: "2-digit",
@@ -365,7 +365,7 @@ async function checkFollowUpSuggestions(userId: string): Promise<void> {
     userId,
     "followup",
     `${stale.length} email(s) may need a follow-up`,
-    `These emails haven't been replied to in 3+ days. Want Eve to draft a follow-up?\n${suggestions.join("\n")}`,
+    `These emails haven't been replied to in 3+ days. Want Jigeum to draft a follow-up?\n${suggestions.join("\n")}`,
     "/chat",
   );
 }

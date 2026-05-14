@@ -60,7 +60,7 @@ describe("file conversion with five users", () => {
 
         expect(res.statusCode).toBe(200);
         expect(res.headers["content-type"]).toContain("application/json");
-        const resultId = String(res.headers["x-eve-conversion-id"]);
+        const resultId = String(res.headers["x-jigeum-conversion-id"]);
         expect(resultId).toMatch(/^[0-9a-f-]{20,80}$/i);
         return { userId, resultId, body: res.body };
       }),
