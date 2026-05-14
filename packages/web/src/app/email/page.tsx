@@ -100,6 +100,17 @@ interface UndoNotice {
   subject: string | null;
 }
 
+interface BulkUndoEmail {
+  id: string;
+  gmailId: string;
+  subject: string;
+}
+
+interface BulkUndoNotice {
+  action: "archive";
+  emails: BulkUndoEmail[];
+}
+
 interface UndoActionResponse {
   success: boolean;
   gmailId: string;
@@ -210,6 +221,7 @@ function EmailView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [undoBusy, setUndoBusy] = useState(false);
+  const [bulkUndoNotice, setBulkUndoNotice] = useState<BulkUndoNotice | null>(null);
 
   const load = useCallback(async (f: Filter, keyword = "") => {
     setLoading(true);
@@ -311,6 +323,7 @@ function EmailView() {
   ) => {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
+    const selectedEmails = emails.filter((email) => selectedIds.has(email.id));
     setBulkBusy(true);
     setError(null);
     try {
@@ -320,6 +333,19 @@ function EmailView() {
       });
       setEmails((prev) => updateEmailsAfterBulk(prev, ids, action, options.priority));
       setSelectedIds(new Set());
+      if (action === "archive") {
+        const failedIds = new Set(data.failed?.map((item) => item.id) ?? []);
+        const undoEmails = selectedEmails
+          .filter((email) => !failedIds.has(email.id))
+          .map((email) => ({
+            id: email.id,
+            gmailId: email.gmailId,
+            subject: email.subject || "No subject",
+          }));
+        setBulkUndoNotice(undoEmails.length > 0 ? { action: "archive", emails: undoEmails } : null);
+      } else {
+        setBulkUndoNotice(null);
+      }
       if (data.failed && data.failed.length > 0) {
         setError(`${data.failed.length} messages could not be processed. Please try again.`);
       }
@@ -333,6 +359,10 @@ function EmailView() {
 
   const dismissUndoNotice = () => {
     router.replace("/email");
+  };
+
+  const dismissBulkUndoNotice = () => {
+    setBulkUndoNotice(null);
   };
 
   const undoLastAction = async () => {
@@ -352,6 +382,38 @@ function EmailView() {
     } catch (err) {
       captureClientError(err, { scope: "email.list.undo", action: undoNotice.action });
       setError("Could not restore that email. Check Gmail connection and try again.");
+    } finally {
+      setUndoBusy(false);
+    }
+  };
+
+  const undoBulkArchive = async () => {
+    if (!bulkUndoNotice || undoBusy) return;
+    setUndoBusy(true);
+    setError(null);
+    try {
+      const results = await Promise.allSettled(
+        bulkUndoNotice.emails.map((email) =>
+          apiFetch<UndoActionResponse>(
+            `/api/email/${encodeURIComponent(email.gmailId)}/archive/undo`,
+            {
+              method: "POST",
+              body: JSON.stringify({ gmailId: email.gmailId }),
+            },
+          ),
+        ),
+      );
+      const failedCount = results.filter((result) => result.status === "rejected").length;
+      if (failedCount > 0) {
+        setError(`${failedCount} messages could not be restored. Check Gmail and try again.`);
+      } else {
+        toast("Restored to inbox.", "success");
+        setBulkUndoNotice(null);
+      }
+      await load(filter, appliedSearch);
+    } catch (err) {
+      captureClientError(err, { scope: "email.bulk.undo" });
+      setError("Could not restore the archived mail. Check Gmail connection and try again.");
     } finally {
       setUndoBusy(false);
     }
@@ -410,6 +472,15 @@ function EmailView() {
           busy={undoBusy}
           onDismiss={dismissUndoNotice}
           onUndo={undoLastAction}
+        />
+      )}
+
+      {bulkUndoNotice && (
+        <BulkUndoActionBanner
+          notice={bulkUndoNotice}
+          busy={undoBusy}
+          onDismiss={dismissBulkUndoNotice}
+          onUndo={undoBulkArchive}
         />
       )}
 
@@ -600,6 +671,52 @@ function UndoActionBanner({
           className="min-h-10 rounded-md bg-[#FF8A70] px-3 text-xs font-semibold text-stone-950 transition hover:bg-[#FFB09C] disabled:opacity-50"
         >
           {busy ? "Restoring..." : "Undo"}
+        </button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          disabled={busy}
+          className="min-h-10 rounded-md border border-white/10 px-3 text-xs text-stone-300 transition hover:bg-white/5 disabled:opacity-50"
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BulkUndoActionBanner({
+  notice,
+  busy,
+  onDismiss,
+  onUndo,
+}: {
+  notice: BulkUndoNotice;
+  busy: boolean;
+  onDismiss: () => void;
+  onUndo: () => void;
+}) {
+  const count = notice.emails.length;
+  const preview = notice.emails
+    .slice(0, 2)
+    .map((email) => email.subject)
+    .join(", ");
+  return (
+    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-[#FF8A70]/30 bg-[#2A1510] px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <p className="font-medium">
+          {count} {count === 1 ? "email" : "emails"} archived.
+        </p>
+        {preview && <p className="mt-0.5 truncate text-xs text-stone-400">{preview}</p>}
+      </div>
+      <div className="flex shrink-0 gap-2">
+        <button
+          type="button"
+          onClick={onUndo}
+          disabled={busy}
+          className="min-h-10 rounded-md bg-[#FF8A70] px-3 text-xs font-semibold text-stone-950 transition hover:bg-[#FFB09C] disabled:opacity-50"
+        >
+          {busy ? "Restoring..." : "Undo all"}
         </button>
         <button
           type="button"
