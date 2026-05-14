@@ -8,6 +8,18 @@ const apiUrl =
 const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DEV_DIST === "1" ? ".next-dev" : ".next",
   outputFileTracingRoot: path.join(import.meta.dirname, "../../"),
+  async redirects() {
+    return [
+      { source: "/dashboard", destination: "/inbox", permanent: false },
+      { source: "/tasks", destination: "/inbox", permanent: false },
+      { source: "/notes", destination: "/files", permanent: false },
+      { source: "/contacts", destination: "/email/candidates", permanent: false },
+      { source: "/reminders", destination: "/inbox", permanent: false },
+      { source: "/skills", destination: "/settings/memory", permanent: false },
+      { source: "/notifications", destination: "/briefing", permanent: false },
+      { source: "/workspace", destination: "/files", permanent: false },
+    ];
+  },
   allowedDevOrigins: [
     "127.0.0.1",
     "127.0.0.1:8001",

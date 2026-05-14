@@ -23,16 +23,7 @@ test.describe("Navigation", () => {
 
   test("unauthenticated user cannot access dashboard", async ({ page }) => {
     await page.goto("/dashboard");
-    // Should redirect to login or show auth guard
-    await page.waitForTimeout(2000);
-    const url = page.url();
-    // Either redirected to login or shows login form
-    const isProtected =
-      url.includes("/login") ||
-      (await page
-        .locator('input[type="email"]')
-        .isVisible()
-        .catch(() => false));
-    expect(isProtected || url.includes("/dashboard")).toBeTruthy();
+    await expect(page).toHaveURL(/\/login\?next=%2Finbox/);
+    await expect(page.locator('input[type="email"]')).toBeVisible();
   });
 });
