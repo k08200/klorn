@@ -47,7 +47,7 @@ export default function AuthScreen({
             Home
           </Link>
           <Link
-            className="whitespace-nowrap rounded-md border border-stone-700 px-3 py-2 text-stone-300 transition hover:border-stone-500 hover:text-stone-100"
+            className="inline-flex min-h-11 items-center whitespace-nowrap rounded-md border border-stone-700 px-3 py-2 text-stone-300 transition hover:border-stone-500 hover:text-stone-100"
             href={navCtaHref}
           >
             {navCtaLabel}

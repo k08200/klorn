@@ -44,7 +44,9 @@ function handleSessionExpired(): void {
   if (isHandling401 || typeof window === "undefined") return;
   isHandling401 = true;
   clearStoredAuthToken();
-  window.location.href = "/login?error=session_expired";
+  const next = `${window.location.pathname}${window.location.search}`;
+  const nextParam = next && next !== "/login" ? `&next=${encodeURIComponent(next)}` : "";
+  window.location.href = `/login?error=session_expired${nextParam}`;
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {

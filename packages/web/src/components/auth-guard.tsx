@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "../lib/auth";
 
@@ -8,13 +8,16 @@ import { useAuth } from "../lib/auth";
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading, authError } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (authError === "api_unavailable") return;
     if (!loading && !user) {
-      router.replace("/login");
+      const query = typeof window !== "undefined" ? window.location.search.slice(1) : "";
+      const next = `${pathname}${query ? `?${query}` : ""}`;
+      router.replace(`/login?next=${encodeURIComponent(next)}`);
     }
-  }, [user, loading, authError, router]);
+  }, [user, loading, authError, pathname, router]);
 
   if (loading) {
     return (

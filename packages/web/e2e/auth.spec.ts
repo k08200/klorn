@@ -5,38 +5,46 @@ test.describe("Authentication", () => {
     await page.goto("/login");
     await expect(page.locator('input[type="email"]')).toBeVisible();
     await expect(page.locator('input[type="password"]')).toBeVisible();
-    await expect(page.locator('button:has-text("Sign in")')).toBeVisible();
+    await expect(page.getByRole("button", { name: "Open decision queue" })).toBeVisible();
   });
 
   test("shows register mode toggle", async ({ page }) => {
     await page.goto("/login");
-    const toggle = page.locator("text=Don't have an account? Sign up");
+    const toggle = page.getByRole("button", { name: "Switch to sign-up" });
     await expect(toggle).toBeVisible();
     await toggle.click();
-    await expect(page.locator('button:has-text("Create account")')).toBeVisible();
+    await expect(page.getByRole("button", { name: "Create account" })).toBeVisible();
     await expect(page.locator('input[id="name"]')).toBeVisible();
   });
 
   test("shows Google login button with Beta badge", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.locator("text=Continue with Google")).toBeVisible();
-    await expect(page.locator("text=Beta")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Google sign-in coming soon Beta" }),
+    ).toBeVisible();
   });
 
-  test("shows demo button", async ({ page }) => {
+  test("explains private beta access", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.locator('button:has-text("Try Demo")')).toBeVisible();
+    await expect(page.getByText("Private beta access is email-based.")).toBeVisible();
   });
 
-  test("shows forgot password link", async ({ page }) => {
+  test("shows reset password link", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.locator("text=Forgot password?")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Reset password" })).toBeVisible();
   });
 
   test("password field requires minimum 8 characters for registration", async ({ page }) => {
     await page.goto("/login");
-    await page.click("text=Don't have an account? Sign up");
+    await page.getByRole("button", { name: "Switch to sign-up" }).click();
     const passwordInput = page.locator('input[type="password"]');
     await expect(passwordInput).toHaveAttribute("minLength", "8");
+  });
+
+  test("protected route redirects with a return destination", async ({ page }) => {
+    await page.goto("/settings");
+    await expect(page).toHaveURL(/\/login\?next=%2Fsettings/);
+    await expect(page.getByText("Sign in to continue to")).toBeVisible();
+    await expect(page.getByText("/settings")).toBeVisible();
   });
 });

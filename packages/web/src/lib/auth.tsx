@@ -19,8 +19,8 @@ interface AuthContextType {
   authError: "api_unavailable" | null;
   googleConnected: boolean | null;
   initSync: InitSyncState;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name?: string) => Promise<void>;
+  login: (email: string, password: string, redirectTo?: string) => Promise<void>;
+  register: (email: string, password: string, name?: string, redirectTo?: string) => Promise<void>;
   loginWithToken: (token: string) => Promise<void>;
   logout: () => void;
 }
@@ -129,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [runInitialSync]);
 
   const login = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string, redirectTo = "/inbox") => {
       const data = await apiFetch<{ token: string; user: User }>("/api/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
@@ -138,7 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(data.token);
       setUser(data.user);
       setAuthError(null);
-      router.push("/inbox");
+      router.push(redirectTo);
 
       // Trigger bootstrap sync. If Google is not connected yet, the card can show that clearly.
       runInitialSync(data.token);
@@ -147,7 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const register = useCallback(
-    async (email: string, password: string, name?: string) => {
+    async (email: string, password: string, name?: string, redirectTo = "/inbox") => {
       const data = await apiFetch<{ token: string; user: User }>("/api/auth/register", {
         method: "POST",
         body: JSON.stringify({ email, password, name }),
@@ -157,7 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(data.user);
       setAuthError(null);
       setGoogleConnected(false);
-      router.push("/inbox");
+      router.push(redirectTo);
     },
     [router],
   );

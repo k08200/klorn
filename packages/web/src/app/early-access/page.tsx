@@ -113,13 +113,13 @@ export default function EarlyAccessPage() {
           <div className="mt-5 grid grid-cols-2 gap-3">
             <Link
               href="/"
-              className="flex h-10 items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
+              className="flex min-h-11 items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
             >
               Back home
             </Link>
             <Link
               href="/login"
-              className="flex h-10 items-center justify-center rounded-md border border-stone-700 text-sm text-stone-300 transition hover:border-stone-500"
+              className="flex min-h-11 items-center justify-center rounded-md border border-stone-700 text-sm text-stone-300 transition hover:border-stone-500"
             >
               Log in after approval
             </Link>

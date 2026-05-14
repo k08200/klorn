@@ -25,12 +25,13 @@ function LoginForm() {
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const nextPath = safeNextPath(searchParams.get("next"));
 
   useEffect(() => {
     if (!authLoading && user) {
-      router.push("/inbox");
+      router.push(nextPath);
     }
-  }, [user, authLoading, router]);
+  }, [user, authLoading, nextPath, router]);
 
   // Surface redirect feedback from Google OAuth and email verification.
   useEffect(() => {
@@ -57,12 +58,11 @@ function LoginForm() {
     setLoading(true);
     try {
       if (mode === "login") {
-        await login(email, password);
+        await login(email, password, nextPath);
         toast("Welcome back.", "success");
       } else {
-        await register(email, password, name || undefined);
+        await register(email, password, name || undefined, nextPath);
         toast("Account created.", "success");
-        router.push("/inbox");
         return;
       }
     } catch (err) {
@@ -88,8 +88,8 @@ function LoginForm() {
       title={mode === "login" ? "Return to your decision queue" : "Start with Jigeum"}
       description={
         mode === "login"
-          ? "Reconnect your work signals and review what needs approval today."
-          : "Create an account to turn team signals into evidence-backed decision cards."
+          ? "Reconnect your work signals and continue where you left off."
+          : "Use your approved beta email to turn team signals into evidence-backed decision cards."
       }
       footer={
         <Link href="/" className="transition hover:text-stone-300">
@@ -97,6 +97,16 @@ function LoginForm() {
         </Link>
       }
     >
+      {nextPath !== "/inbox" && (
+        <div className="mb-4 rounded-md border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100">
+          Sign in to continue to <span className="font-medium text-amber-50">{nextPath}</span>.
+        </div>
+      )}
+
+      <div className="mb-4 rounded-md border border-stone-700/65 bg-black/20 px-3 py-2 text-xs leading-5 text-stone-400">
+        Private beta access is email-based. If you are not approved yet, request early access first.
+      </div>
+
       <div className="mb-5 grid grid-cols-2 rounded-md border border-stone-700/70 bg-black/20 p-1">
         <button
           type="button"
@@ -239,11 +249,18 @@ function LoginForm() {
         <button
           type="button"
           onClick={() => setMode(mode === "login" ? "register" : "login")}
-          className="font-medium text-amber-300 transition hover:text-amber-200"
+          className="inline-flex min-h-10 items-center font-medium text-amber-300 transition hover:text-amber-200"
         >
           {mode === "login" ? "Switch to sign-up" : "Switch to log-in"}
         </button>
       </div>
     </AuthScreen>
   );
+}
+
+function safeNextPath(value: string | null): string {
+  if (!value) return "/inbox";
+  if (!value.startsWith("/") || value.startsWith("//")) return "/inbox";
+  if (value.startsWith("/login")) return "/inbox";
+  return value;
 }

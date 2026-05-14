@@ -1,15 +1,17 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Navigation", () => {
-  test("landing page nav has Sign in and Try Free", async ({ page }) => {
+  test("landing page nav has Log in and Early access", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator('a:has-text("Sign in")')).toBeVisible();
-    await expect(page.locator('a:has-text("Try Free")')).toBeVisible();
+    await expect(page.getByRole("navigation").getByRole("link", { name: "Log in" })).toBeVisible();
+    await expect(
+      page.getByRole("navigation").getByRole("link", { name: "Early access" }),
+    ).toBeVisible();
   });
 
-  test("clicking Sign in navigates to login", async ({ page }) => {
+  test("clicking Log in navigates to login", async ({ page }) => {
     await page.goto("/");
-    await page.click('nav a:has-text("Sign in")');
+    await page.getByRole("navigation").getByRole("link", { name: "Log in" }).click();
     await expect(page).toHaveURL(/\/login/);
   });
 

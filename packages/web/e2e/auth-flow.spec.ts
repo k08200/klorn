@@ -10,44 +10,40 @@ test.describe("Authentication flow — error states and validation", () => {
     expect(isValid).toBe(false);
   });
 
-  test("empty password is blocked by browser validation", async ({ page }) => {
+  test("empty password keeps submit disabled", async ({ page }) => {
     await page.goto("/login");
     await page.locator('input[type="email"]').fill("test@example.com");
-    const submitBtn = page.locator('button:has-text("Sign in")');
-    await submitBtn.click();
-    // Should still be on login page (validation blocked submission)
+    const submitBtn = page.getByRole("button", { name: "Open decision queue" });
+    await expect(submitBtn).toBeDisabled();
     await expect(page).toHaveURL(/\/login/);
   });
 
-  test("register mode requires name field", async ({ page }) => {
+  test("register mode shows optional name field", async ({ page }) => {
     await page.goto("/login");
-    await page.click("text=Don't have an account? Sign up");
+    await page.getByRole("button", { name: "Switch to sign-up" }).click();
     const nameInput = page.locator('input[id="name"]');
     await expect(nameInput).toBeVisible();
     const required = await nameInput.getAttribute("required");
-    expect(required).not.toBeNull();
+    expect(required).toBeNull();
   });
 
-  test("forgot password link leads to reset flow", async ({ page }) => {
+  test("reset password link leads to reset flow", async ({ page }) => {
     await page.goto("/login");
-    await page.click("text=Forgot password?");
-    // Should navigate to reset-password or show reset form
-    await page.waitForTimeout(500);
-    const url = page.url();
-    expect(url).toMatch(/reset|forgot/);
+    await page.getByRole("link", { name: "Reset password" }).click();
+    await expect(page).toHaveURL(/\/reset-password/);
   });
 
   test("toggle between sign in and sign up preserves layout", async ({ page }) => {
     await page.goto("/login");
-    const signInBtn = page.locator('button:has-text("Sign in")');
-    await expect(signInBtn).toBeVisible();
+    const loginBtn = page.getByRole("button", { name: "Open decision queue" });
+    await expect(loginBtn).toBeVisible();
 
-    await page.click("text=Don't have an account? Sign up");
+    await page.getByRole("button", { name: "Switch to sign-up" }).click();
     const createBtn = page.locator('button:has-text("Create account")');
     await expect(createBtn).toBeVisible();
 
     // Toggle back
-    await page.click("text=Already have an account? Sign in");
-    await expect(signInBtn).toBeVisible();
+    await page.getByRole("button", { name: "Switch to log-in" }).click();
+    await expect(loginBtn).toBeVisible();
   });
 });
