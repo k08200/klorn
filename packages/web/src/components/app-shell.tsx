@@ -33,12 +33,26 @@ function isAppShellRoute(pathname: string): boolean {
   return APP_SHELL_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
 
+function currentSectionLabel(pathname: string): string {
+  if (pathname === "/inbox" || pathname.startsWith("/inbox/")) return "Decision queue";
+  if (pathname === "/chat" || pathname.startsWith("/chat/")) return "Decision threads";
+  if (pathname === "/email" || pathname.startsWith("/email/")) return "Mail";
+  if (pathname === "/calendar" || pathname.startsWith("/calendar/")) return "Calendar";
+  if (pathname === "/briefing" || pathname.startsWith("/briefing/")) return "Briefing";
+  if (pathname === "/files" || pathname.startsWith("/files/")) return "Files";
+  if (pathname === "/billing" || pathname.startsWith("/billing/")) return "Plan and billing";
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) return "Admin";
+  if (pathname.startsWith("/settings")) return "Settings";
+  return "Workspace";
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, loading } = useAuth();
 
   const showSidebar = !NO_SIDEBAR_ROUTES.includes(pathname) && isAppShellRoute(pathname);
+  const sectionLabel = currentSectionLabel(pathname);
 
   if (!showSidebar) {
     return <>{children}</>;
@@ -83,7 +97,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <img src="/brand/mark.svg?v=flow-5" alt="" className="h-6 w-6" />
           <div className="min-w-0">
             <p className="text-sm font-semibold leading-none text-stone-100">Jigeum</p>
-            <p className="mt-0.5 text-[10px] leading-none text-stone-500">Decision queue</p>
+            <p
+              className="mt-0.5 truncate text-[10px] leading-none text-stone-500"
+              data-testid="mobile-section-label"
+            >
+              {sectionLabel}
+            </p>
           </div>
         </div>
         <main className="relative z-10 flex-1 overflow-y-auto pb-[calc(62px+env(safe-area-inset-bottom))] md:pb-safe">

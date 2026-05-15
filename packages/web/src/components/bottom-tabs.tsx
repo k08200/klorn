@@ -10,11 +10,11 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  { href: "/chat", label: "Threads", icon: "chat" },
-  { href: "/calendar", label: "Calendar", icon: "calendar" },
-  { href: "/email", label: "Mail", icon: "email" },
-  { href: "/briefing", label: "Briefing", icon: "briefing" },
   { href: "/inbox", label: "Queue", icon: "inbox" },
+  { href: "/chat", label: "Threads", icon: "chat" },
+  { href: "/email", label: "Mail", icon: "email" },
+  { href: "/calendar", label: "Calendar", icon: "calendar" },
+  { href: "/briefing", label: "Briefing", icon: "briefing" },
 ];
 
 export default function BottomTabs() {
@@ -34,7 +34,7 @@ export default function BottomTabs() {
                 href={tab.href}
                 aria-current={active ? "page" : undefined}
                 className={`flex min-h-[62px] flex-col items-center justify-center gap-1 py-2 text-[10px] transition ${
-                  active ? "text-[#FF8A70]" : "text-stone-400"
+                  active ? "text-[#d8a45d]" : "text-stone-400"
                 }`}
               >
                 <TabIcon type={tab.icon} active={active} />

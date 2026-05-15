@@ -74,9 +74,11 @@ function groupByDate(convs: Conversation[]): DateGroup[] {
 
 const NAV_ITEMS = [
   { href: "/inbox", label: "Decision queue", icon: "check" },
+  { href: "/chat", label: "Threads", icon: "chat" },
   { href: "/email", label: "Mail", icon: "mail" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/briefing", label: "Briefing", icon: "bell" },
+  { href: "/files", label: "Files", icon: "file" },
 ];
 
 function NavIcon({ type, size = 16 }: { type: string; size?: number }) {
@@ -380,7 +382,8 @@ export default function Sidebar({
       {/* Header */}
       <div className="relative flex items-center justify-between px-3 py-3">
         <Link
-          href="/chat"
+          href="/inbox"
+          aria-label="Open decision queue"
           className="flex items-center gap-2 rounded-lg px-1 py-1 text-sm font-semibold text-stone-100 transition hover:text-white"
           onClick={onMobileClose}
         >
@@ -413,8 +416,8 @@ export default function Sidebar({
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
             </svg>
           </button>
         </div>
