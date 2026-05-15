@@ -122,6 +122,19 @@ interface UndoActionResponse {
   emailId: string;
 }
 
+type EmailReminderKey = "later-today" | "tomorrow" | "next-week";
+
+interface EmailReminderOption {
+  key: EmailReminderKey;
+  label: string;
+}
+
+const EMAIL_REMINDER_OPTIONS: EmailReminderOption[] = [
+  { key: "later-today", label: "Later today" },
+  { key: "tomorrow", label: "Tomorrow" },
+  { key: "next-week", label: "Next week" },
+];
+
 type EmailQueueKey =
   | "all"
   | "reply-needed"
@@ -173,6 +186,22 @@ function appendUndoParams(
   params.set("undoAction", action);
   params.set("undoGmailId", email.gmailId);
   if (email.subject) params.set("undoSubject", email.subject);
+}
+
+function getReminderDate(option: EmailReminderKey): Date {
+  const date = new Date();
+  if (option === "later-today") {
+    date.setHours(date.getHours() + 4);
+    return date;
+  }
+  if (option === "tomorrow") {
+    date.setDate(date.getDate() + 1);
+    date.setHours(9, 0, 0, 0);
+    return date;
+  }
+  date.setDate(date.getDate() + 7);
+  date.setHours(9, 0, 0, 0);
+  return date;
 }
 
 interface NextEmailSummary {
@@ -286,6 +315,7 @@ function EmailDetailView() {
   const [selectedDraftAttachmentIds, setSelectedDraftAttachmentIds] = useState<string[]>([]);
   const [includeBriefAttachment, setIncludeBriefAttachment] = useState(true);
   const [updatingCandidate, setUpdatingCandidate] = useState(false);
+  const [reminderBusy, setReminderBusy] = useState<EmailReminderKey | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -627,6 +657,29 @@ function EmailDetailView() {
     }
   };
 
+  const createEmailReminder = async (option: EmailReminderOption) => {
+    if (!id || !email || reminderBusy) return;
+    setReminderBusy(option.key);
+    setError(null);
+    try {
+      const remindAt = getReminderDate(option.key);
+      await apiFetch("/api/reminders", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `${email.needsReply ? "Reply to" : "Review"}: ${email.subject || "No subject"}`,
+          remindAt: remindAt.toISOString(),
+          description: [`From: ${email.from}`, `Open: /email/${email.id}`].join("\n"),
+        }),
+      });
+      toast(`Reminder set for ${option.label.toLowerCase()}.`, "success");
+    } catch (err) {
+      captureClientError(err, { scope: "email.detail.reminder", id, option: option.key });
+      setError("Could not create a reminder for this email.");
+    } finally {
+      setReminderBusy(null);
+    }
+  };
+
   const archiveEmailNow = async () => {
     if (!id || actionBusy) return;
     setActionBusy("archive");
@@ -716,6 +769,11 @@ function EmailDetailView() {
                 onOpenNext={() => goToNextOrList("Moving to the next email.")}
                 onToggleRead={toggleRead}
                 onToggleStar={toggleStar}
+              />
+              <EmailReminderQuickActions
+                busyKey={reminderBusy}
+                disabled={email.id.startsWith("demo-")}
+                onCreate={createEmailReminder}
               />
               <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
                 <div>
@@ -937,6 +995,35 @@ function EmailActionToolbar({
             Next
           </EmailActionButton>
         )}
+      </div>
+    </div>
+  );
+}
+
+function EmailReminderQuickActions({
+  busyKey,
+  disabled,
+  onCreate,
+}: {
+  busyKey: EmailReminderKey | null;
+  disabled: boolean;
+  onCreate: (option: EmailReminderOption) => void;
+}) {
+  return (
+    <div className="mb-4 flex flex-col gap-2 rounded-lg border border-stone-800/70 bg-stone-950/30 px-3 py-2 text-xs text-stone-400 sm:flex-row sm:items-center sm:justify-between">
+      <span className="font-medium text-stone-300">Remind me</span>
+      <div className="flex flex-wrap gap-1.5">
+        {EMAIL_REMINDER_OPTIONS.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            onClick={() => onCreate(option)}
+            disabled={disabled || busyKey !== null}
+            className="min-h-9 rounded-md border border-white/10 bg-black/20 px-3 text-xs text-stone-300 transition hover:border-[#7DD3FC]/35 hover:text-stone-100 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {busyKey === option.key ? "Setting..." : option.label}
+          </button>
+        ))}
       </div>
     </div>
   );
