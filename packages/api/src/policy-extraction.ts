@@ -322,6 +322,21 @@ function makeCandidate(
   };
 }
 
+/**
+ * Recency weight for temporal decay: recent feedback matters more than old.
+ * - Last 7 days  → 2.0x (strong recent signal)
+ * - Last 21 days → 1.5x (still relevant)
+ * - Older        → 1.0x (historic, lower weight)
+ */
+function recencyWeight(createdAt: Date): number {
+  const ageMs = Date.now() - createdAt.getTime();
+  const DAY7_MS = 7 * 24 * 60 * 60 * 1000;
+  const DAY21_MS = 21 * 24 * 60 * 60 * 1000;
+  if (ageMs <= DAY7_MS) return 2.0;
+  if (ageMs <= DAY21_MS) return 1.5;
+  return 1.0;
+}
+
 function countSignals(
   events: FeedbackPolicyEvent[],
   distinctRecipients: number,
@@ -334,18 +349,20 @@ function countSignals(
     ignored: 0,
     snoozed: 0,
     dismissed: 0,
-    total: events.length,
+    total: 0,
     distinctRecipients,
   };
 
   for (const event of events) {
-    if (event.signal === "APPROVED") support.approved += 1;
-    else if (event.signal === "REJECTED") support.rejected += 1;
-    else if (event.signal === "FAILED") support.failed += 1;
-    else if (event.signal === "EDITED") support.edited += 1;
-    else if (event.signal === "IGNORED") support.ignored += 1;
-    else if (event.signal === "SNOOZED") support.snoozed += 1;
-    else if (event.signal === "DISMISSED") support.dismissed += 1;
+    const w = recencyWeight(event.createdAt);
+    support.total += w;
+    if (event.signal === "APPROVED") support.approved += w;
+    else if (event.signal === "REJECTED") support.rejected += w;
+    else if (event.signal === "FAILED") support.failed += w;
+    else if (event.signal === "EDITED") support.edited += w;
+    else if (event.signal === "IGNORED") support.ignored += w;
+    else if (event.signal === "SNOOZED") support.snoozed += w;
+    else if (event.signal === "DISMISSED") support.dismissed += w;
   }
 
   return support;

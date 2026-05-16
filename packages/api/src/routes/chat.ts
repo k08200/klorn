@@ -1696,4 +1696,53 @@ export function chatRoutes(app: FastifyInstance) {
       return { success: true, neverSuggested: !!neverSuggest };
     },
   );
+
+  // POST /api/chat/pending-actions/:id/snooze — defer an action until a later time
+  app.post(
+    "/pending-actions/:actionId/snooze",
+    { schema: { params: actionIdParamSchema } },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const { actionId } = request.params as { actionId: string };
+      const { snoozeUntil } = (request.body as { snoozeUntil?: string }) ?? {};
+
+      if (!snoozeUntil) return reply.code(400).send({ error: "snoozeUntil is required" });
+      const snoozeDate = new Date(snoozeUntil);
+      if (!Number.isFinite(snoozeDate.getTime()) || snoozeDate <= new Date()) {
+        return reply.code(400).send({ error: "snoozeUntil must be a future ISO datetime" });
+      }
+
+      const action = await prisma.pendingAction.findFirst({
+        where: { id: actionId, userId, status: "PENDING" },
+        select: { id: true, toolName: true, conversationId: true, toolArgs: true },
+      });
+      if (!action) return reply.code(404).send({ error: "Pending action not found or not actionable" });
+
+      // Snooze the corresponding AttentionItem (the queue entry for this PA)
+      await (prisma.attentionItem as unknown as {
+        updateMany: (args: unknown) => Promise<unknown>;
+      }).updateMany({
+        where: { source: "PENDING_ACTION", sourceId: actionId },
+        data: { status: "SNOOZED", snoozedUntil: snoozeDate, lastAmplifiedAt: null },
+      });
+
+      // Record the snooze signal for policy learning
+      import("../feedback.js")
+        .then(({ recordFeedback }) =>
+          recordFeedback({
+            userId,
+            source: "PENDING_ACTION",
+            sourceId: actionId,
+            signal: "SNOOZED",
+            toolName: action.toolName,
+            recipient: null,
+            threadId: action.conversationId,
+            evidence: `Snoozed until ${snoozeDate.toISOString()}`,
+          }),
+        )
+        .catch(() => {});
+
+      return { success: true, snoozedUntil: snoozeDate.toISOString() };
+    },
+  );
 }

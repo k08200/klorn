@@ -736,9 +736,10 @@ model AttentionItem {
   tier       String? // "SILENT" | "QUEUE" | "PUSH" | "AUTO"
   tierReason String? // why this tier was chosen
 
-  surfacedAt   DateTime  @default(now())
-  resolvedAt   DateTime?
-  snoozedUntil DateTime?
+  surfacedAt      DateTime  @default(now())
+  resolvedAt      DateTime?
+  snoozedUntil    DateTime?
+  lastAmplifiedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

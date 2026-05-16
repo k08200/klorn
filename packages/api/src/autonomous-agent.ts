@@ -751,7 +751,8 @@ async function gatherUserContext(userId: string): Promise<string> {
         hour: "2-digit",
         minute: "2-digit",
       });
-      return `### Email #${idx + 1} (received: ${receivedKST})${read}\n  From: ${e.from}\n  Subject: ${subjectWrapped}${cat}${pri}${summ}${actions}\n  Body: ${bodyWrapped}`;
+      const fromWrapped = wrapUntrusted(e.from, "email:from");
+      return `### Email #${idx + 1} (received: ${receivedKST})${read}\n  From: ${fromWrapped}\n  Subject: ${subjectWrapped}${cat}${pri}${summ}${actions}\n  Body: ${bodyWrapped}`;
     });
     sections.push(
       `## Recent Emails (${replyableEmails.length})\nIMPORTANT: Each email below is a SEPARATE item. Different subjects or different body content = DIFFERENT meetings/requests. Do NOT merge them.\n${emailLines.join("\n\n")}`,
@@ -983,7 +984,9 @@ export async function runAgentForUser(
       ) || AGENT_MODEL;
 
     const { analyzePatterns } = await import("./pattern-learner.js");
-    const [context, feedback, memoryContext, proposalHistory, patternContext, policyContext] =
+    const { buildTrustHintForPrompt } = await import("./trust-score.js");
+    const { buildInteractionHintForPrompt } = await import("./interaction-graph.js");
+    const [context, feedback, memoryContext, proposalHistory, patternContext, policyContext, trustHint, interactionHint] =
       await Promise.all([
         gatherUserContext(userId),
         getAgentFeedback(userId),
@@ -991,6 +994,8 @@ export async function runAgentForUser(
         getProposalHistory(userId).catch(() => ""),
         analyzePatterns(userId).catch(() => ""),
         getFeedbackPolicyContextForPrompt(userId).catch(() => ""),
+        buildTrustHintForPrompt(userId).catch(() => ""),
+        buildInteractionHintForPrompt(userId).catch(() => ""),
       ]);
 
     // Skip if context is minimal (no tasks, no calendar, no emails)
@@ -1148,6 +1153,8 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
     let systemPromptWithMemory = memoryContext ? `${systemPrompt}${memoryContext}` : systemPrompt;
     if (policyContext) systemPromptWithMemory += policyContext;
     if (patternContext) systemPromptWithMemory += patternContext;
+    if (trustHint) systemPromptWithMemory += trustHint;
+    if (interactionHint) systemPromptWithMemory += interactionHint;
 
     const messages: unknown[] = [
       { role: "system", content: systemPromptWithMemory },

@@ -12,7 +12,10 @@
  */
 
 import { db, prisma } from "./db.js";
+import { runFeedbackAdaptationForAllUsers } from "./feedback-adaptor.js";
+import { buildInteractionGraphsForAllUsers } from "./interaction-graph.js";
 import { remember } from "./memory.js";
+import { detectSkillsForAllUsers } from "./skill-recorder.js";
 import { planHasFeature } from "./stripe.js";
 
 const PATTERN_ANALYSIS_HOURS = 168; // 7 days of data for pattern detection
@@ -557,7 +560,89 @@ async function runPatternAnalysisForAllUsers() {
         // Skip individual user failures
       }
     }
+
+    // Attention priority decay — run every 6h tick for all users
+    await amplifyStaleAttentionItems().catch((err) =>
+      console.warn("[PATTERN] Priority decay failed:", err),
+    );
+
+    // Weekly jobs (Sunday only) — avoid running on every 6h tick
+    if (new Date().getDay() === 0) {
+      await detectSkillsForAllUsers();
+      await runFeedbackAdaptationForAllUsers();
+      await buildInteractionGraphsForAllUsers().catch((err) =>
+        console.warn("[PATTERN] Interaction graph batch failed:", err),
+      );
+    }
   } catch (err) {
     console.error("[PATTERN] Batch analysis failed:", err);
+  }
+}
+
+/**
+ * Priority decay amplifier — prevents important items from being permanently buried.
+ *
+ * For every OPEN AttentionItem older than 24 hours, we increment its priority
+ * by `ageInDays * DECAY_RATE`, capped at MAX_AMPLIFIED_PRIORITY. This ensures
+ * items that haven't been actioned on gradually rise in the queue until they
+ * get addressed.
+ *
+ * Runs every 6 hours via the pattern-learner batch cycle.
+ */
+const DECAY_RATE = 3; // priority points per day of age
+const MAX_AMPLIFIED_PRIORITY = 120; // never exceed this via decay alone
+const MIN_AGE_HOURS = 24; // start decaying after 24h in queue
+
+async function amplifyStaleAttentionItems(): Promise<void> {
+  const cutoff = new Date(Date.now() - MIN_AGE_HOURS * 60 * 60 * 1000);
+
+  // Find OPEN items that have been in queue for > MIN_AGE_HOURS and haven't
+  // been amplified recently (lastAmplifiedAt null or > 6h ago).
+  const amplifyThreshold = new Date(Date.now() - 6 * 60 * 60 * 1000);
+
+  const stale = await (prisma.attentionItem as unknown as {
+    findMany: (args: unknown) => Promise<Array<{
+      id: string;
+      priority: number;
+      surfacedAt: Date;
+    }>>;
+  }).findMany({
+    where: {
+      status: "OPEN",
+      surfacedAt: { lte: cutoff },
+      OR: [
+        { lastAmplifiedAt: null },
+        { lastAmplifiedAt: { lte: amplifyThreshold } },
+      ],
+    } as unknown,
+    select: { id: true, priority: true, surfacedAt: true },
+    take: 500,
+  });
+
+  if (stale.length === 0) return;
+
+  const now = Date.now();
+  const updates: Array<Promise<unknown>> = [];
+
+  for (const item of stale) {
+    const ageMs = now - item.surfacedAt.getTime();
+    const ageDays = ageMs / (24 * 60 * 60 * 1000);
+    const boost = Math.floor(ageDays * DECAY_RATE);
+    const newPriority = Math.min(item.priority + boost, MAX_AMPLIFIED_PRIORITY);
+    if (newPriority <= item.priority) continue; // already at cap or no change
+
+    updates.push(
+      (prisma.attentionItem as unknown as {
+        update: (args: unknown) => Promise<unknown>;
+      }).update({
+        where: { id: item.id },
+        data: { priority: newPriority, lastAmplifiedAt: new Date() },
+      }).catch(() => {}),
+    );
+  }
+
+  await Promise.all(updates);
+  if (updates.length > 0) {
+    console.log(`[PATTERN] Amplified priority on ${updates.length} stale attention item(s)`);
   }
 }

@@ -20,6 +20,17 @@ import type { AttentionStatus, AttentionType } from "@prisma/client";
 import { getToolRisk } from "./agent-logic.js";
 import { AUTOPILOT_LEVEL, type AutopilotLevel } from "./agent-mode.js";
 import { prisma } from "./db.js";
+import { getSuppressionSet } from "./feedback-adaptor.js";
+
+// Tier fields (tier, tierReason) are added via migration. Until `prisma generate`
+// reflects the schema change, we use this typed wrapper to avoid TS errors.
+function upsertAttentionItem(args: {
+  where: { source_sourceId: { source: string; sourceId: string } };
+  create: object;
+  update: object;
+}): Promise<unknown> {
+  return (prisma.attentionItem.upsert as unknown as (a: unknown) => Promise<unknown>)(args);
+}
 
 export interface PendingActionLike {
   id: string;
@@ -87,6 +98,56 @@ function pendingActionCost(pa: PendingActionLike): string {
   return "If the decision stays pending, the related workstream may stall.";
 }
 
+// ─── 5-Tier Escalation ─────────────────────────────────────────────────────
+// Maps item characteristics to SILENT | QUEUE | PUSH | AUTO.
+// SILENT: not worth surfacing (noise reduction)
+// QUEUE: added to inbox for async review
+// PUSH: warrants an active push notification
+// AUTO: low-risk, pre-approved action eligible for auto-execution
+
+type Tier = "SILENT" | "QUEUE" | "PUSH" | "AUTO";
+
+function tierForPendingAction(autonomyLevel: AutopilotLevel): { tier: Tier; tierReason: string } {
+  if (autonomyLevel === AUTOPILOT_LEVEL.SAFE_AUTO) {
+    return { tier: "AUTO", tierReason: "Low-risk action — eligible for auto-execution" };
+  }
+  return { tier: "QUEUE", tierReason: "Awaiting your approval" };
+}
+
+function tierForTask(priority: string, isOverdue: boolean): { tier: Tier; tierReason: string } {
+  if (isOverdue && (priority === "URGENT" || priority === "HIGH")) {
+    return { tier: "PUSH", tierReason: "Overdue high-priority task needs immediate attention" };
+  }
+  if (priority === "URGENT") {
+    return { tier: "PUSH", tierReason: "Urgent task is due today" };
+  }
+  return { tier: "QUEUE", tierReason: "Due today — added to review queue" };
+}
+
+function tierForCalendarEvent(priority: number): { tier: Tier; tierReason: string } {
+  if (priority >= 70) {
+    return { tier: "PUSH", tierReason: "Meeting starts within the hour — prep now" };
+  }
+  return { tier: "QUEUE", tierReason: "Today's meeting — prep recommended" };
+}
+
+function tierForCommitment(
+  type: "COMMITMENT_DUE" | "COMMITMENT_OVERDUE" | "COMMITMENT_UNCONFIRMED",
+  priority: number,
+  confidence: number,
+): { tier: Tier; tierReason: string } {
+  if (type === "COMMITMENT_OVERDUE") {
+    return { tier: "PUSH", tierReason: "Overdue commitment — may be blocking counterparty" };
+  }
+  if (type === "COMMITMENT_UNCONFIRMED" || confidence < 0.5) {
+    return { tier: "SILENT", tierReason: "Needs date confirmation before surfacing" };
+  }
+  if (priority >= 70) {
+    return { tier: "PUSH", tierReason: "Commitment due within 24 hours" };
+  }
+  return { tier: "QUEUE", tierReason: "Tracked commitment — added to review queue" };
+}
+
 /**
  * Upsert the AttentionItem mirroring this PendingAction. Safe to call after
  * either a create or an update — uses the (source, sourceId) unique key.
@@ -96,9 +157,15 @@ export async function upsertAttentionForPendingAction(pa: PendingActionLike): Pr
   const isResolved = status !== "OPEN";
   const type: AttentionType = "DECISION";
   const autonomyLevel = autonomyLevelForPendingAction(pa);
+  let { tier, tierReason } = tierForPendingAction(autonomyLevel);
+  const suppressed = await getSuppressionSet(pa.userId);
+  if (suppressed.has(`PENDING_ACTION:${type}`)) {
+    tier = "SILENT";
+    tierReason = "Silenced — you consistently dismiss this signal type";
+  }
 
   try {
-    await prisma.attentionItem.upsert({
+    await upsertAttentionItem({
       where: { source_sourceId: { source: "PENDING_ACTION", sourceId: pa.id } },
       create: {
         userId: pa.userId,
@@ -117,6 +184,8 @@ export async function upsertAttentionForPendingAction(pa: PendingActionLike): Pr
           { label: "Risk level", value: getToolRisk(pa.toolName) ?? "READ_ONLY" },
         ]),
         resolvedAt: isResolved ? new Date() : null,
+        tier,
+        tierReason,
       },
       update: {
         status,
@@ -131,6 +200,8 @@ export async function upsertAttentionForPendingAction(pa: PendingActionLike): Pr
           { label: "Risk level", value: getToolRisk(pa.toolName) ?? "READ_ONLY" },
         ]),
         resolvedAt: isResolved ? new Date() : null,
+        tier,
+        tierReason,
       },
     });
   } catch (err) {
@@ -249,9 +320,15 @@ export async function upsertAttentionForTask(task: TaskLike, now = Date.now()): 
   const status: AttentionStatus = task.status === "DONE" ? "RESOLVED" : "OPEN";
   const isResolved = status !== "OPEN";
   const type: AttentionType = "DEADLINE";
+  let { tier, tierReason } = tierForTask(task.priority, isOverdue);
+  const suppressed = await getSuppressionSet(task.userId);
+  if (suppressed.has(`TASK:${type}`)) {
+    tier = "SILENT";
+    tierReason = "Silenced — you consistently dismiss this signal type";
+  }
 
   try {
-    await prisma.attentionItem.upsert({
+    await upsertAttentionItem({
       where: { source_sourceId: { source: "TASK", sourceId: task.id } },
       create: {
         userId: task.userId,
@@ -269,6 +346,8 @@ export async function upsertAttentionForTask(task: TaskLike, now = Date.now()): 
           { label: "Due date", value: task.dueDate.toISOString() },
         ]),
         resolvedAt: isResolved ? new Date() : null,
+        tier,
+        tierReason,
       },
       update: {
         status,
@@ -282,6 +361,8 @@ export async function upsertAttentionForTask(task: TaskLike, now = Date.now()): 
           { label: "Due date", value: task.dueDate.toISOString() },
         ]),
         resolvedAt: isResolved ? new Date() : null,
+        tier,
+        tierReason,
       },
     });
   } catch (err) {
@@ -345,6 +426,7 @@ export interface CalendarEventLike {
   userId: string;
   title: string;
   startTime: Date;
+  endTime?: Date | null;
 }
 
 const SOON_WINDOW_MS = 60 * 60 * 1000; // "starting within an hour" → priority bump
@@ -362,16 +444,24 @@ export async function upsertAttentionForCalendarEvent(
   // Only events happening today are eligible.
   if (start < todayStart || start >= tomorrowStart) return;
 
-  const status: AttentionStatus = start < now ? "RESOLVED" : "OPEN";
+  // Resolve only after the meeting actually ends — not the moment it starts.
+  const endMs = event.endTime ? event.endTime.getTime() : start + 60 * 60 * 1000;
+  const status: AttentionStatus = endMs < now ? "RESOLVED" : "OPEN";
   const isResolved = status !== "OPEN";
   const type: AttentionType = "MEETING_PREP";
 
   // Priority bump when the event is starting within the hour — that's the
   // window where the user actually needs prep.
   const priority = !isResolved && start - now <= SOON_WINDOW_MS ? 70 : 50;
+  let { tier, tierReason } = tierForCalendarEvent(priority);
+  const suppressed = await getSuppressionSet(event.userId);
+  if (suppressed.has(`CALENDAR_EVENT:MEETING_PREP`)) {
+    tier = "SILENT";
+    tierReason = "Silenced — you consistently dismiss meeting prep signals";
+  }
 
   try {
-    await prisma.attentionItem.upsert({
+    await upsertAttentionItem({
       where: { source_sourceId: { source: "CALENDAR_EVENT", sourceId: event.id } },
       create: {
         userId: event.userId,
@@ -390,6 +480,8 @@ export async function upsertAttentionForCalendarEvent(
           { label: "Queue type", value: type },
         ]),
         resolvedAt: isResolved ? new Date() : null,
+        tier,
+        tierReason,
       },
       update: {
         status,
@@ -404,6 +496,8 @@ export async function upsertAttentionForCalendarEvent(
           { label: "Queue type", value: type },
         ]),
         resolvedAt: isResolved ? new Date() : null,
+        tier,
+        tierReason,
       },
     });
   } catch (err) {
@@ -447,9 +541,16 @@ export async function upsertAttentionForNotification(notif: NotificationLike): P
 
   const status: AttentionStatus = notif.isRead ? "DISMISSED" : "OPEN";
   const isResolved = status !== "OPEN";
+  let tier: Tier = "QUEUE";
+  let tierReason = "Agent proposal awaiting your review";
+  const suppressed = await getSuppressionSet(notif.userId);
+  if (suppressed.has("NOTIFICATION:FOLLOWUP")) {
+    tier = "SILENT";
+    tierReason = "Silenced — you consistently dismiss agent proposals";
+  }
 
   try {
-    await prisma.attentionItem.upsert({
+    await upsertAttentionItem({
       where: { source_sourceId: { source: "NOTIFICATION", sourceId: notif.id } },
       create: {
         userId: notif.userId,
@@ -467,6 +568,8 @@ export async function upsertAttentionForNotification(notif: NotificationLike): P
           { label: "Unread", value: String(!notif.isRead) },
         ]),
         resolvedAt: isResolved ? new Date() : null,
+        tier,
+        tierReason,
       },
       update: {
         status,
@@ -480,6 +583,8 @@ export async function upsertAttentionForNotification(notif: NotificationLike): P
           { label: "Unread", value: String(!notif.isRead) },
         ]),
         resolvedAt: isResolved ? new Date() : null,
+        tier,
+        tierReason,
       },
     });
   } catch (err) {
@@ -566,9 +671,15 @@ export async function upsertAttentionForCommitment(
   const isResolved = status !== "OPEN";
   const type = commitmentTypeFor(c, now);
   const priority = priorityForCommitment(type, c, now);
+  let { tier, tierReason } = tierForCommitment(type, priority, c.confidence);
+  const suppressed = await getSuppressionSet(c.userId);
+  if (suppressed.has(`COMMITMENT:${type}`)) {
+    tier = "SILENT";
+    tierReason = "Silenced — you consistently dismiss this commitment type";
+  }
 
   try {
-    await prisma.attentionItem.upsert({
+    await upsertAttentionItem({
       where: { source_sourceId: { source: "COMMITMENT", sourceId: c.id } },
       create: {
         userId: c.userId,
@@ -590,6 +701,8 @@ export async function upsertAttentionForCommitment(
           { label: "Confidence", value: String(c.confidence) },
         ]),
         resolvedAt: isResolved ? new Date() : null,
+        tier,
+        tierReason,
       },
       update: {
         status,
@@ -608,6 +721,8 @@ export async function upsertAttentionForCommitment(
           { label: "Confidence", value: String(c.confidence) },
         ]),
         resolvedAt: isResolved ? new Date() : null,
+        tier,
+        tierReason,
       },
     });
   } catch (err) {

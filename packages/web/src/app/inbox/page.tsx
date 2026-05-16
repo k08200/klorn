@@ -60,7 +60,7 @@ function InboxView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("pending");
-  const [actionLoading, setActionLoading] = useState<Record<string, "approve" | "reject" | null>>(
+  const [actionLoading, setActionLoading] = useState<Record<string, "approve" | "reject" | "snooze" | null>>(
     {},
   );
   const [commitmentLoading, setCommitmentLoading] = useState<
@@ -152,6 +152,29 @@ function InboxView() {
     }
   };
 
+  const handleSnooze = async (actionId: string, hours = 1) => {
+    if (actionLoading[actionId]) return;
+    setActionLoading((prev) => ({ ...prev, [actionId]: "snooze" }));
+    try {
+      const snoozeUntil = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+      await apiFetch(`/api/chat/pending-actions/${actionId}/snooze`, {
+        method: "POST",
+        body: JSON.stringify({ snoozeUntil }),
+      });
+      setActions((prev) =>
+        filter === "pending"
+          ? prev.filter((a) => a.id !== actionId)
+          : prev.map((a) => (a.id === actionId ? { ...a, status: "REJECTED" } : a)),
+      );
+      toast(`Snoozed for ${hours}h — will resurface automatically.`, "success");
+    } catch (err) {
+      captureClientError(err, { scope: "inbox.snooze", actionId });
+      toast("Could not snooze this action. Please try again.", "error");
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [actionId]: null }));
+    }
+  };
+
   const handleCommitmentStatus = async (commitmentId: string, status: "DONE" | "DISMISSED") => {
     if (commitmentLoading[commitmentId]) return;
     const loadingState = status === "DONE" ? "done" : "dismiss";
@@ -224,12 +247,20 @@ function InboxView() {
               <p className="text-xs text-stone-600">
                 Review the signal, judgment, and action before approval.
               </p>
-              <Link
-                href="/inbox/receipt"
-                className="shrink-0 text-xs text-teal-400 hover:text-teal-300 transition"
-              >
-                Today's receipt →
-              </Link>
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/inbox/receipt"
+                  className="shrink-0 text-xs text-teal-400 hover:text-teal-300 transition"
+                >
+                  Today's receipt →
+                </Link>
+                <Link
+                  href="/agent"
+                  className="shrink-0 text-xs text-stone-500 hover:text-stone-300 transition"
+                >
+                  Agent timeline →
+                </Link>
+              </div>
             </div>
           </div>
         </div>
@@ -294,6 +325,7 @@ function InboxView() {
                   loading={actionLoading[action.id] ?? null}
                   onApprove={() => handleApprove(action.id)}
                   onReject={() => handleReject(action.id)}
+                  onSnooze={() => handleSnooze(action.id, 1)}
                 />
               </li>
             ))}
@@ -454,11 +486,13 @@ function ActionCard({
   loading,
   onApprove,
   onReject,
+  onSnooze,
 }: {
   action: PendingActionItem;
-  loading: "approve" | "reject" | null;
+  loading: "approve" | "reject" | "snooze" | null;
   onApprove: () => void;
   onReject: () => void;
+  onSnooze: () => void;
 }) {
   const toolName = action.toolName || "prepared_action";
   const toolArgs = action.toolArgs || "{}";
@@ -568,6 +602,19 @@ function ActionCard({
                   <span className="h-3 w-3 animate-spin rounded-full border-2 border-stone-300/30 border-t-stone-200" />
                 ) : (
                   "Reject"
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={onSnooze}
+                disabled={!!loading}
+                title="Remind me in 1 hour"
+                className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs text-stone-500 hover:text-stone-300 transition disabled:opacity-50"
+              >
+                {loading === "snooze" ? (
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-stone-500/30 border-t-stone-400" />
+                ) : (
+                  "Snooze 1h"
                 )}
               </button>
               <Link

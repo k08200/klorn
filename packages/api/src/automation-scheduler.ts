@@ -590,9 +590,40 @@ async function runAutomations() {
         });
       }
     }
+
+    // --- Weekly: Voice Profile Extraction (Sunday only) ---
+    // Runs once per week for all users with Google connected. Each user is
+    // skipped automatically if their profile was updated within the last 7 days.
+    if (new Date().getDay() === 0) {
+      import("./voice-profile-extractor.js")
+        .then(({ extractVoiceProfilesForAllUsers }) => extractVoiceProfilesForAllUsers())
+        .catch((err) => console.error("[AUTOMATION] Voice profile extraction failed:", err));
+    }
+
+    // --- Every tick: Resurrect snoozed AttentionItems whose snooze has expired ---
+    await resurrectSnoozedItems().catch((err) =>
+      console.warn("[AUTOMATION] Snooze resurrection failed:", err),
+    );
   } catch (err) {
     console.error("[AUTOMATION] Scheduler error:", err);
   }
+}
+
+/**
+ * Finds AttentionItems that were snoozed and whose snoozeUntil has passed,
+ * then sets them back to OPEN so they resurface in the inbox.
+ */
+async function resurrectSnoozedItems(): Promise<void> {
+  const now = new Date();
+  await (prisma.attentionItem as unknown as {
+    updateMany: (args: unknown) => Promise<{ count: number }>;
+  }).updateMany({
+    where: {
+      status: "SNOOZED",
+      snoozedUntil: { lte: now },
+    } as unknown,
+    data: { status: "OPEN", snoozedUntil: null },
+  });
 }
 
 /** Start the automation scheduler */
