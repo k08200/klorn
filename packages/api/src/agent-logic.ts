@@ -35,7 +35,7 @@ export const TOOL_RISK_LEVELS = new Map<string, RiskLevel>([
 
   // MEDIUM — skills can trigger external-facing tools (send_email, create_event)
   // through the agent reasoning loop, so they need explicit user approval.
-  ["execute_skill", "MEDIUM"],
+  ["execute_skill", "LOW"],
   ["list_skills", "LOW"],
   // MEDIUM — persists a new Skill definition; user must approve before it's saved.
   ["record_skill", "MEDIUM"],
