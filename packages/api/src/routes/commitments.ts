@@ -8,6 +8,12 @@
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import {
+  buildPath,
+  getOrBuildPath,
+  materializeAllSteps,
+  materializeStepAsTask,
+} from "../commitment-path.js";
+import {
   deleteCommitment as deleteCommitmentService,
   getCommitment,
   listCommitments,
@@ -155,5 +161,54 @@ export async function commitmentRoutes(app: FastifyInstance) {
     if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
     await deleteCommitmentService(id);
     return reply.code(204).send();
+  });
+
+  // ─── Commitment Fulfillment Paths ─────────────────────────────────────────
+
+  // GET /api/commitments/:id/path — get or build the fulfillment plan
+  app.get("/:id/path", async (request, reply) => {
+    const userId = getUserId(request);
+    const { id } = request.params as { id: string };
+    const existing = await getCommitment(id);
+    if (!existing) return reply.code(404).send({ error: "Commitment not found" });
+    if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+    const path = await getOrBuildPath(userId, id);
+    return { success: true, path };
+  });
+
+  // POST /api/commitments/:id/path/rebuild — force a fresh plan from LLM
+  app.post("/:id/path/rebuild", async (request, reply) => {
+    const userId = getUserId(request);
+    const { id } = request.params as { id: string };
+    const existing = await getCommitment(id);
+    if (!existing) return reply.code(404).send({ error: "Commitment not found" });
+    if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+    const path = await buildPath(userId, id);
+    return { success: true, path };
+  });
+
+  // POST /api/commitments/:id/path/steps/:index/materialize — create task for one step
+  app.post("/:id/path/steps/:index/materialize", async (request, reply) => {
+    const userId = getUserId(request);
+    const { id, index } = request.params as { id: string; index: string };
+    const existing = await getCommitment(id);
+    if (!existing) return reply.code(404).send({ error: "Commitment not found" });
+    if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+    const stepIndex = Number.parseInt(index, 10);
+    if (!Number.isFinite(stepIndex) || stepIndex < 0)
+      return reply.code(400).send({ error: "Invalid step index" });
+    const result = await materializeStepAsTask(userId, id, stepIndex);
+    return { success: true, ...result };
+  });
+
+  // POST /api/commitments/:id/path/materialize-all — create tasks for all steps
+  app.post("/:id/path/materialize-all", async (request, reply) => {
+    const userId = getUserId(request);
+    const { id } = request.params as { id: string };
+    const existing = await getCommitment(id);
+    if (!existing) return reply.code(404).send({ error: "Commitment not found" });
+    if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+    const result = await materializeAllSteps(userId, id);
+    return { success: true, ...result };
   });
 }
