@@ -600,20 +600,21 @@ async function amplifyStaleAttentionItems(): Promise<void> {
   // been amplified recently (lastAmplifiedAt null or > 6h ago).
   const amplifyThreshold = new Date(Date.now() - 6 * 60 * 60 * 1000);
 
-  const stale = await (prisma.attentionItem as unknown as {
-    findMany: (args: unknown) => Promise<Array<{
-      id: string;
-      priority: number;
-      surfacedAt: Date;
-    }>>;
-  }).findMany({
+  const stale = await (
+    prisma.attentionItem as unknown as {
+      findMany: (args: unknown) => Promise<
+        Array<{
+          id: string;
+          priority: number;
+          surfacedAt: Date;
+        }>
+      >;
+    }
+  ).findMany({
     where: {
       status: "OPEN",
       surfacedAt: { lte: cutoff },
-      OR: [
-        { lastAmplifiedAt: null },
-        { lastAmplifiedAt: { lte: amplifyThreshold } },
-      ],
+      OR: [{ lastAmplifiedAt: null }, { lastAmplifiedAt: { lte: amplifyThreshold } }],
     } as unknown,
     select: { id: true, priority: true, surfacedAt: true },
     take: 500,
@@ -632,12 +633,16 @@ async function amplifyStaleAttentionItems(): Promise<void> {
     if (newPriority <= item.priority) continue; // already at cap or no change
 
     updates.push(
-      (prisma.attentionItem as unknown as {
-        update: (args: unknown) => Promise<unknown>;
-      }).update({
-        where: { id: item.id },
-        data: { priority: newPriority, lastAmplifiedAt: new Date() },
-      }).catch(() => {}),
+      (
+        prisma.attentionItem as unknown as {
+          update: (args: unknown) => Promise<unknown>;
+        }
+      )
+        .update({
+          where: { id: item.id },
+          data: { priority: newPriority, lastAmplifiedAt: new Date() },
+        })
+        .catch(() => {}),
     );
   }
 

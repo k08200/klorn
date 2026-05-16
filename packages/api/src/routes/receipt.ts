@@ -53,22 +53,20 @@ interface DailyReceipt {
 }
 
 export async function receiptRoutes(app: FastifyInstance) {
-  app.get(
-    "/today",
-    { preHandler: requireAuth },
-    async (request): Promise<DailyReceipt> => {
-      const userId = getUserId(request);
+  app.get("/today", { preHandler: requireAuth }, async (request): Promise<DailyReceipt> => {
+    const userId = getUserId(request);
 
-      // Determine today's date window in user's timezone
-      const config = await prisma.automationConfig.findUnique({
-        where: { userId },
-        select: { timezone: true },
-      });
-      const tz = config?.timezone || "UTC";
-      const { todayStart, todayEnd } = getTodayWindow(tz);
+    // Determine today's date window in user's timezone
+    const config = await prisma.automationConfig.findUnique({
+      where: { userId },
+      select: { timezone: true },
+    });
+    const tz = config?.timezone || "UTC";
+    const { todayStart, todayEnd } = getTodayWindow(tz);
 
-      // Fetch all AttentionItems surfaced today
-      const attentionItems = await (prisma.attentionItem as unknown as {
+    // Fetch all AttentionItems surfaced today
+    const attentionItems = await (
+      prisma.attentionItem as unknown as {
         findMany: (args: unknown) => Promise<
           Array<{
             id: string;
@@ -80,130 +78,127 @@ export async function receiptRoutes(app: FastifyInstance) {
             surfacedAt: Date;
           }>
         >;
-      }).findMany({
-        where: {
-          userId,
-          surfacedAt: { gte: todayStart, lt: todayEnd },
-        },
-        select: {
-          id: true,
-          title: true,
-          source: true,
-          type: true,
-          tier: true,
-          tierReason: true,
-          surfacedAt: true,
-        },
-        orderBy: { surfacedAt: "asc" },
-      });
-
-      // Fetch push delivery logs for today to correlate outcomes
-      const pushLogs = await prisma.pushDeliveryLog.findMany({
-        where: { userId, createdAt: { gte: todayStart, lt: todayEnd } },
-        select: { notificationId: true, status: true, clickedAt: true },
-      });
-      const pushByNotifId = new Map(pushLogs.map((p) => [p.notificationId, p]));
-
-      // Fetch auto-executed pending actions today (no user prompt)
-      const autoActions = await prisma.pendingAction.findMany({
-        where: {
-          userId,
-          status: "EXECUTED",
-          updatedAt: { gte: todayStart, lt: todayEnd },
-        },
-        select: { id: true, toolName: true, reasoning: true, updatedAt: true },
-        orderBy: { updatedAt: "asc" },
-      });
-
-      // Fetch silenced email processing logs (SHADOW mode)
-      const shadowLogs = await prisma.emailProcessingLog.findMany({
-        where: {
-          userId,
-          mode: "SHADOW",
-          processedAt: { gte: todayStart, lt: todayEnd },
-        },
-        select: { id: true, emailId: true, action: true, processedAt: true },
-        take: 50,
-      });
-
-      // Categorize attention items by tier
-      const silenced: ReceiptItem[] = [];
-      const queued: ReceiptItem[] = [];
-      const pushed: ReceiptItem[] = [];
-
-      for (const item of attentionItems) {
-        const base: ReceiptItem = {
-          id: item.id,
-          title: item.title,
-          source: item.source,
-          type: item.type,
-          tierReason: item.tierReason,
-          surfacedAt: item.surfacedAt.toISOString(),
-        };
-
-        const tier = item.tier || "QUEUE";
-        if (tier === "SILENT") {
-          silenced.push(base);
-        } else if (tier === "PUSH") {
-          // Find matching push log
-          const push = pushLogs.find((p) =>
-            pushByNotifId.has(p.notificationId ?? ""),
-          );
-          pushed.push({
-            ...base,
-            pushStatus: push?.status ?? "SENT",
-            pushClickedAt: push?.clickedAt?.toISOString() ?? null,
-          });
-        } else {
-          queued.push(base);
-        }
       }
+    ).findMany({
+      where: {
+        userId,
+        surfacedAt: { gte: todayStart, lt: todayEnd },
+      },
+      select: {
+        id: true,
+        title: true,
+        source: true,
+        type: true,
+        tier: true,
+        tierReason: true,
+        surfacedAt: true,
+      },
+      orderBy: { surfacedAt: "asc" },
+    });
 
-      // AUTO items from pending actions
-      const auto: ReceiptItem[] = autoActions.map((a) => ({
-        id: a.id,
-        title: a.reasoning?.slice(0, 80) ?? a.toolName.replace(/_/g, " "),
-        source: "PENDING_ACTION",
-        type: "DECISION",
-        tierReason: "Auto-executed — low risk, pre-approved",
-        surfacedAt: a.updatedAt.toISOString(),
-      }));
+    // Fetch push delivery logs for today to correlate outcomes
+    const pushLogs = await prisma.pushDeliveryLog.findMany({
+      where: { userId, createdAt: { gte: todayStart, lt: todayEnd } },
+      select: { notificationId: true, status: true, clickedAt: true },
+    });
+    const pushByNotifId = new Map(pushLogs.map((p) => [p.notificationId, p]));
 
-      // Silent email signals
-      const silencedEmails: ReceiptItem[] = shadowLogs.map((l) => ({
-        id: l.id,
-        title: `Email signal (${l.action})`,
-        source: "EMAIL",
-        type: "REPLY_NEEDED",
-        tierReason: "Observed in SHADOW mode — not surfaced yet",
-        surfacedAt: l.processedAt.toISOString(),
-      }));
+    // Fetch auto-executed pending actions today (no user prompt)
+    const autoActions = await prisma.pendingAction.findMany({
+      where: {
+        userId,
+        status: "EXECUTED",
+        updatedAt: { gte: todayStart, lt: todayEnd },
+      },
+      select: { id: true, toolName: true, reasoning: true, updatedAt: true },
+      orderBy: { updatedAt: "asc" },
+    });
 
-      const allSilenced = [...silenced, ...silencedEmails];
-      const totalSeen =
-        attentionItems.length + shadowLogs.length;
-      const totalInterrupted = pushed.length;
-      const autoHandled = auto.length;
-      const savedFromInbox = allSilenced.length;
+    // Fetch silenced email processing logs (SHADOW mode)
+    const shadowLogs = await prisma.emailProcessingLog.findMany({
+      where: {
+        userId,
+        mode: "SHADOW",
+        processedAt: { gte: todayStart, lt: todayEnd },
+      },
+      select: { id: true, emailId: true, action: true, processedAt: true },
+      take: 50,
+    });
 
-      const narrative = buildNarrative(totalSeen, totalInterrupted, savedFromInbox, autoHandled);
+    // Categorize attention items by tier
+    const silenced: ReceiptItem[] = [];
+    const queued: ReceiptItem[] = [];
+    const pushed: ReceiptItem[] = [];
 
-      return {
-        date: todayStart.toISOString().slice(0, 10),
-        silenced: allSilenced,
-        queued,
-        pushed,
-        auto,
-        summary: {
-          totalSeen,
-          totalInterrupted,
-          savedFromInbox,
-          autoHandled,
-          narrative,
-        },
+    for (const item of attentionItems) {
+      const base: ReceiptItem = {
+        id: item.id,
+        title: item.title,
+        source: item.source,
+        type: item.type,
+        tierReason: item.tierReason,
+        surfacedAt: item.surfacedAt.toISOString(),
       };
-    },
-  );
+
+      const tier = item.tier || "QUEUE";
+      if (tier === "SILENT") {
+        silenced.push(base);
+      } else if (tier === "PUSH") {
+        // Find matching push log
+        const push = pushLogs.find((p) => pushByNotifId.has(p.notificationId ?? ""));
+        pushed.push({
+          ...base,
+          pushStatus: push?.status ?? "SENT",
+          pushClickedAt: push?.clickedAt?.toISOString() ?? null,
+        });
+      } else {
+        queued.push(base);
+      }
+    }
+
+    // AUTO items from pending actions
+    const auto: ReceiptItem[] = autoActions.map((a) => ({
+      id: a.id,
+      title: a.reasoning?.slice(0, 80) ?? a.toolName.replace(/_/g, " "),
+      source: "PENDING_ACTION",
+      type: "DECISION",
+      tierReason: "Auto-executed — low risk, pre-approved",
+      surfacedAt: a.updatedAt.toISOString(),
+    }));
+
+    // Silent email signals
+    const silencedEmails: ReceiptItem[] = shadowLogs.map((l) => ({
+      id: l.id,
+      title: `Email signal (${l.action})`,
+      source: "EMAIL",
+      type: "REPLY_NEEDED",
+      tierReason: "Observed in SHADOW mode — not surfaced yet",
+      surfacedAt: l.processedAt.toISOString(),
+    }));
+
+    const allSilenced = [...silenced, ...silencedEmails];
+    const totalSeen = attentionItems.length + shadowLogs.length;
+    const totalInterrupted = pushed.length;
+    const autoHandled = auto.length;
+    const savedFromInbox = allSilenced.length;
+
+    const narrative = buildNarrative(totalSeen, totalInterrupted, savedFromInbox, autoHandled);
+
+    return {
+      date: todayStart.toISOString().slice(0, 10),
+      silenced: allSilenced,
+      queued,
+      pushed,
+      auto,
+      summary: {
+        totalSeen,
+        totalInterrupted,
+        savedFromInbox,
+        autoHandled,
+        narrative,
+      },
+    };
+  });
 
   // Mark an auto-handled item for undo (surfaces a new PendingAction to reverse it)
   app.post(
@@ -295,13 +290,17 @@ function buildNarrative(
   }
 
   if (interrupted > 0) {
-    parts.push(`${interrupted} ${interrupted === 1 ? "push was" : "pushes were"} sent — only what mattered.`);
+    parts.push(
+      `${interrupted} ${interrupted === 1 ? "push was" : "pushes were"} sent — only what mattered.`,
+    );
   } else {
     parts.push("No pushes were sent — nothing was urgent enough.");
   }
 
   if (autoHandled > 0) {
-    parts.push(`${autoHandled} low-risk ${autoHandled === 1 ? "action was" : "actions were"} handled automatically.`);
+    parts.push(
+      `${autoHandled} low-risk ${autoHandled === 1 ? "action was" : "actions were"} handled automatically.`,
+    );
   }
 
   return parts.join(" ");

@@ -193,10 +193,7 @@ function ReceiptView() {
             items={receipt.pushed}
             renderExtra={(item) =>
               item.pushStatus ? (
-                <PushStatusBadge
-                  status={item.pushStatus}
-                  clickedAt={item.pushClickedAt ?? null}
-                />
+                <PushStatusBadge status={item.pushStatus} clickedAt={item.pushClickedAt ?? null} />
               ) : null
             }
           />
@@ -235,10 +232,7 @@ function ReceiptView() {
       </div>
 
       <div className="mt-8 flex justify-center">
-        <Link
-          href="/inbox"
-          className="text-sm text-stone-500 hover:text-stone-300 transition"
-        >
+        <Link href="/inbox" className="text-sm text-stone-500 hover:text-stone-300 transition">
           ← Back to Decision Queue
         </Link>
       </div>
@@ -275,9 +269,7 @@ function ReceiptSection({
       <ul className="space-y-2">
         {items.map((item) => (
           <li key={item.id}>
-            <div
-              className={`rounded-lg border p-3 ${accentClass}`}
-            >
+            <div className={`rounded-lg border p-3 ${accentClass}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-stone-200 truncate">{item.title}</p>
@@ -289,9 +281,7 @@ function ReceiptSection({
                   </div>
                 </div>
                 <div className="shrink-0 flex flex-col items-end gap-1">
-                  <span className="text-[11px] text-stone-600">
-                    {formatTime(item.surfacedAt)}
-                  </span>
+                  <span className="text-[11px] text-stone-600">{formatTime(item.surfacedAt)}</span>
                   {renderExtra?.(item)}
                   {renderActions?.(item)}
                 </div>
@@ -304,15 +294,7 @@ function ReceiptSection({
   );
 }
 
-function SummaryMetric({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: string;
-}) {
+function SummaryMetric({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div className="border-r border-white/10 px-4 py-3 last:border-r-0">
       <p className={`text-2xl font-semibold ${color}`}>{value}</p>
@@ -330,13 +312,7 @@ function SourceBadge({ source, type }: { source: string; type: string }) {
   );
 }
 
-function PushStatusBadge({
-  status,
-  clickedAt,
-}: {
-  status: string;
-  clickedAt: string | null;
-}) {
+function PushStatusBadge({ status, clickedAt }: { status: string; clickedAt: string | null }) {
   if (clickedAt) {
     return (
       <span className="text-[11px] text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 rounded px-1.5 py-0.5">

@@ -1716,12 +1716,15 @@ export function chatRoutes(app: FastifyInstance) {
         where: { id: actionId, userId, status: "PENDING" },
         select: { id: true, toolName: true, conversationId: true, toolArgs: true },
       });
-      if (!action) return reply.code(404).send({ error: "Pending action not found or not actionable" });
+      if (!action)
+        return reply.code(404).send({ error: "Pending action not found or not actionable" });
 
       // Snooze the corresponding AttentionItem (the queue entry for this PA)
-      await (prisma.attentionItem as unknown as {
-        updateMany: (args: unknown) => Promise<unknown>;
-      }).updateMany({
+      await (
+        prisma.attentionItem as unknown as {
+          updateMany: (args: unknown) => Promise<unknown>;
+        }
+      ).updateMany({
         where: { source: "PENDING_ACTION", sourceId: actionId },
         data: { status: "SNOOZED", snoozedUntil: snoozeDate, lastAmplifiedAt: null },
       });

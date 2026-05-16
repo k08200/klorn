@@ -55,8 +55,16 @@ export async function extractVoiceProfile(userId: string): Promise<void> {
     const profile = await analyzeWithLlm(bodies, userId);
     if (!profile) return;
 
-    await remember(userId, "CONTEXT", VOICE_PROFILE_KEY, JSON.stringify(profile), "voice-profile-extractor");
-    console.log(`[VOICE] Profile persisted for user ${userId}: tone=${profile.tone}, confidence=${profile.confidence}`);
+    await remember(
+      userId,
+      "CONTEXT",
+      VOICE_PROFILE_KEY,
+      JSON.stringify(profile),
+      "voice-profile-extractor",
+    );
+    console.log(
+      `[VOICE] Profile persisted for user ${userId}: tone=${profile.tone}, confidence=${profile.confidence}`,
+    );
   } catch (err) {
     console.warn("[VOICE] extractVoiceProfile failed for user", userId, err);
   }
@@ -144,7 +152,9 @@ async function fetchSentMailBodies(userId: string): Promise<string[]> {
   const bodies = await Promise.allSettled(
     messageIds.slice(0, SAMPLE_SIZE).map(async (id) => {
       const detail = await gmail.users.messages.get({ userId: "me", id, format: "full" });
-      return extractPlainTextBody(detail.data as unknown as Parameters<typeof extractPlainTextBody>[0]);
+      return extractPlainTextBody(
+        detail.data as unknown as Parameters<typeof extractPlainTextBody>[0],
+      );
     }),
   );
 
@@ -215,7 +225,12 @@ Return exactly this JSON shape:
     );
 
     const raw = res.choices[0]?.message?.content?.trim() || "";
-    const clean = raw.startsWith("```") ? raw.replace(/```json?\n?/, "").replace(/```$/, "").trim() : raw;
+    const clean = raw.startsWith("```")
+      ? raw
+          .replace(/```json?\n?/, "")
+          .replace(/```$/, "")
+          .trim()
+      : raw;
     const parsed = JSON.parse(clean) as VoiceProfile;
 
     return {
@@ -252,9 +267,7 @@ async function getUserCredentials(userId: string) {
     if (!user) return undefined;
     const { decryptOptional } = await import("./crypto-tokens.js");
     return {
-      openRouterApiKey: user.openRouterApiKey
-        ? decryptOptional(user.openRouterApiKey)
-        : undefined,
+      openRouterApiKey: user.openRouterApiKey ? decryptOptional(user.openRouterApiKey) : undefined,
       geminiApiKey: user.geminiApiKey ? decryptOptional(user.geminiApiKey) : undefined,
     };
   } catch {

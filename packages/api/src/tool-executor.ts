@@ -523,6 +523,17 @@ async function executeToolCallInternal(
           requireString(args.key, "key"),
           requireString(args.type, "type"),
         );
+      case "record_skill": {
+        const skillKey = requireString(args.key, "key");
+        const skillName = requireString(args.name, "name");
+        const skillPrompt = requireString(args.prompt, "prompt");
+        const recorded = await prisma.skill.upsert({
+          where: { userId_key: { userId, key: skillKey } },
+          create: { userId, key: skillKey, name: skillName, description: "Auto-recorded from repeated usage pattern", prompt: skillPrompt },
+          update: { name: skillName, prompt: skillPrompt },
+        });
+        return JSON.stringify({ ok: true, key: recorded.key, name: recorded.name });
+      }
       case "execute_skill":
         return JSON.stringify(
           await executeSkill(

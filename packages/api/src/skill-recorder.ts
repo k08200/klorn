@@ -137,7 +137,10 @@ async function proposalAlreadyPending(userId: string, tools: string[]): Promise<
 
 async function proposeSkillCreation(userId: string, seq: ToolSequence): Promise<void> {
   const skillName = await generateSkillName(seq);
-  const skillKey = skillName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+  const skillKey = skillName
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_]/g, "");
   const skillPrompt = buildSkillPrompt(seq);
 
   // Find or create a today conversation for agent proposals

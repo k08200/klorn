@@ -85,10 +85,14 @@ export async function buildInteractionHintForPrompt(userId: string): Promise<str
     const lines = graph.nodes.slice(0, 8).map((node) => {
       const parts: string[] = [node.name ? `${node.name} (${node.email})` : node.email];
       if (node.upcomingMeetings > 0) {
-        parts.push(`${node.upcomingMeetings} upcoming meeting${node.upcomingMeetings > 1 ? "s" : ""}`);
+        parts.push(
+          `${node.upcomingMeetings} upcoming meeting${node.upcomingMeetings > 1 ? "s" : ""}`,
+        );
       }
       if (node.lastEmailDaysAgo !== null) {
-        parts.push(`last email ${node.lastEmailDaysAgo === 0 ? "today" : `${node.lastEmailDaysAgo}d ago`}`);
+        parts.push(
+          `last email ${node.lastEmailDaysAgo === 0 ? "today" : `${node.lastEmailDaysAgo}d ago`}`,
+        );
       }
       if (node.tags.includes("overdue_reply")) parts.push("⚠ waiting for reply");
       return `- ${parts.join(" · ")}`;
@@ -190,15 +194,17 @@ async function buildAndCacheGraph(userId: string): Promise<InteractionGraph> {
     if (score < 5) continue; // skip very low-signal contacts
 
     const displayName = contactNameMap.get(addr) ?? emailHistory[0]?.displayName ?? null;
-    const lastEmailMs = emailHistory.length > 0
-      ? now.getTime() - emailHistory[0].receivedAt.getTime()
-      : null;
-    const lastEmailDaysAgo = lastEmailMs !== null ? Math.floor(lastEmailMs / (24 * 60 * 60 * 1000)) : null;
+    const lastEmailMs =
+      emailHistory.length > 0 ? now.getTime() - emailHistory[0].receivedAt.getTime() : null;
+    const lastEmailDaysAgo =
+      lastEmailMs !== null ? Math.floor(lastEmailMs / (24 * 60 * 60 * 1000)) : null;
 
     const tags: string[] = [];
     if (emailHistory.length >= 5) tags.push("frequent");
     if (upcomingMeetings > 0) tags.push("meeting_soon");
-    const hasUnansweredReply = emailHistory.some((e) => e.needsReply && lastEmailDaysAgo !== null && lastEmailDaysAgo >= 2);
+    const hasUnansweredReply = emailHistory.some(
+      (e) => e.needsReply && lastEmailDaysAgo !== null && lastEmailDaysAgo >= 2,
+    );
     if (hasUnansweredReply) tags.push("overdue_reply");
 
     nodes.push({
@@ -289,11 +295,16 @@ function parseSenderAddress(from: string): ParsedAddress | null {
 }
 
 const NO_REPLY_PATTERNS = [
-  /no-?reply/i, /noreply/i, /donotreply/i, /mailer-daemon/i,
-  /notification/i, /newsletter/i, /automated/i, /bounce/i,
+  /no-?reply/i,
+  /noreply/i,
+  /donotreply/i,
+  /mailer-daemon/i,
+  /notification/i,
+  /newsletter/i,
+  /automated/i,
+  /bounce/i,
 ];
 
 function isNoReplyAddress(email: string): boolean {
   return NO_REPLY_PATTERNS.some((p) => p.test(email));
 }
-

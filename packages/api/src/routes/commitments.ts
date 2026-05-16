@@ -123,13 +123,24 @@ export async function commitmentRoutes(app: FastifyInstance) {
       existing.status !== "DONE" &&
       (existing as unknown as Record<string, unknown>).owner === "COUNTERPARTY"
     ) {
-      const row = existing as unknown as { counterpartyEmail?: string | null; counterpartyName?: string | null; dueAt?: Date | null };
+      const row = existing as unknown as {
+        counterpartyEmail?: string | null;
+        counterpartyName?: string | null;
+        dueAt?: Date | null;
+      };
       if (row.counterpartyEmail) {
         const wasOnTime = row.dueAt ? new Date() <= row.dueAt : true;
-        const daysLate = wasOnTime || !row.dueAt
-          ? 0
-          : Math.ceil((Date.now() - row.dueAt.getTime()) / (24 * 60 * 60 * 1000));
-        updateTrustScore(userId, row.counterpartyEmail, row.counterpartyName ?? null, wasOnTime, daysLate).catch(() => {});
+        const daysLate =
+          wasOnTime || !row.dueAt
+            ? 0
+            : Math.ceil((Date.now() - row.dueAt.getTime()) / (24 * 60 * 60 * 1000));
+        updateTrustScore(
+          userId,
+          row.counterpartyEmail,
+          row.counterpartyName ?? null,
+          wasOnTime,
+          daysLate,
+        ).catch(() => {});
       }
     }
 

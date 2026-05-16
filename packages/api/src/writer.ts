@@ -5,6 +5,7 @@
 
 import { prisma } from "./db.js";
 import { CHAT_SYSTEM_PROMPT, createCompletion, MODEL, openai } from "./openai.js";
+import { buildVoicePromptHint } from "./voice-profile-extractor.js";
 
 export async function writeDocument(
   userId: string,
@@ -25,9 +26,12 @@ export async function writeDocument(
 
   const instruction = typePrompts[type] || `Write a ${type} document`;
 
+  // For email drafts, inject the user's voice profile so tone matches their style
+  const voiceHint = type === "email_draft" ? await buildVoicePromptHint(userId) : "";
+
   const prompt = `${instruction} about: ${topic}
 ${details ? `\nAdditional context: ${details}` : ""}
-
+${voiceHint ? `\n${voiceHint}` : ""}
 Write in English unless the user explicitly asks for another language.
 Be professional, clear, and well-structured. Use markdown formatting.`;
 

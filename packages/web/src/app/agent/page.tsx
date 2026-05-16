@@ -54,7 +54,7 @@ function AgentTimeline() {
         `/api/automations/agent-logs?limit=${PAGE_SIZE}&offset=${offset}`,
       );
       const newLogs = Array.isArray(data.logs) ? data.logs : [];
-      setLogs((prev) => replace ? newLogs : [...prev, ...newLogs]);
+      setLogs((prev) => (replace ? newLogs : [...prev, ...newLogs]));
       setHasMore(newLogs.length === PAGE_SIZE);
     } catch (err) {
       captureClientError(err, { scope: "agent-timeline.load" });
@@ -174,7 +174,10 @@ function AgentTimeline() {
       {!loading && filtered.length > 0 && (
         <div className="relative">
           {/* Timeline spine */}
-          <div className="absolute left-[11px] top-0 bottom-0 w-px bg-stone-800" aria-hidden="true" />
+          <div
+            className="absolute left-[11px] top-0 bottom-0 w-px bg-stone-800"
+            aria-hidden="true"
+          />
 
           <ul className="space-y-1">
             {filtered.map((log, idx) => (
@@ -213,7 +216,9 @@ function TimelineEntry({ log, isFirst }: { log: AgentLogEntry; isFirst: boolean 
   return (
     <div className="flex gap-4 pl-1">
       {/* Dot */}
-      <div className={`relative mt-3 h-6 w-6 shrink-0 flex items-center justify-center rounded-full border ${dotClass} z-10`}>
+      <div
+        className={`relative mt-3 h-6 w-6 shrink-0 flex items-center justify-center rounded-full border ${dotClass} z-10`}
+      >
         <span className="text-[11px]">{icon}</span>
       </div>
 
@@ -225,7 +230,9 @@ function TimelineEntry({ log, isFirst }: { log: AgentLogEntry; isFirst: boolean 
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className={`text-[11px] font-semibold uppercase tracking-[0.12em] ${labelClass}`}>
+              <span
+                className={`text-[11px] font-semibold uppercase tracking-[0.12em] ${labelClass}`}
+              >
                 {actionLabel}
               </span>
               {log.tool && (
@@ -238,8 +245,12 @@ function TimelineEntry({ log, isFirst }: { log: AgentLogEntry; isFirst: boolean 
 
             {expanded && hasReasoning && (
               <div className="mt-3 rounded border border-stone-700/50 bg-black/20 p-3">
-                <p className="text-[11px] font-mono uppercase tracking-wider text-stone-500 mb-1">Reasoning</p>
-                <p className="text-xs text-stone-400 whitespace-pre-wrap leading-5">{log.reasoning}</p>
+                <p className="text-[11px] font-mono uppercase tracking-wider text-stone-500 mb-1">
+                  Reasoning
+                </p>
+                <p className="text-xs text-stone-400 whitespace-pre-wrap leading-5">
+                  {log.reasoning}
+                </p>
               </div>
             )}
           </div>
@@ -249,9 +260,7 @@ function TimelineEntry({ log, isFirst }: { log: AgentLogEntry; isFirst: boolean 
               {formatTimestamp(log.createdAt)}
             </span>
             {hasReasoning && (
-              <span className="text-[10px] text-stone-600">
-                {expanded ? "▲ hide" : "▼ why"}
-              </span>
+              <span className="text-[10px] text-stone-600">{expanded ? "▲ hide" : "▼ why"}</span>
             )}
           </div>
         </div>
@@ -269,7 +278,10 @@ function StatMetric({ label, value, color }: { label: string; value: number; col
   );
 }
 
-function actionStyle(action: string, tool: string | null): {
+function actionStyle(
+  action: string,
+  tool: string | null,
+): {
   icon: string;
   dotClass: string;
   labelClass: string;
@@ -277,32 +289,82 @@ function actionStyle(action: string, tool: string | null): {
 } {
   if (action === "tool_call" || action === "auto_action") {
     if (tool?.includes("send_email") || tool?.includes("email")) {
-      return { icon: "✉", dotClass: "border-amber-500/40 bg-amber-950/30", labelClass: "text-amber-300", actionLabel: "Email action" };
+      return {
+        icon: "✉",
+        dotClass: "border-amber-500/40 bg-amber-950/30",
+        labelClass: "text-amber-300",
+        actionLabel: "Email action",
+      };
     }
     if (tool?.includes("event") || tool?.includes("calendar")) {
-      return { icon: "📅", dotClass: "border-teal-500/40 bg-teal-950/30", labelClass: "text-teal-300", actionLabel: "Calendar action" };
+      return {
+        icon: "📅",
+        dotClass: "border-teal-500/40 bg-teal-950/30",
+        labelClass: "text-teal-300",
+        actionLabel: "Calendar action",
+      };
     }
     if (tool?.includes("task")) {
-      return { icon: "✓", dotClass: "border-emerald-500/40 bg-emerald-950/30", labelClass: "text-emerald-300", actionLabel: "Task action" };
+      return {
+        icon: "✓",
+        dotClass: "border-emerald-500/40 bg-emerald-950/30",
+        labelClass: "text-emerald-300",
+        actionLabel: "Task action",
+      };
     }
     if (tool?.includes("reminder")) {
-      return { icon: "⏰", dotClass: "border-blue-500/40 bg-blue-950/30", labelClass: "text-blue-300", actionLabel: "Reminder action" };
+      return {
+        icon: "⏰",
+        dotClass: "border-blue-500/40 bg-blue-950/30",
+        labelClass: "text-blue-300",
+        actionLabel: "Reminder action",
+      };
     }
     if (tool?.includes("delete") || tool?.includes("archive")) {
-      return { icon: "🗑", dotClass: "border-red-500/40 bg-red-950/30", labelClass: "text-red-300", actionLabel: "Destructive action" };
+      return {
+        icon: "🗑",
+        dotClass: "border-red-500/40 bg-red-950/30",
+        labelClass: "text-red-300",
+        actionLabel: "Destructive action",
+      };
     }
-    return { icon: "⚡", dotClass: "border-amber-400/30 bg-amber-950/20", labelClass: "text-amber-200", actionLabel: "Tool call" };
+    return {
+      icon: "⚡",
+      dotClass: "border-amber-400/30 bg-amber-950/20",
+      labelClass: "text-amber-200",
+      actionLabel: "Tool call",
+    };
   }
   if (action === "notify") {
-    return { icon: "🔔", dotClass: "border-teal-500/40 bg-teal-950/30", labelClass: "text-teal-300", actionLabel: "Notification" };
+    return {
+      icon: "🔔",
+      dotClass: "border-teal-500/40 bg-teal-950/30",
+      labelClass: "text-teal-300",
+      actionLabel: "Notification",
+    };
   }
   if (action === "skip") {
-    return { icon: "—", dotClass: "border-stone-700 bg-stone-900/20", labelClass: "text-stone-500", actionLabel: "Skipped" };
+    return {
+      icon: "—",
+      dotClass: "border-stone-700 bg-stone-900/20",
+      labelClass: "text-stone-500",
+      actionLabel: "Skipped",
+    };
   }
   if (action === "error") {
-    return { icon: "!", dotClass: "border-red-500/40 bg-red-950/30", labelClass: "text-red-400", actionLabel: "Error" };
+    return {
+      icon: "!",
+      dotClass: "border-red-500/40 bg-red-950/30",
+      labelClass: "text-red-400",
+      actionLabel: "Error",
+    };
   }
-  return { icon: "·", dotClass: "border-stone-700 bg-stone-900", labelClass: "text-stone-400", actionLabel: action };
+  return {
+    icon: "·",
+    dotClass: "border-stone-700 bg-stone-900",
+    labelClass: "text-stone-400",
+    actionLabel: action,
+  };
 }
 
 function computeStats(logs: AgentLogEntry[]): AgentStats {

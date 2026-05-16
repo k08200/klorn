@@ -33,9 +33,12 @@ export const TOOL_RISK_LEVELS = new Map<string, RiskLevel>([
   ["update_contact", "MEDIUM"],
   ["create_contact", "MEDIUM"],
 
-  // LOW — skill execution (prompt template, no external side effect)
-  ["execute_skill", "LOW"],
+  // MEDIUM — skills can trigger external-facing tools (send_email, create_event)
+  // through the agent reasoning loop, so they need explicit user approval.
+  ["execute_skill", "MEDIUM"],
   ["list_skills", "LOW"],
+  // MEDIUM — persists a new Skill definition; user must approve before it's saved.
+  ["record_skill", "MEDIUM"],
 
   // HIGH — destructive or hard to reverse
   ["delete_task", "HIGH"],

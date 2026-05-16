@@ -331,6 +331,7 @@ async function persistGmailEmail(
       text: commitmentText,
       contextTitle: email.subject,
       referenceDate: email.receivedAt,
+      senderEmail: email.from,
     }).catch((err) => {
       captureError(err, {
         tags: { scope: "commitment.email_ingestion" },

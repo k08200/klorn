@@ -91,9 +91,11 @@ export async function runFeedbackAdaptation(userId: string): Promise<number> {
     const attentionIds = [...new Set(events.map((e) => e.sourceId))];
 
     // Fetch source/type for each dismissed AttentionItem
-    const items = await (prisma.attentionItem as unknown as {
-      findMany: (args: unknown) => Promise<Array<{ id: string; source: string; type: string }>>;
-    }).findMany({
+    const items = await (
+      prisma.attentionItem as unknown as {
+        findMany: (args: unknown) => Promise<Array<{ id: string; source: string; type: string }>>;
+      }
+    ).findMany({
       where: { id: { in: attentionIds } },
       select: { id: true, source: true, type: true },
     });

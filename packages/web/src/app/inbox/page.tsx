@@ -60,9 +60,9 @@ function InboxView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("pending");
-  const [actionLoading, setActionLoading] = useState<Record<string, "approve" | "reject" | "snooze" | null>>(
-    {},
-  );
+  const [actionLoading, setActionLoading] = useState<
+    Record<string, "approve" | "reject" | "snooze" | null>
+  >({});
   const [commitmentLoading, setCommitmentLoading] = useState<
     Record<string, "done" | "dismiss" | null>
   >({});
@@ -402,9 +402,7 @@ function CommitmentCard({
             <CommitmentOwnerBadge owner={commitment.owner} />
             {commitment.owner === "COUNTERPARTY" &&
               commitment.trustBadge &&
-              commitment.trustBadge !== "unknown" && (
-                <TrustBadge badge={commitment.trustBadge} />
-              )}
+              commitment.trustBadge !== "unknown" && <TrustBadge badge={commitment.trustBadge} />}
             <span className="text-[11px] text-stone-500">
               {commitmentKindLabel(commitment.kind)}
             </span>

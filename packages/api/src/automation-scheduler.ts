@@ -615,9 +615,11 @@ async function runAutomations() {
  */
 async function resurrectSnoozedItems(): Promise<void> {
   const now = new Date();
-  await (prisma.attentionItem as unknown as {
-    updateMany: (args: unknown) => Promise<{ count: number }>;
-  }).updateMany({
+  await (
+    prisma.attentionItem as unknown as {
+      updateMany: (args: unknown) => Promise<{ count: number }>;
+    }
+  ).updateMany({
     where: {
       status: "SNOOZED",
       snoozedUntil: { lte: now },

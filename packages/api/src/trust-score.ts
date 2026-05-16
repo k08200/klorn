@@ -137,7 +137,8 @@ export async function buildTrustHintForPrompt(userId: string): Promise<string> {
     const lines = rows.map((row) => {
       const r = computeResult(row);
       const name = r.displayName || r.contactEmail;
-      if (r.badge === "reliable") return `- ${name}: reliable (${Math.round(r.onTimeRate * 100)}% on-time)`;
+      if (r.badge === "reliable")
+        return `- ${name}: reliable (${Math.round(r.onTimeRate * 100)}% on-time)`;
       if (r.badge === "mostly_reliable") {
         const delay = r.avgDelayDays > 0 ? `, avg +${Math.round(r.avgDelayDays)}d late` : "";
         return `- ${name}: mostly reliable (${Math.round(r.onTimeRate * 100)}% on-time${delay})`;

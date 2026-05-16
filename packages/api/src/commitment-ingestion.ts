@@ -30,6 +30,7 @@ export interface CommitmentIngestionInput {
   referenceDate?: Date;
   timeZone?: string;
   maxCandidates?: number;
+  senderEmail?: string | null; // email source: set to From address; used for trust score
 }
 
 export interface CommitmentIngestionResult {
@@ -77,12 +78,15 @@ function buildCommitmentInput(
   refinement: CommitmentRefinement | null,
   dedupKey: string,
 ): CommitmentInput {
+  const owner = refinement?.owner ?? candidate.owner;
   return {
     title: compactText(refinement?.title ?? candidate.text),
     description: input.contextTitle ? compactText(input.contextTitle, 180) : null,
     kind: refinement?.kind ?? kindForCandidate(candidate),
-    owner: refinement?.owner ?? candidate.owner,
+    owner,
     counterpartyName: refinement?.counterpartyName ?? null,
+    // Set counterpartyEmail from the email sender when the counterparty owns the commitment
+    counterpartyEmail: owner === "COUNTERPARTY" ? (input.senderEmail ?? null) : null,
     dueAt: refinement?.dueAt ?? null,
     dueText: refinement?.dueText ?? candidate.dueHint,
     sourceType: input.sourceType,

@@ -16,6 +16,7 @@ export interface CommitmentInput {
   kind?: CommitmentKind;
   owner?: CommitmentOwner;
   counterpartyName?: string | null;
+  counterpartyEmail?: string | null;
   contactId?: string | null;
   dueAt?: Date | null;
   dueText?: string | null;
@@ -84,7 +85,7 @@ export async function upsertCommitment(
       return commitment;
     }
   }
-  commitment = await prisma.commitment.create({
+  commitment = await (prisma.commitment.create as unknown as (args: unknown) => Promise<Commitment>)({
     data: {
       userId,
       title: input.title,
@@ -92,6 +93,7 @@ export async function upsertCommitment(
       kind: input.kind ?? "DELIVERABLE",
       owner: input.owner ?? "USER",
       counterpartyName: input.counterpartyName ?? null,
+      counterpartyEmail: input.counterpartyEmail ?? null,
       contactId: input.contactId ?? null,
       dueAt: input.dueAt ?? null,
       dueText: input.dueText ?? null,

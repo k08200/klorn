@@ -986,17 +986,25 @@ export async function runAgentForUser(
     const { analyzePatterns } = await import("./pattern-learner.js");
     const { buildTrustHintForPrompt } = await import("./trust-score.js");
     const { buildInteractionHintForPrompt } = await import("./interaction-graph.js");
-    const [context, feedback, memoryContext, proposalHistory, patternContext, policyContext, trustHint, interactionHint] =
-      await Promise.all([
-        gatherUserContext(userId),
-        getAgentFeedback(userId),
-        loadMemoriesForPrompt(userId).catch(() => ""),
-        getProposalHistory(userId).catch(() => ""),
-        analyzePatterns(userId).catch(() => ""),
-        getFeedbackPolicyContextForPrompt(userId).catch(() => ""),
-        buildTrustHintForPrompt(userId).catch(() => ""),
-        buildInteractionHintForPrompt(userId).catch(() => ""),
-      ]);
+    const [
+      context,
+      feedback,
+      memoryContext,
+      proposalHistory,
+      patternContext,
+      policyContext,
+      trustHint,
+      interactionHint,
+    ] = await Promise.all([
+      gatherUserContext(userId),
+      getAgentFeedback(userId),
+      loadMemoriesForPrompt(userId).catch(() => ""),
+      getProposalHistory(userId).catch(() => ""),
+      analyzePatterns(userId).catch(() => ""),
+      getFeedbackPolicyContextForPrompt(userId).catch(() => ""),
+      buildTrustHintForPrompt(userId).catch(() => ""),
+      buildInteractionHintForPrompt(userId).catch(() => ""),
+    ]);
 
     // Skip if context is minimal (no tasks, no calendar, no emails)
     const hasNothing =
