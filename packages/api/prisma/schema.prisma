@@ -237,6 +237,8 @@ model Task {
   dueDate     DateTime?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+
+  @@index([userId, status, dueDate])
 }
 
 enum TaskStatus {
@@ -272,6 +274,8 @@ model Reminder {
   remindAt    DateTime
   status      ReminderStatus @default(PENDING)
   createdAt   DateTime       @default(now())
+
+  @@index([userId, status, remindAt])
 }
 
 enum ReminderStatus {
@@ -310,6 +314,8 @@ model CalendarEvent {
   googleId    String?  @unique
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([userId, startTime])
 }
 
 model AutomationConfig {
@@ -390,6 +396,7 @@ model Notification {
   createdAt       DateTime       @default(now())
 
   @@index([userId, createdAt])
+  @@index([userId, isRead])
   @@index([pendingActionId])
 }
 
