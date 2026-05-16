@@ -45,9 +45,9 @@ const PLANS = [
       "Decision loop mode: suggest + policy execution",
       "Daily briefings and mail triage",
       "Reply drafts and pattern learning",
-      "Slack and Notion integrations",
+      "Slack and Notion integrations (coming soon)",
       "Web research and document drafts",
-      "GPT-5.4 and Claude Sonnet selection",
+      "Claude Sonnet model selection",
     ],
   },
   {
