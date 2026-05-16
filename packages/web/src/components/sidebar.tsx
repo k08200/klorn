@@ -468,7 +468,7 @@ export default function Sidebar({
               onClick={onMobileClose}
               className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium text-stone-400 transition hover:bg-stone-800 hover:text-stone-100"
             >
-              <span className="h-2 w-2 rounded-full bg-[#FF8A70]" />
+              <span className="h-2 w-2 rounded-full bg-accent-light" />
               Decision queue
               {totalPending > 0 && (
                 <span className="ml-auto rounded-full bg-stone-800 px-1.5 py-0.5 text-[10px] font-semibold text-stone-300">

@@ -133,14 +133,14 @@ function CandidateDetailView() {
       <div className="mb-4 flex flex-wrap gap-2">
         <Link
           href="/email/candidates"
-          className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 hover:border-[#FF6B4A]/35 hover:text-[#FFE2D7]"
+          className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 hover:border-accent/35 hover:text-accent-dim"
         >
           Candidate queue
         </Link>
         {email && (
           <Link
             href={`/email/${email.id}`}
-            className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 hover:border-[#FF6B4A]/35 hover:text-[#FFE2D7]"
+            className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 hover:border-accent/35 hover:text-accent-dim"
           >
             Source email
           </Link>
@@ -159,7 +159,7 @@ function CandidateDetailView() {
           <section className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#FF8A70]/80">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-light/80">
                   Candidate CRM
                 </p>
                 <h1 className="mt-2 text-2xl font-semibold text-stone-50">
@@ -167,7 +167,7 @@ function CandidateDetailView() {
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-stone-400">{profile.summary}</p>
               </div>
-              <span className="rounded border border-[#FF8A70]/25 bg-[#FF8A70]/10 px-2 py-1 text-xs text-[#FFB09C]">
+              <span className="rounded border border-accent-light/25 bg-accent-light/10 px-2 py-1 text-xs text-accent-muted">
                 {Math.round(profile.confidence * 100)}%
               </span>
             </div>
@@ -185,10 +185,10 @@ function CandidateDetailView() {
             {profile.links.length > 0 && <ChipBlock title="Links" values={profile.links} />}
 
             {(profile.missingFields.length > 0 || profile.manualReviewFiles.length > 0) && (
-              <div className="mt-5 rounded-lg border border-[#FF6B4A]/20 bg-[#FF6B4A]/10 p-3">
-                <p className="text-xs font-medium text-[#FFE2D7]">{profile.nextAction}</p>
+              <div className="mt-5 rounded-lg border border-accent/20 bg-accent/10 p-3">
+                <p className="text-xs font-medium text-accent-dim">{profile.nextAction}</p>
                 {profile.manualReviewFiles.map((file) => (
-                  <p key={file.filename} className="mt-1 text-[11px] text-[#FFB09C]/80">
+                  <p key={file.filename} className="mt-1 text-[11px] text-accent-muted/80">
                     {file.filename}: {file.reason}
                   </p>
                 ))}
@@ -234,8 +234,8 @@ function CandidateDetailView() {
                   disabled={saving}
                   className={`rounded-lg border px-3 py-2 text-left text-xs transition disabled:opacity-50 ${
                     email.candidateIntake?.status === status.value
-                      ? "border-[#FF8A70]/45 bg-[#FF8A70]/10 text-[#FFE2D7]"
-                      : "border-stone-700/55 text-stone-400 hover:border-[#FF6B4A]/30 hover:text-[#FFE2D7]"
+                      ? "border-accent-light/45 bg-accent-light/10 text-accent-dim"
+                      : "border-stone-700/55 text-stone-400 hover:border-accent/30 hover:text-accent-dim"
                   }`}
                 >
                   {status.label}
@@ -250,14 +250,14 @@ function CandidateDetailView() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={6}
-                className="w-full rounded-lg border border-stone-700/60 bg-black/20 px-3 py-2 text-xs leading-5 text-stone-300 outline-none focus:border-[#FF6B4A]/40"
+                className="w-full rounded-lg border border-stone-700/60 bg-black/20 px-3 py-2 text-xs leading-5 text-stone-300 outline-none focus:border-accent/40"
               />
             </label>
             <button
               type="button"
               onClick={() => update({ notes })}
               disabled={saving}
-              className="mt-2 w-full rounded-lg bg-[#FF8A70] px-3 py-2 text-xs font-medium text-stone-950 transition hover:bg-[#FFB09C] disabled:opacity-50"
+              className="mt-2 w-full rounded-lg bg-accent-light px-3 py-2 text-xs font-medium text-stone-950 transition hover:bg-accent-muted disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save notes"}
             </button>
@@ -270,7 +270,7 @@ function CandidateDetailView() {
       )}
       {email && !profile && !loading && (
         <main className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#FF8A70]/80">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-light/80">
             Candidate CRM
           </p>
           <h1 className="mt-2 text-2xl font-semibold text-stone-50">No candidate profile yet</h1>
@@ -282,13 +282,13 @@ function CandidateDetailView() {
           <div className="mt-5 flex flex-wrap gap-2">
             <Link
               href={`/email/${email.id}`}
-              className="inline-flex min-h-11 items-center rounded-lg bg-[#FF8A70] px-4 text-sm font-medium text-stone-950 transition hover:bg-[#FFB09C]"
+              className="inline-flex min-h-11 items-center rounded-lg bg-accent-light px-4 text-sm font-medium text-stone-950 transition hover:bg-accent-muted"
             >
               Open source email
             </Link>
             <Link
               href="/email/candidates"
-              className="inline-flex min-h-11 items-center rounded-lg border border-stone-700/60 px-4 text-sm text-stone-300 hover:border-[#FF6B4A]/35 hover:text-[#FFE2D7]"
+              className="inline-flex min-h-11 items-center rounded-lg border border-stone-700/60 px-4 text-sm text-stone-300 hover:border-accent/35 hover:text-accent-dim"
             >
               Back to queue
             </Link>

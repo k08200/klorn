@@ -986,6 +986,7 @@ export async function runAgentForUser(
     const { analyzePatterns } = await import("./pattern-learner.js");
     const { buildTrustHintForPrompt } = await import("./trust-score.js");
     const { buildInteractionHintForPrompt } = await import("./interaction-graph.js");
+    const { buildPlaybookHintForPrompt } = await import("./playbooks.js");
     const [
       context,
       feedback,
@@ -995,6 +996,7 @@ export async function runAgentForUser(
       policyContext,
       trustHint,
       interactionHint,
+      playbookHint,
     ] = await Promise.all([
       gatherUserContext(userId),
       getAgentFeedback(userId),
@@ -1004,6 +1006,7 @@ export async function runAgentForUser(
       getFeedbackPolicyContextForPrompt(userId).catch(() => ""),
       buildTrustHintForPrompt(userId).catch(() => ""),
       buildInteractionHintForPrompt(userId).catch(() => ""),
+      buildPlaybookHintForPrompt(userId).catch(() => ""),
     ]);
 
     // Skip if context is minimal (no tasks, no calendar, no emails)
@@ -1159,6 +1162,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
 
     // Inject user memories and learned patterns into system prompt for personalization
     let systemPromptWithMemory = memoryContext ? `${systemPrompt}${memoryContext}` : systemPrompt;
+    if (playbookHint) systemPromptWithMemory += playbookHint;
     if (policyContext) systemPromptWithMemory += policyContext;
     if (patternContext) systemPromptWithMemory += patternContext;
     if (trustHint) systemPromptWithMemory += trustHint;

@@ -394,7 +394,7 @@ function FileConverter() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-8 text-stone-100">
       <div className="mb-6">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#FF8A70]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-light">
           File tools
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">File conversion</h1>
@@ -417,7 +417,7 @@ function FileConverter() {
             type="button"
             onClick={runQualityTests}
             disabled={qualityRunning}
-            className="rounded-md border border-white/10 bg-[#090B10] px-3 py-2 text-xs text-stone-300 transition hover:border-[#FF6B4A]/30 hover:text-[#FFE2D7] disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md border border-white/10 bg-[#090B10] px-3 py-2 text-xs text-stone-300 transition hover:border-accent/30 hover:text-accent-dim disabled:cursor-not-allowed disabled:opacity-50"
           >
             {qualityRunning ? "Testing..." : "Run quality tests"}
           </button>
@@ -485,8 +485,8 @@ function FileConverter() {
                 className={`rounded border px-2 py-1 text-[10px] transition ${
                   (qualityReport?.id ?? qualityReport?.generatedAt) ===
                   (report.id ?? report.generatedAt)
-                    ? "border-[#FF6B4A]/40 bg-[#FF6B4A]/10 text-[#FFE2D7]"
-                    : "border-white/10 bg-[#090B10] text-stone-500 hover:border-[#FF6B4A]/30 hover:text-[#FFB09C]"
+                    ? "border-accent/40 bg-accent/10 text-accent-dim"
+                    : "border-white/10 bg-[#090B10] text-stone-500 hover:border-accent/30 hover:text-accent-muted"
                 }`}
               >
                 {report.score} ·{" "}
@@ -501,7 +501,7 @@ function FileConverter() {
       </section>
 
       <section className="rounded-lg border border-white/10 bg-[#11161A] p-4 shadow-2xl shadow-black/10">
-        <label className="block rounded-lg border border-dashed border-white/15 bg-[#090B10] px-4 py-8 text-center transition hover:border-[#FF6B4A]/35">
+        <label className="block rounded-lg border border-dashed border-white/15 bg-[#090B10] px-4 py-8 text-center transition hover:border-accent/35">
           <input
             type="file"
             multiple
@@ -574,8 +574,8 @@ function FileConverter() {
                           onClick={() => setTarget(item.target)}
                           className={`rounded border px-2 py-1 text-[10px] transition ${
                             target === item.target
-                              ? "border-[#FF6B4A]/45 bg-[#FF6B4A]/15 text-[#FFE2D7]"
-                              : "border-white/10 bg-[#090B10] text-stone-400 hover:border-[#FF6B4A]/30 hover:text-[#FFE2D7]"
+                              ? "border-accent/45 bg-accent/15 text-accent-dim"
+                              : "border-white/10 bg-[#090B10] text-stone-400 hover:border-accent/30 hover:text-accent-dim"
                           }`}
                           title={item.reason}
                         >
@@ -598,8 +598,8 @@ function FileConverter() {
               onClick={() => setTarget(option.value)}
               className={`rounded-lg border px-3 py-2 text-left transition ${
                 target === option.value
-                  ? "border-[#FF6B4A]/45 bg-[#FF6B4A]/15 text-[#FFE2D7]"
-                  : "border-white/10 bg-[#090B10] text-stone-400 hover:border-[#FF6B4A]/30 hover:text-[#FFE2D7]"
+                  ? "border-accent/45 bg-accent/15 text-accent-dim"
+                  : "border-white/10 bg-[#090B10] text-stone-400 hover:border-accent/30 hover:text-accent-dim"
               }`}
             >
               <span className="block text-xs font-semibold">{option.label}</span>
@@ -621,7 +621,7 @@ function FileConverter() {
             type="button"
             onClick={convert}
             disabled={files.length === 0 || busy || selectedTargetUnavailable}
-            className="rounded-md bg-[#FF6B4A] px-4 py-2 text-sm font-medium text-[#190B07] transition hover:bg-[#FF8A70] disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-[#190B07] transition hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-50"
           >
             {selectedTargetUnavailable
               ? "Engine required"
@@ -638,8 +638,8 @@ function FileConverter() {
           </p>
         )}
         {conversionAlternatives.length > 0 && (
-          <div className="mt-3 rounded-lg border border-[#FF6B4A]/20 bg-[#FF6B4A]/5 px-3 py-2">
-            <p className="text-[11px] font-medium text-[#FFE2D7]">Suggested alternatives</p>
+          <div className="mt-3 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2">
+            <p className="text-[11px] font-medium text-accent-dim">Suggested alternatives</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {conversionAlternatives.map((item) => (
                 <button
@@ -650,7 +650,7 @@ function FileConverter() {
                     setMessage(`Try again as ${item.target.toUpperCase()}.`);
                     setConversionAlternatives([]);
                   }}
-                  className="rounded border border-[#FF6B4A]/25 bg-black/20 px-2 py-1 text-[10px] text-[#FFE2D7] transition hover:border-[#FFB09C]/50"
+                  className="rounded border border-accent/25 bg-black/20 px-2 py-1 text-[10px] text-accent-dim transition hover:border-accent-muted/50"
                   title={item.reason}
                 >
                   {item.target.toUpperCase()}
@@ -736,8 +736,8 @@ function capabilityBadge(capability: ConversionCapability | undefined) {
     <span
       className={`mt-1 inline-flex rounded border px-1.5 py-0.5 text-[9px] ${
         capability.mode === "builtin" || capability.available
-          ? "border-[#FF6B4A]/25 bg-[#FF6B4A]/10 text-[#FFB09C]"
-          : "border-[#FF6B4A]/25 bg-[#FF6B4A]/10 text-[#FFB09C]"
+          ? "border-accent/25 bg-accent/10 text-accent-muted"
+          : "border-accent/25 bg-accent/10 text-accent-muted"
       }`}
     >
       {label}
@@ -752,8 +752,8 @@ function engineStatusLabel(engine: ConversionEngineStatus): string {
 }
 
 function engineStatusClass(engine: ConversionEngineStatus): string {
-  if (!engine.available) return "border-[#FF6B4A]/25 bg-[#FF6B4A]/10 text-[#FFB09C]";
-  if (engine.source === "env") return "border-[#FF6B4A]/25 bg-[#FF6B4A]/10 text-[#FFB09C]";
+  if (!engine.available) return "border-accent/25 bg-accent/10 text-accent-muted";
+  if (engine.source === "env") return "border-accent/25 bg-accent/10 text-accent-muted";
   return "border-[#7DD3FC]/25 bg-[#7DD3FC]/10 text-sky-200";
 }
 
@@ -765,8 +765,8 @@ function qualityStatusLabel(status: QualityScenarioResult["status"]): string {
 }
 
 function qualityStatusClass(status: QualityScenarioResult["status"]): string {
-  if (status === "pass") return "border-[#FF6B4A]/25 bg-[#FF6B4A]/10 text-[#FFB09C]";
-  if (status === "warn") return "border-[#FF6B4A]/25 bg-[#FF6B4A]/10 text-[#FFB09C]";
+  if (status === "pass") return "border-accent/25 bg-accent/10 text-accent-muted";
+  if (status === "warn") return "border-accent/25 bg-accent/10 text-accent-muted";
   if (status === "blocked") return "border-stone-600/60 bg-stone-900/70 text-stone-400";
   return "border-rose-400/25 bg-rose-400/10 text-rose-200";
 }
@@ -778,8 +778,8 @@ function qualityLabel(quality: FilePreview["quality"]): string {
 }
 
 function qualityClass(quality: FilePreview["quality"]): string {
-  if (quality === "readable") return "border-[#FF6B4A]/25 bg-[#FF6B4A]/10 text-[#FFB09C]";
-  if (quality === "metadata") return "border-[#FF6B4A]/25 bg-[#FF6B4A]/10 text-[#FFB09C]";
+  if (quality === "readable") return "border-accent/25 bg-accent/10 text-accent-muted";
+  if (quality === "metadata") return "border-accent/25 bg-accent/10 text-accent-muted";
   return "border-rose-400/25 bg-rose-400/10 text-rose-200";
 }
 

@@ -251,344 +251,359 @@ async function runAutomations() {
         });
     }
 
-    const configs = await prisma.automationConfig.findMany();
-    if (configs.length === 0) return;
+    const BATCH_SIZE = 100;
+    let cursor: string | undefined;
 
-    // Fetch user plans for feature gating
-    const configUserIds = configs.map((c) => c.userId);
-    const automationUsers = await prisma.user.findMany({
-      where: { id: { in: configUserIds } },
-      select: { id: true, plan: true },
-    });
-    const automationPlanMap = new Map(automationUsers.map((u) => [u.id, u.plan]));
+    for (;;) {
+      const configs = await prisma.automationConfig.findMany({
+        where: {
+          OR: [{ dailyBriefing: true }, { emailAutoClassify: true }, { autonomousAgent: true }],
+        },
+        take: BATCH_SIZE,
+        skip: cursor ? 1 : 0,
+        cursor: cursor ? { userId: cursor } : undefined,
+        orderBy: { userId: "asc" },
+      });
+      if (configs.length === 0) break;
 
-    for (const config of configs) {
-      const configUserPlan = automationPlanMap.get(config.userId) || "FREE";
-      const timeZone = normalizeTimeZone((config as unknown as { timezone?: string }).timezone);
-      const today = localDateKey(new Date(), timeZone);
+      // Fetch user plans for feature gating
+      const configUserIds = configs.map((c) => c.userId);
+      const automationUsers = await prisma.user.findMany({
+        where: { id: { in: configUserIds } },
+        select: { id: true, plan: true },
+      });
+      const automationPlanMap = new Map(automationUsers.map((u) => [u.id, u.plan]));
 
-      // --- Daily Briefing ---
-      if (
-        config.dailyBriefing &&
-        briefingSentToday.get(config.userId) !== today &&
-        planHasFeature(configUserPlan, "daily_briefing")
-      ) {
-        if (isBriefingDue(config.briefingTime, timeZone)) {
-          // DB-based dedup: check if briefing was already sent today (survives restarts)
-          const alreadySent = await hasBriefingBeenSentToday(config.userId, timeZone);
-          if (alreadySent) {
-            briefingSentToday.set(config.userId, today);
-            continue;
-          }
-          try {
-            console.log(`[AUTOMATION] Generating daily briefing for ${config.userId}`);
-            await createDailyBriefingDelivery(config.userId);
-            briefingSentToday.set(config.userId, today);
-            console.log(`[AUTOMATION] Briefing delivered to ${config.userId}`);
-          } catch (err) {
-            console.error(`[AUTOMATION] Briefing failed for ${config.userId}:`, err);
-            captureError(err, {
-              tags: { scope: "automation.briefing", userId: config.userId },
-              extra: { briefingTime: config.briefingTime, timeZone },
-            });
-          }
-        }
-      }
+      for (const config of configs) {
+        const configUserPlan = automationPlanMap.get(config.userId) || "FREE";
+        const timeZone = normalizeTimeZone((config as unknown as { timezone?: string }).timezone);
+        const today = localDateKey(new Date(), timeZone);
 
-      // --- Calendar Auto-Sync (every 15 minutes) ---
-      if (isCalendarSyncDue(config.userId)) {
-        lastCalendarSyncAt.set(config.userId, Date.now());
-        try {
-          const auth = await getAuthedClient(config.userId);
-          if (auth) {
-            const { google } = await import("googleapis");
-            const calendar = google.calendar({ version: "v3", auth });
-            const now = new Date();
-            const later = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-            const response = await calendar.events.list({
-              calendarId: "primary",
-              timeMin: now.toISOString(),
-              timeMax: later.toISOString(),
-              singleEvents: true,
-              orderBy: "startTime",
-              maxResults: 100,
-            });
-
-            for (const item of response.data.items || []) {
-              const googleId = item.id || "";
-              if (!googleId) continue;
-              const startTime = item.start?.dateTime || item.start?.date || "";
-              const endTime = item.end?.dateTime || item.end?.date || "";
-              if (!startTime || !endTime) continue;
-
-              let meetingLink: string | null = null;
-              if (item.conferenceData?.entryPoints) {
-                const video = item.conferenceData.entryPoints.find(
-                  (e) => e.entryPointType === "video",
-                );
-                if (video) meetingLink = video.uri || null;
-              }
-              if (!meetingLink && item.hangoutLink) meetingLink = item.hangoutLink;
-
-              await prisma.calendarEvent.upsert({
-                where: { googleId },
-                create: {
-                  userId: config.userId,
-                  title: item.summary || "Untitled",
-                  description: item.description || null,
-                  startTime: new Date(startTime),
-                  endTime: new Date(endTime),
-                  location: item.location || null,
-                  meetingLink,
-                  allDay: !item.start?.dateTime,
-                  googleId,
-                },
-                update: {
-                  title: item.summary || "Untitled",
-                  description: item.description || null,
-                  startTime: new Date(startTime),
-                  endTime: new Date(endTime),
-                  location: item.location || null,
-                  meetingLink,
-                  allDay: !item.start?.dateTime,
-                },
-              });
+        // --- Daily Briefing ---
+        if (
+          config.dailyBriefing &&
+          briefingSentToday.get(config.userId) !== today &&
+          planHasFeature(configUserPlan, "daily_briefing")
+        ) {
+          if (isBriefingDue(config.briefingTime, timeZone)) {
+            // DB-based dedup: check if briefing was already sent today (survives restarts)
+            const alreadySent = await hasBriefingBeenSentToday(config.userId, timeZone);
+            if (alreadySent) {
+              briefingSentToday.set(config.userId, today);
+              continue;
             }
-          }
-        } catch (err) {
-          const gaxiosErr = err as {
-            response?: { status?: number; data?: { error?: { message?: string } } };
-            message?: string;
-          };
-          const status = gaxiosErr.response?.status;
-          console.error(
-            `[AUTOMATION] Calendar sync failed for ${config.userId} (HTTP ${status}):`,
-            gaxiosErr.response?.data?.error?.message || gaxiosErr.message || err,
-          );
-
-          // 401/403 = token invalid — notify user to reconnect
-          if (status === 401 || status === 403) {
-            const existingAlert = await prisma.notification.findFirst({
-              where: {
-                userId: config.userId,
-                type: "calendar",
-                OR: [
-                  { title: { contains: "Google disconnected" } },
-                  { title: { contains: "Google 연결 끊김" } },
-                ],
-                createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-              },
-            });
-            if (!existingAlert) {
-              await prisma.notification.create({
-                data: {
-                  userId: config.userId,
-                  type: "calendar",
-                  title: "Google disconnected",
-                  message: "Calendar sync stopped. Reconnect your Google account in settings.",
-                  link: "/settings",
-                },
-              });
-              pushNotification(config.userId, {
-                id: crypto.randomUUID(),
-                type: "calendar",
-                title: "Google disconnected",
-                message: "Reconnect your Google account in settings.",
-                link: "/settings",
+            try {
+              console.log(`[AUTOMATION] Generating daily briefing for ${config.userId}`);
+              await createDailyBriefingDelivery(config.userId);
+              briefingSentToday.set(config.userId, today);
+              console.log(`[AUTOMATION] Briefing delivered to ${config.userId}`);
+            } catch (err) {
+              console.error(`[AUTOMATION] Briefing failed for ${config.userId}:`, err);
+              captureError(err, {
+                tags: { scope: "automation.briefing", userId: config.userId },
+                extra: { briefingTime: config.briefingTime, timeZone },
               });
             }
           }
         }
-      }
 
-      // --- Email Sync + AI Classify (requires PRO+ for classify, TEAM+ for auto-reply) ---
-      // emailAutoClassify now defaults to true in schema — we still honor an
-      // explicit opt-out, but for the vast majority of users sync runs on
-      // its own interval without any config step.
-      if (config.emailAutoClassify && planHasFeature(configUserPlan, "email_auto_classify")) {
-        if (isEmailSyncDue(config.userId)) {
-          lastEmailSyncAt.set(config.userId, Date.now());
+        // --- Calendar Auto-Sync (every 15 minutes) ---
+        if (isCalendarSyncDue(config.userId)) {
+          lastCalendarSyncAt.set(config.userId, Date.now());
           try {
-            // Sync from Gmail → DB
-            const syncResult = await syncEmails(config.userId, 20);
+            const auth = await getAuthedClient(config.userId);
+            if (auth) {
+              const { google } = await import("googleapis");
+              const calendar = google.calendar({ version: "v3", auth });
+              const now = new Date();
+              const later = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-            // AI summarize new emails
-            if (syncResult.newCount > 0) {
-              await summarizeUnsummarizedEmails(config.userId, syncResult.newCount);
-            }
-            await syncRecentCandidateIntakes(config.userId, Math.max(syncResult.newCount, 10));
-            await notifyCandidateEmails(config.userId);
-
-            // LOW-priority mail is a quarantine signal, not a destructive
-            // action. Keep the local/Gmail records intact so the user can audit
-            // EVE's classification and approve any cleanup later.
-
-            // Auto-reply: check rules for newly synced emails (dedup by gmailId)
-            // Requires TEAM+ plan for auto-reply
-            if (syncResult.newCount > 0 && planHasFeature(configUserPlan, "email_auto_reply")) {
-              const newEmails = await prisma.emailMessage.findMany({
-                where: { userId: config.userId },
-                orderBy: { syncedAt: "desc" },
-                take: syncResult.newCount,
+              const response = await calendar.events.list({
+                calendarId: "primary",
+                timeMin: now.toISOString(),
+                timeMax: later.toISOString(),
+                singleEvents: true,
+                orderBy: "startTime",
+                maxResults: 100,
               });
-              for (const email of newEmails) {
-                try {
-                  // Skip if we already sent an auto-reply notification for this email
-                  const alreadyReplied = await prisma.notification.findFirst({
-                    where: {
-                      userId: config.userId,
-                      type: "email",
-                      title: "Auto-reply sent",
-                      message: { contains: email.gmailId },
-                    },
-                  });
-                  if (alreadyReplied) continue;
 
-                  const matched = await checkAutoReplyRules(config.userId, email);
-                  if (
-                    matched &&
-                    (matched.actionType === "AUTO_REPLY" || matched.actionType === "DRAFT_REPLY")
-                  ) {
-                    const replyBody = await generateSmartReply(matched.actionValue, {
-                      from: email.from,
-                      subject: email.subject,
-                      body: email.body || "",
-                    });
-                    if (matched.actionType === "AUTO_REPLY") {
-                      const emailMatch = email.from.match(/<([^>]+)>/) || [null, email.from];
-                      const toAddr = emailMatch[1] || email.from;
-                      await sendEmail(config.userId, toAddr, `Re: ${email.subject}`, replyBody);
-                      const notification = await prisma.notification.create({
-                        data: {
-                          userId: config.userId,
-                          type: "email",
-                          title: "Auto-reply sent",
-                          message: `Auto-replied to ${toAddr} (rule: "${matched.ruleName}") [${email.gmailId}]`,
-                        },
-                      });
-                      pushNotification(config.userId, {
-                        id: notification.id,
-                        type: "email",
-                        title: "Auto-reply sent",
-                        message: `Auto-replied to ${toAddr}`,
-                        createdAt: notification.createdAt.toISOString(),
-                      });
-                    }
-                  }
-                } catch {
-                  // Auto-reply failed — non-critical
+              for (const item of response.data.items || []) {
+                const googleId = item.id || "";
+                if (!googleId) continue;
+                const startTime = item.start?.dateTime || item.start?.date || "";
+                const endTime = item.end?.dateTime || item.end?.date || "";
+                if (!startTime || !endTime) continue;
+
+                let meetingLink: string | null = null;
+                if (item.conferenceData?.entryPoints) {
+                  const video = item.conferenceData.entryPoints.find(
+                    (e) => e.entryPointType === "video",
+                  );
+                  if (video) meetingLink = video.uri || null;
                 }
-              }
-            }
+                if (!meetingLink && item.hangoutLink) meetingLink = item.hangoutLink;
 
-            // Reconcile DB with Gmail (remove deleted/archived emails).
-            // Runs at most once every 30 minutes per user, independent of
-            // wall-clock minute so a slipped tick doesn't skip the window.
-            if (isReconcileDue(config.userId)) {
-              lastReconcileAt.set(config.userId, Date.now());
-              try {
-                await reconcileEmails(config.userId);
-              } catch (err) {
-                console.error(`[AUTOMATION] Reconcile failed for ${config.userId}:`, err);
-                captureError(err, {
-                  tags: { scope: "automation.reconcile", userId: config.userId },
+                await prisma.calendarEvent.upsert({
+                  where: { googleId },
+                  create: {
+                    userId: config.userId,
+                    title: item.summary || "Untitled",
+                    description: item.description || null,
+                    startTime: new Date(startTime),
+                    endTime: new Date(endTime),
+                    location: item.location || null,
+                    meetingLink,
+                    allDay: !item.start?.dateTime,
+                    googleId,
+                  },
+                  update: {
+                    title: item.summary || "Untitled",
+                    description: item.description || null,
+                    startTime: new Date(startTime),
+                    endTime: new Date(endTime),
+                    location: item.location || null,
+                    meetingLink,
+                    allDay: !item.start?.dateTime,
+                  },
                 });
               }
             }
+          } catch (err) {
+            const gaxiosErr = err as {
+              response?: { status?: number; data?: { error?: { message?: string } } };
+              message?: string;
+            };
+            const status = gaxiosErr.response?.status;
+            console.error(
+              `[AUTOMATION] Calendar sync failed for ${config.userId} (HTTP ${status}):`,
+              gaxiosErr.response?.data?.error?.message || gaxiosErr.message || err,
+            );
 
-            // Check for urgent unread emails — notify only for NEW urgent emails
-            // Only check truly new emails (synced in last hour) to avoid re-notifying old unread emails
-            const urgentEmails = await prisma.emailMessage.findMany({
-              where: {
-                userId: config.userId,
-                priority: "URGENT",
-                isRead: false,
-                syncedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
-              },
-              orderBy: { receivedAt: "desc" },
-              select: { id: true, gmailId: true, subject: true, from: true, summary: true },
-            });
-
-            if (urgentEmails.length > 0) {
-              // Check which urgent emails we already notified about (by gmailId in message, last 7 days)
-              const recentUrgentNotifs = await prisma.notification.findMany({
+            // 401/403 = token invalid — notify user to reconnect
+            if (status === 401 || status === 403) {
+              const existingAlert = await prisma.notification.findFirst({
                 where: {
                   userId: config.userId,
-                  type: "email",
-                  OR: [{ title: "Urgent email" }, { title: "긴급 이메일" }],
-                  createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+                  type: "calendar",
+                  OR: [
+                    { title: { contains: "Google disconnected" } },
+                    { title: { contains: "Google 연결 끊김" } },
+                  ],
+                  createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
                 },
-                select: { message: true },
               });
-              const notifiedGmailIds = new Set(
-                recentUrgentNotifs
-                  .map((n) => {
-                    const match = n.message.match(/\[([^\]]+)\]$/);
-                    return match ? match[1] : null;
-                  })
-                  .filter(Boolean),
-              );
-
-              // Only notify for urgent emails we haven't notified about yet
-              const newUrgent = urgentEmails.filter((e) => !notifiedGmailIds.has(e.gmailId));
-
-              if (newUrgent.length > 0) {
-                // User-visible body: who + what, no internal IDs.
-                // DB message keeps the [gmailId] suffix because the dedup
-                // regex above (notifiedGmailIds) reads it back from message.
-                const userBody = formatUrgentEmailBody(newUrgent);
-                const dbMessage = `${userBody} [${newUrgent[0].gmailId}]`;
-
-                const notification = await prisma.notification.create({
+              if (!existingAlert) {
+                await prisma.notification.create({
                   data: {
                     userId: config.userId,
-                    type: "email",
-                    title: "Urgent email",
-                    message: dbMessage,
+                    type: "calendar",
+                    title: "Google disconnected",
+                    message: "Calendar sync stopped. Reconnect your Google account in settings.",
+                    link: "/settings",
                   },
                 });
-
                 pushNotification(config.userId, {
-                  id: notification.id,
-                  type: "email",
-                  title: "Urgent email",
-                  message: userBody,
-                  createdAt: notification.createdAt.toISOString(),
+                  id: crypto.randomUUID(),
+                  type: "calendar",
+                  title: "Google disconnected",
+                  message: "Reconnect your Google account in settings.",
+                  link: "/settings",
                 });
-
-                sendPushNotification(
-                  config.userId,
-                  {
-                    title: "Urgent mail",
-                    body: userBody,
-                    url: "/briefing",
-                  },
-                  "email_urgent",
-                );
               }
             }
-          } catch (err) {
-            // Gmail not connected, token expired, rate-limited, or network
-            // flake — log + capture so "Eve stopped reading email" doesn't
-            // become an invisible outage. Returns early so the next tick
-            // still tries.
-            console.error(`[AUTOMATION] Email sync failed for ${config.userId}:`, err);
-            captureError(err, {
-              tags: { scope: "automation.email-sync", userId: config.userId },
-            });
           }
         }
-      }
 
-      // --- Proactive Actions (rule-based, no LLM cost) ---
-      // Default OFF during dogfooding: these are useful but can create bell
-      // noise until each rule has stronger precision and per-user controls.
-      if (PROACTIVE_ACTIONS_ENABLED) {
-        runProactiveActions(config.userId).catch((err) => {
-          console.error(`[PROACTIVE] Failed for ${config.userId}:`, err);
-        });
+        // --- Email Sync + AI Classify (requires PRO+ for classify, TEAM+ for auto-reply) ---
+        // emailAutoClassify now defaults to true in schema — we still honor an
+        // explicit opt-out, but for the vast majority of users sync runs on
+        // its own interval without any config step.
+        if (config.emailAutoClassify && planHasFeature(configUserPlan, "email_auto_classify")) {
+          if (isEmailSyncDue(config.userId)) {
+            lastEmailSyncAt.set(config.userId, Date.now());
+            try {
+              // Sync from Gmail → DB
+              const syncResult = await syncEmails(config.userId, 20);
+
+              // AI summarize new emails
+              if (syncResult.newCount > 0) {
+                await summarizeUnsummarizedEmails(config.userId, syncResult.newCount);
+              }
+              await syncRecentCandidateIntakes(config.userId, Math.max(syncResult.newCount, 10));
+              await notifyCandidateEmails(config.userId);
+
+              // LOW-priority mail is a quarantine signal, not a destructive
+              // action. Keep the local/Gmail records intact so the user can audit
+              // EVE's classification and approve any cleanup later.
+
+              // Auto-reply: check rules for newly synced emails (dedup by gmailId)
+              // Requires TEAM+ plan for auto-reply
+              if (syncResult.newCount > 0 && planHasFeature(configUserPlan, "email_auto_reply")) {
+                const newEmails = await prisma.emailMessage.findMany({
+                  where: { userId: config.userId },
+                  orderBy: { syncedAt: "desc" },
+                  take: syncResult.newCount,
+                });
+                for (const email of newEmails) {
+                  try {
+                    // Skip if we already sent an auto-reply notification for this email
+                    const alreadyReplied = await prisma.notification.findFirst({
+                      where: {
+                        userId: config.userId,
+                        type: "email",
+                        title: "Auto-reply sent",
+                        message: { contains: email.gmailId },
+                      },
+                    });
+                    if (alreadyReplied) continue;
+
+                    const matched = await checkAutoReplyRules(config.userId, email);
+                    if (
+                      matched &&
+                      (matched.actionType === "AUTO_REPLY" || matched.actionType === "DRAFT_REPLY")
+                    ) {
+                      const replyBody = await generateSmartReply(matched.actionValue, {
+                        from: email.from,
+                        subject: email.subject,
+                        body: email.body || "",
+                      });
+                      if (matched.actionType === "AUTO_REPLY") {
+                        const emailMatch = email.from.match(/<([^>]+)>/) || [null, email.from];
+                        const toAddr = emailMatch[1] || email.from;
+                        await sendEmail(config.userId, toAddr, `Re: ${email.subject}`, replyBody);
+                        const notification = await prisma.notification.create({
+                          data: {
+                            userId: config.userId,
+                            type: "email",
+                            title: "Auto-reply sent",
+                            message: `Auto-replied to ${toAddr} (rule: "${matched.ruleName}") [${email.gmailId}]`,
+                          },
+                        });
+                        pushNotification(config.userId, {
+                          id: notification.id,
+                          type: "email",
+                          title: "Auto-reply sent",
+                          message: `Auto-replied to ${toAddr}`,
+                          createdAt: notification.createdAt.toISOString(),
+                        });
+                      }
+                    }
+                  } catch {
+                    // Auto-reply failed — non-critical
+                  }
+                }
+              }
+
+              // Reconcile DB with Gmail (remove deleted/archived emails).
+              // Runs at most once every 30 minutes per user, independent of
+              // wall-clock minute so a slipped tick doesn't skip the window.
+              if (isReconcileDue(config.userId)) {
+                lastReconcileAt.set(config.userId, Date.now());
+                try {
+                  await reconcileEmails(config.userId);
+                } catch (err) {
+                  console.error(`[AUTOMATION] Reconcile failed for ${config.userId}:`, err);
+                  captureError(err, {
+                    tags: { scope: "automation.reconcile", userId: config.userId },
+                  });
+                }
+              }
+
+              // Check for urgent unread emails — notify only for NEW urgent emails
+              // Only check truly new emails (synced in last hour) to avoid re-notifying old unread emails
+              const urgentEmails = await prisma.emailMessage.findMany({
+                where: {
+                  userId: config.userId,
+                  priority: "URGENT",
+                  isRead: false,
+                  syncedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+                },
+                orderBy: { receivedAt: "desc" },
+                select: { id: true, gmailId: true, subject: true, from: true, summary: true },
+              });
+
+              if (urgentEmails.length > 0) {
+                // Check which urgent emails we already notified about (by gmailId in message, last 7 days)
+                const recentUrgentNotifs = await prisma.notification.findMany({
+                  where: {
+                    userId: config.userId,
+                    type: "email",
+                    OR: [{ title: "Urgent email" }, { title: "긴급 이메일" }],
+                    createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+                  },
+                  select: { message: true },
+                });
+                const notifiedGmailIds = new Set(
+                  recentUrgentNotifs
+                    .map((n) => {
+                      const match = n.message.match(/\[([^\]]+)\]$/);
+                      return match ? match[1] : null;
+                    })
+                    .filter(Boolean),
+                );
+
+                // Only notify for urgent emails we haven't notified about yet
+                const newUrgent = urgentEmails.filter((e) => !notifiedGmailIds.has(e.gmailId));
+
+                if (newUrgent.length > 0) {
+                  // User-visible body: who + what, no internal IDs.
+                  // DB message keeps the [gmailId] suffix because the dedup
+                  // regex above (notifiedGmailIds) reads it back from message.
+                  const userBody = formatUrgentEmailBody(newUrgent);
+                  const dbMessage = `${userBody} [${newUrgent[0].gmailId}]`;
+
+                  const notification = await prisma.notification.create({
+                    data: {
+                      userId: config.userId,
+                      type: "email",
+                      title: "Urgent email",
+                      message: dbMessage,
+                    },
+                  });
+
+                  pushNotification(config.userId, {
+                    id: notification.id,
+                    type: "email",
+                    title: "Urgent email",
+                    message: userBody,
+                    createdAt: notification.createdAt.toISOString(),
+                  });
+
+                  sendPushNotification(
+                    config.userId,
+                    {
+                      title: "Urgent mail",
+                      body: userBody,
+                      url: "/briefing",
+                    },
+                    "email_urgent",
+                  );
+                }
+              }
+            } catch (err) {
+              // Gmail not connected, token expired, rate-limited, or network
+              // flake — log + capture so "Eve stopped reading email" doesn't
+              // become an invisible outage. Returns early so the next tick
+              // still tries.
+              console.error(`[AUTOMATION] Email sync failed for ${config.userId}:`, err);
+              captureError(err, {
+                tags: { scope: "automation.email-sync", userId: config.userId },
+              });
+            }
+          }
+        }
+
+        // --- Proactive Actions (rule-based, no LLM cost) ---
+        // Default OFF during dogfooding: these are useful but can create bell
+        // noise until each rule has stronger precision and per-user controls.
+        if (PROACTIVE_ACTIONS_ENABLED) {
+          runProactiveActions(config.userId).catch((err) => {
+            console.error(`[PROACTIVE] Failed for ${config.userId}:`, err);
+          });
+        }
       }
+      if (configs.length < BATCH_SIZE) break;
+      cursor = configs[configs.length - 1].userId;
     }
 
     // --- Weekly: Voice Profile Extraction (Sunday only) ---

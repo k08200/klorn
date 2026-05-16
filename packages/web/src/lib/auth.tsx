@@ -164,10 +164,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithToken = useCallback(
     async (newToken: string) => {
-      console.log("[auth] loginWithToken: start");
       setStoredAuthToken(newToken);
       setToken(newToken);
-      console.log("[auth] loginWithToken: token stored, calling /api/auth/me");
       try {
         const data = await apiFetch<{ user: User & { googleConnected?: boolean } }>(
           "/api/auth/me",
@@ -175,7 +173,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             headers: { Authorization: `Bearer ${newToken}` },
           },
         );
-        console.log("[auth] loginWithToken: /api/auth/me success", data.user?.email);
         setUser(data.user);
         setAuthError(null);
         setGoogleConnected(data.user.googleConnected ?? true);
@@ -187,7 +184,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Trigger initial sync (calendar, contacts, recent emails) after Google login.
       runInitialSync(newToken);
 
-      console.log("[auth] loginWithToken: redirecting to /inbox");
       window.location.href = "/inbox";
     },
     [runInitialSync],

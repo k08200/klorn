@@ -45,8 +45,8 @@ const KIND_COPY: Record<
 > = {
   ALLOW_AFTER_SUGGESTION: {
     label: "Repeated approvals",
-    tone: "border-orange-500/30 bg-orange-500/10 text-[#FFB09C]",
-    dot: "bg-[#FF6B4A]",
+    tone: "border-orange-500/30 bg-orange-500/10 text-accent-muted",
+    dot: "bg-accent",
     summary: "Suggest with more confidence",
   },
   REQUIRE_DRAFT_REVIEW: {

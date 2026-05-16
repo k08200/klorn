@@ -237,6 +237,8 @@ model Task {
   dueDate     DateTime?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+
+  @@index([userId, status, dueDate])
 }
 
 enum TaskStatus {
@@ -272,6 +274,8 @@ model Reminder {
   remindAt    DateTime
   status      ReminderStatus @default(PENDING)
   createdAt   DateTime       @default(now())
+
+  @@index([userId, status, remindAt])
 }
 
 enum ReminderStatus {
@@ -310,6 +314,8 @@ model CalendarEvent {
   googleId    String?  @unique
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([userId, startTime])
 }
 
 model AutomationConfig {
@@ -390,6 +396,7 @@ model Notification {
   createdAt       DateTime       @default(now())
 
   @@index([userId, createdAt])
+  @@index([userId, isRead])
   @@index([pendingActionId])
 }
 
@@ -820,9 +827,27 @@ model Commitment {
   updatedAt   DateTime  @updatedAt
   completedAt DateTime?
 
+  path CommitmentPath?
+
   @@unique([userId, dedupKey])
   @@index([userId, status, dueAt])
   @@index([userId, threadId])
+}
+
+// AI-generated step-by-step fulfillment plan for a commitment.
+// Built by backward chaining from the due date. Each step can map to a Task
+// or CalendarEvent (taskId / eventId) once the user approves the plan.
+model CommitmentPath {
+  id           String     @id @default(uuid())
+  commitmentId String     @unique
+  commitment   Commitment @relation(fields: [commitmentId], references: [id], onDelete: Cascade)
+
+  // JSON array of PathStep: { step, action, dueIso, estimatedMinutes, taskId?, eventId? }
+  steps   Json
+  builtAt DateTime @default(now())
+  model   String?
+
+  @@index([commitmentId])
 }
 
 enum CommitmentStatus {

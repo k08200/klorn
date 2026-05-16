@@ -7,6 +7,7 @@ import AuthGuard from "../../components/auth-guard";
 import { useToast } from "../../components/toast";
 import { apiFetch } from "../../lib/api";
 import { captureClientError } from "../../lib/sentry";
+import { formatRelative } from "../../lib/text";
 
 type Filter =
   | "all"
@@ -523,7 +524,7 @@ function EmailView() {
       <header className="mb-5 rounded-lg border border-white/10 bg-[#11161A] p-5 shadow-xl shadow-black/10 md:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#FF8A70]">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-light">
               Mail
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
@@ -531,7 +532,7 @@ function EmailView() {
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
               Organized by urgency and reply need.
-              {source === "demo" && <span className="ml-2 text-[#FF6B4A]">Demo data</span>}
+              {source === "demo" && <span className="ml-2 text-accent">Demo data</span>}
             </p>
           </div>
           <button
@@ -584,11 +585,11 @@ function EmailView() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search sender, body, attachment text, extracted fields"
-          className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#090B10] px-3 text-sm text-stone-200 outline-none transition placeholder:text-stone-600 focus:border-[#FF6B4A]/45"
+          className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#090B10] px-3 text-sm text-stone-200 outline-none transition placeholder:text-stone-600 focus:border-accent/45"
         />
         <button
           type="submit"
-          className="h-10 rounded-lg bg-[#FF6B4A] px-4 text-sm font-medium text-stone-950 transition hover:bg-[#FFB09C]"
+          className="h-10 rounded-lg bg-accent px-4 text-sm font-medium text-stone-950 transition hover:bg-accent-muted"
         >
           Search
         </button>
@@ -616,7 +617,7 @@ function EmailView() {
             onClick={() => setFilter(queue.key)}
             className={`rounded-lg border p-3 text-left transition ${
               filter === queue.key
-                ? "border-[#FF6B4A]/45 bg-[#FF6B4A]/10"
+                ? "border-accent/45 bg-accent/10"
                 : "border-white/10 bg-[#11161A] hover:border-white/20 hover:bg-white/5"
             }`}
           >
@@ -624,7 +625,7 @@ function EmailView() {
             <span className="mt-1 block text-[11px] leading-4 text-stone-500">
               {queue.description}
             </span>
-            <span className="mt-2 block text-xs text-[#FF8A70]">
+            <span className="mt-2 block text-xs text-accent-light">
               Current signals {queue.count(emails)}
             </span>
           </button>
@@ -634,7 +635,7 @@ function EmailView() {
       {candidateCount > 0 && (
         <Link
           href="/email/candidates"
-          className="mt-3 flex items-center justify-between rounded-lg border border-orange-500/20 bg-orange-500/5 px-4 py-3 text-sm text-[#FFB09C] transition hover:bg-orange-500/10"
+          className="mt-3 flex items-center justify-between rounded-lg border border-orange-500/20 bg-orange-500/5 px-4 py-3 text-sm text-accent-muted transition hover:bg-orange-500/10"
         >
           <span>Review {candidateCount} candidate signals in the intake queue.</span>
           <span className="text-xs">Open</span>
@@ -661,7 +662,7 @@ function EmailView() {
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               <Link
                 href="/settings"
-                className="inline-flex min-h-11 items-center rounded-md bg-[#FF8A70] px-4 text-xs font-medium text-stone-950 transition hover:bg-[#FFB09C]"
+                className="inline-flex min-h-11 items-center rounded-md bg-accent-light px-4 text-xs font-medium text-stone-950 transition hover:bg-accent-muted"
               >
                 Connect Google
               </Link>
@@ -755,7 +756,7 @@ function UndoActionBanner({
 }) {
   const actionLabel = notice.action === "archive" ? "archived" : "moved to trash";
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-[#FF8A70]/30 bg-[#2A1510] px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-[#2A1510] px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="font-medium">Email {actionLabel}.</p>
         {notice.subject && (
@@ -767,7 +768,7 @@ function UndoActionBanner({
           type="button"
           onClick={onUndo}
           disabled={busy}
-          className="min-h-10 rounded-md bg-[#FF8A70] px-3 text-xs font-semibold text-stone-950 transition hover:bg-[#FFB09C] disabled:opacity-50"
+          className="min-h-10 rounded-md bg-accent-light px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent-muted disabled:opacity-50"
         >
           {busy ? "Restoring..." : "Undo"}
         </button>
@@ -803,7 +804,7 @@ function BulkUndoActionBanner({
     .map((email) => email.subject)
     .join(", ");
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-[#FF8A70]/30 bg-[#2A1510] px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-[#2A1510] px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="font-medium">
           {count} {count === 1 ? "email" : "emails"} archived.
@@ -815,7 +816,7 @@ function BulkUndoActionBanner({
           type="button"
           onClick={onUndo}
           disabled={busy}
-          className="min-h-10 rounded-md bg-[#FF8A70] px-3 text-xs font-semibold text-stone-950 transition hover:bg-[#FFB09C] disabled:opacity-50"
+          className="min-h-10 rounded-md bg-accent-light px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent-muted disabled:opacity-50"
         >
           {busy ? "Restoring..." : "Undo all"}
         </button>
@@ -947,7 +948,7 @@ function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filt
             onClick={() => onChange(f.key)}
             className={`min-h-[32px] shrink-0 rounded-full px-3 py-1.5 text-xs transition ${
               active
-                ? "bg-[#FF6B4A] text-[#190B07]"
+                ? "bg-accent text-[#190B07]"
                 : "border border-white/10 bg-[#11161A] text-stone-400 hover:bg-white/6 hover:text-stone-200"
             }`}
           >
@@ -985,7 +986,7 @@ function EmailRowItem({
         onClick={() => onToggleSelected(email.id)}
         className={`mt-4 h-5 w-5 rounded border transition ${
           selected
-            ? "border-[#FF6B4A] bg-[#FF6B4A] shadow-[inset_0_0_0_4px_#0C1116]"
+            ? "border-accent bg-accent shadow-[inset_0_0_0_4px_#0C1116]"
             : "border-white/15 bg-[#11161A] hover:border-white/30"
         }`}
       />
@@ -1081,12 +1082,12 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
         </span>
       )}
       {(email.attachmentFallbackCount ?? 0) > 0 && (
-        <span className="shrink-0 rounded border border-[#FF6B4A]/25 bg-[#FF6B4A]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#FF6B4A]">
+        <span className="shrink-0 rounded border border-accent/25 bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
           Fallback {email.attachmentFallbackCount}
         </span>
       )}
       {email.category && <CategoryBadge category={email.category} />}
-      {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#FF6B4A]" />}
+      {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />}
     </div>
   );
 }
@@ -1103,7 +1104,7 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
             <div className="flex flex-wrap items-center gap-2">
               <PriorityBadge priority={thread.latestPriority} />
               {thread.hasUnread && (
-                <span className="rounded border border-[#FF6B4A]/30 bg-[#FF6B4A]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#FF6B4A]">
+                <span className="rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
                   Unread
                 </span>
               )}
@@ -1143,8 +1144,8 @@ function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
   return (
     <div className="mt-2 rounded-lg border border-orange-500/15 bg-orange-500/5 px-2.5 py-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="truncate text-[11px] font-medium text-[#FFB09C]">{title}</p>
-        <span className="shrink-0 text-[10px] tabular-nums text-[#FF8A70]/80">
+        <p className="truncate text-[11px] font-medium text-accent-muted">{title}</p>
+        <span className="shrink-0 text-[10px] tabular-nums text-accent-light/80">
           {Math.round(profile.confidence * 100)}%
         </span>
       </div>
@@ -1153,7 +1154,7 @@ function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
         {profile.contact && <span className="truncate">Contact {profile.contact}</span>}
         {profile.intakeStatus && <span>{candidateIntakeLabel(profile.intakeStatus)}</span>}
         <span>Files {profile.evidenceCount}</span>
-        {missing && <span className="text-[#FF6B4A]/80">{missing}</span>}
+        {missing && <span className="text-accent/80">{missing}</span>}
       </div>
     </div>
   );
@@ -1184,7 +1185,7 @@ function candidateMissingLabel(field: string): string {
 }
 function ReplyNeededBadge() {
   return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded border border-[#FF6B4A]/30 bg-[#FF6B4A]/10 text-[#FF6B4A] font-medium shrink-0">
+    <span className="text-[10px] px-1.5 py-0.5 rounded border border-accent/30 bg-accent/10 text-accent font-medium shrink-0">
       Needs reply
     </span>
   );
@@ -1192,7 +1193,7 @@ function ReplyNeededBadge() {
 
 function CandidateBadge() {
   return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded border border-[#FF6B4A]/30 bg-[#FF6B4A]/10 text-[#FF8A70] font-medium shrink-0">
+    <span className="text-[10px] px-1.5 py-0.5 rounded border border-accent/30 bg-accent/10 text-accent-light font-medium shrink-0">
       Candidate
     </span>
   );
@@ -1238,21 +1239,4 @@ function senderName(raw: string): string {
   const match = raw.match(/^([^<]+?)\s*</);
   if (match?.[1]) return match[1].trim();
   return raw.replace(/[<>]/g, "").trim();
-}
-
-function formatRelative(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "2-digit" }),
-  });
 }

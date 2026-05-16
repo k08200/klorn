@@ -29,7 +29,7 @@ interface EmailFeedbackResponse {
 
 const PRIORITY_STYLES: Record<EmailPriority, string> = {
   URGENT: "text-red-300 bg-red-500/10 border-red-500/20",
-  NORMAL: "text-[#FFB09C] bg-orange-500/10 border-orange-500/20",
+  NORMAL: "text-accent-muted bg-orange-500/10 border-orange-500/20",
   LOW: "text-stone-300 bg-stone-500/10 border-stone-500/20",
 };
 

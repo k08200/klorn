@@ -89,7 +89,7 @@ export default function FeedbackPolicyStudio() {
     <section className="mb-6 rounded-2xl border border-stone-800 bg-stone-950/50 p-4 md:p-5">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#FF6B4A]/80">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent/80">
             Policy Studio
           </p>
           <h2 className="mt-2 text-lg font-semibold text-stone-100">
@@ -104,7 +104,7 @@ export default function FeedbackPolicyStudio() {
           type="button"
           onClick={load}
           disabled={loading}
-          className="h-8 rounded-md border border-stone-700 px-3 text-xs text-stone-400 transition hover:border-[#FF6B4A]/35 hover:text-stone-200 disabled:opacity-50"
+          className="h-8 rounded-md border border-stone-700 px-3 text-xs text-stone-400 transition hover:border-accent/35 hover:text-stone-200 disabled:opacity-50"
         >
           {loading ? "Checking" : "Refresh"}
         </button>
@@ -129,14 +129,14 @@ export default function FeedbackPolicyStudio() {
           {candidates.slice(0, 5).map((candidate) => (
             <article
               key={candidate.id}
-              className="rounded-xl border border-stone-800 bg-stone-900/35 p-3 transition hover:border-[#FF6B4A]/25 hover:bg-stone-900/55"
+              className="rounded-xl border border-stone-800 bg-stone-900/35 p-3 transition hover:border-accent/25 hover:bg-stone-900/55"
             >
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <PolicyBadge kind={candidate.kind} />
                     {candidate.active && (
-                      <span className="rounded border border-[#FF6B4A]/20 bg-[#FF6B4A]/10 px-1.5 py-0.5 text-[10px] text-[#FF8A70]">
+                      <span className="rounded border border-accent/20 bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent-light">
                         Active
                       </span>
                     )}
@@ -167,7 +167,7 @@ export default function FeedbackPolicyStudio() {
                     type="button"
                     onClick={() => setPreference(candidate, "ACTIVE")}
                     disabled={updating === candidate.id}
-                    className="h-8 rounded-md border border-[#FF6B4A]/25 bg-[#FF6B4A]/10 px-3 text-xs font-medium text-[#FFB09C] transition hover:bg-[#FF6B4A]/15 disabled:opacity-50"
+                    className="h-8 rounded-md border border-accent/25 bg-accent/10 px-3 text-xs font-medium text-accent-muted transition hover:bg-accent/15 disabled:opacity-50"
                   >
                     Apply
                   </button>
@@ -191,10 +191,7 @@ export default function FeedbackPolicyStudio() {
 
 function PolicyBadge({ kind }: { kind: PolicyKind }) {
   const meta = {
-    ALLOW_AFTER_SUGGESTION: [
-      "Allow more often",
-      "border-[#FF6B4A]/20 bg-[#FF6B4A]/10 text-[#FF8A70]",
-    ],
+    ALLOW_AFTER_SUGGESTION: ["Allow more often", "border-accent/20 bg-accent/10 text-accent-light"],
     REQUIRE_DRAFT_REVIEW: [
       "Keep draft review",
       "border-[#7DD3FC]/20 bg-[#7DD3FC]/10 text-[#7DD3FC]",

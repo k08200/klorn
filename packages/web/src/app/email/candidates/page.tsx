@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
+import { formatRelative } from "../../../lib/text";
 
 type CandidateStatus =
   | "ALL"
@@ -248,7 +249,7 @@ function CandidateIntakeView() {
       <header className="mb-5 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-2xl shadow-black/10">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#FF8A70]/80">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-light/80">
               Candidate Intake
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
@@ -262,7 +263,7 @@ function CandidateIntakeView() {
           <div className="flex shrink-0 gap-2">
             <Link
               href="/email"
-              className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-orange-500/40 hover:bg-orange-500/10 hover:text-[#FFE2D7]"
+              className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-orange-500/40 hover:bg-orange-500/10 hover:text-accent-dim"
             >
               Email list
             </Link>
@@ -270,7 +271,7 @@ function CandidateIntakeView() {
               type="button"
               onClick={() => load(status, attention, true)}
               disabled={refreshing}
-              className="rounded-lg border border-[#FF6B4A]/30 px-3 py-1.5 text-xs text-[#FFB09C] transition hover:bg-[#FF6B4A]/10 disabled:opacity-50"
+              className="rounded-lg border border-accent/30 px-3 py-1.5 text-xs text-accent-muted transition hover:bg-accent/10 disabled:opacity-50"
             >
               {refreshing ? "Refreshing..." : "Rescan candidates"}
             </button>
@@ -299,7 +300,7 @@ function CandidateIntakeView() {
           </div>
         )}
         {quality?.correctionSummary && quality.correctionSummary.total > 0 && (
-          <div className="mt-3 rounded-xl border border-[#FF6B4A]/15 bg-[#FF6B4A]/5 px-3 py-2 text-[11px] text-[#FFE2D7]/80">
+          <div className="mt-3 rounded-xl border border-accent/15 bg-accent/5 px-3 py-2 text-[11px] text-accent-dim/80">
             Recent corrections {quality.correctionSummary.total} · categories{" "}
             {quality.correctionSummary.categoryCorrectionCount} · fields{" "}
             {quality.correctionSummary.fieldCorrectionCount} · summaries{" "}
@@ -338,7 +339,7 @@ function CandidateIntakeView() {
               onClick={() => setStatus(filter.status)}
               className={`min-h-[32px] shrink-0 rounded-full px-3 py-1.5 text-xs transition ${
                 active
-                  ? "bg-[#FF8A70] text-stone-950"
+                  ? "bg-accent-light text-stone-950"
                   : "border border-stone-700/55 bg-stone-950/45 text-stone-400 hover:bg-stone-900/70 hover:text-stone-200"
               }`}
             >
@@ -374,7 +375,7 @@ function CandidateIntakeView() {
             <button
               type="button"
               onClick={toggleAllVisible}
-              className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-[#FF6B4A]/35 hover:bg-[#FF6B4A]/10 hover:text-[#FFE2D7]"
+              className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim"
             >
               {selectedCount > 0 ? `${selectedCount} selected` : "Select visible"}
             </button>
@@ -471,7 +472,7 @@ function BulkStatusButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-[#FF6B4A]/35 hover:bg-[#FF6B4A]/10 hover:text-[#FFE2D7] disabled:cursor-not-allowed disabled:opacity-40"
+      className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim disabled:cursor-not-allowed disabled:opacity-40"
     >
       {label}
     </button>
@@ -492,8 +493,8 @@ function CandidateCard({
     <article
       className={`rounded-xl border p-4 transition ${
         selected
-          ? "border-[#FF8A70]/60 bg-[#FF6B4A]/10"
-          : "border-orange-500/20 bg-orange-500/5 hover:border-[#FF6B4A]/35 hover:bg-[#FF6B4A]/10"
+          ? "border-accent-light/60 bg-accent/10"
+          : "border-orange-500/20 bg-orange-500/5 hover:border-accent/35 hover:bg-accent/10"
       }`}
     >
       <div className="flex items-start gap-3">
@@ -501,19 +502,19 @@ function CandidateCard({
           type="checkbox"
           checked={selected}
           onChange={onToggle}
-          className="mt-1 h-4 w-4 rounded border-stone-600 bg-stone-950 text-[#FF8A70]"
+          className="mt-1 h-4 w-4 rounded border-stone-600 bg-stone-950 text-accent-light"
           aria-label={`Select ${title}`}
         />
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded border border-[#FF6B4A]/25 bg-[#FF6B4A]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#FFB09C]">
+            <span className="rounded border border-accent/25 bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent-muted">
               {candidateStatusLabel(candidate.status)}
             </span>
-            <span className="text-[10px] tabular-nums text-[#FF8A70]/75">
+            <span className="text-[10px] tabular-nums text-accent-light/75">
               {Math.round(candidate.confidence * 100)}%
             </span>
             {candidate.duplicateCount > 1 && (
-              <span className="rounded border border-[#FF6B4A]/25 bg-[#FF6B4A]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#FFB09C]">
+              <span className="rounded border border-accent/25 bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent-muted">
                 Possible duplicate {candidate.duplicateCount}
               </span>
             )}
@@ -534,12 +535,12 @@ function CandidateCard({
           </span>
         )}
         {candidate.duplicateCount > 1 && (
-          <span className="text-[#FF6B4A]/80">
+          <span className="text-accent/80">
             Duplicate match {candidate.duplicateReasons.map(candidateDuplicateLabel).join(", ")}
           </span>
         )}
         {candidate.missingFields.length > 0 && (
-          <span className="text-[#FF6B4A]/80">
+          <span className="text-accent/80">
             Missing {candidate.missingFields.map(candidateMissingLabel).join(", ")}
           </span>
         )}
@@ -557,13 +558,13 @@ function CandidateCard({
       )}
       <Link
         href={`/email/candidates/${candidate.emailId}`}
-        className="mt-3 inline-flex rounded-lg border border-stone-700/55 px-3 py-1.5 text-xs text-stone-300 transition hover:border-[#FF6B4A]/35 hover:bg-[#FF6B4A]/10 hover:text-[#FFE2D7]"
+        className="mt-3 inline-flex rounded-lg border border-stone-700/55 px-3 py-1.5 text-xs text-stone-300 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim"
       >
         Candidate details
       </Link>
       <Link
         href={`/email/${candidate.emailId}`}
-        className="ml-2 mt-3 inline-flex rounded-lg border border-stone-700/55 px-3 py-1.5 text-xs text-stone-500 transition hover:border-[#FF6B4A]/35 hover:bg-[#FF6B4A]/10 hover:text-[#FFE2D7]"
+        className="ml-2 mt-3 inline-flex rounded-lg border border-stone-700/55 px-3 py-1.5 text-xs text-stone-500 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim"
       >
         Email
       </Link>
@@ -609,21 +610,4 @@ function senderName(raw: string): string {
   const match = raw.match(/^([^<]+?)\s*</);
   if (match?.[1]) return match[1].trim();
   return raw.replace(/[<>]/g, "").trim();
-}
-
-function formatRelative(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return "Just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "2-digit" }),
-  });
 }

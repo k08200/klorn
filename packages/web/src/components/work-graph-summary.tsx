@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { formatRelative } from "../lib/text";
 import type { WorkGraphContext, WorkGraphRisk, WorkGraphSummary } from "../lib/work-graph";
 
 const EMPTY_SUMMARY: WorkGraphSummary = { generatedAt: "", contexts: [] };
@@ -290,16 +291,4 @@ function summarizeContexts(contexts: WorkGraphContext[]): { signals: number; hig
 
 function displayText(value: string | null | undefined): string {
   return value ?? "";
-}
-
-function formatRelative(date: string | null | undefined): string {
-  if (!date) return "Just now";
-  const diff = Date.now() - new Date(date).getTime();
-  if (!Number.isFinite(diff)) return "Just now";
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
 }

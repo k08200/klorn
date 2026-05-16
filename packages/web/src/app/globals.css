@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+@theme {
+  --color-accent: #ff6b4a;
+  --color-accent-light: #ff8a70;
+  --color-accent-muted: #ffb09c;
+  --color-accent-dim: #ffe2d7;
+}
+
 body {
   word-break: keep-all;
   overflow-wrap: anywhere;

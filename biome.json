@@ -61,6 +61,18 @@
     "indentWidth": 2,
     "lineWidth": 100
   },
+  "css": {
+    "parser": {
+      "cssModules": false,
+      "allowWrongLineComments": false,
+      "tailwindDirectives": true
+    },
+    "formatter": {
+      "enabled": true,
+      "indentStyle": "space",
+      "indentWidth": 2
+    }
+  },
   "javascript": {
     "formatter": {
       "quoteStyle": "double",

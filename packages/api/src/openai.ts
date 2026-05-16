@@ -181,9 +181,7 @@ export async function createVisionCompletion(
       if (isKeyLimitError(err) || isCreditError(err) || isProviderUnavailable(provider.quotaKey)) {
         if (isKeyLimitError(err)) markKeyLimited(provider.quotaKey);
         if (isCreditError(err)) markCreditExhausted(provider.quotaKey);
-        continue;
       }
-      continue;
     }
   }
 

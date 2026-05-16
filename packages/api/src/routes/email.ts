@@ -2702,12 +2702,21 @@ export async function emailRoutes(app: FastifyInstance) {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const [total, unread, urgent, today] = await Promise.all([
-      prisma.emailMessage.count({ where: { userId: uid } }),
-      prisma.emailMessage.count({ where: { userId: uid, isRead: false } }),
-      prisma.emailMessage.count({ where: { userId: uid, priority: "URGENT" } }),
-      prisma.emailMessage.count({ where: { userId: uid, receivedAt: { gte: todayStart } } }),
-    ]);
+    const [statsRows] = await prisma.$queryRaw<
+      [{ total: bigint; unread: bigint; urgent: bigint; today: bigint }]
+    >`
+      SELECT
+        COUNT(*)                                                  AS total,
+        COUNT(*) FILTER (WHERE "isRead" = false)                  AS unread,
+        COUNT(*) FILTER (WHERE priority = 'URGENT')               AS urgent,
+        COUNT(*) FILTER (WHERE "receivedAt" >= ${todayStart})     AS today
+      FROM "EmailMessage"
+      WHERE "userId" = ${uid}
+    `;
+    const total = Number(statsRows.total);
+    const unread = Number(statsRows.unread);
+    const urgent = Number(statsRows.urgent);
+    const today = Number(statsRows.today);
 
     // Category breakdown
     const categories = await prisma.emailMessage.groupBy({
@@ -2806,6 +2815,54 @@ export async function emailRoutes(app: FastifyInstance) {
 
     await prisma.emailRule.delete({ where: { id } });
     return { success: true };
+  });
+
+  // ─── Email Action Items → Tasks ───────────────────────────────────────────
+
+  // POST /api/email/:id/create-tasks
+  // Convert the AI-extracted actionItems from an email into Task rows.
+  // Body: { indices?: number[] } — if omitted, creates tasks for all items.
+  app.post("/:id/create-tasks", { preHandler: requireAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const userId = getUserId(request);
+    const body = (request.body ?? {}) as { indices?: number[] };
+
+    const email = await prisma.emailMessage.findFirst({
+      where: { userId, OR: [{ id }, { gmailId: id }] },
+      select: { id: true, subject: true, actionItems: true, receivedAt: true },
+    });
+    if (!email) return reply.code(404).send({ error: "Email not found" });
+
+    const allItems = parseJsonArray(email.actionItems);
+    if (allItems.length === 0)
+      return reply.code(400).send({ error: "This email has no extracted action items" });
+
+    const toCreate =
+      Array.isArray(body.indices) && body.indices.length > 0
+        ? body.indices
+            .filter((i) => typeof i === "number" && i >= 0 && i < allItems.length)
+            .map((i) => allItems[i])
+            .filter(Boolean)
+        : allItems;
+
+    if (toCreate.length === 0)
+      return reply.code(400).send({ error: "No valid action item indices provided" });
+
+    const created = await Promise.all(
+      toCreate.map((item) =>
+        prisma.task.create({
+          data: {
+            userId,
+            title: String(item).slice(0, 250),
+            status: "TODO",
+            priority: "MEDIUM",
+          },
+          select: { id: true, title: true },
+        }),
+      ),
+    );
+
+    return { success: true, tasks: created, source: { emailId: email.id, subject: email.subject } };
   });
 }
 

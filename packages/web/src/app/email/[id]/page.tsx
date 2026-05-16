@@ -758,7 +758,7 @@ function EmailDetailView() {
       {email && (
         <article>
           <header className="mb-5 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
-            <div className="h-1 bg-gradient-to-r from-[#7DD3FC] via-[#FF6B4A] to-stone-600" />
+            <div className="h-1 bg-gradient-to-r from-[#7DD3FC] via-accent to-stone-600" />
             <div className="p-5 md:p-6">
               <EmailActionToolbar
                 busyAction={actionBusy}
@@ -777,7 +777,7 @@ function EmailDetailView() {
               />
               <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
                 <div>
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#FF6B4A]/80">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent/80">
                     Signal detail
                   </p>
                   <h1 className="break-words text-xl font-semibold leading-snug tracking-tight text-stone-50 md:text-2xl">
@@ -895,7 +895,7 @@ function UndoActionBanner({
 }) {
   const actionLabel = notice.action === "archive" ? "archived" : "moved to trash";
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-[#FF8A70]/30 bg-[#2A1510] px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-[#2A1510] px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="font-medium">Email {actionLabel}.</p>
         {notice.subject && (
@@ -907,7 +907,7 @@ function UndoActionBanner({
           type="button"
           onClick={onUndo}
           disabled={busy}
-          className="min-h-10 rounded-md bg-[#FF8A70] px-3 text-xs font-semibold text-stone-950 transition hover:bg-[#FFB09C] disabled:opacity-50"
+          className="min-h-10 rounded-md bg-accent-light px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent-muted disabled:opacity-50"
         >
           {busy ? "Restoring..." : "Undo"}
         </button>
@@ -951,7 +951,7 @@ function EmailActionToolbar({
       <div className="flex min-w-0 items-center gap-2 text-xs text-stone-500">
         <span
           className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-            email.isRead ? "bg-stone-600" : "bg-[#FF6B4A]"
+            email.isRead ? "bg-stone-600" : "bg-accent"
           }`}
         />
         <span className="truncate">
@@ -1073,7 +1073,7 @@ function CandidateProfileCard({
   return (
     <section className="mt-5 rounded-xl border border-orange-500/20 bg-orange-500/5 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[#FF8A70]">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-accent-light">
           Candidate card
         </h2>
         <span className="text-[11px] text-stone-500">
@@ -1081,10 +1081,10 @@ function CandidateProfileCard({
         </span>
       </div>
       <div className="mb-3 rounded-lg border border-orange-500/15 bg-black/15 px-3 py-2">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-[#FF8A70]/70">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-accent-light/70">
           Pipeline
         </p>
-        <p className="mt-1 text-xs font-medium text-[#FFE2D7]">
+        <p className="mt-1 text-xs font-medium text-accent-dim">
           {candidatePipelineLabel(profile.pipelineStatus)}
         </p>
         <p className="mt-1 text-[11px] leading-5 text-stone-400">{profile.nextAction}</p>
@@ -1098,8 +1098,8 @@ function CandidateProfileCard({
             disabled={updating || status === option.status}
             className={`rounded border px-2 py-1 text-[11px] transition disabled:cursor-default ${
               status === option.status
-                ? "border-[#FF8A70]/40 bg-[#FF8A70]/15 text-[#FFE2D7]"
-                : "border-stone-700/60 bg-black/15 text-stone-400 hover:border-[#FF6B4A]/30 hover:text-[#FFB09C]"
+                ? "border-accent-light/40 bg-accent-light/15 text-accent-dim"
+                : "border-stone-700/60 bg-black/15 text-stone-400 hover:border-accent/30 hover:text-accent-muted"
             }`}
           >
             {option.label}
@@ -1120,7 +1120,7 @@ function CandidateProfileCard({
           {profile.skills.map((skill) => (
             <span
               key={skill}
-              className="rounded border border-orange-500/25 bg-[#FF6B4A]/10 px-2 py-1 text-[11px] text-[#FFB09C]"
+              className="rounded border border-orange-500/25 bg-accent/10 px-2 py-1 text-[11px] text-accent-muted"
             >
               {skill}
             </span>
@@ -1137,7 +1137,7 @@ function CandidateProfileCard({
         </div>
       )}
       {profile.missingFields.length > 0 && (
-        <p className="mt-3 text-[11px] text-[#FF6B4A]/80">
+        <p className="mt-3 text-[11px] text-accent/80">
           Needs follow-up: {profile.missingFields.map(candidateMissingLabel).join(", ")}
         </p>
       )}
@@ -1161,7 +1161,7 @@ function CandidateProfileCard({
           defaultValue={intake?.notes ?? ""}
           rows={2}
           onBlur={(e) => onUpdate({ notes: e.target.value || null })}
-          className="w-full rounded-lg border border-orange-500/15 bg-black/15 px-3 py-2 text-xs leading-5 text-stone-300 outline-none transition focus:border-[#FF6B4A]/35"
+          className="w-full rounded-lg border border-orange-500/15 bg-black/15 px-3 py-2 text-xs leading-5 text-stone-300 outline-none transition focus:border-accent/35"
           placeholder="Review note"
         />
       </label>
@@ -1227,7 +1227,7 @@ function ThreadContextPanel({
             <li
               key={message.id}
               className={`rounded-lg border px-3 py-2 ${
-                current ? "border-[#FF6B4A]/30 bg-[#FF6B4A]/10" : "border-stone-800/70 bg-black/15"
+                current ? "border-accent/30 bg-accent/10" : "border-stone-800/70 bg-black/15"
               }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1242,7 +1242,7 @@ function ThreadContextPanel({
                 {message.summary || message.snippet || message.subject || "No summary"}
               </p>
               {message.actionItems.length > 0 && (
-                <p className="mt-1 text-[10px] text-[#FF8A70]">
+                <p className="mt-1 text-[10px] text-accent-light">
                   {message.actionItems.length} tasks
                 </p>
               )}
@@ -1395,7 +1395,7 @@ function AttachmentAnalysis({
             type="button"
             onClick={downloadBrief}
             disabled={downloading === "brief"}
-            className="rounded border border-[#FF6B4A]/25 bg-[#FF6B4A]/10 px-2 py-1 text-[11px] text-[#FFB09C] transition hover:bg-[#FF6B4A]/15 disabled:opacity-50"
+            className="rounded border border-accent/25 bg-accent/10 px-2 py-1 text-[11px] text-accent-muted transition hover:bg-accent/15 disabled:opacity-50"
           >
             {downloading === "brief" ? "Creating..." : "Download brief"}
           </button>
@@ -1411,7 +1411,7 @@ function AttachmentAnalysis({
             type="button"
             onClick={onOcr}
             disabled={ocring}
-            className="rounded border border-[#FF6B4A]/25 bg-[#FF6B4A]/10 px-2 py-1 text-[11px] text-[#FFB09C] transition hover:bg-[#FF6B4A]/15 disabled:opacity-50"
+            className="rounded border border-accent/25 bg-accent/10 px-2 py-1 text-[11px] text-accent-muted transition hover:bg-accent/15 disabled:opacity-50"
           >
             {ocring ? "Running OCR..." : "OCR/vision"}
           </button>
@@ -1525,7 +1525,7 @@ function AttachmentAnalysis({
               </details>
             )}
             {attachment.analysisError && (
-              <p className="mt-2 text-[11px] leading-relaxed text-[#FF6B4A]/70">
+              <p className="mt-2 text-[11px] leading-relaxed text-accent/70">
                 Processed with fallback analysis: {attachment.analysisError}
               </p>
             )}
@@ -1533,7 +1533,7 @@ function AttachmentAnalysis({
               <button
                 type="button"
                 onClick={() => setEditingId(editingId === attachment.id ? null : attachment.id)}
-                className="rounded border border-stone-700/70 bg-stone-950/45 px-2 py-1 text-[10px] text-stone-400 transition hover:border-[#FF6B4A]/30 hover:text-[#FFB09C]"
+                className="rounded border border-stone-700/70 bg-stone-950/45 px-2 py-1 text-[10px] text-stone-400 transition hover:border-accent/30 hover:text-accent-muted"
               >
                 {editingId === attachment.id ? "Close edit" : "Edit analysis"}
               </button>
@@ -1638,7 +1638,7 @@ function AttachmentCorrectionForm({
   };
 
   return (
-    <div className="mt-3 rounded-lg border border-[#FF6B4A]/15 bg-[#FF6B4A]/5 p-3">
+    <div className="mt-3 rounded-lg border border-accent/15 bg-accent/5 p-3">
       <div className="grid gap-2 sm:grid-cols-[1fr_160px]">
         <label className="block">
           <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-600">
@@ -1746,7 +1746,7 @@ function AttachmentCorrectionForm({
           type="button"
           onClick={save}
           disabled={saving}
-          className="rounded bg-[#FF6B4A] px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-[#FFB09C] disabled:opacity-50"
+          className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-accent-muted disabled:opacity-50"
         >
           {saving ? "Saving..." : "Save changes"}
         </button>
@@ -1997,7 +1997,7 @@ function ReplyDraftBox({
           type="button"
           onClick={onGenerate}
           disabled={drafting}
-          className="rounded-lg border border-orange-500/30 px-3 py-1.5 text-xs text-[#FFB09C] transition hover:bg-orange-500/10 disabled:opacity-50"
+          className="rounded-lg border border-orange-500/30 px-3 py-1.5 text-xs text-accent-muted transition hover:bg-orange-500/10 disabled:opacity-50"
         >
           {drafting ? "Drafting..." : draft ? "Regenerate" : "Draft reply"}
         </button>
@@ -2016,7 +2016,7 @@ function ReplyDraftBox({
             onClick={() => setMode(option.value)}
             className={`h-8 shrink-0 rounded-full border px-3 text-[11px] transition ${
               mode === option.value
-                ? "border-[#FF6B4A]/45 bg-[#FF6B4A]/15 text-[#FFB09C]"
+                ? "border-accent/45 bg-accent/15 text-accent-muted"
                 : "border-stone-700/60 bg-black/15 text-stone-400 hover:border-stone-600"
             }`}
           >
@@ -2070,15 +2070,15 @@ function ReplyDraftBox({
           />
           {attachments.length > 0 && (
             <div className="space-y-2 rounded-lg border border-stone-800/70 bg-black/15 px-3 py-2">
-              <label className="flex cursor-pointer items-start gap-2 rounded border border-[#FF6B4A]/15 bg-[#FF6B4A]/5 px-2 py-1.5">
+              <label className="flex cursor-pointer items-start gap-2 rounded border border-accent/15 bg-accent/5 px-2 py-1.5">
                 <input
                   type="checkbox"
                   checked={includeBriefAttachment}
                   onChange={(e) => onIncludeBriefAttachmentChange(e.target.checked)}
-                  className="mt-0.5 h-3.5 w-3.5 rounded border-stone-600 bg-stone-900 text-[#FF8A70] focus:ring-[#FF8A70] focus:ring-offset-stone-950"
+                  className="mt-0.5 h-3.5 w-3.5 rounded border-stone-600 bg-stone-900 text-accent-light focus:ring-accent-light focus:ring-offset-stone-950"
                 />
                 <span>
-                  <span className="block text-[11px] font-medium text-[#FFB09C]">
+                  <span className="block text-[11px] font-medium text-accent-muted">
                     Attach the attachment analysis brief
                   </span>
                   <span className="mt-0.5 block text-[10px] leading-4 text-stone-500">
@@ -2134,7 +2134,7 @@ function ReplyDraftBox({
                   href={gmailDraftUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-lg border border-[#FF6B4A]/30 px-3 py-1.5 text-xs font-medium text-[#FFB09C] transition hover:bg-[#FF6B4A]/10"
+                  className="rounded-lg border border-accent/30 px-3 py-1.5 text-xs font-medium text-accent-muted transition hover:bg-accent/10"
                 >
                   Open Gmail draft
                 </a>
@@ -2155,7 +2155,7 @@ function ReplyDraftBox({
                 type="button"
                 onClick={onSend}
                 disabled={sending || !draft.to || !draft.subject || !draft.body}
-                className="rounded-lg bg-[#FF6B4A] px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-[#FFB09C] disabled:opacity-50"
+                className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-accent-muted disabled:opacity-50"
               >
                 {sending ? "Sending..." : "Send this reply"}
               </button>
@@ -2200,10 +2200,10 @@ function EveAnalysis({
 
   return (
     <section className="relative overflow-hidden rounded-lg border border-orange-500/20 bg-orange-500/5 p-4">
-      <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-[#7DD3FC] via-[#FF6B4A] to-[#7DD3FC]" />
+      <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-[#7DD3FC] via-accent to-[#7DD3FC]" />
       <div className="pl-2">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-[#FF6B4A]">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-accent">
             Jigeum judgment
           </span>
           <div className="flex items-center gap-1.5">
@@ -2228,7 +2228,7 @@ function EveAnalysis({
             <ul className="space-y-1">
               {email.keyPoints.map((k, i) => (
                 <li key={i} className="flex gap-1.5 text-xs text-stone-300">
-                  <span className="text-[#FF6B4A]/75">•</span>
+                  <span className="text-accent/75">•</span>
                   <span>{k}</span>
                 </li>
               ))}
@@ -2237,19 +2237,7 @@ function EveAnalysis({
         )}
 
         {email.actionItems.length > 0 && (
-          <div className="mt-3">
-            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-stone-500">
-              Action items
-            </p>
-            <ul className="space-y-1">
-              {email.actionItems.map((a, i) => (
-                <li key={i} className="flex gap-1.5 text-xs text-stone-300">
-                  <span className="text-[#FF6B4A]/80">□</span>
-                  <span>{a}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <ActionItemsPanel emailId={email.id} actionItems={email.actionItems} />
         )}
 
         {email.needsReply && <ReplyNeededFeedbackControl emailId={email.id} />}
@@ -2258,9 +2246,99 @@ function EveAnalysis({
   );
 }
 
+function ActionItemsPanel({ emailId, actionItems }: { emailId: string; actionItems: string[] }) {
+  const { toast } = useToast();
+  const [creating, setCreating] = useState<"all" | number | null>(null);
+  const [created, setCreated] = useState<Set<number>>(new Set());
+
+  async function createTask(index: number) {
+    if (created.has(index) || creating !== null) return;
+    setCreating(index);
+    try {
+      await apiFetch(`/api/email/${emailId}/create-tasks`, {
+        method: "POST",
+        body: JSON.stringify({ indices: [index] }),
+      });
+      setCreated((prev) => new Set([...prev, index]));
+      toast("Task created.", "success");
+    } catch {
+      toast("Failed to create task.", "error");
+    } finally {
+      setCreating(null);
+    }
+  }
+
+  async function createAll() {
+    if (creating !== null) return;
+    setCreating("all");
+    try {
+      const uncreatedIndices = actionItems.map((_, i) => i).filter((i) => !created.has(i));
+      await apiFetch(`/api/email/${emailId}/create-tasks`, {
+        method: "POST",
+        body: JSON.stringify({ indices: uncreatedIndices }),
+      });
+      setCreated(new Set(actionItems.map((_, i) => i)));
+      toast(
+        `${uncreatedIndices.length} task${uncreatedIndices.length > 1 ? "s" : ""} created.`,
+        "success",
+      );
+    } catch {
+      toast("Failed to create tasks.", "error");
+    } finally {
+      setCreating(null);
+    }
+  }
+
+  const allCreated = created.size >= actionItems.length;
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-stone-500">
+          Action items
+        </p>
+        {!allCreated && (
+          <button
+            type="button"
+            onClick={createAll}
+            disabled={creating !== null}
+            className="text-[10px] px-2 py-0.5 rounded border border-teal-500/30 bg-teal-950/20 text-teal-400 hover:bg-teal-900/30 transition disabled:opacity-40"
+          >
+            {creating === "all" ? "Creating…" : "Create all tasks"}
+          </button>
+        )}
+      </div>
+      <ul className="space-y-1">
+        {actionItems.map((a, i) => (
+          <li key={i} className="flex items-center gap-2 text-xs">
+            <span className={created.has(i) ? "text-teal-400" : "text-accent/80"}>
+              {created.has(i) ? "✓" : "□"}
+            </span>
+            <span
+              className={`flex-1 ${created.has(i) ? "text-stone-500 line-through" : "text-stone-300"}`}
+            >
+              {a}
+            </span>
+            {!created.has(i) && (
+              <button
+                type="button"
+                onClick={() => createTask(i)}
+                disabled={creating !== null}
+                className="shrink-0 text-[10px] px-1.5 py-0.5 rounded border border-stone-700/50 text-stone-500 hover:text-stone-300 hover:border-stone-600 transition disabled:opacity-40"
+              >
+                {creating === i ? "…" : "+ task"}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ReplyNeededPill() {
   return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded border border-[#FF6B4A]/30 bg-[#FF6B4A]/10 text-[#FF6B4A] font-medium">
+    <span className="text-[10px] px-1.5 py-0.5 rounded border border-accent/30 bg-accent/10 text-accent font-medium">
       Needs reply
     </span>
   );
@@ -2320,8 +2398,8 @@ function LabelFeedbackControl({
 
   if (feedback) {
     return (
-      <span className="text-[11px] text-[#FF8A70]/80 inline-flex items-center gap-1">
-        <span className="h-1.5 w-1.5 rounded-full bg-[#FF6B4A]" />
+      <span className="text-[11px] text-accent-light/80 inline-flex items-center gap-1">
+        <span className="h-1.5 w-1.5 rounded-full bg-accent" />
         Reported: {PRIORITY_LABELS[feedback.originalPriority]} {"->"}{" "}
         {PRIORITY_LABELS[feedback.correctedPriority]}
       </span>
@@ -2446,7 +2524,7 @@ function ReplyNeededFeedbackControl({ emailId }: { emailId: string }) {
               disabled={!!submitting}
               className={`h-7 rounded-lg border px-2 text-[11px] transition disabled:opacity-50 ${
                 selected
-                  ? "border-[#FF6B4A] bg-[#FF6B4A]/10 text-[#FFB09C]"
+                  ? "border-accent bg-accent/10 text-accent-muted"
                   : "border-stone-700 text-stone-400 hover:bg-stone-800"
               }`}
             >
