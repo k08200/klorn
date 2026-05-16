@@ -7,6 +7,7 @@ import AuthGuard from "../../components/auth-guard";
 import { useToast } from "../../components/toast";
 import { apiFetch } from "../../lib/api";
 import { captureClientError } from "../../lib/sentry";
+import { formatRelative } from "../../lib/text";
 
 type Filter =
   | "all"
@@ -1238,21 +1239,4 @@ function senderName(raw: string): string {
   const match = raw.match(/^([^<]+?)\s*</);
   if (match?.[1]) return match[1].trim();
   return raw.replace(/[<>]/g, "").trim();
-}
-
-function formatRelative(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "2-digit" }),
-  });
 }
