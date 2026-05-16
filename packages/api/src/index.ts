@@ -229,82 +229,9 @@ app.delete("/api/user/me/data", { preHandler: requireAuth }, async (request, rep
     await tx.commitment.deleteMany({ where: { userId } });
     await tx.feedbackEvent.deleteMany({ where: { userId } });
     await tx.attentionItem.deleteMany({ where: { userId } });
-    await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
-      .contactTrustScore.deleteMany({ where: { userId } });
-  });
-  return reply.code(204).send();
-});
-
-// User data export/delete — authenticated
-app.get("/api/user/export", { preHandler: requireAuth }, async (request) => {
-  const userId = getUserId(request);
-  const [
-    tasks,
-    notes,
-    contacts,
-    reminders,
-    conversations,
-    calendarEvents,
-    notifications,
-    automationConfig,
-    agentLogs,
-  ] = await Promise.all([
-    prisma.task.findMany({ where: { userId } }),
-    prisma.note.findMany({ where: { userId } }),
-    prisma.contact.findMany({ where: { userId } }),
-    prisma.reminder.findMany({ where: { userId } }),
-    prisma.conversation.findMany({
-      where: { userId },
-      include: { messages: { orderBy: { createdAt: "asc" } } },
-    }),
-    prisma.calendarEvent.findMany({ where: { userId } }),
-    prisma.notification.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 200 }),
-    prisma.automationConfig.findUnique({ where: { userId } }),
-    db.agentLog.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      take: 200,
-    }),
-  ]);
-  return {
-    tasks,
-    notes,
-    contacts,
-    reminders,
-    conversations,
-    calendarEvents,
-    notifications,
-    automationConfig,
-    agentLogs,
-    exportedAt: new Date().toISOString(),
-  };
-});
-
-app.delete("/api/user/data", { preHandler: requireAuth }, async (request, reply) => {
-  const userId = getUserId(request);
-  await prisma.$transaction(async (tx: TxClient) => {
-    await tx.pushSubscription.deleteMany({ where: { userId } });
-    await tx.notification.deleteMany({ where: { userId } });
-    await (tx as unknown as typeof db).agentLog.deleteMany({ where: { userId } });
-    await tx.automationConfig.deleteMany({ where: { userId } });
-    await tx.calendarEvent.deleteMany({ where: { userId } });
-    await tx.userToken.deleteMany({ where: { userId } });
-    await (tx as unknown as typeof db).tokenUsage.deleteMany({ where: { userId } });
-    await (tx as unknown as typeof db).memory.deleteMany({ where: { userId } });
-    await (tx as unknown as typeof db).conversationSummary.deleteMany({
-      where: { conversation: { userId } },
-    });
-    await tx.message.deleteMany({ where: { conversation: { userId } } });
-    await tx.conversation.deleteMany({ where: { userId } });
-    await tx.task.deleteMany({ where: { userId } });
-    await tx.note.deleteMany({ where: { userId } });
-    await tx.contact.deleteMany({ where: { userId } });
-    await tx.reminder.deleteMany({ where: { userId } });
-    await tx.commitment.deleteMany({ where: { userId } });
-    await tx.feedbackEvent.deleteMany({ where: { userId } });
-    await tx.attentionItem.deleteMany({ where: { userId } });
-    await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
-      .contactTrustScore.deleteMany({ where: { userId } });
+    await (
+      tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>
+    ).contactTrustScore.deleteMany({ where: { userId } });
   });
   return reply.code(204).send();
 });
