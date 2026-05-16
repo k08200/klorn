@@ -1,7 +1,7 @@
 function resolveApiBase(): string {
   if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
   if (typeof window !== "undefined") {
-    return `http://${window.location.hostname || "localhost"}:8000`;
+    return `http://${window.location.hostname || "localhost"}:3001`;
   }
   return "http://localhost:8000";
 }

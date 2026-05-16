@@ -1,1 +1,0 @@
-ALTER TYPE "FeedbackSignal" ADD VALUE 'FAILED';
