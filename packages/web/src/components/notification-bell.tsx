@@ -4,13 +4,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "../lib/api";
-import { formatRelative } from "../lib/text";
 import {
   getTypeLabel,
   groupNotifications,
   type NotificationGroup,
   unreadGroupCount,
 } from "../lib/notification-grouping";
+import { formatRelative } from "../lib/text";
 import { useToast } from "./toast";
 import { useWebSocket } from "./use-websocket";
 
