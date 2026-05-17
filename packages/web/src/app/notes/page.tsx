@@ -108,20 +108,17 @@ function NotesContent() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
 
-  const load = useCallback(
-    (q: string, cat: string) => {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (q) params.set("search", q);
-      if (cat !== "all") params.set("category", cat);
-      const qs = params.toString() ? `?${params.toString()}` : "";
-      apiFetch<{ notes: Note[] }>(`/api/notes${qs}`)
-        .then((data) => setNotes(Array.isArray(data.notes) ? data.notes : []))
-        .catch((err) => captureClientError(err, { scope: "notes.load" }))
-        .finally(() => setLoading(false));
-    },
-    [],
-  );
+  const load = useCallback((q: string, cat: string) => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (q) params.set("search", q);
+    if (cat !== "all") params.set("category", cat);
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    apiFetch<{ notes: Note[] }>(`/api/notes${qs}`)
+      .then((data) => setNotes(Array.isArray(data.notes) ? data.notes : []))
+      .catch((err) => captureClientError(err, { scope: "notes.load" }))
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => load(search, category), search ? 300 : 0);
