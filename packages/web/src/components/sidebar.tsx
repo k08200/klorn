@@ -78,7 +78,9 @@ const NAV_ITEMS = [
   { href: "/email", label: "Mail", icon: "mail" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/briefing", label: "Briefing", icon: "bell" },
+  { href: "/contacts", label: "Contacts", icon: "user" },
   { href: "/files", label: "Files", icon: "file" },
+  { href: "/agent", label: "Agent log", icon: "zap" },
 ];
 
 function NavIcon({ type, size = 16 }: { type: string; size?: number }) {

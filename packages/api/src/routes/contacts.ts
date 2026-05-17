@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
+import { getTrustScoresBulk } from "../trust-score.js";
 
 export async function contactRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
@@ -19,6 +20,41 @@ export async function contactRoutes(app: FastifyInstance) {
     }
     const contacts = await prisma.contact.findMany({ where, orderBy: { name: "asc" } });
     return { contacts };
+  });
+
+  // Contacts enriched with trust scores — used by the Contacts page
+  app.get("/with-trust", async (request) => {
+    const userId = getUserId(request);
+    const { search } = request.query as { search?: string };
+    const where: Record<string, unknown> = { userId };
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+        { company: { contains: search, mode: "insensitive" } },
+        { tags: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    const contacts = await prisma.contact.findMany({ where, orderBy: { name: "asc" } });
+
+    const emails = contacts.flatMap((c) => (c.email ? [c.email] : []));
+    const trustMap = await getTrustScoresBulk(userId, emails);
+
+    const BADGE_ORDER = { reliable: 0, mostly_reliable: 1, unknown: 2, unreliable: 3 } as const;
+
+    const enriched = contacts
+      .map((c) => {
+        const trust = c.email ? (trustMap.get(c.email.toLowerCase().trim()) ?? null) : null;
+        return { ...c, trust };
+      })
+      .sort((a, b) => {
+        const ba = a.trust?.badge ?? "unknown";
+        const bb = b.trust?.badge ?? "unknown";
+        if (BADGE_ORDER[ba] !== BADGE_ORDER[bb]) return BADGE_ORDER[ba] - BADGE_ORDER[bb];
+        return a.name.localeCompare(b.name);
+      });
+
+    return { contacts: enriched };
   });
 
   app.post("/", async (request, reply) => {
