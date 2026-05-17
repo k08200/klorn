@@ -956,6 +956,16 @@ export default function Sidebar({
                   Usage
                 </Link>
                 <Link
+                  href="/settings/playbooks"
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    onMobileClose();
+                  }}
+                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
+                >
+                  Playbooks
+                </Link>
+                <Link
                   href="/settings/skills"
                   onClick={() => {
                     setShowUserMenu(false);
@@ -964,6 +974,16 @@ export default function Sidebar({
                   className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
                 >
                   Skills
+                </Link>
+                <Link
+                  href="/notes"
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    onMobileClose();
+                  }}
+                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
+                >
+                  Notes
                 </Link>
                 <Link
                   href="/settings/email-feedback"
