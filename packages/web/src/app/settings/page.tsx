@@ -181,6 +181,7 @@ export default function SettingsPage() {
   const [geminiApiKey, setGeminiApiKey] = useState("");
   const [alwaysAllowedTools, setAlwaysAllowedTools] = useState<string[]>([]);
   const [autoMarkReadEnabled, setAutoMarkReadEnabled] = useState(false);
+  const [proactiveActionsEnabled, setProactiveActionsEnabled] = useState(false);
   const [preApprovableTools, setPreApprovableTools] = useState<string[]>([]);
   const [notifPrefs, setNotifPrefs] = useState({
     notifyEmailUrgent: true,
@@ -463,8 +464,10 @@ export default function SettingsPage() {
       timezone?: string;
       quietHoursStart?: string | null;
       quietHoursEnd?: string | null;
+      proactiveActions?: boolean;
     }>("/api/automations")
       .then((d) => {
+        setProactiveActionsEnabled(d.proactiveActions ?? false);
         setAgentEnabled(d.autonomousAgent ?? true);
         setAgentMode(normalizeAgentMode(d.agentMode));
         setAgentModeOptions(normalizeAgentModeOptions(d.agentModes));
@@ -1447,6 +1450,47 @@ export default function SettingsPage() {
                   <p className="text-[10px] text-stone-500 mt-1">
                     In auto mode, Jigeum can mark the original Gmail thread as read after sending a
                     reply. Default is off so unread mail remains a fallback.
+                  </p>
+                </div>
+
+                {/* Proactive actions toggle */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const next = !proactiveActionsEnabled;
+                      setProactiveActionsEnabled(next);
+                      try {
+                        await apiFetch("/api/automations", {
+                          method: "PATCH",
+                          body: JSON.stringify({ proactiveActions: next }),
+                        });
+                        toast(
+                          next
+                            ? "Proactive alerts on — Jigeum will notify you about unanswered emails, overdue tasks, and upcoming meetings."
+                            : "Proactive alerts off.",
+                          "success",
+                        );
+                      } catch {
+                        setProactiveActionsEnabled(!next);
+                        toast("Could not save setting.", "error");
+                      }
+                    }}
+                    className={`flex min-h-11 w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition ${
+                      proactiveActionsEnabled
+                        ? "bg-amber-300/15 border-amber-300/40 text-amber-200"
+                        : "bg-stone-900 border-stone-700 text-stone-400 hover:border-stone-600"
+                    }`}
+                    aria-pressed={proactiveActionsEnabled}
+                  >
+                    <span>Proactive alerts</span>
+                    <span className="text-[10px] opacity-80">
+                      {proactiveActionsEnabled ? "On" : "Off"}
+                    </span>
+                  </button>
+                  <p className="text-[10px] text-stone-500 mt-1">
+                    Jigeum watches for unanswered emails, overdue tasks, upcoming meetings, and
+                    follow-up opportunities — and alerts you before they slip.
                   </p>
                 </div>
 

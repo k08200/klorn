@@ -77,7 +77,7 @@ function CommandCenterView() {
     Record<string, "approve" | "reject" | "snooze" | null>
   >({});
   const [commitmentLoading, setCommitmentLoading] = useState<
-    Record<string, "done" | "dismiss" | null>
+    Record<string, "done" | "dismiss" | "snooze" | null>
   >({});
   const { toast } = useToast();
 
@@ -187,9 +187,12 @@ function CommandCenterView() {
     }
   };
 
-  const handleCommitmentStatus = async (commitmentId: string, status: "DONE" | "DISMISSED") => {
+  const handleCommitmentStatus = async (
+    commitmentId: string,
+    status: "DONE" | "DISMISSED" | "SNOOZED",
+  ) => {
     if (commitmentLoading[commitmentId]) return;
-    const loadingState = status === "DONE" ? "done" : "dismiss";
+    const loadingState = status === "DONE" ? "done" : status === "SNOOZED" ? "snooze" : "dismiss";
     setCommitmentLoading((prev) => ({ ...prev, [commitmentId]: loadingState }));
     try {
       await apiFetch(`/api/commitments/${commitmentId}`, {
@@ -197,6 +200,7 @@ function CommandCenterView() {
         body: JSON.stringify({ status }),
       });
       setCommitments((prev) => prev.filter((c) => c.id !== commitmentId));
+      if (status === "SNOOZED") toast("Snoozed for 24h.", "success");
       window.dispatchEvent(new Event("conversations-updated"));
     } catch (err) {
       captureClientError(err, { scope: "inbox.commitment_status", commitmentId, status });
@@ -339,6 +343,7 @@ function CommandCenterView() {
                       loading={commitmentLoading[commitment.id] ?? null}
                       onDone={() => handleCommitmentStatus(commitment.id, "DONE")}
                       onDismiss={() => handleCommitmentStatus(commitment.id, "DISMISSED")}
+                      onSnooze={() => handleCommitmentStatus(commitment.id, "SNOOZED")}
                     />
                   </li>
                 ))}
@@ -733,11 +738,13 @@ function CommitmentCard({
   loading,
   onDone,
   onDismiss,
+  onSnooze,
 }: {
   commitment: CommitmentItem;
-  loading: "done" | "dismiss" | null;
+  loading: "done" | "dismiss" | "snooze" | null;
   onDone: () => void;
   onDismiss: () => void;
+  onSnooze: () => void;
 }) {
   const { toast } = useToast();
   const [pathExpanded, setPathExpanded] = useState(false);
@@ -880,6 +887,19 @@ function CommitmentCard({
           className="inline-flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-teal-700/50 text-teal-400 hover:bg-teal-400/10 transition"
         >
           {pathExpanded ? "Hide plan" : "View plan"}
+        </button>
+        <button
+          type="button"
+          onClick={onSnooze}
+          disabled={!!loading}
+          title="Hide for 24h — will resurface automatically"
+          className="inline-flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-stone-500 hover:text-stone-300 transition disabled:opacity-50"
+        >
+          {loading === "snooze" ? (
+            <span className="w-3 h-3 border-2 border-stone-500/30 border-t-stone-400 rounded-full animate-spin" />
+          ) : (
+            "Snooze 24h"
+          )}
         </button>
         <span className="ml-auto text-[11px] text-stone-600">
           Confidence {Math.round((commitment.confidence ?? 0.72) * 100)}%

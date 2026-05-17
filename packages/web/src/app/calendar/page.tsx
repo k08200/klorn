@@ -385,6 +385,32 @@ function EventRow({ event }: { event: CalendarEvent }) {
                   </ul>
                 </div>
               )}
+              {prep.openCommitments.length > 0 && (
+                <div>
+                  <p className="mb-1 text-[11px] font-medium text-stone-500">Open commitments</p>
+                  <ul className="space-y-1">
+                    {prep.openCommitments.map((c) => (
+                      <li key={c.id} className="flex items-start gap-2 text-xs">
+                        <span
+                          className={`mt-0.5 shrink-0 rounded border px-1 py-0.5 text-[10px] font-medium ${
+                            c.owner === "USER"
+                              ? "border-emerald-400/20 bg-emerald-400/5 text-emerald-300"
+                              : "border-amber-300/20 bg-amber-300/5 text-amber-300"
+                          }`}
+                        >
+                          {c.owner === "USER" ? "Mine" : "Theirs"}
+                        </span>
+                        <span className="truncate text-stone-300">{c.title}</span>
+                        {c.dueText && (
+                          <span className="ml-auto shrink-0 text-[11px] text-stone-500">
+                            {c.dueText}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </div>
