@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import PlaybookRecommendations from "../../../components/playbook-recommendations";
-import type { JigeumPlaybook } from "../../../lib/playbooks";
 import { apiFetch } from "../../../lib/api";
+import type { JigeumPlaybook } from "../../../lib/playbooks";
 import { captureClientError } from "../../../lib/sentry";
 
 const DOMAIN_META: Record<string, { label: string; color: string }> = {
