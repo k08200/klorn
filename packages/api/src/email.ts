@@ -2,7 +2,7 @@ import { Resend } from "resend";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-const FROM_EMAIL = process.env.FROM_EMAIL || "Jigeum <noreply@jigeum.ai>";
+const FROM_EMAIL = process.env.FROM_EMAIL || "EVE <onboarding@resend.dev>";
 const WEB_URL = process.env.WEB_URL || "http://localhost:8001";
 
 /** Mask email for safe logging: "user@example.com" → "u***@example.com" */

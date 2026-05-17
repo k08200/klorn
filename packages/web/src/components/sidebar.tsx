@@ -76,6 +76,7 @@ const NAV_ITEMS = [
   { href: "/inbox", label: "Decision queue", icon: "check" },
   { href: "/chat", label: "Threads", icon: "chat" },
   { href: "/email", label: "Mail", icon: "mail" },
+  { href: "/commitments", label: "Commitments", icon: "flag" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/briefing", label: "Briefing", icon: "bell" },
   { href: "/contacts", label: "Contacts", icon: "user" },
@@ -153,6 +154,13 @@ function NavIcon({ type, size = 16 }: { type: string; size?: number }) {
       return (
         <svg aria-hidden="true" {...props}>
           <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+        </svg>
+      );
+    case "flag":
+      return (
+        <svg aria-hidden="true" {...props}>
+          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+          <line x1="4" y1="22" x2="4" y2="15" />
         </svg>
       );
     case "settings":
@@ -946,6 +954,16 @@ export default function Sidebar({
                   className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
                 >
                   Usage
+                </Link>
+                <Link
+                  href="/settings/skills"
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    onMobileClose();
+                  }}
+                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
+                >
+                  Skills
                 </Link>
                 <Link
                   href="/settings/email-feedback"
