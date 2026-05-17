@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { runAllScenarios, summarizeEval } from "../agent-eval.js";
 import { requireAdmin } from "../auth.js";
 import { db, prisma } from "../db.js";
+import { Resend } from "resend";
 import { sendBetaInviteEmail } from "../email.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 
@@ -345,6 +346,38 @@ export async function adminRoutes(app: FastifyInstance) {
     }
 
     return entry;
+  });
+
+  // GET /api/admin/email-config — Diagnose email configuration and send a test email
+  app.get("/email-config", async () => {
+    const hasApiKey = !!process.env.RESEND_API_KEY;
+    const fromEmail = process.env.FROM_EMAIL || "EVE <onboarding@resend.dev>";
+    const adminEmails = (process.env.ADMIN_EMAILS || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const alertTo = process.env.WAITLIST_ALERT_EMAIL || adminEmails[0] || null;
+
+    if (!hasApiKey) {
+      return { ok: false, reason: "RESEND_API_KEY not set", fromEmail, alertTo };
+    }
+    if (!alertTo) {
+      return { ok: false, reason: "ADMIN_EMAILS and WAITLIST_ALERT_EMAIL both unset", fromEmail };
+    }
+
+    const resend = new Resend(process.env.RESEND_API_KEY!);
+    try {
+      const result = await resend.emails.send({
+        from: fromEmail,
+        to: alertTo,
+        subject: "[EVE] Email config test",
+        html: "<p>Email delivery is working.</p>",
+      });
+      return { ok: true, fromEmail, alertTo, resendId: (result as { id?: string }).id ?? null };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, reason: msg, fromEmail, alertTo };
+    }
   });
 
   // GET /api/admin/eval — Run agent decision-logic eval scenarios
