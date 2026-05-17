@@ -443,8 +443,10 @@ export async function buildInboxSummary(userId: string, now = Date.now()): Promi
   ]);
 
   // Single queue read replaces the per-source merge in the old pickTop3.
+  // Exclude SILENT items — those have been suppressed by the feedback adaptor
+  // and must not resurface in the top3 queue.
   const queue = (await prisma.attentionItem.findMany({
-    where: { userId, status: "OPEN" },
+    where: { userId, status: "OPEN", tier: { not: "SILENT" } },
     orderBy: [{ priority: "desc" }, { surfacedAt: "desc" }],
     take: TOP_LIMIT * 4, // overfetch to absorb any rows whose source row no longer qualifies
     select: {

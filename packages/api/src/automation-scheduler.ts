@@ -594,9 +594,11 @@ async function runAutomations() {
         }
 
         // --- Proactive Actions (rule-based, no LLM cost) ---
-        // Default OFF during dogfooding: these are useful but can create bell
-        // noise until each rule has stronger precision and per-user controls.
-        if (PROACTIVE_ACTIONS_ENABLED) {
+        // Enabled either via global env flag (PROACTIVE_ACTIONS_ENABLED=true for all users)
+        // or per-user toggle (proactiveActions: true in automationConfig JSON field).
+        const perUserProactive =
+          (config as unknown as Record<string, unknown>).proactiveActions === true;
+        if (PROACTIVE_ACTIONS_ENABLED || perUserProactive) {
           runProactiveActions(config.userId).catch((err) => {
             console.error(`[PROACTIVE] Failed for ${config.userId}:`, err);
           });

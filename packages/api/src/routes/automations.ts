@@ -63,6 +63,7 @@ export async function automationRoutes(app: FastifyInstance) {
       quietHoursStart: configAny.quietHoursStart ?? null,
       quietHoursEnd: configAny.quietHoursEnd ?? null,
       autoMarkReadEnabled: configAny.autoMarkReadEnabled ?? false,
+      proactiveActions: configAny.proactiveActions ?? false,
     };
   });
 
@@ -94,6 +95,7 @@ export async function automationRoutes(app: FastifyInstance) {
       "quietHoursStart",
       "quietHoursEnd",
       "autoMarkReadEnabled",
+      "proactiveActions",
     ];
     const data: Record<string, unknown> = {};
     for (const key of allowed) {
@@ -146,6 +148,7 @@ export async function automationRoutes(app: FastifyInstance) {
       quietHoursStart: configAny.quietHoursStart ?? null,
       quietHoursEnd: configAny.quietHoursEnd ?? null,
       autoMarkReadEnabled: configAny.autoMarkReadEnabled ?? false,
+      proactiveActions: configAny.proactiveActions ?? false,
     };
   });
 
