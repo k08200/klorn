@@ -429,10 +429,10 @@ export async function buildInboxSummary(userId: string, now = Date.now()): Promi
     }),
   ]);
 
-  // Lazy backfill — refresh the queue from current source state. Idempotent
-  // upserts keyed on (source, sourceId) so this is a no-op once the producers
-  // have caught up.
-  await Promise.all([
+  // Fire-and-forget backfill. The attention-mirror producers keep the queue
+  // current; this is a safety net for rows that pre-date the producers.
+  // Not awaited so the queue read below is not blocked by up to ~230 upserts.
+  Promise.all([
     ...pendingRows.map((p) => upsertAttentionForPendingAction(p)),
     ...taskRows
       .filter((t) => t.dueDate && t.dueDate.getTime() < tomorrowStart.getTime())
@@ -440,7 +440,7 @@ export async function buildInboxSummary(userId: string, now = Date.now()): Promi
     ...eventRows.map((e) => upsertAttentionForCalendarEvent(e, now)),
     ...notifRows.map((n) => upsertAttentionForNotification(n)),
     ...commitmentRows.map((c) => upsertAttentionForCommitment(c, now)),
-  ]);
+  ]).catch(() => {});
 
   // Single queue read replaces the per-source merge in the old pickTop3.
   // Exclude SILENT items — those have been suppressed by the feedback adaptor
