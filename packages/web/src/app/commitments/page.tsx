@@ -85,7 +85,9 @@ function CommitmentRow({
       {/* Done checkbox */}
       <button
         type="button"
-        onClick={() => onStatusChange(commitment.id, commitment.status === "DONE" ? "OPEN" : "DONE")}
+        onClick={() =>
+          onStatusChange(commitment.id, commitment.status === "DONE" ? "OPEN" : "DONE")
+        }
         className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
           commitment.status === "DONE"
             ? "border-emerald-500 bg-emerald-500/20 text-emerald-400"
@@ -131,9 +133,7 @@ function CommitmentRow({
           </span>
 
           {/* Counterparty name */}
-          {counterparty && (
-            <span className="text-[11px] text-stone-500">{counterparty}</span>
-          )}
+          {counterparty && <span className="text-[11px] text-stone-500">{counterparty}</span>}
 
           {/* Trust badge */}
           {trust && commitment.owner === "COUNTERPARTY" && (
