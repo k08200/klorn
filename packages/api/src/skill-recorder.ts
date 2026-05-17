@@ -78,34 +78,54 @@ async function loadRecentActions(userId: string): Promise<ActionRecord[]> {
 }
 
 function detectRepeatedSequences(actions: ActionRecord[]): ToolSequence[] {
-  const pairCounts = new Map<string, { count: number; args: string[][] }>();
+  const seqCounts = new Map<string, { count: number; args: string[][] }>();
 
-  // Sliding window of pairs
+  const SESSION_WINDOW = 24 * 60 * 60 * 1000;
+
+  // Sliding window of pairs and triples
   for (let i = 0; i < actions.length - 1; i++) {
     const a = actions[i];
     const b = actions[i + 1];
 
-    // Only count pairs within 24 hours of each other (same "session")
-    const timeDiff = b.createdAt.getTime() - a.createdAt.getTime();
-    if (timeDiff > 24 * 60 * 60 * 1000) continue;
+    const abDiff = b.createdAt.getTime() - a.createdAt.getTime();
+    if (abDiff > SESSION_WINDOW) continue;
 
-    const key = `${a.toolName}→${b.toolName}`;
-    const existing = pairCounts.get(key) || { count: 0, args: [[], []] };
-    existing.count++;
-    if (existing.args[0].length < 3) existing.args[0].push(a.toolArgs);
-    if (existing.args[1].length < 3) existing.args[1].push(b.toolArgs);
-    pairCounts.set(key, existing);
+    // Pair: A→B
+    const pairKey = `${a.toolName}→${b.toolName}`;
+    const pair = seqCounts.get(pairKey) || { count: 0, args: [[], []] };
+    pair.count++;
+    if (pair.args[0].length < 3) pair.args[0].push(a.toolArgs);
+    if (pair.args[1].length < 3) pair.args[1].push(b.toolArgs);
+    seqCounts.set(pairKey, pair);
+
+    // Triple: A→B→C (only when C exists and is within session window of B)
+    if (i + 2 < actions.length) {
+      const c = actions[i + 2];
+      const bcDiff = c.createdAt.getTime() - b.createdAt.getTime();
+      if (bcDiff <= SESSION_WINDOW) {
+        const tripleKey = `${a.toolName}→${b.toolName}→${c.toolName}`;
+        const triple = seqCounts.get(tripleKey) || { count: 0, args: [[], [], []] };
+        triple.count++;
+        if (triple.args[0].length < 3) triple.args[0].push(a.toolArgs);
+        if (triple.args[1].length < 3) triple.args[1].push(b.toolArgs);
+        if (triple.args[2].length < 3) triple.args[2].push(c.toolArgs);
+        seqCounts.set(tripleKey, triple);
+      }
+    }
   }
 
   const results: ToolSequence[] = [];
-  for (const [key, data] of pairCounts) {
+  for (const [key, data] of seqCounts) {
     if (data.count < MIN_REPEAT) continue;
     const tools = key.split("→");
     results.push({ tools, count: data.count, argSamples: data.args });
   }
 
-  // Sort by frequency
-  return results.sort((a, b) => b.count - a.count);
+  // Prefer longer sequences (triples over pairs covering same tools), then by frequency
+  return results.sort((a, b) => {
+    if (b.tools.length !== a.tools.length) return b.tools.length - a.tools.length;
+    return b.count - a.count;
+  });
 }
 
 // ─── Dedup guards ─────────────────────────────────────────────────────────────
