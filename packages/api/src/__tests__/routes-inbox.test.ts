@@ -68,6 +68,18 @@ const commitments: Array<{
   confidence: number;
 }> = [];
 
+const emailMessages: Array<{
+  id: string;
+  userId: string;
+  subject: string;
+  from: string;
+  snippet: string | null;
+  needsReply: boolean;
+  needsReplyReason: string | null;
+  needsReplyConfidence: number;
+  receivedAt: Date;
+}> = [];
+
 type AttentionRow = {
   id: string;
   userId: string;
@@ -242,6 +254,44 @@ vi.mock("../db.js", () => {
           }),
       ),
     },
+    emailMessage: {
+      findMany: vi.fn(
+        async ({
+          where,
+          orderBy,
+          take,
+        }: {
+          where: { userId: string; needsReply?: boolean };
+          orderBy?: Array<Record<string, "desc" | "asc">>;
+          take?: number;
+        }) => {
+          let rows = emailMessages.filter(
+            (e) =>
+              e.userId === where.userId &&
+              (where.needsReply === undefined || e.needsReply === where.needsReply),
+          );
+          if (orderBy) {
+            rows = [...rows].sort((a, b) => {
+              for (const clause of orderBy) {
+                const [key, dir] = Object.entries(clause)[0] as [
+                  keyof (typeof emailMessages)[0],
+                  "desc" | "asc",
+                ];
+                const av = a[key];
+                const bv = b[key];
+                const aNum = av instanceof Date ? av.getTime() : (av as number);
+                const bNum = bv instanceof Date ? bv.getTime() : (bv as number);
+                if (aNum === bNum) continue;
+                return dir === "desc" ? bNum - aNum : aNum - bNum;
+              }
+              return 0;
+            });
+          }
+          if (typeof take === "number") rows = rows.slice(0, take);
+          return rows;
+        },
+      ),
+    },
     user: {
       findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })),
     },
@@ -275,6 +325,7 @@ function resetStores() {
   notifications.length = 0;
   commitments.length = 0;
   attentionItems.length = 0;
+  emailMessages.length = 0;
 }
 
 describe("inbox routes", () => {
@@ -428,6 +479,164 @@ describe("inbox routes", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().top3).toEqual([]);
     await app.close();
+  });
+
+  describe("GET /api/inbox/reply-needed", () => {
+    it("rejects unauthenticated requests with 401", async () => {
+      const app = await buildApp();
+      const res = await app.inject({ method: "GET", url: "/api/inbox/reply-needed" });
+      expect(res.statusCode).toBe(401);
+      await app.close();
+    });
+
+    it("returns empty list when no emails need reply", async () => {
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/inbox/reply-needed",
+        headers: auth(),
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ emails: [] });
+      await app.close();
+    });
+
+    it("returns only emails where needsReply=true", async () => {
+      emailMessages.push(
+        {
+          id: "em-1",
+          userId: "user-1",
+          subject: "Project update",
+          from: "alice@example.com",
+          snippet: "Can you review this?",
+          needsReply: true,
+          needsReplyReason: "Direct question asked",
+          needsReplyConfidence: 0.9,
+          receivedAt: new Date("2026-05-17T09:00:00Z"),
+        },
+        {
+          id: "em-2",
+          userId: "user-1",
+          subject: "Newsletter",
+          from: "news@example.com",
+          snippet: "This week in tech",
+          needsReply: false,
+          needsReplyReason: null,
+          needsReplyConfidence: 0,
+          receivedAt: new Date("2026-05-17T08:00:00Z"),
+        },
+      );
+
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/inbox/reply-needed",
+        headers: auth(),
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.emails).toHaveLength(1);
+      expect(body.emails[0]).toMatchObject({
+        id: "em-1",
+        subject: "Project update",
+        from: "alice@example.com",
+        needsReplyReason: "Direct question asked",
+        needsReplyConfidence: 0.9,
+      });
+      expect(typeof body.emails[0].receivedAt).toBe("string");
+      await app.close();
+    });
+
+    it("orders by confidence desc then receivedAt desc", async () => {
+      const now = new Date("2026-05-17T10:00:00Z");
+      const earlier = new Date("2026-05-17T08:00:00Z");
+      emailMessages.push(
+        {
+          id: "em-low",
+          userId: "user-1",
+          subject: "Low confidence",
+          from: "b@example.com",
+          snippet: null,
+          needsReply: true,
+          needsReplyReason: null,
+          needsReplyConfidence: 0.5,
+          receivedAt: now,
+        },
+        {
+          id: "em-high",
+          userId: "user-1",
+          subject: "High confidence",
+          from: "a@example.com",
+          snippet: null,
+          needsReply: true,
+          needsReplyReason: "Explicit ask",
+          needsReplyConfidence: 0.95,
+          receivedAt: earlier,
+        },
+      );
+
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/inbox/reply-needed",
+        headers: auth(),
+      });
+      expect(res.statusCode).toBe(200);
+      const ids = res.json().emails.map((e: { id: string }) => e.id);
+      expect(ids[0]).toBe("em-high");
+      expect(ids[1]).toBe("em-low");
+      await app.close();
+    });
+
+    it("scopes results to the requesting user only", async () => {
+      emailMessages.push({
+        id: "em-other",
+        userId: "user-2",
+        subject: "Other user email",
+        from: "x@example.com",
+        snippet: null,
+        needsReply: true,
+        needsReplyReason: null,
+        needsReplyConfidence: 0.8,
+        receivedAt: new Date(),
+      });
+
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/inbox/reply-needed",
+        headers: auth(),
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().emails).toEqual([]);
+      await app.close();
+    });
+
+    it("caps results at 8 emails", async () => {
+      for (let i = 0; i < 10; i++) {
+        emailMessages.push({
+          id: `em-${i}`,
+          userId: "user-1",
+          subject: `Email ${i}`,
+          from: `sender${i}@example.com`,
+          snippet: null,
+          needsReply: true,
+          needsReplyReason: null,
+          needsReplyConfidence: 0.8,
+          receivedAt: new Date(Date.now() - i * 1000),
+        });
+      }
+
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/inbox/reply-needed",
+        headers: auth(),
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().emails).toHaveLength(8);
+      await app.close();
+    });
   });
 
   it("surfaces commitments from the Attention queue", async () => {

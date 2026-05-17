@@ -3,15 +3,11 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
-import BetaLearningCard from "../../components/beta-learning-card";
-import { EveSignalField } from "../../components/brand-visuals";
 import BriefingCard from "../../components/briefing-card";
 import CommandCenterSummary from "../../components/command-center-summary";
-import OperatingLoopCard from "../../components/operating-loop-card";
-import PlaybookRecommendations from "../../components/playbook-recommendations";
 import { useToast } from "../../components/toast";
-import WorkGraphSummaryCard from "../../components/work-graph-summary";
 import { apiFetch } from "../../lib/api";
+import type { ReplyNeededEmail } from "../../lib/inbox-summary";
 import { captureClientError } from "../../lib/sentry";
 import { formatRelative } from "../../lib/text";
 
@@ -23,7 +19,6 @@ interface PendingActionItem {
   toolName: string;
   toolArgs: string;
   preview?: string | null;
-  /** Server-resolved human label (task title, contact name, …) — null when n/a */
   targetLabel: string | null;
   reasoning: string | null;
   result: string | null;
@@ -67,12 +62,12 @@ type StatusFilter = "pending" | "all";
 export default function InboxPage() {
   return (
     <AuthGuard>
-      <InboxView />
+      <CommandCenterView />
     </AuthGuard>
   );
 }
 
-function InboxView() {
+function CommandCenterView() {
   const [actions, setActions] = useState<PendingActionItem[]>([]);
   const [commitments, setCommitments] = useState<CommitmentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,16 +91,16 @@ function InboxView() {
     ]);
 
     if (actionResult.status === "fulfilled") {
-      const actionData = actionResult.value;
-      setActions(Array.isArray(actionData.actions) ? actionData.actions : []);
+      setActions(Array.isArray(actionResult.value.actions) ? actionResult.value.actions : []);
     } else {
       captureClientError(actionResult.reason, { scope: "inbox.load.actions" });
       setActions([]);
     }
 
     if (commitmentResult.status === "fulfilled") {
-      const commitmentData = commitmentResult.value;
-      setCommitments(Array.isArray(commitmentData.commitments) ? commitmentData.commitments : []);
+      setCommitments(
+        Array.isArray(commitmentResult.value.commitments) ? commitmentResult.value.commitments : [],
+      );
     } else {
       captureClientError(commitmentResult.reason, { scope: "inbox.load.commitments" });
       setCommitments([]);
@@ -122,7 +117,6 @@ function InboxView() {
     load(filter);
   }, [filter, load]);
 
-  // Refresh when a new pending action arrives (websocket fires "conversations-updated")
   useEffect(() => {
     const handler = () => load(filter);
     window.addEventListener("conversations-updated", handler);
@@ -215,364 +209,263 @@ function InboxView() {
   const pendingCount = actions.filter((a) => a.status === "PENDING").length;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-6 md:py-10">
-      <header className="mb-6 overflow-hidden rounded-lg border border-amber-300/15 bg-stone-950/65 shadow-2xl shadow-black/20">
-        <div className="h-1 bg-gradient-to-r from-amber-300 via-stone-500 to-teal-300" />
-        <div className="p-5 md:p-6">
-          <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
-            <div className="max-w-2xl">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
-                Decision queue
-              </p>
-              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-stone-50 md:text-3xl">
-                Turn scattered signals into decisions you can approve.
-              </h1>
-              <p className="mt-3 text-sm leading-6 text-stone-400">
-                See what Jigeum found, why it matters, and what action is ready before anything
-                runs.
-              </p>
-            </div>
-            <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
-              <EveSignalField className="absolute inset-0 border-0" />
-              <button
-                type="button"
-                onClick={() => load(filter)}
-                disabled={loading}
-                className="absolute right-3 top-3 h-9 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 backdrop-blur transition hover:bg-stone-800 disabled:opacity-50"
-                aria-label="Refresh decision queue"
-              >
-                {loading ? "..." : "Refresh"}
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-xl border border-white/10 bg-black/25">
-            <QueueMetric label="Pending" value={pendingCount} />
-            <QueueMetric label="Cards" value={actions.length} />
-            <QueueMetric label="Open commitments" value={commitments.length} />
-          </div>
-
-          <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex w-fit items-center gap-1 rounded-lg border border-stone-800 bg-stone-950/80 p-1">
-              <FilterTab
-                active={filter === "pending"}
-                label={`Pending${pendingCount ? ` (${pendingCount})` : ""}`}
-                onClick={() => setFilter("pending")}
-              />
-              <FilterTab active={filter === "all"} label="All" onClick={() => setFilter("all")} />
-            </div>
-            <div className="flex items-center gap-4">
-              <p className="text-xs text-stone-600">
-                Review the signal, judgment, and action before approval.
-              </p>
-              <div className="flex items-center gap-3">
-                <Link
-                  href="/inbox/receipt"
-                  className="shrink-0 text-xs text-teal-400 hover:text-teal-300 transition"
-                >
-                  Today's receipt →
-                </Link>
-                <Link
-                  href="/agent"
-                  className="shrink-0 text-xs text-stone-500 hover:text-stone-300 transition"
-                >
-                  Agent timeline →
-                </Link>
-              </div>
-            </div>
-          </div>
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 md:py-8">
+      {/* Minimal page header */}
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
+            Command Center
+          </p>
+          <h1 className="mt-1 text-xl font-semibold tracking-tight text-stone-50">
+            {pendingCount > 0
+              ? `${pendingCount} decision${pendingCount !== 1 ? "s" : ""} waiting`
+              : "All clear"}
+          </h1>
         </div>
-      </header>
-
-      <OperatingLoopCard />
-      <BetaLearningCard />
-
-      {loading && actions.length === 0 && (
-        <p className="text-sm text-stone-500 py-8 text-center">Loading...</p>
-      )}
+        <div className="flex shrink-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={() => load(filter)}
+            disabled={loading}
+            className="h-8 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
+          >
+            {loading ? "..." : "Refresh"}
+          </button>
+          <Link
+            href="/inbox/receipt"
+            className="hidden text-xs text-teal-400 hover:text-teal-300 transition sm:block"
+          >
+            Today's receipt →
+          </Link>
+        </div>
+      </div>
 
       {error && (
-        <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+        <div className="mb-4 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
           {error}
         </div>
       )}
 
-      {!loading && !error && actions.length === 0 && commitments.length === 0 && (
-        <div className="rounded-lg border border-stone-800 bg-stone-900/40 p-8 text-center">
-          <p className="text-sm text-stone-300 mb-1">
-            {filter === "pending" ? "No pending items." : "No decision queue items yet."}
-          </p>
-          <p className="mx-auto max-w-md text-xs leading-5 text-stone-500">
-            Connect work signals or start a decision thread so Jigeum has mail, meetings, and tasks
-            to turn into cards.
-          </p>
-          <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
-            <Link
-              href="/settings"
-              className="inline-flex min-h-11 items-center justify-center rounded-md bg-amber-300 px-4 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
-            >
-              Connect Google
-            </Link>
-            <Link
-              href="/chat"
-              className="inline-flex min-h-11 items-center justify-center rounded-md border border-stone-700 px-4 text-sm font-medium text-stone-300 transition hover:bg-stone-800"
-            >
-              Start a thread
-            </Link>
-            <Link
-              href="/email"
-              className="inline-flex min-h-11 items-center justify-center rounded-md border border-stone-700 px-4 text-sm font-medium text-stone-300 transition hover:bg-stone-800"
-            >
-              Open mail
-            </Link>
-          </div>
-        </div>
-      )}
+      {/* Morning Briefing — always first, full width */}
+      <div className="mb-6">
+        <BriefingCard />
+      </div>
 
-      {actions.length > 0 && (
-        <section className="mb-6" aria-label="Decision queue">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold text-stone-100">Decision cards</h2>
-            <span className="text-[11px] text-stone-500">{actions.length}</span>
-          </div>
-          <ul className="space-y-3">
-            {actions.map((action) => (
-              <li key={action.id}>
-                <ActionCard
-                  action={action}
-                  loading={actionLoading[action.id] ?? null}
-                  onApprove={() => handleApprove(action.id)}
-                  onReject={() => handleReject(action.id)}
-                  onSnooze={() => handleSnooze(action.id, 1)}
+      {/* 2-column Command Center grid */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
+        {/* ── LEFT: Primary work queue ── */}
+        <div className="min-w-0 space-y-6">
+          {/* Approval Queue */}
+          <section aria-label="Approval queue">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-stone-100">Approval Queue</h2>
+                {pendingCount > 0 && (
+                  <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
+                    {pendingCount}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1 rounded-lg border border-stone-800 bg-stone-950/80 p-1">
+                <FilterTab
+                  active={filter === "pending"}
+                  label={`Pending${pendingCount ? ` (${pendingCount})` : ""}`}
+                  onClick={() => setFilter("pending")}
                 />
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+                <FilterTab active={filter === "all"} label="All" onClick={() => setFilter("all")} />
+              </div>
+            </div>
 
-      {commitments.length > 0 && (
-        <CommitmentSection
-          commitments={commitments}
-          loading={commitmentLoading}
-          onDone={(id) => handleCommitmentStatus(id, "DONE")}
-          onDismiss={(id) => handleCommitmentStatus(id, "DISMISSED")}
-        />
-      )}
+            {loading && actions.length === 0 && (
+              <div className="space-y-2 rounded-xl border border-stone-800 bg-stone-900/30 p-4">
+                <div className="h-20 animate-pulse rounded-lg bg-stone-800/60" />
+                <div className="h-20 animate-pulse rounded-lg bg-stone-800/40" />
+              </div>
+            )}
 
-      <BriefingCard />
-      <CommandCenterSummary />
-      <WorkGraphSummaryCard />
-      <PlaybookRecommendations />
+            {!loading && actions.length === 0 && (
+              <div className="rounded-xl border border-stone-800 bg-stone-900/30 p-6 text-center">
+                <p className="text-sm text-stone-300">No pending decisions.</p>
+                <p className="mx-auto mt-1 max-w-xs text-xs text-stone-500">
+                  Connect your Google account so Jigeum can surface decisions from your mail and
+                  calendar.
+                </p>
+                <div className="mt-4 flex justify-center gap-2">
+                  <Link
+                    href="/settings"
+                    className="inline-flex min-h-9 items-center justify-center rounded-md bg-amber-300 px-4 text-xs font-semibold text-stone-950 transition hover:bg-amber-200"
+                  >
+                    Connect Google
+                  </Link>
+                  <Link
+                    href="/email"
+                    className="inline-flex min-h-9 items-center justify-center rounded-md border border-stone-700 px-4 text-xs text-stone-300 transition hover:bg-stone-800"
+                  >
+                    Open mail
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {actions.length > 0 && (
+              <ul className="space-y-3">
+                {actions.map((action) => (
+                  <li key={action.id}>
+                    <ActionCard
+                      action={action}
+                      loading={actionLoading[action.id] ?? null}
+                      onApprove={() => handleApprove(action.id)}
+                      onReject={() => handleReject(action.id)}
+                      onSnooze={() => handleSnooze(action.id, 1)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {/* Commitment Ledger */}
+          {commitments.length > 0 && (
+            <section aria-label="Commitment ledger">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-stone-100">Commitment Ledger</h2>
+                <span className="text-[11px] text-stone-500">{commitments.length} open</span>
+              </div>
+              <ul className="space-y-2">
+                {commitments.map((commitment) => (
+                  <li key={commitment.id}>
+                    <CommitmentCard
+                      commitment={commitment}
+                      loading={commitmentLoading[commitment.id] ?? null}
+                      onDone={() => handleCommitmentStatus(commitment.id, "DONE")}
+                      onDismiss={() => handleCommitmentStatus(commitment.id, "DISMISSED")}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+
+        {/* ── RIGHT: Context sidebar ── */}
+        <div className="space-y-4">
+          <CommandCenterSummary />
+          <ReplyNeededPanel />
+          <QuickLinksPanel />
+        </div>
+      </div>
     </div>
   );
 }
 
-function CommitmentSection({
-  commitments,
-  loading,
-  onDone,
-  onDismiss,
-}: {
-  commitments: CommitmentItem[];
-  loading: Record<string, "done" | "dismiss" | null>;
-  onDone: (id: string) => void;
-  onDismiss: (id: string) => void;
-}) {
+// ─── Reply Needed panel ────────────────────────────────────────────────────
+
+function ReplyNeededPanel() {
+  const [emails, setEmails] = useState<ReplyNeededEmail[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch<{ emails: ReplyNeededEmail[] }>("/api/inbox/reply-needed")
+      .then((data) => setEmails(Array.isArray(data.emails) ? data.emails : []))
+      .catch(() => setEmails([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-stone-800 bg-stone-900/30 p-4">
+        <div className="h-6 w-24 animate-pulse rounded bg-stone-800/60" />
+        <div className="mt-3 space-y-2">
+          <div className="h-12 animate-pulse rounded-lg bg-stone-800/50" />
+          <div className="h-12 animate-pulse rounded-lg bg-stone-800/40" />
+        </div>
+      </div>
+    );
+  }
+
+  if (emails.length === 0) return null;
+
   return (
-    <section className="mb-6" aria-label="Commitment ledger">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-sm font-semibold text-stone-100">Tracked commitments</h2>
-        <span className="text-[11px] text-stone-500">{commitments.length}</span>
+    <section
+      className="rounded-xl border border-stone-800 bg-stone-900/30 p-4"
+      aria-label="Reply needed"
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-stone-100">Reply Needed</h2>
+        <span className="text-[11px] text-stone-500">{emails.length}</span>
       </div>
       <ul className="space-y-2">
-        {commitments.map((commitment) => (
-          <li key={commitment.id}>
-            <CommitmentCard
-              commitment={commitment}
-              loading={loading[commitment.id] ?? null}
-              onDone={() => onDone(commitment.id)}
-              onDismiss={() => onDismiss(commitment.id)}
-            />
+        {emails.map((email) => (
+          <li key={email.id}>
+            <Link
+              href="/email"
+              className="block rounded-lg border border-stone-800/60 bg-black/15 p-3 transition hover:bg-stone-800/40"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="flex-1 truncate text-xs font-medium text-stone-200">
+                  {email.subject || "(no subject)"}
+                </p>
+                <span className="shrink-0 rounded border border-amber-300/20 bg-amber-300/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
+                  {Math.round(email.needsReplyConfidence * 100)}%
+                </span>
+              </div>
+              <p className="mt-0.5 truncate text-[11px] text-stone-500">{formatFrom(email.from)}</p>
+              {email.needsReplyReason && (
+                <p className="mt-1 line-clamp-1 text-[11px] text-stone-400">
+                  {email.needsReplyReason}
+                </p>
+              )}
+            </Link>
           </li>
         ))}
       </ul>
+      <div className="mt-3 flex justify-end">
+        <Link href="/email" className="text-xs text-stone-500 transition hover:text-stone-300">
+          Open mail →
+        </Link>
+      </div>
     </section>
   );
 }
 
-function CommitmentCard({
-  commitment,
-  loading,
-  onDone,
-  onDismiss,
-}: {
-  commitment: CommitmentItem;
-  loading: "done" | "dismiss" | null;
-  onDone: () => void;
-  onDismiss: () => void;
-}) {
-  const { toast } = useToast();
-  const [pathExpanded, setPathExpanded] = useState(false);
-  const [pathData, setPathData] = useState<CommitmentPathData | null>(null);
-  const [pathLoading, setPathLoading] = useState(false);
-  const [materializingStep, setMaterializingStep] = useState<number | "all" | null>(null);
-  const [materializedSteps, setMaterializedSteps] = useState<Set<number>>(new Set());
+function formatFrom(from: string): string {
+  const match = from.match(/^([^<]+)\s*</);
+  if (match) return match[1].trim();
+  return from;
+}
 
-  const loadPath = async () => {
-    if (pathData || pathLoading) return;
-    setPathLoading(true);
-    try {
-      const result = await apiFetch<{ success: boolean; path: CommitmentPathData }>(
-        `/api/commitments/${commitment.id}/path`,
-      );
-      setPathData(result.path);
-      const existing = new Set<number>();
-      result.path.steps.forEach((step, i) => {
-        if (step.taskId) existing.add(i);
-      });
-      setMaterializedSteps(existing);
-    } catch {
-      toast("Could not load fulfillment plan.", "error");
-    } finally {
-      setPathLoading(false);
-    }
-  };
+// ─── Quick links panel ─────────────────────────────────────────────────────
 
-  const togglePath = () => {
-    if (!pathExpanded) loadPath();
-    setPathExpanded((prev) => !prev);
-  };
-
-  const materializeStep = async (index: number) => {
-    if (materializingStep !== null) return;
-    setMaterializingStep(index);
-    try {
-      await apiFetch<{ success: boolean; taskId: string }>(
-        `/api/commitments/${commitment.id}/path/steps/${index}/materialize`,
-        { method: "POST" },
-      );
-      setMaterializedSteps((prev) => new Set([...prev, index]));
-      toast("Task created.", "success");
-    } catch {
-      toast("Could not create task.", "error");
-    } finally {
-      setMaterializingStep(null);
-    }
-  };
-
-  const materializeAll = async () => {
-    if (materializingStep !== null || !pathData) return;
-    setMaterializingStep("all");
-    try {
-      const result = await apiFetch<{ success: boolean; taskIds: string[] }>(
-        `/api/commitments/${commitment.id}/path/materialize-all`,
-        { method: "POST" },
-      );
-      const next = new Set(materializedSteps);
-      for (let i = 0; i < pathData.steps.length; i++) next.add(i);
-      setMaterializedSteps(next);
-      toast(
-        `${result.taskIds.length} task${result.taskIds.length === 1 ? "" : "s"} created.`,
-        "success",
-      );
-    } catch {
-      toast("Could not create tasks.", "error");
-    } finally {
-      setMaterializingStep(null);
-    }
-  };
-
-  const rebuildPath = async () => {
-    if (pathLoading) return;
-    setPathLoading(true);
-    try {
-      const result = await apiFetch<{ success: boolean; path: CommitmentPathData }>(
-        `/api/commitments/${commitment.id}/path/rebuild`,
-        { method: "POST" },
-      );
-      setPathData(result.path);
-      setMaterializedSteps(new Set());
-      toast("Plan rebuilt.", "success");
-    } catch {
-      toast("Could not rebuild plan.", "error");
-    } finally {
-      setPathLoading(false);
-    }
-  };
+function QuickLinksPanel() {
+  const links = [
+    { href: "/inbox/receipt", label: "Today's receipt" },
+    { href: "/briefing", label: "Full briefing" },
+    { href: "/agent", label: "Agent timeline" },
+    { href: "/chat", label: "Start a thread" },
+  ] as const;
 
   return (
-    <article className="rounded-lg border border-stone-800 bg-stone-900/40 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <CommitmentOwnerBadge owner={commitment.owner} />
-            {commitment.owner === "COUNTERPARTY" &&
-              commitment.trustBadge &&
-              commitment.trustBadge !== "unknown" && <TrustBadge badge={commitment.trustBadge} />}
-            <span className="text-[11px] text-stone-500">
-              {commitmentKindLabel(commitment.kind)}
-            </span>
-            <span className="text-[11px] text-stone-600">{commitmentDueLabel(commitment)}</span>
-          </div>
-          <p className="mt-2 text-sm font-medium text-stone-100 break-words">{commitment.title}</p>
-          {commitment.description && (
-            <p className="mt-1 text-xs text-stone-400 line-clamp-2">{commitment.description}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 mt-4">
-        <button
-          type="button"
-          onClick={onDone}
-          disabled={!!loading}
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[72px]"
-        >
-          {loading === "done" ? (
-            <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          ) : (
-            "Done"
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={onDismiss}
-          disabled={!!loading}
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-stone-700 text-stone-300 hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[72px]"
-        >
-          {loading === "dismiss" ? (
-            <span className="w-3 h-3 border-2 border-stone-300/30 border-t-stone-200 rounded-full animate-spin" />
-          ) : (
-            "Dismiss"
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={togglePath}
-          className="inline-flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-teal-700/50 text-teal-400 hover:bg-teal-400/10 transition"
-        >
-          {pathExpanded ? "Hide plan" : "View plan"}
-        </button>
-        <span className="ml-auto text-[11px] text-stone-600">
-          Confidence {Math.round((commitment.confidence ?? 0.72) * 100)}%
-        </span>
-      </div>
-
-      {pathExpanded && (
-        <CommitmentPathPanel
-          pathData={pathData}
-          loading={pathLoading}
-          materializingStep={materializingStep}
-          materializedSteps={materializedSteps}
-          onMaterializeStep={materializeStep}
-          onMaterializeAll={materializeAll}
-          onRebuild={rebuildPath}
-        />
-      )}
-    </article>
+    <div className="rounded-xl border border-stone-800 bg-stone-900/30 p-4">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500">
+        Quick links
+      </p>
+      <nav className="space-y-0.5">
+        {links.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="flex items-center justify-between rounded-md px-2 py-2 text-xs text-stone-400 transition hover:bg-stone-800 hover:text-stone-200"
+          >
+            <span>{link.label}</span>
+            <span className="text-stone-600">→</span>
+          </Link>
+        ))}
+      </nav>
+    </div>
   );
 }
+
+// ─── Filter tab ────────────────────────────────────────────────────────────
 
 function FilterTab({
   active,
@@ -587,7 +480,7 @@ function FilterTab({
     <button
       type="button"
       onClick={onClick}
-      className={`text-xs px-3 py-1.5 rounded-md transition ${
+      className={`rounded-md px-3 py-1.5 text-xs transition ${
         active ? "bg-stone-800 text-white" : "text-stone-400 hover:text-stone-200"
       }`}
     >
@@ -596,14 +489,7 @@ function FilterTab({
   );
 }
 
-function QueueMetric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="border-r border-white/10 px-4 py-3 last:border-r-0">
-      <p className="text-2xl font-semibold text-stone-50">{value}</p>
-      <p className="mt-1 text-[11px] text-stone-500">{label}</p>
-    </div>
-  );
-}
+// ─── Action card ───────────────────────────────────────────────────────────
 
 function ActionCard({
   action,
@@ -643,7 +529,7 @@ function ActionCard({
 
       <div className="p-4 pl-5 md:p-5 md:pl-6">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11px] font-medium text-amber-200 bg-amber-300/10 border border-amber-300/20 rounded px-1.5 py-0.5">
               {toolName === "prepared_action" ? "Prepared action" : toolName.replace(/_/g, " ")}
             </span>
@@ -840,6 +726,181 @@ function splitReasoning(reasoning: string | null): {
   return { situation: null, judgment: reasoning.trim(), proposal: null };
 }
 
+// ─── Commitment card ───────────────────────────────────────────────────────
+
+function CommitmentCard({
+  commitment,
+  loading,
+  onDone,
+  onDismiss,
+}: {
+  commitment: CommitmentItem;
+  loading: "done" | "dismiss" | null;
+  onDone: () => void;
+  onDismiss: () => void;
+}) {
+  const { toast } = useToast();
+  const [pathExpanded, setPathExpanded] = useState(false);
+  const [pathData, setPathData] = useState<CommitmentPathData | null>(null);
+  const [pathLoading, setPathLoading] = useState(false);
+  const [materializingStep, setMaterializingStep] = useState<number | "all" | null>(null);
+  const [materializedSteps, setMaterializedSteps] = useState<Set<number>>(new Set());
+
+  const loadPath = async () => {
+    if (pathData || pathLoading) return;
+    setPathLoading(true);
+    try {
+      const result = await apiFetch<{ success: boolean; path: CommitmentPathData }>(
+        `/api/commitments/${commitment.id}/path`,
+      );
+      setPathData(result.path);
+      const existing = new Set<number>();
+      result.path.steps.forEach((step, i) => {
+        if (step.taskId) existing.add(i);
+      });
+      setMaterializedSteps(existing);
+    } catch {
+      toast("Could not load fulfillment plan.", "error");
+    } finally {
+      setPathLoading(false);
+    }
+  };
+
+  const togglePath = () => {
+    if (!pathExpanded) loadPath();
+    setPathExpanded((prev) => !prev);
+  };
+
+  const materializeStep = async (index: number) => {
+    if (materializingStep !== null) return;
+    setMaterializingStep(index);
+    try {
+      await apiFetch<{ success: boolean; taskId: string }>(
+        `/api/commitments/${commitment.id}/path/steps/${index}/materialize`,
+        { method: "POST" },
+      );
+      setMaterializedSteps((prev) => new Set([...prev, index]));
+      toast("Task created.", "success");
+    } catch {
+      toast("Could not create task.", "error");
+    } finally {
+      setMaterializingStep(null);
+    }
+  };
+
+  const materializeAll = async () => {
+    if (materializingStep !== null || !pathData) return;
+    setMaterializingStep("all");
+    try {
+      const result = await apiFetch<{ success: boolean; taskIds: string[] }>(
+        `/api/commitments/${commitment.id}/path/materialize-all`,
+        { method: "POST" },
+      );
+      const next = new Set(materializedSteps);
+      for (let i = 0; i < pathData.steps.length; i++) next.add(i);
+      setMaterializedSteps(next);
+      toast(
+        `${result.taskIds.length} task${result.taskIds.length === 1 ? "" : "s"} created.`,
+        "success",
+      );
+    } catch {
+      toast("Could not create tasks.", "error");
+    } finally {
+      setMaterializingStep(null);
+    }
+  };
+
+  const rebuildPath = async () => {
+    if (pathLoading) return;
+    setPathLoading(true);
+    try {
+      const result = await apiFetch<{ success: boolean; path: CommitmentPathData }>(
+        `/api/commitments/${commitment.id}/path/rebuild`,
+        { method: "POST" },
+      );
+      setPathData(result.path);
+      setMaterializedSteps(new Set());
+      toast("Plan rebuilt.", "success");
+    } catch {
+      toast("Could not rebuild plan.", "error");
+    } finally {
+      setPathLoading(false);
+    }
+  };
+
+  return (
+    <article className="rounded-lg border border-stone-800 bg-stone-900/40 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <CommitmentOwnerBadge owner={commitment.owner} />
+            {commitment.owner === "COUNTERPARTY" &&
+              commitment.trustBadge &&
+              commitment.trustBadge !== "unknown" && <TrustBadge badge={commitment.trustBadge} />}
+            <span className="text-[11px] text-stone-500">
+              {commitmentKindLabel(commitment.kind)}
+            </span>
+            <span className="text-[11px] text-stone-600">{commitmentDueLabel(commitment)}</span>
+          </div>
+          <p className="mt-2 text-sm font-medium text-stone-100 break-words">{commitment.title}</p>
+          {commitment.description && (
+            <p className="mt-1 text-xs text-stone-400 line-clamp-2">{commitment.description}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 mt-4">
+        <button
+          type="button"
+          onClick={onDone}
+          disabled={!!loading}
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[72px]"
+        >
+          {loading === "done" ? (
+            <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            "Done"
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          disabled={!!loading}
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-stone-700 text-stone-300 hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[72px]"
+        >
+          {loading === "dismiss" ? (
+            <span className="w-3 h-3 border-2 border-stone-300/30 border-t-stone-200 rounded-full animate-spin" />
+          ) : (
+            "Dismiss"
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={togglePath}
+          className="inline-flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-teal-700/50 text-teal-400 hover:bg-teal-400/10 transition"
+        >
+          {pathExpanded ? "Hide plan" : "View plan"}
+        </button>
+        <span className="ml-auto text-[11px] text-stone-600">
+          Confidence {Math.round((commitment.confidence ?? 0.72) * 100)}%
+        </span>
+      </div>
+
+      {pathExpanded && (
+        <CommitmentPathPanel
+          pathData={pathData}
+          loading={pathLoading}
+          materializingStep={materializingStep}
+          materializedSteps={materializedSteps}
+          onMaterializeStep={materializeStep}
+          onMaterializeAll={materializeAll}
+          onRebuild={rebuildPath}
+        />
+      )}
+    </article>
+  );
+}
+
 function CommitmentOwnerBadge({ owner }: { owner: CommitmentItem["owner"] }) {
   const entry = commitmentOwnerEntry(owner);
   return (
@@ -983,8 +1044,6 @@ function buildPreview(
     return `${pick("name") || "?"}${email ? ` (${email})` : ""}`;
   }
   if (toolName === "delete_task" || toolName === "delete_note" || toolName === "delete_contact") {
-    // Prefer server-resolved label (task title / contact name); fall back to
-    // the correct id key so the user at least sees *something* they can match.
     const idKey =
       toolName === "delete_task"
         ? "task_id"
@@ -1004,6 +1063,8 @@ function buildPreview(
   }
   return null;
 }
+
+// ─── Commitment path panel ─────────────────────────────────────────────────
 
 function CommitmentPathPanel({
   pathData,

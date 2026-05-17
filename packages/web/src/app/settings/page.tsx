@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
+import { GoogleConnectRedirect } from "../../components/google-connect-redirect";
 import { useConfirm } from "../../components/confirm-dialog";
 import { FeedbackPolicyPanel } from "../../components/feedback-policy-panel";
 import { ListSkeleton } from "../../components/skeleton";
@@ -829,6 +830,9 @@ export default function SettingsPage() {
 
   return (
     <AuthGuard>
+      <Suspense>
+        <GoogleConnectRedirect />
+      </Suspense>
       <main className="mx-auto max-w-4xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
         <header className="mb-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-sm shadow-black/20">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">

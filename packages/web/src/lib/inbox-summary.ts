@@ -92,3 +92,13 @@ export interface InboxSummary {
   top3: AttentionItem[];
   today: TodaySection;
 }
+
+export interface ReplyNeededEmail {
+  id: string;
+  subject: string;
+  from: string;
+  snippet: string | null;
+  needsReplyReason: string | null;
+  needsReplyConfidence: number;
+  receivedAt: string;
+}

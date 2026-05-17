@@ -147,7 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const register = useCallback(
-    async (email: string, password: string, name?: string, redirectTo = "/inbox") => {
+    async (email: string, password: string, name?: string, redirectTo = "/onboarding") => {
       const data = await apiFetch<{ token: string; user: User }>("/api/auth/register", {
         method: "POST",
         body: JSON.stringify({ email, password, name }),
