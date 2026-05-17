@@ -182,7 +182,7 @@ function AgentTimeline() {
           <ul className="space-y-1">
             {filtered.map((log, idx) => (
               <li key={log.id}>
-                <TimelineEntry log={log} isFirst={idx === 0} />
+                <TimelineEntry log={log} />
               </li>
             ))}
           </ul>
@@ -208,7 +208,7 @@ function AgentTimeline() {
   );
 }
 
-function TimelineEntry({ log, isFirst }: { log: AgentLogEntry; isFirst: boolean }) {
+function TimelineEntry({ log }: { log: AgentLogEntry }) {
   const [expanded, setExpanded] = useState(false);
   const { icon, dotClass, labelClass, actionLabel } = actionStyle(log.action, log.tool);
   const hasReasoning = !!log.reasoning && log.reasoning.length > 10;

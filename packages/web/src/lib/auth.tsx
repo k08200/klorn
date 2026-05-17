@@ -177,6 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthError(null);
         setGoogleConnected(data.user.googleConnected ?? true);
       } catch (err) {
+        // biome-ignore lint/suspicious/noConsole: critical auth failure, always log
         console.error("[auth] loginWithToken: /api/auth/me FAILED", err);
         throw err;
       }

@@ -125,9 +125,11 @@ function verifyTranslationSymmetry(): void {
     const missing = [...baseKeys].filter((k) => !localeKeys.has(k));
     const extra = [...localeKeys].filter((k) => !baseKeys.has(k));
     if (missing.length > 0) {
+      // biome-ignore lint/suspicious/noConsole: dev-time i18n validation
       console.warn(`[i18n] "${locale}" missing keys: ${missing.join(", ")}`);
     }
     if (extra.length > 0) {
+      // biome-ignore lint/suspicious/noConsole: dev-time i18n validation
       console.warn(`[i18n] "${locale}" has unexpected keys: ${extra.join(", ")}`);
     }
   }

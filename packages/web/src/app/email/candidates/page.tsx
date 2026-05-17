@@ -238,7 +238,6 @@ function CandidateIntakeView() {
   const needsCount = candidates.filter((c) =>
     ["NEEDS_ANALYSIS", "NEEDS_INFO"].includes(c.status),
   ).length;
-  const contactedCount = candidates.filter((c) => c.status === "CONTACTED").length;
   const duplicateCount = candidates.filter((c) => c.duplicateCount > 1).length;
   const manualReviewCount = candidates.filter((c) =>
     c.evidenceFiles.some((file) => file.needsManualReview),

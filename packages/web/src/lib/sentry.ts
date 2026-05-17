@@ -57,6 +57,7 @@ export function captureClientError(error: unknown, context?: Record<string, unkn
     })
     .catch(() => {
       if (process.env.NODE_ENV !== "production") {
+        // biome-ignore lint/suspicious/noConsole: dev-only fallback when Sentry fails
         console.error(err);
       }
     });
