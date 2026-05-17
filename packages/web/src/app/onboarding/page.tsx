@@ -1,11 +1,11 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
+import { ONBOARDING_ACTIVE_KEY } from "../../components/google-connect-redirect";
 import { API_BASE } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
-import { ONBOARDING_ACTIVE_KEY } from "../../components/google-connect-redirect";
 
 export default function OnboardingPage() {
   return (
@@ -109,8 +109,8 @@ function WelcomeStep({
         is ready to set up.
       </h1>
       <p className="mt-4 text-sm leading-6 text-stone-400">
-        Connect Gmail and Google Calendar. Jigeum reads your inbox, finds what needs your
-        attention, and surfaces it — so nothing slips through.
+        Connect Gmail and Google Calendar. Jigeum reads your inbox, finds what needs your attention,
+        and surfaces it — so nothing slips through.
       </p>
 
       <div className="mt-8 space-y-3">
@@ -159,13 +159,7 @@ interface SyncState {
   contacts: number;
 }
 
-function SyncingStep({
-  initSync,
-  onContinue,
-}: {
-  initSync: SyncState;
-  onContinue: () => void;
-}) {
+function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue: () => void }) {
   const isDone = initSync.status === "done";
   const canContinue = isDone || initSync.status === "failed" || initSync.status === "skipped";
 
@@ -259,8 +253,8 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
         You&apos;re set up.
       </h1>
       <p className="mt-4 text-sm leading-6 text-stone-400">
-        Jigeum is running. It&apos;ll surface decisions, track commitments, and prepare your
-        morning briefing — all before you open your inbox.
+        Jigeum is running. It&apos;ll surface decisions, track commitments, and prepare your morning
+        briefing — all before you open your inbox.
       </p>
 
       <div className="mt-6 grid grid-cols-3 gap-3">
