@@ -8,7 +8,10 @@ import { captureClientError } from "../../../lib/sentry";
 import type { JigeumPlaybook } from "../../../lib/playbooks";
 
 const DOMAIN_META: Record<string, { label: string; color: string }> = {
-  investment: { label: "Investors", color: "text-emerald-300 border-emerald-400/20 bg-emerald-400/10" },
+  investment: {
+    label: "Investors",
+    color: "text-emerald-300 border-emerald-400/20 bg-emerald-400/10",
+  },
   customer_success: { label: "Customers", color: "text-sky-300 border-sky-400/20 bg-sky-400/10" },
   launch: { label: "Launch", color: "text-fuchsia-300 border-fuchsia-400/20 bg-fuchsia-400/10" },
   hiring: { label: "Hiring", color: "text-amber-300 border-amber-400/20 bg-amber-400/10" },
@@ -23,7 +26,10 @@ function PlaybookRow({
   onToggle: (id: string, active: boolean) => void;
   toggling: boolean;
 }) {
-  const domain = DOMAIN_META[playbook.domain] ?? { label: playbook.domain, color: "text-stone-400 border-stone-700 bg-stone-800" };
+  const domain = DOMAIN_META[playbook.domain] ?? {
+    label: playbook.domain,
+    color: "text-stone-400 border-stone-700 bg-stone-800",
+  };
   const active = Boolean(playbook.active);
 
   return (

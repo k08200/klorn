@@ -19,13 +19,7 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function NoteCard({
-  note,
-  onDelete,
-}: {
-  note: Note;
-  onDelete: (id: string) => void;
-}) {
+function NoteCard({ note, onDelete }: { note: Note; onDelete: (id: string) => void }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
