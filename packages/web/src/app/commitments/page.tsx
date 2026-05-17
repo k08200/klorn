@@ -149,7 +149,8 @@ function CommitmentRow({
             <span
               className={`text-[11px] font-medium ${overdue ? "text-red-400" : "text-stone-500"}`}
             >
-              {overdue && "⚠ "}{dueLabel}
+              {overdue && "⚠ "}
+              {dueLabel}
             </span>
           )}
         </div>
@@ -201,24 +202,29 @@ function CommitmentsContent() {
     load();
   }, [load]);
 
-  const handleStatusChange = useCallback(async (id: string, status: CommitmentStatus) => {
-    setCommitments((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
-    try {
-      await apiFetch(`/api/commitments/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-      });
-    } catch (err) {
-      captureClientError(err, { scope: "commitments.status-change" });
-      // Reload to get actual state on failure
-      load();
-    }
-  }, [load]);
+  const handleStatusChange = useCallback(
+    async (id: string, status: CommitmentStatus) => {
+      setCommitments((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
+      try {
+        await apiFetch(`/api/commitments/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+        });
+      } catch (err) {
+        captureClientError(err, { scope: "commitments.status-change" });
+        // Reload to get actual state on failure
+        load();
+      }
+    },
+    [load],
+  );
 
   const visible = commitments.filter((c) => {
     if (tab === "open") return c.status === "OPEN" || c.status === "SNOOZED";
-    if (tab === "mine") return (c.status === "OPEN" || c.status === "SNOOZED") && c.owner === "USER";
-    if (tab === "theirs") return (c.status === "OPEN" || c.status === "SNOOZED") && c.owner === "COUNTERPARTY";
+    if (tab === "mine")
+      return (c.status === "OPEN" || c.status === "SNOOZED") && c.owner === "USER";
+    if (tab === "theirs")
+      return (c.status === "OPEN" || c.status === "SNOOZED") && c.owner === "COUNTERPARTY";
     if (tab === "done") return c.status === "DONE" || c.status === "DISMISSED";
     return true;
   });
@@ -228,8 +234,12 @@ function CommitmentsContent() {
 
   const counts = {
     open: commitments.filter((c) => c.status === "OPEN" || c.status === "SNOOZED").length,
-    mine: commitments.filter((c) => (c.status === "OPEN" || c.status === "SNOOZED") && c.owner === "USER").length,
-    theirs: commitments.filter((c) => (c.status === "OPEN" || c.status === "SNOOZED") && c.owner === "COUNTERPARTY").length,
+    mine: commitments.filter(
+      (c) => (c.status === "OPEN" || c.status === "SNOOZED") && c.owner === "USER",
+    ).length,
+    theirs: commitments.filter(
+      (c) => (c.status === "OPEN" || c.status === "SNOOZED") && c.owner === "COUNTERPARTY",
+    ).length,
     done: commitments.filter((c) => c.status === "DONE" || c.status === "DISMISSED").length,
   };
 
