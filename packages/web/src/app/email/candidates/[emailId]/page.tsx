@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../../components/auth-guard";
+import ErrorAlert from "../../../../components/ui/error-alert";
+import LoadingState from "../../../../components/ui/loading-state";
 import { apiFetch } from "../../../../lib/api";
 import { captureClientError } from "../../../../lib/sentry";
 
@@ -87,6 +89,7 @@ function CandidateDetailView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [commitmentToast, setCommitmentToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!emailId) return;
@@ -113,11 +116,20 @@ function CandidateDetailView() {
     setSaving(true);
     setError(null);
     try {
-      const data = await apiFetch<{ candidateIntake: CandidateIntake }>(
-        `/api/email/${emailId}/candidate-intake`,
-        { method: "PATCH", body: JSON.stringify(patch) },
-      );
+      const data = await apiFetch<{
+        candidateIntake: CandidateIntake;
+        openedCommitmentId?: string | null;
+      }>(`/api/email/${emailId}/candidate-intake`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      });
       setEmail((prev) => (prev ? { ...prev, candidateIntake: data.candidateIntake } : prev));
+      if (data.openedCommitmentId && patch.status) {
+        const label = STATUSES.find((s) => s.value === patch.status)?.label ?? patch.status;
+        setCommitmentToast(`Commitment opened for "${label}" — see the ledger.`);
+      } else {
+        setCommitmentToast(null);
+      }
     } catch (err) {
       captureClientError(err, { scope: "email.candidate-detail.update", emailId });
       setError("Could not save candidate status.");
@@ -147,10 +159,19 @@ function CandidateDetailView() {
         )}
       </div>
 
-      {loading && <p className="text-sm text-stone-500">Loading...</p>}
-      {error && (
-        <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
-          {error}
+      {loading && <LoadingState rows={3} rowHeight="h-24" label="Loading candidate" />}
+      {error && !loading && (
+        <ErrorAlert onRetry={load}>{error}</ErrorAlert>
+      )}
+      {commitmentToast && (
+        <div
+          role="status"
+          className="mb-3 rounded-lg border border-emerald-700/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200"
+        >
+          {commitmentToast}{" "}
+          <Link href="/commitments" className="underline hover:text-emerald-100">
+            Open ledger
+          </Link>
         </div>
       )}
 

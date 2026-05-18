@@ -9,6 +9,10 @@
 import type { EmailMessage, EmailRuleAction, FeedbackSignal, Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import {
+  type CandidateIntakeStatus,
+  openCommitmentForCandidateTransition,
+} from "../candidate-commitments.js";
 import { prisma } from "../db.js";
 import {
   analyzeEmailAttachmentsForEmail,
@@ -2234,9 +2238,15 @@ export async function emailRoutes(app: FastifyInstance) {
 
     const dbEmail = await prisma.emailMessage.findFirst({
       where: { userId: uid, OR: [{ id }, { gmailId: id }] },
-      select: { id: true },
+      select: { id: true, threadId: true },
     });
     if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
+
+    // Snapshot the pre-update status so we can detect a real transition.
+    const before = await prisma.candidateIntake.findUnique({
+      where: { userId_emailId: { userId: uid, emailId: dbEmail.id } },
+      select: { status: true },
+    });
 
     let intake = await updateCandidateIntake({
       userId: uid,
@@ -2256,7 +2266,28 @@ export async function emailRoutes(app: FastifyInstance) {
       }
     }
     if (!intake) return reply.code(404).send({ error: "Candidate intake not found" });
-    return { candidateIntake: intake };
+
+    // Open the matching commitment when the status actually changes to a
+    // mapped state. Same-status updates are a no-op so a repeated PATCH
+    // (idempotent client retry, status pill double-click) cannot spawn
+    // duplicates beyond the dedupKey safety net.
+    let openedCommitmentId: string | null = null;
+    if (status && status !== before?.status) {
+      const opened = await openCommitmentForCandidateTransition(
+        uid,
+        {
+          id: intake.id,
+          name: intake.name,
+          contactEmail: intake.emailAddress,
+          emailId: dbEmail.id,
+          threadId: dbEmail.threadId ?? null,
+        },
+        status as CandidateIntakeStatus,
+      );
+      openedCommitmentId = opened?.id ?? null;
+    }
+
+    return { candidateIntake: intake, openedCommitmentId };
   });
 
   // ─── Reply Draft ─────────────────────────────────────────────────────
