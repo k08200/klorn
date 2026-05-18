@@ -9,6 +9,7 @@ import { useConfirm } from "../../../components/confirm-dialog";
 import { useToast } from "../../../components/toast";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
+import { DetailStat, EmailActionButton, ProfileFact, senderName } from "./atoms";
 
 type EmailPriority = "URGENT" | "NORMAL" | "LOW";
 
@@ -1029,35 +1030,6 @@ function EmailReminderQuickActions({
   );
 }
 
-function EmailActionButton({
-  busy,
-  children,
-  danger = false,
-  disabled,
-  onClick,
-}: {
-  busy: boolean;
-  children: string;
-  danger?: boolean;
-  disabled: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`h-8 rounded-md border px-2.5 text-xs font-medium transition disabled:opacity-50 ${
-        danger
-          ? "border-red-500/25 bg-red-500/10 text-red-200 hover:bg-red-500/15"
-          : "border-stone-700/70 bg-stone-950/50 text-stone-300 hover:border-stone-600 hover:bg-white/5"
-      }`}
-    >
-      {busy ? "Working" : children}
-    </button>
-  );
-}
-
 function CandidateProfileCard({
   profile,
   intake,
@@ -1186,21 +1158,6 @@ function candidatePipelineToIntakeStatus(
   if (status === "needs_analysis") return "NEEDS_ANALYSIS";
   if (status === "needs_info") return "NEEDS_INFO";
   return "READY_TO_REVIEW";
-}
-
-function ProfileFact({ label, value }: { label: string; value: string | null }) {
-  return (
-    <div className="rounded-lg border border-stone-800/60 bg-black/15 px-3 py-2">
-      <p className="text-[10px] font-medium uppercase tracking-wider text-stone-600">{label}</p>
-      <p className="mt-1 truncate text-xs text-stone-300">{value || "-"}</p>
-    </div>
-  );
-}
-
-function senderName(raw: string): string {
-  const match = raw.match(/^([^<]+?)\s*</);
-  if (match?.[1]) return match[1].trim();
-  return raw.replace(/[<>]/g, "").trim();
 }
 
 function ThreadContextPanel({
@@ -2164,17 +2121,6 @@ function ReplyDraftBox({
         </div>
       )}
     </section>
-  );
-}
-
-function DetailStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-stone-700/45 bg-black/20 px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
-        {label}
-      </p>
-      <p className="mt-1 truncate text-sm font-semibold text-stone-100">{value}</p>
-    </div>
   );
 }
 
