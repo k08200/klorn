@@ -89,7 +89,7 @@ function LoginForm() {
       description={
         mode === "login"
           ? "Reconnect your work signals and continue where you left off."
-          : "Use your approved beta email to turn team signals into evidence-backed decision cards."
+          : "Connect Gmail and Calendar to turn team signals into evidence-backed decision cards."
       }
       footer={
         <Link href="/" className="transition hover:text-stone-300">
@@ -103,10 +103,6 @@ function LoginForm() {
           <span className="font-medium text-amber-50">{returnDestinationLabel(nextPath)}</span>.
         </div>
       )}
-
-      <div className="mb-4 rounded-md border border-stone-700/65 bg-black/20 px-3 py-2 text-xs leading-5 text-stone-400">
-        Private beta access is email-based. If you are not approved yet, request early access first.
-      </div>
 
       <div className="mb-5 grid grid-cols-2 rounded-md border border-stone-700/70 bg-black/20 p-1">
         <button
