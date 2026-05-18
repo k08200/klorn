@@ -28,6 +28,13 @@ export interface ClassifiableEmail {
   from: string;
   subject: string;
   snippet?: string | null;
+  /**
+   * Gmail labels attached to the message (CATEGORY_PROMOTIONS,
+   * CATEGORY_UPDATES, UNREAD, etc.). Caller is responsible for forwarding
+   * Gmail's `labelIds` field through. Used as a high-confidence signal in
+   * fastClassify so promotional mail never escapes the LLM's politeness.
+   */
+  labels?: string[];
 }
 
 export interface ClassifiedLabel {
@@ -39,44 +46,119 @@ export interface ClassifiedLabel {
 
 const PRIORITY_ORDER: Record<EmailPriority, number> = { high: 0, medium: 1, low: 2 };
 
+// Senders that *never* expect a human reply. Hardened 2026-05-19 after
+// dogfood pain "메일 부정확": missing patterns let promotional mail get
+// upgraded to "needs reply" by the LLM, which then woke the user up.
 const SYSTEM_SENDER_PATTERNS = [
   /no[-_]?reply@/i,
   /noreply@/i,
+  /do[-_]?not[-_]?reply@/i,
+  /donotreply@/i,
   /mailer-daemon@/i,
   /postmaster@/i,
+  /bounce[s]?@/i,
   /notifications?@/i,
+  /notice@/i,
   /alerts?@/i,
   /security@/i,
   /billing@/i,
   /receipts?@/i,
+  /invoice@/i,
   /newsletter@/i,
+  /digest@/i,
+  /updates?@/i,
+  /marketing@/i,
+  /promo@/i,
+  /offers?@/i,
+  /deals?@/i,
+  // Common Korean automated senders
+  /^auto@/i,
+  /^system@/i,
+  /webmaster@/i,
 ];
 
-/** Cheap deterministic classifier for obvious cases so we skip the LLM call. */
-function fastClassify(email: ClassifiableEmail): ClassifiedLabel | null {
-  const from = email.from || "";
-  const subject = (email.subject || "").toLowerCase();
+// Senders that *might* be human-operated but rarely need a same-day reply.
+// We mark these as low-priority "internal-ish" so the LLM still gets a
+// chance to override on real one-off questions.
+const SOFT_AUTOMATED_HINTS = [
+  /^info@/i,
+  /^contact@/i,
+  /^hello@/i,
+  /^team@/i,
+  /^help@/i,
+  /^support@/i,
+  /^service@/i,
+];
 
+// Subject patterns that strongly indicate marketing/newsletter regardless
+// of sender. Caught before the LLM so the urgent-language trick fails.
+const MARKETING_SUBJECT_PATTERNS = [
+  /unsubscribe/i,
+  /^\[newsletter\]/i,
+  /view (this email )?in (your )?browser/i,
+  // Korean marketing markers
+  /\[광고\]/,
+  /\[알림\]/,
+  /\(광고\)/,
+  /수신거부/,
+  /무료\s*체험/,
+  /할인\s*쿠폰/,
+];
+
+// Security/sign-in/verification language. Real notifications, but never
+// "reply" — they should surface as system, not as inbox actions.
+const SECURITY_RE =
+  /security|verify|verification|sign[- ]?in|unusual activity|new device|2[\s-]?factor|otp|보안|로그인|인증/i;
+
+/**
+ * Cheap deterministic classifier for obvious cases so we skip the LLM call.
+ * Exported for testability — every match here is a code path that never
+ * spends an LLM token. Callers should not rely on this directly; go
+ * through `classifyEmailBatch`.
+ */
+export function fastClassify(email: ClassifiableEmail): ClassifiedLabel | null {
+  const from = email.from || "";
+  const subject = email.subject || "";
+  const snippet = email.snippet || "";
+
+  // 1. Hard automated sender: never needs reply.
   if (SYSTEM_SENDER_PATTERNS.some((p) => p.test(from))) {
-    const isSecurity = /security|verify|sign[- ]?in|unusual activity|알림/i.test(
-      `${from} ${email.subject}`,
-    );
+    const haystack = `${from} ${subject} ${snippet}`;
+    const isSecurity = SECURITY_RE.test(haystack);
     return {
       priority: isSecurity ? "medium" : "low",
       category: isSecurity ? "system" : "automated",
       needsReply: false,
-      reason: "automated sender",
+      reason: isSecurity ? "automated security notice" : "automated sender",
     };
   }
 
-  if (subject.includes("unsubscribe") || subject.startsWith("[newsletter]")) {
+  // 2. Marketing/newsletter subjects override the LLM's urgency bait.
+  if (MARKETING_SUBJECT_PATTERNS.some((p) => p.test(subject))) {
     return {
       priority: "low",
       category: "automated",
       needsReply: false,
-      reason: "newsletter markers",
+      reason: "marketing markers",
     };
   }
+
+  // 3. CATEGORY_PROMOTIONS Gmail label is a strong, calibrated signal —
+  // Gmail already classified this as promo; we should not second-guess.
+  if (email.labels?.includes("CATEGORY_PROMOTIONS")) {
+    return {
+      priority: "low",
+      category: "automated",
+      needsReply: false,
+      reason: "Gmail promotions label",
+    };
+  }
+
+  // 4. Soft automated hint: still send to LLM but pre-set a low floor so
+  // the LLM has to actively justify any high-priority upgrade.
+  // We return null here (defer to LLM) and rely on the prompt's guidance,
+  // but a future iteration could pass this hint as bias.
+  void SOFT_AUTOMATED_HINTS;
 
   return null;
 }

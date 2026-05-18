@@ -276,6 +276,9 @@ export async function listEmails(userId: string, maxResults = 10) {
       subject: wrapUntrusted(headers.find((h) => h.name === "Subject")?.value, "email:subject"),
       date: headers.find((h) => h.name === "Date")?.value || "",
       snippet: wrapUntrusted(detail.data.snippet, "email:snippet"),
+      // Gmail's labelIds carries CATEGORY_PROMOTIONS / CATEGORY_UPDATES /
+      // UNREAD / IMPORTANT — high-signal hints for the classifier.
+      labels: detail.data.labelIds || [],
     });
   }
 
@@ -732,6 +735,7 @@ export async function classifyEmails(userId: string, maxResults = 10) {
       from: e.from || "",
       subject: e.subject || "",
       snippet: e.snippet || "",
+      labels: e.labels,
     })),
     userId,
   );

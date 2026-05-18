@@ -85,8 +85,15 @@ describe("classifyPriority — heuristic gate before LLM", () => {
     it("'문의' → NORMAL", () => {
       expect(classifyPriority("a@b.com", "협업 관련 문의드립니다")).toBe("NORMAL");
     });
-    it("'invoice' → NORMAL", () => {
-      expect(classifyPriority("billing@x.com", "Invoice INV-2026-001")).toBe("NORMAL");
+    it("'invoice' from billing@ → LOW (automated sender wins over invoice keyword)", () => {
+      // Updated 2026-05-19: billing@/invoice@ senders are auto-classified
+      // LOW so the recurring billing flood from Stripe/Toss/카카오페이 does
+      // not page the user. A human asking about an invoice still surfaces
+      // because the LLM keyword "invoice" + non-automated sender wins.
+      expect(classifyPriority("billing@x.com", "Invoice INV-2026-001")).toBe("LOW");
+    });
+    it("'invoice' from human sender → NORMAL", () => {
+      expect(classifyPriority("alice@customer.com", "Invoice INV-2026-001")).toBe("NORMAL");
     });
     it("'계약' → NORMAL", () => {
       expect(classifyPriority("a@b.com", "계약 조건 확인 부탁드립니다")).toBe("NORMAL");

@@ -559,11 +559,16 @@ export function classifyPriorityDetailed(
     return { priority: "LOW", reason: "gmail_low_priority_label", signals: labels };
   }
 
-  // Low priority signals (automated/newsletter/ads)
+  // Low priority signals (automated/newsletter/ads). Updated 2026-05-19:
+  // add invoice@ / billing@ / receipts@ / bounce(s)@ / do-not-reply / 알림@
+  // — these all routinely escaped the gate before and got upgraded to
+  // NORMAL on the LLM pass.
   if (
     f.includes("noreply") ||
     f.includes("no-reply") ||
     f.includes("donotreply") ||
+    f.includes("do-not-reply") ||
+    f.includes("do_not_reply") ||
     f.includes("newsletter") ||
     f.includes("marketing") ||
     f.includes("digest") ||
@@ -577,6 +582,12 @@ export function classifyPriorityDetailed(
     f.includes("team@") ||
     f.includes("mailer-daemon") ||
     f.includes("postmaster") ||
+    f.includes("bounce@") ||
+    f.includes("bounces@") ||
+    f.includes("invoice@") ||
+    f.includes("receipts@") ||
+    f.includes("receipt@") ||
+    f.includes("billing@") ||
     s.includes("unsubscribe") ||
     s.includes("수신거부") ||
     s.includes("광고") ||
