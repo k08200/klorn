@@ -156,7 +156,7 @@ async function proposalAlreadyPending(userId: string, tools: string[]): Promise<
 // ─── Proposal ─────────────────────────────────────────────────────────────────
 
 async function proposeSkillCreation(userId: string, seq: ToolSequence): Promise<void> {
-  const skillName = await generateSkillName(seq);
+  const skillName = await generateSkillName(seq, userId);
   const skillKey = skillName
     .toLowerCase()
     .replace(/\s+/g, "_")
@@ -199,18 +199,21 @@ async function proposeSkillCreation(userId: string, seq: ToolSequence): Promise<
   });
 }
 
-async function generateSkillName(seq: ToolSequence): Promise<string> {
+async function generateSkillName(seq: ToolSequence, userId?: string): Promise<string> {
   // Try LLM for a good name; fall back to derived name
   try {
-    const res = await createCompletion({
-      model: MODEL,
-      messages: [
-        {
-          role: "user",
-          content: `Give a 2-3 word skill name (title case, no quotes) for a workflow that does: ${seq.tools.join(" then ")}. Return only the name.`,
-        },
-      ],
-    });
+    const res = await createCompletion(
+      {
+        model: MODEL,
+        messages: [
+          {
+            role: "user",
+            content: `Give a 2-3 word skill name (title case, no quotes) for a workflow that does: ${seq.tools.join(" then ")}. Return only the name.`,
+          },
+        ],
+      },
+      userId ? { userId } : {},
+    );
     const name = res.choices[0]?.message?.content?.trim().slice(0, 40);
     if (name && name.length > 2) return name;
   } catch {

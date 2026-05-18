@@ -1208,14 +1208,17 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
     let toolCallCount = 0;
 
     for (let i = 0; i < 3; i++) {
-      const response = await createCompletion({
-        model: agentModelForUser,
-        messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-        tools: agentTools,
-        tool_choice: "auto",
-        temperature: 0.3,
-        max_tokens: 1000,
-      });
+      const response = await createCompletion(
+        {
+          model: agentModelForUser,
+          messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+          tools: agentTools,
+          tool_choice: "auto",
+          temperature: 0.3,
+          max_tokens: 1000,
+        },
+        { userId },
+      );
 
       // Track token usage for cost monitoring
       await trackTokenUsage(
@@ -1976,6 +1979,14 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
     );
   } catch (err) {
     const elapsed = Date.now() - startTime;
+    const errName = err instanceof Error ? err.name : "";
+    // Cost-cap hits are not bugs — they're expected back-pressure. Log
+    // quietly, skip Sentry, and let the next cycle (next day) recover.
+    if (errName === "DailyCostCapExceededError") {
+      await logAgentAction(userId, "skipped", "Daily cost cap reached; skipping cycle");
+      console.log(`[AGENT] Cost cap reached for ${userId}; skipping cycle`);
+      return;
+    }
     const message = err instanceof Error ? err.message : "Unknown error";
     await logAgentAction(userId, "error", `Agent error after ${elapsed}ms: ${message}`);
     console.error(`[AGENT] Error for ${userId} after ${elapsed}ms:`, err);

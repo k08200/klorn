@@ -224,7 +224,7 @@ Return exactly this JSON shape:
           { role: "user", content: prompt },
         ],
       },
-      { credentials: await getUserCredentials(userId) },
+      { credentials: await getUserCredentials(userId), userId },
     );
 
     const raw = res.choices[0]?.message?.content?.trim() || "";

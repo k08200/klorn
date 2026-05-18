@@ -67,19 +67,22 @@ export async function buildPath(userId: string, commitmentId: string): Promise<C
   );
 
   const prompt = buildPathPrompt(commitment, now, daysUntilDue);
-  const response = await createCompletion({
-    model: MODEL,
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are a planning assistant. Return ONLY valid JSON — an array of step objects. No markdown, no explanation.",
-      },
-      { role: "user", content: prompt },
-    ],
-    max_tokens: 600,
-    temperature: 0.2,
-  });
+  const response = await createCompletion(
+    {
+      model: MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a planning assistant. Return ONLY valid JSON — an array of step objects. No markdown, no explanation.",
+        },
+        { role: "user", content: prompt },
+      ],
+      max_tokens: 600,
+      temperature: 0.2,
+    },
+    { userId },
+  );
 
   const raw = response.choices[0]?.message?.content?.trim() ?? "[]";
   const steps = parseSteps(raw, now, dueAt);

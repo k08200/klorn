@@ -58,6 +58,16 @@ export class DailyCostCapExceededError extends Error {
   }
 }
 
+/**
+ * User-facing message when the daily cost cap is hit. Surfaced when
+ * routes/chat.ts streams the error back to the browser. Background
+ * workers (autonomous agent, briefing, classify) catch
+ * `DailyCostCapExceededError` and silently skip the cycle so the cron
+ * does not crash.
+ */
+export const DAILY_COST_CAP_MESSAGE_KO =
+  "오늘 사용 가능한 AI 한도를 모두 소진했어요. 한국 시간 자정(UTC+9)에 다시 열려요. 설정에서 본인 API 키를 등록하면 즉시 복구돼요.";
+
 const KOREAN_EXHAUSTED_MESSAGE =
   "지금 사용할 수 있는 AI 쿼터를 모두 소진했어요. 다음 주 월요일(UTC 00:00)에 무료 한도가 리셋되거나, 설정에서 본인 API 키를 등록하면 바로 복구돼요.";
 
@@ -102,9 +112,7 @@ export async function createCompletion(
     const { checkCostGate, recordCostUsage, usdToCents } = await import("./cost-guard.js");
     const gate = await checkCostGate(options.userId);
     if (!gate.allowed) {
-      throw new DailyCostCapExceededError(
-        gate.reason || `Daily LLM cost cap reached for user ${options.userId}`,
-      );
+      throw new DailyCostCapExceededError(DAILY_COST_CAP_MESSAGE_KO);
     }
     // Pre-emptively bill the estimated cost; success path is recorded below.
     // We use a tiny floor (1¢) for paid models so runaway calls can't sneak

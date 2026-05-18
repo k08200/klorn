@@ -121,6 +121,7 @@ export async function extractAndUpsertCommitmentsFromText(
       contextTitle: input.contextTitle,
       referenceDate: input.referenceDate,
       timeZone: input.timeZone,
+      userId: input.userId,
     });
     if (refinement?.isCommitment === false) continue;
     const usableRefinement = refinement?.isCommitment === true ? refinement : null;

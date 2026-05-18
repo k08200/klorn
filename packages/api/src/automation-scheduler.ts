@@ -341,6 +341,13 @@ async function runAutomations() {
               briefingSentToday.set(config.userId, today);
               console.log(`[AUTOMATION] Briefing delivered to ${config.userId}`);
             } catch (err) {
+              const errName = err instanceof Error ? err.name : "";
+              // Daily cost-cap hits are expected back-pressure, not bugs.
+              if (errName === "DailyCostCapExceededError") {
+                console.log(`[AUTOMATION] Briefing skipped for ${config.userId} — daily cost cap`);
+                briefingSentToday.set(config.userId, today);
+                continue;
+              }
               console.error(`[AUTOMATION] Briefing failed for ${config.userId}:`, err);
               captureError(err, {
                 tags: { scope: "automation.briefing", userId: config.userId },
@@ -505,11 +512,15 @@ async function runAutomations() {
                       matched &&
                       (matched.actionType === "AUTO_REPLY" || matched.actionType === "DRAFT_REPLY")
                     ) {
-                      const replyBody = await generateSmartReply(matched.actionValue, {
-                        from: email.from,
-                        subject: email.subject,
-                        body: email.body || "",
-                      });
+                      const replyBody = await generateSmartReply(
+                        matched.actionValue,
+                        {
+                          from: email.from,
+                          subject: email.subject,
+                          body: email.body || "",
+                        },
+                        config.userId,
+                      );
                       if (matched.actionType === "AUTO_REPLY") {
                         const emailMatch = email.from.match(/<([^>]+)>/) || [null, email.from];
                         const toAddr = emailMatch[1] || email.from;

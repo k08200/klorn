@@ -733,6 +733,7 @@ export async function classifyEmails(userId: string, maxResults = 10) {
       subject: e.subject || "",
       snippet: e.snippet || "",
     })),
+    userId,
   );
 
   const classified = result.emails.map((email, i) => ({

@@ -2907,11 +2907,15 @@ async function checkAndExecuteAutoReply(
   if (!matched) return;
 
   if (matched.actionType === "AUTO_REPLY" || matched.actionType === "DRAFT_REPLY") {
-    const replyBody = await generateSmartReply(matched.actionValue, {
-      from: email.from,
-      subject: email.subject,
-      body: email.body || "",
-    });
+    const replyBody = await generateSmartReply(
+      matched.actionValue,
+      {
+        from: email.from,
+        subject: email.subject,
+        body: email.body || "",
+      },
+      userId,
+    );
 
     if (matched.actionType === "AUTO_REPLY") {
       // Extract email address from From header

@@ -40,18 +40,21 @@ async function autoGenerateTitle(conversationId: string, userMessage: string) {
     // Only generate if title is null/empty (never been set)
     if (convo?.title) return;
 
-    const response = await createCompletion({
-      model: MODEL,
-      messages: [
-        {
-          role: "system",
-          content:
-            "Generate a short conversation title (max 30 chars) from the user message. Reply with ONLY the title, no quotes or extra text. Use the same language as the user message.",
-        },
-        { role: "user", content: userMessage },
-      ],
-      max_tokens: 50,
-    });
+    const response = await createCompletion(
+      {
+        model: MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Generate a short conversation title (max 30 chars) from the user message. Reply with ONLY the title, no quotes or extra text. Use the same language as the user message.",
+          },
+          { role: "user", content: userMessage },
+        ],
+        max_tokens: 50,
+      },
+      { userId: convo?.userId },
+    );
 
     const title = response.choices[0]?.message?.content?.trim();
     if (title) {
@@ -642,7 +645,7 @@ export function chatRoutes(app: FastifyInstance) {
                 messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
                 tools,
               },
-              { credentials: retryCredentials },
+              { credentials: retryCredentials, userId: conversation.userId },
             );
 
             const choice = response.choices[0];
@@ -724,7 +727,7 @@ export function chatRoutes(app: FastifyInstance) {
               messages: history as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
               stream: true,
             },
-            { credentials: retryCredentials },
+            { credentials: retryCredentials, userId: conversation.userId },
           );
           for await (const chunk of stream) {
             const delta = chunk.choices[0]?.delta?.content;
@@ -966,7 +969,7 @@ export function chatRoutes(app: FastifyInstance) {
               { role: "user", content: trimmedContent },
             ],
           },
-          { credentials: userCredentials },
+          { credentials: userCredentials, userId: conversation.userId },
         )
           .then((res) => {
             const smartTitle = res.choices[0]?.message?.content?.trim();
@@ -1132,7 +1135,7 @@ export function chatRoutes(app: FastifyInstance) {
                       messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
                       tools,
                     },
-                    { credentials: userCredentials },
+                    { credentials: userCredentials, userId: conversation.userId },
                   ),
                 {
                   maxRetries: 2,
@@ -1267,7 +1270,7 @@ export function chatRoutes(app: FastifyInstance) {
                     messages: history as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
                     stream: true,
                   },
-                  { credentials: userCredentials },
+                  { credentials: userCredentials, userId: conversation.userId },
                 ),
               {
                 maxRetries: 2,

@@ -123,20 +123,24 @@ ${lines.join("\n")}`;
 
 async function classifyBatchWithLlm(
   emails: ClassifiableEmail[],
+  userId?: string,
 ): Promise<ClassifiedLabel[] | null> {
   try {
-    const response = await createCompletion({
-      model: MODEL,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a strict JSON classifier. Respond with valid JSON only — no prose, no code fences.",
-        },
-        { role: "user", content: buildPrompt(emails) },
-      ],
-      response_format: { type: "json_object" },
-    });
+    const response = await createCompletion(
+      {
+        model: MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a strict JSON classifier. Respond with valid JSON only — no prose, no code fences.",
+          },
+          { role: "user", content: buildPrompt(emails) },
+        ],
+        response_format: { type: "json_object" },
+      },
+      userId ? { userId } : {},
+    );
 
     const raw = response.choices[0]?.message?.content;
     if (!raw) return null;
@@ -187,7 +191,10 @@ function keywordFallback(email: ClassifiableEmail): ClassifiedLabel {
  * Classify a batch of emails. Ordering of the returned array matches input.
  * Emails that match a deterministic fast-path rule skip the LLM call.
  */
-export async function classifyEmailBatch(emails: ClassifiableEmail[]): Promise<ClassifiedLabel[]> {
+export async function classifyEmailBatch(
+  emails: ClassifiableEmail[],
+  userId?: string,
+): Promise<ClassifiedLabel[]> {
   if (emails.length === 0) return [];
 
   const results: (ClassifiedLabel | null)[] = emails.map((e) => fastClassify(e));
@@ -195,7 +202,7 @@ export async function classifyEmailBatch(emails: ClassifiableEmail[]): Promise<C
 
   if (llmIndexes.length > 0) {
     const llmInputs = llmIndexes.map((i) => emails[i]);
-    const llmResults = await classifyBatchWithLlm(llmInputs);
+    const llmResults = await classifyBatchWithLlm(llmInputs, userId);
 
     llmIndexes.forEach((inboxIdx, batchIdx) => {
       results[inboxIdx] = llmResults?.[batchIdx] ?? keywordFallback(emails[inboxIdx]);
