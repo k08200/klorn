@@ -60,22 +60,25 @@ export function waitlistRoutes(app: FastifyInstance) {
         select: { id: true, status: true },
       });
 
-      if (existing) {
-        return reply.code(200).send({ ok: true, alreadyOnList: true });
-      }
-
-      const entry = await db.waitlist.create({
-        data: { email, name, useCase },
-        select: { id: true, email: true, name: true, useCase: true },
-      });
+      const entry = existing
+        ? await db.waitlist.update({
+            where: { email },
+            data: { name: name ?? undefined, useCase: useCase ?? undefined },
+            select: { id: true, email: true, name: true, useCase: true },
+          })
+        : await db.waitlist.create({
+            data: { email, name, useCase },
+            select: { id: true, email: true, name: true, useCase: true },
+          });
 
       // Fire-and-forget admin notification — don't block the response if
-      // the email service is slow or misconfigured.
-      sendWaitlistAdminAlert(entry).catch((err) => {
+      // the email service is slow or misconfigured. Also fires on
+      // re-submissions so the admin sees follow-up interest.
+      sendWaitlistAdminAlert({ ...entry, isResubmission: !!existing }).catch((err) => {
         console.error("[WAITLIST] Admin alert failed:", err);
       });
 
-      return reply.code(200).send({ ok: true });
+      return reply.code(200).send({ ok: true, alreadyOnList: !!existing });
     },
   );
 }

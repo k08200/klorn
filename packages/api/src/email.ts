@@ -57,6 +57,7 @@ export async function sendWaitlistAdminAlert(entry: {
   email: string;
   name?: string | null;
   useCase?: string | null;
+  isResubmission?: boolean;
 }): Promise<boolean> {
   const adminEmails = (process.env.ADMIN_EMAILS || "")
     .split(",")
@@ -88,10 +89,12 @@ export async function sendWaitlistAdminAlert(entry: {
     await resend.emails.send({
       from: FROM_EMAIL,
       to: alertTo,
-      subject: `[Jigeum] New waitlist signup: ${safeEmail}`,
+      subject: entry.isResubmission
+        ? `[Jigeum] Waitlist re-submission: ${safeEmail}`
+        : `[Jigeum] New waitlist signup: ${safeEmail}`,
       html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-          <h2 style="color: #d8a45d; margin: 0 0 16px;">New early-access request</h2>
+          <h2 style="color: #d8a45d; margin: 0 0 16px;">${entry.isResubmission ? "Waitlist re-submission" : "New early-access request"}</h2>
           <p style="color: #374151; font-size: 14px; margin: 0 0 4px;"><strong>Email:</strong> ${safeEmail}</p>
           ${safeName ? `<p style="color: #374151; font-size: 14px; margin: 0 0 4px;"><strong>Name:</strong> ${safeName}</p>` : ""}
           ${safeUseCase ? `<p style="color: #374151; font-size: 14px; margin: 0 0 12px;"><strong>How they use email:</strong> ${safeUseCase}</p>` : ""}
