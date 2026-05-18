@@ -10,131 +10,28 @@ import { useToast } from "../../../components/toast";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
 import { DetailStat, EmailActionButton, ProfileFact, senderName } from "./atoms";
+import { EmailActionToolbar, EmailReminderQuickActions, UndoActionBanner } from "./toolbar";
 
-type EmailPriority = "URGENT" | "NORMAL" | "LOW";
-
-interface EmailDetail {
-  id: string;
-  gmailId: string;
-  threadId?: string | null;
-  from: string;
-  to: string;
-  cc: string | null;
-  subject: string;
-  body: string | null;
-  snippet: string | null;
-  date: string;
-  priority: EmailPriority;
-  category: string | null;
-  summary: string | null;
-  keyPoints: string[];
-  actionItems: string[];
-  sentiment: string | null;
-  isRead?: boolean;
-  isStarred?: boolean;
-  needsReply?: boolean;
-  attachmentCount?: number;
-  attachments?: EmailAttachment[];
-  candidateProfile?: AttachmentCandidateProfile | null;
-  candidateIntake?: CandidateIntake | null;
-}
-
-interface EmailAttachment {
-  id: string;
-  filename: string;
-  mimeType: string;
-  size: number | null;
-  summary: string | null;
-  textPreview: string | null;
-  keyPoints: string[];
-  extractedFields: Record<string, string | number | boolean | null>;
-  category: string | null;
-  analysisStatus: string;
-  analysisError: string | null;
-}
-
-interface AttachmentCandidateProfile {
-  detected: boolean;
-  pipelineStatus: "ready_to_review" | "needs_info" | "needs_analysis";
-  nextAction: string;
-  name: string | null;
-  role: string | null;
-  contact: string | null;
-  email: string | null;
-  phone: string | null;
-  age: string | null;
-  height: string | null;
-  skills: string[];
-  links: string[];
-  summary: string;
-  evidenceFiles: Array<{
-    filename: string;
-    category: string | null;
-    summary: string | null;
-    analysisStatus: string;
-    needsManualReview: boolean;
-    reviewReason: string | null;
-  }>;
-  manualReviewFiles: Array<{
-    filename: string;
-    status: string;
-    reason: string;
-  }>;
-  missingFields: string[];
-  confidence: number;
-}
-
-type CandidateIntakeStatus =
-  | "NEEDS_ANALYSIS"
-  | "NEEDS_INFO"
-  | "READY_TO_REVIEW"
-  | "REVIEWING"
-  | "CONTACTED"
-  | "SHORTLISTED"
-  | "REJECTED"
-  | "ARCHIVED";
-
-interface CandidateIntake {
-  id: string;
-  emailId: string;
-  status: CandidateIntakeStatus;
-  notes: string | null;
-  updatedAt: string;
-}
-
-interface ReplyDraft {
-  to: string;
-  subject: string;
-  body: string;
-  candidateProfile: AttachmentCandidateProfile | null;
-}
-
-type UndoableEmailAction = "archive" | "delete";
-
-interface UndoNotice {
-  action: UndoableEmailAction;
-  gmailId: string;
-  subject: string | null;
-}
-
-interface UndoActionResponse {
-  success: boolean;
-  gmailId: string;
-  emailId: string;
-}
-
-type EmailReminderKey = "later-today" | "tomorrow" | "next-week";
-
-interface EmailReminderOption {
-  key: EmailReminderKey;
-  label: string;
-}
-
-const EMAIL_REMINDER_OPTIONS: EmailReminderOption[] = [
-  { key: "later-today", label: "Later today" },
-  { key: "tomorrow", label: "Tomorrow" },
-  { key: "next-week", label: "Next week" },
-];
+// Domain types and the reminder option list live in ./types.ts so
+// sibling components (atoms.tsx, toolbar.tsx, future
+// candidate/attachment/reply extractions) can import them without
+// going through page.tsx.
+import type {
+  AttachmentCandidateProfile,
+  CandidateIntake,
+  CandidateIntakeStatus,
+  EmailAttachment,
+  EmailDetail,
+  EmailPriority,
+  EmailReminderKey,
+  EmailReminderOption,
+  NextEmailSummary,
+  ReplyDraft,
+  UndoActionResponse,
+  UndoableEmailAction,
+  UndoNotice,
+} from "./types";
+import { EMAIL_REMINDER_OPTIONS } from "./types";
 
 type EmailQueueKey =
   | "all"
@@ -203,16 +100,6 @@ function getReminderDate(option: EmailReminderKey): Date {
   date.setDate(date.getDate() + 7);
   date.setHours(9, 0, 0, 0);
   return date;
-}
-
-interface NextEmailSummary {
-  id: string;
-  from: string;
-  subject: string;
-  date: string;
-  isRead: boolean;
-  priority: EmailPriority;
-  needsReply: boolean;
 }
 
 interface LabelFeedback {
@@ -879,153 +766,6 @@ function EmailDetailView() {
           </div>
         </article>
       )}
-    </div>
-  );
-}
-
-function UndoActionBanner({
-  notice,
-  busy,
-  onDismiss,
-  onUndo,
-}: {
-  notice: UndoNotice;
-  busy: boolean;
-  onDismiss: () => void;
-  onUndo: () => void;
-}) {
-  const actionLabel = notice.action === "archive" ? "archived" : "moved to trash";
-  return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-[#2A1510] px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <p className="font-medium">Email {actionLabel}.</p>
-        {notice.subject && (
-          <p className="mt-0.5 truncate text-xs text-stone-400">{notice.subject}</p>
-        )}
-      </div>
-      <div className="flex shrink-0 gap-2">
-        <button
-          type="button"
-          onClick={onUndo}
-          disabled={busy}
-          className="min-h-10 rounded-md bg-accent-light px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent-muted disabled:opacity-50"
-        >
-          {busy ? "Restoring..." : "Undo"}
-        </button>
-        <button
-          type="button"
-          onClick={onDismiss}
-          disabled={busy}
-          className="min-h-10 rounded-md border border-white/10 px-3 text-xs text-stone-300 transition hover:bg-white/5 disabled:opacity-50"
-        >
-          Dismiss
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function EmailActionToolbar({
-  busyAction,
-  email,
-  nextEmail,
-  onArchive,
-  onDelete,
-  onOpenNext,
-  onToggleRead,
-  onToggleStar,
-}: {
-  busyAction: string | null;
-  email: EmailDetail;
-  nextEmail: NextEmailSummary | null;
-  onArchive: () => void;
-  onDelete: () => void;
-  onOpenNext: () => void;
-  onToggleRead: () => void;
-  onToggleStar: () => void;
-}) {
-  const disabled = busyAction !== null;
-  const isDemo = email.id.startsWith("demo-");
-  const actionDisabled = disabled || isDemo;
-  return (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-stone-800/70 bg-black/20 px-3 py-2">
-      <div className="flex min-w-0 items-center gap-2 text-xs text-stone-500">
-        <span
-          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-            email.isRead ? "bg-stone-600" : "bg-accent"
-          }`}
-        />
-        <span className="truncate">
-          {isDemo ? "Demo email" : email.isRead ? "Read email" : "Unread email"}
-          {email.isStarred ? " · Starred" : ""}
-          {nextEmail ? ` · Next: ${senderName(nextEmail.from)}` : ""}
-        </span>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        <EmailActionButton
-          busy={busyAction === "read"}
-          disabled={actionDisabled}
-          onClick={onToggleRead}
-        >
-          {email.isRead ? "Unread" : "Read"}
-        </EmailActionButton>
-        <EmailActionButton
-          busy={busyAction === "star"}
-          disabled={actionDisabled}
-          onClick={onToggleStar}
-        >
-          {email.isStarred ? "Unstar" : "Star"}
-        </EmailActionButton>
-        <EmailActionButton
-          busy={busyAction === "archive"}
-          disabled={actionDisabled}
-          onClick={onArchive}
-        >
-          Archive
-        </EmailActionButton>
-        <EmailActionButton
-          busy={busyAction === "delete"}
-          danger
-          disabled={actionDisabled}
-          onClick={onDelete}
-        >
-          Delete
-        </EmailActionButton>
-        {nextEmail && (
-          <EmailActionButton busy={false} disabled={disabled} onClick={onOpenNext}>
-            Next
-          </EmailActionButton>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function EmailReminderQuickActions({
-  busyKey,
-  disabled,
-  onCreate,
-}: {
-  busyKey: EmailReminderKey | null;
-  disabled: boolean;
-  onCreate: (option: EmailReminderOption) => void;
-}) {
-  return (
-    <div className="mb-4 flex flex-col gap-2 rounded-lg border border-stone-800/70 bg-stone-950/30 px-3 py-2 text-xs text-stone-400 sm:flex-row sm:items-center sm:justify-between">
-      <span className="font-medium text-stone-300">Remind me</span>
-      <div className="flex flex-wrap gap-1.5">
-        {EMAIL_REMINDER_OPTIONS.map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => onCreate(option)}
-            disabled={disabled || busyKey !== null}
-            className="min-h-9 rounded-md border border-white/10 bg-black/20 px-3 text-xs text-stone-300 transition hover:border-[#7DD3FC]/35 hover:text-stone-100 disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            {busyKey === option.key ? "Setting..." : option.label}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
