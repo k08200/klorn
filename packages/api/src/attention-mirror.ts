@@ -20,7 +20,7 @@ import type { AttentionStatus, AttentionType } from "@prisma/client";
 import { getToolRisk } from "./agent-logic.js";
 import { AUTOPILOT_LEVEL, type AutopilotLevel } from "./agent-mode.js";
 import { prisma } from "./db.js";
-import { getSuppressionSet } from "./feedback-adaptor.js";
+import { getSuppressionSet, isSuppressed } from "./feedback-adaptor.js";
 
 // Tier fields (tier, tierReason) are added via migration. Until `prisma generate`
 // reflects the schema change, we use this typed wrapper to avoid TS errors.
@@ -182,7 +182,7 @@ export async function upsertAttentionForPendingAction(pa: PendingActionLike): Pr
   const autonomyLevel = autonomyLevelForPendingAction(pa);
   let { tier, tierReason } = tierForPendingAction(autonomyLevel);
   const suppressed = await getSuppressionSet(pa.userId);
-  if (suppressed.has(`PENDING_ACTION:${type}`)) {
+  if (isSuppressed(suppressed, "PENDING_ACTION", type, PENDING_ACTION_PRIORITY)) {
     tier = "SILENT";
     tierReason = "Silenced — you consistently dismiss this signal type";
   }
@@ -345,7 +345,7 @@ export async function upsertAttentionForTask(task: TaskLike, now = Date.now()): 
   const type: AttentionType = "DEADLINE";
   let { tier, tierReason } = tierForTask(task.priority, isOverdue);
   const suppressed = await getSuppressionSet(task.userId);
-  if (suppressed.has(`TASK:${type}`)) {
+  if (isSuppressed(suppressed, "TASK", type, priorityForTask(task, isOverdue))) {
     tier = "SILENT";
     tierReason = "Silenced — you consistently dismiss this signal type";
   }
@@ -478,7 +478,7 @@ export async function upsertAttentionForCalendarEvent(
   const priority = !isResolved && start - now <= SOON_WINDOW_MS ? 70 : 50;
   let { tier, tierReason } = tierForCalendarEvent(priority);
   const suppressed = await getSuppressionSet(event.userId);
-  if (suppressed.has(`CALENDAR_EVENT:MEETING_PREP`)) {
+  if (isSuppressed(suppressed, "CALENDAR_EVENT", "MEETING_PREP", priority)) {
     tier = "SILENT";
     tierReason = "Silenced — you consistently dismiss meeting prep signals";
   }
@@ -567,7 +567,7 @@ export async function upsertAttentionForNotification(notif: NotificationLike): P
   let tier: Tier = "QUEUE";
   let tierReason = "Agent proposal awaiting your review";
   const suppressed = await getSuppressionSet(notif.userId);
-  if (suppressed.has("NOTIFICATION:FOLLOWUP")) {
+  if (isSuppressed(suppressed, "NOTIFICATION", "FOLLOWUP")) {
     tier = "SILENT";
     tierReason = "Silenced — you consistently dismiss agent proposals";
   }
@@ -696,7 +696,7 @@ export async function upsertAttentionForCommitment(
   const priority = priorityForCommitment(type, c, now);
   let { tier, tierReason } = tierForCommitment(type, priority, c.confidence);
   const suppressed = await getSuppressionSet(c.userId);
-  if (suppressed.has(`COMMITMENT:${type}`)) {
+  if (isSuppressed(suppressed, "COMMITMENT", type, priority)) {
     tier = "SILENT";
     tierReason = "Silenced — you consistently dismiss this commitment type";
   }
