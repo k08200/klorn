@@ -694,8 +694,11 @@ model EmailRule {
   name            String // Rule display name
   description     String?
   isActive        Boolean         @default(true)
-  // Conditions (JSON): { from?: string[], subjectContains?: string[], category?: string[] }
-  conditions      String
+  // Conditions: { from?: string[], subjectContains?: string[], category?: string[] }
+  // Stored as native JSONB so the matching engine can rely on the
+  // shape (no per-row JSON.parse) and so a future PR can index/query
+  // individual keys without rewriting every row.
+  conditions      Json
   // Action type
   actionType      EmailRuleAction @default(AUTO_REPLY)
   // Reply template (for AUTO_REPLY) or label name (for LABEL)

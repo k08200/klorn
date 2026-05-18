@@ -29,7 +29,9 @@ export async function registerEmailRulesRoutes(app: FastifyInstance) {
       where: { userId: uid },
       orderBy: { createdAt: "desc" },
     });
-    return { rules: rules.map((r) => ({ ...r, conditions: JSON.parse(r.conditions) })) };
+    // conditions is JSONB after migration 20260519030000_email_rule_conditions_jsonb
+    // so Prisma returns it as a parsed value — no JSON.parse needed.
+    return { rules };
   });
 
   // POST /api/email/rules
@@ -52,13 +54,15 @@ export async function registerEmailRulesRoutes(app: FastifyInstance) {
         userId: uid,
         name,
         description: description || null,
-        conditions: JSON.stringify(conditions),
+        // Prisma serializes the object directly into the JSONB column;
+        // we no longer round-trip through JSON.stringify.
+        conditions: conditions as Prisma.InputJsonValue,
         actionType: (actionType as EmailRuleAction) || "AUTO_REPLY",
         actionValue,
       },
     });
 
-    return { rule: { ...rule, conditions } };
+    return { rule };
   });
 
   // PATCH /api/email/rules/:id
@@ -77,19 +81,18 @@ export async function registerEmailRulesRoutes(app: FastifyInstance) {
     const rule = await prisma.emailRule.findFirst({ where: { id, userId: uid } });
     if (!rule) return { error: "Rule not found" };
 
-    const data: Record<string, unknown> = {};
+    const data: Prisma.EmailRuleUpdateInput = {};
     if (updates.name !== undefined) data.name = updates.name;
     if (updates.description !== undefined) data.description = updates.description;
-    if (updates.conditions !== undefined) data.conditions = JSON.stringify(updates.conditions);
-    if (updates.actionType !== undefined) data.actionType = updates.actionType;
+    if (updates.conditions !== undefined) {
+      data.conditions = updates.conditions as Prisma.InputJsonValue;
+    }
+    if (updates.actionType !== undefined) data.actionType = updates.actionType as EmailRuleAction;
     if (updates.actionValue !== undefined) data.actionValue = updates.actionValue;
     if (updates.isActive !== undefined) data.isActive = updates.isActive;
 
-    const updated = await prisma.emailRule.update({
-      where: { id },
-      data: data as Prisma.EmailRuleUpdateInput,
-    });
-    return { rule: { ...updated, conditions: JSON.parse(updated.conditions) } };
+    const updated = await prisma.emailRule.update({ where: { id }, data });
+    return { rule: updated };
   });
 
   // DELETE /api/email/rules/:id

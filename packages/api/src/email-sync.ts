@@ -1036,7 +1036,10 @@ export async function checkAutoReplyRules(
   });
 
   for (const rule of rules) {
-    const conditions = JSON.parse(rule.conditions) as {
+    // conditions is JSONB after migration 20260519030000 — Prisma returns
+    // it parsed. Defensive cast (`as` chain) because Prisma types
+    // conditions as JsonValue, which is the union we actually want here.
+    const conditions = (rule.conditions ?? {}) as {
       from?: string[];
       subjectContains?: string[];
       category?: string[];
