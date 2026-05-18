@@ -107,6 +107,7 @@
       "!!**/node_modules",
       "!!**/dist",
       "!!**/.next",
+      "!!**/.next-dev",
       "!!**/prisma/migrations",
       "!!**/.turbo"
     ]

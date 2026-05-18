@@ -16,7 +16,6 @@
   "dependencies": {
     "@fastify/cors": "^11.0.1",
     "@fastify/rate-limit": "^10.2.1",
-    "@jigeum/core": "workspace:*",
     "@prisma/client": "^6.8.2",
     "@sentry/node": "^10.48.0",
     "@types/web-push": "^3.6.4",
