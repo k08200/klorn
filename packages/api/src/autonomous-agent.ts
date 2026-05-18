@@ -34,10 +34,22 @@ import {
   getNotifKey,
   getToolRisk,
   isHousekeepingProposalToolName,
-  proposalIssueTokens,
   TOOL_RISK_LEVELS,
 } from "./agent-logic.js";
 import { type AgentMode, getAgentModePolicy, normalizeAgentMode } from "./agent-mode.js";
+import {
+  AGENT_NOTIFICATION_PREFIX,
+  EVE_AGENT_NOTIFICATION_PREFIX,
+  filterSuppressedContextItems,
+  findRecentSimilarProposal,
+  formatRecentProposalSuppressions,
+  getRecentProposalSuppressions,
+  hasRecentNotification,
+  hasRepliedToEmail,
+  LEGACY_AGENT_NOTIFICATION_PREFIX,
+  type RecentProposalSuppression,
+  safeJson,
+} from "./agent-proposal-dedup.js";
 import {
   bulkResolveAttentionForPendingActions,
   upsertAttentionForPendingAction,
@@ -90,224 +102,16 @@ let intervalId: ReturnType<typeof setInterval> | null = null;
 // Track last run per user to respect per-user interval
 const lastRunTime = new Map<string, number>();
 
-// DB-based dedup: check if a similar notification was sent recently
-// Survives server restarts (unlike previous in-memory Map approach)
-const NOTIFY_DEDUP_HOURS = 2; // Don't repeat same notification within 2 hours
-const PROPOSAL_DEDUP_HOURS = 24; // Don't re-propose the same underlying issue within a day
-const CONTEXT_SUPPRESSION_HOURS = 24; // Hide recently-proposed topics before the LLM sees context
-const AGENT_NOTIFICATION_PREFIX = "[Jigeum]";
-const EVE_AGENT_NOTIFICATION_PREFIX = "[Eve]";
-const LEGACY_AGENT_NOTIFICATION_PREFIX = "[EV" + "E]";
 const EXECUTABLE_TOOL_NAMES = new Set(
   ALL_TOOLS.map((tool) => (tool as { function?: { name?: string } }).function?.name).filter(
     (name): name is string => typeof name === "string" && name.length > 0,
   ),
 );
 
-async function hasRecentNotification(userId: string, titleKey: string): Promise<boolean> {
-  const since = new Date(Date.now() - NOTIFY_DEDUP_HOURS * 60 * 60 * 1000);
-  const existing = await prisma.notification.findFirst({
-    where: {
-      userId,
-      OR: [
-        { title: { startsWith: AGENT_NOTIFICATION_PREFIX } },
-        { title: { startsWith: EVE_AGENT_NOTIFICATION_PREFIX } },
-        { title: { startsWith: LEGACY_AGENT_NOTIFICATION_PREFIX } },
-      ],
-      createdAt: { gte: since },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-  // Check recent Jigeum notifications for similar title.
-  if (!existing) return false;
-  const recentNotifs = await prisma.notification.findMany({
-    where: {
-      userId,
-      OR: [
-        { title: { startsWith: AGENT_NOTIFICATION_PREFIX } },
-        { title: { startsWith: EVE_AGENT_NOTIFICATION_PREFIX } },
-        { title: { startsWith: LEGACY_AGENT_NOTIFICATION_PREFIX } },
-      ],
-      createdAt: { gte: since },
-    },
-    select: { title: true },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
-  return recentNotifs.some((n) => getNotifKey(n.title) === titleKey);
-}
-
-async function findRecentSimilarProposal(
-  userId: string,
-  proposed: { message: string; toolName: string; toolArgs: unknown },
-): Promise<{ id: string; toolName: string; status: string; createdAt: Date } | null> {
-  const since = new Date(Date.now() - PROPOSAL_DEDUP_HOURS * 60 * 60 * 1000);
-  const recentRows = (await db.pendingAction.findMany({
-    where: {
-      userId,
-      status: { in: ["PENDING", "REJECTED", "EXECUTED"] },
-      createdAt: { gte: since },
-    },
-    select: {
-      id: true,
-      toolName: true,
-      toolArgs: true,
-      reasoning: true,
-      status: true,
-      createdAt: true,
-    },
-    orderBy: { createdAt: "desc" },
-    take: 80,
-  })) as Array<{
-    id: string;
-    toolName: string;
-    toolArgs: string;
-    reasoning: string | null;
-    status: string;
-    createdAt: Date;
-  }>;
-
-  for (const row of recentRows) {
-    if (
-      areSimilarProposalIssues(proposed, {
-        message: row.reasoning ?? "",
-        toolName: row.toolName,
-        toolArgs: safeJson(row.toolArgs),
-      })
-    ) {
-      return row;
-    }
-  }
-
-  return null;
-}
-
-function safeJson(raw: string): unknown {
-  try {
-    return JSON.parse(raw || "{}");
-  } catch {
-    return raw;
-  }
-}
-
-interface RecentProposalSuppression {
-  id: string;
-  toolName: string;
-  status: string;
-  createdAt: Date;
-  message: string;
-  toolArgs: unknown;
-  tokens: Set<string>;
-}
-
-async function getRecentProposalSuppressions(userId: string): Promise<RecentProposalSuppression[]> {
-  const since = new Date(Date.now() - CONTEXT_SUPPRESSION_HOURS * 60 * 60 * 1000);
-  const rows = (await db.pendingAction.findMany({
-    where: {
-      userId,
-      status: { in: ["PENDING", "REJECTED", "EXECUTED"] },
-      createdAt: { gte: since },
-    },
-    select: {
-      id: true,
-      toolName: true,
-      toolArgs: true,
-      reasoning: true,
-      status: true,
-      createdAt: true,
-    },
-    orderBy: { createdAt: "desc" },
-    take: 80,
-  })) as Array<{
-    id: string;
-    toolName: string;
-    toolArgs: string;
-    reasoning: string | null;
-    status: string;
-    createdAt: Date;
-  }>;
-
-  return rows
-    .map((row) => {
-      const toolArgs = safeJson(row.toolArgs);
-      const input = {
-        message: row.reasoning ?? "",
-        toolName: row.toolName,
-        toolArgs,
-      };
-      return {
-        id: row.id,
-        toolName: row.toolName,
-        status: row.status,
-        createdAt: row.createdAt,
-        message: row.reasoning ?? "",
-        toolArgs,
-        tokens: proposalIssueTokens(input),
-      };
-    })
-    .filter((row) => row.tokens.size > 0);
-}
-
-function shouldSuppressContextText(
-  text: string,
-  suppressions: RecentProposalSuppression[],
-): boolean {
-  if (!text.trim() || suppressions.length === 0) return false;
-  return suppressions.some((suppression) =>
-    areSimilarProposalIssues(
-      { message: text, toolName: "context_item" },
-      {
-        message: suppression.message,
-        toolName: suppression.toolName,
-        toolArgs: suppression.toolArgs,
-      },
-    ),
-  );
-}
-
-function filterSuppressedContextItems<T>(
-  items: T[],
-  getText: (item: T) => string,
-  suppressions: RecentProposalSuppression[],
-): { visible: T[]; hidden: number } {
-  if (suppressions.length === 0) return { visible: items, hidden: 0 };
-  const visible = items.filter((item) => !shouldSuppressContextText(getText(item), suppressions));
-  return { visible, hidden: items.length - visible.length };
-}
-
-function formatRecentProposalSuppressions(suppressions: RecentProposalSuppression[]): string {
-  if (suppressions.length === 0) return "";
-  const lines = suppressions.slice(0, 8).map((suppression) => {
-    const ageMin = Math.max(0, Math.round((Date.now() - suppression.createdAt.getTime()) / 60_000));
-    const age = ageMin < 60 ? `${ageMin}m ago` : `${Math.round(ageMin / 60)}h ago`;
-    const anchors = [...suppression.tokens].slice(0, 6).join(", ");
-    return `- [${suppression.status}] ${suppression.toolName} (${age}) anchors: ${anchors}`;
-  });
-  return `## Suppressed Recent Proposal Topics (last ${CONTEXT_SUPPRESSION_HOURS}h)
-These topics already had an approval card or user decision recently. Treat them as already handled. Do NOT propose them again unless the user explicitly asks in the current chat.
-${lines.join("\n")}`;
-}
-
-// DB-based email reply dedup: check AgentLog for recent send_email actions
-const REPLIED_EMAIL_DEDUP_HOURS = 24;
-
-async function hasRepliedToEmail(userId: string, emailSubject: string): Promise<boolean> {
-  const since = new Date(Date.now() - REPLIED_EMAIL_DEDUP_HOURS * 60 * 60 * 1000);
-  const normalizedSubject = emailSubject.replace(/^Re:\s*/i, "").slice(0, 30);
-  if (!normalizedSubject) return false;
-  const recentSend = await db.agentLog.findFirst({
-    where: {
-      userId,
-      action: "auto_action",
-      tool: "send_email",
-      summary: { contains: normalizedSubject },
-      createdAt: { gte: since },
-    },
-  });
-  return !!recentSend;
-}
-
-// getNotifKey moved to agent-logic.ts and re-exported at the top of this file
+// Proposal/notification dedup helpers and the prefix constants live in
+// agent-proposal-dedup.ts so they can be tested without booting the
+// full agent runtime. The autonomous loop imports what it needs at the
+// top of this file.
 
 /** Track LLM token usage for cost monitoring */
 async function trackTokenUsage(
