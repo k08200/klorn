@@ -5,6 +5,24 @@
   --color-accent-light: #ff8a70;
   --color-accent-muted: #ffb09c;
   --color-accent-dim: #ffe2d7;
+
+  /* Surface tokens — extracted 2026-05-19 from inline bg-[#XXXXXX] usages
+     across the landing page and app shell. Use `bg-surface-app`, etc.
+     instead of bare hex values so the palette can be retuned in one spot. */
+  --color-surface-app: #10100d;
+  --color-surface-canvas: #0f1115;
+  --color-surface-elevated: #151922;
+  --color-surface-panel: #111318;
+  --color-surface-translucent: #12161b;
+
+  /* Text / brand tokens — gold accent and cream foreground used on the
+     marketing surface. Same logic: rename here, not 30 className strings. */
+  --color-brand-gold: #d8a45d;
+  --color-brand-gold-bright: #f0c982;
+  --color-brand-cream: #f8f4ec;
+  --color-brand-cream-soft: #f2eadc;
+  --color-brand-ink: #11100d;
+  --color-brand-ink-soft: #12100d;
 }
 
 body {

@@ -9,12 +9,37 @@
  * Install: pnpm add @slack/bolt
  */
 
-import type { FastifyInstance } from "fastify";
+import crypto from "node:crypto";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { wrapUntrusted } from "./untrusted.js";
 
 // Slack message sending (works without @slack/bolt via webhook)
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
+const SLACK_SIGNING_SECRET = process.env.SLACK_SIGNING_SECRET;
+
+const SLACK_REQUEST_MAX_AGE_SEC = 60 * 5;
+
+function verifySlackSignature(req: FastifyRequest): boolean {
+  if (!SLACK_SIGNING_SECRET) return false;
+  const timestamp = req.headers["x-slack-request-timestamp"];
+  const signature = req.headers["x-slack-signature"];
+  const rawBody = (req as unknown as { rawBody?: string }).rawBody;
+  if (typeof timestamp !== "string" || typeof signature !== "string" || !rawBody) {
+    return false;
+  }
+  const ts = Number.parseInt(timestamp, 10);
+  if (!Number.isFinite(ts)) return false;
+  if (Math.abs(Math.floor(Date.now() / 1000) - ts) > SLACK_REQUEST_MAX_AGE_SEC) {
+    return false;
+  }
+  const base = `v0:${timestamp}:${rawBody}`;
+  const expected = `v0=${crypto.createHmac("sha256", SLACK_SIGNING_SECRET).update(base).digest("hex")}`;
+  const expectedBuf = Buffer.from(expected, "utf8");
+  const signatureBuf = Buffer.from(signature, "utf8");
+  if (expectedBuf.length !== signatureBuf.length) return false;
+  return crypto.timingSafeEqual(expectedBuf, signatureBuf);
+}
 
 interface SlackMessage {
   channel: string;
@@ -105,6 +130,13 @@ export async function readSlackMessages(
 export async function slackEventRoutes(app: FastifyInstance) {
   // POST /api/slack/events — Slack Events API webhook
   app.post("/events", async (request, reply) => {
+    if (!SLACK_SIGNING_SECRET) {
+      return reply.code(503).send({ error: "Slack signing secret not configured" });
+    }
+    if (!verifySlackSignature(request)) {
+      return reply.code(401).send({ error: "Invalid Slack signature" });
+    }
+
     const body = request.body as Record<string, unknown>;
 
     // URL verification challenge

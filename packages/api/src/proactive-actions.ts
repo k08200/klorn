@@ -16,17 +16,18 @@
  * All actions are idempotent (dedup via DB notification check).
  */
 
+import {
+  DEADLINE_WARNING_DAYS,
+  EOD_HOUR,
+  MEETING_PREP_MINUTES,
+  UNANSWERED_THRESHOLD_HOURS,
+  WEEKLY_REVIEW_DAY,
+} from "./config.js";
 import { prisma } from "./db.js";
 import { senderName } from "./notification-format.js";
 import type { NotifCategory } from "./notification-prefs.js";
 import { sendPushNotification } from "./push.js";
 import { pushNotification } from "./websocket.js";
-
-const UNANSWERED_THRESHOLD_HOURS = 48;
-const MEETING_PREP_MINUTES = 60;
-const WEEKLY_REVIEW_DAY = 1; // Monday
-const DEADLINE_WARNING_DAYS = 3;
-const EOD_HOUR = 18; // 6pm for end-of-day review
 
 /** Check for emails that haven't been replied to in 48 hours */
 async function checkUnansweredEmails(userId: string): Promise<void> {

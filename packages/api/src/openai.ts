@@ -39,6 +39,23 @@ export class AllProvidersExhaustedError extends Error {
 
 export interface CompletionOptions {
   credentials?: ProviderCredentials;
+  /**
+   * When set, the request is gated by the per-user daily cost cap
+   * (see DAILY_COST_CAP_CENTS). A user over the cap throws
+   * `DailyCostCapExceededError`; otherwise the call's estimated cost is
+   * recorded after success.
+   *
+   * Leave undefined for system-initiated calls that should bypass user
+   * accounting (e.g. one-off backfill scripts).
+   */
+  userId?: string;
+}
+
+export class DailyCostCapExceededError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DailyCostCapExceededError";
+  }
 }
 
 const KOREAN_EXHAUSTED_MESSAGE =
@@ -77,6 +94,24 @@ export async function createCompletion(
   const chain = getProviderChain(options.credentials);
   if (chain.length === 0) {
     throw new Error("No LLM providers configured — set OPENROUTER_API_KEY and/or GEMINI_API_KEY");
+  }
+
+  // Daily-cost gate: enforce BEFORE the call so we don't burn budget twice
+  // when a runaway loop has already crossed the cap.
+  if (options.userId) {
+    const { checkCostGate, recordCostUsage, usdToCents } = await import("./cost-guard.js");
+    const gate = await checkCostGate(options.userId);
+    if (!gate.allowed) {
+      throw new DailyCostCapExceededError(
+        gate.reason || `Daily LLM cost cap reached for user ${options.userId}`,
+      );
+    }
+    // Pre-emptively bill the estimated cost; success path is recorded below.
+    // We use a tiny floor (1¢) for paid models so runaway calls can't sneak
+    // under the cap by being individually cheap.
+    const { estimateModelCostUsd } = await import("./model-fallback.js");
+    const estUsd = estimateModelCostUsd(params.model, 0, 0); // floor for the call itself
+    void recordCostUsage(options.userId, usdToCents(estUsd), params.model);
   }
 
   /**

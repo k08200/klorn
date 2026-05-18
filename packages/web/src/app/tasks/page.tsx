@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
+import ErrorAlert from "../../components/ui/error-alert";
+import LoadingState from "../../components/ui/loading-state";
 import { apiFetch } from "../../lib/api";
 import { captureClientError } from "../../lib/sentry";
 
@@ -309,12 +311,18 @@ function NewTaskForm({ onCreated }: { onCreated: (task: Task) => void }) {
 function TasksContent() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("open");
 
   const load = useCallback(() => {
+    setLoading(true);
+    setLoadError(null);
     apiFetch<{ tasks: Task[] }>("/api/tasks")
       .then((data) => setTasks(Array.isArray(data.tasks) ? data.tasks : []))
-      .catch((err) => captureClientError(err, { scope: "tasks.load" }))
+      .catch((err) => {
+        captureClientError(err, { scope: "tasks.load" });
+        setLoadError("Could not load tasks.");
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -430,15 +438,14 @@ function TasksContent() {
           ))}
         </div>
 
-        {loading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-16 animate-pulse rounded-xl border border-stone-800 bg-stone-900/30"
-              />
-            ))}
+        {loadError && !loading && (
+          <div className="mb-3">
+            <ErrorAlert onRetry={load}>{loadError}</ErrorAlert>
           </div>
+        )}
+
+        {loading ? (
+          <LoadingState rows={5} rowHeight="h-16" label="Loading tasks" />
         ) : sorted.length === 0 ? (
           <div className="rounded-xl border border-stone-800 bg-stone-900/20 py-12 text-center">
             <svg

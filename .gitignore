@@ -5,6 +5,7 @@ dist/
 *.log
 .env
 results/
+test-results/
 .next/
 .next-dev/
 

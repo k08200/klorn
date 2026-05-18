@@ -61,6 +61,7 @@ model User {
   updatedAt                 DateTime                   @updatedAt
   emailProcessingLogs       EmailProcessingLog[]
   contactTrustScores        ContactTrustScore[]
+  llmCostLedger             LlmCostLedger[]
 }
 
 enum UserRole {
@@ -121,6 +122,8 @@ model Agent {
   testRuns  TestRun[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  @@index([userId])
 }
 
 model TestRun {
@@ -139,6 +142,9 @@ model TestRun {
   startedAt     DateTime?
   completedAt   DateTime?
   createdAt     DateTime     @default(now())
+
+  @@index([userId, createdAt])
+  @@index([agentId, createdAt])
 }
 
 model Evaluation {
@@ -153,6 +159,8 @@ model Evaluation {
   confidence Float?
   latencyMs  Int?
   createdAt  DateTime @default(now())
+
+  @@index([testRunId])
 }
 
 enum Plan {
@@ -188,6 +196,8 @@ model Conversation {
   summaries      ConversationSummary[]
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
+
+  @@index([userId, updatedAt])
 }
 
 model Message {
@@ -263,6 +273,9 @@ model Note {
   category  String   @default("general")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId, updatedAt])
+  @@index([userId, category])
 }
 
 model Reminder {
@@ -297,6 +310,9 @@ model Contact {
   tags      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId, name])
+  @@index([userId, email])
 }
 
 model CalendarEvent {
@@ -408,6 +424,8 @@ model PushSubscription {
   p256dh    String
   auth      String
   createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model PushDeliveryLog {
@@ -1039,4 +1057,25 @@ enum WaitlistStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+// ─── LLM cost ledger ───────────────────────────────────────────────────────
+// Per-user daily LLM spend so the engine can enforce a hard cap before
+// each model call (see config.DAILY_COST_CAP_CENTS). One row per
+// (user, date in YYYY-MM-DD UTC). `cents` is monotonically incremented as
+// calls succeed. Free models add 0 — they still appear so we can see
+// "how active was this user today" even when the cost is zero.
+model LlmCostLedger {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayKey      String   // "YYYY-MM-DD" in UTC, stable for fast upsert
+  cents       Int      @default(0) // accumulated USD cents
+  callCount   Int      @default(0)
+  lastModel   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, dayKey])
+  @@index([userId, dayKey])
 }

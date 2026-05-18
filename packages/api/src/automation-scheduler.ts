@@ -10,6 +10,13 @@
  */
 
 import { createDailyBriefingDelivery } from "./briefing.js";
+import {
+  SCHEDULER_CALENDAR_SYNC_INTERVAL_MS,
+  SCHEDULER_CHECK_INTERVAL_MS,
+  SCHEDULER_EMAIL_SYNC_INTERVAL_MS,
+  SCHEDULER_RECONCILE_INTERVAL_MS,
+  SCHEDULER_WATCH_RENEWAL_INTERVAL_MS,
+} from "./config.js";
 import { prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
 import { syncRecentCandidateIntakes } from "./email-candidate-intake.js";
@@ -36,10 +43,40 @@ import { pushNotification } from "./websocket.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 
-const CHECK_INTERVAL_MS = 60_000; // 1 minute
-const WATCH_RENEWAL_INTERVAL_MS = 60 * 60 * 1000; // hourly check for expiring Gmail watches
+const CHECK_INTERVAL_MS = SCHEDULER_CHECK_INTERVAL_MS;
+const WATCH_RENEWAL_INTERVAL_MS = SCHEDULER_WATCH_RENEWAL_INTERVAL_MS;
 const DB_HEARTBEAT_ENABLED = process.env.DB_HEARTBEAT_ENABLED === "true";
 const PROACTIVE_ACTIONS_ENABLED = process.env.PROACTIVE_ACTIONS_ENABLED === "true";
+
+// Stable 32-bit hash used as Postgres advisory lock key. Same int across
+// every worker that imports this module — distributed mutual exclusion.
+const SCHEDULER_LOCK_KEY = 0x4a47_454d; // "JIGE" + "M" reduced; arbitrary stable int
+
+/**
+ * Postgres session advisory lock. Try-and-skip if another worker holds it.
+ * `pg_try_advisory_lock` returns true if acquired, false otherwise.
+ * Release with `pg_advisory_unlock` at the end of the tick.
+ */
+async function tryAcquireSchedulerLock(): Promise<boolean> {
+  try {
+    const rows = await prisma.$queryRawUnsafe<{ locked: boolean }[]>(
+      `SELECT pg_try_advisory_lock($1) AS locked`,
+      SCHEDULER_LOCK_KEY,
+    );
+    return rows[0]?.locked === true;
+  } catch (err) {
+    console.warn("[AUTOMATION] advisory lock acquire failed:", err);
+    return false;
+  }
+}
+
+async function releaseSchedulerLock(): Promise<void> {
+  try {
+    await prisma.$queryRawUnsafe(`SELECT pg_advisory_unlock($1)`, SCHEDULER_LOCK_KEY);
+  } catch (err) {
+    console.warn("[AUTOMATION] advisory lock release failed:", err);
+  }
+}
 
 // In-memory cache to skip redundant DB queries within same process lifetime.
 // Actual dedup is DB-based (survives server restarts).
@@ -68,27 +105,24 @@ async function hasBriefingBeenSentToday(userId: string, timeZone: string): Promi
  * per-user timestamps removes that class of misses.
  */
 const lastEmailSyncAt = new Map<string, number>();
-const EMAIL_SYNC_INTERVAL_MS = 3 * 60 * 1000; // 3 minutes
 function isEmailSyncDue(userId: string): boolean {
   const last = lastEmailSyncAt.get(userId);
   if (!last) return true;
-  return Date.now() - last >= EMAIL_SYNC_INTERVAL_MS;
+  return Date.now() - last >= SCHEDULER_EMAIL_SYNC_INTERVAL_MS;
 }
 
 const lastReconcileAt = new Map<string, number>();
-const RECONCILE_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 function isReconcileDue(userId: string): boolean {
   const last = lastReconcileAt.get(userId);
   if (!last) return true;
-  return Date.now() - last >= RECONCILE_INTERVAL_MS;
+  return Date.now() - last >= SCHEDULER_RECONCILE_INTERVAL_MS;
 }
 
 const lastCalendarSyncAt = new Map<string, number>();
-const CALENDAR_SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 function isCalendarSyncDue(userId: string): boolean {
   const last = lastCalendarSyncAt.get(userId);
   if (!last) return true;
-  return Date.now() - last >= CALENDAR_SYNC_INTERVAL_MS;
+  return Date.now() - last >= SCHEDULER_CALENDAR_SYNC_INTERVAL_MS;
 }
 
 async function notifyCandidateEmails(userId: string): Promise<void> {
@@ -235,6 +269,15 @@ async function dbHeartbeat(): Promise<void> {
 
 async function runAutomations() {
   await dbHeartbeat();
+
+  // Cross-worker mutual exclusion. If another container holds the lock,
+  // skip this tick entirely — prevents duplicate briefings, sync, and pushes
+  // when multiple Render dynos run in parallel.
+  const acquired = await tryAcquireSchedulerLock();
+  if (!acquired) {
+    return;
+  }
+
   try {
     // Gmail watch renewal runs once per hour regardless of configs.
     // It is a no-op when GMAIL_PUBSUB_TOPIC is unset or no watches are due.
@@ -623,6 +666,8 @@ async function runAutomations() {
     );
   } catch (err) {
     console.error("[AUTOMATION] Scheduler error:", err);
+  } finally {
+    await releaseSchedulerLock();
   }
 }
 

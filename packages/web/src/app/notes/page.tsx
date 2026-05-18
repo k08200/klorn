@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import ErrorAlert from "../../components/ui/error-alert";
+import LoadingState from "../../components/ui/loading-state";
 import AuthGuard from "../../components/auth-guard";
 import { apiFetch } from "../../lib/api";
 import { captureClientError } from "../../lib/sentry";
@@ -105,18 +107,23 @@ function NoteCard({ note, onDelete }: { note: Note; onDelete: (id: string) => vo
 function NotesContent() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
 
   const load = useCallback((q: string, cat: string) => {
     setLoading(true);
+    setLoadError(null);
     const params = new URLSearchParams();
     if (q) params.set("search", q);
     if (cat !== "all") params.set("category", cat);
     const qs = params.toString() ? `?${params.toString()}` : "";
     apiFetch<{ notes: Note[] }>(`/api/notes${qs}`)
       .then((data) => setNotes(Array.isArray(data.notes) ? data.notes : []))
-      .catch((err) => captureClientError(err, { scope: "notes.load" }))
+      .catch((err) => {
+        captureClientError(err, { scope: "notes.load" });
+        setLoadError("Could not load notes.");
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -190,15 +197,14 @@ function NotesContent() {
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {loading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-20 animate-pulse rounded-xl border border-stone-800 bg-stone-900/30"
-              />
-            ))}
+        {loadError && !loading && (
+          <div className="mb-3">
+            <ErrorAlert onRetry={() => load(search, category)}>{loadError}</ErrorAlert>
           </div>
+        )}
+
+        {loading ? (
+          <LoadingState rows={5} rowHeight="h-20" label="Loading notes" />
         ) : notes.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <svg

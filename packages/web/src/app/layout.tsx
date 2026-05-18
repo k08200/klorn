@@ -41,7 +41,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-[#10100d] text-stone-100 antialiased">
+      <body className="bg-surface-app text-stone-100 antialiased">
         <Providers>
           <KeyboardShortcuts />
           <CommandPalette />

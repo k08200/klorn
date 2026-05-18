@@ -388,8 +388,8 @@ export function authRoutes(app: FastifyInstance) {
       if (!hasMeaningfulText(currentPassword) || !hasMeaningfulText(newPassword)) {
         return reply.code(400).send({ error: "Current and new password required" });
       }
-      if (newPassword.length < 6) {
-        return reply.code(400).send({ error: "New password must be at least 6 characters" });
+      if (newPassword.length < 8) {
+        return reply.code(400).send({ error: "New password must be at least 8 characters" });
       }
 
       const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -407,6 +407,18 @@ export function authRoutes(app: FastifyInstance) {
         data: { passwordHash: await hashPassword(newPassword) },
       });
 
+      // Revoke other device sessions; keep current request's session active.
+      const currentToken = (request.headers.authorization ?? "").slice(7);
+      const currentHash = currentToken
+        ? crypto.createHash("sha256").update(currentToken).digest("hex")
+        : null;
+      await prisma.device.deleteMany({
+        where: {
+          userId,
+          ...(currentHash ? { tokenHash: { not: currentHash } } : {}),
+        },
+      });
+
       return reply.send({ success: true });
     },
   );
@@ -422,8 +434,8 @@ export function authRoutes(app: FastifyInstance) {
       }
 
       const { newPassword } = request.body as { newPassword: string };
-      if (!hasMeaningfulText(newPassword) || newPassword.length < 6) {
-        return reply.code(400).send({ error: "Password must be at least 6 characters" });
+      if (!hasMeaningfulText(newPassword) || newPassword.length < 8) {
+        return reply.code(400).send({ error: "Password must be at least 8 characters" });
       }
 
       const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -823,8 +835,8 @@ export function authRoutes(app: FastifyInstance) {
       if (!hasMeaningfulText(token) || !hasMeaningfulText(newPassword)) {
         return reply.code(400).send({ error: "Token and new password required" });
       }
-      if (newPassword.length < 6) {
-        return reply.code(400).send({ error: "Password must be at least 6 characters" });
+      if (newPassword.length < 8) {
+        return reply.code(400).send({ error: "Password must be at least 8 characters" });
       }
 
       const user = await prisma.user.findFirst({
@@ -832,20 +844,34 @@ export function authRoutes(app: FastifyInstance) {
           resetToken: token,
           resetTokenExp: { gte: new Date() },
         },
+        select: { id: true },
       });
 
       if (!user) {
         return reply.code(400).send({ error: "Invalid or expired reset token" });
       }
 
-      await prisma.user.update({
-        where: { id: user.id },
+      // Atomic single-use: only succeed if resetToken still matches and is unexpired.
+      // Two concurrent calls with the same token: one wins, the other affects 0 rows.
+      const updated = await prisma.user.updateMany({
+        where: {
+          id: user.id,
+          resetToken: token,
+          resetTokenExp: { gte: new Date() },
+        },
         data: {
           passwordHash: await hashPassword(newPassword),
           resetToken: null,
           resetTokenExp: null,
         },
       });
+
+      if (updated.count === 0) {
+        return reply.code(400).send({ error: "Invalid or expired reset token" });
+      }
+
+      // Revoke all device sessions so any stolen token is invalidated immediately.
+      await prisma.device.deleteMany({ where: { userId: user.id } });
 
       return reply.send({ success: true });
     },
@@ -867,20 +893,30 @@ export function authRoutes(app: FastifyInstance) {
           verifyToken: token,
           verifyTokenExp: { gte: new Date() },
         },
+        select: { id: true },
       });
 
       if (!user) {
         return reply.code(400).send({ error: "Invalid or expired verification token" });
       }
 
-      await prisma.user.update({
-        where: { id: user.id },
+      // Atomic single-use verification.
+      const updated = await prisma.user.updateMany({
+        where: {
+          id: user.id,
+          verifyToken: token,
+          verifyTokenExp: { gte: new Date() },
+        },
         data: {
           emailVerified: true,
           verifyToken: null,
           verifyTokenExp: null,
         },
       });
+
+      if (updated.count === 0) {
+        return reply.code(400).send({ error: "Invalid or expired verification token" });
+      }
 
       // Validate WEB_URL to prevent open redirect — only allow http(s) origins
       const rawUrl = process.env.WEB_URL || "http://localhost:8001";

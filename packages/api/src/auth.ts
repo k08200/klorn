@@ -21,7 +21,14 @@ function isAdminEmail(email: string | null | undefined): boolean {
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
-  return adminEmails.includes(email.trim().toLowerCase());
+  const normalized = email.trim().toLowerCase();
+  const allowed = adminEmails.includes(normalized);
+  if (allowed) {
+    // Audit log: every env-granted admin access is recorded so a leaked
+    // ADMIN_EMAILS env can be traced after the fact.
+    console.log(`[AUDIT][ADMIN_ENV] env-granted admin access for ${normalized}`);
+  }
+  return allowed;
 }
 
 export interface JwtPayload {
@@ -63,8 +70,11 @@ export function getUserId(request: FastifyRequest): string {
       // invalid token — fall through
     }
   }
-  // Only allow demo-user in development
-  if (process.env.NODE_ENV !== "production") {
+  // Demo-user fallback is OFF by default. Requires both:
+  //   1. NODE_ENV !== "production"
+  //   2. ENABLE_DEMO_USER === "true" (explicit opt-in)
+  // This prevents accidental anonymous access on staging/preview deploys.
+  if (process.env.NODE_ENV !== "production" && process.env.ENABLE_DEMO_USER === "true") {
     return "demo-user";
   }
   throw new Error("Authentication required");

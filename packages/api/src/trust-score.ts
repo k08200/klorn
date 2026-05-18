@@ -33,7 +33,29 @@ export interface TrustScoreResult {
   label: string;
 }
 
-const MIN_DATA_POINTS = 3;
+import {
+  TRUST_HALF_LIFE_DAYS,
+  TRUST_MIN_DATA_POINTS,
+  TRUST_MOSTLY_RELIABLE_THRESHOLD,
+  TRUST_RELIABLE_THRESHOLD,
+} from "./config.js";
+
+const MIN_DATA_POINTS = TRUST_MIN_DATA_POINTS;
+const STALE_THRESHOLD_DAYS = Math.max(30, TRUST_HALF_LIFE_DAYS * 2);
+
+/**
+ * Returns true if the trust row is too old to be load-bearing. We do not yet
+ * carry per-event timestamps so we can't do full exponential decay; until that
+ * migration lands, we treat anything not touched in the last 2 half-lives as
+ * stale and demote it to "unknown" so a year-old "reliable" badge can't
+ * outlive a fresh pattern of misses.
+ */
+function isStale(lastUpdatedAt: Date | null | undefined): boolean {
+  if (!lastUpdatedAt) return false;
+  const ageMs = Date.now() - lastUpdatedAt.getTime();
+  const ageDays = ageMs / (1000 * 60 * 60 * 24);
+  return ageDays > STALE_THRESHOLD_DAYS;
+}
 
 // ─── Write ───────────────────────────────────────────────────────────────────
 
@@ -161,16 +183,19 @@ function computeResult(row: {
   onTimeCount: number;
   lateCount: number;
   totalDelayDays: number;
+  lastUpdatedAt?: Date | null;
 }): TrustScoreResult {
   const onTimeRate = row.totalCount > 0 ? row.onTimeCount / row.totalCount : 0;
   const avgDelayDays = row.lateCount > 0 ? row.totalDelayDays / row.lateCount : 0;
+  const stale = isStale(row.lastUpdatedAt ?? null);
 
-  const badge: TrustBadge =
-    row.totalCount < MIN_DATA_POINTS
+  const badge: TrustBadge = stale
+    ? "unknown"
+    : row.totalCount < MIN_DATA_POINTS
       ? "unknown"
-      : onTimeRate >= 0.8
+      : onTimeRate >= TRUST_RELIABLE_THRESHOLD
         ? "reliable"
-        : onTimeRate >= 0.5
+        : onTimeRate >= TRUST_MOSTLY_RELIABLE_THRESHOLD
           ? "mostly_reliable"
           : "unreliable";
 

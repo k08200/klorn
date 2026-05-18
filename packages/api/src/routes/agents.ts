@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { encryptOptional } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 
 export async function agentRoutes(app: FastifyInstance) {
@@ -49,7 +50,14 @@ export async function agentRoutes(app: FastifyInstance) {
     }
 
     const agent = await prisma.agent.create({
-      data: { name, endpoint: parsedUrl.href, apiKey, userId },
+      data: {
+        name,
+        endpoint: parsedUrl.href,
+        // Encrypt at-rest. Callers that actually invoke the agent must
+        // decrypt with decryptOptional from crypto-tokens.
+        apiKey: encryptOptional(apiKey ?? null),
+        userId,
+      },
     });
 
     return reply.code(201).send({ id: agent.id, name: agent.name, endpoint: agent.endpoint });

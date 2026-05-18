@@ -22,6 +22,7 @@ interface DailyReceipt {
   silenced: ReceiptItem[];
   queued: ReceiptItem[];
   pushed: ReceiptItem[];
+  called: ReceiptItem[];
   auto: ReceiptItem[];
   summary: {
     totalSeen: number;
@@ -32,13 +33,14 @@ interface DailyReceipt {
   };
 }
 
-type Section = "silenced" | "queued" | "pushed" | "auto";
+type Section = "silenced" | "queued" | "pushed" | "called" | "auto";
 
 const EMPTY: DailyReceipt = {
   date: "",
   silenced: [],
   queued: [],
   pushed: [],
+  called: [],
   auto: [],
   summary: { totalSeen: 0, totalInterrupted: 0, savedFromInbox: 0, autoHandled: 0, narrative: "" },
 };
@@ -64,6 +66,12 @@ const SECTION_META: Record<
     description: "Worth interrupting you for.",
     tone: "text-amber-300 border-amber-400/30",
     dot: "bg-amber-400",
+  },
+  called: {
+    label: "Called",
+    description: "Highest-urgency interrupt — last-chance signal before damage.",
+    tone: "text-red-300 border-red-500/40",
+    dot: "bg-red-500",
   },
   auto: {
     label: "Auto-handled",
@@ -150,6 +158,7 @@ function ReceiptContent() {
           silenced: Array.isArray(res.silenced) ? res.silenced : [],
           queued: Array.isArray(res.queued) ? res.queued : [],
           pushed: Array.isArray(res.pushed) ? res.pushed : [],
+          called: Array.isArray(res.called) ? res.called : [],
           auto: Array.isArray(res.auto) ? res.auto : [],
           summary: res.summary ?? EMPTY.summary,
         }),
@@ -174,7 +183,7 @@ function ReceiptContent() {
     }
   };
 
-  const sections: Section[] = ["pushed", "queued", "auto", "silenced"];
+  const sections: Section[] = ["called", "pushed", "queued", "auto", "silenced"];
   const visible = data[section];
 
   const dateLabel = data.date

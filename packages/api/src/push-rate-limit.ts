@@ -9,10 +9,18 @@
  * pushes remain visible via the bell; only the phone ding is suppressed.
  */
 
-export const PUSH_WINDOW_10MIN_MS = 10 * 60 * 1000;
-export const PUSH_WINDOW_60MIN_MS = 60 * 60 * 1000;
-export const PUSH_CAP_10MIN = 3;
-export const PUSH_CAP_60MIN = 6;
+import {
+  PUSH_CAP_10MIN as CFG_PUSH_CAP_10MIN,
+  PUSH_CAP_60MIN as CFG_PUSH_CAP_60MIN,
+  PUSH_WINDOW_10MIN_MS as CFG_WINDOW_10MIN,
+  PUSH_WINDOW_60MIN_MS as CFG_WINDOW_60MIN,
+} from "./config.js";
+
+// Re-export so existing callers (and tests) keep their named imports working.
+export const PUSH_WINDOW_10MIN_MS = CFG_WINDOW_10MIN;
+export const PUSH_WINDOW_60MIN_MS = CFG_WINDOW_60MIN;
+export const PUSH_CAP_10MIN = CFG_PUSH_CAP_10MIN;
+export const PUSH_CAP_60MIN = CFG_PUSH_CAP_60MIN;
 
 const history = new Map<string, number[]>();
 

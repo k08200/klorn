@@ -11,6 +11,10 @@
  * Runs periodically (every 6 hours) or on-demand after proposal feedback.
  */
 
+import {
+  PATTERN_ANALYSIS_HOURS as CFG_PATTERN_HOURS,
+  PATTERN_MIN_OCCURRENCES,
+} from "./config.js";
 import { db, prisma } from "./db.js";
 import { runFeedbackAdaptationForAllUsers } from "./feedback-adaptor.js";
 import { buildInteractionGraphsForAllUsers } from "./interaction-graph.js";
@@ -18,8 +22,8 @@ import { remember } from "./memory.js";
 import { detectSkillsForAllUsers } from "./skill-recorder.js";
 import { planHasFeature } from "./stripe.js";
 
-const PATTERN_ANALYSIS_HOURS = 168; // 7 days of data for pattern detection
-const MIN_OCCURRENCES = 3; // Need at least 3 instances to detect a pattern
+const PATTERN_ANALYSIS_HOURS = CFG_PATTERN_HOURS;
+const MIN_OCCURRENCES = PATTERN_MIN_OCCURRENCES;
 const AGENT_NOTIFICATION_PREFIX = "[Jigeum]";
 const EVE_AGENT_NOTIFICATION_PREFIX = "[Eve]";
 const LEGACY_AGENT_NOTIFICATION_PREFIX = "[EV" + "E]";

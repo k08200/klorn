@@ -110,6 +110,37 @@ vi.mock("../db.js", () => {
           return updated;
         },
       ),
+      updateMany: vi.fn(
+        async ({
+          where,
+          data,
+        }: {
+          where: {
+            id?: string;
+            resetToken?: string;
+            verifyToken?: string;
+            resetTokenExp?: { gte: Date };
+            verifyTokenExp?: { gte: Date };
+          };
+          data: Record<string, unknown>;
+        }) => {
+          let count = 0;
+          for (const [id, user] of userStore.entries()) {
+            if (where.id && id !== where.id) continue;
+            if (where.resetToken && user.resetToken !== where.resetToken) continue;
+            if (where.verifyToken && user.verifyToken !== where.verifyToken) continue;
+            if (where.resetTokenExp && (!user.resetTokenExp || user.resetTokenExp < new Date())) {
+              continue;
+            }
+            if (where.verifyTokenExp && (!user.verifyTokenExp || user.verifyTokenExp < new Date())) {
+              continue;
+            }
+            userStore.set(id, { ...user, ...data } as StoredUser);
+            count += 1;
+          }
+          return { count };
+        },
+      ),
       count: vi.fn(async ({ where }: { where?: { betaProGrantedAt?: { not: null } } } = {}) => {
         if (where?.betaProGrantedAt?.not === null) {
           let n = 0;
@@ -690,7 +721,7 @@ describe("POST /api/auth/change-password", () => {
     await app.close();
   });
 
-  it("rejects new password shorter than 6 characters", async () => {
+  it("rejects new password shorter than 8 characters", async () => {
     const app = await buildApp();
     const token = await registerAndGetToken(app, "short@example.com", "oldpassword1");
 
@@ -702,7 +733,7 @@ describe("POST /api/auth/change-password", () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toMatch(/6 characters/);
+    expect(res.json().error).toMatch(/8 characters/);
     await app.close();
   });
 });
@@ -971,7 +1002,7 @@ describe("POST /api/auth/reset-password", () => {
       payload: { token: "abc", newPassword: "short" },
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toMatch(/6 characters/);
+    expect(res.json().error).toMatch(/8 characters/);
     await app.close();
   });
 

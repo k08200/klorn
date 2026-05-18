@@ -52,15 +52,20 @@ import type { NotifCategory } from "./notification-prefs.js";
 import { AGENT_MODEL, createCompletion, openai, resolveUserAgentModel } from "./openai.js";
 import { getFeedbackPolicyContextForPrompt } from "./policy-extraction.js";
 import { sendPushNotification } from "./push.js";
+import {
+  AGENT_CHECK_INTERVAL_MS,
+  AGENT_MAX_CONTEXT_ITEMS,
+  AGENT_MAX_TOOLS_PER_LOOP,
+} from "./config.js";
 import { captureError } from "./sentry.js";
 import { planHasFeature } from "./stripe.js";
 import { ALL_TOOLS, executeToolCall, isToolAllowedForPlan } from "./tool-executor.js";
 import { wrapUntrusted } from "./untrusted.js";
 import { pushNotification } from "./websocket.js";
 
-const CHECK_INTERVAL_MS = 60 * 1000; // Check every 1 minute (respects per-user intervals)
-const MAX_TOOL_CALLS = 10;
-const MAX_CONTEXT_ITEMS = 10;
+const CHECK_INTERVAL_MS = AGENT_CHECK_INTERVAL_MS;
+const MAX_TOOL_CALLS = AGENT_MAX_TOOLS_PER_LOOP;
+const MAX_CONTEXT_ITEMS = AGENT_MAX_CONTEXT_ITEMS;
 const CONCURRENCY_LIMIT = 5; // Max users to run concurrently
 
 /**

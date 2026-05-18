@@ -8,6 +8,7 @@ import { briefingRoutes } from "./briefing.js";
 import { db, prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
 import { attachPerfMonitor } from "./perf-monitor.js";
+import { captureError } from "./sentry.js";
 import { adminRoutes } from "./routes/admin.js";
 import { agentRoutes } from "./routes/agents.js";
 import { authRoutes } from "./routes/auth.js";
@@ -395,21 +396,30 @@ try {
     .then(({ startReminderScheduler }) => {
       startReminderScheduler();
     })
-    .catch((_err) => {});
+    .catch((err) => {
+      console.error("[STARTUP] reminder-scheduler failed to start:", err);
+      captureError(err, { tags: { context: "startup:reminder-scheduler" } });
+    });
 
   // Start automation scheduler (daily briefing, email classify)
   import("./automation-scheduler.js")
     .then(({ startAutomationScheduler }) => {
       startAutomationScheduler();
     })
-    .catch((_err) => {});
+    .catch((err) => {
+      console.error("[STARTUP] automation-scheduler failed to start:", err);
+      captureError(err, { tags: { context: "startup:automation-scheduler" } });
+    });
 
   // Start autonomous LLM reasoning agent
   import("./autonomous-agent.js")
     .then(({ startAutonomousAgent }) => {
       startAutonomousAgent();
     })
-    .catch((_err) => {});
+    .catch((err) => {
+      console.error("[STARTUP] autonomous-agent failed to start:", err);
+      captureError(err, { tags: { context: "startup:autonomous-agent" } });
+    });
 
   // Start pattern learner (6-hour cycle for learning user behavior patterns)
   import("./pattern-learner.js")

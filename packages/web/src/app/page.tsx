@@ -65,9 +65,9 @@ function HeroProductScene() {
 
   return (
     <div aria-hidden="true" className="absolute inset-0 overflow-hidden">
-      <div className="absolute inset-0 bg-[#0f1115]" />
+      <div className="absolute inset-0 bg-surface-canvas" />
       <div className="absolute inset-y-0 right-0 hidden w-[66vw] min-w-[780px] lg:block">
-        <div className="absolute right-[-42px] top-[72px] h-[548px] w-[900px] rotate-[-1deg] rounded-xl border border-stone-600/70 bg-[#151922] shadow-2xl shadow-black/40">
+        <div className="absolute right-[-42px] top-[72px] h-[548px] w-[900px] rotate-[-1deg] rounded-xl border border-stone-600/70 bg-surface-elevated shadow-2xl shadow-black/40">
           <div className="flex h-12 items-center gap-2 border-b border-stone-800 px-4">
             <span className="h-2.5 w-2.5 rounded-full bg-stone-700" />
             <span className="h-2.5 w-2.5 rounded-full bg-stone-700" />
@@ -75,7 +75,7 @@ function HeroProductScene() {
             <span className="ml-4 text-xs font-medium text-stone-500">Jigeum / Today</span>
           </div>
           <div className="grid h-[496px] grid-cols-[210px_1fr]">
-            <aside className="border-r border-stone-800 bg-[#111318] p-4">
+            <aside className="border-r border-stone-800 bg-surface-panel p-4">
               <div className="mb-8 flex items-center gap-3">
                 <BrandMark className="h-8 w-8" />
                 <div>
@@ -104,7 +104,7 @@ function HeroProductScene() {
                     Today's next actions
                   </h2>
                 </div>
-                <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-stone-800 bg-[#111318] text-center">
+                <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-stone-800 bg-surface-panel text-center">
                   {["7", "3", "1"].map((value, index) => (
                     <div
                       key={value}
@@ -122,7 +122,7 @@ function HeroProductScene() {
                 {rows.map(([tag, sender, subject, time]) => (
                   <div
                     key={subject}
-                    className="rounded-lg border border-stone-800 bg-[#111318] p-4"
+                    className="rounded-lg border border-stone-800 bg-surface-panel p-4"
                   >
                     <div className="mb-3 flex items-center justify-between gap-4">
                       <span className="rounded border border-stone-700 px-2 py-1 text-[10px] text-stone-400">
@@ -140,7 +140,7 @@ function HeroProductScene() {
         </div>
       </div>
       <div className="absolute inset-0 bg-[linear-gradient(90deg,#0f1115_0%,rgba(15,17,21,0.94)_39%,rgba(15,17,21,0.34)_74%,rgba(15,17,21,0.64)_100%)]" />
-      <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#0f1115] to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-surface-canvas to-transparent" />
     </div>
   );
 }
@@ -203,7 +203,7 @@ function Icon({ type, className = "" }: { type: IconName; className?: string }) 
 
 function MobilePreview() {
   return (
-    <div className="mt-10 max-w-xl rounded-lg border border-white/10 bg-[#12161b]/90 p-4 shadow-2xl shadow-black/25 lg:hidden">
+    <div className="mt-10 max-w-xl rounded-lg border border-white/10 bg-surface-translucent/90 p-4 shadow-2xl shadow-black/25 lg:hidden">
       <div className="mb-4 flex items-center justify-between border-b border-white/8 pb-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500">
@@ -229,7 +229,7 @@ function MobilePreview() {
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-[#0f1115] text-[#f8f4ec]">
+    <main className="min-h-screen bg-surface-canvas text-brand-cream">
       <LandingRedirect />
 
       <section className="relative min-h-[84svh] overflow-hidden">
@@ -249,7 +249,7 @@ export default function LandingPage() {
             </Link>
             <Link
               href="/early-access"
-              className="inline-flex min-h-11 items-center whitespace-nowrap rounded-md bg-[#f2eadc] px-4 text-sm font-semibold text-[#12100d] transition hover:bg-white"
+              className="inline-flex min-h-11 items-center whitespace-nowrap rounded-md bg-brand-cream-soft px-4 text-sm font-semibold text-brand-ink-soft transition hover:bg-white"
             >
               Early access
             </Link>
@@ -258,7 +258,7 @@ export default function LandingPage() {
 
         <div className="relative z-20 mx-auto flex min-h-[calc(84svh-82px)] max-w-7xl flex-col justify-center px-5 pb-16 pt-12 md:px-8">
           <div className="max-w-3xl">
-            <p className="mb-5 inline-flex items-center gap-2 border-b border-[#d8a45d]/50 pb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[#d8a45d]">
+            <p className="mb-5 inline-flex items-center gap-2 border-b border-brand-gold/50 pb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-brand-gold">
               <Icon type="compass" className="h-4 w-4" />
               Decision queue
             </p>
@@ -266,14 +266,15 @@ export default function LandingPage() {
               Decide what matters before work scatters.
             </h1>
             <p className="mt-6 max-w-xl text-base leading-7 text-stone-300 md:text-lg md:leading-8">
-              Jigeum turns mail, calendar, and task signals into a focused queue with evidence,
-              risk, and approval paths before anything executes.
+              An attention firewall for your inbox, calendar, and tasks. Silenced, queued, pushed,
+              called, or auto-handled — every signal gets a tier, every tier gets a reason, and
+              you see the daily receipt of what we did on your behalf.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/early-access"
                 aria-label="Request early access from hero"
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-md bg-[#d8a45d] px-6 text-sm font-semibold text-[#11100d] transition hover:bg-[#f0c982]"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-md bg-brand-gold px-6 text-sm font-semibold text-brand-ink transition hover:bg-brand-gold-bright"
               >
                 Request early access
                 <Icon type="arrow" className="h-4 w-4" />
@@ -293,7 +294,7 @@ export default function LandingPage() {
 
       <section className="mx-auto grid max-w-7xl gap-10 px-5 py-20 md:grid-cols-[0.82fr_1.18fr] md:px-8 md:py-28">
         <div>
-          <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-[#d8a45d]">
+          <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-brand-gold">
             Decision queue
           </p>
           <h2 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">
@@ -304,7 +305,7 @@ export default function LandingPage() {
           </p>
         </div>
 
-        <div className="rounded-lg border border-white/10 bg-[#12161b] p-3 shadow-2xl shadow-black/30">
+        <div className="rounded-lg border border-white/10 bg-surface-translucent p-3 shadow-2xl shadow-black/30">
           <div className="rounded-md border border-white/8 bg-[#0d1014] p-4">
             <div className="mb-4 flex items-center justify-between gap-4 border-b border-white/8 pb-4">
               <div>
@@ -342,7 +343,7 @@ export default function LandingPage() {
             <div className="mt-4 flex flex-col gap-2 border-t border-white/8 pt-4 sm:flex-row">
               <button
                 type="button"
-                className="h-11 rounded-md bg-[#d8a45d] px-4 text-sm font-semibold text-[#11100d]"
+                className="h-11 rounded-md bg-brand-gold px-4 text-sm font-semibold text-brand-ink"
               >
                 Approve
               </button>
@@ -367,10 +368,10 @@ export default function LandingPage() {
         <div className="mx-auto grid max-w-7xl gap-4 px-5 py-20 md:grid-cols-3 md:px-8 md:py-24">
           {pillars.map((pillar) => (
             <article key={pillar.label} className="border-t border-[#d7c9b6] pt-5">
-              <div className="mb-8 flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-black/20 text-[#d8a45d]">
+              <div className="mb-8 flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-black/20 text-brand-gold">
                 <Icon type={pillar.icon} className="h-5 w-5" />
               </div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#d8a45d]">
+              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-brand-gold">
                 {pillar.label}
               </p>
               <h3 className="mt-3 text-2xl font-semibold tracking-tight">{pillar.title}</h3>
@@ -383,7 +384,7 @@ export default function LandingPage() {
       <section className="mx-auto max-w-6xl px-5 py-20 md:px-8 md:py-28">
         <div className="grid gap-8 md:grid-cols-[0.8fr_1.2fr] md:items-start">
           <div>
-            <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-[#d8a45d]">
+            <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-brand-gold">
               Operating principle
             </p>
             <h2 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">
@@ -396,7 +397,7 @@ export default function LandingPage() {
                 key={stage}
                 className="border-white/10 bg-white/[0.025] p-4 md:border-r md:last:border-r-0"
               >
-                <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#d8a45d]">
+                <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-brand-gold">
                   0{index + 1}
                 </p>
                 <h3 className="mt-3 text-base font-semibold text-stone-100">{stage}</h3>
@@ -408,7 +409,7 @@ export default function LandingPage() {
       </section>
 
       <section className="mx-auto max-w-7xl px-5 pb-24 text-center md:px-8 md:pb-32">
-        <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-[#d8a45d]">
+        <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-brand-gold">
           Built for decisions
         </p>
         <h2 className="mx-auto max-w-3xl text-4xl font-semibold tracking-tight text-white md:text-6xl">
@@ -420,7 +421,7 @@ export default function LandingPage() {
         <Link
           href="/early-access"
           aria-label="Request early access from final section"
-          className="mt-9 inline-flex h-12 items-center justify-center gap-2 rounded-md bg-[#f2eadc] px-6 text-sm font-semibold text-[#11100d] transition hover:bg-white"
+          className="mt-9 inline-flex h-12 items-center justify-center gap-2 rounded-md bg-brand-cream-soft px-6 text-sm font-semibold text-brand-ink transition hover:bg-white"
         >
           Request early access
           <Icon type="arrow" className="h-4 w-4" />
