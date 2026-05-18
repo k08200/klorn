@@ -42,8 +42,11 @@ export interface VoiceProfile {
  * Extract and persist the voice profile for a user.
  * No-op if a fresh profile already exists.
  */
-export async function extractVoiceProfile(userId: string): Promise<void> {
-  if (await isProfileFresh(userId)) return;
+export async function extractVoiceProfile(
+  userId: string,
+  options: { force?: boolean } = {},
+): Promise<void> {
+  if (!options.force && (await isProfileFresh(userId))) return;
 
   try {
     const bodies = await fetchSentMailBodies(userId);
