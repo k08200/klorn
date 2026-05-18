@@ -6,7 +6,7 @@
  * Falls back to demo data when Gmail isn't connected.
  */
 
-import type { EmailMessage, EmailRuleAction, FeedbackSignal, Prisma } from "@prisma/client";
+import type { EmailMessage, FeedbackSignal, Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import {
@@ -78,6 +78,7 @@ import { createCompletion, createVisionCompletion, MODEL } from "../openai.js";
 import { sendPushNotification } from "../push.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { pushNotification } from "../websocket.js";
+import { registerEmailRulesRoutes } from "./email-rules.js";
 
 // ─── Demo Data ────────────────────────────────────────────────────────────
 
@@ -1103,6 +1104,10 @@ ${wrapUntrusted((input.body || "").slice(0, 3000), "email:body")}`,
 }
 
 export async function emailRoutes(app: FastifyInstance) {
+  // Sub-route groups live in sibling files and register against the same
+  // FastifyInstance + prefix so client paths stay byte-identical.
+  await registerEmailRulesRoutes(app);
+
   // ─── Sync & List Emails ───────────────────────────────────────────────
   // GET /api/email?filter=unread|urgent|reply-needed|attachments|candidates&search=keyword&category=billing&page=1
   app.get("/", async (request) => {
@@ -2762,90 +2767,6 @@ export async function emailRoutes(app: FastifyInstance) {
     }
 
     return { total, unread, urgent, today, categories: categoryMap, source: "gmail" };
-  });
-
-  // ─── Auto-Reply Rules CRUD ────────────────────────────────────────────
-
-  // GET /api/email/rules
-  app.get("/rules", async (request) => {
-    const uid = getUserId(request);
-    const rules = await prisma.emailRule.findMany({
-      where: { userId: uid },
-      orderBy: { createdAt: "desc" },
-    });
-    return { rules: rules.map((r) => ({ ...r, conditions: JSON.parse(r.conditions) })) };
-  });
-
-  // POST /api/email/rules
-  app.post("/rules", { preHandler: requireAuth }, async (request) => {
-    const uid = getUserId(request);
-    const { name, description, conditions, actionType, actionValue } = request.body as {
-      name: string;
-      description?: string;
-      conditions: { from?: string[]; subjectContains?: string[]; category?: string[] };
-      actionType: string;
-      actionValue: string;
-    };
-
-    if (!name || !conditions || !actionValue) {
-      return { error: "Missing required fields: name, conditions, actionValue" };
-    }
-
-    const rule = await prisma.emailRule.create({
-      data: {
-        userId: uid,
-        name,
-        description: description || null,
-        conditions: JSON.stringify(conditions),
-        actionType: (actionType as EmailRuleAction) || "AUTO_REPLY",
-        actionValue,
-      },
-    });
-
-    return { rule: { ...rule, conditions } };
-  });
-
-  // PATCH /api/email/rules/:id
-  app.patch("/rules/:id", { preHandler: requireAuth }, async (request) => {
-    const { id } = request.params as { id: string };
-    const uid = getUserId(request);
-    const updates = request.body as {
-      name?: string;
-      description?: string;
-      conditions?: object;
-      actionType?: string;
-      actionValue?: string;
-      isActive?: boolean;
-    };
-
-    const rule = await prisma.emailRule.findFirst({ where: { id, userId: uid } });
-    if (!rule) return { error: "Rule not found" };
-
-    const data: Record<string, unknown> = {};
-    if (updates.name !== undefined) data.name = updates.name;
-    if (updates.description !== undefined) data.description = updates.description;
-    if (updates.conditions !== undefined) data.conditions = JSON.stringify(updates.conditions);
-    if (updates.actionType !== undefined) data.actionType = updates.actionType;
-    if (updates.actionValue !== undefined) data.actionValue = updates.actionValue;
-    if (updates.isActive !== undefined) data.isActive = updates.isActive;
-
-    const updated = await prisma.emailRule.update({
-      where: { id },
-      data: data as Prisma.EmailRuleUpdateInput,
-    });
-    return { rule: { ...updated, conditions: JSON.parse(updated.conditions) } };
-  });
-
-  // DELETE /api/email/rules/:id
-  app.delete("/rules/:id", { preHandler: requireAuth }, async (request) => {
-    const { id } = request.params as { id: string };
-    const uid = getUserId(request);
-
-    const rule = await prisma.emailRule.findFirst({ where: { id, userId: uid } });
-    if (!rule) return { error: "Rule not found" };
-
-    await prisma.emailRule.delete({ where: { id } });
-    return { success: true };
   });
 
   // ─── Email Action Items → Tasks ───────────────────────────────────────────
