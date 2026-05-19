@@ -765,8 +765,10 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
         data: {
           summary: result.summary,
           category: result.category,
-          keyPoints: JSON.stringify(result.keyPoints),
-          actionItems: JSON.stringify(result.actionItems),
+          // JSONB columns after migration 20260519040000 — pass the
+          // arrays directly. Prisma serializes into the column.
+          keyPoints: result.keyPoints,
+          actionItems: result.actionItems,
           sentiment: result.sentiment,
           priority: aiPriority,
           needsReply: replyNeeded.needsReply,

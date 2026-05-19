@@ -293,20 +293,40 @@ export function serializeFeedback(row: FeedbackRecord) {
   };
 }
 
-export function parseJsonArray(value: string | null | undefined): string[] {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : [];
-  } catch {
-    return [];
+/**
+ * Accepts either a legacy JSON-stringified array (`'["a","b"]'`) or an
+ * already-parsed JSONB value from Prisma. After the migration to JSONB
+ * (#329, #330 chain) the columns return parsed values directly; this
+ * shim keeps callers stable while we walk through fields one PR at a
+ * time. Always returns a plain `string[]`.
+ */
+export function parseJsonArray(value: unknown): string[] {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  if (typeof value === "string") {
+    if (!value) return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed)
+        ? parsed.filter((item): item is string => typeof item === "string")
+        : [];
+    } catch {
+      return [];
+    }
   }
+  return [];
 }
 
-export function parseJsonRecord(
-  value: string | null | undefined,
-): Record<string, string | number | boolean | null> {
-  if (!value) return {};
+/**
+ * Same shape-tolerant helper for object-typed JSON columns. Accepts a
+ * JSON string (legacy TEXT column) or an already-parsed JSONB object.
+ */
+export function parseJsonRecord(value: unknown): Record<string, string | number | boolean | null> {
+  if (value == null) return {};
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, string | number | boolean | null>;
+  }
+  if (typeof value !== "string" || !value) return {};
   try {
     const parsed = JSON.parse(value);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
@@ -1626,8 +1646,8 @@ export async function emailRoutes(app: FastifyInstance) {
         isRead: m.isRead,
         priority: m.priority,
         summary: m.summary,
-        keyPoints: m.keyPoints ? JSON.parse(m.keyPoints) : [],
-        actionItems: m.actionItems ? JSON.parse(m.actionItems) : [],
+        keyPoints: parseJsonArray(m.keyPoints),
+        actionItems: parseJsonArray(m.actionItems),
         attachments: attachmentsByEmail.get(m.id) ?? [],
       })),
     };
