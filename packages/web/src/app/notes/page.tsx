@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import ErrorAlert from "../../components/ui/error-alert";
 import LoadingState from "../../components/ui/loading-state";
 import { apiFetch } from "../../lib/api";
+import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 
 interface Note {
@@ -21,21 +23,20 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function NoteCard({ note, onDelete }: { note: Note; onDelete: (id: string) => void }) {
+function NoteCard({
+  note,
+  onDelete,
+  deleting,
+}: {
+  note: Note;
+  onDelete: (id: string) => void;
+  deleting: boolean;
+}) {
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
-  const handleDelete = async () => {
-    setDeleting(true);
-    try {
-      await apiFetch(`/api/notes/${note.id}`, { method: "DELETE" });
-      onDelete(note.id);
-    } catch (err) {
-      captureClientError(err, { scope: "notes.delete" });
-    } finally {
-      setDeleting(false);
-      setConfirmDelete(false);
-    }
+  const handleDelete = () => {
+    onDelete(note.id);
+    setConfirmDelete(false);
   };
 
   return (
@@ -105,35 +106,57 @@ function NoteCard({ note, onDelete }: { note: Note; onDelete: (id: string) => vo
 }
 
 function NotesContent() {
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
 
-  const load = useCallback((q: string, cat: string) => {
-    setLoading(true);
-    setLoadError(null);
-    const params = new URLSearchParams();
-    if (q) params.set("search", q);
-    if (cat !== "all") params.set("category", cat);
-    const qs = params.toString() ? `?${params.toString()}` : "";
-    apiFetch<{ notes: Note[] }>(`/api/notes${qs}`)
-      .then((data) => setNotes(Array.isArray(data.notes) ? data.notes : []))
-      .catch((err) => {
-        captureClientError(err, { scope: "notes.load" });
-        setLoadError("Could not load notes.");
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
+  // Debounce the search input so we don't fire a request per keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
   useEffect(() => {
-    const timer = setTimeout(() => load(search, category), search ? 300 : 0);
+    const timer = setTimeout(() => setDebouncedSearch(search), search ? 300 : 0);
     return () => clearTimeout(timer);
-  }, [search, category, load]);
+  }, [search]);
+
+  const filters = { search: debouncedSearch, category };
+
+  const {
+    data: notes = [],
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.notes.list(filters),
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters.search) params.set("search", filters.search);
+      if (filters.category !== "all") params.set("category", filters.category);
+      const qs = params.toString() ? `?${params.toString()}` : "";
+      const data = await apiFetch<{ notes: Note[] }>(`/api/notes${qs}`);
+      return Array.isArray(data.notes) ? data.notes : [];
+    },
+  });
+
+  const loadError = queryError ? "Could not load notes." : null;
+  const load = () => {
+    void refetch();
+  };
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/notes/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      // Invalidate every cached filter combo so the deleted note can't
+      // resurface when the user changes the search/category.
+      queryClient.invalidateQueries({ queryKey: queryKeys.notes.all });
+    },
+    onError: (err) => captureClientError(err, { scope: "notes.delete" }),
+  });
 
   const handleDeleted = (id: string) => {
-    setNotes((prev) => prev.filter((n) => n.id !== id));
+    // Optimistic local removal for the currently-rendered list.
+    queryClient.setQueryData<Note[]>(queryKeys.notes.list(filters), (prev) =>
+      (prev ?? []).filter((n) => n.id !== id),
+    );
+    deleteMutation.mutate(id);
   };
 
   const categories = ["all", ...Array.from(new Set(notes.map((n) => n.category).filter(Boolean)))];
@@ -199,7 +222,7 @@ function NotesContent() {
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {loadError && !loading && (
           <div className="mb-3">
-            <ErrorAlert onRetry={() => load(search, category)}>{loadError}</ErrorAlert>
+            <ErrorAlert onRetry={load}>{loadError}</ErrorAlert>
           </div>
         )}
 
@@ -233,7 +256,12 @@ function NotesContent() {
         ) : (
           <div className="space-y-3">
             {notes.map((note) => (
-              <NoteCard key={note.id} note={note} onDelete={handleDeleted} />
+              <NoteCard
+                key={note.id}
+                note={note}
+                onDelete={handleDeleted}
+                deleting={deleteMutation.isPending}
+              />
             ))}
           </div>
         )}

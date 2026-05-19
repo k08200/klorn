@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import ErrorAlert from "../../components/ui/error-alert";
 import LoadingState from "../../components/ui/loading-state";
 import { apiFetch } from "../../lib/api";
+import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
@@ -309,54 +311,77 @@ function NewTaskForm({ onCreated }: { onCreated: (task: Task) => void }) {
 }
 
 function TasksContent() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("open");
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setLoadError(null);
-    apiFetch<{ tasks: Task[] }>("/api/tasks")
-      .then((data) => setTasks(Array.isArray(data.tasks) ? data.tasks : []))
-      .catch((err) => {
-        captureClientError(err, { scope: "tasks.load" });
-        setLoadError("Could not load tasks.");
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const {
+    data: tasks = [],
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.tasks.list(),
+    queryFn: async () => {
+      const data = await apiFetch<{ tasks: Task[] }>("/api/tasks");
+      return Array.isArray(data.tasks) ? data.tasks : [];
+    },
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const loadError = queryError ? "Could not load tasks." : null;
+  const load = () => {
+    void refetch();
+  };
 
   const handleCreated = (task: Task) => {
-    setTasks((prev) => [task, ...prev]);
+    // Optimistically prepend the new task; the server already created it,
+    // so we just refresh the cache.
+    queryClient.setQueryData<Task[]>(queryKeys.tasks.list(), (prev) =>
+      prev ? [task, ...prev] : [task],
+    );
   };
 
-  const handleToggle = async (id: string, next: TaskStatus) => {
-    const snapshot = tasks;
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: next } : t)));
-    try {
-      await apiFetch(`/api/tasks/${id}`, {
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, next }: { id: string; next: TaskStatus }) =>
+      apiFetch(`/api/tasks/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ status: next.toLowerCase() }),
-      });
-    } catch (err) {
+      }),
+    onMutate: async ({ id, next }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.tasks.list() });
+      const snapshot = queryClient.getQueryData<Task[]>(queryKeys.tasks.list());
+      queryClient.setQueryData<Task[]>(queryKeys.tasks.list(), (prev) =>
+        (prev ?? []).map((t) => (t.id === id ? { ...t, status: next } : t)),
+      );
+      return { snapshot };
+    },
+    onError: (err, _vars, ctx) => {
       captureClientError(err, { scope: "tasks.toggle" });
-      setTasks(snapshot);
-    }
+      if (ctx?.snapshot) queryClient.setQueryData(queryKeys.tasks.list(), ctx.snapshot);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/tasks/${id}`, { method: "DELETE" }),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.tasks.list() });
+      const snapshot = queryClient.getQueryData<Task[]>(queryKeys.tasks.list());
+      queryClient.setQueryData<Task[]>(queryKeys.tasks.list(), (prev) =>
+        (prev ?? []).filter((t) => t.id !== id),
+      );
+      return { snapshot };
+    },
+    onError: (err, _id, ctx) => {
+      captureClientError(err, { scope: "tasks.delete" });
+      if (ctx?.snapshot) queryClient.setQueryData(queryKeys.tasks.list(), ctx.snapshot);
+    },
+  });
+
+  const handleToggle = (id: string, next: TaskStatus) => {
+    toggleMutation.mutate({ id, next });
   };
 
-  const handleDelete = async (id: string) => {
-    const snapshot = tasks;
-    setTasks((prev) => prev.filter((t) => t.id !== id));
-    try {
-      await apiFetch(`/api/tasks/${id}`, { method: "DELETE" });
-    } catch (err) {
-      captureClientError(err, { scope: "tasks.delete" });
-      setTasks(snapshot);
-    }
+  const handleDelete = (id: string) => {
+    deleteMutation.mutate(id);
   };
 
   const filtered = tasks.filter((t) => {

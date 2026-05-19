@@ -1,9 +1,11 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { apiFetch } from "../../lib/api";
+import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 
 type TrustBadge = "reliable" | "mostly_reliable" | "unreliable" | "unknown";
@@ -132,23 +134,27 @@ function ContactCard({ contact }: { contact: Contact }) {
 }
 
 function ContactsContent() {
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-
-  const load = useCallback((q: string) => {
-    setLoading(true);
-    const qs = q ? `?search=${encodeURIComponent(q)}` : "";
-    apiFetch<{ contacts: Contact[] }>(`/api/contacts/with-trust${qs}`)
-      .then((data) => setContacts(data.contacts))
-      .catch((err) => captureClientError(err, { scope: "contacts.load" }))
-      .finally(() => setLoading(false));
-  }, []);
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
 
   useEffect(() => {
-    const timer = setTimeout(() => load(search), search ? 300 : 0);
+    const timer = setTimeout(() => setDebouncedSearch(search), search ? 300 : 0);
     return () => clearTimeout(timer);
-  }, [search, load]);
+  }, [search]);
+
+  const { data: contacts = [], isLoading: loading } = useQuery({
+    queryKey: [...queryKeys.contacts.list(), { search: debouncedSearch }] as const,
+    queryFn: async () => {
+      const qs = debouncedSearch ? `?search=${encodeURIComponent(debouncedSearch)}` : "";
+      try {
+        const data = await apiFetch<{ contacts: Contact[] }>(`/api/contacts/with-trust${qs}`);
+        return data.contacts;
+      } catch (err) {
+        captureClientError(err, { scope: "contacts.load" });
+        throw err;
+      }
+    },
+  });
 
   const reliable = contacts.filter((c) => c.trust?.badge === "reliable");
   const mostly = contacts.filter((c) => c.trust?.badge === "mostly_reliable");

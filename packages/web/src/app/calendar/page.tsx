@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { EveSignalField } from "../../components/brand-visuals";
 import { API_BASE, apiFetch, getStoredAuthToken } from "../../lib/api";
+import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 
 interface CalendarEvent {
@@ -40,46 +42,50 @@ export default function CalendarPage() {
 }
 
 function CalendarView() {
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
 
-  const loadEvents = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const {
+    data: events = [],
+    isLoading: loading,
+    error: eventsError,
+  } = useQuery({
+    queryKey: queryKeys.calendar.events({ from: "now", to: "+14d" }),
+    queryFn: async () => {
       const data = await apiFetch<{ events: CalendarEvent[] }>("/api/calendar?days=14");
-      setEvents(Array.isArray(data.events) ? data.events : []);
-    } catch (err) {
-      captureClientError(err, { scope: "calendar.load" });
-      setError("Could not load calendar events.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return Array.isArray(data.events) ? data.events : [];
+    },
+  });
 
   useEffect(() => {
-    loadEvents();
+    if (eventsError) {
+      captureClientError(eventsError, { scope: "calendar.load" });
+      setError("Could not load calendar events.");
+    }
+  }, [eventsError]);
+
+  useEffect(() => {
     apiFetch<{ connected: boolean }>("/api/auth/google/status")
       .then((data) => setGoogleConnected(data.connected))
       .catch((err) => {
         captureClientError(err, { scope: "calendar.google-status" });
         setGoogleConnected(false);
       });
-  }, [loadEvents]);
+  }, []);
 
-  const syncNow = async () => {
-    setSyncing(true);
-    setError(null);
-    setSyncMessage(null);
-    try {
-      const result = await apiFetch<{ success?: boolean; synced?: number; error?: string }>(
-        "/api/calendar/sync",
-        { method: "POST", body: JSON.stringify({}) },
-      );
+  const syncMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<{ success?: boolean; synced?: number; error?: string }>("/api/calendar/sync", {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
+    onMutate: () => {
+      setError(null);
+      setSyncMessage(null);
+    },
+    onSuccess: (result) => {
       if (result.error) {
         if (result.error.toLowerCase().includes("google not connected")) {
           setGoogleConnected(false);
@@ -94,14 +100,16 @@ function CalendarView() {
           ? `Imported ${synced} events from Google Calendar.`
           : "Google Calendar is synced. No events in the next 14 days.",
       );
-      await loadEvents();
-    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all });
+    },
+    onError: (err) => {
       captureClientError(err, { scope: "calendar.sync" });
       setError("Could not sync Google Calendar.");
-    } finally {
-      setSyncing(false);
-    }
-  };
+    },
+  });
+
+  const syncing = syncMutation.isPending;
+  const syncNow = () => syncMutation.mutate();
 
   const groups = groupByDay(events);
   const todayCount =
