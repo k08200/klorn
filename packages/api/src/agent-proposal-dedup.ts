@@ -33,7 +33,16 @@ export const EVE_AGENT_NOTIFICATION_PREFIX = "[Eve]";
 export const LEGACY_AGENT_NOTIFICATION_PREFIX = "[EV" + "E]";
 
 /** Tolerant JSON parse: returns the raw input if parsing fails. */
-export function safeJson(raw: string): unknown {
+/**
+ * Tolerant JSON parse. Accepts either:
+ *   - a JSON-encoded string (legacy TEXT column path)
+ *   - an already-parsed value coming straight from a JSONB column
+ * Returns the parsed value, falling back to the raw input on parse error
+ * so callers never lose data when the underlying row is malformed.
+ */
+export function safeJson(raw: unknown): unknown {
+  if (raw == null) return {};
+  if (typeof raw !== "string") return raw;
   try {
     return JSON.parse(raw || "{}");
   } catch {
@@ -107,7 +116,10 @@ export async function findRecentSimilarProposal(
   })) as Array<{
     id: string;
     toolName: string;
-    toolArgs: string;
+    // unknown post-#332 migration (Prisma returns JsonValue). safeJson
+    // handles both shapes — keeping the loose type lets us flip the
+    // schema without touching every read site at once.
+    toolArgs: unknown;
     reasoning: string | null;
     status: string;
     createdAt: Date;
@@ -166,7 +178,10 @@ export async function getRecentProposalSuppressions(
   })) as Array<{
     id: string;
     toolName: string;
-    toolArgs: string;
+    // unknown post-#332 migration (Prisma returns JsonValue). safeJson
+    // handles both shapes — keeping the loose type lets us flip the
+    // schema without touching every read site at once.
+    toolArgs: unknown;
     reasoning: string | null;
     status: string;
     createdAt: Date;

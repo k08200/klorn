@@ -633,7 +633,9 @@ describe("chat routes (conversation CRUD)", () => {
     expect(pendingActionStore.size).toBe(1);
     const action = [...pendingActionStore.values()][0];
     expect(action.toolName).toBe("create_task");
-    expect(action.toolArgs).toContain("운영 루프 후속 정리");
+    // toolArgs is JSONB post-#332 — assert the parsed shape rather
+    // than the legacy stringified form.
+    expect(JSON.stringify(action.toolArgs)).toContain("운영 루프 후속 정리");
     expect(msgStore.get(action.messageId)?.content).toContain("✅ 제안");
     await app.close();
   });

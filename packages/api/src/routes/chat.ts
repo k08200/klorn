@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import type OpenAI from "openai";
 import { resolveActionTarget } from "../action-target.js";
@@ -186,7 +187,8 @@ async function createPendingActionFromProposal(input: {
       messageId: assistantMsg.id,
       userId: input.userId,
       toolName,
-      toolArgs: JSON.stringify(toolArgs),
+      // JSONB after migration 20260519060000.
+      toolArgs: (toolArgs ?? {}) as Prisma.InputJsonValue,
       reasoning: message,
     },
   });
@@ -1416,7 +1418,9 @@ export function chatRoutes(app: FastifyInstance) {
       actions.map(async (a) => {
         let targetLabel: string | null = null;
         try {
-          const parsed = JSON.parse(a.toolArgs) as Record<string, unknown>;
+          const parsed = (
+            typeof a.toolArgs === "string" ? JSON.parse(a.toolArgs) : (a.toolArgs ?? {})
+          ) as Record<string, unknown>;
           targetLabel = await resolveActionTarget(a.toolName, parsed);
         } catch {
           // Malformed toolArgs — leave label null
@@ -1474,7 +1478,9 @@ export function chatRoutes(app: FastifyInstance) {
         actions.map(async (a) => {
           let targetLabel: string | null = null;
           try {
-            const parsed = JSON.parse(a.toolArgs) as Record<string, unknown>;
+            const parsed = (
+              typeof a.toolArgs === "string" ? JSON.parse(a.toolArgs) : (a.toolArgs ?? {})
+            ) as Record<string, unknown>;
             targetLabel = await resolveActionTarget(a.toolName, parsed);
           } catch {
             // Malformed toolArgs — leave label null
@@ -1518,7 +1524,12 @@ export function chatRoutes(app: FastifyInstance) {
 
       // Execute the tool — if it fails, rollback to FAILED
       try {
-        const toolArgs = JSON.parse(action.toolArgs);
+        // toolArgs is JSONB post-#332 (already parsed), but legacy
+        // rows can still be JSON strings.
+        const toolArgs =
+          typeof action.toolArgs === "string"
+            ? JSON.parse(action.toolArgs)
+            : (action.toolArgs ?? {});
         const toolResult = await executeToolCall(userId, action.toolName, toolArgs);
 
         await db.pendingAction.update({

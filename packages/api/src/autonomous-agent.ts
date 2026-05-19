@@ -25,6 +25,7 @@
  * Uses `never[]` for args so callers don't need explicit casts, and
  * `Promise<{ [k: string]: unknown }>` so returned objects support property access.
  */
+import type { Prisma } from "@prisma/client";
 import type OpenAI from "openai";
 import { resolveActionTarget } from "./action-target.js";
 import { AGENT_SYSTEM_PROMPT, NOTIFY_TOOL, PROPOSE_ACTION_TOOL } from "./agent/prompt.js";
@@ -718,7 +719,9 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                   messageId: assistantMsg.id,
                   userId,
                   toolName: proposedToolName,
-                  toolArgs: JSON.stringify(args.toolArgs ?? {}),
+                  // JSONB after migration 20260519060000 — pass the
+                  // object directly; Prisma serializes into the column.
+                  toolArgs: (args.toolArgs ?? {}) as Prisma.InputJsonValue,
                   reasoning: args.message,
                 },
               });
@@ -1016,7 +1019,8 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                   messageId: assistantMsg.id,
                   userId,
                   toolName: fnName,
-                  toolArgs: JSON.stringify(args),
+                  // JSONB after migration 20260519060000.
+                  toolArgs: (args ?? {}) as Prisma.InputJsonValue,
                   reasoning: proposalMessage,
                 },
               });

@@ -119,7 +119,10 @@ export async function learnFromRejection(
 export async function learnFromApproval(
   userId: string,
   toolName: string,
-  toolArgs: string,
+  // JSONB after migration 20260519060000 — callers may pass a parsed
+  // object or the legacy JSON string. We do not actually use the arg
+  // beyond logging here, so the loose type is sufficient.
+  _toolArgs: unknown,
 ): Promise<void> {
   try {
     // Count approvals for this tool
@@ -149,7 +152,9 @@ export async function learnFromApproval(
     });
 
     const argsList = recentApproved
-      .map((a: { toolArgs: string }) => {
+      .map((a: { toolArgs: unknown }) => {
+        if (a.toolArgs == null) return null;
+        if (typeof a.toolArgs !== "string") return a.toolArgs;
         try {
           return JSON.parse(a.toolArgs);
         } catch {
@@ -284,7 +289,10 @@ async function analyzeToolPatterns(userId: string): Promise<LearnedPattern[]> {
     const stats = toolStats.get(a.toolName) || { approved: 0, rejected: 0, args: [] };
     if (a.status === "EXECUTED") stats.approved++;
     else stats.rejected++;
-    stats.args.push(a.toolArgs as string);
+    // Normalize to a stringified form so downstream pattern-detection
+    // code keeps working whether the column is TEXT (legacy) or JSONB.
+    const argStr = typeof a.toolArgs === "string" ? a.toolArgs : JSON.stringify(a.toolArgs ?? {});
+    stats.args.push(argStr);
     toolStats.set(a.toolName, stats);
   }
 
