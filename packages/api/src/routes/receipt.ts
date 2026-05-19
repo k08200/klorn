@@ -21,6 +21,7 @@
  *   - EmailProcessingLog for silenced email signals
  */
 
+import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
@@ -241,7 +242,10 @@ export async function receiptRoutes(app: FastifyInstance) {
           messageId: undoMessage.id,
           userId,
           toolName: `undo_${action.toolName}`,
-          toolArgs: action.toolArgs,
+          // Reuse the original toolArgs payload verbatim; cast through
+          // Prisma.InputJsonValue because the read type is JsonValue
+          // (includes JsonNull) while writes need InputJsonValue.
+          toolArgs: (action.toolArgs ?? {}) as Prisma.InputJsonValue,
           reasoning: `Undo requested for: ${action.toolName.replace(/_/g, " ")}`,
         },
       });

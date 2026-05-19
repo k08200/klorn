@@ -24,7 +24,9 @@ const MAX_PROPOSALS_PER_RUN = 2; // cap to avoid flooding inbox
 
 interface ActionRecord {
   toolName: string;
-  toolArgs: string;
+  // JSONB post-#332 — Prisma returns JsonValue. Skill recording only
+  // uses it for the JSON-string-formatted sample below (via stringify).
+  toolArgs: unknown;
   createdAt: Date;
 }
 
@@ -94,8 +96,14 @@ function detectRepeatedSequences(actions: ActionRecord[]): ToolSequence[] {
     const pairKey = `${a.toolName}→${b.toolName}`;
     const pair = seqCounts.get(pairKey) || { count: 0, args: [[], []] };
     pair.count++;
-    if (pair.args[0].length < 3) pair.args[0].push(a.toolArgs);
-    if (pair.args[1].length < 3) pair.args[1].push(b.toolArgs);
+    if (pair.args[0].length < 3)
+      pair.args[0].push(
+        typeof a.toolArgs === "string" ? a.toolArgs : JSON.stringify(a.toolArgs ?? {}),
+      );
+    if (pair.args[1].length < 3)
+      pair.args[1].push(
+        typeof b.toolArgs === "string" ? b.toolArgs : JSON.stringify(b.toolArgs ?? {}),
+      );
     seqCounts.set(pairKey, pair);
 
     // Triple: A→B→C (only when C exists and is within session window of B)
@@ -106,9 +114,18 @@ function detectRepeatedSequences(actions: ActionRecord[]): ToolSequence[] {
         const tripleKey = `${a.toolName}→${b.toolName}→${c.toolName}`;
         const triple = seqCounts.get(tripleKey) || { count: 0, args: [[], [], []] };
         triple.count++;
-        if (triple.args[0].length < 3) triple.args[0].push(a.toolArgs);
-        if (triple.args[1].length < 3) triple.args[1].push(b.toolArgs);
-        if (triple.args[2].length < 3) triple.args[2].push(c.toolArgs);
+        if (triple.args[0].length < 3)
+          triple.args[0].push(
+            typeof a.toolArgs === "string" ? a.toolArgs : JSON.stringify(a.toolArgs ?? {}),
+          );
+        if (triple.args[1].length < 3)
+          triple.args[1].push(
+            typeof b.toolArgs === "string" ? b.toolArgs : JSON.stringify(b.toolArgs ?? {}),
+          );
+        if (triple.args[2].length < 3)
+          triple.args[2].push(
+            typeof c.toolArgs === "string" ? c.toolArgs : JSON.stringify(c.toolArgs ?? {}),
+          );
         seqCounts.set(tripleKey, triple);
       }
     }
@@ -141,16 +158,20 @@ async function skillAlreadyExists(userId: string, tools: string[]): Promise<bool
 
 async function proposalAlreadyPending(userId: string, tools: string[]): Promise<boolean> {
   const toolSignature = tools.join("→");
-  const recent = await prisma.pendingAction.findFirst({
-    where: {
-      userId,
-      toolName: "record_skill",
-      status: "PENDING",
-      toolArgs: { contains: toolSignature },
-      createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-    },
-  });
-  return Boolean(recent);
+  // toolArgs is JSONB after migration 20260519060000; we cast to text
+  // for the substring search so the existing "did we already propose
+  // this skill" check keeps working without indexing into a specific
+  // JSON path.
+  const matches = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT "id" FROM "PendingAction"
+    WHERE "userId" = ${userId}
+      AND "toolName" = 'record_skill'
+      AND "status" = 'PENDING'
+      AND "toolArgs"::text ILIKE ${`%${toolSignature}%`}
+      AND "createdAt" >= ${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)}
+    LIMIT 1
+  `;
+  return matches.length > 0;
 }
 
 // ─── Proposal ─────────────────────────────────────────────────────────────────
@@ -193,7 +214,8 @@ async function proposeSkillCreation(userId: string, seq: ToolSequence): Promise<
       messageId: message.id,
       userId,
       toolName: "record_skill",
-      toolArgs: JSON.stringify({ key: skillKey, name: skillName, prompt: skillPrompt }),
+      // JSONB after migration 20260519060000.
+      toolArgs: { key: skillKey, name: skillName, prompt: skillPrompt },
       reasoning,
     },
   });

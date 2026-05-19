@@ -539,9 +539,14 @@ model PendingAction {
   userId         String
   status         ActionStatus  @default(PENDING)
   toolName       String // e.g. "create_reminder", "update_task"
-  toolArgs       String // JSON string of tool arguments
+  // JSONB after migration 20260519060000. Always an object payload; the
+  // exact shape depends on toolName (tool-executor.ts dispatches on it).
+  toolArgs       Json
   reasoning      String? // Why Eve suggests this action
-  result         String? // Result after execution (JSON)
+  // Result payload from executeToolCall. Free-form string (tool's
+  // return value) — leaving as text keeps the column open for any tool
+  // that returns a non-JSON message.
+  result         String?
   notification   Notification?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt

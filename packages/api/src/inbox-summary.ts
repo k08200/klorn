@@ -189,7 +189,8 @@ type PendingActionRow = {
   conversationId: string;
   status: string;
   toolName: string;
-  toolArgs: string;
+  // JSONB after migration 20260519060000; legacy callers may still pass strings.
+  toolArgs: unknown;
   reasoning: string | null;
   createdAt: Date;
 };
@@ -267,7 +268,12 @@ async function buildPendingItem(
   if (pa.status !== "PENDING") return null;
   let targetLabel: string | null = null;
   try {
-    const parsed = JSON.parse(pa.toolArgs) as Record<string, unknown>;
+    // toolArgs is JSONB after migration 20260519060000 (already parsed),
+    // but legacy rows can still be JSON strings — handle both.
+    const parsed =
+      typeof pa.toolArgs === "string"
+        ? (JSON.parse(pa.toolArgs) as Record<string, unknown>)
+        : ((pa.toolArgs ?? {}) as Record<string, unknown>);
     targetLabel = await resolveActionTarget(pa.toolName, parsed);
   } catch {
     // Malformed toolArgs — leave label null

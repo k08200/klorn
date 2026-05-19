@@ -45,12 +45,16 @@ export async function recordFeedback(input: FeedbackInput): Promise<void> {
  * yields a non-empty string. Anything else returns null and the row simply
  * gets stored without a recipient (still useful for tool-level rollups).
  */
-export function recipientFromToolArgs(toolArgs: string): string | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(toolArgs);
-  } catch {
-    return null;
+export function recipientFromToolArgs(toolArgs: unknown): string | null {
+  let parsed: unknown = toolArgs;
+  // Backward-compat: rows written before migration 20260519060000 are
+  // JSON strings; rows written after are already parsed objects.
+  if (typeof toolArgs === "string") {
+    try {
+      parsed = JSON.parse(toolArgs);
+    } catch {
+      return null;
+    }
   }
   if (!parsed || typeof parsed !== "object") return null;
   const obj = parsed as Record<string, unknown>;
