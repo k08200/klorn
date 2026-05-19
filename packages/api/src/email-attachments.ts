@@ -578,13 +578,17 @@ async function analyzeAttachmentRows(
         from: row.from,
         subject: row.subject,
       });
+      // keyPoints + extractedFields are JSONB after migration
+      // 20260519050000. Send the JSON-encoded string and cast in SQL so
+      // Postgres validates the payload server-side and rejects malformed
+      // data instead of writing garbage.
       await prisma.$executeRaw`
         UPDATE "EmailAttachment"
         SET
           "summary" = ${analysis.summary},
           "category" = ${analysis.category},
-          "keyPoints" = ${JSON.stringify(analysis.keyPoints)},
-          "extractedFields" = ${JSON.stringify(analysis.extractedFields)},
+          "keyPoints" = ${JSON.stringify(analysis.keyPoints)}::jsonb,
+          "extractedFields" = ${JSON.stringify(analysis.extractedFields)}::jsonb,
           "analysisStatus" = 'ANALYZED',
           "analysisError" = NULL,
           "updatedAt" = NOW()
@@ -602,8 +606,8 @@ async function analyzeAttachmentRows(
         SET
           "summary" = ${fallback.summary},
           "category" = ${fallback.category},
-          "keyPoints" = ${JSON.stringify(fallback.keyPoints)},
-          "extractedFields" = ${JSON.stringify(fallback.extractedFields)},
+          "keyPoints" = ${JSON.stringify(fallback.keyPoints)}::jsonb,
+          "extractedFields" = ${JSON.stringify(fallback.extractedFields)}::jsonb,
           "analysisStatus" = 'FALLBACK',
           "analysisError" = ${err instanceof Error ? err.message.slice(0, 500) : "analysis failed"},
           "updatedAt" = NOW()

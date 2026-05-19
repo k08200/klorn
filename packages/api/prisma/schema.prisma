@@ -616,8 +616,10 @@ model EmailAttachment {
   size              Int?
   contentText       String?
   summary           String?
-  keyPoints         String?
-  extractedFields   String?
+  // JSONB after migration 20260519050000. `keyPoints` is a `string[]`;
+  // `extractedFields` is a flat object Record<string, string|number|boolean|null>.
+  keyPoints         Json?
+  extractedFields   Json?
   category          String?
   analysisStatus    String       @default("PENDING")
   analysisError     String?

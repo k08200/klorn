@@ -2146,8 +2146,9 @@ export async function emailRoutes(app: FastifyInstance) {
             contentText: analysis.ocrText || row.contentText,
             summary: analysis.summary,
             category: analysis.category,
-            keyPoints: JSON.stringify(analysis.keyPoints),
-            extractedFields: JSON.stringify(analysis.extractedFields),
+            // JSONB after migration 20260519050000.
+            keyPoints: analysis.keyPoints,
+            extractedFields: analysis.extractedFields,
             analysisStatus: analysis.ocrText ? "ANALYZED" : "VISION_FAILED",
             analysisError: analysis.ocrText ? null : "Vision OCR returned no readable text",
           },
@@ -2218,8 +2219,9 @@ export async function emailRoutes(app: FastifyInstance) {
         data: {
           summary: nextSummary,
           category: nextCategory,
-          keyPoints: JSON.stringify(keyPoints),
-          extractedFields: JSON.stringify(extractedFields),
+          // JSONB after migration 20260519050000.
+          keyPoints: keyPoints,
+          extractedFields: extractedFields,
           analysisStatus: "CORRECTED",
           analysisError: null,
         },
