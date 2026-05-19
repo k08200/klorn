@@ -1,12 +1,14 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { EveSignalField } from "../../components/brand-visuals";
 import { Markdown } from "../../components/markdown";
 import { apiFetch } from "../../lib/api";
 import { useT } from "../../lib/i18n";
+import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 
 interface BriefingResponse {
@@ -91,126 +93,119 @@ export default function BriefingPage() {
 
 function BriefingView() {
   const { t } = useT();
-  const [noteId, setNoteId] = useState<string | null>(null);
-  const [content, setContent] = useState<string | null>(null);
-  const [createdAt, setCreatedAt] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<Record<number, BriefingFeedbackChoice>>({});
-  const [status, setStatus] = useState<BriefingStatus | null>(null);
-  const [savingRank, setSavingRank] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const [statusError, setStatusError] = useState<string | null>(null);
+  const [savingRank, setSavingRank] = useState<number | null>(null);
 
-  const loadFeedback = useCallback(async (id: string) => {
-    try {
+  // Parallel fetch: today's briefing + delivery status. Errors on either
+  // are handled independently so a flaky status endpoint never blocks the
+  // briefing body.
+  const briefingQuery = useQuery({
+    queryKey: queryKeys.briefing.today(),
+    queryFn: () => apiFetch<BriefingResponse>("/api/briefing/today"),
+  });
+  const statusQuery = useQuery({
+    queryKey: queryKeys.briefing.status(),
+    queryFn: () => apiFetch<BriefingStatus>("/api/briefing/status"),
+  });
+
+  const noteId = briefingQuery.data?.briefing?.id ?? null;
+  const content = briefingQuery.data?.briefing?.content ?? null;
+  const createdAt = briefingQuery.data?.briefing?.createdAt ?? null;
+  const status = statusQuery.data ?? null;
+  const loading = briefingQuery.isLoading;
+  const statusError = statusQuery.error
+    ? "Delivery status is unavailable. The briefing can still load."
+    : null;
+  const briefingLoadError = briefingQuery.error ? "Could not load today's briefing." : null;
+
+  // Dependent fetch: only call /feedback once we know the briefing id.
+  const feedbackQuery = useQuery({
+    queryKey: noteId ? queryKeys.briefing.feedback(noteId) : queryKeys.briefing.feedback("none"),
+    enabled: Boolean(noteId),
+    queryFn: async () => {
+      if (!noteId) return {} as Record<number, BriefingFeedbackChoice>;
       const data = await apiFetch<BriefingFeedbackResponse>(
-        `/api/briefing/${id}/top-actions/feedback`,
+        `/api/briefing/${noteId}/top-actions/feedback`,
       );
       const next: Record<number, BriefingFeedbackChoice> = {};
       for (const [rank, row] of Object.entries(data.feedback)) {
         next[Number(rank)] = row.choice;
       }
-      setFeedback(next);
-    } catch (err) {
-      captureClientError(err, { scope: "briefing.feedback.load", noteId: id });
-      setFeedback({});
-    }
-  }, []);
-
-  const loadToday = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setStatusError(null);
-    try {
-      const [briefingResult, statusResult] = await Promise.allSettled([
-        apiFetch<BriefingResponse>("/api/briefing/today"),
-        apiFetch<BriefingStatus>("/api/briefing/status"),
-      ]);
-      if (statusResult.status === "fulfilled") {
-        setStatus(statusResult.value);
-      } else {
-        captureClientError(statusResult.reason, { scope: "briefing.status.load" });
-        setStatus(null);
-        setStatusError("Delivery status is unavailable. The briefing can still load.");
-      }
-      if (briefingResult.status === "rejected") {
-        throw briefingResult.reason;
-      }
-      const data = briefingResult.value;
-      if (data.briefing) {
-        setNoteId(data.briefing.id);
-        setContent(data.briefing.content);
-        setCreatedAt(data.briefing.createdAt);
-        await loadFeedback(data.briefing.id);
-      } else {
-        setNoteId(null);
-        setContent(null);
-        setCreatedAt(null);
-        setFeedback({});
-      }
-    } catch (err) {
-      captureClientError(err, { scope: "briefing.load-today" });
-      setError("Could not load today's briefing.");
-    } finally {
-      setLoading(false);
-    }
-  }, [loadFeedback]);
+      return next;
+    },
+  });
+  const feedback = feedbackQuery.data ?? {};
 
   useEffect(() => {
-    loadToday();
-  }, [loadToday]);
+    if (briefingQuery.error) {
+      captureClientError(briefingQuery.error, { scope: "briefing.load-today" });
+    }
+    if (statusQuery.error) {
+      captureClientError(statusQuery.error, { scope: "briefing.status.load" });
+    }
+    if (feedbackQuery.error) {
+      captureClientError(feedbackQuery.error, {
+        scope: "briefing.feedback.load",
+        noteId,
+      });
+    }
+  }, [briefingQuery.error, statusQuery.error, feedbackQuery.error, noteId]);
 
-  const regenerate = async () => {
-    setGenerating(true);
-    setError(null);
-    try {
-      const data = await apiFetch<GenerateResponse>("/api/briefing/generate", {
+  const regenerateMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<GenerateResponse>("/api/briefing/generate", {
         method: "POST",
         body: JSON.stringify({}),
-      });
-      const statusResult = await apiFetch<BriefingStatus>("/api/briefing/status").catch((err) => {
-        captureClientError(err, { scope: "briefing.status.after-generate" });
-        setStatusError("Generated, but delivery status is unavailable.");
-        return null;
-      });
-      setContent(data.briefing);
-      setNoteId(data.note?.id ?? null);
-      setCreatedAt(data.note?.createdAt ?? new Date().toISOString());
-      setStatus(statusResult);
-      setFeedback({});
-    } catch (err) {
+      }),
+    onMutate: () => setError(null),
+    onSuccess: () => {
+      // Truth lives on the server — refetch all 3 dependent queries.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.briefing.all });
+    },
+    onError: (err) => {
       captureClientError(err, { scope: "briefing.generate" });
       setError("Could not generate the briefing. Please try again.");
-    } finally {
-      setGenerating(false);
-    }
-  };
+    },
+  });
+  const generating = regenerateMutation.isPending;
+  const regenerate = () => regenerateMutation.mutate();
 
-  const submitFeedback = async (
-    action: TopAction,
-    choice: BriefingFeedbackChoice,
-  ): Promise<void> => {
-    if (!noteId || savingRank) return;
-    setSavingRank(action.rank);
-    setError(null);
-    try {
-      await apiFetch(`/api/briefing/${noteId}/top-actions/${action.rank}/feedback`, {
+  const feedbackMutation = useMutation({
+    mutationFn: async (input: { action: TopAction; choice: BriefingFeedbackChoice }) => {
+      if (!noteId) throw new Error("Missing noteId");
+      await apiFetch(`/api/briefing/${noteId}/top-actions/${input.action.rank}/feedback`, {
         method: "POST",
-        body: JSON.stringify({ choice, label: action.label }),
+        body: JSON.stringify({ choice: input.choice, label: input.action.label }),
       });
-      setFeedback((prev) => ({ ...prev, [action.rank]: choice }));
-    } catch (err) {
+      return input;
+    },
+    onMutate: (input) => {
+      setSavingRank(input.action.rank);
+      setError(null);
+    },
+    onSuccess: (input) => {
+      // Optimistic local update; cache will refetch on next focus.
+      if (!noteId) return;
+      queryClient.setQueryData<Record<number, BriefingFeedbackChoice>>(
+        queryKeys.briefing.feedback(noteId),
+        (prev) => ({ ...(prev ?? {}), [input.action.rank]: input.choice }),
+      );
+    },
+    onError: (err, vars) => {
       captureClientError(err, {
         scope: "briefing.feedback.submit",
         noteId,
-        rank: action.rank,
-        choice,
+        rank: vars.action.rank,
+        choice: vars.choice,
       });
       setError("Could not save feedback. Please try again.");
-    } finally {
-      setSavingRank(null);
-    }
+    },
+    onSettled: () => setSavingRank(null),
+  });
+  const submitFeedback = async (action: TopAction, choice: BriefingFeedbackChoice) => {
+    if (!noteId || savingRank) return;
+    feedbackMutation.mutate({ action, choice });
   };
 
   const formattedTime = createdAt
@@ -266,13 +261,13 @@ function BriefingView() {
 
       {loading && <p className="text-sm text-stone-500">Loading...</p>}
 
-      {error && (
+      {(error || briefingLoadError) && (
         <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
-          {error}
+          {error ?? briefingLoadError}
         </div>
       )}
 
-      {!loading && !error && !content && (
+      {!loading && !error && !briefingLoadError && !content && (
         <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-6 text-center">
           <p className="mb-3 text-sm text-stone-300">No briefing for today yet.</p>
           <p className="mx-auto mb-4 max-w-md text-xs leading-5 text-amber-100/85">

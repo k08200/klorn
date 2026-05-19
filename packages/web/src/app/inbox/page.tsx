@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueries, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
@@ -9,6 +10,7 @@ import { useToast } from "../../components/toast";
 import WorkGraphSummaryCard from "../../components/work-graph-summary";
 import { apiFetch } from "../../lib/api";
 import type { ReplyNeededEmail } from "../../lib/inbox-summary";
+import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { formatRelative } from "../../lib/text";
 
@@ -70,9 +72,7 @@ export default function InboxPage() {
 }
 
 function CommandCenterView() {
-  const [actions, setActions] = useState<PendingActionItem[]>([]);
-  const [commitments, setCommitments] = useState<CommitmentItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("pending");
   const [actionLoading, setActionLoading] = useState<
@@ -83,40 +83,65 @@ function CommandCenterView() {
   >({});
   const { toast } = useToast();
 
-  const load = useCallback(async (statusFilter: StatusFilter) => {
-    setLoading(true);
-    setError(null);
-    const qs = statusFilter === "all" ? "?status=all" : "";
-    const [actionResult, commitmentResult] = await Promise.allSettled([
-      apiFetch<{ actions: PendingActionItem[] }>(`/api/chat/pending-actions${qs}`),
-      apiFetch<{ commitments: CommitmentItem[] }>("/api/commitments?status=OPEN&limit=8"),
-    ]);
+  // Parallel fetch via useQueries. Each branch has independent loading
+  // and error state so a flaky endpoint never blocks the other.
+  const results = useQueries({
+    queries: [
+      {
+        queryKey: [...queryKeys.inbox.pending(), filter] as const,
+        queryFn: async () => {
+          const qs = filter === "all" ? "?status=all" : "";
+          const data = await apiFetch<{ actions: PendingActionItem[] }>(
+            `/api/chat/pending-actions${qs}`,
+          );
+          return Array.isArray(data.actions) ? data.actions : [];
+        },
+      },
+      {
+        queryKey: queryKeys.inbox.commitments(),
+        queryFn: async () => {
+          const data = await apiFetch<{ commitments: CommitmentItem[] }>(
+            "/api/commitments?status=OPEN&limit=8",
+          );
+          return Array.isArray(data.commitments) ? data.commitments : [];
+        },
+      },
+    ],
+  });
+  const [actionsQuery, commitmentsQuery] = results;
+  const actions = actionsQuery.data ?? [];
+  const commitments = commitmentsQuery.data ?? [];
+  const loading = actionsQuery.isLoading || commitmentsQuery.isLoading;
 
-    if (actionResult.status === "fulfilled") {
-      setActions(Array.isArray(actionResult.value.actions) ? actionResult.value.actions : []);
-    } else {
-      captureClientError(actionResult.reason, { scope: "inbox.load.actions" });
-      setActions([]);
-    }
-
-    if (commitmentResult.status === "fulfilled") {
-      setCommitments(
-        Array.isArray(commitmentResult.value.commitments) ? commitmentResult.value.commitments : [],
-      );
-    } else {
-      captureClientError(commitmentResult.reason, { scope: "inbox.load.commitments" });
-      setCommitments([]);
-    }
-
-    if (actionResult.status === "rejected" || commitmentResult.status === "rejected") {
-      setError("Could not load the decision queue.");
-    }
-
-    setLoading(false);
-  }, []);
+  const load = useCallback(
+    async (_statusFilter: StatusFilter) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.inbox.pending() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.inbox.commitments() }),
+      ]);
+    },
+    [queryClient],
+  );
 
   useEffect(() => {
-    load(filter);
+    if (actionsQuery.error) {
+      captureClientError(actionsQuery.error, { scope: "inbox.load.actions" });
+    }
+    if (commitmentsQuery.error) {
+      captureClientError(commitmentsQuery.error, { scope: "inbox.load.commitments" });
+    }
+    if (actionsQuery.error || commitmentsQuery.error) {
+      setError("Could not load the decision queue.");
+    } else {
+      setError(null);
+    }
+  }, [actionsQuery.error, commitmentsQuery.error]);
+
+  useEffect(() => {
+    // Filter change retriggers the keyed query automatically; no-op here
+    // intentionally kept so the existing `load(filter)` button still
+    // works for refresh.
+    void filter;
   }, [filter, load]);
 
   useEffect(() => {
@@ -130,10 +155,12 @@ function CommandCenterView() {
     setActionLoading((prev) => ({ ...prev, [actionId]: "approve" }));
     try {
       await apiFetch(`/api/chat/pending-actions/${actionId}/approve`, { method: "POST" });
-      setActions((prev) =>
-        filter === "pending"
-          ? prev.filter((a) => a.id !== actionId)
-          : prev.map((a) => (a.id === actionId ? { ...a, status: "EXECUTED" } : a)),
+      queryClient.setQueryData<PendingActionItem[]>(
+        [...queryKeys.inbox.pending(), filter] as unknown as readonly unknown[],
+        (prev) =>
+          filter === "pending"
+            ? (prev ?? []).filter((a) => a.id !== actionId)
+            : (prev ?? []).map((a) => (a.id === actionId ? { ...a, status: "EXECUTED" } : a)),
       );
       toast("Action approved.", "success");
     } catch (err) {
@@ -152,10 +179,12 @@ function CommandCenterView() {
         method: "POST",
         body: JSON.stringify({}),
       });
-      setActions((prev) =>
-        filter === "pending"
-          ? prev.filter((a) => a.id !== actionId)
-          : prev.map((a) => (a.id === actionId ? { ...a, status: "REJECTED" } : a)),
+      queryClient.setQueryData<PendingActionItem[]>(
+        [...queryKeys.inbox.pending(), filter] as unknown as readonly unknown[],
+        (prev) =>
+          filter === "pending"
+            ? (prev ?? []).filter((a) => a.id !== actionId)
+            : (prev ?? []).map((a) => (a.id === actionId ? { ...a, status: "REJECTED" } : a)),
       );
       toast("Suggestion rejected.", "success");
     } catch (err) {
@@ -175,10 +204,12 @@ function CommandCenterView() {
         method: "POST",
         body: JSON.stringify({ snoozeUntil }),
       });
-      setActions((prev) =>
-        filter === "pending"
-          ? prev.filter((a) => a.id !== actionId)
-          : prev.map((a) => (a.id === actionId ? { ...a, status: "REJECTED" } : a)),
+      queryClient.setQueryData<PendingActionItem[]>(
+        [...queryKeys.inbox.pending(), filter] as unknown as readonly unknown[],
+        (prev) =>
+          filter === "pending"
+            ? (prev ?? []).filter((a) => a.id !== actionId)
+            : (prev ?? []).map((a) => (a.id === actionId ? { ...a, status: "REJECTED" } : a)),
       );
       toast(`Snoozed for ${hours}h — will resurface automatically.`, "success");
     } catch (err) {
@@ -201,7 +232,9 @@ function CommandCenterView() {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
-      setCommitments((prev) => prev.filter((c) => c.id !== commitmentId));
+      queryClient.setQueryData<CommitmentItem[]>(queryKeys.inbox.commitments(), (prev) =>
+        (prev ?? []).filter((c) => c.id !== commitmentId),
+      );
       if (status === "SNOOZED") toast("Snoozed for 24h.", "success");
       window.dispatchEvent(new Event("conversations-updated"));
     } catch (err) {
