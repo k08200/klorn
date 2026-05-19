@@ -39,6 +39,34 @@ import { wrapUntrusted } from "./untrusted.js";
 
 const MAX_CONTEXT_ITEMS = AGENT_MAX_CONTEXT_ITEMS;
 
+/**
+ * Stringify EmailMessage.actionItems for prompt embedding.
+ *
+ * The column is now JSONB (a `string[]` payload), but historic rows
+ * predating migration 20260519040000 may still arrive as a JSON-encoded
+ * string. Accept both shapes and produce a stable bullet-joined text
+ * for the LLM context block.
+ */
+function formatActionItems(value: unknown): string {
+  if (value == null) return "";
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string").join("; ");
+  }
+  if (typeof value === "string") {
+    if (!value) return "";
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item): item is string => typeof item === "string").join("; ");
+      }
+    } catch {
+      /* legacy plaintext */
+    }
+    return value;
+  }
+  return "";
+}
+
 /** Gather full user context for LLM reasoning. */
 export async function gatherUserContext(userId: string): Promise<string> {
   const now = new Date();
@@ -132,7 +160,10 @@ export async function gatherUserContext(userId: string): Promise<string> {
             summary: string | null;
             category: string | null;
             priority: string;
-            actionItems: string | null;
+            // JSONB after migration 20260519040000; legacy callers can
+            // still pass the JSON-string form because formatActionItems
+            // accepts both.
+            actionItems: unknown;
             isRead: boolean;
             receivedAt: Date;
           }>,
@@ -213,9 +244,9 @@ export async function gatherUserContext(userId: string): Promise<string> {
       snippet: string | null;
       body: string | null;
       summary: string | null;
-      actionItems: string | null;
+      actionItems: unknown;
     }) =>
-      `${e.from} ${e.subject} ${e.summary || ""} ${e.actionItems || ""} ${e.snippet || ""} ${e.body || ""}`,
+      `${e.from} ${e.subject} ${e.summary || ""} ${formatActionItems(e.actionItems)} ${e.snippet || ""} ${e.body || ""}`,
     recentProposalSuppressions,
   );
   const visibleEmails = suppressedEmails.visible.slice(0, 5);
@@ -309,7 +340,7 @@ export async function gatherUserContext(userId: string): Promise<string> {
         summary: string | null;
         category: string | null;
         priority: string;
-        actionItems: string | null;
+        actionItems: unknown;
         isRead: boolean;
         receivedAt: Date;
       }>
@@ -323,8 +354,9 @@ export async function gatherUserContext(userId: string): Promise<string> {
       const subjectWrapped = wrapUntrusted(e.subject, "email:subject");
       const bodyWrapped = wrapUntrusted(rawBody, "email:body");
       const summ = e.summary ? `\n  Summary: ${wrapUntrusted(e.summary, "email:summary")}` : "";
-      const actions = e.actionItems
-        ? `\n  Actions: ${wrapUntrusted(e.actionItems, "email:actions")}`
+      const actionsText = formatActionItems(e.actionItems);
+      const actions = actionsText
+        ? `\n  Actions: ${wrapUntrusted(actionsText, "email:actions")}`
         : "";
       const read = e.isRead ? "" : " 📩 UNREAD";
       const receivedKST = e.receivedAt.toLocaleString("en-US", {

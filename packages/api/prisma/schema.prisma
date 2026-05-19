@@ -579,8 +579,11 @@ model EmailMessage {
   priority             EmailPriority @default(NORMAL)
   category             String? // AI classification: billing, meeting, engineering, conversation, automated, other
   summary              String? // AI-generated one-line summary
-  keyPoints            String? // JSON array: AI-extracted key takeaways
-  actionItems          String? // JSON array: AI-extracted TODOs from email
+  // JSONB after migration 20260519040000. Always a `string[]` payload
+  // when present (AI-extracted bullet points / TODOs); `null` when EVE
+  // has not summarized the email yet.
+  keyPoints            Json?
+  actionItems          Json?
   needsReply           Boolean       @default(false)
   needsReplyReason     String?
   needsReplyConfidence Float         @default(0.0)
