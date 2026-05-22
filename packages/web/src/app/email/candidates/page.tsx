@@ -1,9 +1,11 @@
 "use client";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
+import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
 import { formatRelative } from "../../../lib/text";
 
@@ -108,49 +110,89 @@ export default function CandidateIntakePage() {
 }
 
 function CandidateIntakeView() {
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState<CandidateStatus>("ALL");
   const [attention, setAttention] = useState<AttentionFilter>("all");
-  const [candidates, setCandidates] = useState<CandidateIntake[]>([]);
-  const [quality, setQuality] = useState<AttachmentQuality | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  // Used by the "Rescan" button to force a refetch with refresh=true.
+  const [forceRefresh, setForceRefresh] = useState(false);
 
-  const load = useCallback(
-    async (nextStatus: CandidateStatus, nextAttention: AttentionFilter, refresh = false) => {
-      if (refresh) setRefreshing(true);
-      else setLoading(true);
-      setError(null);
+  const candidatesQuery = useQuery({
+    queryKey: queryKeys.email.candidates({
+      status: status === "ALL" ? undefined : status,
+      attention: attention === "all" ? undefined : attention,
+    }),
+    queryFn: async () => {
+      const params = new URLSearchParams({ limit: "80" });
+      if (status !== "ALL") params.set("status", status);
+      if (attention !== "all") params.set("attention", attention);
+      if (forceRefresh) params.set("refresh", "true");
       try {
-        const params = new URLSearchParams({ limit: "80" });
-        if (nextStatus !== "ALL") params.set("status", nextStatus);
-        if (nextAttention !== "all") params.set("attention", nextAttention);
-        if (refresh) params.set("refresh", "true");
         const data = await apiFetch<{ candidates: CandidateIntake[] }>(
           `/api/email/candidates?${params.toString()}`,
         );
-        setCandidates(data.candidates);
-        apiFetch<AttachmentQuality>("/api/email/attachments/quality?limit=500")
-          .then(setQuality)
-          .catch((err) => captureClientError(err, { scope: "email.candidates.quality" }));
-        setSelectedIds(new Set());
+        return data.candidates;
       } catch (err) {
         captureClientError(err, {
           scope: "email.candidates.load",
-          status: nextStatus,
-          attention: nextAttention,
+          status,
+          attention,
         });
-        setError("Could not load the candidate queue.");
+        throw err;
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (forceRefresh) setForceRefresh(false);
       }
     },
-    [],
-  );
+  });
+
+  const qualityQuery = useQuery({
+    queryKey: ["email", "candidates", "quality"] as const,
+    queryFn: async () => {
+      try {
+        return await apiFetch<AttachmentQuality>("/api/email/attachments/quality?limit=500");
+      } catch (err) {
+        captureClientError(err, { scope: "email.candidates.quality" });
+        throw err;
+      }
+    },
+  });
+
+  const candidates = candidatesQuery.data ?? [];
+  const quality = qualityQuery.data ?? null;
+  const loading = candidatesQuery.isLoading;
+  const refreshing = candidatesQuery.isFetching && !candidatesQuery.isLoading;
+  // Keep selection in sync when the filter changes (the keyed query
+  // already refetches on its own).
+  if (candidatesQuery.error && !error) {
+    setError("Could not load the candidate queue.");
+  }
+  const setCandidates = (updater: (prev: CandidateIntake[]) => CandidateIntake[]) => {
+    queryClient.setQueryData<CandidateIntake[]>(
+      queryKeys.email.candidates({
+        status: status === "ALL" ? undefined : status,
+        attention: attention === "all" ? undefined : attention,
+      }),
+      (prev) => updater(prev ?? []),
+    );
+  };
+
+  const load = (nextStatus: CandidateStatus, nextAttention: AttentionFilter, refresh = false) => {
+    if (refresh) setForceRefresh(true);
+    setSelectedIds(new Set());
+    // Filter changes auto-refetch via key change; explicit refresh
+    // invalidates current.
+    if (refresh || nextStatus !== status || nextAttention !== attention) {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.email.candidates({
+          status: nextStatus === "ALL" ? undefined : nextStatus,
+          attention: nextAttention === "all" ? undefined : nextAttention,
+        }),
+      });
+    }
+  };
 
   const selectedCount = selectedIds.size;
 
@@ -230,9 +272,8 @@ function CandidateIntakeView() {
     }
   };
 
-  useEffect(() => {
-    load(status, attention);
-  }, [attention, load, status]);
+  // Filter changes refetch automatically via the keyed useQuery —
+  // no manual load() call needed on mount.
 
   const readyCount = candidates.filter((c) => c.status === "READY_TO_REVIEW").length;
   const needsCount = candidates.filter((c) =>
