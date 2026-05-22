@@ -1008,7 +1008,7 @@ export default function Sidebar({
                   Reminders
                 </Link>
                 <Link
-                  href="/receipt"
+                  href="/inbox/receipt"
                   onClick={() => {
                     setShowUserMenu(false);
                     onMobileClose();
