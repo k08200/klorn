@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 
 const apiUrl =
   process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV === "production" ? "https://jigeum.onrender.com" : undefined);
+  (process.env.NODE_ENV === "production" ? "https://klorn-api.onrender.com" : undefined);
 
 const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DEV_DIST === "1" ? ".next-dev" : ".next",
