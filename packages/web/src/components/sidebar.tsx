@@ -74,15 +74,9 @@ function groupByDate(convs: Conversation[]): DateGroup[] {
 
 const NAV_ITEMS = [
   { href: "/inbox", label: "Decision queue", icon: "check" },
-  { href: "/chat", label: "Threads", icon: "chat" },
   { href: "/email", label: "Mail", icon: "mail" },
-  { href: "/commitments", label: "Commitments", icon: "flag" },
-  { href: "/tasks", label: "Tasks", icon: "check-square" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/briefing", label: "Briefing", icon: "bell" },
-  { href: "/contacts", label: "Contacts", icon: "user" },
-  { href: "/files", label: "Files", icon: "file" },
-  { href: "/agent", label: "Agent log", icon: "zap" },
 ];
 
 function NavIcon({ type, size = 16 }: { type: string; size?: number }) {
@@ -936,126 +930,6 @@ export default function Sidebar({
                   className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
                 >
                   Settings
-                </Link>
-                <Link
-                  href="/billing"
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    onMobileClose();
-                  }}
-                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
-                >
-                  Plan and billing
-                </Link>
-                <Link
-                  href="/settings/memory"
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    onMobileClose();
-                  }}
-                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
-                >
-                  Memory
-                </Link>
-                <Link
-                  href="/settings/usage"
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    onMobileClose();
-                  }}
-                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
-                >
-                  Usage
-                </Link>
-                <Link
-                  href="/settings/playbooks"
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    onMobileClose();
-                  }}
-                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
-                >
-                  Playbooks
-                </Link>
-                <Link
-                  href="/settings/skills"
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    onMobileClose();
-                  }}
-                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
-                >
-                  Skills
-                </Link>
-                <Link
-                  href="/notes"
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    onMobileClose();
-                  }}
-                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
-                >
-                  Notes
-                </Link>
-                <Link
-                  href="/reminders"
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    onMobileClose();
-                  }}
-                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
-                >
-                  Reminders
-                </Link>
-                <Link
-                  href="/inbox/receipt"
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    onMobileClose();
-                  }}
-                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
-                >
-                  Today&apos;s receipt
-                </Link>
-                <Link
-                  href="/settings/voice"
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    onMobileClose();
-                  }}
-                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
-                >
-                  Voice profile
-                </Link>
-                <Link
-                  href="/settings/email-rules"
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    onMobileClose();
-                  }}
-                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
-                >
-                  Email rules
-                </Link>
-                <Link
-                  href="/settings/workspaces"
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    onMobileClose();
-                  }}
-                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
-                >
-                  Workspaces
-                </Link>
-                <Link
-                  href="/settings/email-feedback"
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    onMobileClose();
-                  }}
-                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
-                >
-                  Mail feedback
                 </Link>
                 <div className="border-t border-stone-800 my-1" />
                 <button
