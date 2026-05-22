@@ -1,11 +1,13 @@
 "use client";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { useToast } from "../../components/toast";
 import { apiFetch } from "../../lib/api";
+import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { formatRelative } from "../../lib/text";
 
@@ -237,15 +239,12 @@ function EmailView() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const undoNotice = useMemo(() => parseUndoNotice(searchParams), [searchParams]);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
-  const [emails, setEmails] = useState<EmailRow[]>([]);
-  const [threads, setThreads] = useState<ThreadRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
-  const [source, setSource] = useState<"gmail" | "demo" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -255,40 +254,55 @@ function EmailView() {
   const [undoCountdown, setUndoCountdown] = useState(0);
   const [bulkUndoCountdown, setBulkUndoCountdown] = useState(0);
 
-  const load = useCallback(async (f: Filter, keyword = "") => {
-    setLoading(true);
-    setError(null);
-    setSelectedIds(new Set());
-    try {
-      const q = FILTERS.find((x) => x.key === f)?.query || "";
+  // filter + search drive the cached query key. /api/email/threads and
+  // /api/email return discriminated shapes so we route the query body on
+  // filter === "threads".
+  const listQuery = useQuery({
+    queryKey: queryKeys.email.list({ filter, search: appliedSearch }),
+    queryFn: async () => {
+      const q = FILTERS.find((x) => x.key === filter)?.query || "";
       const params = new URLSearchParams(q);
-      if (keyword.trim()) params.set("search", keyword.trim());
-      if (f === "threads") {
-        const data = await apiFetch<ThreadListResponse>(
-          `/api/email/threads${params.toString() ? `?${params.toString()}` : ""}`,
-        );
-        setThreads(data.threads);
-        setEmails([]);
-        setSource(data.source);
-      } else {
+      if (appliedSearch.trim()) params.set("search", appliedSearch.trim());
+      try {
+        if (filter === "threads") {
+          const data = await apiFetch<ThreadListResponse>(
+            `/api/email/threads${params.toString() ? `?${params.toString()}` : ""}`,
+          );
+          return { kind: "threads" as const, threads: data.threads, source: data.source };
+        }
         const data = await apiFetch<ListResponse>(
           `/api/email${params.toString() ? `?${params.toString()}` : ""}`,
         );
-        setEmails(data.emails);
-        setThreads([]);
-        setSource(data.source);
+        return { kind: "list" as const, emails: data.emails, source: data.source };
+      } catch (err) {
+        captureClientError(err, { scope: "email.load", filter });
+        throw err;
       }
-    } catch (err) {
-      captureClientError(err, { scope: "email.load", filter: f });
-      setError("Could not load mail.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+  });
+
+  const emails = listQuery.data?.kind === "list" ? listQuery.data.emails : [];
+  const threads = listQuery.data?.kind === "threads" ? listQuery.data.threads : [];
+  const source = listQuery.data?.source ?? null;
+  const loading = listQuery.isLoading;
 
   useEffect(() => {
-    load(filter, appliedSearch);
-  }, [appliedSearch, filter, load]);
+    if (listQuery.error) {
+      setError("Could not load mail.");
+    }
+  }, [listQuery.error]);
+
+  // Bulk action mutations still call set* on local UI state; for the
+  // server-derived list we invalidate the keyed query to refetch.
+  const load = (_f: Filter, _keyword = "") => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.email.all });
+  };
+
+  // Reset selection whenever the filter / search changes (the keyed
+  // query already refetches automatically).
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, []);
 
   const submitSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -363,7 +377,19 @@ function EmailView() {
         method: "POST",
         body: JSON.stringify({ ids, action, priority: options.priority }),
       });
-      setEmails((prev) => updateEmailsAfterBulk(prev, ids, action, options.priority));
+      // Update the cached list optimistically for the current filter,
+      // then invalidate so a background refetch pulls truth.
+      queryClient.setQueryData<typeof listQuery.data>(
+        queryKeys.email.list({ filter, search: appliedSearch }),
+        (prev) => {
+          if (!prev || prev.kind !== "list") return prev;
+          return {
+            ...prev,
+            emails: updateEmailsAfterBulk(prev.emails, ids, action, options.priority),
+          };
+        },
+      );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.email.all });
       setSelectedIds(new Set());
       if (action === "archive") {
         const failedIds = new Set(data.failed?.map((item) => item.id) ?? []);
