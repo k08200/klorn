@@ -1,9 +1,11 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { apiFetch } from "../../lib/api";
+import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { formatRelative } from "../../lib/text";
 import type { WorkGraphContext, WorkGraphRisk, WorkGraphSummary } from "../../lib/work-graph";
@@ -141,26 +143,24 @@ function ContextCard({ context }: { context: WorkGraphContext }) {
 }
 
 function WorkGraphContent() {
-  const [data, setData] = useState<WorkGraphSummary>(EMPTY);
-  const [loading, setLoading] = useState(true);
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
 
-  const load = useCallback(() => {
-    apiFetch<WorkGraphSummary>("/api/work-graph/summary")
-      .then((res) =>
-        setData({
+  const { data = EMPTY, isLoading: loading } = useQuery({
+    queryKey: queryKeys.workGraph.summary(),
+    queryFn: async () => {
+      try {
+        const res = await apiFetch<WorkGraphSummary>("/api/work-graph/summary");
+        return {
           generatedAt: res.generatedAt ?? "",
           contexts: Array.isArray(res.contexts) ? res.contexts : [],
-        }),
-      )
-      .catch((err) => captureClientError(err, { scope: "work-graph.load" }))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+        };
+      } catch (err) {
+        captureClientError(err, { scope: "work-graph.load" });
+        throw err;
+      }
+    },
+  });
 
   const visible = data.contexts.filter((c) => {
     if (riskFilter !== "all" && c.risk !== riskFilter) return false;

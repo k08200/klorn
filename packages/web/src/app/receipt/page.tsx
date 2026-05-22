@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { apiFetch } from "../../lib/api";
+import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { formatRelative } from "../../lib/text";
 
@@ -145,15 +147,15 @@ function StatCard({ label, value, tone }: { label: string; value: number; tone: 
 }
 
 function ReceiptContent() {
-  const [data, setData] = useState<DailyReceipt>(EMPTY);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [section, setSection] = useState<Section>("pushed");
-  const [undoing, setUndoing] = useState<string | null>(null);
 
-  const load = useCallback(() => {
-    apiFetch<DailyReceipt>("/api/inbox/receipt/today")
-      .then((res) =>
-        setData({
+  const { data = EMPTY, isLoading: loading } = useQuery({
+    queryKey: queryKeys.inbox.receipt(),
+    queryFn: async () => {
+      try {
+        const res = await apiFetch<DailyReceipt>("/api/inbox/receipt/today");
+        return {
           date: res.date ?? "",
           silenced: Array.isArray(res.silenced) ? res.silenced : [],
           queued: Array.isArray(res.queued) ? res.queued : [],
@@ -161,27 +163,27 @@ function ReceiptContent() {
           called: Array.isArray(res.called) ? res.called : [],
           auto: Array.isArray(res.auto) ? res.auto : [],
           summary: res.summary ?? EMPTY.summary,
-        }),
-      )
-      .catch((err) => captureClientError(err, { scope: "receipt.load" }))
-      .finally(() => setLoading(false));
-  }, []);
+        };
+      } catch (err) {
+        captureClientError(err, { scope: "receipt.load" });
+        throw err;
+      }
+    },
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const handleUndo = async (id: string) => {
-    setUndoing(id);
-    try {
-      await apiFetch(`/api/inbox/receipt/undo/${id}`, { method: "POST" });
-      setData((prev) => ({ ...prev, auto: prev.auto.filter((a) => a.id !== id) }));
-    } catch (err) {
-      captureClientError(err, { scope: "receipt.undo" });
-    } finally {
-      setUndoing(null);
-    }
-  };
+  // Optimistically drop the undone row from the auto list; the next
+  // refetch (focus / refresh) reconciles against the server.
+  const undoMutation = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/inbox/receipt/undo/${id}`, { method: "POST" }),
+    onMutate: (id) => {
+      queryClient.setQueryData<DailyReceipt>(queryKeys.inbox.receipt(), (prev) =>
+        prev ? { ...prev, auto: prev.auto.filter((a) => a.id !== id) } : prev,
+      );
+    },
+    onError: (err) => captureClientError(err, { scope: "receipt.undo" }),
+  });
+  const undoing = undoMutation.isPending ? (undoMutation.variables ?? null) : null;
+  const handleUndo = (id: string) => undoMutation.mutate(id);
 
   const sections: Section[] = ["called", "pushed", "queued", "auto", "silenced"];
   const visible = data[section];
