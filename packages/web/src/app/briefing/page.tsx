@@ -356,12 +356,14 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
     : status.automation.reason === "no_config"
       ? "Not set"
       : "Off";
+  const nextLabel = nextBriefingLabel(status.automation);
   const notification = status.notification
     ? new Date(status.notification.createdAt).toLocaleTimeString("en-US", {
         hour: "2-digit",
         minute: "2-digit",
       })
     : "None yet";
+  const guidance = deliveryGuidance(status);
 
   return (
     <section className="mb-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
@@ -371,11 +373,16 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
           Settings
         </Link>
       </div>
-      <div className="grid gap-2 text-xs sm:grid-cols-3">
+      <div className="grid gap-2 text-xs sm:grid-cols-4">
         <DeliveryFact
           label="Automation"
           value={auto}
           tone={status.automation.enabled ? "ok" : "warn"}
+        />
+        <DeliveryFact
+          label="Next"
+          value={nextLabel}
+          tone={status.automation.enabled ? "ok" : "muted"}
         />
         <DeliveryFact
           label="App alert"
@@ -384,14 +391,87 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
         />
         <DeliveryFact label="Push" value={push.label} tone={push.tone} />
       </div>
-      {push.reason && (
-        <p className="mt-3 text-[11px] leading-5 text-stone-500">
-          Push status: {pushReasonLabel(push.reason)}. Browser permission, subscription state, VAPID
-          keys, or quiet hours may be blocking delivery.
-        </p>
+      {guidance && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] leading-5 text-amber-100/90">
+          <span>{guidance.message}</span>
+          {guidance.action && (
+            <Link
+              href={guidance.action.href}
+              className="rounded-md border border-amber-300/40 px-2 py-0.5 text-amber-200 transition hover:bg-amber-300/10"
+            >
+              {guidance.action.label}
+            </Link>
+          )}
+        </div>
       )}
     </section>
   );
+}
+
+function nextBriefingLabel(automation: BriefingStatus["automation"]): string {
+  if (!automation.enabled) return "—";
+  const time = automation.briefingTime ?? "06:00";
+  const match = /^(\d{2}):(\d{2})$/.exec(time);
+  if (!match) return time;
+  const targetHour = Number(match[1]);
+  const targetMinute = Number(match[2]);
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(targetHour, targetMinute, 0, 0);
+  const isToday = target.getTime() > now.getTime();
+  const dayLabel = isToday ? "today" : "tomorrow";
+  return `${dayLabel} ${time}`;
+}
+
+interface DeliveryGuidance {
+  message: string;
+  action?: { label: string; href: string };
+}
+
+function deliveryGuidance(status: BriefingStatus): DeliveryGuidance | null {
+  if (!status.automation.configured || status.automation.reason === "no_config") {
+    return {
+      message: "No briefing time is set. Choose when you want the morning brief to arrive.",
+      action: { label: "Set briefing time", href: "/settings" },
+    };
+  }
+  if (status.automation.reason === "disabled") {
+    return {
+      message: "Daily briefing automation is off. Turn it on to receive a brief every morning.",
+      action: { label: "Turn on", href: "/settings" },
+    };
+  }
+  if (status.push.state === "no_subscription") {
+    return {
+      message:
+        "Push isn't set up on this device — install Klorn as an app to receive the morning push.",
+      action: { label: "Install instructions", href: "/settings" },
+    };
+  }
+  if (status.push.reason === "permission_denied") {
+    return {
+      message:
+        "Browser notifications are blocked. Allow notifications to receive the morning push.",
+    };
+  }
+  if (status.push.reason === "vapid_missing") {
+    return {
+      message: "Push keys are not configured for this deployment — ask the operator.",
+    };
+  }
+  if (status.push.state === "failed") {
+    return {
+      message:
+        "Last briefing push failed to deliver. The next scheduled briefing will try again automatically.",
+    };
+  }
+  if (status.push.state === "skipped" && status.push.reason === "quiet_hours") {
+    return {
+      message: "Push was skipped because quiet hours were active when the briefing fired.",
+      action: { label: "Adjust quiet hours", href: "/settings" },
+    };
+  }
+  return null;
 }
 
 function DeliveryFact({
