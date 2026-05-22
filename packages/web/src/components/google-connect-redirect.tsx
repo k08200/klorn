@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
-export const ONBOARDING_ACTIVE_KEY = "jigeum_onboarding_active";
+export const ONBOARDING_ACTIVE_KEY = "klorn_onboarding_active";
 
 /**
  * Detects the `?google=connected` redirect from the OAuth callback and, if

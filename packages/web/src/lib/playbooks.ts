@@ -1,12 +1,12 @@
 import type { WorkGraphContext } from "./work-graph";
 
-export type JigeumPlaybookId =
+export type KlornPlaybookId =
   | "investment_ops"
   | "customer_success"
   | "launch_room"
   | "hiring_pipeline";
 
-export type JigeumPlaybookDomain = "investment" | "customer_success" | "launch" | "hiring";
+export type KlornPlaybookDomain = "investment" | "customer_success" | "launch" | "hiring";
 
 export interface PlaybookStep {
   id: string;
@@ -14,9 +14,9 @@ export interface PlaybookStep {
   description: string;
 }
 
-export interface JigeumPlaybook {
-  id: JigeumPlaybookId;
-  domain: JigeumPlaybookDomain;
+export interface KlornPlaybook {
+  id: KlornPlaybookId;
+  domain: KlornPlaybookDomain;
   name: string;
   description: string;
   bestFor: string;
@@ -39,7 +39,7 @@ export interface PlaybookContextHit {
 }
 
 export interface PlaybookRecommendation {
-  playbook: JigeumPlaybook;
+  playbook: KlornPlaybook;
   score: number;
   confidence: number;
   reasons: string[];
@@ -49,6 +49,6 @@ export interface PlaybookRecommendation {
 
 export interface PlaybookRecommendationSummary {
   generatedAt: string;
-  playbooks: JigeumPlaybook[];
+  playbooks: KlornPlaybook[];
   recommendations: PlaybookRecommendation[];
 }

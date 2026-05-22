@@ -31,10 +31,10 @@ vi.mock("../playbooks.js", async (importOriginal) => {
     ...actual,
     buildPlaybookRecommendations: vi.fn(async () => ({
       generatedAt: "2026-04-28T00:00:00.000Z",
-      playbooks: actual.listJigeumPlaybooks(),
+      playbooks: actual.listKlornPlaybooks(),
       recommendations: [
         {
-          playbook: actual.listJigeumPlaybooks()[0],
+          playbook: actual.listKlornPlaybooks()[0],
           score: 42,
           confidence: 0.75,
           reasons: ["High-risk matching context"],

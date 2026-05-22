@@ -528,16 +528,16 @@ function ChatPageContent() {
   const exportConversation = () => {
     if (messages.length === 0) return;
     const lines = messages.map((m) => {
-      const label = m.role === "USER" ? "**You**" : "**Jigeum**";
+      const label = m.role === "USER" ? "**You**" : "**Klorn**";
       const time = new Date(m.createdAt).toLocaleString("en-US");
       return `### ${label} — ${time}\n\n${m.content}`;
     });
-    const md = `# Jigeum decision thread\n\nExported at: ${new Date().toLocaleString("en-US")}\n\n---\n\n${lines.join("\n\n---\n\n")}`;
+    const md = `# Klorn decision thread\n\nExported at: ${new Date().toLocaleString("en-US")}\n\n---\n\n${lines.join("\n\n---\n\n")}`;
     const blob = new Blob([md], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `jigeum-chat-${id.slice(0, 8)}.md`;
+    a.download = `klorn-chat-${id.slice(0, 8)}.md`;
     a.click();
     URL.revokeObjectURL(url);
     toast("Exported as Markdown.", "success");
@@ -687,7 +687,7 @@ function ChatPageContent() {
                 Start with the outcome you need.
               </h2>
               <p className="mb-8 max-w-md text-center text-sm leading-6 text-stone-500">
-                Jigeum reads the current work context, explains why it matters, and turns it into an
+                Klorn reads the current work context, explains why it matters, and turns it into an
                 approvable next action.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
@@ -767,7 +767,7 @@ function ChatPageContent() {
                 {/* Content */}
                 <div className="min-w-0 flex-1">
                   <p className="mb-1.5 text-[13px] font-semibold text-stone-300">
-                    {msg.role === "USER" ? "You" : "Jigeum"}
+                    {msg.role === "USER" ? "You" : "Klorn"}
                   </p>
                   {msg.role === "USER" && editingMsgId === msg.id ? (
                     <div>
@@ -1054,7 +1054,7 @@ function ChatPageContent() {
                   </div>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold text-stone-300 mb-1.5">Jigeum</p>
+                  <p className="text-[13px] font-semibold text-stone-300 mb-1.5">Klorn</p>
                   <div className="text-[15px] text-stone-200 leading-relaxed">
                     <Markdown content={streamingContent} />
                     <span className="inline-block w-0.5 h-5 bg-stone-400 rounded-full animate-pulse ml-0.5 align-text-bottom" />
@@ -1314,7 +1314,7 @@ function ChatPageContent() {
           </div>
 
           <p className="mt-2 text-center text-[11px] text-stone-600">
-            Jigeum prepares the reasoning first. Real execution waits for approval.
+            Klorn prepares the reasoning first. Real execution waits for approval.
           </p>
         </div>
       </div>

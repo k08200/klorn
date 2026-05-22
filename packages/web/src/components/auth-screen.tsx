@@ -22,7 +22,7 @@ export default function AuthScreen({
   description,
   children,
   asideTitle = "Keep only the work that needs a decision",
-  asideBody = "Jigeum reads mail, calendar, and task signals, then turns them into cards you can review before anything runs.",
+  asideBody = "Klorn reads mail, calendar, and task signals, then turns them into cards you can review before anything runs.",
   asideItems = [
     { label: "Signal", value: "Detect meaningful changes in mail and calendar" },
     { label: "Context", value: "Connect people, deadlines, and projects" },
@@ -37,7 +37,7 @@ export default function AuthScreen({
       <nav className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-6">
         <Link href="/" className="flex items-center gap-3">
           <img src="/brand/mark.svg?v=flow-5" alt="" className="h-8 w-8" />
-          <span className="text-sm font-semibold tracking-[0.14em] text-stone-100">Jigeum</span>
+          <span className="text-sm font-semibold tracking-[0.14em] text-stone-100">Klorn</span>
         </Link>
         <div className="flex items-center gap-3 text-sm">
           <Link

@@ -294,7 +294,7 @@ function CandidateDetailView() {
           </p>
           <h1 className="mt-2 text-2xl font-semibold text-stone-50">No candidate profile yet</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
-            Jigeum found this message, but the attachments have not produced a structured profile.
+            Klorn found this message, but the attachments have not produced a structured profile.
             Open the source email, reanalyze attachments, or add notes while the review state is
             still clear.
           </p>

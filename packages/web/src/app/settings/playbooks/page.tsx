@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import PlaybookRecommendations from "../../../components/playbook-recommendations";
 import { apiFetch } from "../../../lib/api";
-import type { JigeumPlaybook } from "../../../lib/playbooks";
+import type { KlornPlaybook } from "../../../lib/playbooks";
 import { captureClientError } from "../../../lib/sentry";
 
 const DOMAIN_META: Record<string, { label: string; color: string }> = {
@@ -22,7 +22,7 @@ function PlaybookRow({
   onToggle,
   toggling,
 }: {
-  playbook: JigeumPlaybook;
+  playbook: KlornPlaybook;
   onToggle: (id: string, active: boolean) => void;
   toggling: boolean;
 }) {
@@ -73,12 +73,12 @@ function PlaybookRow({
 }
 
 function PlaybooksContent() {
-  const [playbooks, setPlaybooks] = useState<JigeumPlaybook[]>([]);
+  const [playbooks, setPlaybooks] = useState<KlornPlaybook[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    apiFetch<{ playbooks: JigeumPlaybook[] }>("/api/playbooks")
+    apiFetch<{ playbooks: KlornPlaybook[] }>("/api/playbooks")
       .then((data) => setPlaybooks(Array.isArray(data.playbooks) ? data.playbooks : []))
       .catch((err) => captureClientError(err, { scope: "playbooks.load" }))
       .finally(() => setLoading(false));

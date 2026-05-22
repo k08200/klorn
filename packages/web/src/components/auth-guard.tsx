@@ -41,7 +41,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300">
           Connection issue
         </p>
-        <h1 className="mt-3 text-2xl font-semibold text-stone-50">Jigeum API is offline.</h1>
+        <h1 className="mt-3 text-2xl font-semibold text-stone-50">Klorn API is offline.</h1>
         <p className="mt-3 text-sm leading-6 text-stone-400">
           Your session is still saved. Start the API service, then retry this screen.
         </p>

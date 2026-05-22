@@ -2,7 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 
 async function mockSignedIn(page: Page) {
   await page.addInitScript(() => {
-    localStorage.setItem("jigeum-token", "test-token");
+    localStorage.setItem("klorn-token", "test-token");
   });
 
   await page.route("**/api/**", async (route) => {

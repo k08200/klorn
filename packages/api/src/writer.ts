@@ -1,5 +1,5 @@
 /**
- * Document Writer for Jigeum - generate reports, proposals, emails drafts, etc.
+ * Document Writer for Klorn - generate reports, proposals, emails drafts, etc.
  * Results are saved as Notes.
  */
 

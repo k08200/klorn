@@ -32,7 +32,7 @@ services:
       - key: PORT
         value: "3001"
       - key: CORS_ORIGINS
-        value: "https://jigeum.ai,https://www.jigeum.ai"
+        value: "https://klorn.ai,https://www.klorn.ai,https://jigeum.ai,https://www.jigeum.ai"
       - key: RENDER_EXTERNAL_URL
         value: "https://jigeum.onrender.com"
       - key: BETA_AUTO_PRO_ENABLED

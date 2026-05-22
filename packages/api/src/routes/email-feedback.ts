@@ -111,7 +111,7 @@ export async function registerEmailFeedbackRoutes(app: FastifyInstance) {
     return { feedback: row ? serializeFeedback(row) : null };
   });
 
-  // POST /api/email/:id/reply-needed/feedback — capture whether Jigeum's
+  // POST /api/email/:id/reply-needed/feedback — capture whether Klorn's
   // "reply needed" judgment was right. This measures precision before we
   // make reply automation any bolder.
   app.post("/:id/reply-needed/feedback", async (request, reply) => {

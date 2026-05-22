@@ -14,7 +14,7 @@ if (process.env.NODE_ENV === "production" && !process.env.TOKEN_ENCRYPTION_KEY) 
 function getKey(): Buffer {
   const raw = process.env.TOKEN_ENCRYPTION_KEY;
   if (!raw) {
-    return crypto.createHash("sha256").update("jigeum-dev-only-not-for-production").digest();
+    return crypto.createHash("sha256").update("klorn-dev-only-not-for-production").digest();
   }
   const key = Buffer.from(raw, "base64");
   if (key.length !== 32) {

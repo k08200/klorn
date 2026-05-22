@@ -56,7 +56,7 @@ export default function WorkGraphSummaryCard() {
               Active work contexts
             </h2>
             <p className="mt-2 max-w-xl text-xs leading-5 text-stone-500">
-              Jigeum groups mail, decision threads, and commitments into one work context so risk is
+              Klorn groups mail, decision threads, and commitments into one work context so risk is
               easier to see.
             </p>
           </div>

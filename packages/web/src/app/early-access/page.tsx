@@ -69,7 +69,7 @@ export default function EarlyAccessPage() {
   return (
     <AuthScreen
       eyebrow="Early access"
-      title="Apply for the private Jigeum beta"
+      title="Apply for the private Klorn beta"
       description="We are inviting teams that live in mail, meetings, and follow-ups first."
       navCtaHref="/login"
       navCtaLabel="Log in"
@@ -107,7 +107,7 @@ export default function EarlyAccessPage() {
             <p className="mt-2 text-sm leading-6 text-stone-300">
               {status === "already"
                 ? "We will review your existing request and follow up by email."
-                : "We will review within 24 hours. If invited, you can sign in to Jigeum."}
+                : "We will review within 24 hours. If invited, you can sign in to Klorn."}
             </p>
           </div>
           <div className="mt-5 grid grid-cols-2 gap-3">

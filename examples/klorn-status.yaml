@@ -1,6 +1,6 @@
-id: jigeum-status-check
-name: "Jigeum Status Check"
-description: "Verify Jigeum CLI can show status without crashing"
+id: klorn-status-check
+name: "Klorn Status Check"
+description: "Verify Klorn CLI can show status without crashing"
 
 agent:
   type: command

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../lib/auth";
 
 type StepState = "done" | "active" | "pending" | "failed";
-const DISMISS_KEY = "jigeum-beta-learning-card-dismissed";
+const DISMISS_KEY = "klorn-beta-learning-card-dismissed";
 const LEGACY_KEY_PREFIX = "ev" + "e";
 const LEGACY_DISMISS_KEY = `${LEGACY_KEY_PREFIX}-beta-learning-card-dismissed`;
 
@@ -83,7 +83,7 @@ export default function BetaLearningCard() {
             Initial learning
           </p>
           <h2 className="mt-2 text-base font-semibold text-stone-100">
-            Jigeum learns mail and calendar patterns during the first 2-3 days.
+            Klorn learns mail and calendar patterns during the first 2-3 days.
           </h2>
           <p className="mt-2 text-sm leading-6 text-stone-400">
             Early briefings may be conservative. The top three actions get sharper as you use the
@@ -135,7 +135,7 @@ export default function BetaLearningCard() {
 
       {syncFailed && (
         <p className="mt-3 text-xs text-amber-300">
-          Initial analysis hit a temporary issue. Refresh or reopen shortly and Jigeum will retry.
+          Initial analysis hit a temporary issue. Refresh or reopen shortly and Klorn will retry.
         </p>
       )}
     </section>

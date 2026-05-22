@@ -121,7 +121,7 @@ export default function OperatingLoopCard() {
   return (
     <section
       className="mb-6 overflow-hidden rounded-2xl border border-amber-300/15 bg-stone-950/70"
-      aria-label="Jigeum operating loop"
+      aria-label="Klorn operating loop"
     >
       <div className="border-b border-stone-800 bg-gradient-to-br from-stone-950 via-stone-950 to-amber-950/25 p-4 md:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -332,7 +332,7 @@ function LoopMetric({ metric }: { metric: OperatingPlanMetric }) {
 }
 
 function displayText(value: string | null | undefined): string {
-  return (value ?? "").replace(/\bEVE\b/g, "Jigeum").replace(/\bEve\b/g, "Jigeum");
+  return (value ?? "").replace(/\bEVE\b/g, "Klorn").replace(/\bEve\b/g, "Klorn");
 }
 
 function ToneBadge({ tone, label }: { tone: OperatingPlanTone; label: string }) {

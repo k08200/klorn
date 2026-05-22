@@ -329,7 +329,7 @@ function CommitmentsContent() {
               {tab === "done" ? "No completed commitments yet." : "No commitments in this view."}
             </p>
             <p className="mt-1 text-[12px] text-stone-700">
-              Jigeum detects commitments from mail and chat — they appear here automatically.
+              Klorn detects commitments from mail and chat — they appear here automatically.
             </p>
           </div>
         ) : (

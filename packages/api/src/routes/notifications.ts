@@ -139,7 +139,7 @@ export async function notificationRoutes(app: FastifyInstance) {
   app.post("/push/test", async (request) => {
     const userId = getUserId(request);
     const result = await sendPushNotification(userId, {
-      title: "Jigeum test",
+      title: "Klorn test",
       body: "Push notifications are working.",
       url: "/chat",
     });

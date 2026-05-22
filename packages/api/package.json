@@ -1,8 +1,8 @@
 {
-  "name": "@jigeum/api",
+  "name": "@klorn/api",
   "version": "0.1.0",
   "private": true,
-  "description": "Jigeum API server",
+  "description": "Klorn API server",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

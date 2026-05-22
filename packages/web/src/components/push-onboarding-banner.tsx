@@ -23,7 +23,7 @@ import {
   registerSubscriptionWithServer,
 } from "../lib/push";
 
-const DISMISS_KEY = "jigeum-push-banner-dismissed-at";
+const DISMISS_KEY = "klorn-push-banner-dismissed-at";
 const LEGACY_KEY_PREFIX = "ev" + "e";
 const LEGACY_DISMISS_KEY = `${LEGACY_KEY_PREFIX}-push-banner-dismissed-at`;
 const DISMISS_TTL_MS = 24 * 60 * 60 * 1000;
@@ -66,7 +66,7 @@ export default function PushOnboardingBanner() {
       if (permission !== "granted") {
         setError(
           permission === "denied"
-            ? "Allow notifications in iPhone Settings -> Jigeum -> Notifications."
+            ? "Allow notifications in iPhone Settings -> Klorn -> Notifications."
             : "Notification permission is required.",
         );
         setSubmitting(false);
@@ -101,7 +101,7 @@ export default function PushOnboardingBanner() {
         <span aria-hidden="true">🔔</span>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-stone-100">Enable Jigeum notifications</p>
+        <p className="text-sm font-medium text-stone-100">Enable Klorn notifications</p>
         <p className="text-xs text-stone-400 mt-0.5">
           Get briefings and urgent mail on your phone.
         </p>

@@ -260,7 +260,7 @@ function dueLabel(item: Extract<AttentionItem, { kind: "commitment" }>): string 
 
 function stripEvePrefix(title: string): string {
   const legacyPrefix = "[EV" + "E]";
-  if (title.startsWith("[Jigeum]")) return title.slice(8).trim();
+  if (title.startsWith("[Klorn]")) return title.slice(8).trim();
   if (title.startsWith("[Eve]")) return title.slice(5).trim();
   if (title.startsWith(legacyPrefix)) return title.slice(5).trim();
   return displayText(title);
@@ -276,7 +276,7 @@ function displayText(value: string | null | undefined): string {
       minute: "2-digit",
     });
   }
-  return text.replace(/\bEVE\b/g, "Jigeum").replace(/\bEve\b/g, "Jigeum");
+  return text.replace(/\bEVE\b/g, "Klorn").replace(/\bEve\b/g, "Klorn");
 }
 
 function formatEventSubtitle(

@@ -195,7 +195,7 @@ function AdminDashboard() {
     }
     const confirmed = await confirm({
       title: "Delete account data?",
-      message: `This permanently deletes ${email}, conversations, tasks, mail cache, and usage data from Jigeum.`,
+      message: `This permanently deletes ${email}, conversations, tasks, mail cache, and usage data from Klorn.`,
       confirmLabel: "Delete user",
       danger: true,
     });

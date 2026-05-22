@@ -92,7 +92,7 @@ function UsagePageContent() {
               Usage ledger
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              Jigeum usage and cost
+              Klorn usage and cost
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
               Track decision turns, model tokens, and the threads driving workspace cost.

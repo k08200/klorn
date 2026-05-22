@@ -87,7 +87,7 @@ test.describe("Onboarding wizard", () => {
     // Click and immediately check localStorage (navigation will be aborted)
     await connectLink.click().catch(() => {});
 
-    const flag = await page.evaluate(() => localStorage.getItem("jigeum_onboarding_active"));
+    const flag = await page.evaluate(() => localStorage.getItem("klorn_onboarding_active"));
     expect(flag).toBe("true");
   });
 });

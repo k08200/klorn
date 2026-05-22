@@ -96,7 +96,7 @@ export default function FeedbackPolicyStudio() {
             Rules learned from repeated feedback
           </h2>
           <p className="mt-1 max-w-xl text-xs leading-5 text-stone-500">
-            Apply or hide candidates from approve, reject, and edit patterns to tune Jigeum's
+            Apply or hide candidates from approve, reject, and edit patterns to tune Klorn's
             suggestions.
           </p>
         </div>

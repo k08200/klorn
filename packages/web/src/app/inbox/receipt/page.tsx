@@ -119,7 +119,7 @@ function ReceiptView() {
                 Attention receipt
               </p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-50">
-                What Jigeum did today
+                What Klorn did today
               </h1>
               <p className="mt-2 text-sm leading-6 text-stone-400">{receipt.summary.narrative}</p>
             </div>
@@ -166,7 +166,7 @@ function ReceiptView() {
         {receipt.auto.length > 0 && (
           <ReceiptSection
             title="Auto-handled"
-            description="Low-risk actions Jigeum executed without interrupting you"
+            description="Low-risk actions Klorn executed without interrupting you"
             accentClass="border-emerald-500/20 bg-emerald-500/5"
             labelClass="text-emerald-300"
             items={receipt.auto}
@@ -187,7 +187,7 @@ function ReceiptView() {
         {receipt.pushed.length > 0 && (
           <ReceiptSection
             title="Pushed to you"
-            description="Signals Jigeum judged urgent enough to interrupt you"
+            description="Signals Klorn judged urgent enough to interrupt you"
             accentClass="border-amber-400/20 bg-amber-400/5"
             labelClass="text-amber-300"
             items={receipt.pushed}
@@ -214,7 +214,7 @@ function ReceiptView() {
         {receipt.silenced.length > 0 && (
           <ReceiptSection
             title="Silenced"
-            description="Signals Jigeum filtered out to protect your focus"
+            description="Signals Klorn filtered out to protect your focus"
             accentClass="border-stone-800 bg-black/20"
             labelClass="text-stone-500"
             items={receipt.silenced}
@@ -225,7 +225,7 @@ function ReceiptView() {
           <div className="rounded-lg border border-stone-800 bg-stone-900/40 p-8 text-center">
             <p className="text-sm text-stone-400">No signals processed today yet.</p>
             <p className="mt-1 text-xs text-stone-600">
-              Come back later — Jigeum processes your mail and meetings continuously.
+              Come back later — Klorn processes your mail and meetings continuously.
             </p>
           </div>
         )}

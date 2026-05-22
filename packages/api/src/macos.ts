@@ -148,7 +148,7 @@ export async function typeText(text: string): Promise<{ success: boolean }> {
 
 /** Take a screenshot and return the file path */
 export async function takeScreenshot(): Promise<{ path: string }> {
-  const path = `/tmp/jigeum-screenshot-${Date.now()}.png`;
+  const path = `/tmp/klorn-screenshot-${Date.now()}.png`;
   await exec("screencapture", ["-x", path], { timeout: 5_000 });
   return { path };
 }

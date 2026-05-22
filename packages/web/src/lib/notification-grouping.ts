@@ -23,11 +23,11 @@ const TYPE_LABELS: Record<string, string> = {
   task: "Task",
   meeting: "Meeting",
   briefing: "Briefing",
-  agent_proposal: "Jigeum proposal",
+  agent_proposal: "Klorn proposal",
   insight: "Insight",
 };
 
-const AGENT_PREFIX = "[Jigeum]";
+const AGENT_PREFIX = "[Klorn]";
 const EVE_AGENT_PREFIX = "[Eve]";
 const LEGACY_AGENT_PREFIX = "[EV" + "E]";
 

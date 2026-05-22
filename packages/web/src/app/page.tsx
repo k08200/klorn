@@ -72,15 +72,15 @@ function HeroProductScene() {
             <span className="h-2.5 w-2.5 rounded-full bg-stone-700" />
             <span className="h-2.5 w-2.5 rounded-full bg-stone-700" />
             <span className="h-2.5 w-2.5 rounded-full bg-stone-700" />
-            <span className="ml-4 text-xs font-medium text-stone-500">Jigeum / Today</span>
+            <span className="ml-4 text-xs font-medium text-stone-500">Klorn / Today</span>
           </div>
           <div className="grid h-[496px] grid-cols-[210px_1fr]">
             <aside className="border-r border-stone-800 bg-surface-panel p-4">
               <div className="mb-8 flex items-center gap-3">
                 <BrandMark className="h-8 w-8" />
                 <div>
-                  <p className="text-sm font-semibold text-stone-100">Jigeum</p>
-                  <p className="text-[10px] text-stone-500">What matters now</p>
+                  <p className="text-sm font-semibold text-stone-100">Klorn</p>
+                  <p className="text-[10px] text-stone-500">The clear signal</p>
                 </div>
               </div>
               {["Decision queue", "Mail", "Calendar", "Briefing"].map((item, index) => (
@@ -238,7 +238,7 @@ export default function LandingPage() {
         <nav className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-5 py-5 md:px-8">
           <Link href="/" className="flex items-center gap-3">
             <BrandMark className="h-9 w-9" />
-            <span className="text-sm font-semibold tracking-[0.18em] text-stone-100">JIGEUM</span>
+            <span className="text-sm font-semibold tracking-[0.18em] text-stone-100">KLORN</span>
           </Link>
           <div className="flex items-center gap-2">
             <Link
@@ -263,12 +263,12 @@ export default function LandingPage() {
               Decision queue
             </p>
             <h1 className="max-w-3xl text-4xl font-semibold leading-[1.04] tracking-tight text-white sm:text-5xl md:text-6xl md:leading-[1.02] lg:text-7xl">
-              Decide what matters before work scatters.
+              The clear signal worth acting on.
             </h1>
             <p className="mt-6 max-w-xl text-base leading-7 text-stone-300 md:text-lg md:leading-8">
-              An attention firewall for your inbox, calendar, and tasks. Silenced, queued, pushed,
-              called, or auto-handled — every signal gets a tier, every tier gets a reason, and you
-              see the daily receipt of what we did on your behalf.
+              Other AI agents act. Klorn helps you decide what's worth acting on. Mail, calendar,
+              and AI signals filtered into one clear decision queue — with evidence and approval
+              before anything leaves your hands.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -432,7 +432,7 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-7xl flex-col gap-4 text-sm text-stone-500 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
             <BrandMark className="h-7 w-7" />
-            <span>Jigeum turns scattered work signals into decisions you can trust.</span>
+            <span>Klorn — the clear signal worth acting on.</span>
           </div>
           <div className="flex gap-5">
             <Link

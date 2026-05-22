@@ -38,12 +38,12 @@ export function humanizeAutoExec(
   const summary = TOOL_SUMMARIES[fnName];
   if (summary) {
     const built = summary(args);
-    return { autoTitle: `[Jigeum] ${built.title}`, autoMessage: built.body };
+    return { autoTitle: `[Klorn] ${built.title}`, autoMessage: built.body };
   }
   // Unknown tool — at least drop the JSON dump.
   const friendly = fnName.replace(/_/g, " ");
   return {
-    autoTitle: "[Jigeum] Action complete",
+    autoTitle: "[Klorn] Action complete",
     autoMessage: `${friendly} finished.`,
   };
 }

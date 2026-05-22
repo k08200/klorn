@@ -8,7 +8,7 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-const INSTALL_DISMISSED_KEY = "jigeum-install-dismissed";
+const INSTALL_DISMISSED_KEY = "klorn-install-dismissed";
 const LEGACY_KEY_PREFIX = "ev" + "e";
 const LEGACY_INSTALL_DISMISSED_KEY = `${LEGACY_KEY_PREFIX}-install-dismissed`;
 
@@ -109,7 +109,7 @@ export default function PwaPrompts() {
           role="region"
           aria-label="App update available"
         >
-          <div className="text-sm text-stone-200">A new Jigeum build is ready.</div>
+          <div className="text-sm text-stone-200">A new Klorn build is ready.</div>
           <button
             type="button"
             onClick={handleUpdate}
@@ -133,7 +133,7 @@ export default function PwaPrompts() {
         <div
           className="fixed bottom-20 left-1/2 z-[100] flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-xl border border-amber-300/20 bg-stone-950 px-4 py-3 shadow-2xl shadow-black/60 animate-slide-up sm:max-w-md"
           role="region"
-          aria-label="Install Jigeum"
+          aria-label="Install Klorn"
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f5f0e8]">
             <Image
@@ -145,7 +145,7 @@ export default function PwaPrompts() {
             />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-stone-200">Install Jigeum</p>
+            <p className="text-sm font-medium text-stone-200">Install Klorn</p>
             <p className="text-xs text-stone-500">Open the decision queue from your home screen.</p>
           </div>
           <button

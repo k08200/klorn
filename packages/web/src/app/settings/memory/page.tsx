@@ -71,7 +71,7 @@ function MemoryPageContent() {
               Memory graph
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              Memory Jigeum uses for judgment
+              Memory Klorn uses for judgment
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
               Review approval preferences, recurring work context, and stale memories in one place.
@@ -188,7 +188,7 @@ function MemoryPageContent() {
           <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 py-12 text-center">
             <p className="mb-1 text-sm text-stone-400">No saved memories yet.</p>
             <p className="text-xs text-stone-600">
-              Jigeum will remember decision preferences and repeated context as you work.
+              Klorn will remember decision preferences and repeated context as you work.
             </p>
           </div>
         )}

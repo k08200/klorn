@@ -12,7 +12,7 @@ if (!JWT_SECRET && process.env.NODE_ENV === "production") {
 if (!JWT_SECRET) {
   console.warn("[AUTH] WARNING: JWT_SECRET not set — using insecure default for development.");
 }
-const EFFECTIVE_SECRET = JWT_SECRET || "jigeum-dev-secret-do-not-use-in-production";
+const EFFECTIVE_SECRET = JWT_SECRET || "klorn-dev-secret-do-not-use-in-production";
 const TOKEN_EXPIRY = "7d";
 
 function isAdminEmail(email: string | null | undefined): boolean {
@@ -202,12 +202,12 @@ export async function ensureDemoUser() {
     where: { id: "demo-user" },
     create: {
       id: "demo-user",
-      email: "demo@jigeum.ai",
+      email: "demo@klorn.ai",
       name: "Demo User",
       passwordHash: hash,
     },
     update: {
-      email: "demo@jigeum.ai",
+      email: "demo@klorn.ai",
       name: "Demo User",
       passwordHash: hash,
     },
@@ -276,7 +276,7 @@ async function seedDemoData() {
     data: [
       {
         userId: uid,
-        title: "Jigeum Q2 roadmap",
+        title: "Klorn Q2 roadmap",
         content:
           "## Q2 goals\n\n1. Finish two-way Slack integration\n2. Launch team workspaces\n3. Ship desktop app v1.0\n4. Launch on Product Hunt\n\n### KPI\n- 500 MAU\n- 5% paid conversion",
       },
@@ -290,7 +290,7 @@ async function seedDemoData() {
         userId: uid,
         title: "Competitor analysis",
         content:
-          "### Direct competitors\n- Notion AI: document-first, not decision-first\n- ChatGPT: general-purpose, weaker workspace context\n\n### Jigeum differentiation\n- Decision queue instead of another inbox\n- Evidence and approval before execution\n- Work graph across mail, calendar, and tasks\n- Background preparation with user control",
+          "### Direct competitors\n- Notion AI: document-first, not decision-first\n- ChatGPT: general-purpose, weaker workspace context\n\n### Klorn differentiation\n- Decision queue instead of another inbox\n- Evidence and approval before execution\n- Work graph across mail, calendar, and tasks\n- Background preparation with user control",
       },
     ],
   });

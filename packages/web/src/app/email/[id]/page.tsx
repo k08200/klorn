@@ -997,7 +997,7 @@ function AttachmentAnalysis({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "jigeum-attachment-brief.txt";
+      a.download = "klorn-attachment-brief.txt";
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -1687,7 +1687,7 @@ function ReplyDraftBox({
             Reply draft
           </h2>
           <p className="mt-1 text-xs text-stone-500">
-            Jigeum drafts it. You approve before anything is sent.
+            Klorn drafts it. You approve before anything is sent.
           </p>
         </div>
         <button
@@ -1878,7 +1878,7 @@ function EveAnalysis({
     return (
       <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
         <p className="text-xs text-stone-500">
-          Jigeum has not analyzed this email yet. Sync, then check again shortly.
+          Klorn has not analyzed this email yet. Sync, then check again shortly.
         </p>
       </section>
     );
@@ -1890,7 +1890,7 @@ function EveAnalysis({
       <div className="pl-2">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-accent">
-            Jigeum judgment
+            Klorn judgment
           </span>
           <div className="flex items-center gap-1.5">
             <PriorityPill priority={email.priority} />

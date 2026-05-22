@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { listJigeumPlaybooks, recommendPlaybooksFromGraph } from "../playbooks.js";
+import { listKlornPlaybooks, recommendPlaybooksFromGraph } from "../playbooks.js";
 import type { WorkGraphContext, WorkGraphSummary } from "../work-graph.js";
 
 function context(over: Partial<WorkGraphContext> = {}): WorkGraphContext {
@@ -30,7 +30,7 @@ function graph(contexts: WorkGraphContext[]): WorkGraphSummary {
 
 describe("Eve playbooks", () => {
   it("exposes the canonical built-in playbooks", () => {
-    expect(listJigeumPlaybooks().map((playbook) => playbook.domain)).toEqual([
+    expect(listKlornPlaybooks().map((playbook) => playbook.domain)).toEqual([
       "investment",
       "customer_success",
       "launch",

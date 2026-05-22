@@ -429,7 +429,7 @@ function buildPlainTextRawEmail(
     ).toString("base64url");
   }
 
-  const boundary = `jigeum_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+  const boundary = `klorn_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
   const parts = [
     `To: ${safeHeaderValue(to)}`,
     `Subject: ${encodeSubject(subject)}`,
@@ -468,7 +468,7 @@ export async function sendEmail(userId: string, to: string, subject: string, bod
   }
   if (isNoReplyAddress(to)) {
     return {
-      error: `This address (${to}) is a no-reply system sender, so Jigeum will not send a reply.`,
+      error: `This address (${to}) is a no-reply system sender, so Klorn will not send a reply.`,
     };
   }
 
@@ -511,7 +511,7 @@ export async function createEmailDraft(
   }
   if (isNoReplyAddress(to)) {
     return {
-      error: `This address (${to}) is a no-reply system sender. Jigeum will not create a Gmail draft.`,
+      error: `This address (${to}) is a no-reply system sender. Klorn will not create a Gmail draft.`,
     };
   }
 

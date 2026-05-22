@@ -1,7 +1,7 @@
 {
-  "name": "Jigeum — What matters now at work",
-  "short_name": "Jigeum",
-  "description": "Jigeum turns work signals, approval queues, briefings, and memory into decisions you can act on.",
+  "name": "Klorn — The clear signal worth acting on",
+  "short_name": "Klorn",
+  "description": "Klorn filters mail, calendar, and AI signals into one clear decision queue — with approval before any action.",
   "start_url": "/chat",
   "display": "standalone",
   "background_color": "#10100d",

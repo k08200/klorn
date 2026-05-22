@@ -1,5 +1,5 @@
 {
-  "name": "@jigeum/core",
+  "name": "@klorn/core",
   "version": "0.2.2",
   "description": "Core engine for testing and evaluating AI coding agents",
   "main": "dist/index.js",
@@ -37,7 +37,7 @@
     "typescript": "^5.9.3"
   },
   "bin": {
-    "jigeum": "dist/cli/index.js"
+    "klorn": "dist/cli/index.js"
   },
   "type": "module"
 }

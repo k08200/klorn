@@ -197,7 +197,7 @@ function CalendarView() {
           </p>
           <p className="mb-4 text-xs text-stone-500">
             {googleConnected === false
-              ? "Connect and sync so Jigeum can brief from your real calendar."
+              ? "Connect and sync so Klorn can brief from your real calendar."
               : "Google is connected. An empty calendar stays empty in the briefing."}
           </p>
           {googleConnected === false ? (

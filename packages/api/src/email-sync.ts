@@ -790,7 +790,7 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
 //   1. Promotional urgency subjects tagged URGENT
 //   2. Investor / VC / customer-facing replies tagged LOW
 //   3. Calendar invites and re: threads silently dropped to LOW
-const EMAIL_ANALYSIS_PROMPT = `You are Jigeum's email triage analyst for a work inbox.
+const EMAIL_ANALYSIS_PROMPT = `You are Klorn's email triage analyst for a work inbox.
 
 You decide WHO each email is from, WHAT it asks, and HOW urgent it is. Do not be polite — be useful. Misclassifying a VC reply as LOW is far worse than misclassifying a newsletter as NORMAL.
 
@@ -825,7 +825,7 @@ You decide WHO each email is from, WHAT it asks, and HOW urgent it is. Do not be
 ## Rules
 - summary ALWAYS leads with the sender's display name if available
 - keyPoints: 1-3 English bullets, each <=45 chars, no meta phrasing
-- actionItems: only if Jigeum/the user must do something. Empty array if read-and-ack
+- actionItems: only if Klorn/the user must do something. Empty array if read-and-ack
 - sentiment: tone of the SENDER, not the request urgency
 
 ## Examples
@@ -1112,7 +1112,7 @@ export async function generateSmartReply(
       messages: [
         {
           role: "system",
-          content: `You are Jigeum's approval-ready email reply drafter. Generate a polite, natural reply based on the template and context.
+          content: `You are Klorn's approval-ready email reply drafter. Generate a polite, natural reply based on the template and context.
 Write in English unless the user's template explicitly asks for another language.
 Keep it concise (2-4 sentences). Do not add subject line — just the body.
 

@@ -96,7 +96,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <img src="/brand/mark.svg?v=flow-5" alt="" className="h-6 w-6" />
           <div className="min-w-0">
-            <p className="text-sm font-semibold leading-none text-stone-100">Jigeum</p>
+            <p className="text-sm font-semibold leading-none text-stone-100">Klorn</p>
             <p
               className="mt-0.5 truncate text-[10px] leading-none text-stone-500"
               data-testid="mobile-section-label"
