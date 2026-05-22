@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { apiFetch } from "../lib/api";
 
 interface Command {
   id: string;
@@ -29,22 +28,16 @@ export default function CommandPalette() {
       action: () => router.push("/inbox"),
     },
     {
-      id: "chat",
-      label: "Open threads",
-      sublabel: "Continue the current work context",
-      action: () => router.push("/chat"),
+      id: "mail",
+      label: "Open mail",
+      sublabel: "Triage today's inbox",
+      action: () => router.push("/email"),
     },
     {
-      id: "new-chat",
-      label: "New decision thread",
-      sublabel: "Start a new work context",
-      action: () => {
-        apiFetch<{ id: string }>("/api/chat/conversations", {
-          method: "POST",
-        })
-          .then((conv) => router.push(`/chat/${conv.id}`))
-          .catch(() => router.push("/chat"));
-      },
+      id: "calendar",
+      label: "Open calendar",
+      sublabel: "See meetings and prep context",
+      action: () => router.push("/calendar"),
     },
     {
       id: "briefing",
@@ -57,12 +50,6 @@ export default function CommandPalette() {
       label: "Open settings",
       sublabel: "Connections, guardrails, and memory",
       action: () => router.push("/settings"),
-    },
-    {
-      id: "billing",
-      label: "Open plan and usage",
-      sublabel: "Check limits and billing status",
-      action: () => router.push("/billing"),
     },
     {
       id: "shortcuts",
