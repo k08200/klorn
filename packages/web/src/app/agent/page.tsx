@@ -1,7 +1,8 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { apiFetch } from "../../lib/api";
 import { captureClientError } from "../../lib/sentry";
@@ -38,63 +39,85 @@ export default function AgentPage() {
 }
 
 function AgentTimeline() {
-  const [logs, setLogs] = useState<AgentLogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(true);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<string>("all");
-  const [running, setRunning] = useState(false);
   const [runMessage, setRunMessage] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
-  const load = useCallback(async (offset = 0, replace = true) => {
-    if (offset === 0) setLoading(true);
-    else setLoadingMore(true);
-    setError(null);
-    try {
-      const data = await apiFetch<AgentLogsResponse>(
-        `/api/automations/agent-logs?limit=${PAGE_SIZE}&offset=${offset}`,
-      );
-      const newLogs = Array.isArray(data.logs) ? data.logs : [];
-      setLogs((prev) => (replace ? newLogs : [...prev, ...newLogs]));
-      setHasMore(newLogs.length === PAGE_SIZE);
-    } catch (err) {
-      captureClientError(err, { scope: "agent-timeline.load" });
-      setError("Could not load agent activity.");
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  }, []);
+  // First page lives in TanStack. load-more keeps using a local append
+  // via setQueryData; a future PR can upgrade to useInfiniteQuery once
+  // the server returns a stable cursor.
+  const logsKey = ["agent", "logs", "first-page"] as const;
+  const logsQuery = useQuery({
+    queryKey: logsKey,
+    queryFn: async () => {
+      try {
+        const data = await apiFetch<AgentLogsResponse>(
+          `/api/automations/agent-logs?limit=${PAGE_SIZE}&offset=0`,
+        );
+        const newLogs = Array.isArray(data.logs) ? data.logs : [];
+        setHasMore(newLogs.length === PAGE_SIZE);
+        return newLogs;
+      } catch (err) {
+        captureClientError(err, { scope: "agent-timeline.load" });
+        throw err;
+      }
+    },
+  });
+  const logs = logsQuery.data ?? [];
+  const loading = logsQuery.isLoading;
+  const error = logsQuery.error ? "Could not load agent activity." : null;
 
-  useEffect(() => {
-    load(0, true);
-  }, [load]);
+  const load = useCallback(
+    async (offset = 0, replace = true) => {
+      if (offset === 0) {
+        await queryClient.invalidateQueries({ queryKey: logsKey });
+        return;
+      }
+      setLoadingMore(true);
+      try {
+        const data = await apiFetch<AgentLogsResponse>(
+          `/api/automations/agent-logs?limit=${PAGE_SIZE}&offset=${offset}`,
+        );
+        const newLogs = Array.isArray(data.logs) ? data.logs : [];
+        queryClient.setQueryData<AgentLogEntry[]>(logsKey, (prev) =>
+          replace ? newLogs : [...(prev ?? []), ...newLogs],
+        );
+        setHasMore(newLogs.length === PAGE_SIZE);
+      } catch (err) {
+        captureClientError(err, { scope: "agent-timeline.load-more" });
+      } finally {
+        setLoadingMore(false);
+      }
+    },
+    [queryClient],
+  );
 
-  const handleRunNow = useCallback(async () => {
-    setRunning(true);
-    setRunMessage(null);
-    try {
-      const res = await apiFetch<{ triggered?: boolean; mode?: string; error?: string }>(
-        "/api/automations/run-now",
-        { method: "POST" },
-      );
+  const runNowMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<{ triggered?: boolean; mode?: string; error?: string }>("/api/automations/run-now", {
+        method: "POST",
+      }),
+    onMutate: () => setRunMessage(null),
+    onSuccess: (res) => {
       if (res.error) {
         setRunMessage(res.error);
-      } else {
-        setRunMessage(`Triggered (${res.mode ?? "auto"}). Refreshing in a few seconds…`);
-        setTimeout(() => {
-          load(0, true);
-          setRunMessage(null);
-        }, 4000);
+        return;
       }
-    } catch (err) {
+      setRunMessage(`Triggered (${res.mode ?? "auto"}). Refreshing in a few seconds…`);
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: logsKey });
+        setRunMessage(null);
+      }, 4000);
+    },
+    onError: (err) => {
       captureClientError(err, { scope: "agent-timeline.run-now" });
       setRunMessage("Could not trigger agent run.");
-    } finally {
-      setRunning(false);
-    }
-  }, [load]);
+    },
+  });
+  const running = runNowMutation.isPending;
+  const handleRunNow = useCallback(() => runNowMutation.mutate(), [runNowMutation]);
 
   const filtered = filter === "all" ? logs : logs.filter((l) => l.action === filter);
 
