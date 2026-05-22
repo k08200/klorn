@@ -28,6 +28,16 @@ export async function noteRoutes(app: FastifyInstance) {
     return { notes };
   });
 
+  // GET /api/notes/:id
+  app.get("/:id", async (request, reply) => {
+    const userId = getUserId(request);
+    const { id } = request.params as { id: string };
+    const note = await prisma.note.findUnique({ where: { id } });
+    if (!note) return reply.code(404).send({ error: "Note not found" });
+    if (note.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+    return note;
+  });
+
   // POST /api/notes
   app.post("/", async (request, reply) => {
     const userId = getUserId(request);

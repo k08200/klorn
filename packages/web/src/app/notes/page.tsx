@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import ErrorAlert from "../../components/ui/error-alert";
@@ -51,7 +52,12 @@ function NoteCard({
             )}
             <span className="text-[11px] text-stone-600">{formatDate(note.updatedAt)}</span>
           </div>
-          <p className="mt-1.5 text-sm font-semibold text-stone-100">{note.title}</p>
+          <Link
+            href={`/notes/${note.id}`}
+            className="mt-1.5 block text-sm font-semibold text-stone-100 hover:text-amber-200"
+          >
+            {note.title}
+          </Link>
           <p className="mt-1 line-clamp-3 whitespace-pre-line text-[12px] leading-5 text-stone-500">
             {note.content}
           </p>
