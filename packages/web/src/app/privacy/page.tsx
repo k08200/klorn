@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy - Jigeum",
-  description: "How Jigeum handles Gmail, Calendar, and account data during beta.",
+  title: "Privacy Policy - Klorn",
+  description: "How Klorn handles Gmail, Calendar, and account data during beta.",
 };
 
 const updatedAt = "May 4, 2026";
@@ -25,7 +25,7 @@ export default function PrivacyPage() {
           <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-[#f5f0e8]">
             <img src="/brand/mark.svg?v=flow-5" alt="" className="h-9 w-9" />
           </div>
-          <span className="text-lg font-bold tracking-tight">Jigeum</span>
+          <span className="text-lg font-bold tracking-tight">Klorn</span>
         </Link>
         <div className="flex items-center gap-5 text-sm text-stone-400">
           <Link href="/terms" className="transition hover:text-white">
@@ -42,24 +42,24 @@ export default function PrivacyPage() {
           PRIVACY POLICY
         </p>
         <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
-          How Jigeum handles work data
+          How Klorn handles work data
         </h1>
         <p className="mt-5 max-w-2xl text-sm leading-6 text-stone-400">
-          Last updated: {updatedAt}. Jigeum is currently a beta product. This policy explains what
-          data Jigeum can access, why it needs that access, and how you can request deletion.
+          Last updated: {updatedAt}. Klorn is currently a beta product. This policy explains what
+          data Klorn can access, why it needs that access, and how you can request deletion.
         </p>
 
         <div className="mt-12 space-y-10">
-          <Section title="What Jigeum Does">
+          <Section title="What Klorn Does">
             <p>
-              Jigeum is a work Decision OS that reviews Gmail, Calendar, tasks, reminders,
+              Klorn is a work Decision OS that reviews Gmail, Calendar, tasks, reminders,
               notifications, and related work context so important replies, meetings, and follow-ups
               are easier to decide on.
             </p>
           </Section>
 
           <Section title="Data We Collect">
-            <p>When you use Jigeum, we may collect or store the following data.</p>
+            <p>When you use Klorn, we may collect or store the following data.</p>
             <ul className="list-disc space-y-2 pl-5">
               <li>Account information such as email address and name.</li>
               <li>
@@ -74,7 +74,7 @@ export default function PrivacyPage() {
                 description.
               </li>
               <li>
-                Product data you create in Jigeum, including tasks, reminders, notes, commitments,
+                Product data you create in Klorn, including tasks, reminders, notes, commitments,
                 approved actions, feedback, notifications, and chat messages.
               </li>
               <li>
@@ -84,36 +84,36 @@ export default function PrivacyPage() {
           </Section>
 
           <Section title="How We Use Data">
-            <p>Jigeum uses data only to provide and improve the product. Examples include:</p>
+            <p>Klorn uses data only to provide and improve the product. Examples include:</p>
             <ul className="list-disc space-y-2 pl-5">
               <li>Syncing Gmail and Calendar after you connect Google.</li>
               <li>Creating morning briefings and finding messages or meetings that need review.</li>
               <li>Preparing approval proposals, reminders, tasks, and notifications.</li>
-              <li>Measuring whether Jigeum suggestions are useful during beta.</li>
+              <li>Measuring whether Klorn suggestions are useful during beta.</li>
               <li>Debugging reliability issues, preventing abuse, and protecting the service.</li>
             </ul>
           </Section>
 
           <Section title="Google User Data">
             <p>
-              Jigeum requests Gmail and Calendar permissions to read work context, identify
+              Klorn requests Gmail and Calendar permissions to read work context, identify
               important messages, understand calendar context, and prepare actions for your
               approval.
             </p>
             <p>
-              Jigeum does not sell Google user data, use it for advertising, or transfer it to
+              Klorn does not sell Google user data, use it for advertising, or transfer it to
               unrelated third parties. Google user data is used only to provide or improve the
-              Jigeum features you see.
+              Klorn features you see.
             </p>
             <p>
-              Email sending is treated as a sensitive action. During beta, Jigeum does not send
+              Email sending is treated as a sensitive action. During beta, Klorn does not send
               replies without your awareness. Email actions require your approval before sending.
             </p>
           </Section>
 
           <Section title="AI Processing">
             <p>
-              Jigeum may send relevant work context such as email snippets, bodies, calendar
+              Klorn may send relevant work context such as email snippets, bodies, calendar
               details, tasks, and notes to AI model providers for summarization, classification,
               drafting, and prioritization. We send only the context needed for the feature you are
               using.
@@ -131,15 +131,15 @@ export default function PrivacyPage() {
                 k0820086@gmail.com
               </a>
               . Authenticated users may also use in-product deletion controls where available.
-              Deleting Jigeum data does not delete messages or events from your Google account
-              unless you explicitly approve that action inside Jigeum.
+              Deleting Klorn data does not delete messages or events from your Google account
+              unless you explicitly approve that action inside Klorn.
             </p>
           </Section>
 
           <Section title="Security">
             <p>
-              Jigeum uses access controls, authentication, and operational safeguards to protect
-              user data. Because Jigeum is a beta product, avoid connecting accounts that contain
+              Klorn uses access controls, authentication, and operational safeguards to protect
+              user data. Because Klorn is a beta product, avoid connecting accounts that contain
               information you are not comfortable using with a beta service.
             </p>
           </Section>

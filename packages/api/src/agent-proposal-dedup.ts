@@ -26,7 +26,7 @@ export const PROPOSAL_DEDUP_HOURS = 24;
 export const CONTEXT_SUPPRESSION_HOURS = 24;
 export const REPLIED_EMAIL_DEDUP_HOURS = 24;
 
-export const AGENT_NOTIFICATION_PREFIX = "[Jigeum]";
+export const AGENT_NOTIFICATION_PREFIX = "[Klorn]";
 export const EVE_AGENT_NOTIFICATION_PREFIX = "[Eve]";
 // Split string literal: the audit tooling looks for the bare token "EVE"
 // in source and would otherwise flag this prefix as a legacy brand string.

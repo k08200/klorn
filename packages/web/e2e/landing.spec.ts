@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Landing page", () => {
-  test("displays Jigeum hero with concept message", async ({ page }) => {
+  test("displays Klorn hero with concept message", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("link", { name: "JIGEUM" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "KLORN" })).toBeVisible();
     await expect(page.locator("h1")).toContainText("Decide what matters");
     await expect(page.locator("h1")).toContainText("before work scatters");
   });

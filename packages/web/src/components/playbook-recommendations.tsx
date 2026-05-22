@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
 import type {
-  JigeumPlaybookDomain,
+  KlornPlaybookDomain,
   PlaybookContextHit,
   PlaybookRecommendation,
   PlaybookRecommendationSummary,
@@ -59,7 +59,7 @@ export default function PlaybookRecommendations() {
   };
 
   return (
-    <section className="mb-6" aria-label="Jigeum recommended playbooks">
+    <section className="mb-6" aria-label="Klorn recommended playbooks">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-stone-100">Recommended Playbooks</h2>
         <span className="text-[11px] text-stone-500">{data.recommendations.length}</span>
@@ -180,7 +180,7 @@ function RiskDot({ risk }: { risk: PlaybookContextHit["risk"] }) {
   return <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${className}`} />;
 }
 
-function domainMeta(domain: JigeumPlaybookDomain): { label: string; className: string } {
+function domainMeta(domain: KlornPlaybookDomain): { label: string; className: string } {
   switch (domain) {
     case "investment":
       return {

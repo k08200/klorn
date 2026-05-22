@@ -1,7 +1,7 @@
 /**
  * Attention Receipt API
  *
- * "What did Jigeum do (or not do) on my behalf today?"
+ * "What did Klorn do (or not do) on my behalf today?"
  *
  * GET /api/inbox/receipt/today
  *   Returns a structured daily receipt:
@@ -11,7 +11,7 @@
  *   - auto:      items that were auto-handled without asking the user
  *   - summary:   aggregate counts + narrative
  *
- * This is how EVE/Jigeum builds trust: not by showing what it did,
+ * This is how EVE/Klorn builds trust: not by showing what it did,
  * but by being transparent about what it *didn't* interrupt you with.
  *
  * The receipt is derived from:
@@ -293,7 +293,7 @@ function buildNarrative(
     return "No signals were processed today yet.";
   }
 
-  parts.push(`Jigeum evaluated ${totalSeen} signal${totalSeen !== 1 ? "s" : ""} today.`);
+  parts.push(`Klorn evaluated ${totalSeen} signal${totalSeen !== 1 ? "s" : ""} today.`);
 
   if (silenced > 0) {
     parts.push(

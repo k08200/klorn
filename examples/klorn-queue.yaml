@@ -1,6 +1,6 @@
-id: jigeum-queue-list
-name: "Jigeum Queue List"
-description: "Verify Jigeum can list the task queue"
+id: klorn-queue-list
+name: "Klorn Queue List"
+description: "Verify Klorn can list the task queue"
 
 agent:
   type: command

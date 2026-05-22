@@ -255,7 +255,7 @@ function FileConverter() {
         }
         const filename =
           filenameFromContentDisposition(res.headers.get("Content-Disposition")) ||
-          `jigeum-converted-${target}.zip`;
+          `klorn-converted-${target}.zip`;
         await downloadResponseBlob(res, filename);
         rememberConversionResult({
           resultId: conversionIdFromHeaders(res.headers),
@@ -829,11 +829,11 @@ function validAlternatives(value: ConversionAlternative[] | undefined): Conversi
     : [];
 }
 
-const CONVERSION_HISTORY_KEY = "jigeum-file-conversion-history";
+const CONVERSION_HISTORY_KEY = "klorn-file-conversion-history";
 const LEGACY_CONVERSION_HISTORY_KEY = "eve-file-conversion-history";
 
 function conversionIdFromHeaders(headers: Headers): string | null {
-  return headers.get("X-Jigeum-Conversion-Id") ?? headers.get("X-Eve-Conversion-Id");
+  return headers.get("X-Klorn-Conversion-Id") ?? headers.get("X-Eve-Conversion-Id");
 }
 
 function readConversionHistory(): ConversionHistoryItem[] {

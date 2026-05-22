@@ -57,7 +57,7 @@ function VerifyEmailContent() {
       }
       description={
         status === "success"
-          ? "Open the verification link in your inbox to unlock your Jigeum workspace."
+          ? "Open the verification link in your inbox to unlock your Klorn workspace."
           : status === "pending"
             ? "Verify your account email to unlock every workspace feature."
             : "The link is expired or invalid. Sign in again and request a new verification email."
@@ -75,7 +75,7 @@ function VerifyEmailContent() {
           </p>
           <p className="mt-2 text-sm leading-6 text-stone-300">
             {status === "success"
-              ? "Open the Jigeum verification email and follow the link. You can return to the decision queue after verification."
+              ? "Open the Klorn verification email and follow the link. You can return to the decision queue after verification."
               : status === "pending"
                 ? "If the email is missing, send a fresh verification link."
                 : "Return to login, check your account state, then request a new verification email."}

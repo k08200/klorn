@@ -41,10 +41,10 @@ const DEFAULT_AGENT_MODE_OPTIONS: AgentModeOption[] = [
   { mode: "SUGGEST", label: "Review", description: "Ask before action" },
   { mode: "AUTO", label: "Auto", description: "Run safe actions" },
 ];
-const PROFILE_KEY = "jigeum-profile";
+const PROFILE_KEY = "klorn-profile";
 const LEGACY_KEY_PREFIX = "ev" + "e";
 const LEGACY_PROFILE_KEY = `${LEGACY_KEY_PREFIX}-profile`;
-const PINNED_CHATS_KEY = "jigeum-pinned-chats";
+const PINNED_CHATS_KEY = "klorn-pinned-chats";
 const LEGACY_PINNED_CHATS_KEY = `${LEGACY_KEY_PREFIX}-pinned-chats`;
 
 function normalizeAgentMode(value: string | undefined): AgentMode {
@@ -77,11 +77,11 @@ function normalizeAgentModeOptions(options: ApiAgentModeOption[] | undefined): A
 function agentModeToast(mode: AgentMode): string {
   switch (mode) {
     case "SHADOW":
-      return "Observe mode - Jigeum prepares quietly";
+      return "Observe mode - Klorn prepares quietly";
     case "AUTO":
       return "Auto mode - safe actions can run automatically";
     case "SUGGEST":
-      return "Review mode - Jigeum asks before acting";
+      return "Review mode - Klorn asks before acting";
   }
 }
 
@@ -507,7 +507,7 @@ export default function SettingsPage() {
       const ok = await confirm({
         title: "Auto-mark Gmail as read?",
         message:
-          "After Jigeum sends an approved auto-mode reply, the original Gmail thread can be marked as read. Keep this off if unread mail is part of your fallback workflow.",
+          "After Klorn sends an approved auto-mode reply, the original Gmail thread can be marked as read. Keep this off if unread mail is part of your fallback workflow.",
         confirmLabel: "Turn on",
       });
       if (!ok) return;
@@ -676,7 +676,7 @@ export default function SettingsPage() {
       const ok = await confirm({
         title: "Switch to Auto mode?",
         message:
-          "Jigeum can run low-risk internal actions automatically. External replies, calendar changes, destructive work, and anything outside policy still require approval.",
+          "Klorn can run low-risk internal actions automatically. External replies, calendar changes, destructive work, and anything outside policy still require approval.",
         confirmLabel: "Use Auto mode",
       });
       if (!ok) return;
@@ -853,7 +853,7 @@ export default function SettingsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `jigeum-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `klorn-export-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
       toast("Data exported.", "success");
@@ -873,7 +873,7 @@ export default function SettingsPage() {
             Control panel
           </p>
           <h1 className="mt-3 text-2xl font-semibold tracking-tight text-stone-50 md:text-3xl">
-            Jigeum execution boundaries and access
+            Klorn execution boundaries and access
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-400">
             Tune profile, notifications, execution mode, and data access in one compact place.
@@ -1129,7 +1129,7 @@ export default function SettingsPage() {
                 {
                   key: "notifyEmailUrgent" as const,
                   label: "Urgent mail",
-                  desc: "New mail Jigeum considers time-sensitive",
+                  desc: "New mail Klorn considers time-sensitive",
                 },
                 {
                   key: "notifyMeeting" as const,
@@ -1144,7 +1144,7 @@ export default function SettingsPage() {
                 {
                   key: "notifyAgentProposal" as const,
                   label: "Agent proposals",
-                  desc: "When Jigeum needs approval before acting",
+                  desc: "When Klorn needs approval before acting",
                 },
                 {
                   key: "notifyDailyBriefing" as const,
@@ -1347,7 +1347,7 @@ export default function SettingsPage() {
               <div>
                 <h3 className="font-medium">Execution boundary</h3>
                 <p className="text-sm text-stone-400">
-                  Let Jigeum watch work, calendar, and mail in the background within approval
+                  Let Klorn watch work, calendar, and mail in the background within approval
                   limits.
                 </p>
               </div>
@@ -1395,7 +1395,7 @@ export default function SettingsPage() {
                   </div>
                   {agentMode === "SHADOW" && (
                     <p className="text-[10px] text-stone-400 mt-2">
-                      Jigeum quietly prepares drafts and approval-ready work, then queues it.
+                      Klorn quietly prepares drafts and approval-ready work, then queues it.
                     </p>
                   )}
                   {agentMode === "AUTO" && (
@@ -1479,7 +1479,7 @@ export default function SettingsPage() {
                     </span>
                   </button>
                   <p className="text-[10px] text-stone-500 mt-1">
-                    In auto mode, Jigeum can mark the original Gmail thread as read after sending a
+                    In auto mode, Klorn can mark the original Gmail thread as read after sending a
                     reply. Default is off so unread mail remains a fallback.
                   </p>
                 </div>
@@ -1498,7 +1498,7 @@ export default function SettingsPage() {
                         });
                         toast(
                           next
-                            ? "Proactive alerts on — Jigeum will notify you about unanswered emails, overdue tasks, and upcoming meetings."
+                            ? "Proactive alerts on — Klorn will notify you about unanswered emails, overdue tasks, and upcoming meetings."
                             : "Proactive alerts off.",
                           "success",
                         );
@@ -1520,7 +1520,7 @@ export default function SettingsPage() {
                     </span>
                   </button>
                   <p className="text-[10px] text-stone-500 mt-1">
-                    Jigeum watches for unanswered emails, overdue tasks, upcoming meetings, and
+                    Klorn watches for unanswered emails, overdue tasks, upcoming meetings, and
                     follow-up opportunities — and alerts you before they slip.
                   </p>
                 </div>
@@ -1605,7 +1605,7 @@ export default function SettingsPage() {
                   ? "Analyzing..."
                   : patternsLoaded
                     ? "Refresh learned patterns"
-                    : "What has Jigeum learned about you?"}
+                    : "What has Klorn learned about you?"}
               </button>
               {patternsLoaded && (
                 <div className="mt-3">
@@ -1730,7 +1730,7 @@ export default function SettingsPage() {
                       ? gmailPushExpiresAt
                         ? `Gmail push is active until ${new Date(gmailPushExpiresAt).toLocaleString()}. It renews automatically before expiration.`
                         : "Gmail push is active and renews automatically before expiration."
-                      : "Subscribe to Gmail push so mail signals arrive immediately. If off, Jigeum checks every minute."
+                      : "Subscribe to Gmail push so mail signals arrive immediately. If off, Klorn checks every minute."
                     : "The server Pub/Sub topic is not configured yet. Ask an admin to enable it."}
                 </p>
               </div>
@@ -1812,7 +1812,7 @@ export default function SettingsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-sm text-stone-400">
                 <p>Pre-approval rules - allow low-risk work inside clear limits</p>
                 <p>Execution history - track run, skipped, and review states</p>
-                <p>Memory controls - tune what Jigeum remembers</p>
+                <p>Memory controls - tune what Klorn remembers</p>
                 <p>Notifications - keep only interruption-worthy signals</p>
               </div>
             </div>
@@ -1840,7 +1840,7 @@ export default function SettingsPage() {
               className="flex items-center justify-between rounded-xl border border-stone-700/45 bg-stone-950/35 p-4 transition hover:border-stone-700 hover:bg-stone-950"
             >
               <div className="min-w-0">
-                <h3 className="font-medium">Jigeum status</h3>
+                <h3 className="font-medium">Klorn status</h3>
                 <p className="text-sm text-stone-400">
                   Check deployment, push, reminders, briefings, and connection health.
                 </p>
@@ -1906,7 +1906,7 @@ export default function SettingsPage() {
           <h2 className="text-sm font-semibold text-stone-300 mb-3">About</h2>
           <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-4">
             <p className="text-sm text-stone-400">
-              <span className="text-amber-300 font-medium">Jigeum</span> · Decision OS
+              <span className="text-amber-300 font-medium">Klorn</span> · Decision OS
             </p>
             <p className="text-sm text-stone-500 mt-1">
               Built to reduce scattered tabs and make the next decision clearer.

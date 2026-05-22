@@ -193,7 +193,7 @@ async function proposeSkillCreation(userId: string, seq: ToolSequence): Promise<
   });
   if (!convo) {
     convo = await prisma.conversation.create({
-      data: { userId, source: "agent", title: "Jigeum Suggestions" },
+      data: { userId, source: "agent", title: "Klorn Suggestions" },
     });
   }
 

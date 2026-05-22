@@ -86,7 +86,7 @@ function LoginForm() {
   return (
     <AuthScreen
       eyebrow={mode === "login" ? "Welcome back" : "Create account"}
-      title={mode === "login" ? "Return to your decision queue" : "Start with Jigeum"}
+      title={mode === "login" ? "Return to your decision queue" : "Start with Klorn"}
       description={
         mode === "login"
           ? "Reconnect your work signals and continue where you left off."

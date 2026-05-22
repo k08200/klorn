@@ -20,7 +20,7 @@ export default function EmailFeedbackPage() {
                 Mail judgment corrections
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-                Review priority and reply-needed corrections so Jigeum can learn sharper operating
+                Review priority and reply-needed corrections so Klorn can learn sharper operating
                 rules.
               </p>
             </div>

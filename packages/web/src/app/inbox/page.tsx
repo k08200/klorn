@@ -326,7 +326,7 @@ function CommandCenterView() {
               <div className="rounded-xl border border-stone-800 bg-stone-900/30 p-6 text-center">
                 <p className="text-sm text-stone-300">No pending decisions.</p>
                 <p className="mx-auto mt-1 max-w-xs text-xs text-stone-500">
-                  Connect your Google account so Jigeum can surface decisions from your mail and
+                  Connect your Google account so Klorn can surface decisions from your mail and
                   calendar.
                 </p>
                 <div className="mt-4 flex justify-center gap-2">
@@ -585,11 +585,11 @@ function ActionCard({
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <DecisionSection
               label="Signal"
-              title="What Jigeum found"
+              title="What Klorn found"
               body={
                 reasoning.situation ||
                 action.conversationTitle ||
-                "Jigeum reviewed the connected thread and work signals."
+                "Klorn reviewed the connected thread and work signals."
               }
             />
             <DecisionSection

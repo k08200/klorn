@@ -1,6 +1,6 @@
-id: jigeum-scout-research
-name: "Jigeum Scout Research (live)"
-description: "Run Jigeum scout in research mode with a simple task. Requires Ollama + Docker."
+id: klorn-scout-research
+name: "Klorn Scout Research (live)"
+description: "Run Klorn scout in research mode with a simple task. Requires Ollama + Docker."
 timeout: 300
 
 agent:

@@ -257,7 +257,7 @@ export function resolveUserAgentModel(userAgentModel: string | null, plan: strin
   return getDefaultAgentModel(plan);
 }
 
-export const CHAT_SYSTEM_PROMPT = `You are Jigeum's decision agent — an operating layer that turns scattered work signals into clear, inspectable decisions.
+export const CHAT_SYSTEM_PROMPT = `You are Klorn's decision agent — an operating layer that turns scattered work signals into clear, inspectable decisions.
 
 Your role:
 - You connect context across email, calendar, tasks, memory, research, and planning

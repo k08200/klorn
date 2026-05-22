@@ -259,7 +259,7 @@ function CandidateIntakeView() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `jigeum-candidate-intake-${status.toLowerCase()}.csv`;
+      a.download = `klorn-candidate-intake-${status.toLowerCase()}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();

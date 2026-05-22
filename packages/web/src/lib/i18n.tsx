@@ -71,7 +71,7 @@ const enTranslations: Record<string, string> = {
   "chat.send": "Send",
   // Briefing
   "briefing.learningMode":
-    "Jigeum learns mail and calendar patterns during the first 2-3 days. The top actions get sharper as you use the workspace.",
+    "Klorn learns mail and calendar patterns during the first 2-3 days. The top actions get sharper as you use the workspace.",
   // Common
   "common.loading": "Loading...",
   "common.cancel": "Cancel",
@@ -81,7 +81,7 @@ const enTranslations: Record<string, string> = {
   "common.or": "or",
   // Skills
   "skills.title": "Skills",
-  "skills.subtitle": "Reusable workflows Jigeum can run for you",
+  "skills.subtitle": "Reusable workflows Klorn can run for you",
   "skills.newSkill": "+ New Skill",
   "skills.edit": "Edit Skill",
   "skills.name": "Skill name",
@@ -146,7 +146,7 @@ interface I18nContextType {
 }
 
 const I18nContext = createContext<I18nContextType | null>(null);
-const PROFILE_KEY = "jigeum-profile";
+const PROFILE_KEY = "klorn-profile";
 const LEGACY_KEY_PREFIX = "ev" + "e";
 const LEGACY_PROFILE_KEY = `${LEGACY_KEY_PREFIX}-profile`;
 

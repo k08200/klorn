@@ -1,5 +1,5 @@
 /**
- * Jigeum Playbooks v0.
+ * Klorn Playbooks v0.
  *
  * Built-in operating patterns for recurring domains. v0 is intentionally
  * read-only: it recommends playbooks from the user's Work Graph without
@@ -13,13 +13,13 @@ import {
   type WorkGraphSummary,
 } from "./work-graph.js";
 
-export type JigeumPlaybookId =
+export type KlornPlaybookId =
   | "investment_ops"
   | "customer_success"
   | "launch_room"
   | "hiring_pipeline";
 
-export type JigeumPlaybookDomain = "investment" | "customer_success" | "launch" | "hiring";
+export type KlornPlaybookDomain = "investment" | "customer_success" | "launch" | "hiring";
 
 export interface PlaybookStep {
   id: string;
@@ -28,8 +28,8 @@ export interface PlaybookStep {
 }
 
 interface PlaybookDefinition {
-  id: JigeumPlaybookId;
-  domain: JigeumPlaybookDomain;
+  id: KlornPlaybookId;
+  domain: KlornPlaybookDomain;
   name: string;
   description: string;
   bestFor: string;
@@ -39,9 +39,9 @@ interface PlaybookDefinition {
   activationChecklist: PlaybookStep[];
 }
 
-export interface JigeumPlaybook {
-  id: JigeumPlaybookId;
-  domain: JigeumPlaybookDomain;
+export interface KlornPlaybook {
+  id: KlornPlaybookId;
+  domain: KlornPlaybookDomain;
   name: string;
   description: string;
   bestFor: string;
@@ -64,7 +64,7 @@ export interface PlaybookContextHit {
 }
 
 export interface PlaybookRecommendation {
-  playbook: JigeumPlaybook;
+  playbook: KlornPlaybook;
   score: number;
   confidence: number;
   reasons: string[];
@@ -74,7 +74,7 @@ export interface PlaybookRecommendation {
 
 export interface PlaybookRecommendationSummary {
   generatedAt: string;
-  playbooks: JigeumPlaybook[];
+  playbooks: KlornPlaybook[];
   recommendations: PlaybookRecommendation[];
 }
 
@@ -276,7 +276,7 @@ const PLAYBOOKS: PlaybookDefinition[] = [
   },
 ];
 
-export function listJigeumPlaybooks(activeIds: Set<string> = new Set()): JigeumPlaybook[] {
+export function listKlornPlaybooks(activeIds: Set<string> = new Set()): KlornPlaybook[] {
   return PLAYBOOKS.map((playbook) => publicPlaybook(playbook, activeIds));
 }
 
@@ -297,7 +297,7 @@ export async function listActivePlaybookIds(userId: string): Promise<Set<string>
 export async function activatePlaybook(
   userId: string,
   playbookId: string,
-): Promise<JigeumPlaybook> {
+): Promise<KlornPlaybook> {
   const definition = PLAYBOOKS.find((playbook) => playbook.id === playbookId);
   if (!definition) throw new Error(`Unknown playbook: ${playbookId}`);
   const model = (
@@ -354,7 +354,7 @@ export function recommendPlaybooksFromGraph(
 
   return {
     generatedAt: graph.generatedAt,
-    playbooks: listJigeumPlaybooks(activeIds),
+    playbooks: listKlornPlaybooks(activeIds),
     recommendations,
   };
 }
@@ -426,7 +426,7 @@ function contextText(context: WorkGraphContext): string {
     .toLowerCase();
 }
 
-function publicPlaybook(definition: PlaybookDefinition, activeIds: Set<string>): JigeumPlaybook {
+function publicPlaybook(definition: PlaybookDefinition, activeIds: Set<string>): KlornPlaybook {
   return {
     id: definition.id,
     domain: definition.domain,

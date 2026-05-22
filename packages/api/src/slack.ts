@@ -1,5 +1,5 @@
 /**
- * Slack Bot Integration for Jigeum
+ * Slack Bot Integration for Klorn
  *
  * Required env vars:
  *   SLACK_BOT_TOKEN    — xoxb-...
@@ -162,7 +162,7 @@ export async function slackEventRoutes(app: FastifyInstance) {
 
         await sendSlackMessage({
           channel,
-          text: `Noted. I've saved this to your Jigeum dashboard. For now, please use the Jigeum web app for full conversations. Slack auto-reply is coming soon.\n\n> _${text.slice(0, 100)}${text.length > 100 ? "..." : ""}_`,
+          text: `Noted. I've saved this to your Klorn dashboard. For now, please use the Klorn web app for full conversations. Slack auto-reply is coming soon.\n\n> _${text.slice(0, 100)}${text.length > 100 ? "..." : ""}_`,
           thread_ts: threadTs,
         });
       }
@@ -187,7 +187,7 @@ export async function slackEventRoutes(app: FastifyInstance) {
     const channel = process.env.SLACK_DEFAULT_CHANNEL || "#general";
     const result = await sendSlackMessage({
       channel,
-      text: "Jigeum test message - Slack integration is working.",
+      text: "Klorn test message - Slack integration is working.",
     });
     if (!result.ok) {
       return reply.code(502).send({ error: result.error || "Failed to send" });
@@ -196,7 +196,7 @@ export async function slackEventRoutes(app: FastifyInstance) {
   });
 }
 
-// Tool definitions for Jigeum chat
+// Tool definitions for Klorn chat
 export const SLACK_TOOLS = [
   {
     type: "function" as const,

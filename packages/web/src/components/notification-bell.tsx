@@ -41,13 +41,13 @@ const typeIcon: Record<string, string> = {
 function isAgentNotification(title: string): boolean {
   const legacyPrefix = "[EV" + "E]";
   return (
-    title.startsWith("[Jigeum]") || title.startsWith("[Eve]") || title.startsWith(legacyPrefix)
+    title.startsWith("[Klorn]") || title.startsWith("[Eve]") || title.startsWith(legacyPrefix)
   );
 }
 
 function notificationTitle(title: string): string {
   const legacyPrefix = "[EV" + "E]";
-  if (title.startsWith("[Jigeum]")) return title.slice(8).trim();
+  if (title.startsWith("[Klorn]")) return title.slice(8).trim();
   if (title.startsWith("[Eve]")) return title.slice(5).trim();
   if (title.startsWith(legacyPrefix)) return title.slice(5).trim();
   return title;
@@ -319,7 +319,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         </span>
         {isAgentNotification(n.title) && (
           <span className="text-[9px] text-amber-300 bg-amber-300/10 px-1 py-0.5 rounded shrink-0">
-            Jigeum
+            Klorn
           </span>
         )}
         {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-amber-300 shrink-0 ml-auto" />}
@@ -364,7 +364,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
   );
 
   const renderGroupHeader = (group: NotificationGroup<Notification>, expanded: boolean) => {
-    const label = `${group.isAgent ? "Jigeum " : ""}${getTypeLabel(group.type)}`;
+    const label = `${group.isAgent ? "Klorn " : ""}${getTypeLabel(group.type)}`;
     return (
       <button
         key={`${group.key}_header`}

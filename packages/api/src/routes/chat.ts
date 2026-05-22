@@ -473,13 +473,13 @@ export function chatRoutes(app: FastifyInstance) {
       let md = `# ${title}\n\n_Exported: ${date}_\n\n---\n\n`;
 
       for (const msg of convo.messages) {
-        const role = msg.role === "USER" ? "You" : "Jigeum";
+        const role = msg.role === "USER" ? "You" : "Klorn";
         md += `**${role}** _(${new Date(msg.createdAt).toLocaleString("en-US")})_\n\n${msg.content}\n\n---\n\n`;
       }
 
       return reply
         .header("Content-Type", "text/markdown; charset=utf-8")
-        .header("Content-Disposition", `attachment; filename="jigeum-chat-${date}.md"`)
+        .header("Content-Disposition", `attachment; filename="klorn-chat-${date}.md"`)
         .send(md);
     },
   );
@@ -995,7 +995,7 @@ export function chatRoutes(app: FastifyInstance) {
       const allowedToolNames = new Set(baseTools.map((tool) => tool.function.name));
       const tools = [...baseTools, PROPOSE_ACTION_TOOL];
 
-      // Build dynamic context so Jigeum knows the current situation.
+      // Build dynamic context so Klorn knows the current situation.
       const contextParts: string[] = [];
       try {
         const now = new Date();
@@ -1700,7 +1700,7 @@ export function chatRoutes(app: FastifyInstance) {
               userId,
               "FEEDBACK",
               `never_suggest_${action.toolName}`,
-              `User explicitly asked Jigeum to never propose ${action.toolName} actions.`,
+              `User explicitly asked Klorn to never propose ${action.toolName} actions.`,
               "user",
             ),
           )

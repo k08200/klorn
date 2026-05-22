@@ -411,7 +411,7 @@ export default function Sidebar({
         >
           <img src="/brand/mark.svg?v=flow-5" alt="" className="h-7 w-7" />
           <span>
-            <span className="block leading-none">Jigeum</span>
+            <span className="block leading-none">Klorn</span>
             <span className="mt-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-stone-500">
               Decision queue
             </span>

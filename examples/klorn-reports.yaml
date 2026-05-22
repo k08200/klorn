@@ -1,6 +1,6 @@
-id: jigeum-reports-list
-name: "Jigeum Reports List"
-description: "Verify Jigeum can list generated reports"
+id: klorn-reports-list
+name: "Klorn Reports List"
+description: "Verify Klorn can list generated reports"
 
 agent:
   type: command

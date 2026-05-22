@@ -45,7 +45,7 @@ test.describe("Authentication", () => {
     await page.goto("/settings");
     await expect(page).toHaveURL(/\/login\?next=%2Fsettings/);
     await expect(page.getByText("Sign in to continue to Settings.")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Jigeum" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Klorn" })).toBeVisible();
     await expect(page.getByText("No decision threads yet.")).toHaveCount(0);
   });
 });

@@ -154,7 +154,7 @@ export async function joinMeeting(
 export async function startRecording(): Promise<{ path: string; pid: number }> {
   if (!IS_MACOS) throw new Error("Recording requires macOS");
 
-  const path = `/tmp/jigeum-meeting-${Date.now()}.m4a`;
+  const path = `/tmp/klorn-meeting-${Date.now()}.m4a`;
 
   // Use macOS built-in afrecord or sox
   const proc = require("node:child_process").spawn("afrecord", ["-d", "aac", "-f", "m4af", path], {

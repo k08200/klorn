@@ -57,7 +57,7 @@ function OnboardingFlow() {
       <div className="w-full max-w-md">
         {/* Brand mark */}
         <p className="mb-10 text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-300">
-          Jigeum
+          Klorn
         </p>
 
         {step === 1 && (
@@ -109,7 +109,7 @@ function WelcomeStep({
         is ready to set up.
       </h1>
       <p className="mt-4 text-sm leading-6 text-stone-400">
-        Connect Gmail and Google Calendar. Jigeum reads your inbox, finds what needs your attention,
+        Connect Gmail and Google Calendar. Klorn reads your inbox, finds what needs your attention,
         and surfaces it — so nothing slips through.
       </p>
 
@@ -178,7 +178,7 @@ function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue
       </h1>
       <p className="mt-4 text-sm leading-6 text-stone-400">
         {isDone
-          ? "Jigeum has read your inbox and mapped your schedule."
+          ? "Klorn has read your inbox and mapped your schedule."
           : "Reading your recent emails and calendar. This takes about 30 seconds."}
       </p>
 
@@ -213,7 +213,7 @@ function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue
           onClick={onContinue}
           className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
         >
-          {isDone ? "See what Jigeum found" : "Continue to inbox"}
+          {isDone ? "See what Klorn found" : "Continue to inbox"}
           <span aria-hidden>→</span>
         </button>
       )}
@@ -253,7 +253,7 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
         You&apos;re set up.
       </h1>
       <p className="mt-4 text-sm leading-6 text-stone-400">
-        Jigeum is running. It&apos;ll surface decisions, track commitments, and prepare your morning
+        Klorn is running. It&apos;ll surface decisions, track commitments, and prepare your morning
         briefing — all before you open your inbox.
       </p>
 
@@ -267,7 +267,7 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
         <p className="text-xs font-semibold text-teal-300">What happens next</p>
         <ul className="mt-2 space-y-1.5 text-xs text-stone-400">
           <li>Your morning briefing will be ready before you wake up.</li>
-          <li>Decision cards appear when Jigeum finds something that needs your approval.</li>
+          <li>Decision cards appear when Klorn finds something that needs your approval.</li>
           <li>Commitments are tracked automatically from your emails.</li>
         </ul>
       </div>

@@ -21,7 +21,7 @@
  *   - Recent Emails (no-reply filtered out)
  *   - Unread Notifications count
  *   - Key Contacts (if any)
- *   - What User Recently Asked Jigeum (if any)
+ *   - What User Recently Asked Klorn (if any)
  *   - Your Previous Decisions (if any)
  *   - Cross-Domain Insights (deadline cluster / free time / meeting-contact /
  *     meeting-task / email-contact links)
@@ -404,7 +404,7 @@ export async function gatherUserContext(userId: string): Promise<string> {
         return `- (${timeLabel}) "${m.content.slice(0, 120)}${m.content.length > 120 ? "..." : ""}"`;
       },
     );
-    sections.push(`## What User Recently Asked Jigeum (last 24h)\n${chatLines.join("\n")}`);
+    sections.push(`## What User Recently Asked Klorn (last 24h)\n${chatLines.join("\n")}`);
   }
 
   // Previous agent decisions — continuity across cycles (prevent repeating).

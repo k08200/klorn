@@ -112,7 +112,7 @@ function AgentTimeline() {
                 Agent timeline
               </p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-50">
-                What Jigeum did and why
+                What Klorn did and why
               </h1>
               <p className="mt-2 text-sm leading-6 text-stone-400">
                 Every decision, proposal, and action — with the reasoning behind it.

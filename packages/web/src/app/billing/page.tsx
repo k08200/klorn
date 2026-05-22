@@ -137,7 +137,7 @@ function BillingContent() {
           Plan ledger
         </p>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight text-stone-50 md:text-3xl">
-          Jigeum limits and execution access
+          Klorn limits and execution access
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-400">
           Review decision limits, model usage, execution modes, and the plan that fits your team.
@@ -291,7 +291,7 @@ function BillingContent() {
                 <div />
               ) : plan.key === "ENTERPRISE" ? (
                 <a
-                  href="mailto:sales@jigeum.ai"
+                  href="mailto:sales@klorn.ai"
                   className="block rounded-lg border border-stone-700 bg-stone-900/70 py-2.5 text-center text-sm font-medium text-stone-100 transition hover:border-stone-500"
                 >
                   Contact sales

@@ -129,7 +129,7 @@ function NewChatWelcome() {
               Start with the decision in front of you.
             </h1>
             <p className="mt-4 max-w-xl text-sm leading-6 text-stone-500">
-              Ask Jigeum to connect the relevant mail, meetings, tasks, and next actions.
+              Ask Klorn to connect the relevant mail, meetings, tasks, and next actions.
             </p>
           </div>
 

@@ -91,13 +91,13 @@ export function EmailFeedbackList() {
             {loading ? "Checking correction logs..." : `${count} correction records`}
           </p>
           <p className="mt-1 text-sm text-stone-500">
-            These corrections sharpen Jigeum's mail judgment.
+            These corrections sharpen Klorn's mail judgment.
           </p>
         </div>
         {exportHref && (
           <a
             href={exportHref}
-            download="jigeum-email-feedback-fixtures.json"
+            download="klorn-email-feedback-fixtures.json"
             className="inline-flex w-fit items-center rounded-lg border border-stone-700/60 bg-stone-950/45 px-3 py-2 text-sm font-medium text-stone-200 transition hover:border-orange-500/35 hover:bg-orange-500/10"
           >
             Export JSON

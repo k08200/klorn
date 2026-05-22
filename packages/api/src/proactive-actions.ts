@@ -1,7 +1,7 @@
 /**
  * Proactive Actions — Rule-based autonomous behaviors that run without LLM calls.
  *
- * These are the actions that make Jigeum feel like a quiet decision layer:
+ * These are the actions that make Klorn feel like a quiet decision layer:
  * 1. Unanswered email detection → reminder + follow-up draft suggestion
  * 2. Pre-meeting briefing → push notification 1 hour before
  * 3. Overdue task alerts → push notification
@@ -366,7 +366,7 @@ async function checkFollowUpSuggestions(userId: string): Promise<void> {
     userId,
     "followup",
     `${stale.length} email(s) may need a follow-up`,
-    `These emails haven't been replied to in 3+ days. Want Jigeum to draft a follow-up?\n${suggestions.join("\n")}`,
+    `These emails haven't been replied to in 3+ days. Want Klorn to draft a follow-up?\n${suggestions.join("\n")}`,
     "/chat",
   );
 }

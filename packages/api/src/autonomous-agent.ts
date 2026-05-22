@@ -474,7 +474,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
 ### Reply tone:
 - Korean 존댓말, professional but friendly
 - Concise: 2-4 sentences max
-- Sign off as the user (NOT as Jigeum)
+- Sign off as the user (NOT as Klorn)
 - Mirror the language of the incoming email (Korean → Korean, English → English)
 
 ### CRITICAL rules:
@@ -696,7 +696,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                 agentConvo = await db.conversation.create({
                   data: {
                     userId,
-                    title: `Jigeum proposal - ${todayStr}`,
+                    title: `Klorn proposal - ${todayStr}`,
                     source: "agent",
                   },
                 });
@@ -992,7 +992,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                 agentConvo = await db.conversation.create({
                   data: {
                     userId,
-                    title: `Jigeum proposal - ${todayStr}`,
+                    title: `Klorn proposal - ${todayStr}`,
                     source: "agent",
                   },
                 });

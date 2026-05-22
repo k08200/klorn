@@ -130,7 +130,7 @@ export async function fileRoutes(app: FastifyInstance) {
         return reply
           .header("Content-Type", converted.mimeType)
           .header("Content-Length", String(converted.buffer.length))
-          .header("X-Jigeum-Conversion-Id", result.id)
+          .header("X-Klorn-Conversion-Id", result.id)
           .header("Content-Disposition", `attachment; filename="${converted.filename}"`)
           .send(converted.buffer);
       } catch (err) {
@@ -213,7 +213,7 @@ export async function fileRoutes(app: FastifyInstance) {
       const uid = getUserId(request);
       const result = await saveConversionResult({
         userId: uid,
-        filename: `jigeum-converted-${target}.zip`,
+        filename: `klorn-converted-${target}.zip`,
         mimeType: "application/zip",
         buffer: zip,
         target,
@@ -222,8 +222,8 @@ export async function fileRoutes(app: FastifyInstance) {
       return reply
         .header("Content-Type", "application/zip")
         .header("Content-Length", String(zip.length))
-        .header("X-Jigeum-Conversion-Id", result.id)
-        .header("Content-Disposition", `attachment; filename="jigeum-converted-${target}.zip"`)
+        .header("X-Klorn-Conversion-Id", result.id)
+        .header("Content-Disposition", `attachment; filename="klorn-converted-${target}.zip"`)
         .send(zip);
     },
   );

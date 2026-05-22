@@ -638,7 +638,7 @@ async function analyzeAttachment(input: {
       messages: [
         {
           role: "system",
-          content: `You analyze email attachments for a work assistant named Jigeum.
+          content: `You analyze email attachments for a work assistant named Klorn.
 
 Return ONLY JSON:
 {

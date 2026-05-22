@@ -8,7 +8,7 @@ function resolveApiBase(): string {
 
 export const API_BASE = resolveApiBase();
 
-export const AUTH_TOKEN_KEY = "jigeum-token";
+export const AUTH_TOKEN_KEY = "klorn-token";
 const LEGACY_KEY_PREFIX = "ev" + "e";
 const LEGACY_AUTH_TOKEN_KEY = `${LEGACY_KEY_PREFIX}-token`;
 

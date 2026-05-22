@@ -276,7 +276,7 @@ function headlineFor(mode: OperatingPlanMode): string {
 
 function primaryActionFor(mode: OperatingPlanMode, moves: OperatingPlanMove[]): string {
   if (moves[0]) return moves[0].title;
-  if (mode === "maintain_flow") return "Jigeum will refresh the plan when new signals arrive.";
+  if (mode === "maintain_flow") return "Klorn will refresh the plan when new signals arrive.";
   return "Start with the first decision card.";
 }
 
@@ -286,7 +286,7 @@ function moveFromAttention(item: AttentionItem): OperatingPlanMove {
     item.decision.suggestedAction ||
     item.decision.costOfIgnoring ||
     item.decision.evidence[0]?.value ||
-    "Jigeum ranked this as the signal to handle now.";
+    "Klorn ranked this as the signal to handle now.";
   return {
     id: `attention:${item.kind}:${item.id}`,
     title,

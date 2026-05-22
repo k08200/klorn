@@ -701,11 +701,11 @@ export function authRoutes(app: FastifyInstance) {
           }
           reply.type("text/html");
           return reply.send(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Jigeum Login</title>
+<html><head><meta charset="utf-8"><title>Klorn Login</title>
 <style>body{font-family:system-ui;background:#0a0a0a;color:#e5e7eb;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
 .box{text-align:center;padding:40px}.ok{font-size:48px;margin-bottom:16px}.t{font-size:14px;color:#9ca3af;margin-top:12px}</style>
 </head><body><div class="box"><div class="ok">✓</div><h2>Login Successful</h2>
-<p class="t">Return to the Jigeum desktop app.<br>You can close this tab.</p>
+<p class="t">Return to the Klorn desktop app.<br>You can close this tab.</p>
 </div></body></html>`);
         }
 
@@ -765,11 +765,11 @@ export function authRoutes(app: FastifyInstance) {
           .replace(/'/g, "&#39;");
         reply.type("text/html");
         return reply.send(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Jigeum Login</title>
+<html><head><meta charset="utf-8"><title>Klorn Login</title>
 <style>body{font-family:system-ui;background:#0a0a0a;color:#e5e7eb;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
 .box{text-align:center;padding:40px}.err{font-size:48px;margin-bottom:16px;color:#ef4444}.t{font-size:14px;color:#9ca3af;margin-top:12px}</style>
 </head><body><div class="box"><div class="err">✕</div><h2>Login Failed</h2>
-<p class="t">${htmlMessage}<br>Please try again in Jigeum Desktop.</p>
+<p class="t">${htmlMessage}<br>Please try again in Klorn Desktop.</p>
 </div></body></html>`);
       }
       return reply.code(500).send({ error: message });

@@ -10,24 +10,27 @@ import ServiceWorkerRegister from "../components/sw-register";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Jigeum - Decision Queue for Work",
-  description: "Jigeum turns mail, calendar, tasks, and memory into clear decision cards.",
+  title: "Klorn — The clear signal worth acting on",
+  description:
+    "Klorn filters mail, calendar, and AI signals into one clear decision queue — with approval before any action.",
   manifest: "/manifest.json",
   openGraph: {
-    title: "Jigeum - Decision Queue for Work",
-    description: "A quiet work layer for signals, decision context, approvals, and memory.",
-    siteName: "Jigeum",
+    title: "Klorn — The clear signal worth acting on",
+    description:
+      "Other AI agents act. Klorn helps you decide what's worth acting on — with evidence and approval before anything leaves your hands.",
+    siteName: "Klorn",
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Jigeum - Decision Queue for Work",
-    description: "Turn scattered work signals into decisions with context, approval, and memory.",
+    title: "Klorn — The clear signal worth acting on",
+    description:
+      "The approval layer for AI agents. Mail, calendar, and signals filtered into one clear decision queue.",
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Jigeum",
+    title: "Klorn",
   },
 };
 

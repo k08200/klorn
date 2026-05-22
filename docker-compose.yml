@@ -4,15 +4,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: jigeum
-      POSTGRES_PASSWORD: jigeum-local-dev
-      POSTGRES_DB: jigeum
+      POSTGRES_USER: klorn
+      POSTGRES_PASSWORD: klorn-local-dev
+      POSTGRES_DB: klorn
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U jigeum"]
+      test: ["CMD-SHELL", "pg_isready -U klorn"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -24,7 +24,7 @@ services:
     ports:
       - "3001:3001"
     environment:
-      DATABASE_URL: postgresql://jigeum:jigeum-local-dev@postgres:5432/jigeum
+      DATABASE_URL: postgresql://klorn:klorn-local-dev@postgres:5432/klorn
       PORT: "3001"
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?TOKEN_ENCRYPTION_KEY must be set (32-byte base64)}

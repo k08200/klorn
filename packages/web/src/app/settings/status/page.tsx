@@ -163,7 +163,7 @@ export default function SettingsStatusPage() {
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
                 Ops status
               </p>
-              <h1 className="text-2xl font-semibold tracking-tight text-stone-50">Jigeum status</h1>
+              <h1 className="text-2xl font-semibold tracking-tight text-stone-50">Klorn status</h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
                 Check deployment, integrations, push, reminders, and briefing readiness in one
                 compact view.
@@ -307,7 +307,7 @@ export default function SettingsStatusPage() {
           </>
         ) : (
           <div className="rounded-lg border border-red-900/50 bg-red-950/20 p-6 text-sm text-red-300">
-            Could not load Jigeum status.
+            Could not load Klorn status.
           </div>
         )}
       </main>

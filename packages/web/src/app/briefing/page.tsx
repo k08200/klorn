@@ -229,7 +229,7 @@ function BriefingView() {
               Compress today into decisions
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-              Jigeum summarizes mail, meetings, and tasks into approvals, deferrals, and next steps.
+              Klorn summarizes mail, meetings, and tasks into approvals, deferrals, and next steps.
               {formattedTime && <span className="ml-2 text-stone-400">Today {formattedTime}</span>}
             </p>
           </div>

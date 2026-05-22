@@ -1,5 +1,5 @@
 /**
- * Daily Briefing - Jigeum's autonomous planning feature
+ * Daily Briefing - Klorn's autonomous planning feature
  *
  * Aggregates tasks, calendar events, and recent emails into a daily summary.
  * Can be triggered manually or via cron.
@@ -440,7 +440,7 @@ async function todayRangeForUser(userId: string): Promise<{ gte: Date; lt: Date 
   return { gte, lt };
 }
 
-// Tool for Jigeum to generate briefing on demand
+// Tool for Klorn to generate briefing on demand
 export const BRIEFING_TOOLS = [
   {
     type: "function" as const,
