@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import AuthScreen from "../../components/auth-screen";
 import { useToast } from "../../components/toast";
+import { API_BASE } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 
 export default function LoginPage() {
@@ -209,10 +210,9 @@ function LoginForm() {
         <div className="h-px flex-1 bg-stone-800/80" />
       </div>
 
-      <button
-        type="button"
-        disabled
-        className="flex h-11 w-full cursor-not-allowed items-center justify-center gap-3 rounded-md border border-stone-700 bg-stone-900 text-sm font-medium text-stone-500"
+      <a
+        href={`${API_BASE}/api/auth/google/login`}
+        className="flex h-11 w-full items-center justify-center gap-3 rounded-md border border-stone-700 bg-stone-900 text-sm font-medium text-stone-100 transition hover:border-stone-600 hover:bg-stone-800"
       >
         <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24">
           <path
@@ -232,13 +232,10 @@ function LoginForm() {
             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
           />
         </svg>
-        Google sign-in coming soon
-        <span className="rounded bg-stone-200 px-1.5 py-0.5 text-[10px] font-normal text-stone-500">
-          Beta
-        </span>
-      </button>
+        Continue with Google
+      </a>
       <p className="mt-3 text-center text-[11px] leading-5 text-stone-600">
-        Google sign-in is under review. Email sign-up is available now.
+        App is pending Google verification — approved test users only.
       </p>
 
       <div className="mt-5 border-t border-stone-800/80 pt-4 text-center text-xs text-stone-500">
