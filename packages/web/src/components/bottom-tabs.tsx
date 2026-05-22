@@ -6,12 +6,11 @@ import { usePathname } from "next/navigation";
 interface Tab {
   href: string;
   label: string;
-  icon: "chat" | "calendar" | "email" | "briefing" | "inbox";
+  icon: "calendar" | "email" | "briefing" | "inbox";
 }
 
 const TABS: Tab[] = [
   { href: "/inbox", label: "Queue", icon: "inbox" },
-  { href: "/chat", label: "Threads", icon: "chat" },
   { href: "/email", label: "Mail", icon: "email" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/briefing", label: "Briefing", icon: "briefing" },
@@ -25,7 +24,7 @@ export default function BottomTabs() {
       aria-label="Primary navigation"
       className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-stone-700/50 bg-[#10100d]/92 pb-safe shadow-[0_-16px_44px_rgba(0,0,0,0.35)] backdrop-blur-xl"
     >
-      <ul className="grid grid-cols-5">
+      <ul className="grid grid-cols-4">
         {TABS.map((tab) => {
           const active = isActive(pathname, tab.href);
           return (
@@ -49,9 +48,6 @@ export default function BottomTabs() {
 }
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === "/chat") {
-    return pathname === "/chat" || pathname.startsWith("/chat/");
-  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -68,12 +64,6 @@ function TabIcon({ type, active }: { type: Tab["icon"]; active: boolean }) {
     "aria-hidden": true as const,
   };
   switch (type) {
-    case "chat":
-      return (
-        <svg {...props}>
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
-      );
     case "calendar":
       return (
         <svg {...props}>
