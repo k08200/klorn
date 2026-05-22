@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { apiFetch } from "../../lib/api";
+import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 
 type CommitmentStatus = "OPEN" | "DONE" | "DISMISSED" | "SNOOZED";
@@ -185,39 +187,51 @@ function CommitmentRow({
 }
 
 function CommitmentsContent() {
-  const [commitments, setCommitments] = useState<Commitment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<FilterTab>("open");
+  const statusKey = tab === "done" ? "DONE" : undefined;
 
-  const load = useCallback(() => {
-    setLoading(true);
-    const qs = tab === "done" ? "?status=DONE" : "";
-    apiFetch<{ commitments: Commitment[] }>(`/api/commitments${qs}`)
-      .then((data) => setCommitments(Array.isArray(data.commitments) ? data.commitments : []))
-      .catch((err) => captureClientError(err, { scope: "commitments.load" }))
-      .finally(() => setLoading(false));
-  }, [tab]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const handleStatusChange = useCallback(
-    async (id: string, status: CommitmentStatus) => {
-      setCommitments((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
+  const { data: commitments = [], isLoading: loading } = useQuery({
+    queryKey: queryKeys.commitments.list(statusKey),
+    queryFn: async () => {
+      const qs = tab === "done" ? "?status=DONE" : "";
       try {
-        await apiFetch(`/api/commitments/${id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ status }),
-        });
+        const data = await apiFetch<{ commitments: Commitment[] }>(`/api/commitments${qs}`);
+        return Array.isArray(data.commitments) ? data.commitments : [];
       } catch (err) {
-        captureClientError(err, { scope: "commitments.status-change" });
-        // Reload to get actual state on failure
-        load();
+        captureClientError(err, { scope: "commitments.load" });
+        throw err;
       }
     },
-    [load],
-  );
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: CommitmentStatus }) =>
+      apiFetch(`/api/commitments/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      }),
+    onMutate: async ({ id, status }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.commitments.list(statusKey) });
+      const snapshot = queryClient.getQueryData<Commitment[]>(
+        queryKeys.commitments.list(statusKey),
+      );
+      queryClient.setQueryData<Commitment[]>(queryKeys.commitments.list(statusKey), (prev) =>
+        (prev ?? []).map((c) => (c.id === id ? { ...c, status } : c)),
+      );
+      return { snapshot };
+    },
+    onError: (err, _vars, ctx) => {
+      captureClientError(err, { scope: "commitments.status-change" });
+      if (ctx?.snapshot) {
+        queryClient.setQueryData(queryKeys.commitments.list(statusKey), ctx.snapshot);
+      }
+    },
+  });
+
+  const handleStatusChange = (id: string, status: CommitmentStatus) => {
+    statusMutation.mutate({ id, status });
+  };
 
   const visible = commitments.filter((c) => {
     if (tab === "open") return c.status === "OPEN" || c.status === "SNOOZED";
