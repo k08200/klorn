@@ -7,7 +7,7 @@ WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/api/package.json packages/api/
 COPY packages/core/package.json packages/core/
-RUN pnpm install --frozen-lockfile --filter @jigeum/api...
+RUN pnpm install --frozen-lockfile --filter @klorn/api...
 
 # Copy source
 COPY packages/core/ packages/core/
@@ -15,7 +15,7 @@ COPY packages/api/ packages/api/
 
 # Generate Prisma client + build
 RUN cd packages/api && npx prisma generate
-RUN pnpm --filter @jigeum/api build
+RUN pnpm --filter @klorn/api build
 
 EXPOSE 3001
 CMD ["node", "packages/api/dist/index.js"]

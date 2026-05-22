@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: jigeum-api
+    name: klorn-api
     runtime: node
     region: singapore
     plan: free
@@ -32,9 +32,9 @@ services:
       - key: PORT
         value: "3001"
       - key: CORS_ORIGINS
-        value: "https://klorn.ai,https://www.klorn.ai,https://jigeum.ai,https://www.jigeum.ai"
+        value: "https://klorn.ai,https://www.klorn.ai"
       - key: RENDER_EXTERNAL_URL
-        value: "https://jigeum.onrender.com"
+        value: "https://klorn-api.onrender.com"
       - key: BETA_AUTO_PRO_ENABLED
         sync: false
       - key: BETA_AUTO_PRO_LIMIT
