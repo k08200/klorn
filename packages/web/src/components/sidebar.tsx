@@ -1028,6 +1028,16 @@ export default function Sidebar({
                   Voice profile
                 </Link>
                 <Link
+                  href="/settings/email-rules"
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    onMobileClose();
+                  }}
+                  className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
+                >
+                  Email rules
+                </Link>
+                <Link
                   href="/settings/email-feedback"
                   onClick={() => {
                     setShowUserMenu(false);
