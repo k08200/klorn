@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { apiFetch } from "../../lib/api";
+import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 
 type ReminderStatus = "PENDING" | "SENT" | "DISMISSED";
@@ -256,73 +258,92 @@ function NewReminderForm({ onCreated }: { onCreated: (r: Reminder) => void }) {
 }
 
 function RemindersContent() {
-  const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("pending");
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const load = useCallback(() => {
-    apiFetch<{ reminders: Reminder[] }>("/api/reminders")
-      .then((data) => setReminders(Array.isArray(data.reminders) ? data.reminders : []))
-      .catch((err) => captureClientError(err, { scope: "reminders.load" }))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data: reminders = [], isLoading: loading } = useQuery({
+    queryKey: queryKeys.reminders.list(),
+    queryFn: async () => {
+      try {
+        const data = await apiFetch<{ reminders: Reminder[] }>("/api/reminders");
+        return Array.isArray(data.reminders) ? data.reminders : [];
+      } catch (err) {
+        captureClientError(err, { scope: "reminders.load" });
+        throw err;
+      }
+    },
+  });
 
   const handleCreated = (r: Reminder) => {
-    setReminders((prev) => [r, ...prev]);
+    queryClient.setQueryData<Reminder[]>(queryKeys.reminders.list(), (prev) => [
+      r,
+      ...(prev ?? []),
+    ]);
   };
 
-  const handleDismiss = async (id: string) => {
-    const snapshot = reminders;
-    setBusyId(id);
-    setReminders((prev) => prev.map((r) => (r.id === id ? { ...r, status: "DISMISSED" } : r)));
-    try {
-      await apiFetch(`/api/reminders/${id}/dismiss`, { method: "PATCH" });
-    } catch (err) {
+  const dismissMutation = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/reminders/${id}/dismiss`, { method: "PATCH" }),
+    onMutate: async (id) => {
+      setBusyId(id);
+      await queryClient.cancelQueries({ queryKey: queryKeys.reminders.list() });
+      const snapshot = queryClient.getQueryData<Reminder[]>(queryKeys.reminders.list());
+      queryClient.setQueryData<Reminder[]>(queryKeys.reminders.list(), (prev) =>
+        (prev ?? []).map((r) => (r.id === id ? { ...r, status: "DISMISSED" } : r)),
+      );
+      return { snapshot };
+    },
+    onError: (err, _id, ctx) => {
       captureClientError(err, { scope: "reminders.dismiss" });
-      setReminders(snapshot);
-    } finally {
-      setBusyId(null);
-    }
-  };
+      if (ctx?.snapshot) queryClient.setQueryData(queryKeys.reminders.list(), ctx.snapshot);
+    },
+    onSettled: () => setBusyId(null),
+  });
 
-  const handleSnooze = async (id: string, minutes: number) => {
-    const snapshot = reminders;
-    setBusyId(id);
-    const newTime = new Date(Date.now() + minutes * 60000).toISOString();
-    setReminders((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, remindAt: newTime, status: "PENDING" } : r)),
-    );
-    try {
-      await apiFetch(`/api/reminders/${id}/snooze`, {
+  const snoozeMutation = useMutation({
+    mutationFn: ({ id, minutes }: { id: string; minutes: number }) =>
+      apiFetch(`/api/reminders/${id}/snooze`, {
         method: "PATCH",
         body: JSON.stringify({ minutes }),
-      });
-    } catch (err) {
+      }),
+    onMutate: async ({ id, minutes }) => {
+      setBusyId(id);
+      await queryClient.cancelQueries({ queryKey: queryKeys.reminders.list() });
+      const snapshot = queryClient.getQueryData<Reminder[]>(queryKeys.reminders.list());
+      const newTime = new Date(Date.now() + minutes * 60000).toISOString();
+      queryClient.setQueryData<Reminder[]>(queryKeys.reminders.list(), (prev) =>
+        (prev ?? []).map((r) => (r.id === id ? { ...r, remindAt: newTime, status: "PENDING" } : r)),
+      );
+      return { snapshot };
+    },
+    onError: (err, _vars, ctx) => {
       captureClientError(err, { scope: "reminders.snooze" });
-      setReminders(snapshot);
-    } finally {
-      setBusyId(null);
-    }
-  };
+      if (ctx?.snapshot) queryClient.setQueryData(queryKeys.reminders.list(), ctx.snapshot);
+    },
+    onSettled: () => setBusyId(null),
+  });
 
-  const handleDelete = async (id: string) => {
-    const snapshot = reminders;
-    setBusyId(id);
-    setReminders((prev) => prev.filter((r) => r.id !== id));
-    try {
-      await apiFetch(`/api/reminders/${id}`, { method: "DELETE" });
-    } catch (err) {
+  const handleDismiss = (id: string) => dismissMutation.mutate(id);
+  const handleSnooze = (id: string, minutes: number) => snoozeMutation.mutate({ id, minutes });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/reminders/${id}`, { method: "DELETE" }),
+    onMutate: async (id) => {
+      setBusyId(id);
+      await queryClient.cancelQueries({ queryKey: queryKeys.reminders.list() });
+      const snapshot = queryClient.getQueryData<Reminder[]>(queryKeys.reminders.list());
+      queryClient.setQueryData<Reminder[]>(queryKeys.reminders.list(), (prev) =>
+        (prev ?? []).filter((r) => r.id !== id),
+      );
+      return { snapshot };
+    },
+    onError: (err, _id, ctx) => {
       captureClientError(err, { scope: "reminders.delete" });
-      setReminders(snapshot);
-    } finally {
-      setBusyId(null);
-    }
-  };
+      if (ctx?.snapshot) queryClient.setQueryData(queryKeys.reminders.list(), ctx.snapshot);
+    },
+    onSettled: () => setBusyId(null),
+  });
+  const handleDelete = (id: string) => deleteMutation.mutate(id);
 
   const filtered = reminders.filter((r) => {
     if (tab === "pending") return r.status === "PENDING";
