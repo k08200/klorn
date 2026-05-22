@@ -96,14 +96,13 @@ export default function PrivacyPage() {
 
           <Section title="Google User Data">
             <p>
-              Klorn requests Gmail and Calendar permissions to read work context, identify
-              important messages, understand calendar context, and prepare actions for your
-              approval.
+              Klorn requests Gmail and Calendar permissions to read work context, identify important
+              messages, understand calendar context, and prepare actions for your approval.
             </p>
             <p>
               Klorn does not sell Google user data, use it for advertising, or transfer it to
-              unrelated third parties. Google user data is used only to provide or improve the
-              Klorn features you see.
+              unrelated third parties. Google user data is used only to provide or improve the Klorn
+              features you see.
             </p>
             <p>
               Email sending is treated as a sensitive action. During beta, Klorn does not send
@@ -113,10 +112,9 @@ export default function PrivacyPage() {
 
           <Section title="AI Processing">
             <p>
-              Klorn may send relevant work context such as email snippets, bodies, calendar
-              details, tasks, and notes to AI model providers for summarization, classification,
-              drafting, and prioritization. We send only the context needed for the feature you are
-              using.
+              Klorn may send relevant work context such as email snippets, bodies, calendar details,
+              tasks, and notes to AI model providers for summarization, classification, drafting,
+              and prioritization. We send only the context needed for the feature you are using.
             </p>
           </Section>
 
@@ -131,15 +129,15 @@ export default function PrivacyPage() {
                 k0820086@gmail.com
               </a>
               . Authenticated users may also use in-product deletion controls where available.
-              Deleting Klorn data does not delete messages or events from your Google account
-              unless you explicitly approve that action inside Klorn.
+              Deleting Klorn data does not delete messages or events from your Google account unless
+              you explicitly approve that action inside Klorn.
             </p>
           </Section>
 
           <Section title="Security">
             <p>
-              Klorn uses access controls, authentication, and operational safeguards to protect
-              user data. Because Klorn is a beta product, avoid connecting accounts that contain
+              Klorn uses access controls, authentication, and operational safeguards to protect user
+              data. Because Klorn is a beta product, avoid connecting accounts that contain
               information you are not comfortable using with a beta service.
             </p>
           </Section>

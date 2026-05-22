@@ -45,8 +45,8 @@ export default function TermsPage() {
           Klorn Beta Terms
         </h1>
         <p className="mt-5 max-w-2xl text-sm leading-6 text-stone-400">
-          Last updated: {updatedAt}. These terms apply to the Klorn beta. By using Klorn, you
-          agree to these terms and the Privacy Policy.
+          Last updated: {updatedAt}. These terms apply to the Klorn beta. By using Klorn, you agree
+          to these terms and the Privacy Policy.
         </p>
 
         <div className="mt-12 space-y-10">
@@ -88,17 +88,17 @@ export default function TermsPage() {
 
           <Section title="Not Professional Advice">
             <p>
-              Klorn can help organize work, draft language, and prioritize decisions. Klorn does
-              not provide legal, financial, medical, employment, or other professional advice.
-              Verify important information before acting on it.
+              Klorn can help organize work, draft language, and prioritize decisions. Klorn does not
+              provide legal, financial, medical, employment, or other professional advice. Verify
+              important information before acting on it.
             </p>
           </Section>
 
           <Section title="Availability and Data Loss">
             <p>
-              We work to keep Klorn reliable, but the beta is provided without uptime guarantees.
-              We are not responsible for missed notifications, sync delays, inaccurate results, or
-              data loss caused by beta limitations, third-party outages, or user configuration.
+              We work to keep Klorn reliable, but the beta is provided without uptime guarantees. We
+              are not responsible for missed notifications, sync delays, inaccurate results, or data
+              loss caused by beta limitations, third-party outages, or user configuration.
             </p>
           </Section>
 

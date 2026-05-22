@@ -294,10 +294,7 @@ export async function listActivePlaybookIds(userId: string): Promise<Set<string>
   return new Set(rows.map((row) => row.playbookId));
 }
 
-export async function activatePlaybook(
-  userId: string,
-  playbookId: string,
-): Promise<KlornPlaybook> {
+export async function activatePlaybook(userId: string, playbookId: string): Promise<KlornPlaybook> {
   const definition = PLAYBOOKS.find((playbook) => playbook.id === playbookId);
   if (!definition) throw new Error(`Unknown playbook: ${playbookId}`);
   const model = (

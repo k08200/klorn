@@ -1347,8 +1347,7 @@ export default function SettingsPage() {
               <div>
                 <h3 className="font-medium">Execution boundary</h3>
                 <p className="text-sm text-stone-400">
-                  Let Klorn watch work, calendar, and mail in the background within approval
-                  limits.
+                  Let Klorn watch work, calendar, and mail in the background within approval limits.
                 </p>
               </div>
               <button
