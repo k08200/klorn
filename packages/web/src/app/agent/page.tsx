@@ -44,6 +44,8 @@ function AgentTimeline() {
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [filter, setFilter] = useState<string>("all");
+  const [running, setRunning] = useState(false);
+  const [runMessage, setRunMessage] = useState<string | null>(null);
 
   const load = useCallback(async (offset = 0, replace = true) => {
     if (offset === 0) setLoading(true);
@@ -67,6 +69,31 @@ function AgentTimeline() {
 
   useEffect(() => {
     load(0, true);
+  }, [load]);
+
+  const handleRunNow = useCallback(async () => {
+    setRunning(true);
+    setRunMessage(null);
+    try {
+      const res = await apiFetch<{ triggered?: boolean; mode?: string; error?: string }>(
+        "/api/automations/run-now",
+        { method: "POST" },
+      );
+      if (res.error) {
+        setRunMessage(res.error);
+      } else {
+        setRunMessage(`Triggered (${res.mode ?? "auto"}). Refreshing in a few seconds…`);
+        setTimeout(() => {
+          load(0, true);
+          setRunMessage(null);
+        }, 4000);
+      }
+    } catch (err) {
+      captureClientError(err, { scope: "agent-timeline.run-now" });
+      setRunMessage("Could not trigger agent run.");
+    } finally {
+      setRunning(false);
+    }
   }, [load]);
 
   const filtered = filter === "all" ? logs : logs.filter((l) => l.action === filter);
@@ -94,6 +121,14 @@ function AgentTimeline() {
             <div className="shrink-0 flex gap-2">
               <button
                 type="button"
+                onClick={handleRunNow}
+                disabled={running}
+                className="h-8 rounded-md border border-amber-300/30 bg-amber-300/10 px-3 text-xs text-amber-200 transition hover:bg-amber-300/20 disabled:opacity-50"
+              >
+                {running ? "Running…" : "Run now"}
+              </button>
+              <button
+                type="button"
                 onClick={() => load(0, true)}
                 className="h-8 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800"
               >
@@ -117,11 +152,18 @@ function AgentTimeline() {
             <StatMetric label="Errors" value={stats.errors} color="text-red-400" />
           </div>
 
+          {runMessage && (
+            <p className="mt-4 rounded-md border border-amber-300/20 bg-amber-300/5 px-3 py-2 text-xs text-amber-200">
+              {runMessage}
+            </p>
+          )}
+
           {/* Filter */}
           <div className="mt-4 flex items-center gap-1 rounded-lg border border-stone-800 bg-stone-950/80 p-1 w-fit">
             {[
               { value: "all", label: "All" },
               { value: "tool_call", label: "Tool calls" },
+              { value: "auto_action", label: "Auto" },
               { value: "notify", label: "Notifications" },
               { value: "skip", label: "Skipped" },
               { value: "error", label: "Errors" },
