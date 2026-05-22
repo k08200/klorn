@@ -170,12 +170,25 @@ function RuleCard({
   );
 }
 
+const KNOWN_CATEGORIES = [
+  "billing",
+  "meeting",
+  "engineering",
+  "conversation",
+  "automated",
+  "newsletter",
+  "personal",
+  "business",
+  "other",
+];
+
 function NewRuleForm({ onCreated }: { onCreated: (r: EmailRule) => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [from, setFrom] = useState("");
   const [subject, setSubject] = useState("");
+  const [categories, setCategories] = useState<string[]>([]);
   const [actionType, setActionType] = useState<ActionType>("LABEL");
   const [actionValue, setActionValue] = useState("");
   const [saving, setSaving] = useState(false);
@@ -186,6 +199,7 @@ function NewRuleForm({ onCreated }: { onCreated: (r: EmailRule) => void }) {
     setDescription("");
     setFrom("");
     setSubject("");
+    setCategories([]);
     setActionType("LABEL");
     setActionValue("");
     setError(null);
@@ -198,12 +212,19 @@ function NewRuleForm({ onCreated }: { onCreated: (r: EmailRule) => void }) {
       .map((s) => s.trim())
       .filter(Boolean);
 
+  const toggleCategory = (cat: string) => {
+    setCategories((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const fromList = parseCsv(from);
     const subjectList = parseCsv(subject);
-    if (!name.trim() || (fromList.length === 0 && subjectList.length === 0)) {
-      setError("Name and at least one condition (from or subject) are required.");
+    if (
+      !name.trim() ||
+      (fromList.length === 0 && subjectList.length === 0 && categories.length === 0)
+    ) {
+      setError("Name and at least one condition (from, subject, or category) are required.");
       return;
     }
     if (actionType !== "ARCHIVE" && !actionValue.trim()) {
@@ -214,6 +235,7 @@ function NewRuleForm({ onCreated }: { onCreated: (r: EmailRule) => void }) {
     const conditions: RuleConditions = {};
     if (fromList.length > 0) conditions.from = fromList;
     if (subjectList.length > 0) conditions.subjectContains = subjectList;
+    if (categories.length > 0) conditions.category = categories;
 
     setSaving(true);
     setError(null);
@@ -325,6 +347,31 @@ function NewRuleForm({ onCreated }: { onCreated: (r: EmailRule) => void }) {
             placeholder="weekly digest, newsletter"
             className="w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 placeholder-stone-600 focus:border-stone-500 focus:outline-none"
           />
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-1 text-[11px] text-stone-500">
+          Category matches <span className="text-stone-700">(click to toggle)</span>
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {KNOWN_CATEGORIES.map((cat) => {
+            const selected = categories.includes(cat);
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => toggleCategory(cat)}
+                className={`rounded border px-2 py-0.5 text-[11px] transition ${
+                  selected
+                    ? "border-amber-400/40 bg-amber-400/15 text-amber-200"
+                    : "border-stone-700 bg-stone-800/40 text-stone-400 hover:border-stone-500"
+                }`}
+              >
+                {cat}
+              </button>
+            );
+          })}
         </div>
       </div>
 
