@@ -1,10 +1,12 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { useToast } from "../../../components/toast";
 import { apiFetch } from "../../../lib/api";
+import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
 
 interface ReceiptItem {
@@ -42,51 +44,54 @@ export default function ReceiptPage() {
 }
 
 function ReceiptView() {
-  const [receipt, setReceipt] = useState<DailyReceipt | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [undoLoading, setUndoLoading] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await apiFetch<DailyReceipt>("/api/inbox/receipt/today");
-      setReceipt(data);
-    } catch (err) {
-      captureClientError(err, { scope: "receipt.load" });
-      setError("Could not load today's attention receipt.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const receiptQuery = useQuery({
+    queryKey: queryKeys.inbox.receipt(),
+    queryFn: async () => {
+      try {
+        return await apiFetch<DailyReceipt>("/api/inbox/receipt/today");
+      } catch (err) {
+        captureClientError(err, { scope: "receipt.load" });
+        throw err;
+      }
+    },
+  });
+  const receipt = receiptQuery.data ?? null;
+  const loading = receiptQuery.isLoading;
+  const error = receiptQuery.error ? "Could not load today's attention receipt." : null;
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const handleUndo = async (pendingActionId: string) => {
-    if (undoLoading[pendingActionId]) return;
-    setUndoLoading((prev) => ({ ...prev, [pendingActionId]: true }));
-    try {
-      const result = await apiFetch<{ ok: boolean; message: string }>(
-        `/api/inbox/receipt/undo/${pendingActionId}`,
-        { method: "POST" },
-      );
+  const undoMutation = useMutation({
+    mutationFn: (pendingActionId: string) =>
+      apiFetch<{ ok: boolean; message: string }>(`/api/inbox/receipt/undo/${pendingActionId}`, {
+        method: "POST",
+      }),
+    onMutate: (pendingActionId) => {
+      setUndoLoading((prev) => ({ ...prev, [pendingActionId]: true }));
+    },
+    onSuccess: (result) => {
       if (result.ok) {
         toast(result.message, "success");
-        // Refresh to reflect the new undo proposal
-        await load();
+        // The undo creates a new proposal server-side; refetch reflects it.
+        void queryClient.invalidateQueries({ queryKey: queryKeys.inbox.receipt() });
       } else {
         toast(result.message, "error");
       }
-    } catch (err) {
+    },
+    onError: (err, pendingActionId) => {
       captureClientError(err, { scope: "receipt.undo", pendingActionId });
       toast("Could not create undo proposal. Please try again.", "error");
-    } finally {
+    },
+    onSettled: (_data, _err, pendingActionId) => {
       setUndoLoading((prev) => ({ ...prev, [pendingActionId]: false }));
-    }
+    },
+  });
+
+  const handleUndo = (pendingActionId: string) => {
+    if (undoLoading[pendingActionId]) return;
+    undoMutation.mutate(pendingActionId);
   };
 
   if (loading) {
@@ -127,7 +132,7 @@ function ReceiptView() {
               <p className="text-xs text-stone-500">{formatReceiptDate(receipt.date)}</p>
               <button
                 type="button"
-                onClick={load}
+                onClick={() => receiptQuery.refetch()}
                 className="mt-2 h-8 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800"
               >
                 Refresh
