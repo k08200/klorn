@@ -132,7 +132,7 @@ export function getFileConversionCapabilities(): FileConversionCapability[] {
         label: suffix,
         mode: "external",
         available: !!config,
-        description: `PDF 도면을 ${suffix} CAD 파일로 변환합니다.`,
+        description: `Convert PDF drawings into ${suffix} CAD files.`,
       };
     }
     if (isRasterTarget(target)) {
@@ -142,7 +142,7 @@ export function getFileConversionCapabilities(): FileConversionCapability[] {
         label: target.toUpperCase(),
         mode: "external",
         available: !!config,
-        description: `이미지 파일을 ${target.toUpperCase()} 형식으로 변환합니다.`,
+        description: `Convert images to ${target.toUpperCase()} format.`,
       };
     }
     if (target === "pdf" || target === "docx" || target === "xlsx") {
@@ -153,8 +153,8 @@ export function getFileConversionCapabilities(): FileConversionCapability[] {
         mode: "builtin",
         available: true,
         description: hasLayoutEngine
-          ? `${target.toUpperCase()} 변환은 원본 레이아웃 보존 엔진을 우선 사용하고, 불가하면 내장 보고서 변환으로 처리합니다.`
-          : `${builtinDescription(target)} 원본 레이아웃 보존은 LibreOffice/soffice 연결 시 우선 적용됩니다.`,
+          ? `${target.toUpperCase()} conversion prefers the layout-preserving engine and falls back to the built-in report renderer.`
+          : `${builtinDescription(target)} Connect LibreOffice/soffice to preserve the original layout.`,
       };
     }
     return {
@@ -192,9 +192,9 @@ export function getFileConversionEngineStatus(): FileConversionEngineStatus[] {
         { target: "xlsx", available: !!office },
       ],
       detail: office
-        ? "원본 문서 레이아웃 보존 변환을 우선 시도합니다."
-        : "내장 보고서 변환만 사용 중입니다.",
-      setupHint: "LibreOffice/soffice를 설치하거나 EVE_LIBREOFFICE_BIN을 설정하세요.",
+        ? "Layout-preserving conversion is attempted first."
+        : "Only the built-in report renderer is active.",
+      setupHint: "Install LibreOffice/soffice or set EVE_LIBREOFFICE_BIN.",
     },
     {
       id: "image-raster",
@@ -219,9 +219,9 @@ export function getFileConversionEngineStatus(): FileConversionEngineStatus[] {
       ],
       detail:
         png || jpg || webp
-          ? "이미지 재인코딩 변환을 실행할 수 있습니다."
-          : "같은 포맷 보존만 가능합니다.",
-      setupHint: "ImageMagick magick을 설치하거나 EVE_IMAGE_CONVERTER_BIN을 설정하세요.",
+          ? "Image re-encoding is available."
+          : "Only identity (same-format) conversion is available.",
+      setupHint: "Install ImageMagick (magick) or set EVE_IMAGE_CONVERTER_BIN.",
     },
     {
       id: "cad-dwg",
@@ -233,12 +233,11 @@ export function getFileConversionEngineStatus(): FileConversionEngineStatus[] {
       targets: ["dwg"],
       targetStatuses: [{ target: "dwg", available: dwgAvailable }],
       detail: dwg
-        ? "DWG 전용 변환 엔진이 연결되어 있습니다."
+        ? "A dedicated DWG converter is connected."
         : dwgAvailable
-          ? "PDF→DXF→DWG 후처리 파이프라인이 연결되어 있습니다."
-          : "DWG 변환 엔진 또는 DXF→DWG 후처리 엔진이 아직 없습니다.",
-      setupHint:
-        "ODA File Converter를 설치하거나 EVE_DXF_TO_DWG_BIN 또는 EVE_PDF_TO_DWG_BIN을 설정하세요.",
+          ? "PDF→DXF→DWG post-processing pipeline is connected."
+          : "No DWG converter or DXF→DWG post-processor is configured.",
+      setupHint: "Install ODA File Converter or set EVE_DXF_TO_DWG_BIN / EVE_PDF_TO_DWG_BIN.",
     },
     {
       id: "cad-dxf",
@@ -249,8 +248,8 @@ export function getFileConversionEngineStatus(): FileConversionEngineStatus[] {
       executable: dxf?.bin ?? null,
       targets: ["dxf"],
       targetStatuses: [{ target: "dxf", available: !!dxf }],
-      detail: dxf ? "DXF 변환 엔진이 연결되어 있습니다." : "DXF 변환 엔진이 아직 없습니다.",
-      setupHint: "pstoedit을 설치하거나 EVE_PDF_TO_DXF_BIN을 설정하세요.",
+      detail: dxf ? "DXF converter is connected." : "No DXF converter is configured.",
+      setupHint: "Install pstoedit or set EVE_PDF_TO_DXF_BIN.",
     },
   ];
 }
@@ -272,23 +271,28 @@ export async function runFileConversionQualitySuite(): Promise<FileConversionQua
   ];
   const scenarios = await Promise.all([
     ...builtinTargets.map((target) => runBuiltinQualityScenario(target)),
-    runPassthroughQualityScenario("image-png-pass", "PNG 원본 보존", "png"),
-    runPassthroughQualityScenario("image-jpg-pass", "JPG 원본 보존", "jpg"),
-    runPassthroughQualityScenario("image-webp-pass", "WEBP 원본 보존", "webp"),
-    runImageReencodeScenario("image-svg-webp", "SVG→WEBP 실제 재인코딩", "webp"),
+    runPassthroughQualityScenario("image-png-pass", "PNG identity", "png"),
+    runPassthroughQualityScenario("image-jpg-pass", "JPG identity", "jpg"),
+    runPassthroughQualityScenario("image-webp-pass", "WEBP identity", "webp"),
+    runImageReencodeScenario("image-svg-webp", "SVG → WEBP re-encode", "webp"),
     runLayoutEngineScenario(),
     runDxfEngineScenario(),
     runDwgPipelineScenario(),
     runEngineReadinessScenario(
       "layout-engine",
-      "원본 레이아웃 보존 엔진",
+      "Layout-preserving engine",
       "layout",
       readOfficeConverterConfig(),
     ),
-    runEngineReadinessScenario("cad-dwg-engine", "PDF→DWG 엔진", "cad", readDwgReadinessConfig()),
+    runEngineReadinessScenario(
+      "cad-dwg-engine",
+      "PDF → DWG engine",
+      "cad",
+      readDwgReadinessConfig(),
+    ),
     runEngineReadinessScenario(
       "cad-dxf-engine",
-      "PDF→DXF 엔진",
+      "PDF → DXF engine",
       "cad",
       readExternalConverterConfig("dxf"),
     ),
@@ -339,48 +343,48 @@ export function recommendConversionTargets(input: {
       analysisStatus: "",
       analysisError: null,
     });
-    if (source === "png") push("png", "원본 이미지 포맷을 보존합니다.", 100);
-    else if (source === "jpeg") push("jpg", "원본 이미지 포맷을 보존합니다.", 100);
-    else if (source === "webp") push("webp", "원본 이미지 포맷을 보존합니다.", 100);
-    push("pdf", "이미지를 검토용 PDF 보고서로 묶습니다.", 70);
-    push("svg", "이미지 메타데이터를 요약 카드로 저장합니다.", 55);
+    if (source === "png") push("png", "Preserves the original image format.", 100);
+    else if (source === "jpeg") push("jpg", "Preserves the original image format.", 100);
+    else if (source === "webp") push("webp", "Preserves the original image format.", 100);
+    push("pdf", "Bundles the image into a review-ready PDF report.", 70);
+    push("svg", "Stores image metadata as a summary card.", 55);
     return recommendations.sort((a, b) => b.priority - a.priority);
   }
 
   if (mime.includes("spreadsheet") || /\.(xlsx|xls|csv|tsv)$/i.test(lower)) {
-    push("xlsx", "표 형식을 유지하기 좋습니다.", 100);
-    push("csv", "다른 시스템으로 가져가기 좋습니다.", 90);
-    push("json", "구조화 데이터 연동에 적합합니다.", 70);
+    push("xlsx", "Keeps tabular structure intact.", 100);
+    push("csv", "Easy to import into other systems.", 90);
+    push("json", "Best for structured data integrations.", 70);
     return recommendations.sort((a, b) => b.priority - a.priority);
   }
 
   if (mime.includes("pdf") || lower.endsWith(".pdf")) {
-    push("pdf", "검토용 PDF 보고서로 유지합니다.", 90);
-    push("docx", "추출 내용을 편집 가능한 문서로 옮깁니다.", 80);
-    if (input.extractionStatus === "readable") push("txt", "PDF 텍스트 레이어를 보존합니다.", 75);
-    push("dwg", "도면 PDF라면 CAD 변환 후보입니다.", 60);
-    push("dxf", "도면 교환 형식이 필요할 때 사용합니다.", 55);
+    push("pdf", "Keeps a review-ready PDF report.", 90);
+    push("docx", "Moves extracted content into an editable document.", 80);
+    if (input.extractionStatus === "readable") push("txt", "Preserves the PDF text layer.", 75);
+    push("dwg", "CAD-conversion candidate for engineering drawings.", 60);
+    push("dxf", "Use when a drawing-exchange format is required.", 55);
     return recommendations.sort((a, b) => b.priority - a.priority);
   }
 
   if (mime.includes("word") || /\.(docx|doc|hwp|hwpx|rtf)$/i.test(lower)) {
-    push("docx", "편집 가능한 문서로 유지합니다.", 100);
-    push("pdf", "공유용 문서로 내보내기 좋습니다.", 85);
-    push("md", "내용을 가볍게 정리하기 좋습니다.", 70);
-    push("txt", "본문만 추출합니다.", 60);
+    push("docx", "Keep as an editable document.", 100);
+    push("pdf", "Good for sharing as a finished document.", 85);
+    push("md", "Light option for tidied-up content.", 70);
+    push("txt", "Extracts plain body text only.", 60);
     return recommendations.sort((a, b) => b.priority - a.priority);
   }
 
   if (input.extractionStatus === "readable" || /\.(txt|md|json|xml|html|yaml|yml)$/i.test(lower)) {
-    push("md", "읽기 좋은 요약 문서로 변환합니다.", 95);
-    push("pdf", "공유용 보고서로 저장합니다.", 85);
-    push("json", "구조화 결과가 필요할 때 적합합니다.", 75);
-    push("txt", "본문만 보존합니다.", 70);
+    push("md", "Reformats into a readable summary.", 95);
+    push("pdf", "Saves as a shareable report.", 85);
+    push("json", "Best when structured output is required.", 75);
+    push("txt", "Preserves the body text only.", 70);
     return recommendations.sort((a, b) => b.priority - a.priority);
   }
 
-  push("pdf", "검토용 보고서로 저장합니다.", 70);
-  push("json", "메타데이터와 추출 결과를 보존합니다.", 60);
+  push("pdf", "Saves as a review-ready report.", 70);
+  push("json", "Preserves metadata and extracted content.", 60);
   return recommendations.sort((a, b) => b.priority - a.priority);
 }
 
@@ -408,7 +412,7 @@ async function runQualityScenario(
       label,
       category,
       status: "fail",
-      detail: err instanceof Error ? err.message : "품질 테스트가 실패했습니다.",
+      detail: err instanceof Error ? err.message : "Quality test failed.",
       durationMs: Date.now() - startedAt,
     };
   }
@@ -419,7 +423,7 @@ function runBuiltinQualityScenario(
 ): Promise<FileConversionQualityScenarioResult> {
   return runQualityScenario(
     `builtin-${target}`,
-    `${target.toUpperCase()} 내장 변환`,
+    `${target.toUpperCase()} built-in conversion`,
     "builtin",
     async () => {
       const attachment = qualityAttachment(
@@ -427,14 +431,14 @@ function runBuiltinQualityScenario(
           ? {
               filename: "applicants.csv",
               mimeType: "text/csv",
-              contentText: "name,role\n김하나,배우\n박도윤,모델",
+              contentText: "name,role\nHana Kim,Actor\nDoyoon Park,Model",
             }
           : { filename: "actor-profile.txt", mimeType: "text/plain" },
       );
       const converted = await convertEmailAttachment({ target, attachment });
       assertConvertedOutput(target, converted.buffer);
       return {
-        detail: `${target.toUpperCase()} 샘플 변환이 정상 출력됩니다.`,
+        detail: `${target.toUpperCase()} sample conversion produced valid output.`,
         outputBytes: converted.buffer.length,
       };
     },
@@ -457,9 +461,9 @@ function runPassthroughQualityScenario(
       }),
     });
     if (!converted.buffer.equals(source))
-      throw new Error("원본 이미지 바이트가 보존되지 않았습니다.");
+      throw new Error("Original image bytes were not preserved.");
     return {
-      detail: "같은 이미지 포맷은 원본 바이트를 보존합니다.",
+      detail: "Identity conversion preserves the original bytes.",
       outputBytes: converted.buffer.length,
     };
   });
@@ -471,7 +475,7 @@ function runImageReencodeScenario(
   target: "png" | "jpg" | "webp",
 ): Promise<FileConversionQualityScenarioResult> | FileConversionQualityScenarioResult {
   if (!readImageConverterConfig(target)) {
-    return blockedQualityScenario(id, label, "image", "이미지 재인코딩 엔진 연결이 필요합니다.");
+    return blockedQualityScenario(id, label, "image", "An image re-encoding engine is required.");
   }
   return runQualityScenario(id, label, "image", async () => {
     const converted = await convertEmailAttachment({
@@ -484,7 +488,7 @@ function runImageReencodeScenario(
     });
     assertConvertedOutput(target, converted.buffer);
     return {
-      detail: `ImageMagick 경로로 SVG→${target.toUpperCase()} 변환이 실행됩니다.`,
+      detail: `ImageMagick path runs the SVG → ${target.toUpperCase()} conversion.`,
       outputBytes: converted.buffer.length,
     };
   });
@@ -496,30 +500,35 @@ function runLayoutEngineScenario():
   if (!readOfficeConverterConfig()) {
     return blockedQualityScenario(
       "layout-rtf-pdf",
-      "RTF→PDF 레이아웃 보존 변환",
+      "RTF → PDF layout-preserving conversion",
       "layout",
-      "LibreOffice/soffice 연결이 필요합니다.",
+      "LibreOffice/soffice must be connected.",
     );
   }
-  return runQualityScenario("layout-rtf-pdf", "RTF→PDF 레이아웃 보존 변환", "layout", async () => {
-    const source = Buffer.from(
-      "{\\rtf1\\ansi\\deff0\\b EVE Profile\\b0\\par Name: Hana Kim\\par Role: Actor\\par}",
-      "utf-8",
-    );
-    const converted = await convertEmailAttachment({
-      target: "pdf",
-      sourceBuffer: source,
-      attachment: qualityAttachment({
-        filename: "layout-profile.rtf",
-        mimeType: "application/rtf",
-      }),
-    });
-    assertConvertedOutput("pdf", converted.buffer);
-    return {
-      detail: "LibreOffice 경로로 원본 문서 레이아웃 변환이 실행됩니다.",
-      outputBytes: converted.buffer.length,
-    };
-  });
+  return runQualityScenario(
+    "layout-rtf-pdf",
+    "RTF → PDF layout-preserving conversion",
+    "layout",
+    async () => {
+      const source = Buffer.from(
+        "{\\rtf1\\ansi\\deff0\\b EVE Profile\\b0\\par Name: Hana Kim\\par Role: Actor\\par}",
+        "utf-8",
+      );
+      const converted = await convertEmailAttachment({
+        target: "pdf",
+        sourceBuffer: source,
+        attachment: qualityAttachment({
+          filename: "layout-profile.rtf",
+          mimeType: "application/rtf",
+        }),
+      });
+      assertConvertedOutput("pdf", converted.buffer);
+      return {
+        detail: "LibreOffice path runs the layout-preserving conversion.",
+        outputBytes: converted.buffer.length,
+      };
+    },
+  );
 }
 
 function runDxfEngineScenario():
@@ -528,21 +537,21 @@ function runDxfEngineScenario():
   if (!readExternalConverterConfig("dxf")) {
     return blockedQualityScenario(
       "cad-pdf-dxf",
-      "PDF→DXF 실제 변환",
+      "PDF → DXF live conversion",
       "cad",
-      "PDF→DXF 엔진 연결이 필요합니다.",
+      "A PDF → DXF engine must be connected.",
     );
   }
-  return runQualityScenario("cad-pdf-dxf", "PDF→DXF 실제 변환", "cad", async () => {
+  return runQualityScenario("cad-pdf-dxf", "PDF → DXF live conversion", "cad", async () => {
     const pdf = await convertEmailAttachment({ target: "pdf", attachment: qualityAttachment() });
     const converted = await convertEmailAttachment({
       target: "dxf",
       sourceBuffer: pdf.buffer,
       attachment: qualityAttachment({ filename: "floor-plan.pdf", mimeType: "application/pdf" }),
     });
-    if (converted.buffer.length === 0) throw new Error("DXF 결과가 비어 있습니다.");
+    if (converted.buffer.length === 0) throw new Error("DXF output is empty.");
     return {
-      detail: "pstoedit 경로로 PDF→DXF 변환이 실행됩니다.",
+      detail: "pstoedit path runs the PDF → DXF conversion.",
       outputBytes: converted.buffer.length,
     };
   });
@@ -554,21 +563,21 @@ function runDwgPipelineScenario():
   if (!readDwgReadinessConfig()) {
     return blockedQualityScenario(
       "cad-pdf-dwg-pipeline",
-      "PDF→DXF→DWG 파이프라인",
+      "PDF → DXF → DWG pipeline",
       "cad",
-      "DWG 전용 엔진 또는 DXF→DWG 후처리 엔진 연결이 필요합니다.",
+      "A dedicated DWG engine or a DXF → DWG post-processor must be connected.",
     );
   }
-  return runQualityScenario("cad-pdf-dwg-pipeline", "PDF→DXF→DWG 파이프라인", "cad", async () => {
+  return runQualityScenario("cad-pdf-dwg-pipeline", "PDF → DXF → DWG pipeline", "cad", async () => {
     const pdf = await convertEmailAttachment({ target: "pdf", attachment: qualityAttachment() });
     const converted = await convertEmailAttachment({
       target: "dwg",
       sourceBuffer: pdf.buffer,
       attachment: qualityAttachment({ filename: "floor-plan.pdf", mimeType: "application/pdf" }),
     });
-    if (converted.buffer.length === 0) throw new Error("DWG 결과가 비어 있습니다.");
+    if (converted.buffer.length === 0) throw new Error("DWG output is empty.");
     return {
-      detail: "PDF→DXF→DWG 파이프라인이 실제 실행됩니다.",
+      detail: "PDF → DXF → DWG pipeline ran end to end.",
       outputBytes: converted.buffer.length,
     };
   });
@@ -586,8 +595,8 @@ function runEngineReadinessScenario(
     category,
     status: config ? "pass" : "blocked",
     detail: config
-      ? `${config.bin} 실행 경로가 연결되어 있습니다.`
-      : "외부 변환 엔진 연결이 필요합니다.",
+      ? `${config.bin} executable is connected.`
+      : "An external conversion engine must be connected.",
     durationMs: 0,
   };
 }
@@ -602,24 +611,24 @@ function blockedQualityScenario(
 }
 
 function assertConvertedOutput(target: AttachmentConversionTarget, buffer: Buffer): void {
-  if (buffer.length === 0) throw new Error("결과 파일이 비어 있습니다.");
+  if (buffer.length === 0) throw new Error("Output file is empty.");
   if (target === "pdf" && buffer.subarray(0, 5).toString("utf-8") !== "%PDF-") {
-    throw new Error("PDF 시그니처가 없습니다.");
+    throw new Error("PDF signature missing.");
   }
   if (
     (target === "docx" || target === "xlsx") &&
     buffer.subarray(0, 4).toString("hex") !== "504b0304"
   ) {
-    throw new Error(`${target.toUpperCase()} ZIP 시그니처가 없습니다.`);
+    throw new Error(`${target.toUpperCase()} ZIP signature missing.`);
   }
   if (target === "svg" && !buffer.toString("utf-8", 0, 200).includes("<svg")) {
-    throw new Error("SVG 마크업이 없습니다.");
+    throw new Error("SVG markup missing.");
   }
   if (target === "webp" && buffer.subarray(0, 4).toString("utf-8") !== "RIFF") {
-    throw new Error("WEBP RIFF 시그니처가 없습니다.");
+    throw new Error("WEBP RIFF signature missing.");
   }
   if (target === "png" && buffer.subarray(0, 4).toString("hex") !== "89504e47") {
-    throw new Error("PNG 시그니처가 없습니다.");
+    throw new Error("PNG signature missing.");
   }
 }
 
@@ -642,12 +651,12 @@ function qualityAttachment(
     filename: "actor-profile.txt",
     mimeType: "text/plain",
     size: 128,
-    contentText: "이름: 김하나\n역할: 배우\n연락처: 010-1234-5678\n경력: 독립영화 2편",
-    summary: "배우 지원자 프로필",
-    keyPoints: ["배우 지원", "연락처 포함", "경력 포함"],
+    contentText: "Name: Hana Kim\nRole: Actor\nContact: 010-1234-5678\nExperience: 2 indie films",
+    summary: "Actor applicant profile",
+    keyPoints: ["Actor application", "Contact included", "Experience included"],
     extractedFields: {
-      name: "김하나",
-      role: "배우",
+      name: "Hana Kim",
+      role: "Actor",
       phone: "010-1234-5678",
     },
     category: "profile",
@@ -731,7 +740,11 @@ export async function convertEmailAttachment(input: {
     case "dxf":
       return convertPdfToCad(input.attachment, input.target, input.sourceBuffer);
     default:
-      throw new FileConversionError("unsupported_target", "지원하지 않는 변환 형식이에요.", 400);
+      throw new FileConversionError(
+        "unsupported_target",
+        "This conversion target is not supported.",
+        400,
+      );
   }
 }
 
@@ -740,7 +753,7 @@ function buildTextConversion(attachment: AttachmentForConversion): ConvertedAtta
   if (!text) {
     throw new FileConversionError(
       "no_extracted_text",
-      "이 파일에는 변환할 수 있는 추출 텍스트가 아직 없어요. 먼저 첨부 분석 또는 OCR을 실행해 주세요.",
+      "This file has no extracted text yet. Run attachment analysis or OCR first.",
       422,
     );
   }
@@ -1055,7 +1068,7 @@ async function tryLayoutPreservingDocumentConversion(
     if (!outputPath) {
       throw new FileConversionError(
         "converter_failed",
-        "레이아웃 보존 변환기는 실행됐지만 결과 파일을 만들지 못했어요.",
+        "The layout-preserving converter ran but produced no output file.",
         500,
       );
     }
@@ -1077,14 +1090,14 @@ async function convertImageFormat(
   if (!isImageAttachment(attachment)) {
     throw new FileConversionError(
       "unsupported_source",
-      "이미지 변환은 이미지 원본만 지원해요.",
+      "Image conversion supports only image sources.",
       415,
     );
   }
   if (!sourceBuffer || sourceBuffer.length === 0) {
     throw new FileConversionError(
       "missing_source",
-      "이미지 변환을 위해 원본 파일이 필요해요.",
+      "Image conversion requires the original file.",
       422,
     );
   }
@@ -1103,8 +1116,8 @@ async function convertImageFormat(
     throw new FileConversionError(
       "converter_unavailable",
       [
-        `${sourceFormat?.toUpperCase() ?? "IMAGE"}→${target.toUpperCase()} 이미지 변환 엔진이 아직 서버에 연결되지 않았어요.`,
-        `ImageMagick 같은 변환기를 설치한 뒤 EVE_IMAGE_CONVERTER_BIN 또는 EVE_IMAGE_TO_${target.toUpperCase()}_BIN 환경변수를 설정하면 실제 재인코딩됩니다.`,
+        `${sourceFormat?.toUpperCase() ?? "IMAGE"} → ${target.toUpperCase()} image converter is not connected on the server yet.`,
+        `Install a converter like ImageMagick and set EVE_IMAGE_CONVERTER_BIN or EVE_IMAGE_TO_${target.toUpperCase()}_BIN to enable real re-encoding.`,
       ].join(" "),
       501,
     );
@@ -1138,14 +1151,14 @@ async function convertPdfToCad(
   if (!isPdfAttachment(attachment)) {
     throw new FileConversionError(
       "unsupported_source",
-      "현재 CAD 변환은 PDF 원본만 지원해요.",
+      "CAD conversion currently supports PDF sources only.",
       415,
     );
   }
   if (!sourceBuffer || sourceBuffer.length === 0) {
     throw new FileConversionError(
       "missing_source",
-      "CAD 변환을 위해 원본 PDF 파일이 필요해요.",
+      "CAD conversion requires the original PDF file.",
       422,
     );
   }
@@ -1157,10 +1170,10 @@ async function convertPdfToCad(
     throw new FileConversionError(
       "converter_unavailable",
       [
-        `PDF→${target.toUpperCase()} 변환 엔진이 아직 서버에 연결되지 않았어요.`,
+        `PDF → ${target.toUpperCase()} converter is not connected on the server yet.`,
         target === "dwg"
-          ? "EVE_PDF_TO_DWG_BIN을 설정하거나 ODA File Converter를 설치한 뒤 EVE_DXF_TO_DWG_BIN을 설정하면 PDF→DXF→DWG 파이프라인으로 생성합니다."
-          : "EVE_PDF_TO_DXF_BIN 환경변수를 설정하면 이 버튼이 실제 DXF 파일을 생성합니다.",
+          ? "Set EVE_PDF_TO_DWG_BIN, or install ODA File Converter and set EVE_DXF_TO_DWG_BIN to run the PDF → DXF → DWG pipeline."
+          : "Set EVE_PDF_TO_DXF_BIN to make this button produce a real DXF file.",
       ].join(" "),
       501,
     );
@@ -1264,7 +1277,7 @@ async function runDxfToDwgConverter(
   if (!dwgPath) {
     throw new FileConversionError(
       "converter_failed",
-      "DXF→DWG 후처리 엔진은 실행됐지만 DWG 결과 파일을 만들지 못했어요.",
+      "The DXF → DWG post-processor ran but produced no DWG output.",
       500,
     );
   }
@@ -1331,7 +1344,7 @@ function readTemplateConverterConfig(
   } catch (err) {
     throw new FileConversionError(
       "converter_misconfigured",
-      err instanceof Error ? err.message : "변환기 인자 설정이 잘못됐어요.",
+      err instanceof Error ? err.message : "Converter arguments are misconfigured.",
       500,
     );
   }
@@ -1352,7 +1365,7 @@ function runExternalConverter(bin: string, args: string[]): Promise<void> {
       reject(
         new FileConversionError(
           "converter_timeout",
-          `변환기가 ${Math.round(timeoutMs / 1000)}초 안에 완료되지 않았어요.`,
+          `The converter did not finish within ${Math.round(timeoutMs / 1000)} seconds.`,
           504,
         ),
       );
@@ -1374,7 +1387,7 @@ function runExternalConverter(bin: string, args: string[]): Promise<void> {
       reject(
         new FileConversionError(
           "converter_failed",
-          (stderr || `변환기가 종료 코드 ${code}로 실패했어요.`).slice(0, 700),
+          (stderr || `The converter exited with code ${code}.`).slice(0, 700),
           500,
         ),
       );
@@ -1569,37 +1582,37 @@ function withExtension(filename: string, extension: string): string {
 function builtinDescription(target: AttachmentConversionTarget): string {
   switch (target) {
     case "txt":
-      return "추출 텍스트만 저장합니다.";
+      return "Saves the extracted text only.";
     case "md":
-      return "요약, 필드, 본문을 Markdown 보고서로 저장합니다.";
+      return "Saves the summary, fields, and body as a Markdown report.";
     case "json":
-      return "분석 결과와 추출 텍스트를 JSON으로 저장합니다.";
+      return "Saves the analysis result and extracted text as JSON.";
     case "yaml":
-      return "분석 결과와 추출 텍스트를 YAML로 저장합니다.";
+      return "Saves the analysis result and extracted text as YAML.";
     case "csv":
-      return "파일 메타데이터와 추출 필드를 CSV 표로 저장합니다.";
+      return "Saves file metadata and extracted fields as a CSV table.";
     case "html":
-      return "브라우저에서 볼 수 있는 HTML 보고서로 저장합니다.";
+      return "Saves a browser-viewable HTML report.";
     case "xml":
-      return "연동용 XML 문서로 저장합니다.";
+      return "Saves an integration-ready XML document.";
     case "svg":
-      return "요약 보고서를 SVG 이미지로 저장합니다.";
+      return "Saves the summary report as an SVG image.";
     case "rtf":
-      return "리치 텍스트 문서로 저장합니다.";
+      return "Saves as a rich text document.";
     case "pdf":
-      return "추출 내용을 간단한 PDF 보고서로 저장합니다.";
+      return "Saves the extracted content as a simple PDF report.";
     case "docx":
-      return "추출 내용을 Word 문서로 저장합니다.";
+      return "Saves the extracted content as a Word document.";
     case "xlsx":
-      return "추출 필드와 요약을 Excel 문서로 저장합니다.";
+      return "Saves extracted fields and summary as an Excel document.";
     case "png":
-      return "이미지를 PNG 형식으로 변환합니다.";
+      return "Converts the image to PNG.";
     case "jpg":
-      return "이미지를 JPG 형식으로 변환합니다.";
+      return "Converts the image to JPG.";
     case "webp":
-      return "이미지를 WEBP 형식으로 변환합니다.";
+      return "Converts the image to WEBP.";
     default:
-      return "외부 변환 엔진이 필요한 포맷입니다.";
+      return "Requires an external conversion engine.";
   }
 }
 
