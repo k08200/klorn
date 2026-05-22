@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { EveSignalField } from "../../components/brand-visuals";
@@ -296,9 +297,12 @@ function EventRow({ event }: { event: CalendarEvent }) {
           {timeLabel}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium leading-snug text-stone-100">
+          <Link
+            href={`/calendar/${event.id}`}
+            className="text-sm font-medium leading-snug text-stone-100 hover:text-amber-200"
+          >
             {event.title || "Untitled"}
-          </p>
+          </Link>
           {event.location && (
             <p className="mt-0.5 truncate text-xs text-stone-500">{event.location}</p>
           )}
