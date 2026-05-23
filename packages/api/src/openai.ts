@@ -19,7 +19,10 @@ import {
   type Provider,
   type ProviderCredentials,
 } from "./providers/index.js";
+import { checkAndRecordUserCall, UserRateLimitedError } from "./quota-limiter.js";
 import { getDefaultAgentModel, getDefaultChatModel, isModelAllowedForPlan } from "./stripe.js";
+
+export { UserRateLimitedError };
 
 /**
  * Back-compat export — some legacy call sites import `openai` directly.
@@ -99,8 +102,8 @@ function buildExhaustedMessage(chain: Provider[], lastError: unknown): string {
  *
  *   OpenRouter (caller's model)
  *     → 402 insufficient_credits → OpenRouter FALLBACK_MODEL (:free)
- *       → 403 weekly key limit   → Gemini (separate key, separate quota)
- *         → all fail             → AllProvidersExhaustedError (Korean)
+ *       → 403/429 daily key limit → Gemini (separate key, separate quota)
+ *         → all fail              → AllProvidersExhaustedError
  *
  * Streaming and non-streaming calls are both supported.
  */
@@ -126,6 +129,13 @@ export async function createCompletion(
   const chain = getProviderChain(options.credentials);
   if (chain.length === 0) {
     throw new Error("No LLM providers configured — set OPENROUTER_API_KEY and/or GEMINI_API_KEY");
+  }
+
+  // Per-user RPM + daily-cap gate: trip before the call so a runaway loop
+  // doesn't burn upstream provider quota. Background SYSTEM jobs pass no
+  // userId and are paced by their scheduler instead.
+  if (options.userId) {
+    checkAndRecordUserCall(options.userId);
   }
 
   // Daily-cost gate: enforce BEFORE the call so we don't burn budget twice
@@ -196,7 +206,7 @@ export async function createCompletion(
         }
       }
 
-      // 403 weekly key limit: this provider is done — move to next provider
+      // 403/429 daily key limit: this provider is done — move to next provider
       if (isKeyLimitError(err)) {
         markKeyLimited(provider.quotaKey);
         continue;

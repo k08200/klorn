@@ -5,10 +5,10 @@
  *   1. OpenRouter (primary)   — OpenAI-compatible proxy with :free models
  *   2. Gemini     (secondary) — Google AI Studio free tier (1500 req/day)
  *
- * Failover happens in createCompletion() when OpenRouter returns a 403
- * "Key limit exceeded (weekly limit)" — the weekly limit is per-KEY, so
- * switching to another :free model on the same OpenRouter key does not help.
- * Gemini uses a completely separate key + quota, so it actually recovers.
+ * Failover happens in createCompletion() when OpenRouter returns a 403/429
+ * "Key limit exceeded" — the limit is per-KEY (daily, resets at UTC 00:00),
+ * so switching to another :free model on the same OpenRouter key does not
+ * help. Gemini uses a completely separate key + quota, so it recovers.
  *
  * OpenRouter goes through the OpenAI SDK (Bearer-auth). Gemini is called via
  * a native adapter (URL-param auth) — newer `AQ.`-prefix Google keys are
@@ -121,7 +121,7 @@ if (!providers.openrouter && !providers.gemini) {
   }
   if (!providers.gemini) {
     console.warn(
-      "[providers] GEMINI_API_KEY not set — no secondary provider, weekly OpenRouter limits will surface as hard errors",
+      "[providers] GEMINI_API_KEY not set — no secondary provider, OpenRouter daily limits will surface as hard errors until UTC midnight",
     );
   } else {
     console.log("[providers] Gemini secondary provider active (daily quota fallback)");
