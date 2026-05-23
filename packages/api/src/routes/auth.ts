@@ -33,34 +33,6 @@ const authHeaderSchema = {
   },
 } as const;
 
-// Ring buffer of recent OAuth callback attempts — for self-diagnose endpoint.
-// Stored in module scope (per-instance), reset on restart. No secrets.
-type OAuthCallbackRecord = {
-  ts: string;
-  hasCode: boolean;
-  stateEmail: string;
-  outcome:
-    | "tokens_received"
-    | "no_access_token"
-    | "missing_code"
-    | "invalid_state"
-    | "exception"
-    | "success_login"
-    | "success_integration";
-  errorName?: string;
-  errorMessage?: string;
-  hasAccessToken?: boolean;
-  hasRefreshToken?: boolean;
-  hasIdToken?: boolean;
-  tokenType?: string;
-  scope?: string;
-};
-const recentOAuthCallbacks: OAuthCallbackRecord[] = [];
-function recordOAuthCallback(entry: OAuthCallbackRecord): void {
-  recentOAuthCallbacks.push(entry);
-  if (recentOAuthCallbacks.length > 20) recentOAuthCallbacks.shift();
-}
-
 /**
  * Server-side constant — not user-controlled.
  * getUserId() extracts from a verified JWT; this comparison is safe.
@@ -622,53 +594,9 @@ export function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Invalid or expired OAuth state" });
     }
 
-    {
-      const clientIdLen = (process.env.GOOGLE_CLIENT_ID || "").length;
-      const clientSecretLen = (process.env.GOOGLE_CLIENT_SECRET || "").length;
-      const urlInfo = (envKey: string) => {
-        const v = process.env[envKey];
-        if (!v) return { unset: true } as const;
-        try {
-          const u = new URL(v);
-          return { host: u.host, path: u.pathname } as const;
-        } catch {
-          return { invalid: true, length: v.length } as const;
-        }
-      };
-      console.log("[OAUTH_DEBUG] callback received", {
-        hasCode: !!code,
-        stateEmail: statePayload.email,
-        clientIdLen,
-        clientSecretLen,
-        redirectUri: urlInfo("GOOGLE_REDIRECT_URI"),
-        webUrl: urlInfo("WEB_URL"),
-        frontendUrl: urlInfo("FRONTEND_URL"),
-      });
-    }
-
     try {
       const oauth2 = getOAuth2Client();
       const { tokens } = await oauth2.getToken(code);
-
-      console.log("[OAUTH_DEBUG] tokens received", {
-        hasAccessToken: !!tokens.access_token,
-        hasRefreshToken: !!tokens.refresh_token,
-        hasIdToken: !!tokens.id_token,
-        tokenType: tokens.token_type,
-        scope: tokens.scope,
-        expiryDate: tokens.expiry_date,
-      });
-      recordOAuthCallback({
-        ts: new Date().toISOString(),
-        hasCode: !!code,
-        stateEmail: statePayload.email,
-        outcome: "tokens_received",
-        hasAccessToken: !!tokens.access_token,
-        hasRefreshToken: !!tokens.refresh_token,
-        hasIdToken: !!tokens.id_token,
-        tokenType: tokens.token_type ?? undefined,
-        scope: tokens.scope ?? undefined,
-      });
 
       // --- Google Social Login flow (state signed with __google_login__ or __google_login_desktop__ marker) ---
       const isGoogleLogin =
@@ -677,16 +605,6 @@ export function authRoutes(app: FastifyInstance) {
       const isDesktopLogin = statePayload.email === "__google_login_desktop__";
       if (isGoogleLogin) {
         if (!tokens.access_token) {
-          console.error("[OAUTH_DEBUG] access_token missing — returning google_failed");
-          recordOAuthCallback({
-            ts: new Date().toISOString(),
-            hasCode: !!code,
-            stateEmail: statePayload.email,
-            outcome: "no_access_token",
-            hasAccessToken: false,
-            hasRefreshToken: !!tokens.refresh_token,
-            hasIdToken: !!tokens.id_token,
-          });
           return reply.redirect(`${webUrl}/login?error=google_failed`);
         }
 
@@ -835,20 +753,6 @@ export function authRoutes(app: FastifyInstance) {
       return reply.redirect(`${webUrl}/settings?google=connected`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "OAuth failed";
-      console.error("[OAUTH_DEBUG] callback caught error", {
-        message,
-        name: err instanceof Error ? err.name : undefined,
-        stack: err instanceof Error ? err.stack : undefined,
-        stateEmail: statePayload.email,
-      });
-      recordOAuthCallback({
-        ts: new Date().toISOString(),
-        hasCode: !!code,
-        stateEmail: statePayload.email,
-        outcome: "exception",
-        errorName: err instanceof Error ? err.name : undefined,
-        errorMessage: message,
-      });
       if (statePayload.email === "__google_login__") {
         return reply.redirect(`${webUrl}/login?error=${encodeURIComponent(message)}`);
       }
@@ -1222,60 +1126,6 @@ export function authRoutes(app: FastifyInstance) {
       await removeDeviceSession(auth.slice(7));
     }
     return reply.send({ success: true });
-  });
-
-  // GET /api/auth/debug/oauth-state — temporary self-diagnose endpoint
-  // Returns env presence/lengths (NO secret values), recent callback outcomes,
-  // and a freshly minted login authorize URL that bypasses any client-side caching.
-  app.get("/debug/oauth-state", async (_request, reply) => {
-    const clientIdLen = (process.env.GOOGLE_CLIENT_ID || "").length;
-    const clientId = process.env.GOOGLE_CLIENT_ID || "";
-    const clientSecretLen = (process.env.GOOGLE_CLIENT_SECRET || "").length;
-    const urlInfo = (envKey: string) => {
-      const v = process.env[envKey];
-      if (!v) return { unset: true } as const;
-      try {
-        const u = new URL(v);
-        return { host: u.host, path: u.pathname, raw: v } as const;
-      } catch {
-        return { invalid: true, length: v.length } as const;
-      }
-    };
-
-    let testLoginUrl: string | { error: string } = { error: "not_generated" };
-    try {
-      const signedState = signToken({
-        userId: "__login__",
-        email: "__google_login__",
-      });
-      testLoginUrl = getLoginAuthUrl(signedState);
-    } catch (err) {
-      testLoginUrl = {
-        error: err instanceof Error ? err.message : String(err),
-      };
-    }
-
-    return reply.send({
-      env: {
-        clientIdLen,
-        // Public-by-design — client_id is exposed in every OAuth URL anyway
-        clientIdSuffix: clientId.slice(-20),
-        clientSecretLen,
-        redirectUri: urlInfo("GOOGLE_REDIRECT_URI"),
-        webUrl: urlInfo("WEB_URL"),
-        frontendUrl: urlInfo("FRONTEND_URL"),
-        corsOrigins: process.env.CORS_ORIGINS,
-        nodeEnv: process.env.NODE_ENV,
-        renderExternalUrl: process.env.RENDER_EXTERNAL_URL,
-      },
-      server: {
-        now: new Date().toISOString(),
-        uptimeSec: Math.round(process.uptime()),
-        nodeVersion: process.version,
-      },
-      recentCallbacks: recentOAuthCallbacks,
-      testLoginUrl,
-    });
   });
 }
 
