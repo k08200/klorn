@@ -21,6 +21,8 @@ services:
         generateValue: true
       - key: OPENROUTER_API_KEY
         sync: false
+      - key: GEMINI_API_KEY
+        sync: false
       - key: FRONTEND_URL
         sync: false
       - key: WEB_URL

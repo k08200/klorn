@@ -5,6 +5,7 @@ import type {
 } from "openai/resources/chat/completions";
 import {
   FALLBACK_MODEL,
+  getProviderCooldownInfo,
   isCreditError,
   isFreeModel,
   isKeyLimitError,
@@ -68,8 +69,29 @@ export class DailyCostCapExceededError extends Error {
 export const DAILY_COST_CAP_MESSAGE =
   "You've used today's AI quota. It resets at 00:00 UTC. To unblock right now, add your own API key in Settings.";
 
-const PROVIDERS_EXHAUSTED_MESSAGE =
-  "All AI providers are exhausted right now. The free quota resets next Monday at 00:00 UTC. To unblock right now, add your own API key in Settings.";
+const PROVIDERS_EXHAUSTED_BASE =
+  "All AI providers are unavailable right now. To unblock yourself, add your own OpenRouter or Gemini key in Settings.";
+
+function formatProviderEta(info: ReturnType<typeof getProviderCooldownInfo>): string | null {
+  const until = info.keyLimitedUntil ?? info.creditRetryAt;
+  if (!until) return null;
+  return `${info.quotaKey} until ${until.toISOString()}`;
+}
+
+function buildExhaustedMessage(chain: Provider[], lastError: unknown): string {
+  const reasons = chain
+    .map((p) => formatProviderEta(getProviderCooldownInfo(p.quotaKey)))
+    .filter((line): line is string => line !== null);
+
+  const parts = [PROVIDERS_EXHAUSTED_BASE];
+  if (reasons.length > 0) {
+    parts.push(`Cooldown: ${reasons.join("; ")}.`);
+  }
+  if (lastError instanceof Error && lastError.message) {
+    parts.push(`Last error: ${lastError.message}`);
+  }
+  return parts.join(" ");
+}
 
 /**
  * Drop-in replacement for `openai.chat.completions.create()` with multi-provider
@@ -185,11 +207,7 @@ export async function createCompletion(
     }
   }
 
-  throw new AllProvidersExhaustedError(
-    lastError instanceof Error
-      ? `${PROVIDERS_EXHAUSTED_MESSAGE} (cause: ${lastError.message})`
-      : PROVIDERS_EXHAUSTED_MESSAGE,
-  );
+  throw new AllProvidersExhaustedError(buildExhaustedMessage(chain, lastError));
 }
 
 export async function createVisionCompletion(
@@ -229,9 +247,7 @@ export async function createVisionCompletion(
   }
 
   throw new AllProvidersExhaustedError(
-    lastError instanceof Error
-      ? `No AI provider is available for vision/OCR analysis. (cause: ${lastError.message})`
-      : "No AI provider is available for vision/OCR analysis.",
+    `No AI provider is available for vision/OCR analysis. ${buildExhaustedMessage(ordered, lastError)}`,
   );
 }
 

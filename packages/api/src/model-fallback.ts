@@ -106,6 +106,23 @@ export function clearFallbackState(provider?: string): void {
   console.log(`[MODEL-FALLBACK] Cleared state for: ${targets.join(", ")}`);
 }
 
+/** Read-only snapshot of why a provider quotaKey is currently unavailable */
+export interface ProviderCooldownInfo {
+  quotaKey: string;
+  creditRetryAt: Date | null;
+  keyLimitedUntil: Date | null;
+}
+
+export function getProviderCooldownInfo(quotaKey: string): ProviderCooldownInfo {
+  const s = providerState(quotaKey);
+  return {
+    quotaKey,
+    creditRetryAt:
+      s.creditExhaustedAt === null ? null : new Date(s.creditExhaustedAt + CREDIT_RETRY_AFTER_MS),
+    keyLimitedUntil: s.keyLimitedUntil === null ? null : new Date(s.keyLimitedUntil),
+  };
+}
+
 /** 402 insufficient_credits — same-provider, swap to :free model */
 export function isCreditError(error: unknown): boolean {
   const status =
@@ -143,13 +160,26 @@ export function isKeyLimitError(error: unknown): boolean {
     return true;
   }
   if (!message) return false;
+  // SDK errors often surface as `Error("429 ...")` or `Error("403 ...")` with
+  // the HTTP status prefixed into the message. Match those numerically so
+  // we don't depend on the broader phrase "provider returned error" — which
+  // also fires on invalid-model / transient 5xx errors and would otherwise
+  // flip the provider into a week-long cooldown unnecessarily.
+  if (/^\s*429\b/.test(message)) return true;
+  if (
+    /^\s*403\b/.test(message) &&
+    (message.includes("key limit") || message.includes("limit exceeded"))
+  ) {
+    return true;
+  }
   return (
     message.includes("key limit exceeded") ||
     message.includes("weekly limit") ||
     message.includes("daily limit exceeded") ||
     message.includes("rate limit") ||
+    message.includes("rate-limit") ||
     message.includes("too many requests") ||
-    message.includes("provider returned error")
+    message.includes("quota exceeded")
   );
 }
 
