@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#0a1628"/>
+
+  <!-- wordmark, top-left -->
+  <text x="80" y="200"
+        font-family="'Geist','Inter Tight',Inter,system-ui,sans-serif"
+        font-size="120" font-weight="600" letter-spacing="-0.055em" fill="#f0e9d8">klorn</text>
+
+  <!-- hero copy -->
+  <text x="80" y="380"
+        font-family="'Geist','Inter Tight',Inter,system-ui,sans-serif"
+        font-size="68" font-weight="600" letter-spacing="-0.03em" fill="#f0e9d8">The clear signal</text>
+  <text x="80" y="468"
+        font-family="'Geist','Inter Tight',Inter,system-ui,sans-serif"
+        font-size="68" font-weight="600" letter-spacing="-0.03em" fill="#f0e9d8">worth acting on.</text>
+
+  <!-- subline -->
+  <text x="80" y="560"
+        font-family="'Geist','Inter Tight',Inter,system-ui,sans-serif"
+        font-size="28" font-weight="400" letter-spacing="-0.01em" fill="#a8a29e">The approval layer for AI agents.</text>
+
+  <!-- url, bottom-right -->
+  <text x="1120" y="580" text-anchor="end"
+        font-family="'Geist','Inter Tight',Inter,system-ui,sans-serif"
+        font-size="22" font-weight="400" letter-spacing="0" fill="#78716c">klorn.ai</text>
+</svg>
