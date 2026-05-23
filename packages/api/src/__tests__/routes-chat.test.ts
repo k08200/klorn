@@ -31,7 +31,6 @@ vi.mock("../openai.js", () => ({
     },
   },
   createCompletion: createCompletionMock,
-  resolveUserChatModel: vi.fn(() => "gpt-4o-mini"),
 }));
 vi.mock("../context-compressor.js", () => ({
   compactHistory: vi.fn(async (_id: string, msgs: unknown[]) => msgs),

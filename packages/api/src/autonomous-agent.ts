@@ -64,7 +64,7 @@ import { loadMemoriesForPrompt } from "./memory.js";
 import { estimateModelCostUsd } from "./model-fallback.js";
 import { humanizeAutoExec } from "./notification-format.js";
 import type { NotifCategory } from "./notification-prefs.js";
-import { AGENT_MODEL, createCompletion, openai, resolveUserAgentModel } from "./openai.js";
+import { AGENT_MODEL, createCompletion, openai } from "./openai.js";
 import { getFeedbackPolicyContextForPrompt } from "./policy-extraction.js";
 import { sendPushNotification } from "./push.js";
 import { captureError } from "./sentry.js";
@@ -308,11 +308,7 @@ export async function runAgentForUser(
     // Load user plan and model for tool gating
     const agentUser = await prisma.user.findUnique({ where: { id: userId } });
     const userPlan = agentUser?.plan || "FREE";
-    const agentModelForUser =
-      resolveUserAgentModel(
-        (agentUser as unknown as { agentModel?: string })?.agentModel || null,
-        userPlan,
-      ) || AGENT_MODEL;
+    const agentModelForUser = AGENT_MODEL;
 
     const { analyzePatterns } = await import("./pattern-learner.js");
     const { buildTrustHintForPrompt } = await import("./trust-score.js");
