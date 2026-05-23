@@ -4,14 +4,8 @@ import { getUserId, requireAuth } from "../auth.js";
 import { encryptOptional } from "../crypto-tokens.js";
 import { db, prisma } from "../db.js";
 import { clearFallbackState } from "../model-fallback.js";
-import {
-  getEffectivePlan,
-  isModelAllowedForPlan,
-  PLAN_FEATURES,
-  PLAN_MODELS,
-  PLANS,
-  stripe,
-} from "../stripe.js";
+import { MODEL } from "../openai.js";
+import { getEffectivePlan, PLAN_FEATURES, PLANS, stripe } from "../stripe.js";
 
 function keyHash(apiKey: string | null | undefined): string | null {
   if (!apiKey) return null;
@@ -125,14 +119,15 @@ export async function billingRoutes(app: FastifyInstance) {
     };
   });
 
-  // GET /api/billing/models — Get available models for user's plan + current selection
+  // GET /api/billing/models — Report the active LLM model + BYOK key status.
+  // Klorn auto-selects the model now; this endpoint exists so the Settings
+  // page can show which model is in use and whether the user has BYOK keys
+  // attached.
   app.get("/models", async (request, reply) => {
     const userId = getUserId(request);
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return reply.code(404).send({ error: "User not found" });
 
-    const planModels = PLAN_MODELS[user.plan] || PLAN_MODELS.FREE;
-    const userFields = user as unknown as { chatModel?: string; agentModel?: string };
     const keyFields = user as unknown as {
       openRouterApiKey?: string | null;
       geminiApiKey?: string | null;
@@ -140,63 +135,29 @@ export async function billingRoutes(app: FastifyInstance) {
 
     return {
       plan: user.plan,
-      chatModels: planModels.chat,
-      agentModels: planModels.agent,
-      currentChatModel: userFields.chatModel || planModels.chat[0],
-      currentAgentModel: userFields.agentModel || planModels.agent[0] || null,
+      activeModel: MODEL,
       hasOpenRouterApiKey: !!keyFields.openRouterApiKey,
       hasGeminiApiKey: !!keyFields.geminiApiKey,
-      // Show all models across all plans (locked ones for upsell UI)
-      allModels: PLAN_MODELS,
     };
   });
 
-  // PATCH /api/billing/models — Update user's selected model and personal LLM keys
+  // PATCH /api/billing/models — Bring-your-own-key updates. The chat/agent
+  // model is no longer user-selectable; passing chatModel/agentModel is
+  // accepted but ignored to preserve old client compatibility.
   app.patch("/models", async (request, reply) => {
     const userId = getUserId(request);
-    const {
-      chatModel,
-      agentModel,
-      openRouterApiKey,
-      geminiApiKey,
-      clearOpenRouterApiKey,
-      clearGeminiApiKey,
-    } = request.body as {
-      chatModel?: string;
-      agentModel?: string | null;
-      openRouterApiKey?: string | null;
-      geminiApiKey?: string | null;
-      clearOpenRouterApiKey?: boolean;
-      clearGeminiApiKey?: boolean;
-    };
+    const { openRouterApiKey, geminiApiKey, clearOpenRouterApiKey, clearGeminiApiKey } =
+      request.body as {
+        openRouterApiKey?: string | null;
+        geminiApiKey?: string | null;
+        clearOpenRouterApiKey?: boolean;
+        clearGeminiApiKey?: boolean;
+      };
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return reply.code(404).send({ error: "User not found" });
 
     const updateData: Record<string, string | null> = {};
-
-    if (chatModel !== undefined) {
-      if (!isModelAllowedForPlan(user.plan, chatModel, "chat")) {
-        return reply.code(403).send({
-          error: `Model "${chatModel}" is not available on your ${user.plan} plan`,
-          allowedModels: PLAN_MODELS[user.plan]?.chat || [],
-        });
-      }
-      updateData.chatModel = chatModel;
-    }
-
-    if (agentModel !== undefined) {
-      if (agentModel === null) {
-        updateData.agentModel = null;
-      } else if (!isModelAllowedForPlan(user.plan, agentModel, "agent")) {
-        return reply.code(403).send({
-          error: `Agent model "${agentModel}" is not available on your ${user.plan} plan`,
-          allowedModels: PLAN_MODELS[user.plan]?.agent || [],
-        });
-      } else {
-        updateData.agentModel = agentModel;
-      }
-    }
 
     if (typeof openRouterApiKey === "string") {
       const trimmed = openRouterApiKey.trim();
@@ -213,10 +174,9 @@ export async function billingRoutes(app: FastifyInstance) {
     }
 
     if (Object.keys(updateData).length === 0) {
-      return reply.code(400).send({ error: "No model or key setting specified" });
+      return reply.code(400).send({ error: "No key setting specified" });
     }
 
-    // Use raw update to handle new fields before Prisma regenerate
     await prisma.$executeRawUnsafe(
       `UPDATE "User" SET ${Object.keys(updateData)
         .map((k, i) => `"${k}" = $${i + 2}`)
@@ -227,8 +187,6 @@ export async function billingRoutes(app: FastifyInstance) {
 
     return {
       success: true,
-      ...(updateData.chatModel !== undefined ? { chatModel: updateData.chatModel } : {}),
-      ...(updateData.agentModel !== undefined ? { agentModel: updateData.agentModel } : {}),
       hasOpenRouterApiKey:
         updateData.openRouterApiKey !== undefined
           ? !!updateData.openRouterApiKey

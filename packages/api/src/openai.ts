@@ -20,7 +20,6 @@ import {
   type ProviderCredentials,
 } from "./providers/index.js";
 import { checkAndRecordUserCall, UserRateLimitedError } from "./quota-limiter.js";
-import { getDefaultAgentModel, getDefaultChatModel, isModelAllowedForPlan } from "./stripe.js";
 
 export { UserRateLimitedError };
 
@@ -259,28 +258,6 @@ export async function createVisionCompletion(
   throw new AllProvidersExhaustedError(
     `No AI provider is available for vision/OCR analysis. ${buildExhaustedMessage(ordered, lastError)}`,
   );
-}
-
-/**
- * Resolve the chat model for a specific user.
- * Uses user's selected model if set and valid for their plan, otherwise falls back to plan default.
- */
-export function resolveUserChatModel(userChatModel: string | null, plan: string): string {
-  if (userChatModel && isModelAllowedForPlan(plan, userChatModel, "chat")) {
-    return userChatModel;
-  }
-  return getDefaultChatModel(plan);
-}
-
-/**
- * Resolve the agent model for a specific user.
- * Returns null if the plan doesn't support agent models.
- */
-export function resolveUserAgentModel(userAgentModel: string | null, plan: string): string | null {
-  if (userAgentModel && isModelAllowedForPlan(plan, userAgentModel, "agent")) {
-    return userAgentModel;
-  }
-  return getDefaultAgentModel(plan);
 }
 
 export const CHAT_SYSTEM_PROMPT = `You are Klorn's decision agent — an operating layer that turns scattered work signals into clear, inspectable decisions.

@@ -27,13 +27,8 @@ vi.mock("../stripe.js", () => ({
     tokenLimit: 100000,
     deviceLimit: 3,
   })),
-  isModelAllowedForPlan: vi.fn(() => true),
   PLANS: { PRO: { priceId: "price_pro" }, TEAM: { priceId: "price_team" } },
   PLAN_FEATURES: { FREE: new Set(["basic"]) },
-  PLAN_MODELS: {
-    FREE: { chat: ["gpt-4o-mini"], agent: [] },
-    PRO: { chat: ["gpt-4o-mini", "gpt-4o"], agent: ["gpt-4o-mini"] },
-  },
 }));
 
 vi.mock("../db.js", () => {
@@ -100,12 +95,16 @@ describe("billing routes", () => {
     await app.close();
   });
 
-  it("returns available models", async () => {
+  it("returns active model and BYOK key status", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/api/billing/models", headers: auth() });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toHaveProperty("chatModels");
-    expect(res.json()).toHaveProperty("agentModels");
+    const body = res.json();
+    expect(body).toHaveProperty("activeModel");
+    expect(body).toHaveProperty("hasOpenRouterApiKey");
+    expect(body).toHaveProperty("hasGeminiApiKey");
+    expect(body).not.toHaveProperty("chatModels");
+    expect(body).not.toHaveProperty("agentModels");
     await app.close();
   });
 

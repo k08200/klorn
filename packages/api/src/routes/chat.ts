@@ -17,7 +17,7 @@ import { recipientFromToolArgs, recordFeedback } from "../feedback.js";
 import { getUserLlmCredentials } from "../llm-credentials.js";
 import { loadMemoriesForPrompt } from "../memory.js";
 import { estimateModelCostUsd } from "../model-fallback.js";
-import { createCompletion, MODEL, resolveUserChatModel } from "../openai.js";
+import { createCompletion, MODEL } from "../openai.js";
 import { getFeedbackPolicyContextForPrompt } from "../policy-extraction.js";
 import { scheduleReminderDeliveryCheck } from "../reminder-scheduler.js";
 import { createReminder } from "../reminders.js";
@@ -549,10 +549,7 @@ export function chatRoutes(app: FastifyInstance) {
       const retryBaseTools = getToolsForPlan(!!token, retryPlan);
       const retryAllowedToolNames = new Set(retryBaseTools.map((tool) => tool.function.name));
       const tools = [...retryBaseTools, PROPOSE_ACTION_TOOL];
-      const retryChatModel = resolveUserChatModel(
-        (retryUser as unknown as { chatModel?: string })?.chatModel || null,
-        retryPlan,
-      );
+      const retryChatModel = MODEL;
       const retryCredentials = await getUserLlmCredentials(conversation.userId);
 
       // Build dynamic context for retry
@@ -888,11 +885,7 @@ export function chatRoutes(app: FastifyInstance) {
         }
       }
 
-      // Resolve per-user chat model (chatModel field added in migration, cast for type safety)
-      const userChatModel = resolveUserChatModel(
-        (user as unknown as { chatModel?: string })?.chatModel || null,
-        user?.plan || "FREE",
-      );
+      const userChatModel = MODEL;
       const userCredentials = await getUserLlmCredentials(conversation.userId);
 
       // Save user message

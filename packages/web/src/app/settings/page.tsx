@@ -124,10 +124,7 @@ interface UserProfile {
 }
 
 interface ModelSettings {
-  chatModels: string[];
-  agentModels: string[];
-  currentChatModel: string;
-  currentAgentModel: string | null;
+  activeModel: string;
   hasOpenRouterApiKey: boolean;
   hasGeminiApiKey: boolean;
 }
@@ -737,24 +734,17 @@ export default function SettingsPage() {
   const patchModelSettings = async (body: Record<string, unknown>, successMessage: string) => {
     setModelSaving(true);
     try {
-      const updated = await apiFetch<
-        Partial<ModelSettings> & {
-          success: boolean;
-          chatModel?: string;
-          agentModel?: string | null;
-        }
-      >("/api/billing/models", {
-        method: "PATCH",
-        body: JSON.stringify(body),
-      });
+      const updated = await apiFetch<Partial<ModelSettings> & { success: boolean }>(
+        "/api/billing/models",
+        {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        },
+      );
       setModelSettings((prev) =>
         prev
           ? {
               ...prev,
-              ...(updated.chatModel ? { currentChatModel: updated.chatModel } : {}),
-              ...(updated.agentModel !== undefined
-                ? { currentAgentModel: updated.agentModel ?? null }
-                : {}),
               hasOpenRouterApiKey: updated.hasOpenRouterApiKey ?? prev.hasOpenRouterApiKey,
               hasGeminiApiKey: updated.hasGeminiApiKey ?? prev.hasGeminiApiKey,
             }
@@ -764,7 +754,7 @@ export default function SettingsPage() {
       setGeminiApiKey("");
       toast(successMessage, "success");
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not save model settings.", "error");
+      toast(err instanceof Error ? err.message : "Could not save key settings.", "error");
     } finally {
       setModelSaving(false);
     }
@@ -1193,62 +1183,17 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Models */}
+        {/* API keys */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Models and API keys</h2>
+          <h2 className="text-sm font-semibold text-stone-300 mb-3">AI provider keys</h2>
           <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-5 space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="chat-model" className="block text-sm text-stone-400 mb-1">
-                  Chat model
-                </label>
-                <select
-                  id="chat-model"
-                  value={modelSettings?.currentChatModel || ""}
-                  disabled={!modelSettings || modelSaving}
-                  onChange={(e) =>
-                    patchModelSettings({ chatModel: e.target.value }, "Chat model saved.")
-                  }
-                  className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition disabled:opacity-50"
-                >
-                  {(modelSettings?.chatModels || []).map((model) => (
-                    <option key={model} value={model}>
-                      {model}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-stone-500">
-                  Free defaults stay on free models. Paid models follow plan limits.
-                </p>
-              </div>
-              <div>
-                <label htmlFor="agent-model" className="block text-sm text-stone-400 mb-1">
-                  Agent model
-                </label>
-                <select
-                  id="agent-model"
-                  value={modelSettings?.currentAgentModel || ""}
-                  disabled={
-                    !modelSettings || modelSaving || !(modelSettings.agentModels ?? []).length
-                  }
-                  onChange={(e) =>
-                    patchModelSettings({ agentModel: e.target.value || null }, "Agent model saved.")
-                  }
-                  className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition disabled:opacity-50"
-                >
-                  {(modelSettings?.agentModels || []).map((model) => (
-                    <option key={model} value={model}>
-                      {model}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-stone-500">
-                  Background runs use this model when your plan allows it.
-                </p>
-              </div>
+            <div className="text-xs text-stone-500">
+              Klorn auto-selects the model and routes between OpenRouter and Gemini for you. Active
+              model: <span className="text-stone-300">{modelSettings?.activeModel || "—"}</span>.
+              Paste your own key below to get a private quota independent of the shared pool.
             </div>
 
-            <div className="grid grid-cols-1 gap-4 border-t border-stone-800 pt-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <div className="mb-1 flex items-center justify-between gap-3">
                   <label htmlFor="openrouter-key" className="text-sm text-stone-400">
