@@ -1,11 +1,15 @@
 /**
  * Model / Provider Fallback — automatic switch to a secondary provider when
- * OpenRouter reports budget exhaustion or weekly key-limit errors.
+ * OpenRouter or Gemini reports budget exhaustion or daily key-limit errors.
  *
  * Two distinct failure modes:
  *   - 402 insufficient_credits: swap to a :free OpenRouter model
  *   - 403/429 provider quota or rate limit: swap providers entirely
  *     (the limit is per-KEY, so another :free model on the same key fails too)
+ *
+ * OpenRouter free-tier limits (2026): 20 RPM, 50 req/day (1000 with 10+ credits),
+ * shared across ALL :free models. Limits reset daily at UTC 00:00 — NOT weekly.
+ * Gemini free tier also resets daily at UTC 00:00. We treat both the same way.
  */
 
 /** Free model used when paid credits run out (same provider) */
@@ -18,7 +22,7 @@ const CREDIT_RETRY_AFTER_MS = 5 * 60 * 1000; // 5 minutes
 interface ProviderState {
   /** Credit exhaustion (402). Retry after short cooldown. */
   creditExhaustedAt: number | null;
-  /** Provider quota/rate limit. Retry only after UTC-Monday weekly reset. */
+  /** Provider quota/rate limit. Retry only after next UTC-midnight daily reset. */
   keyLimitedUntil: number | null;
 }
 
@@ -33,17 +37,15 @@ function providerState(provider: string): ProviderState {
 }
 
 /**
- * Compute the next OpenRouter weekly-reset boundary.
- * OpenRouter resets free-tier key limits weekly at Monday 00:00 UTC.
- * If we're already past Monday 00:00 UTC this week, target next week's.
+ * Compute the next provider daily-reset boundary.
+ * Both OpenRouter free tier and Gemini free tier reset at UTC 00:00.
+ * Always targets the NEXT UTC midnight (never today's).
  */
-function nextWeeklyResetMs(now: Date = new Date()): number {
+export function nextDailyResetMs(now: Date = new Date()): number {
   const target = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0),
   );
-  // getUTCDay: Sun=0, Mon=1 ... Sat=6. Days until next Monday (exclusive of today).
-  const daysUntilMonday = (8 - target.getUTCDay()) % 7 || 7;
-  target.setUTCDate(target.getUTCDate() + daysUntilMonday);
+  target.setUTCDate(target.getUTCDate() + 1);
   return target.getTime();
 }
 
@@ -59,13 +61,13 @@ export function isCreditExhausted(provider: string): boolean {
   return true;
 }
 
-/** Is this provider locked out until the weekly reset? */
+/** Is this provider locked out until the daily reset? */
 export function isKeyLimited(provider: string): boolean {
   const s = providerState(provider);
   if (s.keyLimitedUntil === null) return false;
   if (Date.now() >= s.keyLimitedUntil) {
     s.keyLimitedUntil = null;
-    console.log(`[MODEL-FALLBACK] ${provider} weekly reset passed — retrying provider`);
+    console.log(`[MODEL-FALLBACK] ${provider} daily reset passed — retrying provider`);
     return false;
   }
   return true;
@@ -85,13 +87,13 @@ export function markCreditExhausted(provider: string): void {
   s.creditExhaustedAt = Date.now();
 }
 
-/** Mark a provider as quota/rate-limited — hold until weekly reset */
+/** Mark a provider as quota/rate-limited — hold until next UTC midnight */
 export function markKeyLimited(provider: string): void {
   const s = providerState(provider);
-  const until = nextWeeklyResetMs();
+  const until = nextDailyResetMs();
   s.keyLimitedUntil = until;
   console.warn(
-    `[MODEL-FALLBACK] ${provider} hit weekly key limit — locked out until ${new Date(until).toISOString()}`,
+    `[MODEL-FALLBACK] ${provider} hit daily key limit — locked out until ${new Date(until).toISOString()}`,
   );
 }
 

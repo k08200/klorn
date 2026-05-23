@@ -89,6 +89,13 @@ export const SCHEDULER_RECONCILE_INTERVAL_MS = intEnv(
   "SCHEDULER_RECONCILE_INTERVAL_MS",
   30 * 60 * 1000,
 );
+// LLM per-user rate limit (token bucket). Protects against runaway loops and
+// avoids tripping upstream provider RPM caps. Numbers chosen for OpenRouter
+// free tier (20 RPM upstream) — we cap each user well below so background
+// agents can still progress under load.
+export const LLM_USER_RPM = intEnv("LLM_USER_RPM", 15);
+export const LLM_USER_DAILY_CAP = intEnv("LLM_USER_DAILY_CAP", 500);
+
 export const SCHEDULER_WATCH_RENEWAL_INTERVAL_MS = intEnv(
   "SCHEDULER_WATCH_RENEWAL_INTERVAL_MS",
   60 * 60 * 1000,
