@@ -78,10 +78,7 @@ function formatProviderEta(info: ReturnType<typeof getProviderCooldownInfo>): st
   return `${info.quotaKey} until ${until.toISOString()}`;
 }
 
-function buildExhaustedMessage(
-  chain: Provider[],
-  lastError: unknown,
-): string {
+function buildExhaustedMessage(chain: Provider[], lastError: unknown): string {
   const reasons = chain
     .map((p) => formatProviderEta(getProviderCooldownInfo(p.quotaKey)))
     .filter((line): line is string => line !== null);

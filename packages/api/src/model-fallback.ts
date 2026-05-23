@@ -118,9 +118,7 @@ export function getProviderCooldownInfo(quotaKey: string): ProviderCooldownInfo 
   return {
     quotaKey,
     creditRetryAt:
-      s.creditExhaustedAt === null
-        ? null
-        : new Date(s.creditExhaustedAt + CREDIT_RETRY_AFTER_MS),
+      s.creditExhaustedAt === null ? null : new Date(s.creditExhaustedAt + CREDIT_RETRY_AFTER_MS),
     keyLimitedUntil: s.keyLimitedUntil === null ? null : new Date(s.keyLimitedUntil),
   };
 }
@@ -168,7 +166,10 @@ export function isKeyLimitError(error: unknown): boolean {
   // also fires on invalid-model / transient 5xx errors and would otherwise
   // flip the provider into a week-long cooldown unnecessarily.
   if (/^\s*429\b/.test(message)) return true;
-  if (/^\s*403\b/.test(message) && (message.includes("key limit") || message.includes("limit exceeded"))) {
+  if (
+    /^\s*403\b/.test(message) &&
+    (message.includes("key limit") || message.includes("limit exceeded"))
+  ) {
     return true;
   }
   return (
