@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#0f1115"/>
+
+  <!-- subtle gradient overlay -->
+  <defs>
+    <radialGradient id="glow" cx="80%" cy="20%" r="60%">
+      <stop offset="0%" stop-color="#7DD3FC" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#7DD3FC" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- mark, top-left -->
+  <g transform="translate(80, 80) scale(0.36)">
+    <path d="M104 332C169 223 253 145 394 108C339 167 314 220 309 291C249 292 188 305 104 332Z" fill="#F5F1E8"/>
+    <path d="M103 333C188 304 249 292 309 291C304 337 316 378 350 418C251 401 171 375 103 333Z" fill="#7DD3FC"/>
+    <path d="M129 173C210 133 299 111 394 108C258 148 176 223 104 332C114 279 122 222 129 173Z" fill="#F5F1E8"/>
+    <path d="M147 210C208 164 282 134 394 108C312 152 260 206 228 274C188 285 148 302 104 332C122 286 136 246 147 210Z" fill="#7DD3FC"/>
+    <path d="M106 332C171 375 251 401 350 418C299 371 278 326 287 273C245 296 187 315 106 332Z" fill="#F5F1E8" fill-opacity=".92"/>
+    <circle cx="390" cy="107" r="28" fill="#7DD3FC"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="260" y="200" font-family="Geist, 'Geist Sans', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" font-size="120" font-weight="600" letter-spacing="-0.05em" fill="#f8f4ec">klorn</text>
+
+  <!-- hero copy -->
+  <text x="80" y="380" font-family="Geist, 'Geist Sans', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" font-size="68" font-weight="600" letter-spacing="-0.03em" fill="#f8f4ec">The clear signal</text>
+  <text x="80" y="468" font-family="Geist, 'Geist Sans', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" font-size="68" font-weight="600" letter-spacing="-0.03em" fill="#f8f4ec">worth acting on.</text>
+
+  <!-- subline -->
+  <text x="80" y="560" font-family="Geist, 'Geist Sans', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" font-size="28" font-weight="400" letter-spacing="-0.01em" fill="#a8a29e">The approval layer for AI agents.</text>
+
+  <!-- url, bottom-right -->
+  <text x="1120" y="580" text-anchor="end" font-family="Geist, 'Geist Sans', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" font-size="22" font-weight="400" letter-spacing="0" fill="#78716c">klorn.ai</text>
+</svg>
