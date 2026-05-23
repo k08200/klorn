@@ -223,26 +223,128 @@ export async function getAuthedClient(
     expiry_date: token.expiresAt ? token.expiresAt.getTime() : undefined,
   });
 
-  // Auto-refresh expired tokens — persist BOTH access and refresh tokens (encrypted at rest)
+  // Auto-refresh expired tokens — persist BOTH access and refresh tokens (encrypted at rest).
+  // Uses optimistic locking against expiresAt so a slower concurrent refresh cannot clobber
+  // a newer one already written by a parallel request. Refresh-token rotation writes
+  // unconditionally because Google revokes the old refresh_token the moment a new one is issued.
   oauth2.on("tokens", async (newTokens) => {
-    const data: { accessToken: string; expiresAt: Date | null; refreshToken?: string | null } = {
-      accessToken: encryptToken(newTokens.access_token ?? ""),
-      expiresAt: newTokens.expiry_date ? new Date(newTokens.expiry_date) : null,
-    };
-    // Google sometimes returns a new refresh_token — always persist it
-    if (newTokens.refresh_token) {
-      data.refreshToken = encryptOptional(newTokens.refresh_token);
+    try {
+      await persistRefreshedGoogleToken(token.id, userId, newTokens);
+    } catch (err) {
+      console.error(
+        `[GOOGLE] Failed to persist refreshed token for user ${userId}:`,
+        err instanceof Error ? err.message : err,
+      );
     }
-    await prisma.userToken.update({
-      where: { id: token.id },
-      data,
-    });
-    console.log(
-      `[GOOGLE] Token refreshed for user ${userId}${newTokens.refresh_token ? " (new refresh_token saved)" : ""}`,
-    );
   });
 
   return oauth2;
+}
+
+export type RefreshTokenDecision =
+  | { write: false; reason: "noop_empty_callback" | "noop_no_expiry" }
+  | {
+      write: true;
+      mode: "rotate";
+      accessTokenPlain: string;
+      refreshTokenPlain: string;
+      expiresAt: Date | null;
+    }
+  | {
+      write: true;
+      mode: "optimistic";
+      accessTokenPlain: string;
+      expiresAt: Date;
+    };
+
+/**
+ * Pure decision function — given a Google `oauth2.on("tokens")` payload, decide
+ * what (if anything) should be persisted. Exported for unit tests.
+ *
+ * - Rotation (new refresh_token present) MUST be persisted unconditionally; the
+ *   old refresh_token is revoked the instant Google issues a new one.
+ * - Otherwise we treat the write as optimistic against the stored expiry —
+ *   skipped if a later expiry has already been written, so a stale concurrent
+ *   refresh cannot win the race.
+ */
+export function decideRefreshTokenWrite(newTokens: {
+  access_token?: string | null;
+  refresh_token?: string | null;
+  expiry_date?: number | null;
+}): RefreshTokenDecision {
+  if (!newTokens.access_token && !newTokens.refresh_token) {
+    return { write: false, reason: "noop_empty_callback" };
+  }
+
+  const expiresAt = newTokens.expiry_date ? new Date(newTokens.expiry_date) : null;
+  const access = newTokens.access_token ?? "";
+
+  if (newTokens.refresh_token) {
+    return {
+      write: true,
+      mode: "rotate",
+      accessTokenPlain: access,
+      refreshTokenPlain: newTokens.refresh_token,
+      expiresAt,
+    };
+  }
+
+  if (!expiresAt) {
+    return { write: false, reason: "noop_no_expiry" };
+  }
+
+  return {
+    write: true,
+    mode: "optimistic",
+    accessTokenPlain: access,
+    expiresAt,
+  };
+}
+
+async function persistRefreshedGoogleToken(
+  tokenId: string,
+  userId: string,
+  newTokens: {
+    access_token?: string | null;
+    refresh_token?: string | null;
+    expiry_date?: number | null;
+  },
+): Promise<void> {
+  const decision = decideRefreshTokenWrite(newTokens);
+  if (!decision.write) return;
+
+  if (decision.mode === "rotate") {
+    await prisma.userToken.update({
+      where: { id: tokenId },
+      data: {
+        accessToken: encryptToken(decision.accessTokenPlain),
+        refreshToken: encryptOptional(decision.refreshTokenPlain),
+        expiresAt: decision.expiresAt,
+      },
+    });
+    console.log(`[GOOGLE] Token refreshed for user ${userId} (new refresh_token saved)`);
+    return;
+  }
+
+  // optimistic: only overwrite when our new expiry is strictly later than what's stored
+  const result = await prisma.userToken.updateMany({
+    where: {
+      id: tokenId,
+      OR: [{ expiresAt: null }, { expiresAt: { lt: decision.expiresAt } }],
+    },
+    data: {
+      accessToken: encryptToken(decision.accessTokenPlain),
+      expiresAt: decision.expiresAt,
+    },
+  });
+
+  if (result.count === 0) {
+    console.log(
+      `[GOOGLE] Skipped stale token write for user ${userId} (newer token already stored)`,
+    );
+  } else {
+    console.log(`[GOOGLE] Token refreshed for user ${userId}`);
+  }
 }
 
 // Gmail tool functions for Eve
