@@ -111,13 +111,21 @@ const providers: Record<ProviderName, Provider | null> = {
   gemini: buildGemini(process.env.GEMINI_API_KEY),
 };
 
-if (!providers.openrouter) {
-  console.warn("[providers] OPENROUTER_API_KEY not set — chat endpoints will fail");
-}
-if (!providers.gemini) {
-  console.warn(
-    "[providers] GEMINI_API_KEY not set — no secondary provider, weekly OpenRouter limits will surface as hard errors",
+if (!providers.openrouter && !providers.gemini) {
+  console.error(
+    "[providers] NEITHER OPENROUTER_API_KEY NOR GEMINI_API_KEY is set — every chat request will fail. Set at least one in your env.",
   );
+} else {
+  if (!providers.openrouter) {
+    console.warn("[providers] OPENROUTER_API_KEY not set — primary provider disabled");
+  }
+  if (!providers.gemini) {
+    console.warn(
+      "[providers] GEMINI_API_KEY not set — no secondary provider, weekly OpenRouter limits will surface as hard errors",
+    );
+  } else {
+    console.log("[providers] Gemini secondary provider active (daily quota fallback)");
+  }
 }
 
 /** Get a provider by name, or null if not configured */
