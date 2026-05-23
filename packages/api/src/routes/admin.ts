@@ -4,7 +4,10 @@ import { runAllScenarios, summarizeEval } from "../agent-eval.js";
 import { requireAdmin } from "../auth.js";
 import { db, prisma } from "../db.js";
 import { sendBetaInviteEmail } from "../email.js";
+import { getProviderCooldownInfo } from "../model-fallback.js";
+import { MODEL } from "../openai.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
+import { getProviderChain } from "../providers/index.js";
 
 type FeedbackGroup = { signal: string; _count: { signal: number } };
 
@@ -378,6 +381,30 @@ export async function adminRoutes(app: FastifyInstance) {
       const msg = err instanceof Error ? err.message : String(err);
       return { ok: false, reason: msg, fromEmail, alertTo };
     }
+  });
+
+  // GET /api/admin/llm-state — Snapshot of provider availability and cooldown.
+  // Useful during incidents to see which provider is locked out and until when,
+  // without grepping logs or restarting the API to clear in-memory state.
+  app.get("/llm-state", async () => {
+    const chain = getProviderChain();
+    const providers = chain.map((p) => {
+      const cooldown = getProviderCooldownInfo(p.quotaKey);
+      return {
+        name: p.name,
+        quotaKey: p.quotaKey,
+        defaultModel: p.defaultModel,
+        supportsTools: p.supportsTools,
+        creditRetryAt: cooldown.creditRetryAt?.toISOString() ?? null,
+        keyLimitedUntil: cooldown.keyLimitedUntil?.toISOString() ?? null,
+        unavailable: !!(cooldown.creditRetryAt || cooldown.keyLimitedUntil),
+      };
+    });
+    return {
+      activeModel: MODEL,
+      providers,
+      observedAt: new Date().toISOString(),
+    };
   });
 
   // GET /api/admin/eval — Run agent decision-logic eval scenarios

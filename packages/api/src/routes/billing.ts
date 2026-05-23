@@ -5,6 +5,7 @@ import { encryptOptional } from "../crypto-tokens.js";
 import { db, prisma } from "../db.js";
 import { clearFallbackState } from "../model-fallback.js";
 import { MODEL } from "../openai.js";
+import { getUserUsage } from "../quota-limiter.js";
 import { getEffectivePlan, PLAN_FEATURES, PLANS, stripe } from "../stripe.js";
 
 function keyHash(apiKey: string | null | undefined): string | null {
@@ -133,11 +134,20 @@ export async function billingRoutes(app: FastifyInstance) {
       geminiApiKey?: string | null;
     };
 
+    const usage = getUserUsage(userId);
+
     return {
       plan: user.plan,
       activeModel: MODEL,
       hasOpenRouterApiKey: !!keyFields.openRouterApiKey,
       hasGeminiApiKey: !!keyFields.geminiApiKey,
+      usage: {
+        rpmUsed: usage.rpmUsed,
+        rpmCap: usage.rpmCap,
+        dailyUsed: usage.dailyUsed,
+        dailyCap: usage.dailyCap,
+        dailyResetAt: usage.dailyResetAt.toISOString(),
+      },
     };
   });
 

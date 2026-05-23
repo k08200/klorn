@@ -839,6 +839,26 @@ export function chatRoutes(app: FastifyInstance) {
       if (!conversation) return reply.code(404).send({ error: "Conversation not found" });
       if (conversation.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
 
+      // Reject rapid duplicate submissions. A double-click or "the response
+      // didn't come, let me retry" hammer fires N copies of the same prompt
+      // through the LLM in seconds, which is the single biggest reason free
+      // OpenRouter quota gets burned on this app. Compare against the most
+      // recent USER message in this conversation.
+      const lastUserMessage = [...conversation.messages]
+        .reverse()
+        .find((m: { role: string }) => m.role === "USER") as
+        | { content: string; createdAt: Date }
+        | undefined;
+      if (
+        lastUserMessage &&
+        lastUserMessage.content === trimmedContent &&
+        Date.now() - new Date(lastUserMessage.createdAt).getTime() < 2_000
+      ) {
+        return reply.code(429).send({
+          error: "Duplicate message — wait a moment before sending the same prompt again.",
+        });
+      }
+
       // Check billing plan message limit (skip for demo-user)
       const user = await prisma.user.findUnique({
         where: { id: conversation.userId },
@@ -941,43 +961,17 @@ export function chatRoutes(app: FastifyInstance) {
         return;
       }
 
-      // Auto-generate title from first message (LLM-powered, async)
+      // Quick fallback title from the raw user message; an LLM-generated
+      // title replaces it via autoGenerateTitle() once the response stream
+      // finishes (see end of handler). Doing both inline + post-stream
+      // double-billed the LLM for every first message.
       if (!conversation.title && conversation.messages.length === 0) {
-        // Set a quick fallback title immediately
         const fallback =
           trimmedContent.length > 50 ? `${trimmedContent.slice(0, 50)}...` : trimmedContent;
         await prisma.conversation.update({
           where: { id },
           data: { title: fallback },
         });
-
-        // Generate a smarter title in the background (non-blocking)
-        createCompletion(
-          {
-            model: userChatModel,
-            messages: [
-              {
-                role: "system",
-                content:
-                  "Generate a short conversation title (max 40 chars) for this message. Reply with ONLY the title, no quotes or explanation. Use the same language as the user.",
-              },
-              { role: "user", content: trimmedContent },
-            ],
-          },
-          { credentials: userCredentials, userId: conversation.userId },
-        )
-          .then((res) => {
-            const smartTitle = res.choices[0]?.message?.content?.trim();
-            if (smartTitle && smartTitle.length <= 60) {
-              return prisma.conversation.update({
-                where: { id },
-                data: { title: smartTitle },
-              });
-            }
-          })
-          .catch(() => {
-            // Keep fallback title on failure
-          });
       }
 
       // Check if Gmail is connected for this user

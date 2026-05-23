@@ -123,10 +123,19 @@ interface UserProfile {
   timezone: string;
 }
 
+interface ModelUsage {
+  rpmUsed: number;
+  rpmCap: number;
+  dailyUsed: number;
+  dailyCap: number;
+  dailyResetAt: string;
+}
+
 interface ModelSettings {
   activeModel: string;
   hasOpenRouterApiKey: boolean;
   hasGeminiApiKey: boolean;
+  usage?: ModelUsage;
 }
 
 const TIMEZONES = [
@@ -1192,6 +1201,25 @@ export default function SettingsPage() {
               model: <span className="text-stone-300">{modelSettings?.activeModel || "—"}</span>.
               Paste your own key below to get a private quota independent of the shared pool.
             </div>
+
+            {modelSettings?.usage && (
+              <div className="grid grid-cols-2 gap-4 rounded-lg border border-stone-800 bg-stone-950/50 p-3 text-xs">
+                <div>
+                  <div className="text-stone-500">This minute</div>
+                  <div className="mt-0.5 text-stone-200">
+                    {modelSettings.usage.rpmUsed} / {modelSettings.usage.rpmCap}
+                    <span className="ml-1 text-stone-500">requests</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-stone-500">Today (UTC)</div>
+                  <div className="mt-0.5 text-stone-200">
+                    {modelSettings.usage.dailyUsed} / {modelSettings.usage.dailyCap}
+                    <span className="ml-1 text-stone-500">requests</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
