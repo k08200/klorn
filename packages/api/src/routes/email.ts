@@ -25,7 +25,6 @@ import {
 import { evaluateUserCorrectionFixtures } from "../email-classification-eval.js";
 import { listUserFeedbackFixtures } from "../email-feedback-fixtures.js";
 import {
-  type EmailPriorityValue,
   FeedbackError,
   type FeedbackRecord,
   getFeedback,
@@ -39,11 +38,12 @@ import {
   summarizeUnsummarizedEmails,
   syncEmails,
 } from "../email-sync.js";
-import { archiveEmail, sendEmail, toggleReadGmail } from "../gmail.js";
+import { sendEmail, toggleReadGmail } from "../gmail.js";
 import { senderName } from "../notification-format.js";
 import { sendPushNotification } from "../push.js";
 import { pushNotification } from "../websocket.js";
 import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
+import { registerEmailBulkRoutes } from "./email-bulk.js";
 import { registerEmailCandidatesRoutes } from "./email-candidates.js";
 import { registerEmailFeedbackRoutes } from "./email-feedback.js";
 import { registerEmailMutationsRoutes } from "./email-mutations.js";
@@ -322,11 +322,6 @@ export function looksReplyNeeded(input: {
   return input.priority === "URGENT" || actionItems.length > 0;
 }
 
-function normalizeEmailPriority(value: unknown): EmailPriorityValue | null {
-  return value === "URGENT" || value === "NORMAL" || value === "LOW" ? value : null;
-}
-
-type BulkEmailAction = "mark-read" | "mark-unread" | "archive" | "set-priority";
 type EmailQueueKey =
   | "all"
   | "reply-needed"
@@ -339,34 +334,6 @@ type EmailQueueKey =
   | "sales"
   | "support"
   | "automated";
-
-interface BulkEmailBody {
-  ids?: unknown;
-  action?: unknown;
-  priority?: unknown;
-}
-
-interface BulkEmailActionResult {
-  statusCode?: number;
-  payload: {
-    success?: boolean;
-    updatedCount?: number;
-    failed?: Array<{ id: string; error: string }>;
-    error?: string;
-  };
-}
-
-function parseBulkEmailIds(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return Array.from(
-    new Set(
-      value
-        .filter((id): id is string => typeof id === "string")
-        .map((id) => id.trim())
-        .filter(Boolean),
-    ),
-  );
-}
 
 function normalizeEmailQueue(value: unknown): EmailQueueKey {
   const queue = typeof value === "string" ? value : "all";
@@ -500,99 +467,6 @@ function serializeQueueEmail(email: EmailMessage) {
   };
 }
 
-function findBulkEmails(userId: string, ids: string[]): Promise<EmailMessage[]> {
-  return prisma.emailMessage.findMany({
-    where: { userId, OR: [{ id: { in: ids } }, { gmailId: { in: ids } }] },
-  });
-}
-
-async function applyBulkReadAction(
-  userId: string,
-  emails: EmailMessage[],
-  isRead: boolean,
-): Promise<BulkEmailActionResult> {
-  await Promise.all(
-    emails.map((email) => toggleReadGmail(userId, email.gmailId, isRead).catch(() => null)),
-  );
-  await prisma.emailMessage.updateMany({
-    where: { userId, id: { in: emails.map((email) => email.id) } },
-    data: { isRead },
-  });
-  return { payload: { success: true, updatedCount: emails.length, failed: [] } };
-}
-
-async function applyBulkPriorityAction(
-  userId: string,
-  emails: EmailMessage[],
-  priorityValue: unknown,
-): Promise<BulkEmailActionResult> {
-  const priority = normalizeEmailPriority(priorityValue);
-  if (!priority) return { statusCode: 400, payload: { error: "Invalid email priority" } };
-  await prisma.emailMessage.updateMany({
-    where: { userId, id: { in: emails.map((email) => email.id) } },
-    data: { priority },
-  });
-  return { payload: { success: true, updatedCount: emails.length, failed: [] } };
-}
-
-async function applyBulkArchiveAction(
-  userId: string,
-  emails: EmailMessage[],
-): Promise<BulkEmailActionResult> {
-  const failed: Array<{ id: string; error: string }> = [];
-  const archivedIds: string[] = [];
-  for (const email of emails) {
-    try {
-      const result = await archiveEmail(userId, email.gmailId);
-      if (result && "error" in result) {
-        failed.push({ id: email.id, error: result.error || "Gmail archive failed" });
-      } else archivedIds.push(email.id);
-    } catch (err) {
-      failed.push({
-        id: email.id,
-        error: err instanceof Error ? err.message : "Gmail archive failed",
-      });
-    }
-  }
-  if (archivedIds.length > 0) {
-    await prisma.emailMessage.deleteMany({ where: { userId, id: { in: archivedIds } } });
-  }
-  return {
-    payload: {
-      success: failed.length === 0,
-      updatedCount: archivedIds.length,
-      failed,
-    },
-  };
-}
-
-async function handleBulkEmailAction(
-  userId: string,
-  body: BulkEmailBody,
-): Promise<BulkEmailActionResult> {
-  const ids = parseBulkEmailIds(body.ids);
-  if (ids.length === 0) return { statusCode: 400, payload: { error: "No emails selected" } };
-  if (ids.length > 100) {
-    return { statusCode: 400, payload: { error: "Bulk action is limited to 100 emails" } };
-  }
-
-  const emails = await findBulkEmails(userId, ids);
-  if (emails.length === 0) return { payload: { success: true, updatedCount: 0, failed: [] } };
-
-  switch (body.action as BulkEmailAction) {
-    case "mark-read":
-      return applyBulkReadAction(userId, emails, true);
-    case "mark-unread":
-      return applyBulkReadAction(userId, emails, false);
-    case "set-priority":
-      return applyBulkPriorityAction(userId, emails, body.priority);
-    case "archive":
-      return applyBulkArchiveAction(userId, emails);
-    default:
-      return { statusCode: 400, payload: { error: "Invalid bulk action" } };
-  }
-}
-
 export function replyNeededSourceId(emailId: string): string {
   return `email:${emailId}:reply_needed`;
 }
@@ -633,6 +507,7 @@ export async function emailRoutes(app: FastifyInstance) {
   await registerEmailAttachmentsRoutes(app);
   await registerEmailRepliesRoutes(app);
   await registerEmailMutationsRoutes(app);
+  await registerEmailBulkRoutes(app);
 
   // ─── Sync & List Emails ───────────────────────────────────────────────
   // GET /api/email?filter=unread|urgent|reply-needed|attachments|candidates&search=keyword&category=billing&page=1
@@ -843,14 +718,6 @@ export async function emailRoutes(app: FastifyInstance) {
     });
 
     return { emails: mapped, source: "gmail", total, unread: unreadCount, page: pageNum };
-  });
-
-  // POST /api/email/bulk — apply a list-level action to selected messages.
-  app.post("/bulk", { preHandler: requireAuth }, async (request, reply) => {
-    const uid = getUserId(request);
-    const result = await handleBulkEmailAction(uid, (request.body as BulkEmailBody) || {});
-    if (result.statusCode) return reply.code(result.statusCode).send(result.payload);
-    return result.payload;
   });
 
   // ─── Thread View ──────────────────────────────────────────────────────
