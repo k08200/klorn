@@ -1355,26 +1355,39 @@ export function chatRoutes(app: FastifyInstance) {
 
         safeWrite(`data: ${JSON.stringify({ type: "done" })}\n\n`);
       } catch (err) {
-        // Save partial response even if client disconnected mid-stream
-        if (fullResponse && !assistantMessagePersisted) {
-          try {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        // Persist whatever we have so refresh shows the same state instead of
+        // a lonely USER bubble. If tokens did arrive, save those plus the error
+        // marker; otherwise save just the error so the user knows the request
+        // failed and stops re-sending the same prompt.
+        try {
+          if (fullResponse && !assistantMessagePersisted) {
             await prisma.message.create({
               data: {
                 conversationId: id,
                 role: "ASSISTANT",
-                content: fullResponse,
+                content: `${fullResponse}\n\n[Error: ${message}]`,
+                metadata: { source: "chat", error: true, partial: true },
               },
             });
-            await prisma.conversation.update({
-              where: { id },
-              data: { updatedAt: new Date() },
+          } else if (!assistantMessagePersisted) {
+            await prisma.message.create({
+              data: {
+                conversationId: id,
+                role: "ASSISTANT",
+                content: `[Error: ${message}]`,
+                metadata: { source: "chat", error: true },
+              },
             });
-          } catch {
-            // DB save failed — nothing we can do
           }
+          await prisma.conversation.update({
+            where: { id },
+            data: { updatedAt: new Date() },
+          });
+        } catch {
+          // DB save failed — nothing we can do
         }
 
-        const message = err instanceof Error ? err.message : "Unknown error";
         safeWrite(`data: ${JSON.stringify({ type: "error", content: message })}\n\n`);
       }
 
