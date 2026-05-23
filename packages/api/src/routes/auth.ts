@@ -594,9 +594,42 @@ export function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Invalid or expired OAuth state" });
     }
 
+    {
+      const clientIdLen = (process.env.GOOGLE_CLIENT_ID || "").length;
+      const clientSecretLen = (process.env.GOOGLE_CLIENT_SECRET || "").length;
+      const urlInfo = (envKey: string) => {
+        const v = process.env[envKey];
+        if (!v) return { unset: true } as const;
+        try {
+          const u = new URL(v);
+          return { host: u.host, path: u.pathname } as const;
+        } catch {
+          return { invalid: true, length: v.length } as const;
+        }
+      };
+      console.log("[OAUTH_DEBUG] callback received", {
+        hasCode: !!code,
+        stateEmail: statePayload.email,
+        clientIdLen,
+        clientSecretLen,
+        redirectUri: urlInfo("GOOGLE_REDIRECT_URI"),
+        webUrl: urlInfo("WEB_URL"),
+        frontendUrl: urlInfo("FRONTEND_URL"),
+      });
+    }
+
     try {
       const oauth2 = getOAuth2Client();
       const { tokens } = await oauth2.getToken(code);
+
+      console.log("[OAUTH_DEBUG] tokens received", {
+        hasAccessToken: !!tokens.access_token,
+        hasRefreshToken: !!tokens.refresh_token,
+        hasIdToken: !!tokens.id_token,
+        tokenType: tokens.token_type,
+        scope: tokens.scope,
+        expiryDate: tokens.expiry_date,
+      });
 
       // --- Google Social Login flow (state signed with __google_login__ or __google_login_desktop__ marker) ---
       const isGoogleLogin =
@@ -605,6 +638,7 @@ export function authRoutes(app: FastifyInstance) {
       const isDesktopLogin = statePayload.email === "__google_login_desktop__";
       if (isGoogleLogin) {
         if (!tokens.access_token) {
+          console.error("[OAUTH_DEBUG] access_token missing — returning google_failed");
           return reply.redirect(`${webUrl}/login?error=google_failed`);
         }
 
@@ -753,6 +787,12 @@ export function authRoutes(app: FastifyInstance) {
       return reply.redirect(`${webUrl}/settings?google=connected`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "OAuth failed";
+      console.error("[OAUTH_DEBUG] callback caught error", {
+        message,
+        name: err instanceof Error ? err.name : undefined,
+        stack: err instanceof Error ? err.stack : undefined,
+        stateEmail: statePayload.email,
+      });
       if (statePayload.email === "__google_login__") {
         return reply.redirect(`${webUrl}/login?error=${encodeURIComponent(message)}`);
       }
