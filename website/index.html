@@ -4,961 +4,1006 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Klorn — The clear signal worth acting on</title>
-  <meta name="description" content="Klorn filters mail, calendar, and AI signals into one clear decision queue — with approval before any action.">
+  <meta name="description" content="Klorn filters mail, calendar, and AI signals into one clear decision queue — with evidence and approval before anything leaves your hands.">
   <meta property="og:title" content="Klorn — The clear signal worth acting on">
-  <meta property="og:description" content="Turn email, calendar, tasks, and notes into ranked signals, decision cards, and approval-ready follow-through.">
+  <meta property="og:description" content="Mail, calendar, and AI signals filtered into one clear decision queue — with evidence and approval before any action.">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%2310100d'/><path d='M28 70V30h34c7 0 12 5 12 12 0 5-3 9-8 11 6 2 10 7 10 14 0 8-6 13-15 13H28z' fill='%23d8a45d'/><path d='M42 46h18c3 0 5-2 5-5s-2-5-5-5H42v10zm0 28h20c4 0 6-2 6-6s-2-6-6-6H42v12z' fill='%23f3efe7'/></svg>">
+  <link rel="icon" href="/brand/mark.svg" type="image/svg+xml">
   <style>
-    /* ── Reset & Base ─────────────────────────── */
+    /* ── Reset & Tokens ───────────────────────── */
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --bg: #050505;
-      --bg-card: #0a0a0a;
-      --border: rgba(255,255,255,0.06);
-      --border-hover: rgba(255,255,255,0.12);
-      --text: #fafafa;
-      --text-secondary: #737373;
-      --text-muted: #525252;
-      --accent: #d8a45d;
-      --accent-glow: rgba(216,164,93,0.16);
-      --accent-soft: rgba(216,164,93,0.09);
-      --green: #22c55e;
-      --purple: #a855f7;
-      --radius: 12px;
-      --radius-lg: 16px;
-      --max-w: 1120px;
+      --surface-canvas: #0f1115;
+      --surface-elevated: #151922;
+      --surface-panel: #111318;
+      --surface-translucent: #12161b;
+      --surface-strip: #11151a;
+
+      --brand-gold: #d8a45d;
+      --brand-gold-bright: #f0c982;
+      --brand-cream: #f8f4ec;
+      --brand-cream-soft: #f2eadc;
+      --brand-ink: #11100d;
+      --brand-ink-soft: #12100d;
+
+      --stone-100: #f5f5f4;
+      --stone-200: #e7e5e4;
+      --stone-300: #d6d3d1;
+      --stone-400: #a8a29e;
+      --stone-500: #78716c;
+      --stone-600: #57534e;
+      --stone-700: #44403c;
+      --stone-800: #292524;
+
+      --border-soft: rgba(255,255,255,0.08);
+      --border-medium: rgba(255,255,255,0.12);
+      --border-strong: rgba(255,255,255,0.18);
+
+      --amber-200: #fde68a;
+      --sky-200: #bae6fd;
+      --emerald-200: #a7f3d0;
+
+      --max-w: 1280px;
+      --max-w-narrow: 1120px;
     }
 
     html { scroll-behavior: smooth; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+      background: var(--surface-canvas);
+      color: var(--brand-cream);
       line-height: 1.6;
       -webkit-font-smoothing: antialiased;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
       overflow-x: hidden;
     }
 
     a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+    ::selection { background: rgba(216,164,93,0.5); color: var(--brand-ink); }
 
-    ::selection { background: rgba(216,164,93,0.3); }
-
-    /* ── Utilities ────────────────────────────── */
-    .container { max-width: var(--max-w); margin: 0 auto; padding: 0 24px; }
-    .flex { display: flex; }
-    .items-center { align-items: center; }
-    .justify-between { justify-content: space-between; }
-    .justify-center { justify-content: center; }
-    .gap-2 { gap: 8px; }
-    .gap-3 { gap: 12px; }
-    .gap-4 { gap: 16px; }
-    .gap-6 { gap: 24px; }
-    .gap-8 { gap: 32px; }
-    .text-center { text-align: center; }
-
-    /* ── Animations ───────────────────────────── */
-    @keyframes fade-up {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes pulse-dot {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-    @keyframes float {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-6px); }
-    }
-    @keyframes shimmer {
-      0% { background-position: -200% center; }
-      100% { background-position: 200% center; }
+    .mono {
+      font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
     }
 
-    .animate-fade-up {
-      opacity: 0;
-      animation: fade-up 0.6s ease-out forwards;
-    }
-    .delay-1 { animation-delay: 0.1s; }
-    .delay-2 { animation-delay: 0.2s; }
-    .delay-3 { animation-delay: 0.3s; }
-    .delay-4 { animation-delay: 0.4s; }
-    .delay-5 { animation-delay: 0.5s; }
+    .container { max-width: var(--max-w); margin: 0 auto; padding: 0 20px; }
+    @media (min-width: 768px) { .container { padding: 0 32px; } }
 
-    /* ── Nav ──────────────────────────────────── */
-    nav {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 100;
-      background: rgba(5,5,5,0.8);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border);
-    }
-    nav .inner {
-      max-width: var(--max-w);
-      margin: 0 auto;
+    /* ── Buttons ──────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      height: 48px;
       padding: 0 24px;
-      height: 56px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .logo {
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      color: var(--accent);
-    }
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 32px;
-    }
-    .nav-links a {
+      border-radius: 6px;
       font-size: 14px;
-      color: var(--text-secondary);
-      transition: color 0.2s;
+      font-weight: 600;
+      transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+      white-space: nowrap;
     }
-    .nav-links a:hover { color: var(--text); }
-    .nav-cta {
-      font-size: 13px;
+    .btn-gold { background: var(--brand-gold); color: var(--brand-ink); }
+    .btn-gold:hover { background: var(--brand-gold-bright); }
+    .btn-cream { background: var(--brand-cream-soft); color: var(--brand-ink); }
+    .btn-cream:hover { background: #fff; }
+    .btn-ghost {
+      border: 1px solid var(--border-strong);
+      color: var(--stone-200);
       font-weight: 500;
-      color: white !important;
-      background: var(--accent);
-      padding: 8px 20px;
-      border-radius: 999px;
-      transition: all 0.2s;
     }
-    .nav-cta:hover { background: #2563eb; box-shadow: 0 0 20px var(--accent-glow); }
-
-    @media (max-width: 640px) {
-      .nav-links { gap: 20px; }
-      .nav-links a:not(.nav-cta) { display: none; }
-    }
+    .btn-ghost:hover { border-color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.08); }
 
     /* ── Hero ─────────────────────────────────── */
     .hero {
       position: relative;
-      padding: 160px 24px 120px;
-      text-align: center;
+      min-height: 84svh;
       overflow: hidden;
     }
-    .hero::before {
-      content: '';
+
+    .hero-scene {
       position: absolute;
-      top: -200px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 800px;
-      height: 600px;
-      background: radial-gradient(ellipse, var(--accent-glow), transparent 70%);
+      inset: 0;
       pointer-events: none;
     }
-    .hero-badge {
-      display: inline-flex;
+    .hero-scene-bg {
+      position: absolute;
+      inset: 0;
+      background: var(--surface-canvas);
+    }
+    .hero-product {
+      position: absolute;
+      top: 72px;
+      right: -42px;
+      width: 900px;
+      height: 548px;
+      transform: rotate(-1deg);
+      border: 1px solid rgba(87,83,78,0.7);
+      border-radius: 12px;
+      background: var(--surface-elevated);
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4);
+      display: none;
+    }
+    @media (min-width: 1024px) { .hero-product { display: block; } }
+
+    .hero-titlebar {
+      display: flex;
       align-items: center;
       gap: 8px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 6px 16px;
-      font-size: 13px;
-      color: var(--text-secondary);
+      height: 48px;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--stone-800);
+    }
+    .hero-titlebar .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 9999px;
+      background: var(--stone-700);
+    }
+    .hero-titlebar .crumb {
+      margin-left: 16px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--stone-500);
+    }
+
+    .hero-shell {
+      display: grid;
+      grid-template-columns: 210px 1fr;
+      height: 496px;
+    }
+    .hero-aside {
+      border-right: 1px solid var(--stone-800);
+      background: var(--surface-panel);
+      padding: 16px;
+    }
+    .hero-aside-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
       margin-bottom: 32px;
     }
-    .hero-badge .dot {
-      width: 6px;
-      height: 6px;
-      background: var(--green);
-      border-radius: 50%;
-      animation: pulse-dot 2s infinite;
-    }
-    .hero h1 {
-      font-size: clamp(40px, 8vw, 72px);
-      font-weight: 700;
-      letter-spacing: -0.03em;
-      line-height: 1.05;
-      margin-bottom: 20px;
-    }
-    .hero h1 .accent {
-      background: linear-gradient(135deg, var(--accent), var(--purple));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .hero p {
-      font-size: 18px;
-      color: var(--text-secondary);
-      max-width: 520px;
-      margin: 0 auto 12px;
-      line-height: 1.6;
-    }
-    .hero .sub {
-      font-size: 15px;
-      color: var(--text-muted);
-      margin-bottom: 40px;
-    }
-    .hero-buttons {
-      display: flex;
-      gap: 12px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-    .btn-primary {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--accent);
-      color: white;
-      padding: 14px 32px;
-      border-radius: 999px;
-      font-size: 15px;
-      font-weight: 600;
-      transition: all 0.2s;
-      border: none;
-      cursor: pointer;
-    }
-    .btn-primary:hover {
-      background: #2563eb;
-      box-shadow: 0 0 30px var(--accent-glow);
-      transform: translateY(-1px);
-    }
-    .btn-secondary {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: transparent;
-      color: var(--text-secondary);
-      padding: 14px 32px;
-      border-radius: 999px;
-      font-size: 15px;
-      font-weight: 500;
-      border: 1px solid var(--border);
-      transition: all 0.2s;
-      cursor: pointer;
-    }
-    .btn-secondary:hover {
-      color: var(--text);
-      border-color: var(--border-hover);
-      background: rgba(255,255,255,0.03);
-    }
-
-    /* ── Stats ────────────────────────────────── */
-    .stats {
-      display: flex;
-      justify-content: center;
-      gap: 48px;
-      margin-top: 72px;
-    }
-    .stats .stat-value {
-      font-size: 28px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-    }
-    .stats .stat-label {
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-top: 2px;
-    }
-    @media (max-width: 480px) { .stats { gap: 32px; } .stats .stat-value { font-size: 22px; } }
-
-    /* ── Section ──────────────────────────────── */
-    section { padding: 100px 24px; }
-    .section-label {
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--accent);
-      margin-bottom: 12px;
-    }
-    .section-title {
-      font-size: clamp(28px, 4vw, 40px);
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      margin-bottom: 16px;
-    }
-    .section-desc {
-      font-size: 16px;
-      color: var(--text-secondary);
-      max-width: 560px;
-      line-height: 1.7;
-    }
-    .section-desc.center { margin: 0 auto; }
-
-    /* ── Features ─────────────────────────────── */
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1px;
-      background: var(--border);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      overflow: hidden;
-      margin-top: 60px;
-    }
-    .feature-card {
-      background: var(--bg-card);
-      padding: 32px;
-      transition: background 0.3s;
-    }
-    .feature-card:hover { background: #111; }
-    .feature-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
-      background: var(--accent-soft);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 16px;
-      color: var(--accent);
-    }
-    .feature-card h3 {
-      font-size: 15px;
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-    .feature-card p {
-      font-size: 14px;
-      color: var(--text-secondary);
-      line-height: 1.6;
-    }
-    @media (max-width: 768px) { .features-grid { grid-template-columns: 1fr; } }
-    @media (min-width: 769px) and (max-width: 1024px) { .features-grid { grid-template-columns: repeat(2, 1fr); } }
-
-    /* ── Demo Chat ────────────────────────────── */
-    .demo-section { background: var(--bg-card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-    .demo-window {
-      max-width: 640px;
-      margin: 48px auto 0;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      overflow: hidden;
-    }
-    .demo-titlebar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-    }
-    .demo-dot { width: 8px; height: 8px; border-radius: 50%; }
-    .demo-dot.red { background: #ef4444; }
-    .demo-dot.yellow { background: #eab308; }
-    .demo-dot.green { background: #22c55e; }
-    .demo-titlebar span { font-size: 12px; color: var(--text-muted); margin-left: 8px; }
-    .demo-messages { padding: 20px; }
-    .demo-msg {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 16px;
-      opacity: 0;
-      animation: fade-up 0.5s ease-out forwards;
-    }
-    .demo-msg:nth-child(1) { animation-delay: 0.3s; }
-    .demo-msg:nth-child(2) { animation-delay: 0.8s; }
-    .demo-msg:nth-child(3) { animation-delay: 1.3s; }
-    .demo-msg:nth-child(4) { animation-delay: 1.8s; }
-    .demo-avatar {
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-weight: 700;
-      shrink: 0;
-      flex-shrink: 0;
-    }
-    .demo-avatar.user { background: var(--accent); color: white; }
-    .demo-avatar.agent { background: #1a1a1a; color: var(--accent); border: 1px solid var(--border); }
-    .demo-bubble {
-      font-size: 14px;
-      line-height: 1.6;
-      color: var(--text-secondary);
-      padding: 10px 14px;
-      border-radius: 12px;
-      max-width: 460px;
-    }
-    .demo-msg.from-user .demo-bubble { background: rgba(59,130,246,0.1); color: #93c5fd; }
-    .demo-msg.from-agent .demo-bubble { background: #111; border: 1px solid var(--border); }
-    .demo-bubble .tag {
-      display: inline-block;
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 6px;
-      margin-right: 4px;
-    }
-    .tag.done { background: rgba(34,197,94,0.1); color: #4ade80; }
-    .tag.tool { background: rgba(234,179,8,0.1); color: #fbbf24; }
-
-    /* ── How it Works ─────────────────────────── */
-    .steps {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 32px;
-      margin-top: 60px;
-    }
-    .step {
-      text-align: center;
-      padding: 32px 24px;
-    }
-    .step-number {
-      width: 48px;
-      height: 48px;
-      border-radius: 14px;
-      background: var(--accent-soft);
-      border: 1px solid rgba(59,130,246,0.2);
-      color: var(--accent);
-      font-size: 18px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 16px;
-    }
-    .step h3 {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-    .step p { font-size: 14px; color: var(--text-secondary); }
-    @media (max-width: 768px) { .steps { grid-template-columns: 1fr; gap: 16px; } }
-
-    /* ── Pricing ──────────────────────────────── */
-    .pricing-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1px;
-      background: var(--border);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      overflow: hidden;
-      margin-top: 60px;
-    }
-    .price-card {
-      background: var(--bg-card);
-      padding: 36px 32px;
-      position: relative;
-    }
-    .price-card.featured {
-      background: #0f0f0f;
-      border-top: 2px solid var(--accent);
-    }
-    .price-card .popular {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      font-size: 11px;
-      font-weight: 600;
-      background: var(--accent);
-      color: white;
-      padding: 3px 10px;
-      border-radius: 999px;
-    }
-    .price-card .plan-name {
-      font-size: 13px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    }
-    .price-card .price {
-      font-size: 36px;
-      font-weight: 700;
-      letter-spacing: -0.03em;
+    .hero-aside-brand img { width: 32px; height: 32px; }
+    .hero-aside-brand .name { font-size: 14px; font-weight: 600; color: var(--stone-100); }
+    .hero-aside-brand .tag { font-size: 10px; color: var(--stone-500); }
+    .hero-nav-item {
       margin-bottom: 4px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      color: var(--stone-500);
     }
-    .price-card .price span { font-size: 15px; font-weight: 400; color: var(--text-muted); }
-    .price-card .price-desc {
-      font-size: 13px;
-      color: var(--text-muted);
+    .hero-nav-item.active { background: var(--stone-800); color: var(--stone-100); }
+
+    .hero-main { padding: 24px; }
+    .hero-main-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
       margin-bottom: 24px;
     }
-    .price-card ul {
-      list-style: none;
-      margin-bottom: 28px;
-    }
-    .price-card li {
-      font-size: 14px;
-      color: var(--text-secondary);
-      padding: 6px 0;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .price-card li::before {
-      content: '';
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: rgba(34,197,94,0.1);
-      flex-shrink: 0;
-      background-image: url("data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2322c55e' stroke-width='3' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: center;
-      background-size: 10px;
-    }
-    .price-btn {
-      display: block;
-      width: 100%;
-      text-align: center;
-      padding: 12px;
-      border-radius: 10px;
-      font-size: 14px;
+    .hero-main-head .label {
+      color: var(--stone-500);
+      letter-spacing: 0.16em;
       font-weight: 600;
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--text);
-      cursor: pointer;
-      transition: all 0.2s;
     }
-    .price-btn:hover { border-color: var(--border-hover); background: rgba(255,255,255,0.03); }
-    .price-btn.primary {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: white;
+    .hero-main-head h2 {
+      margin-top: 8px;
+      font-size: 30px;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      color: #fff;
     }
-    .price-btn.primary:hover { background: #2563eb; box-shadow: 0 0 20px var(--accent-glow); }
-    @media (max-width: 768px) { .pricing-grid { grid-template-columns: 1fr; } }
-
-    /* ── Use Cases ────────────────────────────── */
-    .usecases {
+    .hero-counts {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-      margin-top: 48px;
-    }
-    .usecase {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 24px;
-      transition: border-color 0.3s;
-    }
-    .usecase:hover { border-color: var(--border-hover); }
-    .usecase .q {
-      font-size: 14px;
-      color: #93c5fd;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-    }
-    .usecase .q .label {
-      font-size: 10px;
-      font-weight: 700;
-      background: var(--accent);
-      color: white;
-      padding: 2px 6px;
-      border-radius: 4px;
-      flex-shrink: 0;
-      margin-top: 2px;
-    }
-    .usecase .a {
-      font-size: 13px;
-      color: var(--text-muted);
-      padding-left: 30px;
-    }
-    @media (max-width: 640px) { .usecases { grid-template-columns: 1fr; } }
-
-    /* ── CTA ──────────────────────────────────── */
-    .cta-section {
-      padding: 120px 24px;
+      grid-template-columns: repeat(3, 1fr);
+      overflow: hidden;
+      border: 1px solid var(--stone-800);
+      border-radius: 8px;
+      background: var(--surface-panel);
       text-align: center;
-      position: relative;
     }
-    .cta-section::before {
-      content: '';
+    .hero-counts > div { padding: 12px 20px; border-right: 1px solid var(--stone-800); }
+    .hero-counts > div:last-child { border-right: none; }
+    .hero-counts .num { font-size: 18px; font-weight: 600; color: var(--stone-100); }
+    .hero-counts .sub { font-size: 10px; color: var(--stone-500); }
+
+    .hero-rows { display: flex; flex-direction: column; gap: 12px; }
+    .hero-row {
+      padding: 16px;
+      border: 1px solid var(--stone-800);
+      border-radius: 8px;
+      background: var(--surface-panel);
+    }
+    .hero-row-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+    .hero-row-tag {
+      border: 1px solid var(--stone-700);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 10px;
+      color: var(--stone-400);
+    }
+    .hero-row-time { font-size: 12px; color: var(--stone-600); }
+    .hero-row-sender { font-size: 14px; font-weight: 500; color: var(--stone-100); }
+    .hero-row-subject { margin-top: 4px; font-size: 14px; color: var(--stone-500); }
+
+    .hero-overlay {
       position: absolute;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 600px;
-      height: 400px;
-      background: radial-gradient(ellipse, var(--accent-glow), transparent 70%);
-      pointer-events: none;
+      inset: 0;
+      background: linear-gradient(90deg, #0f1115 0%, rgba(15,17,21,0.94) 39%, rgba(15,17,21,0.34) 74%, rgba(15,17,21,0.64) 100%);
     }
-    .cta-section h2 {
-      font-size: clamp(28px, 5vw, 44px);
-      font-weight: 700;
-      letter-spacing: -0.03em;
-      margin-bottom: 16px;
-    }
-    .cta-section p {
-      font-size: 16px;
-      color: var(--text-secondary);
-      margin-bottom: 36px;
+    .hero-fade {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 144px;
+      background: linear-gradient(to top, var(--surface-canvas), transparent);
     }
 
-    /* ── Footer ───────────────────────────────── */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 40px 24px;
-    }
-    footer .inner {
-      max-width: var(--max-w);
+    .hero-nav {
+      position: relative;
+      z-index: 10;
       margin: 0 auto;
+      max-width: var(--max-w);
       display: flex;
       align-items: center;
       justify-content: space-between;
+      padding: 20px;
     }
-    footer .left { font-size: 13px; color: var(--text-muted); }
-    footer .left .brand { color: var(--accent); font-weight: 600; }
-    footer .right { display: flex; gap: 24px; }
-    footer .right a { font-size: 13px; color: var(--text-muted); transition: color 0.2s; }
-    footer .right a:hover { color: var(--text-secondary); }
-    @media (max-width: 640px) {
-      footer .inner { flex-direction: column; gap: 16px; }
+    @media (min-width: 768px) { .hero-nav { padding: 20px 32px; } }
+    .hero-nav .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .hero-nav .brand img { width: 36px; height: 36px; }
+    .hero-nav .brand .wordmark {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      color: var(--stone-100);
+    }
+    .hero-nav-actions { display: flex; align-items: center; gap: 8px; }
+    .nav-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      padding: 0 12px;
+      font-size: 14px;
+      color: var(--stone-300);
+      transition: color 0.2s ease;
+    }
+    .nav-link:hover { color: #fff; }
+    .nav-cta {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      padding: 0 16px;
+      border-radius: 6px;
+      background: var(--brand-cream-soft);
+      color: var(--brand-ink-soft);
+      font-size: 14px;
+      font-weight: 600;
+      transition: background 0.2s ease;
+    }
+    .nav-cta:hover { background: #fff; }
+
+    .hero-body {
+      position: relative;
+      z-index: 20;
+      margin: 0 auto;
+      max-width: var(--max-w);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: calc(84svh - 82px);
+      padding: 48px 20px 64px;
+    }
+    @media (min-width: 768px) { .hero-body { padding: 48px 32px 64px; } }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(216,164,93,0.5);
+      color: var(--brand-gold);
+      margin-bottom: 20px;
     }
 
-    /* ── Divider ──────────────────────────────── */
-    .divider {
-      height: 1px;
-      background: linear-gradient(to right, transparent, var(--border), transparent);
+    .hero-headline {
+      max-width: 768px;
+      font-size: 40px;
+      font-weight: 600;
+      line-height: 1.04;
+      letter-spacing: -0.025em;
+      color: #fff;
+    }
+    @media (min-width: 640px) { .hero-headline { font-size: 48px; } }
+    @media (min-width: 768px) { .hero-headline { font-size: 60px; line-height: 1.02; } }
+    @media (min-width: 1024px) { .hero-headline { font-size: 72px; } }
+
+    .hero-sub {
+      margin-top: 24px;
+      max-width: 576px;
+      font-size: 16px;
+      line-height: 1.75;
+      color: var(--stone-300);
+    }
+    @media (min-width: 768px) { .hero-sub { font-size: 18px; line-height: 2; } }
+
+    .hero-ctas {
+      margin-top: 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    @media (min-width: 640px) { .hero-ctas { flex-direction: row; } }
+
+    /* ── Mobile product preview ──────────────── */
+    .mobile-preview {
+      margin-top: 40px;
+      max-width: 576px;
+      border: 1px solid var(--border-medium);
+      border-radius: 8px;
+      background: rgba(18,22,27,0.9);
+      padding: 16px;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+    }
+    @media (min-width: 1024px) { .mobile-preview { display: none; } }
+    .mobile-preview-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .mobile-preview-head .label {
+      color: var(--stone-500);
+      letter-spacing: 0.14em;
+      font-weight: 600;
+    }
+    .mobile-preview-head .title {
+      margin-top: 4px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .live-pill {
+      border: 1px solid rgba(253,230,138,0.25);
+      background: rgba(253,230,138,0.1);
+      color: var(--amber-200);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .mobile-rows { display: flex; flex-direction: column; gap: 12px; }
+    .mobile-row {
+      border: 1px solid var(--border-soft);
+      background: rgba(0,0,0,0.2);
+      border-radius: 6px;
+      padding: 12px;
+    }
+    .mobile-row .name { font-size: 14px; font-weight: 500; color: var(--stone-100); }
+    .mobile-row .meta { margin-top: 4px; font-size: 12px; color: var(--stone-500); }
+
+    /* ── Decision-card section ───────────────── */
+    .section { margin: 0 auto; max-width: var(--max-w); padding: 80px 20px; }
+    @media (min-width: 768px) { .section { padding: 112px 32px; } }
+
+    .section-narrow { max-width: var(--max-w-narrow); }
+
+    .decision-grid {
+      display: grid;
+      gap: 40px;
+    }
+    @media (min-width: 768px) {
+      .decision-grid { grid-template-columns: 0.82fr 1.18fr; }
+    }
+
+    .section-eyebrow {
+      color: var(--brand-gold);
+      margin-bottom: 16px;
+    }
+
+    .section-h {
+      font-size: 30px;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      color: #fff;
+    }
+    @media (min-width: 768px) { .section-h { font-size: 48px; } }
+
+    .section-lead {
+      margin-top: 20px;
+      max-width: 576px;
+      font-size: 14px;
+      line-height: 1.75;
+      color: var(--stone-400);
+    }
+    @media (min-width: 768px) { .section-lead { font-size: 16px; } }
+
+    .decision-card-wrap {
+      border: 1px solid var(--border-medium);
+      background: var(--surface-translucent);
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.3);
+    }
+    .decision-card {
+      border: 1px solid var(--border-soft);
+      background: #0d1014;
+      border-radius: 6px;
+      padding: 16px;
+    }
+    .decision-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .decision-card-head .eyebrow-mono {
+      color: var(--stone-500);
+      letter-spacing: 0.16em;
+      font-weight: 500;
+    }
+    .decision-card-head h3 {
+      margin-top: 4px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .approval-pill {
+      border: 1px solid rgba(253,230,138,0.2);
+      background: rgba(253,230,138,0.1);
+      color: var(--amber-200);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .decision-rows { display: grid; gap: 12px; }
+    .decision-row {
+      border: 1px solid var(--border-soft);
+      background: rgba(255,255,255,0.025);
+      border-radius: 6px;
+      padding: 16px;
+    }
+    .decision-row .inner { display: flex; gap: 12px; align-items: flex-start; }
+    .tag {
+      margin-top: 2px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid;
+      letter-spacing: 0.12em;
+      font-weight: 500;
+    }
+    .tag.sky {
+      color: var(--sky-200);
+      border-color: rgba(125,211,252,0.25);
+      background: rgba(125,211,252,0.1);
+    }
+    .tag.amber {
+      color: var(--amber-200);
+      border-color: rgba(253,230,138,0.25);
+      background: rgba(253,230,138,0.1);
+    }
+    .tag.emerald {
+      color: var(--emerald-200);
+      border-color: rgba(167,243,208,0.25);
+      background: rgba(167,243,208,0.1);
+    }
+    .decision-row h4 { font-size: 14px; font-weight: 600; color: var(--stone-100); }
+    .decision-row p { margin-top: 4px; font-size: 14px; line-height: 1.65; color: var(--stone-400); }
+
+    .decision-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-soft);
+    }
+    @media (min-width: 640px) { .decision-actions { flex-direction: row; } }
+    .act-btn {
+      height: 44px;
+      padding: 0 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .act-btn.primary { background: var(--brand-gold); color: var(--brand-ink); }
+    .act-btn.ghost {
+      border: 1px solid var(--border-medium);
+      color: var(--stone-300);
+      font-weight: 500;
+      background: transparent;
+    }
+    .act-btn.plain {
+      color: var(--stone-500);
+      font-weight: 500;
+    }
+
+    /* ── Pillars strip ───────────────────────── */
+    .pillars-strip {
+      background: var(--surface-strip);
+      border-top: 1px solid var(--border-soft);
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--stone-100);
+    }
+    .pillars-grid {
+      display: grid;
+      gap: 16px;
+      margin: 0 auto;
+      max-width: var(--max-w);
+      padding: 80px 20px;
+    }
+    @media (min-width: 768px) {
+      .pillars-grid { grid-template-columns: repeat(3,1fr); padding: 96px 32px; }
+    }
+    .pillar {
+      border-top: 1px solid #d7c9b6;
+      padding-top: 20px;
+    }
+    .pillar-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--border-medium);
+      background: rgba(0,0,0,0.2);
+      border-radius: 6px;
+      color: var(--brand-gold);
+      margin-bottom: 32px;
+    }
+    .pillar-label { color: var(--brand-gold); letter-spacing: 0.16em; font-weight: 500; }
+    .pillar h3 {
+      margin-top: 12px;
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+    }
+    .pillar p {
+      margin-top: 16px;
+      font-size: 14px;
+      line-height: 1.75;
+      color: var(--stone-400);
+    }
+
+    /* ── Operating principle ─────────────────── */
+    .principle-grid {
+      display: grid;
+      gap: 32px;
+    }
+    @media (min-width: 768px) {
+      .principle-grid { grid-template-columns: 0.8fr 1.2fr; align-items: start; }
+    }
+    .principle-steps {
+      display: grid;
+      overflow: hidden;
+      border: 1px solid var(--border-medium);
+      border-radius: 8px;
+    }
+    @media (min-width: 768px) {
+      .principle-steps { grid-template-columns: repeat(4, 1fr); }
+    }
+    .principle-step {
+      padding: 16px;
+      background: rgba(255,255,255,0.025);
+      border-color: var(--border-medium);
+    }
+    @media (min-width: 768px) {
+      .principle-step { border-right: 1px solid var(--border-medium); }
+      .principle-step:last-child { border-right: none; }
+    }
+    .principle-step .index {
+      color: var(--brand-gold);
+      letter-spacing: 0.14em;
+      font-weight: 500;
+    }
+    .principle-step h3 {
+      margin-top: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--stone-100);
+    }
+    .principle-step p {
+      margin-top: 12px;
+      font-size: 12px;
+      line-height: 1.65;
+      color: var(--stone-500);
+    }
+
+    /* ── Final CTA ────────────────────────────── */
+    .final-cta {
       max-width: var(--max-w);
       margin: 0 auto;
+      padding: 0 20px 96px;
+      text-align: center;
     }
+    @media (min-width: 768px) { .final-cta { padding: 0 32px 128px; } }
+    .final-cta-h {
+      margin: 0 auto;
+      max-width: 768px;
+      font-size: 36px;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      color: #fff;
+    }
+    @media (min-width: 768px) { .final-cta-h { font-size: 60px; } }
+    .final-cta-p {
+      margin: 24px auto 0;
+      max-width: 640px;
+      font-size: 14px;
+      line-height: 1.75;
+      color: var(--stone-400);
+    }
+    @media (min-width: 768px) { .final-cta-p { font-size: 16px; } }
+    .final-cta .btn { margin-top: 36px; }
+
+    /* ── Footer ───────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border-soft);
+      padding: 32px 20px;
+    }
+    @media (min-width: 768px) { footer { padding: 32px; } }
+    .footer-inner {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      font-size: 14px;
+      color: var(--stone-500);
+    }
+    @media (min-width: 768px) {
+      .footer-inner { flex-direction: row; align-items: center; justify-content: space-between; }
+    }
+    .footer-brand { display: flex; align-items: center; gap: 12px; }
+    .footer-brand img { width: 28px; height: 28px; }
+    .footer-links { display: flex; gap: 20px; }
+    .footer-links a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 40px;
+      transition: color 0.2s ease;
+    }
+    .footer-links a:hover { color: var(--stone-300); }
+
+    /* ── Reveal animation ────────────────────── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .reveal.in { opacity: 1; transform: translateY(0); }
   </style>
 </head>
 <body>
 
-  <!-- ── Nav ──────────────────────────────────── -->
-  <nav>
-    <div class="inner">
-      <a href="#" class="logo">Klorn</a>
-      <div class="nav-links">
-        <a href="#features">Features</a>
-        <a href="#demo">Demo</a>
-        <a href="#pricing">Pricing</a>
-        <a href="https://app.klorn.ai/login" class="nav-cta">Get Started</a>
-      </div>
-    </div>
-  </nav>
-
-  <!-- ── Hero ─────────────────────────────────── -->
+  <!-- ── Hero ────────────────────────────────── -->
   <section class="hero">
-    <div class="animate-fade-up">
-      <div class="hero-badge">
-        <span class="dot"></span>
-        Signal inbox, approvals, memory
+    <div class="hero-scene" aria-hidden="true">
+      <div class="hero-scene-bg"></div>
+      <div class="hero-product">
+        <div class="hero-titlebar">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="crumb">Klorn / Today</span>
+        </div>
+        <div class="hero-shell">
+          <aside class="hero-aside">
+            <div class="hero-aside-brand">
+              <img src="/brand/mark.svg" alt="">
+              <div>
+                <p class="name">Klorn</p>
+                <p class="tag">The clear signal</p>
+              </div>
+            </div>
+            <div class="hero-nav-item active">Decision queue</div>
+            <div class="hero-nav-item">Mail</div>
+            <div class="hero-nav-item">Calendar</div>
+            <div class="hero-nav-item">Briefing</div>
+          </aside>
+          <main class="hero-main">
+            <div class="hero-main-head">
+              <div>
+                <p class="mono label">Decision queue</p>
+                <h2>Today's next actions</h2>
+              </div>
+              <div class="hero-counts">
+                <div><p class="num">7</p><p class="sub">Signals</p></div>
+                <div><p class="num">3</p><p class="sub">Replies</p></div>
+                <div><p class="num">1</p><p class="sub">Approvals</p></div>
+              </div>
+            </div>
+            <div class="hero-rows">
+              <div class="hero-row">
+                <div class="hero-row-meta">
+                  <span class="hero-row-tag">Reply</span>
+                  <span class="hero-row-time">2m</span>
+                </div>
+                <p class="hero-row-sender">OpenRouter Team</p>
+                <p class="hero-row-subject">Model update email needs a response</p>
+              </div>
+              <div class="hero-row">
+                <div class="hero-row-meta">
+                  <span class="hero-row-tag">Security</span>
+                  <span class="hero-row-time">18m</span>
+                </div>
+                <p class="hero-row-sender">Vercel Security</p>
+                <p class="hero-row-subject">Review env vars before deploy</p>
+              </div>
+              <div class="hero-row">
+                <div class="hero-row-meta">
+                  <span class="hero-row-tag">Meeting</span>
+                  <span class="hero-row-time">1h</span>
+                </div>
+                <p class="hero-row-sender">Mina Kim</p>
+                <p class="hero-row-subject">Prep questions for partner call</p>
+              </div>
+            </div>
+          </main>
+        </div>
       </div>
+      <div class="hero-overlay"></div>
+      <div class="hero-fade"></div>
     </div>
-    <h1 class="animate-fade-up delay-1">
-      What matters<br><span class="accent">now</span>
-    </h1>
-    <p class="animate-fade-up delay-2">
-      Klorn turns email, calendar, tasks, and research into ranked signals, decision cards, and follow-through.
-    </p>
-    <p class="sub animate-fade-up delay-3">
-      Built for teams that need context before action.<br>
-      업무 신호를 결정 큐와 실행 기록으로 정리하세요.
-    </p>
-    <div class="hero-buttons animate-fade-up delay-4">
-      <a href="https://app.klorn.ai/login" class="btn-primary">
-        Start Free
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+
+    <nav class="hero-nav">
+      <a href="/" class="brand">
+        <img src="/brand/mark.svg" alt="">
+        <span class="wordmark">KLORN</span>
       </a>
-      <a href="#demo" class="btn-secondary">See it in action</a>
-    </div>
-    <div class="stats animate-fade-up delay-5">
-      <div>
-        <div class="stat-value">36+</div>
-        <div class="stat-label">Signals</div>
+      <div class="hero-nav-actions">
+        <a href="https://app.klorn.ai/login" class="nav-link">Log in</a>
+        <a href="https://app.klorn.ai/early-access" class="nav-cta">Early access</a>
       </div>
-      <div>
-        <div class="stat-value">13</div>
-        <div class="stat-label">Surfaces</div>
-      </div>
-      <div>
-        <div class="stat-value">5</div>
-        <div class="stat-label">Memory</div>
-      </div>
-    </div>
-  </section>
+    </nav>
 
-  <div class="divider"></div>
-
-  <!-- ── Features ─────────────────────────────── -->
-  <section id="features">
-    <div class="container text-center">
-      <div class="section-label">Capabilities</div>
-      <div class="section-title">Everything a decision surface needs</div>
-      <div class="section-desc center">
-        Eve connects your work tools, finds the signal, and prepares the next move for approval.
+    <div class="hero-body">
+      <div style="max-width: 768px;">
+        <p class="mono eyebrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="m15.5 8.5-2.2 5-4.8 2 2.2-5 4.8-2Z"></path>
+          </svg>
+          Decision queue
+        </p>
+        <h1 class="hero-headline">The clear signal worth acting on.</h1>
+        <p class="hero-sub">
+          Other AI agents act. Klorn helps you decide what's worth acting on. Mail, calendar, and AI signals filtered into one clear decision queue — with evidence and approval before anything leaves your hands.
+        </p>
+        <div class="hero-ctas">
+          <a href="https://app.klorn.ai/early-access" class="btn btn-gold" aria-label="Request early access from hero">
+            Request early access
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12h14M13 6l6 6-6 6"></path>
+            </svg>
+          </a>
+          <a href="https://app.klorn.ai/login" class="btn btn-ghost">Log in</a>
+        </div>
       </div>
-    </div>
-    <div class="container">
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+
+      <div class="mobile-preview">
+        <div class="mobile-preview-head">
+          <div>
+            <p class="mono label" style="color: var(--stone-500); letter-spacing: 0.14em; font-weight: 600;">Decision queue</p>
+            <p class="title">3 items need attention</p>
           </div>
-          <h3>Signal Inbox</h3>
-          <p>Classify email, calendar, and task updates by urgency, owner, and impact before they scatter.</p>
+          <span class="live-pill">Live</span>
         </div>
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <div class="mobile-rows">
+          <div class="mobile-row">
+            <p class="name">Reply to investor</p>
+            <p class="meta">Evidence attached · Ready for approval</p>
           </div>
-          <h3>Context Timeline</h3>
-          <p>See meetings, threads, blockers, and follow-ups in the order decisions actually happen.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <div class="mobile-row">
+            <p class="name">Review deploy risk</p>
+            <p class="meta">Evidence attached · Ready for approval</p>
           </div>
-          <h3>Approval Queue</h3>
-          <p>Review prepared replies, schedule changes, task updates, and handoffs before Eve acts.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <div class="mobile-row">
+            <p class="name">Prep partner call</p>
+            <p class="meta">Evidence attached · Ready for approval</p>
           </div>
-          <h3>Decision Cards</h3>
-          <p>Get concise briefs with source context, recommendation, risk, and suggested next action.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          </div>
-          <h3>Relationship Memory</h3>
-          <p>Keep people, companies, promises, and previous decisions attached to the right signal.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-          </div>
-          <h3>Tool Graph</h3>
-          <p>Gmail, Calendar, Slack, Notion, and more become one operating layer for work context.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ── Demo ─────────────────────────────────── -->
-  <section id="demo" class="demo-section">
-    <div class="container text-center">
-      <div class="section-label">See it work</div>
-      <div class="section-title">Chat naturally, decide with context</div>
-      <div class="section-desc center">
-        Talk to Eve in Korean or English. It traces connected context and prepares approval-ready work.
+  <!-- ── Decision card section ───────────────── -->
+  <section class="section">
+    <div class="decision-grid">
+      <div>
+        <p class="mono section-eyebrow">Decision queue</p>
+        <h2 class="section-h">The important work fits on one card.</h2>
+        <p class="section-lead">Not another inbox. Just the decisions that have enough context to move.</p>
       </div>
-    </div>
-    <div class="container">
-      <div class="demo-window">
-        <div class="demo-titlebar">
-          <div class="demo-dot red"></div>
-          <div class="demo-dot yellow"></div>
-          <div class="demo-dot green"></div>
-          <span>Eve Decision Thread</span>
-        </div>
-        <div class="demo-messages">
-          <div class="demo-msg from-user">
-            <div class="demo-avatar user">Y</div>
-            <div class="demo-bubble">오늘 브리핑 해줘</div>
-          </div>
-          <div class="demo-msg from-agent">
-            <div class="demo-avatar agent">E</div>
-            <div class="demo-bubble">
-              <span class="tag tool">Reading email</span>
-              <span class="tag tool">Checking calendar</span><br>
-              Briefing ready:<br>
-              &bull; 3 investor emails need a response today<br>
-              &bull; Pitch prep has one unresolved calendar conflict<br>
-              &bull; 4 tasks are blocking the launch checklist
+
+      <div class="decision-card-wrap reveal">
+        <div class="decision-card">
+          <div class="decision-card-head">
+            <div>
+              <p class="mono eyebrow-mono">Decision card</p>
+              <h3>Investor follow-up ready</h3>
             </div>
+            <span class="approval-pill">Approval needed</span>
           </div>
-          <div class="demo-msg from-user">
-            <div class="demo-avatar user">Y</div>
-            <div class="demo-bubble">Prepare the investor follow-up</div>
+
+          <div class="decision-rows">
+            <article class="decision-row">
+              <div class="inner">
+                <span class="mono tag sky">Signal</span>
+                <div>
+                  <h4>Investor asked for revised metrics</h4>
+                  <p>Email, tomorrow's meeting, and open deck work are grouped into one decision.</p>
+                </div>
+              </div>
+            </article>
+            <article class="decision-row">
+              <div class="inner">
+                <span class="mono tag amber">Context</span>
+                <div>
+                  <h4>The pitch deck is still unfinished</h4>
+                  <p>Unanswered mail and open tasks point to the same meeting risk.</p>
+                </div>
+              </div>
+            </article>
+            <article class="decision-row">
+              <div class="inner">
+                <span class="mono tag emerald">Action</span>
+                <div>
+                  <h4>Hold 3-4 PM and prepare a reply draft</h4>
+                  <p>The next move is staged for approval before anything leaves your workspace.</p>
+                </div>
+              </div>
+            </article>
           </div>
-          <div class="demo-msg from-agent">
-            <div class="demo-avatar agent">E</div>
-            <div class="demo-bubble">
-              <span class="tag done">Approval ready</span>
-              I drafted the follow-up with meeting context, traction update, and a clear next ask. Review before sending?
-            </div>
+
+          <div class="decision-actions">
+            <button type="button" class="act-btn primary">Approve</button>
+            <button type="button" class="act-btn ghost">Edit first</button>
+            <button type="button" class="act-btn plain">Hold</button>
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <div class="divider"></div>
-
-  <!-- ── How it Works ─────────────────────────── -->
-  <section>
-    <div class="container text-center">
-      <div class="section-label">Simple</div>
-      <div class="section-title">Three steps to a decision queue</div>
+  <!-- ── Pillars ─────────────────────────────── -->
+  <section class="pillars-strip">
+    <div class="pillars-grid">
+      <article class="pillar reveal">
+        <div class="pillar-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 7c4 0 4 10 8 10s4-10 8-10"></path>
+            <path d="M4 17c4 0 4-10 8-10s4 10 8 10"></path>
+            <circle cx="4" cy="7" r="1.5" fill="currentColor" stroke="none"></circle>
+            <circle cx="20" cy="17" r="1.5" fill="currentColor" stroke="none"></circle>
+          </svg>
+        </div>
+        <p class="mono pillar-label">Capture</p>
+        <h3>Read the work signals</h3>
+        <p>Mail, calendar, tasks, and memory are pulled into one view for today.</p>
+      </article>
+      <article class="pillar reveal">
+        <div class="pillar-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="6" cy="7" r="2"></circle>
+            <circle cx="18" cy="7" r="2"></circle>
+            <circle cx="8" cy="18" r="2"></circle>
+            <circle cx="17" cy="17" r="2"></circle>
+            <path d="M8 7h8M7 9l1 7M10 17l5-1M17 9v6"></path>
+          </svg>
+        </div>
+        <p class="mono pillar-label">Connect</p>
+        <h3>Turn noise into context</h3>
+        <p>People, deadlines, threads, and promises are linked by business impact.</p>
+      </article>
+      <article class="pillar reveal">
+        <div class="pillar-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3 5 6v5c0 4.4 2.7 8 7 10 4.3-2 7-5.6 7-10V6l-7-3Z"></path>
+            <path d="m8.8 12.2 2.1 2.1 4.5-5"></path>
+          </svg>
+        </div>
+        <p class="mono pillar-label">Approve</p>
+        <h3>Confirm before action</h3>
+        <p>Important execution carries evidence, risk, and an explicit approval path.</p>
+      </article>
     </div>
-    <div class="container">
-      <div class="steps">
-        <div class="step">
-          <div class="step-number">1</div>
-          <h3>Connect your signals</h3>
-          <p>Link Gmail, Calendar, Slack, and Notion with one click. OAuth keeps credentials out of Klorn.</p>
+  </section>
+
+  <!-- ── Operating principle ─────────────────── -->
+  <section class="section section-narrow">
+    <div class="principle-grid">
+      <div>
+        <p class="mono section-eyebrow">Operating principle</p>
+        <h2 class="section-h">Prepare quietly. Confirm clearly.</h2>
+      </div>
+      <div class="principle-steps">
+        <div class="principle-step reveal">
+          <p class="mono index">01</p>
+          <h3>Observe</h3>
+          <p>Detect important patterns without changing the workspace.</p>
         </div>
-        <div class="step">
-          <div class="step-number">2</div>
-          <h3>Ask for a decision</h3>
-          <p>Chat naturally in Korean or English. "오늘 우선순위 정리해줘" or "Prepare the client response."</p>
+        <div class="principle-step reveal">
+          <p class="mono index">02</p>
+          <h3>Condense</h3>
+          <p>Compress useful signals into short decision cards.</p>
         </div>
-        <div class="step">
-          <div class="step-number">3</div>
-          <h3>Approve follow-through</h3>
-          <p>Review prepared action, source context, and risk before replies, schedule changes, or tasks move.</p>
+        <div class="principle-step reveal">
+          <p class="mono index">03</p>
+          <h3>Draft</h3>
+          <p>Replies, reminders, and schedule changes start as drafts.</p>
+        </div>
+        <div class="principle-step reveal">
+          <p class="mono index">04</p>
+          <h3>Approve</h3>
+          <p>External actions wait for a clear confirmation step.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <div class="divider"></div>
-
-  <!-- ── Use Cases ────────────────────────────── -->
-  <section>
-    <div class="container text-center">
-      <div class="section-label">Real examples</div>
-      <div class="section-title">What teams ask Eve</div>
-    </div>
-    <div class="container">
-      <div class="usecases">
-        <div class="usecase">
-          <div class="q"><span class="label">You</span> 오늘 브리핑 해줘</div>
-          <div class="a">12 emails, 3 events, 2 overdue tasks. Here are the decisions that need attention first.</div>
-        </div>
-        <div class="usecase">
-          <div class="q"><span class="label">You</span> Prepare a follow-up to investor@vc.com</div>
-          <div class="a">Approval card ready with the last meeting, current traction, and suggested next ask.</div>
-        </div>
-        <div class="usecase">
-          <div class="q"><span class="label">You</span> 내일 오후 3시에 미팅 잡아줘</div>
-          <div class="a">No conflicts found. Schedule change prepared for approval: tomorrow at 3:00 PM KST.</div>
-        </div>
-        <div class="usecase">
-          <div class="q"><span class="label">You</span> Build a launch decision brief</div>
-          <div class="a">Generated a brief with owner, timing, risk, budget, and recommended next move.</div>
-        </div>
-        <div class="usecase">
-          <div class="q"><span class="label">You</span> 이 고객 정보 정리해줘</div>
-          <div class="a">Updated relationship memory with company, role, last interaction, and open promises.</div>
-        </div>
-        <div class="usecase">
-          <div class="q"><span class="label">You</span> Summarize yesterday's Slack threads</div>
-          <div class="a">3 threads need decisions: design review feedback, deployment update, and partnership inquiry.</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <div class="divider"></div>
-
-  <!-- ── Pricing ──────────────────────────────── -->
-  <section id="pricing">
-    <div class="container text-center">
-      <div class="section-label">Pricing</div>
-      <div class="section-title">Simple, transparent pricing</div>
-      <div class="section-desc center">Start free. Upgrade when you need more.</div>
-    </div>
-    <div class="container">
-      <div class="pricing-grid">
-        <div class="price-card">
-          <div class="plan-name">Free</div>
-          <div class="price">$0<span>/mo</span></div>
-          <div class="price-desc">50 messages per month</div>
-          <ul>
-            <li>Signal inbox and decision cards</li>
-            <li>Gmail & Calendar</li>
-            <li>Basic approval workflows</li>
-            <li>Community support</li>
-          </ul>
-          <a href="https://app.klorn.ai/login" class="price-btn">Get Started</a>
-        </div>
-        <div class="price-card featured">
-          <span class="popular">Most Popular</span>
-          <div class="plan-name">Pro</div>
-          <div class="price">$29<span>/mo</span></div>
-          <div class="price-desc">2,000 messages per month</div>
-          <ul>
-            <li>Everything in Free</li>
-            <li>Slack & Notion</li>
-            <li>Advanced approval workflows</li>
-            <li>Priority support</li>
-            <li>File attachments</li>
-          </ul>
-          <a href="https://app.klorn.ai/login" class="price-btn primary">Start Pro Trial</a>
-        </div>
-        <div class="price-card">
-          <div class="plan-name">Team</div>
-          <div class="price">$99<span>/mo</span></div>
-          <div class="price-desc">10,000 messages per month</div>
-          <ul>
-            <li>Everything in Pro</li>
-            <li>Team workspace</li>
-            <li>Admin controls</li>
-            <li>Dedicated support</li>
-            <li>Custom integrations</li>
-          </ul>
-          <a href="https://app.klorn.ai/login" class="price-btn">Start Team Trial</a>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <div class="divider"></div>
-
-  <!-- ── CTA ──────────────────────────────────── -->
-  <section class="cta-section">
-    <h2>Stop chasing context.<br>Start deciding.</h2>
-    <p>Free to start. No credit card required. / 무료로 시작하세요.</p>
-    <a href="https://app.klorn.ai/login" class="btn-primary">
-      Try Klorn Now
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+  <!-- ── Final CTA ───────────────────────────── -->
+  <section class="final-cta">
+    <p class="mono section-eyebrow">Built for decisions</p>
+    <h2 class="final-cta-h">The next inbox is a decision queue.</h2>
+    <p class="final-cta-p">Before the day gets noisy, align context, evidence, and action in one clean line.</p>
+    <a href="https://app.klorn.ai/early-access" class="btn btn-cream" aria-label="Request early access from final section">
+      Request early access
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M5 12h14M13 6l6 6-6 6"></path>
+      </svg>
     </a>
   </section>
 
-  <!-- ── Footer ───────────────────────────────── -->
+  <!-- ── Footer ──────────────────────────────── -->
   <footer>
-    <div class="inner">
-      <div class="left">
-        <span class="brand">Klorn</span> &middot; The clear signal worth acting on
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <img src="/brand/mark.svg" alt="">
+        <span>Klorn — the clear signal worth acting on.</span>
       </div>
-      <div class="right">
-        <a href="#features">Features</a>
-        <a href="#pricing">Pricing</a>
+      <div class="footer-links">
+        <a href="https://app.klorn.ai/privacy">Privacy</a>
+        <a href="https://app.klorn.ai/terms">Terms</a>
         <a href="mailto:hello@klorn.ai">Contact</a>
       </div>
     </div>
   </footer>
 
-  <!-- ── Scroll Animation ─────────────────────── -->
   <script>
     const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
+      entries.forEach((entry) => {
         if (entry.isIntersecting) {
-          entry.target.style.opacity = '1';
-          entry.target.style.transform = 'translateY(0)';
+          entry.target.classList.add('in');
+          observer.unobserve(entry.target);
         }
       });
-    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
 
-    document.querySelectorAll('.feature-card, .step, .usecase, .price-card').forEach(el => {
-      el.style.opacity = '0';
-      el.style.transform = 'translateY(16px)';
-      el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-      observer.observe(el);
-    });
+    document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
   </script>
 
 </body>
