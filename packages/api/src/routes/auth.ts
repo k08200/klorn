@@ -594,19 +594,29 @@ export function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Invalid or expired OAuth state" });
     }
 
-    console.log("[OAUTH_DEBUG] callback received", {
-      hasCode: !!code,
-      stateEmail: statePayload.email,
-      env: {
-        hasClientId: !!process.env.GOOGLE_CLIENT_ID,
-        clientIdLen: process.env.GOOGLE_CLIENT_ID?.length,
-        hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
-        clientSecretLen: process.env.GOOGLE_CLIENT_SECRET?.length,
-        redirectUri: process.env.GOOGLE_REDIRECT_URI,
-        webUrl: process.env.WEB_URL,
-        frontendUrl: process.env.FRONTEND_URL,
-      },
-    });
+    {
+      const clientIdLen = (process.env.GOOGLE_CLIENT_ID || "").length;
+      const clientSecretLen = (process.env.GOOGLE_CLIENT_SECRET || "").length;
+      const urlInfo = (envKey: string) => {
+        const v = process.env[envKey];
+        if (!v) return { unset: true } as const;
+        try {
+          const u = new URL(v);
+          return { host: u.host, path: u.pathname } as const;
+        } catch {
+          return { invalid: true, length: v.length } as const;
+        }
+      };
+      console.log("[OAUTH_DEBUG] callback received", {
+        hasCode: !!code,
+        stateEmail: statePayload.email,
+        clientIdLen,
+        clientSecretLen,
+        redirectUri: urlInfo("GOOGLE_REDIRECT_URI"),
+        webUrl: urlInfo("WEB_URL"),
+        frontendUrl: urlInfo("FRONTEND_URL"),
+      });
+    }
 
     try {
       const oauth2 = getOAuth2Client();
