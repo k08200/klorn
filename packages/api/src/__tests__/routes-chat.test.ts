@@ -570,6 +570,33 @@ describe("chat routes (conversation CRUD)", () => {
     await app.close();
   });
 
+  it("rejects rapid duplicate prompts with 429", async () => {
+    const app = await buildApp();
+    const c = await app.inject({
+      method: "POST",
+      url: "/api/chat/conversations",
+      headers: auth(),
+    });
+    const conversationId = c.json().id;
+    const payload = { content: "the same prompt" };
+    const first = await app.inject({
+      method: "POST",
+      url: `/api/chat/conversations/${conversationId}/messages`,
+      headers: auth(),
+      payload,
+    });
+    expect(first.statusCode).toBe(200);
+    const second = await app.inject({
+      method: "POST",
+      url: `/api/chat/conversations/${conversationId}/messages`,
+      headers: auth(),
+      payload,
+    });
+    expect(second.statusCode).toBe(429);
+    expect(second.json()).toHaveProperty("error");
+    await app.close();
+  });
+
   it("turns chat propose_action tool calls into pending approval cards", async () => {
     const { getToolsForPlan } = await import("../tool-executor.js");
     vi.mocked(getToolsForPlan).mockReturnValue([

@@ -218,6 +218,27 @@ describe("admin routes", () => {
     expect(res.json().error).toMatch(/admin/i);
     await app.close();
   });
+
+  it("reports provider cooldown state via /llm-state", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/llm-state",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toHaveProperty("activeModel");
+    expect(body).toHaveProperty("observedAt");
+    expect(Array.isArray(body.providers)).toBe(true);
+    if (body.providers.length > 0) {
+      const p = body.providers[0];
+      expect(p).toHaveProperty("name");
+      expect(p).toHaveProperty("quotaKey");
+      expect(p).toHaveProperty("unavailable");
+    }
+    await app.close();
+  });
 });
 
 describe("PATCH /api/admin/waitlist/:id", () => {
