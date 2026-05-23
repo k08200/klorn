@@ -402,10 +402,20 @@ export function authRoutes(app: FastifyInstance) {
         return reply.code(401).send({ error: "Current password is incorrect" });
       }
 
-      await prisma.user.update({
-        where: { id: userId },
+      // Compare-and-swap on the exact hash we validated against. If a parallel
+      // request (reset-password, another change-password, account recovery) has
+      // already rewritten the hash, our update affects 0 rows and we reject —
+      // otherwise we would silently undo their write with a password the user
+      // who just rotated credentials no longer expects.
+      const updated = await prisma.user.updateMany({
+        where: { id: userId, passwordHash: user.passwordHash },
         data: { passwordHash: await hashPassword(newPassword) },
       });
+      if (updated.count === 0) {
+        return reply
+          .code(409)
+          .send({ error: "Password was changed elsewhere. Please log in again." });
+      }
 
       // Revoke other device sessions; keep current request's session active.
       const currentToken = (request.headers.authorization ?? "").slice(7);
@@ -448,10 +458,19 @@ export function authRoutes(app: FastifyInstance) {
           .send({ error: "Password already set. Use change-password instead." });
       }
 
-      await prisma.user.update({
-        where: { id: userId },
+      // Atomic single-use: only set the hash if no other request has already
+      // assigned one. Two concurrent set-password calls would otherwise both
+      // pass the read-side check and the second writer would silently overwrite
+      // the first user's freshly-set password.
+      const updated = await prisma.user.updateMany({
+        where: { id: userId, passwordHash: null },
         data: { passwordHash: await hashPassword(newPassword) },
       });
+      if (updated.count === 0) {
+        return reply
+          .code(400)
+          .send({ error: "Password already set. Use change-password instead." });
+      }
 
       return reply.send({ success: true });
     },
