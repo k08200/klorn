@@ -4,7 +4,7 @@ import { runAllScenarios, summarizeEval } from "../agent-eval.js";
 import { requireAdmin } from "../auth.js";
 import { db, prisma } from "../db.js";
 import { sendBetaInviteEmail } from "../email.js";
-import { getProviderCooldownInfo } from "../model-fallback.js";
+import { clearFallbackState, getProviderCooldownInfo } from "../model-fallback.js";
 import { MODEL } from "../openai.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { getProviderChain } from "../providers/index.js";
@@ -405,6 +405,17 @@ export async function adminRoutes(app: FastifyInstance) {
       providers,
       observedAt: new Date().toISOString(),
     };
+  });
+
+  // POST /api/admin/llm-state/clear — Reset in-memory provider cooldown state.
+  // Body: { quotaKey?: string } — when omitted, clears every tracked provider.
+  // Use during incidents to un-stick the chain without restarting the API
+  // (state is in-memory, so a redeploy also works but takes longer).
+  app.post("/llm-state/clear", async (request) => {
+    const body = (request.body ?? {}) as { quotaKey?: string };
+    const target = typeof body.quotaKey === "string" && body.quotaKey ? body.quotaKey : undefined;
+    clearFallbackState(target);
+    return { success: true, cleared: target ?? "all", clearedAt: new Date().toISOString() };
   });
 
   // GET /api/admin/eval — Run agent decision-logic eval scenarios

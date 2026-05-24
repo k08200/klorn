@@ -198,16 +198,18 @@ export async function createCompletion(
         } catch (err2) {
           lastError = err2;
           if (isKeyLimitError(err2)) {
-            markKeyLimited(provider.quotaKey);
+            markKeyLimited(provider.quotaKey, err2);
             continue; // → next provider
           }
           throw err2;
         }
       }
 
-      // 403/429 daily key limit: this provider is done — move to next provider
+      // 403/429 quota: this provider is done — move to next provider.
+      // markKeyLimited will pick a cooldown duration matching the actual
+      // quota window (RPM=5min, daily=until UTC midnight, ambiguous=1h).
       if (isKeyLimitError(err)) {
-        markKeyLimited(provider.quotaKey);
+        markKeyLimited(provider.quotaKey, err);
         continue;
       }
 
@@ -249,7 +251,7 @@ export async function createVisionCompletion(
     } catch (err) {
       lastError = err;
       if (isKeyLimitError(err) || isCreditError(err) || isProviderUnavailable(provider.quotaKey)) {
-        if (isKeyLimitError(err)) markKeyLimited(provider.quotaKey);
+        if (isKeyLimitError(err)) markKeyLimited(provider.quotaKey, err);
         if (isCreditError(err)) markCreditExhausted(provider.quotaKey);
       }
     }

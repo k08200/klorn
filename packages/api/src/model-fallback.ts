@@ -87,13 +87,60 @@ export function markCreditExhausted(provider: string): void {
   s.creditExhaustedAt = Date.now();
 }
 
-/** Mark a provider as quota/rate-limited — hold until next UTC midnight */
-export function markKeyLimited(provider: string): void {
+/**
+ * Granularity of the key-limit signal. Matters because Gemini and OpenRouter
+ * return 429s for both per-minute RPM trips AND per-day quota exhaustion —
+ * locking a provider out for ~21h after a one-minute RPM burst is far too
+ * punitive, so we shorten that case dramatically.
+ */
+export type CooldownKind = "minute" | "daily" | "ambiguous";
+
+const MINUTE_COOLDOWN_MS = 5 * 60_000;
+const AMBIGUOUS_COOLDOWN_MS = 60 * 60_000;
+
+/**
+ * Inspect an error message to decide how long to lock the provider out.
+ * Both OpenRouter and Gemini surface their quota window in the message body
+ * ("per minute" / "per day" / "daily limit"). When that signal is absent
+ * we default to "ambiguous" (1h) rather than "daily" so a transient 429
+ * doesn't burn most of the day.
+ */
+export function classifyKeyLimitError(error: unknown): CooldownKind {
+  const msg = error instanceof Error ? error.message.toLowerCase() : "";
+  if (!msg) return "ambiguous";
+  if (/per[\s-]?minute|per[\s-]?min\b/.test(msg)) return "minute";
+  if (/per[\s-]?day|daily limit|weekly limit/.test(msg)) return "daily";
+  return "ambiguous";
+}
+
+/**
+ * Mark a provider as quota/rate-limited. Pass the original error so the
+ * classifier can pick a cooldown that matches the actual quota window —
+ * RPM trips get 5 minutes; per-day quotas get held until next UTC midnight;
+ * anything ambiguous gets 1 hour.
+ */
+export function markKeyLimited(provider: string, error?: unknown): void {
   const s = providerState(provider);
-  const until = nextDailyResetMs();
+  const kind: CooldownKind = error === undefined ? "ambiguous" : classifyKeyLimitError(error);
+  let until: number;
+  let label: string;
+  switch (kind) {
+    case "minute":
+      until = Date.now() + MINUTE_COOLDOWN_MS;
+      label = "RPM (per-minute)";
+      break;
+    case "daily":
+      until = nextDailyResetMs();
+      label = "daily quota";
+      break;
+    default:
+      until = Date.now() + AMBIGUOUS_COOLDOWN_MS;
+      label = "ambiguous quota error";
+      break;
+  }
   s.keyLimitedUntil = until;
   console.warn(
-    `[MODEL-FALLBACK] ${provider} hit daily key limit — locked out until ${new Date(until).toISOString()}`,
+    `[MODEL-FALLBACK] ${provider} hit ${label} — locked out until ${new Date(until).toISOString()}`,
   );
 }
 
