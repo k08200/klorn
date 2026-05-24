@@ -245,19 +245,32 @@ describe("admin routes", () => {
       "../model-fallback.js"
     );
     clearFallbackState();
-    markKeyLimited("openrouter:test-admin", new Error("429 per day"));
-    expect(isKeyLimited("openrouter:test-admin")).toBe(true);
+    markKeyLimited("openrouter:user:test-admin", new Error("429 per day"));
+    expect(isKeyLimited("openrouter:user:test-admin")).toBe(true);
 
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
       url: "/api/admin/llm-state/clear",
       headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
-      payload: { quotaKey: "openrouter:test-admin" },
+      payload: { quotaKey: "openrouter:user:test-admin" },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().cleared).toBe("openrouter:test-admin");
-    expect(isKeyLimited("openrouter:test-admin")).toBe(false);
+    expect(res.json().cleared).toBe("openrouter:user:test-admin");
+    expect(isKeyLimited("openrouter:user:test-admin")).toBe(false);
+    await app.close();
+  });
+
+  it("rejects /llm-state/clear with a malformed quotaKey", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/admin/llm-state/clear",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      payload: { quotaKey: "__proto__" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/invalid quotakey/i);
     await app.close();
   });
 

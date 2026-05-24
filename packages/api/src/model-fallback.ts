@@ -26,14 +26,24 @@ interface ProviderState {
   keyLimitedUntil: number | null;
 }
 
-const state: Record<string, ProviderState> = {
-  openrouter: { creditExhaustedAt: null, keyLimitedUntil: null },
-  gemini: { creditExhaustedAt: null, keyLimitedUntil: null },
-};
+// Map (not a plain object) so a malicious quotaKey like "__proto__" or
+// "constructor" can never poison Object.prototype. quotaKeys flow in from
+// JWT userIds ("openrouter:user:<uuid>") and from the admin clear endpoint,
+// both of which CodeQL classifies as user-controlled.
+const state = new Map<string, ProviderState>();
 
 function providerState(provider: string): ProviderState {
-  state[provider] ??= { creditExhaustedAt: null, keyLimitedUntil: null };
-  return state[provider];
+  let s = state.get(provider);
+  if (!s) {
+    s = { creditExhaustedAt: null, keyLimitedUntil: null };
+    state.set(provider, s);
+  }
+  return s;
+}
+
+/** Strip control characters so log entries can't be forged via injected newlines. */
+function safeLogToken(value: string): string {
+  return value.replace(/[\r\n\t]+/g, " ").slice(0, 200);
 }
 
 /**
@@ -55,7 +65,9 @@ export function isCreditExhausted(provider: string): boolean {
   if (s.creditExhaustedAt === null) return false;
   if (Date.now() - s.creditExhaustedAt > CREDIT_RETRY_AFTER_MS) {
     s.creditExhaustedAt = null;
-    console.log(`[MODEL-FALLBACK] ${provider} credit cooldown expired — retrying paid models`);
+    console.log(
+      `[MODEL-FALLBACK] ${safeLogToken(provider)} credit cooldown expired — retrying paid models`,
+    );
     return false;
   }
   return true;
@@ -67,7 +79,9 @@ export function isKeyLimited(provider: string): boolean {
   if (s.keyLimitedUntil === null) return false;
   if (Date.now() >= s.keyLimitedUntil) {
     s.keyLimitedUntil = null;
-    console.log(`[MODEL-FALLBACK] ${provider} daily reset passed — retrying provider`);
+    console.log(
+      `[MODEL-FALLBACK] ${safeLogToken(provider)} daily reset passed — retrying provider`,
+    );
     return false;
   }
   return true;
@@ -82,7 +96,9 @@ export function isProviderUnavailable(provider: string): boolean {
 export function markCreditExhausted(provider: string): void {
   const s = providerState(provider);
   if (s.creditExhaustedAt === null) {
-    console.warn(`[MODEL-FALLBACK] ${provider} credits exhausted — cooldown for 5min`);
+    console.warn(
+      `[MODEL-FALLBACK] ${safeLogToken(provider)} credits exhausted — cooldown for 5min`,
+    );
   }
   s.creditExhaustedAt = Date.now();
 }
@@ -140,19 +156,19 @@ export function markKeyLimited(provider: string, error?: unknown): void {
   }
   s.keyLimitedUntil = until;
   console.warn(
-    `[MODEL-FALLBACK] ${provider} hit ${label} — locked out until ${new Date(until).toISOString()}`,
+    `[MODEL-FALLBACK] ${safeLogToken(provider)} hit ${label} — locked out until ${new Date(until).toISOString()}`,
   );
 }
 
 /** Manually clear all fallback state (admin / post-topup) */
 export function clearFallbackState(provider?: string): void {
-  const targets = provider ? [provider] : Object.keys(state);
+  const targets = provider ? [provider] : Array.from(state.keys());
   for (const p of targets) {
     const s = providerState(p);
     s.creditExhaustedAt = null;
     s.keyLimitedUntil = null;
   }
-  console.log(`[MODEL-FALLBACK] Cleared state for: ${targets.join(", ")}`);
+  console.log(`[MODEL-FALLBACK] Cleared state for: ${targets.map(safeLogToken).join(", ")}`);
 }
 
 /** Read-only snapshot of why a provider quotaKey is currently unavailable */
