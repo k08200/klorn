@@ -239,6 +239,62 @@ describe("admin routes", () => {
     }
     await app.close();
   });
+
+  it("clears provider cooldown state via POST /llm-state/clear", async () => {
+    const { markKeyLimited, isKeyLimited, clearFallbackState } = await import(
+      "../model-fallback.js"
+    );
+    clearFallbackState();
+    markKeyLimited("openrouter:user:test-admin", new Error("429 per day"));
+    expect(isKeyLimited("openrouter:user:test-admin")).toBe(true);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/admin/llm-state/clear",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      payload: { quotaKey: "openrouter:user:test-admin" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().cleared).toBe("openrouter:user:test-admin");
+    expect(isKeyLimited("openrouter:user:test-admin")).toBe(false);
+    await app.close();
+  });
+
+  it("rejects /llm-state/clear with a malformed quotaKey", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/admin/llm-state/clear",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      payload: { quotaKey: "__proto__" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/invalid quotakey/i);
+    await app.close();
+  });
+
+  it("clears every provider when /llm-state/clear is called without a quotaKey", async () => {
+    const { markKeyLimited, isKeyLimited, clearFallbackState } = await import(
+      "../model-fallback.js"
+    );
+    clearFallbackState();
+    markKeyLimited("openrouter:test-all", new Error("429 per day"));
+    markKeyLimited("gemini:test-all", new Error("429 per day"));
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/admin/llm-state/clear",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      payload: {},
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().cleared).toBe("all");
+    expect(isKeyLimited("openrouter:test-all")).toBe(false);
+    expect(isKeyLimited("gemini:test-all")).toBe(false);
+    await app.close();
+  });
 });
 
 describe("PATCH /api/admin/waitlist/:id", () => {

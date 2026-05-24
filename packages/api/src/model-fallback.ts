@@ -26,14 +26,24 @@ interface ProviderState {
   keyLimitedUntil: number | null;
 }
 
-const state: Record<string, ProviderState> = {
-  openrouter: { creditExhaustedAt: null, keyLimitedUntil: null },
-  gemini: { creditExhaustedAt: null, keyLimitedUntil: null },
-};
+// Map (not a plain object) so a malicious quotaKey like "__proto__" or
+// "constructor" can never poison Object.prototype. quotaKeys flow in from
+// JWT userIds ("openrouter:user:<uuid>") and from the admin clear endpoint,
+// both of which CodeQL classifies as user-controlled.
+const state = new Map<string, ProviderState>();
 
 function providerState(provider: string): ProviderState {
-  state[provider] ??= { creditExhaustedAt: null, keyLimitedUntil: null };
-  return state[provider];
+  let s = state.get(provider);
+  if (!s) {
+    s = { creditExhaustedAt: null, keyLimitedUntil: null };
+    state.set(provider, s);
+  }
+  return s;
+}
+
+/** Strip control characters so log entries can't be forged via injected newlines. */
+function safeLogToken(value: string): string {
+  return value.replace(/[\r\n\t]+/g, " ").slice(0, 200);
 }
 
 /**
@@ -55,7 +65,9 @@ export function isCreditExhausted(provider: string): boolean {
   if (s.creditExhaustedAt === null) return false;
   if (Date.now() - s.creditExhaustedAt > CREDIT_RETRY_AFTER_MS) {
     s.creditExhaustedAt = null;
-    console.log(`[MODEL-FALLBACK] ${provider} credit cooldown expired — retrying paid models`);
+    console.log(
+      `[MODEL-FALLBACK] ${safeLogToken(provider)} credit cooldown expired — retrying paid models`,
+    );
     return false;
   }
   return true;
@@ -67,7 +79,9 @@ export function isKeyLimited(provider: string): boolean {
   if (s.keyLimitedUntil === null) return false;
   if (Date.now() >= s.keyLimitedUntil) {
     s.keyLimitedUntil = null;
-    console.log(`[MODEL-FALLBACK] ${provider} daily reset passed — retrying provider`);
+    console.log(
+      `[MODEL-FALLBACK] ${safeLogToken(provider)} daily reset passed — retrying provider`,
+    );
     return false;
   }
   return true;
@@ -82,30 +96,79 @@ export function isProviderUnavailable(provider: string): boolean {
 export function markCreditExhausted(provider: string): void {
   const s = providerState(provider);
   if (s.creditExhaustedAt === null) {
-    console.warn(`[MODEL-FALLBACK] ${provider} credits exhausted — cooldown for 5min`);
+    console.warn(
+      `[MODEL-FALLBACK] ${safeLogToken(provider)} credits exhausted — cooldown for 5min`,
+    );
   }
   s.creditExhaustedAt = Date.now();
 }
 
-/** Mark a provider as quota/rate-limited — hold until next UTC midnight */
-export function markKeyLimited(provider: string): void {
+/**
+ * Granularity of the key-limit signal. Matters because Gemini and OpenRouter
+ * return 429s for both per-minute RPM trips AND per-day quota exhaustion —
+ * locking a provider out for ~21h after a one-minute RPM burst is far too
+ * punitive, so we shorten that case dramatically.
+ */
+export type CooldownKind = "minute" | "daily" | "ambiguous";
+
+const MINUTE_COOLDOWN_MS = 5 * 60_000;
+const AMBIGUOUS_COOLDOWN_MS = 60 * 60_000;
+
+/**
+ * Inspect an error message to decide how long to lock the provider out.
+ * Both OpenRouter and Gemini surface their quota window in the message body
+ * ("per minute" / "per day" / "daily limit"). When that signal is absent
+ * we default to "ambiguous" (1h) rather than "daily" so a transient 429
+ * doesn't burn most of the day.
+ */
+export function classifyKeyLimitError(error: unknown): CooldownKind {
+  const msg = error instanceof Error ? error.message.toLowerCase() : "";
+  if (!msg) return "ambiguous";
+  if (/per[\s-]?minute|per[\s-]?min\b/.test(msg)) return "minute";
+  if (/per[\s-]?day|daily limit|weekly limit/.test(msg)) return "daily";
+  return "ambiguous";
+}
+
+/**
+ * Mark a provider as quota/rate-limited. Pass the original error so the
+ * classifier can pick a cooldown that matches the actual quota window —
+ * RPM trips get 5 minutes; per-day quotas get held until next UTC midnight;
+ * anything ambiguous gets 1 hour.
+ */
+export function markKeyLimited(provider: string, error?: unknown): void {
   const s = providerState(provider);
-  const until = nextDailyResetMs();
+  const kind: CooldownKind = error === undefined ? "ambiguous" : classifyKeyLimitError(error);
+  let until: number;
+  let label: string;
+  switch (kind) {
+    case "minute":
+      until = Date.now() + MINUTE_COOLDOWN_MS;
+      label = "RPM (per-minute)";
+      break;
+    case "daily":
+      until = nextDailyResetMs();
+      label = "daily quota";
+      break;
+    default:
+      until = Date.now() + AMBIGUOUS_COOLDOWN_MS;
+      label = "ambiguous quota error";
+      break;
+  }
   s.keyLimitedUntil = until;
   console.warn(
-    `[MODEL-FALLBACK] ${provider} hit daily key limit — locked out until ${new Date(until).toISOString()}`,
+    `[MODEL-FALLBACK] ${safeLogToken(provider)} hit ${label} — locked out until ${new Date(until).toISOString()}`,
   );
 }
 
 /** Manually clear all fallback state (admin / post-topup) */
 export function clearFallbackState(provider?: string): void {
-  const targets = provider ? [provider] : Object.keys(state);
+  const targets = provider ? [provider] : Array.from(state.keys());
   for (const p of targets) {
     const s = providerState(p);
     s.creditExhaustedAt = null;
     s.keyLimitedUntil = null;
   }
-  console.log(`[MODEL-FALLBACK] Cleared state for: ${targets.join(", ")}`);
+  console.log(`[MODEL-FALLBACK] Cleared state for: ${targets.map(safeLogToken).join(", ")}`);
 }
 
 /** Read-only snapshot of why a provider quotaKey is currently unavailable */
