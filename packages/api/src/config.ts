@@ -105,7 +105,19 @@ export const SCHEDULER_RECONCILE_INTERVAL_MS = intEnv(
 // free tier (20 RPM upstream) — we cap each user well below so background
 // agents can still progress under load.
 export const LLM_USER_RPM = intEnv("LLM_USER_RPM", 15);
-export const LLM_USER_DAILY_CAP = intEnv("LLM_USER_DAILY_CAP", 500);
+// Daily cap is split into two independent buckets so a runaway background
+// loop (autonomous-agent, classifier, attachment analysis, etc.) can never
+// starve the foreground chat the user is actively waiting on. RPM stays
+// shared across both. LLM_USER_DAILY_CAP is kept as the sum for back-compat
+// with consumers that report a single total; setting it via env overrides
+// the foreground bucket so existing deployments keep their previous ceiling
+// on user-facing calls.
+export const LLM_USER_FOREGROUND_DAILY_CAP = intEnv(
+  "LLM_USER_FOREGROUND_DAILY_CAP",
+  intEnv("LLM_USER_DAILY_CAP", 300),
+);
+export const LLM_USER_BACKGROUND_DAILY_CAP = intEnv("LLM_USER_BACKGROUND_DAILY_CAP", 200);
+export const LLM_USER_DAILY_CAP = LLM_USER_FOREGROUND_DAILY_CAP + LLM_USER_BACKGROUND_DAILY_CAP;
 
 export const SCHEDULER_WATCH_RENEWAL_INTERVAL_MS = intEnv(
   "SCHEDULER_WATCH_RENEWAL_INTERVAL_MS",

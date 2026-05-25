@@ -167,7 +167,7 @@ Recent Notes: ${JSON.stringify(data.notes)}`;
         { role: "user", content: briefingPrompt },
       ],
     },
-    { credentials, userId },
+    { credentials, userId, priority: "background" },
   );
 
   return response.choices[0]?.message?.content || "No briefing generated.";

@@ -234,7 +234,7 @@ async function generateSkillName(seq: ToolSequence, userId?: string): Promise<st
           },
         ],
       },
-      userId ? { userId } : {},
+      userId ? { userId, priority: "background" } : { priority: "background" },
     );
     const name = res.choices[0]?.message?.content?.trim().slice(0, 40);
     if (name && name.length > 2) return name;

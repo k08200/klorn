@@ -19,9 +19,14 @@ import {
   type Provider,
   type ProviderCredentials,
 } from "./providers/index.js";
-import { checkAndRecordUserCall, UserRateLimitedError } from "./quota-limiter.js";
+import {
+  type CallPriority,
+  checkAndRecordUserCall,
+  UserRateLimitedError,
+} from "./quota-limiter.js";
 
 export { UserRateLimitedError };
+export type { CallPriority };
 
 /**
  * Back-compat export — some legacy call sites import `openai` directly.
@@ -52,6 +57,14 @@ export interface CompletionOptions {
    * accounting (e.g. one-off backfill scripts).
    */
   userId?: string;
+  /**
+   * Which daily-quota bucket to charge this call against. Defaults to
+   * "foreground" — anything the user is actively waiting on (chat, drafts,
+   * user-clicked actions). Background callers (autonomous agent, briefing,
+   * classifier, attachment analysis, etc.) MUST pass "background" so they
+   * cannot starve the user's own foreground bucket.
+   */
+  priority?: CallPriority;
 }
 
 export class DailyCostCapExceededError extends Error {
@@ -134,7 +147,9 @@ export async function createCompletion(
   // doesn't burn upstream provider quota. Background SYSTEM jobs pass no
   // userId and are paced by their scheduler instead.
   if (options.userId) {
-    checkAndRecordUserCall(options.userId);
+    checkAndRecordUserCall(options.userId, {
+      priority: options.priority ?? "foreground",
+    });
   }
 
   // Daily-cost gate: enforce BEFORE the call so we don't burn budget twice
