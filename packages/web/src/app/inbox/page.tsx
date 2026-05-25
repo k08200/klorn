@@ -4,8 +4,6 @@ import { useQueries, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
-import BriefingCard from "../../components/briefing-card";
-import CommandCenterSummary from "../../components/command-center-summary";
 import { useToast } from "../../components/toast";
 import WorkGraphSummaryCard from "../../components/work-graph-summary";
 import { apiFetch } from "../../lib/api";
@@ -246,14 +244,15 @@ function CommandCenterView() {
   };
 
   const pendingCount = actions.filter((a) => a.status === "PENDING").length;
+  const introLine = buildIntroLine(pendingCount);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 md:py-8">
       {/* Minimal page header */}
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <div>
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
-            Command Center
+            Klorn · Command Center
           </p>
           <h1 className="mt-1 text-xl font-semibold tracking-tight text-stone-50">
             {pendingCount > 0
@@ -287,35 +286,42 @@ function CommandCenterView() {
         </div>
       )}
 
-      {/* Morning Briefing — always first, full width */}
-      <div className="mb-6">
-        <BriefingCard />
-      </div>
-
-      {/* 2-column Command Center grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
-        {/* ── LEFT: Primary work queue ── */}
+      {/* 2-column Stadium grid — narrow right rail keeps focus on the hero. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
+        {/* ── LEFT: Stadium hero ── */}
         <div className="min-w-0 space-y-6">
-          {/* Approval Queue */}
+          {/* E-voice intro — only when decisions exist */}
+          {introLine && (
+            <p className="text-[15px] leading-relaxed text-stone-300">
+              <span className="text-stone-500">용린님,</span> {introLine}
+            </p>
+          )}
+
+          {/* Approval Queue — the only main-page content */}
           <section aria-label="Approval queue">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-stone-100">Approval Queue</h2>
-                {pendingCount > 0 && (
-                  <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
-                    {pendingCount}
-                  </span>
-                )}
+            {actions.length > 0 && (
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  {pendingCount > 0 && (
+                    <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
+                      {pendingCount} pending
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 rounded-lg border border-stone-800 bg-stone-950/80 p-1">
+                  <FilterTab
+                    active={filter === "pending"}
+                    label={`Pending${pendingCount ? ` (${pendingCount})` : ""}`}
+                    onClick={() => setFilter("pending")}
+                  />
+                  <FilterTab
+                    active={filter === "all"}
+                    label="All"
+                    onClick={() => setFilter("all")}
+                  />
+                </div>
               </div>
-              <div className="flex items-center gap-1 rounded-lg border border-stone-800 bg-stone-950/80 p-1">
-                <FilterTab
-                  active={filter === "pending"}
-                  label={`Pending${pendingCount ? ` (${pendingCount})` : ""}`}
-                  onClick={() => setFilter("pending")}
-                />
-                <FilterTab active={filter === "all"} label="All" onClick={() => setFilter("all")} />
-              </div>
-            </div>
+            )}
 
             {loading && actions.length === 0 && (
               <div className="space-y-2 rounded-xl border border-stone-800 bg-stone-900/30 p-4">
@@ -325,27 +331,7 @@ function CommandCenterView() {
             )}
 
             {!loading && actions.length === 0 && (
-              <div className="rounded-xl border border-stone-800 bg-stone-900/30 p-6 text-center">
-                <p className="text-sm text-stone-300">No pending decisions.</p>
-                <p className="mx-auto mt-1 max-w-xs text-xs text-stone-500">
-                  Connect your Google account so Klorn can surface decisions from your mail and
-                  calendar.
-                </p>
-                <div className="mt-4 flex justify-center gap-2">
-                  <Link
-                    href="/settings"
-                    className="inline-flex min-h-9 items-center justify-center rounded-md bg-amber-300 px-4 text-xs font-semibold text-stone-950 transition hover:bg-amber-200"
-                  >
-                    Connect Google
-                  </Link>
-                  <Link
-                    href="/email"
-                    className="inline-flex min-h-9 items-center justify-center rounded-md border border-stone-700 px-4 text-xs text-stone-300 transition hover:bg-stone-800"
-                  >
-                    Open mail
-                  </Link>
-                </div>
-              </div>
+              <HonestEmptyState commitmentCount={commitments.length} />
             )}
 
             {actions.length > 0 && (
@@ -365,37 +351,65 @@ function CommandCenterView() {
             )}
           </section>
 
-          {/* Commitment Ledger */}
+          {/* Commitment Ledger now lives on its own page (added in next PR).
+              Until then, just a slim link when commitments exist. */}
           {commitments.length > 0 && (
-            <section aria-label="Commitment ledger">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-stone-100">Commitment Ledger</h2>
-                <span className="text-[11px] text-stone-500">{commitments.length} open</span>
-              </div>
-              <ul className="space-y-2">
-                {commitments.map((commitment) => (
-                  <li key={commitment.id}>
-                    <CommitmentCard
-                      commitment={commitment}
-                      loading={commitmentLoading[commitment.id] ?? null}
-                      onDone={() => handleCommitmentStatus(commitment.id, "DONE")}
-                      onDismiss={() => handleCommitmentStatus(commitment.id, "DISMISSED")}
-                      onSnooze={() => handleCommitmentStatus(commitment.id, "SNOOZED")}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
+            <Link
+              href="/ledger"
+              className="flex items-center justify-between rounded-lg border border-stone-800 bg-stone-900/30 px-4 py-3 text-sm text-stone-300 transition hover:border-stone-700 hover:bg-stone-900/50"
+            >
+              <span>
+                <span className="text-stone-500">오늘 추적 중인 약속</span>{" "}
+                <span className="text-stone-100">{commitments.length}건</span>
+              </span>
+              <span className="text-stone-500">Ledger 열기 →</span>
+            </Link>
           )}
         </div>
 
-        {/* ── RIGHT: Context sidebar ── */}
+        {/* ── RIGHT: Slim Work Graph rail ── */}
         <div className="space-y-4">
-          <CommandCenterSummary />
           <WorkGraphSummaryCard />
           <ReplyNeededPanel />
           <QuickLinksPanel />
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── E-voice intro line ────────────────────────────────────────────────────
+
+function buildIntroLine(pendingCount: number): string | null {
+  if (pendingCount === 0) return null;
+  if (pendingCount === 1) return "결정하실 안건이 한 건 도착했습니다.";
+  return `결정하실 안건이 ${pendingCount}건 있습니다.`;
+}
+
+// ─── Honest empty state ────────────────────────────────────────────────────
+
+function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
+  return (
+    <div className="rounded-xl border border-stone-800 bg-stone-900/30 p-8 text-center">
+      <p className="text-base text-stone-200">오늘은 결정할 게 없습니다.</p>
+      <p className="mx-auto mt-2 max-w-sm text-xs text-stone-500">
+        {commitmentCount > 0
+          ? `Klorn이 메일과 캘린더를 모니터링 중입니다. 추적 중인 약속 ${commitmentCount}건은 Ledger에서 볼 수 있어요.`
+          : "Klorn이 메일과 캘린더를 모니터링 중입니다. 결정이 필요한 안건이 생기면 여기서 알려드려요."}
+      </p>
+      <div className="mt-5 flex justify-center gap-2">
+        <Link
+          href="/settings"
+          className="inline-flex min-h-9 items-center justify-center rounded-md border border-stone-700 px-4 text-xs text-stone-300 transition hover:bg-stone-800"
+        >
+          Settings
+        </Link>
+        <Link
+          href="/email"
+          className="inline-flex min-h-9 items-center justify-center rounded-md border border-stone-700 px-4 text-xs text-stone-300 transition hover:bg-stone-800"
+        >
+          메일 열기
+        </Link>
       </div>
     </div>
   );
