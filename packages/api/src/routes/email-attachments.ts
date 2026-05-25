@@ -215,7 +215,7 @@ Do not invent missing facts. If unreadable, keep ocrText empty and explain brief
         },
       ],
     },
-    { credentials },
+    { credentials, userId: input.userId },
   );
   const content = response.choices[0]?.message?.content || "{}";
   const parsed = parseVisualAnalysisJson(content);

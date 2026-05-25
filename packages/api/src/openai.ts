@@ -242,6 +242,20 @@ export async function createVisionCompletion(
     throw new Error("No LLM providers configured — set OPENROUTER_API_KEY and/or GEMINI_API_KEY");
   }
 
+  // Daily-cost gate: vision/OCR calls bill the same per-user daily ledger as
+  // chat. Without this, a runaway attachment-analysis batch can blow past the
+  // cap because checkCostGate was only wired into createCompletion.
+  if (options.userId) {
+    const { checkCostGate, recordCostUsage, usdToCents } = await import("./cost-guard.js");
+    const gate = await checkCostGate(options.userId);
+    if (!gate.allowed) {
+      throw new DailyCostCapExceededError(DAILY_COST_CAP_MESSAGE);
+    }
+    const { estimateModelCostUsd } = await import("./model-fallback.js");
+    const estUsd = estimateModelCostUsd(params.model, 0, 0);
+    void recordCostUsage(options.userId, usdToCents(estUsd), params.model);
+  }
+
   const ordered = [
     ...chain.filter((provider) => provider.name === "gemini"),
     ...chain.filter((provider) => provider.name !== "gemini"),
