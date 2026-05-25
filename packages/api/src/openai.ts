@@ -19,7 +19,11 @@ import {
   type Provider,
   type ProviderCredentials,
 } from "./providers/index.js";
-import { checkAndRecordUserCall, UserRateLimitedError } from "./quota-limiter.js";
+import {
+  type CallPriority,
+  checkAndRecordUserCall,
+  UserRateLimitedError,
+} from "./quota-limiter.js";
 
 export { UserRateLimitedError };
 
@@ -52,6 +56,13 @@ export interface CompletionOptions {
    * accounting (e.g. one-off backfill scripts).
    */
   userId?: string;
+  /**
+   * Which side of the user's daily quota this call should charge against.
+   * Defaults to "foreground" (chat / direct user action). Background workers
+   * (autonomous-agent, email classifier, briefing, pattern-learner, ...)
+   * MUST pass "background" so they can never starve chat.
+   */
+  priority?: CallPriority;
 }
 
 export class DailyCostCapExceededError extends Error {
@@ -131,10 +142,11 @@ export async function createCompletion(
   }
 
   // Per-user RPM + daily-cap gate: trip before the call so a runaway loop
-  // doesn't burn upstream provider quota. Background SYSTEM jobs pass no
-  // userId and are paced by their scheduler instead.
+  // doesn't burn upstream provider quota. Charged against the foreground
+  // bucket by default; background workers pass `priority: "background"` so
+  // they can never starve chat.
   if (options.userId) {
-    checkAndRecordUserCall(options.userId);
+    checkAndRecordUserCall(options.userId, { priority: options.priority ?? "foreground" });
   }
 
   // Daily-cost gate: enforce BEFORE the call so we don't burn budget twice

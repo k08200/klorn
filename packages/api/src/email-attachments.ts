@@ -677,7 +677,7 @@ ${wrapUntrusted(text, "attachment:text")}`,
         },
       ],
     },
-    { credentials },
+    { credentials, userId: input.userId, priority: "background" },
   );
   const content = response.choices[0]?.message?.content || "{}";
   const parsed = JSON.parse(content) as Partial<AttachmentAnalysis>;

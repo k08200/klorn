@@ -524,7 +524,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
           temperature: 0.3,
           max_tokens: 1000,
         },
-        { userId },
+        { userId, priority: "background" },
       );
 
       // Track token usage for cost monitoring
