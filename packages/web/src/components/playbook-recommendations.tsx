@@ -1,7 +1,8 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
 import { apiFetch } from "../lib/api";
 import type {
   KlornPlaybookDomain,
@@ -9,6 +10,9 @@ import type {
   PlaybookRecommendation,
   PlaybookRecommendationSummary,
 } from "../lib/playbooks";
+import { queryKeys } from "../lib/query-keys";
+
+const RECOMMENDATIONS_PARAMS = { limit: 2, contextLimit: 12 } as const;
 
 const EMPTY_SUMMARY: PlaybookRecommendationSummary = {
   generatedAt: "",
@@ -17,46 +21,55 @@ const EMPTY_SUMMARY: PlaybookRecommendationSummary = {
 };
 
 export default function PlaybookRecommendations() {
-  const [data, setData] = useState<PlaybookRecommendationSummary>(EMPTY_SUMMARY);
-  const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const refresh = useCallback(async () => {
-    try {
-      const summary = await apiFetch<PlaybookRecommendationSummary>(
-        "/api/playbooks/recommendations?limit=2&contextLimit=12",
-      ).catch(() => EMPTY_SUMMARY);
-      setData(summary);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data = EMPTY_SUMMARY, isPending: loading } = useQuery({
+    queryKey: queryKeys.playbooks.recommendations(RECOMMENDATIONS_PARAMS),
+    queryFn: async () => {
+      try {
+        return await apiFetch<PlaybookRecommendationSummary>(
+          `/api/playbooks/recommendations?limit=${RECOMMENDATIONS_PARAMS.limit}&contextLimit=${RECOMMENDATIONS_PARAMS.contextLimit}`,
+        );
+      } catch {
+        // Match prior behavior: swallow errors and surface as empty state
+        // so the recommendations strip stays hidden on transient failures.
+        return EMPTY_SUMMARY;
+      }
+    },
+  });
 
+  // Refetch when chat conversations land — same trigger the old version used
+  // to keep recommendations responsive to recent context.
   useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    const handler = () => refresh();
+    const handler = () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.playbooks.recommendations(RECOMMENDATIONS_PARAMS),
+      });
+    };
     window.addEventListener("conversations-updated", handler);
     return () => window.removeEventListener("conversations-updated", handler);
-  }, [refresh]);
+  }, [queryClient]);
+
+  const toggleMutation = useMutation({
+    mutationFn: ({ playbookId, active }: { playbookId: string; active: boolean }) =>
+      apiFetch(`/api/playbooks/${playbookId}/activate`, {
+        method: active ? "POST" : "DELETE",
+      }),
+    onSettled: () => {
+      // Sister page (`/settings/playbooks`) reads the same data — invalidate both.
+      queryClient.invalidateQueries({ queryKey: queryKeys.playbooks.all });
+    },
+  });
 
   if (loading && data.recommendations.length === 0) return null;
   if (data.recommendations.length === 0) return null;
 
-  const setActivation = async (playbookId: string, active: boolean) => {
-    if (updating) return;
-    setUpdating(playbookId);
-    try {
-      await apiFetch(`/api/playbooks/${playbookId}/activate`, {
-        method: active ? "POST" : "DELETE",
-      });
-      await refresh();
-    } finally {
-      setUpdating(null);
-    }
+  const setActivation = (playbookId: string, active: boolean) => {
+    if (toggleMutation.isPending) return;
+    toggleMutation.mutate({ playbookId, active });
   };
+
+  const updatingId = toggleMutation.isPending ? toggleMutation.variables?.playbookId : null;
 
   return (
     <section className="mb-6" aria-label="Klorn recommended playbooks">
@@ -69,7 +82,7 @@ export default function PlaybookRecommendations() {
           <PlaybookCard
             key={recommendation.playbook.id}
             recommendation={recommendation}
-            updating={updating === recommendation.playbook.id}
+            updating={updatingId === recommendation.playbook.id}
             onToggle={() =>
               setActivation(recommendation.playbook.id, !recommendation.playbook.active)
             }

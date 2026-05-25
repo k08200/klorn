@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import AuthGuard from "../../../components/auth-guard";
 import PlaybookRecommendations from "../../../components/playbook-recommendations";
 import { apiFetch } from "../../../lib/api";
 import type { KlornPlaybook } from "../../../lib/playbooks";
+import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
 
 const DOMAIN_META: Record<string, { label: string; color: string }> = {
@@ -73,37 +74,49 @@ function PlaybookRow({
 }
 
 function PlaybooksContent() {
-  const [playbooks, setPlaybooks] = useState<KlornPlaybook[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [toggling, setToggling] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const load = useCallback(() => {
-    apiFetch<{ playbooks: KlornPlaybook[] }>("/api/playbooks")
-      .then((data) => setPlaybooks(Array.isArray(data.playbooks) ? data.playbooks : []))
-      .catch((err) => captureClientError(err, { scope: "playbooks.load" }))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const handleToggle = useCallback(
-    async (id: string, activate: boolean) => {
-      setToggling(id);
+  const { data: playbooks = [], isPending: loading } = useQuery({
+    queryKey: queryKeys.playbooks.list(),
+    queryFn: async () => {
       try {
-        await apiFetch(`/api/playbooks/${id}/activate`, {
-          method: activate ? "POST" : "DELETE",
-        });
-        load();
+        const data = await apiFetch<{ playbooks: KlornPlaybook[] }>("/api/playbooks");
+        return Array.isArray(data.playbooks) ? data.playbooks : [];
       } catch (err) {
-        captureClientError(err, { scope: "playbooks.toggle" });
-      } finally {
-        setToggling(null);
+        captureClientError(err, { scope: "playbooks.load" });
+        throw err;
       }
     },
-    [load],
-  );
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, activate }: { id: string; activate: boolean }) =>
+      apiFetch(`/api/playbooks/${id}/activate`, {
+        method: activate ? "POST" : "DELETE",
+      }),
+    onMutate: async ({ id, activate }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.playbooks.list() });
+      const snapshot = queryClient.getQueryData<KlornPlaybook[]>(queryKeys.playbooks.list());
+      queryClient.setQueryData<KlornPlaybook[]>(queryKeys.playbooks.list(), (prev) =>
+        (prev ?? []).map((p) => (p.id === id ? { ...p, active: activate } : p)),
+      );
+      return { snapshot };
+    },
+    onError: (err, _vars, ctx) => {
+      captureClientError(err, { scope: "playbooks.toggle" });
+      if (ctx?.snapshot) queryClient.setQueryData(queryKeys.playbooks.list(), ctx.snapshot);
+    },
+    onSettled: () => {
+      // Recommendations share the activate endpoint, so invalidate both.
+      queryClient.invalidateQueries({ queryKey: queryKeys.playbooks.all });
+    },
+  });
+
+  const handleToggle = (id: string, activate: boolean) => {
+    toggleMutation.mutate({ id, activate });
+  };
+
+  const togglingId = toggleMutation.isPending ? toggleMutation.variables?.id : null;
 
   const active = playbooks.filter((p) => p.active);
   const inactive = playbooks.filter((p) => !p.active);
@@ -148,7 +161,7 @@ function PlaybooksContent() {
                       key={p.id}
                       playbook={p}
                       onToggle={handleToggle}
-                      toggling={toggling === p.id}
+                      toggling={togglingId === p.id}
                     />
                   ))}
                 </div>
@@ -166,7 +179,7 @@ function PlaybooksContent() {
                       key={p.id}
                       playbook={p}
                       onToggle={handleToggle}
-                      toggling={toggling === p.id}
+                      toggling={togglingId === p.id}
                     />
                   ))}
                 </div>
