@@ -25,8 +25,8 @@ import {
   UserRateLimitedError,
 } from "./quota-limiter.js";
 
-export { UserRateLimitedError };
 export type { CallPriority };
+export { UserRateLimitedError };
 
 /**
  * Back-compat export — some legacy call sites import `openai` directly.

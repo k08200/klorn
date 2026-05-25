@@ -111,12 +111,12 @@ describe("quota-limiter", () => {
     fillBucket("split-user", "background", LLM_USER_BACKGROUND_DAILY_CAP);
     // Background is full; foreground should still drain fully
     fillBucket("split-user", "foreground", LLM_USER_FOREGROUND_DAILY_CAP);
-    expect(() =>
-      checkAndRecordUserCall("split-user", { priority: "foreground" }),
-    ).toThrow(UserRateLimitedError);
-    expect(() =>
-      checkAndRecordUserCall("split-user", { priority: "background" }),
-    ).toThrow(UserRateLimitedError);
+    expect(() => checkAndRecordUserCall("split-user", { priority: "foreground" })).toThrow(
+      UserRateLimitedError,
+    );
+    expect(() => checkAndRecordUserCall("split-user", { priority: "background" })).toThrow(
+      UserRateLimitedError,
+    );
   });
 
   it("defaults to the foreground bucket when no priority is provided", () => {

@@ -73,7 +73,11 @@ export class UserRateLimitedError extends Error {
   retryAfterMs: number;
   reason: "rpm" | "daily";
   priority: CallPriority;
-  constructor(reason: "rpm" | "daily", retryAfterMs: number, priority: CallPriority = "foreground") {
+  constructor(
+    reason: "rpm" | "daily",
+    retryAfterMs: number,
+    priority: CallPriority = "foreground",
+  ) {
     const seconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
     const bucketLabel = priority === "foreground" ? "chat" : "background";
     super(
@@ -102,10 +106,7 @@ export interface CheckAndRecordOptions {
  * themselves multiple slots. Pass `priority: "background"` for any caller
  * that is not blocking a live user interaction.
  */
-export function checkAndRecordUserCall(
-  userId: string,
-  options: CheckAndRecordOptions = {},
-): void {
+export function checkAndRecordUserCall(userId: string, options: CheckAndRecordOptions = {}): void {
   const cost = options.cost ?? 1;
   const priority: CallPriority = options.priority ?? "foreground";
   const now = Date.now();
