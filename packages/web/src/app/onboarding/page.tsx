@@ -65,12 +65,7 @@ function OnboardingFlow() {
           Klorn
         </p>
 
-        {step === 1 && (
-          <WelcomeStep
-            connecting={connecting}
-            onConnectClick={handleConnectClick}
-          />
-        )}
+        {step === 1 && <WelcomeStep connecting={connecting} onConnectClick={handleConnectClick} />}
         {step === 2 && <SyncingStep initSync={initSync} onContinue={handleDone} />}
         {step === 3 && <ReadyStep initSync={initSync} onDone={handleDone} />}
 
