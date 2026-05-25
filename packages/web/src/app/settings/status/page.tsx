@@ -376,6 +376,7 @@ function readinessCheckLabel(check: ReadinessCheck): string {
     devices: "Signed-in devices",
     push: "Push notifications",
     google: "Google account",
+    aiProvider: "AI provider",
     automations: "Automation settings",
     reminders: "Reminders",
     briefing: "Daily briefing",
@@ -413,6 +414,13 @@ function readinessCheckMessage(check: ReadinessCheck): string {
       if (check.message.startsWith("Generated today")) return "Briefing generated today";
       if (check.message.startsWith("Enabled for")) return "Briefing automation on";
       return "Briefing automation off";
+    case "aiProvider": {
+      const unavailable = detailNumber(check, "unavailableCount") ?? 0;
+      if (check.status === "ok") return "All providers available";
+      if (check.status === "error")
+        return "All AI providers in cooldown — chat and briefing fall back to rule-based view";
+      return `${unavailable} provider${unavailable === 1 ? "" : "s"} in cooldown — fallback active`;
+    }
     case "data": {
       const emails = detailNumber(check, "emails") ?? 0;
       const events = detailNumber(check, "upcomingCalendarEvents") ?? 0;
