@@ -131,10 +131,10 @@ function CalendarView() {
                 Klorn · Calendar
               </p>
               <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-                준비가 필요한 회의부터
+                Meetings that need prep
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-                앞으로 14일의 일정과 관련 작업 신호를 함께 확인하세요.
+                The next 14 days of events alongside the work signals that touch them.
               </p>
             </div>
             <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">

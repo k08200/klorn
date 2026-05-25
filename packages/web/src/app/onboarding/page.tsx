@@ -101,13 +101,13 @@ function WelcomeStep({
   return (
     <div>
       <h1 className="text-3xl font-semibold leading-tight tracking-tight text-stone-50">
-        Klorn은 결정해야 할 것만
+        Klorn surfaces only the
         <br />
-        골라드립니다.
+        decisions worth acting on.
       </h1>
       <p className="mt-4 text-sm leading-6 text-stone-400">
-        Gmail과 Google Calendar에 연결해주세요. 메일에서 결정이 필요한 안건만 골라내고, 나머지
-        소음은 차단합니다.
+        Connect Gmail and Google Calendar. Klorn pulls the items that need a decision and quiets the
+        rest.
       </p>
 
       <div className="mt-8 space-y-3">
@@ -117,16 +117,16 @@ function WelcomeStep({
           disabled={connecting}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {connecting ? "Google로 이동 중..." : "Gmail & Calendar 연결하기"}
+          {connecting ? "Redirecting to Google..." : "Connect Gmail & Calendar"}
           {!connecting && <span aria-hidden>→</span>}
         </button>
       </div>
 
       <div className="mt-8 grid grid-cols-3 gap-3">
         {[
-          { icon: "✉", label: "메일을 읽고" },
-          { icon: "◉", label: "약속을 추적하고" },
-          { icon: "✦", label: "결정만 알려줍니다" },
+          { icon: "✉", label: "Read mail" },
+          { icon: "◉", label: "Track meetings" },
+          { icon: "✦", label: "Surface decisions" },
         ].map((item) => (
           <div
             key={item.label}
@@ -140,8 +140,8 @@ function WelcomeStep({
 
       {/* Permissions disclosure — Klorn never sends without explicit approval. */}
       <p className="mt-6 text-center text-[11px] leading-5 text-stone-500">
-        Klorn은 Gmail과 Calendar를 <span className="text-stone-300">읽기만</span> 합니다. 메일
-        전송이나 일정 생성은 항상 <span className="text-stone-300">본인 승인 후</span> 진행됩니다.
+        Klorn <span className="text-stone-300">only reads</span> Gmail and Calendar. Sending mail or
+        creating events always waits for <span className="text-stone-300">your approval</span>.
       </p>
     </div>
   );

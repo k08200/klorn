@@ -231,11 +231,7 @@ function CommandCenterView() {
         {/* ── LEFT: Stadium hero ── */}
         <div className="min-w-0 space-y-6">
           {/* E-voice intro — only when decisions exist */}
-          {introLine && (
-            <p className="text-[15px] leading-relaxed text-stone-300">
-              <span className="text-stone-500">용린님,</span> {introLine}
-            </p>
-          )}
+          {introLine && <p className="text-[15px] leading-relaxed text-stone-300">{introLine}</p>}
 
           {/* Approval Queue — the only main-page content */}
           <section aria-label="Approval queue">
@@ -299,10 +295,10 @@ function CommandCenterView() {
               className="flex items-center justify-between rounded-lg border border-stone-800 bg-stone-900/30 px-4 py-3 text-sm text-stone-300 transition hover:border-stone-700 hover:bg-stone-900/50"
             >
               <span>
-                <span className="text-stone-500">오늘 추적 중인 약속</span>{" "}
-                <span className="text-stone-100">{commitments.length}건</span>
+                <span className="text-stone-500">Commitments tracked today</span>{" "}
+                <span className="text-stone-100">{commitments.length}</span>
               </span>
-              <span className="text-stone-500">Ledger 열기 →</span>
+              <span className="text-stone-500">Open ledger →</span>
             </Link>
           )}
         </div>
@@ -322,8 +318,8 @@ function CommandCenterView() {
 
 function buildIntroLine(pendingCount: number): string | null {
   if (pendingCount === 0) return null;
-  if (pendingCount === 1) return "결정하실 안건이 한 건 도착했습니다.";
-  return `결정하실 안건이 ${pendingCount}건 있습니다.`;
+  if (pendingCount === 1) return "One decision is waiting for you.";
+  return `${pendingCount} decisions are waiting for you.`;
 }
 
 // ─── Honest empty state ────────────────────────────────────────────────────
@@ -331,11 +327,11 @@ function buildIntroLine(pendingCount: number): string | null {
 function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
   return (
     <div className="rounded-xl border border-stone-800 bg-stone-900/30 p-8 text-center">
-      <p className="text-base text-stone-200">오늘은 결정할 게 없습니다.</p>
+      <p className="text-base text-stone-200">Nothing to decide today.</p>
       <p className="mx-auto mt-2 max-w-sm text-xs text-stone-500">
         {commitmentCount > 0
-          ? `Klorn이 메일과 캘린더를 모니터링 중입니다. 추적 중인 약속 ${commitmentCount}건은 Ledger에서 볼 수 있어요.`
-          : "Klorn이 메일과 캘린더를 모니터링 중입니다. 결정이 필요한 안건이 생기면 여기서 알려드려요."}
+          ? `Klorn is watching your mail and calendar. The ${commitmentCount} tracked commitment${commitmentCount === 1 ? "" : "s"} live in the ledger.`
+          : "Klorn is watching your mail and calendar. When something needs a decision, it lands here."}
       </p>
       <div className="mt-5 flex justify-center gap-2">
         <Link
@@ -348,7 +344,7 @@ function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
           href="/email"
           className="inline-flex min-h-9 items-center justify-center rounded-md border border-stone-700 px-4 text-xs text-stone-300 transition hover:bg-stone-800"
         >
-          메일 열기
+          Open mail
         </Link>
       </div>
     </div>
@@ -438,8 +434,8 @@ function QuickLinksPanel() {
   // from /inbox: today's receipt and the morning briefing. Agent timeline
   // and the chat root live one click away through the sidebar nav already.
   const links = [
-    { href: "/inbox/receipt", label: "오늘의 처리 내역" },
-    { href: "/briefing", label: "전체 브리핑" },
+    { href: "/inbox/receipt", label: "Today's receipt" },
+    { href: "/briefing", label: "Full briefing" },
   ] as const;
 
   return (
@@ -518,7 +514,7 @@ function ActionCard({
     emailPreview?.subject ||
     action.conversationTitle ||
     toolPreview ||
-    (toolName === "prepared_action" ? "결정 안건" : toolName.replace(/_/g, " "));
+    (toolName === "prepared_action" ? "Decision pending" : toolName.replace(/_/g, " "));
 
   // Single-paragraph context. Prefer the AI's "judgment" framing because
   // that's the why-it-matters. Situation is a weaker fallback.
@@ -566,7 +562,7 @@ function ActionCard({
         <details className="mx-5 mb-4 rounded-lg border border-stone-800 bg-black/20">
           <summary className="cursor-pointer list-none px-3 py-2 text-xs text-stone-400 transition hover:text-stone-200">
             <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-amber-300">
-              메일 본문
+              Email body
             </span>
             <span className="ml-2 text-stone-500">To: {emailPreview.to}</span>
           </summary>
@@ -593,7 +589,7 @@ function ActionCard({
             {loading === "approve" ? (
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-stone-950/30 border-t-stone-950" />
             ) : (
-              "지금 처리"
+              "Act now"
             )}
           </button>
           <button
@@ -612,7 +608,7 @@ function ActionCard({
             type="button"
             onClick={onSnooze}
             disabled={!!loading}
-            title="1시간 후 다시 알림"
+            title="Remind me in 1 hour"
             className="inline-flex min-h-11 items-center justify-center gap-1 px-3 text-xs text-stone-500 transition hover:text-stone-300 disabled:opacity-50"
           >
             {loading === "snooze" ? (
@@ -625,7 +621,7 @@ function ActionCard({
             href={`/chat/${action.conversationId}`}
             className="ml-auto text-xs text-stone-500 transition hover:text-stone-300"
           >
-            스레드 열기 →
+            Open thread →
           </Link>
         </div>
       )}
@@ -639,7 +635,7 @@ function ActionCard({
             href={`/chat/${action.conversationId}`}
             className="shrink-0 text-xs text-stone-400 transition hover:text-stone-200"
           >
-            스레드 열기 →
+            Open thread →
           </Link>
         </div>
       )}

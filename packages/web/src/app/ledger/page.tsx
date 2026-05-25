@@ -22,11 +22,11 @@ const BUCKET_ORDER = ["overdue", "today", "week", "later", "noDue"] as const;
 type Bucket = (typeof BUCKET_ORDER)[number];
 
 const BUCKET_LABELS: Record<Bucket, string> = {
-  overdue: "지연됨",
-  today: "오늘",
-  week: "이번 주",
-  later: "나중",
-  noDue: "마감 없음",
+  overdue: "Overdue",
+  today: "Today",
+  week: "This week",
+  later: "Later",
+  noDue: "No due date",
 };
 
 export default function LedgerPage() {
@@ -99,10 +99,11 @@ function LedgerView() {
             Klorn · Ledger
           </p>
           <h1 className="mt-1 text-xl font-semibold tracking-tight text-stone-50">
-            추적 중인 약속
+            Tracked commitments
           </h1>
           <p className="mt-1 text-xs text-stone-500">
-            Klorn이 메일과 결정 스레드에서 자동으로 잡아낸 약속들. Done / Dismiss로 정리하세요.
+            Commitments Klorn picked up from mail and decision threads. Resolve with Done or
+            Dismiss.
           </p>
         </div>
         <div className="flex items-center gap-1 rounded-lg border border-stone-800 bg-stone-950/80 p-1 shrink-0">
@@ -130,25 +131,25 @@ function LedgerView() {
       {!loading && commitments.length === 0 && (
         <div className="rounded-xl border border-stone-800 bg-stone-900/30 p-8 text-center">
           <p className="text-base text-stone-200">
-            {filter === "OPEN" ? "추적 중인 약속이 없습니다." : "약속 기록이 없습니다."}
+            {filter === "OPEN" ? "No commitments being tracked." : "No commitment history yet."}
           </p>
           <p className="mx-auto mt-2 max-w-sm text-xs text-stone-500">
-            새 메일이나 결정 스레드에서 약속이 발견되면 여기에 표시됩니다.
+            When Klorn detects a commitment in new mail or a decision thread, it appears here.
           </p>
           <Link
             href="/inbox"
             className="mt-5 inline-flex min-h-9 items-center justify-center rounded-md border border-stone-700 px-4 text-xs text-stone-300 transition hover:bg-stone-800"
           >
-            Decision queue로 돌아가기
+            Back to decision queue
           </Link>
         </div>
       )}
 
       {!loading && commitments.length > 0 && totalShown === 0 && (
         <div className="rounded-xl border border-stone-800 bg-stone-900/30 p-6 text-center">
-          <p className="text-sm text-stone-300">검색 결과가 없습니다.</p>
+          <p className="text-sm text-stone-300">No matching commitments.</p>
           <p className="mt-1 text-xs text-stone-500">
-            "{search}"와 일치하는 약속이 없어요. 검색어를 비우면 전체가 다시 표시됩니다.
+            Nothing matches "{search}". Clear the search to see everything again.
           </p>
         </div>
       )}
@@ -164,7 +165,7 @@ function LedgerView() {
                   <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-400">
                     {BUCKET_LABELS[key]}
                   </h2>
-                  <span className="text-[11px] text-stone-600">{items.length}건</span>
+                  <span className="text-[11px] text-stone-600">{items.length}</span>
                 </div>
                 <ul className="space-y-2">
                   {items.map((commitment) => (
@@ -230,7 +231,7 @@ function SearchInput({ value, onChange }: { value: string; onChange: (next: stri
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="약속 검색..."
+        placeholder="Search commitments..."
         className="w-full rounded-lg border border-stone-800 bg-stone-950/80 py-2 pl-10 pr-9 text-sm text-stone-200 placeholder-stone-600 transition focus:border-stone-600 focus:outline-none"
       />
       {value && (
@@ -238,7 +239,7 @@ function SearchInput({ value, onChange }: { value: string; onChange: (next: stri
           type="button"
           onClick={() => onChange("")}
           className="absolute right-2 top-1/2 -translate-y-1/2 px-2 text-xs text-stone-500 hover:text-stone-300"
-          aria-label="검색어 지우기"
+          aria-label="Clear search"
         >
           ✕
         </button>

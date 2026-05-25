@@ -36,7 +36,7 @@ export function TodayActionsCard() {
   if (query.isLoading) {
     return (
       <section className="mb-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
-        <p className="text-xs text-stone-500">오늘 한 일 불러오는 중…</p>
+        <p className="text-xs text-stone-500">Loading today's activity…</p>
       </section>
     );
   }
@@ -54,12 +54,12 @@ export function TodayActionsCard() {
     return (
       <section className="mb-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
         <header className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-stone-100">오늘 Klorn이 한 일</h2>
-          <span className="text-[11px] text-stone-500">UTC 자정 기준</span>
+          <h2 className="text-sm font-semibold text-stone-100">What Klorn did today</h2>
+          <span className="text-[11px] text-stone-500">Since UTC midnight</span>
         </header>
         <p className="text-xs text-stone-500">
-          오늘은 아직 결정거리도, 자동 실행도 없습니다. 메일 동기화나 결정 카드가 도착하면 여기
-          요약이 나타납니다.
+          Nothing to decide and nothing to run yet today. When a mail sync or decision card lands, a
+          summary appears here.
         </p>
       </section>
     );
@@ -68,24 +68,24 @@ export function TodayActionsCard() {
   return (
     <section className="mb-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
       <header className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-stone-100">오늘 Klorn이 한 일</h2>
-        <span className="text-[11px] text-stone-500">UTC 자정 기준</span>
+        <h2 className="text-sm font-semibold text-stone-100">What Klorn did today</h2>
+        <span className="text-[11px] text-stone-500">Since UTC midnight</span>
       </header>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <TodayStat
-          label="자동 실행"
+          label="Auto-executed"
           value={data.totals.executed}
           tone={data.totals.executed > 0 ? "good" : "idle"}
         />
         <TodayStat
-          label="대기 중"
+          label="Pending"
           value={data.totals.pending}
           tone={data.totals.pending > 0 ? "warn" : "idle"}
         />
-        <TodayStat label="거절" value={data.totals.rejected} tone="idle" />
+        <TodayStat label="Declined" value={data.totals.rejected} tone="idle" />
         <TodayStat
-          label="긴급 메일"
+          label="Urgent mail"
           value={data.totals.urgent}
           tone={data.totals.urgent > 0 ? "hot" : "idle"}
         />
@@ -97,7 +97,7 @@ export function TodayActionsCard() {
             key={item.id}
             tone="executed"
             tool={item.toolName}
-            text={item.summary || "내용 없음"}
+            text={item.summary || "No summary"}
           />
         ))}
         {data.pending.slice(0, 2).map((item) => (
@@ -105,7 +105,7 @@ export function TodayActionsCard() {
             key={item.id}
             tone="pending"
             tool={item.toolName}
-            text={item.summary || "내용 없음"}
+            text={item.summary || "No summary"}
             href={`/chat/${item.conversationId}`}
           />
         ))}
@@ -120,7 +120,7 @@ export function TodayActionsCard() {
             href="/inbox"
             className="text-[11px] text-amber-300 transition hover:text-amber-200"
           >
-            대기 중인 결정 {data.totals.pending}건 모두 보기 →
+            See all {data.totals.pending} pending decision{data.totals.pending === 1 ? "" : "s"} →
           </Link>
         </div>
       )}
@@ -168,9 +168,9 @@ function TodayRow({
     urgent: "bg-rose-400",
   }[tone];
   const label = {
-    executed: "실행",
-    pending: "대기",
-    urgent: "긴급",
+    executed: "Executed",
+    pending: "Pending",
+    urgent: "Urgent",
   }[tone];
   const inner = (
     <div className="flex items-start gap-2 rounded-lg border border-stone-800/70 bg-black/15 px-3 py-2">
