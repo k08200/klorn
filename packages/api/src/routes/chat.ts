@@ -33,14 +33,30 @@ import { pushNotification } from "../websocket.js";
 import { withRetry } from "../with-retry.js";
 import { registerChatPendingActionsRoutes } from "./chat-pending-actions.js";
 
+// Titles shorter than this are treated as placeholder noise — typing "hi"
+// into a fresh thread shouldn't lock in "hi" as the lifetime title. Kept in
+// sync with the sidebar's MIN_TITLE_LENGTH so what we hide on the client
+// matches what we replace on the server.
+const MIN_MEANINGFUL_TITLE_LENGTH = 3;
+const NOISE_TITLES = new Set(["test", "asdf", "qwer", "테스트", "test1", "test2"]);
+
+function isNoiseTitle(title: string | null | undefined): boolean {
+  const t = (title ?? "").trim();
+  if (t.length < MIN_MEANINGFUL_TITLE_LENGTH) return true;
+  return NOISE_TITLES.has(t.toLowerCase());
+}
+
 /** Auto-generate conversation title from the first user message (fire-and-forget) */
 async function autoGenerateTitle(conversationId: string, userMessage: string) {
   try {
     const convo = await prisma.conversation.findUnique({
       where: { id: conversationId },
     });
-    // Only generate if title is null/empty (never been set)
-    if (convo?.title) return;
+    // Generate when title is null/empty/whitespace OR when the existing
+    // title is a short/noise placeholder like "hi" — those just confuse the
+    // sidebar and don't help the user find anything later. A meaningful
+    // existing title is left alone.
+    if (convo && !isNoiseTitle(convo.title)) return;
 
     const response = await createCompletion(
       {
