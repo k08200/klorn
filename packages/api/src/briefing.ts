@@ -159,18 +159,80 @@ Emails: ${JSON.stringify(data.emails)}
 Recent Notes: ${JSON.stringify(data.notes)}`;
 
   const credentials = await getUserLlmCredentials(userId);
-  const response = await createCompletion(
-    {
-      model: MODEL,
-      messages: [
-        { role: "system", content: AGENT_SYSTEM_PROMPT },
-        { role: "user", content: briefingPrompt },
-      ],
-    },
-    { credentials, userId, priority: "background" },
-  );
+  try {
+    const response = await createCompletion(
+      {
+        model: MODEL,
+        messages: [
+          { role: "system", content: AGENT_SYSTEM_PROMPT },
+          { role: "user", content: briefingPrompt },
+        ],
+      },
+      { credentials, userId, priority: "background" },
+    );
 
-  return response.choices[0]?.message?.content || "No briefing generated.";
+    const content = response.choices[0]?.message?.content?.trim();
+    if (content) return content;
+    return buildSignalOnlyBriefing(data.signals);
+  } catch {
+    // LLM provider exhausted, rate-limited, or otherwise unreachable.
+    // Fall back to the deterministic signal summary so the user still
+    // gets a useful briefing instead of an error or empty screen.
+    return buildSignalOnlyBriefing(data.signals);
+  }
+}
+
+/**
+ * Render BriefingSignals (already rule-based — see briefing-signals.ts) as a
+ * human-readable briefing without any LLM call. Used when every provider is
+ * locked out so the briefing page never goes blank.
+ */
+export function buildSignalOnlyBriefing(signals: BriefingSignals): string {
+  const lines: string[] = ["**Briefing (AI summary unavailable — rule-based view)**", ""];
+
+  const topActions = signals.topActions.slice(0, 3);
+  if (topActions.length > 0) {
+    lines.push("**Top 3 Today**");
+    topActions.forEach((a, i) => {
+      lines.push(`${i + 1}. ${a.action} — ${a.reason}`);
+    });
+    lines.push("");
+  }
+
+  if (signals.deadlines.length > 0) {
+    lines.push("**Deadlines**");
+    for (const d of signals.deadlines.slice(0, 5)) {
+      const due = d.dueText || d.dueAt || "soon";
+      lines.push(`- ${d.title} (${due}) — ${d.reason}`);
+    }
+    lines.push("");
+  }
+
+  if (signals.urgentItems.length > 0) {
+    lines.push("**Urgent**");
+    for (const u of signals.urgentItems.slice(0, 5)) {
+      lines.push(`- ${u.title} — ${u.reason}`);
+    }
+    lines.push("");
+  }
+
+  if (signals.crossLinks.length > 0) {
+    lines.push("**Connected items**");
+    for (const link of signals.crossLinks.slice(0, 3)) {
+      lines.push(`- ${link.reason}`);
+    }
+    lines.push("");
+  }
+
+  if (
+    topActions.length === 0 &&
+    signals.deadlines.length === 0 &&
+    signals.urgentItems.length === 0
+  ) {
+    lines.push("Nothing urgent surfaced from today's data. Use the open block to plan ahead.");
+  }
+
+  return lines.join("\n").trim();
 }
 
 export async function createDailyBriefingDelivery(userId: string): Promise<{
