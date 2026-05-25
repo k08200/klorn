@@ -1290,11 +1290,24 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
   } catch (err) {
     const elapsed = Date.now() - startTime;
     const errName = err instanceof Error ? err.name : "";
-    // Cost-cap hits are not bugs — they're expected back-pressure. Log
-    // quietly, skip Sentry, and let the next cycle (next day) recover.
-    if (errName === "DailyCostCapExceededError") {
-      await logAgentAction(userId, "skipped", "Daily cost cap reached; skipping cycle");
-      console.log(`[AGENT] Cost cap reached for ${userId}; skipping cycle`);
+    // Expected back-pressure from the quota/cost guards — these are NOT bugs.
+    // The user has either hit their per-day cost cap, their per-user RPM /
+    // background-bucket limit, or every LLM provider is in cooldown. Log
+    // quietly, skip Sentry, and let the next cycle recover when the window
+    // resets (5 min / next UTC midnight).
+    if (
+      errName === "DailyCostCapExceededError" ||
+      errName === "UserRateLimitedError" ||
+      errName === "AllProvidersExhaustedError"
+    ) {
+      const reason =
+        errName === "DailyCostCapExceededError"
+          ? "Daily cost cap reached"
+          : errName === "UserRateLimitedError"
+            ? "User rate limit reached"
+            : "All LLM providers in cooldown";
+      await logAgentAction(userId, "skipped", `${reason}; skipping cycle`);
+      console.log(`[AGENT] ${reason} for ${userId}; skipping cycle`);
       return;
     }
     const message = err instanceof Error ? err.message : "Unknown error";
