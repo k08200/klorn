@@ -412,7 +412,7 @@ try {
     });
 
   // Start autonomous LLM reasoning agent
-  import("./autonomous-agent.js")
+  import("./autonomous-agent-scheduler.js")
     .then(({ startAutonomousAgent }) => {
       startAutonomousAgent();
     })
