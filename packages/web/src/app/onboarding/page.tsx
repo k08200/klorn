@@ -104,13 +104,13 @@ function WelcomeStep({
   return (
     <div>
       <h1 className="text-3xl font-semibold leading-tight tracking-tight text-stone-50">
-        Your AI Chief of Staff
+        Klorn은 결정해야 할 것만
         <br />
-        is ready to set up.
+        골라드립니다.
       </h1>
       <p className="mt-4 text-sm leading-6 text-stone-400">
-        Connect Gmail and Google Calendar. Klorn reads your inbox, finds what needs your attention,
-        and surfaces it — so nothing slips through.
+        Gmail과 Google Calendar에 연결해주세요. 메일에서 결정이 필요한 안건만 골라내고, 나머지
+        소음은 차단합니다.
       </p>
 
       <div className="mt-8 space-y-3">
@@ -119,7 +119,7 @@ function WelcomeStep({
           onClick={onConnectClick}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
         >
-          Connect Gmail &amp; Calendar
+          Gmail &amp; Calendar 연결하기
           <span aria-hidden>→</span>
         </a>
         <button
@@ -127,15 +127,15 @@ function WelcomeStep({
           onClick={onSkip}
           className="w-full rounded-xl border border-stone-700 px-5 py-3 text-sm text-stone-400 transition hover:border-stone-600 hover:text-stone-200"
         >
-          Skip for now
+          나중에 하기
         </button>
       </div>
 
       <div className="mt-8 grid grid-cols-3 gap-3">
         {[
-          { icon: "✉", label: "Reads your inbox" },
-          { icon: "◉", label: "Tracks commitments" },
-          { icon: "✦", label: "Surfaces decisions" },
+          { icon: "✉", label: "메일을 읽고" },
+          { icon: "◉", label: "약속을 추적하고" },
+          { icon: "✦", label: "결정만 알려줍니다" },
         ].map((item) => (
           <div
             key={item.label}
@@ -146,6 +146,13 @@ function WelcomeStep({
           </div>
         ))}
       </div>
+
+      {/* Permissions disclosure — Klorn never sends without explicit approval. */}
+      <p className="mt-6 text-center text-[11px] leading-5 text-stone-500">
+        Klorn은 Gmail과 Calendar를{" "}
+        <span className="text-stone-300">읽기만</span> 합니다. 메일 전송이나 일정 생성은 항상{" "}
+        <span className="text-stone-300">본인 승인 후</span> 진행됩니다.
+      </p>
     </div>
   );
 }

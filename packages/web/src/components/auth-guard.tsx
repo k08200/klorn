@@ -4,9 +4,18 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "../lib/auth";
 
+// Pages that stay reachable while Google is unconnected. /onboarding is the
+// gate itself; /settings is where the user manages the connection; any path
+// under /auth or /login is the sign-in flow.
+const GOOGLE_OPTIONAL_PREFIXES = ["/onboarding", "/settings", "/login", "/auth"];
+
+function isGoogleOptional(pathname: string): boolean {
+  return GOOGLE_OPTIONAL_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 /** Redirects to /login if user is not authenticated. Wraps protected pages. */
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { user, loading, authError } = useAuth();
+  const { user, loading, authError, googleConnected } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -16,8 +25,15 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       const query = typeof window !== "undefined" ? window.location.search.slice(1) : "";
       const next = `${pathname}${query ? `?${query}` : ""}`;
       router.replace(`/login?next=${encodeURIComponent(next)}`);
+      return;
     }
-  }, [user, loading, authError, pathname, router]);
+    // User is signed in but Google is not connected — Klorn cannot do its
+    // job without mail/calendar access, so route them through the onboarding
+    // gate. Settings and the gate itself stay reachable.
+    if (!loading && user && googleConnected === false && !isGoogleOptional(pathname)) {
+      router.replace("/onboarding");
+    }
+  }, [user, loading, authError, googleConnected, pathname, router]);
 
   if (loading) {
     return (
