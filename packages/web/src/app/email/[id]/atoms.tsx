@@ -73,3 +73,10 @@ export function senderName(raw: string): string {
   if (match?.[1]) return match[1].trim();
   return raw.replace(/[<>]/g, "").trim();
 }
+
+export function formatBytes(size: number | null): string {
+  if (!size || size <= 0) return "Unknown size";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
