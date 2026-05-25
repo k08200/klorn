@@ -487,6 +487,12 @@ function FilterTab({
 }
 
 // ─── Action card ───────────────────────────────────────────────────────────
+//
+// Stadium hero: one decision center stage. The card answers three questions
+// in one glance — "what is it", "why it matters", "what do I do" — without
+// the three-column dashboard noise of the previous design. Email bodies and
+// other heavy context drop into a single disclosure so the default view
+// stays a calm headline + one paragraph + three buttons.
 
 function ActionCard({
   action,
@@ -503,162 +509,145 @@ function ActionCard({
 }) {
   const toolName = action.toolName || "prepared_action";
   const toolArgs = action.toolArgs || "{}";
-  const preview = buildPreview(toolName, toolArgs, action.targetLabel);
   const emailPreview = toolName === "send_email" ? buildEmailPreview(toolArgs) : null;
+  const toolPreview = buildPreview(toolName, toolArgs, action.targetLabel);
   const reasoning = splitReasoning(action.reasoning);
   const isPending = action.status === "PENDING";
   const risk = riskForTool(toolName);
 
+  // Hero subject: the most user-meaningful single line we have. Email
+  // subject beats conversation title beats the per-tool preview beats a
+  // humanised tool name. We never fall back to the literal "prepared_action".
+  const heroSubject =
+    emailPreview?.subject ||
+    action.conversationTitle ||
+    toolPreview ||
+    (toolName === "prepared_action" ? "결정 안건" : toolName.replace(/_/g, " "));
+
+  // Single-paragraph context. Prefer the AI's "judgment" framing because
+  // that's the why-it-matters. Situation is a weaker fallback.
+  const context = reasoning.judgment || reasoning.situation || action.reasoning;
+
+  // Show the thread hint only if it isn't already in the hero (which would
+  // duplicate text when conversationTitle was promoted to the subject).
+  const showThreadHint = action.conversationTitle && action.conversationTitle !== heroSubject;
+
   return (
-    <article className="relative overflow-hidden rounded-lg border border-stone-800 bg-stone-950/70">
-      <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-amber-300 via-teal-300 to-stone-100" />
-      <div className="border-b border-stone-800 bg-stone-900/50 px-4 py-3 pl-5 md:px-5 md:pl-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-300">
-              Decision card
-            </span>
-            <StatusBadge status={action.status} />
-          </div>
-          <span className="text-[11px] text-stone-600">{formatRelative(action.createdAt)}</span>
+    <article className="overflow-hidden rounded-xl border border-amber-300/25 bg-stone-950/70">
+      {/* Top meta — just badges + relative time. No "Decision card" eyebrow,
+          since the entire card already is one. */}
+      <div className="flex items-center justify-between gap-2 px-5 pt-4">
+        <div className="flex items-center gap-2">
+          <RiskBadge risk={risk} />
+          {!isPending && <StatusBadge status={action.status} />}
         </div>
+        <span className="font-mono text-[11px] text-stone-600">
+          {formatRelative(action.createdAt)}
+        </span>
       </div>
 
-      <div className="p-4 pl-5 md:p-5 md:pl-6">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-medium text-amber-200 bg-amber-300/10 border border-amber-300/20 rounded px-1.5 py-0.5">
-              {toolName === "prepared_action" ? "Prepared action" : toolName.replace(/_/g, " ")}
+      {/* Hero subject */}
+      <div className="px-5 pb-1 pt-3">
+        <h3 className="break-words text-2xl font-semibold leading-tight tracking-tight text-stone-50">
+          {heroSubject}
+        </h3>
+        {showThreadHint && (
+          <p className="mt-1.5 truncate text-[11px] text-stone-600">
+            Thread: {action.conversationTitle}
+          </p>
+        )}
+      </div>
+
+      {/* Context paragraph */}
+      {context && (
+        <p className="px-5 pb-4 pt-2 text-sm leading-relaxed text-stone-300 line-clamp-3">
+          {context}
+        </p>
+      )}
+
+      {/* Email body disclosure — hidden by default to keep the card calm */}
+      {emailPreview && (
+        <details className="mx-5 mb-4 rounded-lg border border-stone-800 bg-black/20">
+          <summary className="cursor-pointer list-none px-3 py-2 text-xs text-stone-400 transition hover:text-stone-200">
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-amber-300">
+              메일 본문
             </span>
-            <RiskBadge risk={risk} />
-            {action.conversationTitle && (
-              <span className="min-w-0 truncate text-[11px] text-stone-600">
-                Thread: {action.conversationTitle}
-              </span>
+            <span className="ml-2 text-stone-500">To: {emailPreview.to}</span>
+          </summary>
+          <div className="space-y-2 border-t border-stone-800 px-3 py-3">
+            <p className="break-words text-xs text-stone-300">Subject: {emailPreview.subject}</p>
+            {emailPreview.body && (
+              <p className="line-clamp-8 whitespace-pre-wrap text-xs leading-relaxed text-stone-300">
+                {emailPreview.body}
+              </p>
             )}
           </div>
+        </details>
+      )}
 
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            <DecisionSection
-              label="Signal"
-              title="What Klorn found"
-              body={
-                reasoning.situation ||
-                action.conversationTitle ||
-                "Klorn reviewed the connected thread and work signals."
-              }
-            />
-            <DecisionSection
-              label="Judgment"
-              title="Why it matters"
-              body={reasoning.judgment || action.reasoning || "Review is needed before execution."}
-            />
-            <DecisionSection
-              label="Action"
-              title="Prepared move"
-              body={
-                reasoning.proposal ||
-                preview ||
-                action.preview ||
-                (toolName === "prepared_action" ? "Prepared action" : toolName.replace(/_/g, " "))
-              }
-            />
-          </div>
-
-          {emailPreview && (
-            <div className="mt-4 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-medium text-amber-300">
-                  Approval required before sending
-                </span>
-                <span className="text-[11px] text-stone-500">send_email</span>
-              </div>
-              <p className="mt-2 text-xs text-stone-300 break-words">To: {emailPreview.to}</p>
-              <p className="mt-1 text-xs text-stone-400 break-words">
-                Subject: {emailPreview.subject}
-              </p>
-              {emailPreview.body && (
-                <p className="mt-2 text-xs leading-relaxed text-stone-300 line-clamp-4 whitespace-pre-wrap">
-                  {emailPreview.body}
-                </p>
-              )}
-            </div>
-          )}
-
-          {isPending && (
-            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-stone-800 pt-4">
-              <button
-                type="button"
-                onClick={onApprove}
-                disabled={!!loading}
-                className="inline-flex min-w-[88px] items-center justify-center gap-1.5 rounded-md bg-amber-400 px-4 py-2 text-sm font-semibold text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading === "approve" ? (
-                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-stone-950/30 border-t-stone-950" />
-                ) : (
-                  "Approve"
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={onReject}
-                disabled={!!loading}
-                className="inline-flex min-w-[88px] items-center justify-center gap-1.5 rounded-md border border-stone-600 px-4 py-2 text-sm font-medium text-stone-300 transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading === "reject" ? (
-                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-stone-300/30 border-t-stone-200" />
-                ) : (
-                  "Reject"
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={onSnooze}
-                disabled={!!loading}
-                title="Remind me in 1 hour"
-                className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs text-stone-500 hover:text-stone-300 transition disabled:opacity-50"
-              >
-                {loading === "snooze" ? (
-                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-stone-500/30 border-t-stone-400" />
-                ) : (
-                  "Snooze 1h"
-                )}
-              </button>
-              <Link
-                href={`/chat/${action.conversationId}`}
-                className="text-xs text-amber-300 hover:text-amber-200 ml-auto transition"
-              >
-                Open thread →
-              </Link>
-            </div>
-          )}
-
-          {!isPending && (
-            <div className="flex items-center justify-between mt-4 border-t border-stone-800 pt-3">
-              {action.result && (
-                <p className="text-[11px] text-stone-500 truncate flex-1">{action.result}</p>
-              )}
-              <Link
-                href={`/chat/${action.conversationId}`}
-                className="text-xs text-stone-400 hover:text-stone-200 transition shrink-0 ml-2"
-              >
-                Open thread →
-              </Link>
-            </div>
-          )}
+      {/* Action band */}
+      {isPending && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-stone-800 bg-stone-900/40 px-5 py-3">
+          <button
+            type="button"
+            onClick={onApprove}
+            disabled={!!loading}
+            className="inline-flex min-h-11 min-w-[120px] items-center justify-center gap-1.5 rounded-lg bg-amber-400 px-5 text-sm font-semibold text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading === "approve" ? (
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-stone-950/30 border-t-stone-950" />
+            ) : (
+              "지금 처리"
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={onReject}
+            disabled={!!loading}
+            className="inline-flex min-h-11 min-w-[80px] items-center justify-center gap-1.5 rounded-lg border border-stone-700 px-4 text-sm font-medium text-stone-300 transition hover:border-stone-500 hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading === "reject" ? (
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-stone-300/30 border-t-stone-200" />
+            ) : (
+              "Skip"
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={onSnooze}
+            disabled={!!loading}
+            title="1시간 후 다시 알림"
+            className="inline-flex min-h-11 items-center justify-center gap-1 px-3 text-xs text-stone-500 transition hover:text-stone-300 disabled:opacity-50"
+          >
+            {loading === "snooze" ? (
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-stone-500/30 border-t-stone-400" />
+            ) : (
+              "Snooze 1h"
+            )}
+          </button>
+          <Link
+            href={`/chat/${action.conversationId}`}
+            className="ml-auto text-xs text-stone-500 transition hover:text-stone-300"
+          >
+            스레드 열기 →
+          </Link>
         </div>
-      </div>
-    </article>
-  );
-}
+      )}
 
-function DecisionSection({ label, title, body }: { label: string; title: string; body: string }) {
-  return (
-    <section className="rounded-lg border border-stone-800 bg-black/20 p-3">
-      <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-amber-300">{label}</p>
-      <h3 className="mt-2 text-xs font-semibold text-stone-200">{title}</h3>
-      <p className="mt-2 text-xs leading-5 text-stone-400">{body}</p>
-    </section>
+      {!isPending && (
+        <div className="flex items-center justify-between gap-2 border-t border-stone-800 bg-stone-900/40 px-5 py-3">
+          {action.result && (
+            <p className="flex-1 truncate text-[11px] text-stone-500">{action.result}</p>
+          )}
+          <Link
+            href={`/chat/${action.conversationId}`}
+            className="shrink-0 text-xs text-stone-400 transition hover:text-stone-200"
+          >
+            스레드 열기 →
+          </Link>
+        </div>
+      )}
+    </article>
   );
 }
 
