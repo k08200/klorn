@@ -221,7 +221,7 @@ async function classifyBatchWithLlm(
         ],
         response_format: { type: "json_object" },
       },
-      userId ? { userId } : {},
+      userId ? { userId, priority: "background" as const } : {},
     );
 
     const raw = response.choices[0]?.message?.content;

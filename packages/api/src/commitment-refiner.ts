@@ -166,7 +166,7 @@ Rules:
         { role: "user", content: promptFor(input) },
       ],
     },
-    input.userId ? { userId: input.userId } : {},
+    input.userId ? { userId: input.userId, priority: "background" as const } : {},
   );
 
   const raw = response.choices[0]?.message?.content || "{}";
