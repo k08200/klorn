@@ -184,4 +184,95 @@ export async function automationRoutes(app: FastifyInstance) {
 
     return { logs };
   });
+
+  // GET /api/automations/today-actions — "What did Klorn do for me today?"
+  //
+  // Aggregates PendingAction status transitions for the calling user since UTC
+  // midnight + currently-open proposals + urgent notifications today, into one
+  // shape the briefing page can render as a 5-line card without doing 4
+  // separate queries from the client.
+  app.get("/today-actions", async (request) => {
+    const userId = getUserId(request);
+    const sinceUtc = new Date();
+    sinceUtc.setUTCHours(0, 0, 0, 0);
+
+    type ActionRow = {
+      id: string;
+      toolName: string;
+      reasoning: string | null;
+      result: string | null;
+      conversationId: string;
+      createdAt: Date;
+      updatedAt: Date;
+    };
+
+    const [executedToday, rejectedToday, pendingOpen, urgentToday] = (await Promise.all([
+      db.pendingAction.findMany({
+        where: { userId, status: "EXECUTED", updatedAt: { gte: sinceUtc } },
+        orderBy: { updatedAt: "desc" },
+        take: 8,
+      }),
+      db.pendingAction.findMany({
+        where: { userId, status: "REJECTED", updatedAt: { gte: sinceUtc } },
+        orderBy: { updatedAt: "desc" },
+        take: 8,
+      }),
+      db.pendingAction.findMany({
+        where: { userId, status: "PENDING" },
+        orderBy: { createdAt: "desc" },
+        take: 8,
+      }),
+      prisma.notification.findMany({
+        where: {
+          userId,
+          type: "email",
+          createdAt: { gte: sinceUtc },
+          OR: [{ title: "Urgent email" }, { title: "긴급 이메일" }],
+        },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, message: true, link: true, createdAt: true },
+        take: 8,
+      }),
+    ])) as [
+      ActionRow[],
+      ActionRow[],
+      ActionRow[],
+      Array<{ id: string; message: string; link: string | null; createdAt: Date }>,
+    ];
+
+    return {
+      sinceUtc: sinceUtc.toISOString(),
+      executed: executedToday.map((row) => ({
+        id: row.id,
+        toolName: row.toolName,
+        summary: (row.reasoning ?? "").slice(0, 200),
+        at: row.updatedAt.toISOString(),
+      })),
+      rejected: rejectedToday.map((row) => ({
+        id: row.id,
+        toolName: row.toolName,
+        reason: (row.result ?? "").slice(0, 200),
+        at: row.updatedAt.toISOString(),
+      })),
+      pending: pendingOpen.map((row) => ({
+        id: row.id,
+        toolName: row.toolName,
+        summary: (row.reasoning ?? "").slice(0, 200),
+        conversationId: row.conversationId,
+        at: row.createdAt.toISOString(),
+      })),
+      urgent: urgentToday.map((row) => ({
+        id: row.id,
+        message: row.message,
+        link: row.link ?? null,
+        at: row.createdAt.toISOString(),
+      })),
+      totals: {
+        executed: executedToday.length,
+        rejected: rejectedToday.length,
+        pending: pendingOpen.length,
+        urgent: urgentToday.length,
+      },
+    };
+  });
 }
