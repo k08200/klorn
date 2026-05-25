@@ -83,7 +83,11 @@ export async function notificationRoutes(app: FastifyInstance) {
   // POST /api/notifications/push/subscribe — Register push subscription
   app.post("/push/subscribe", async (request, reply) => {
     const userId = getUserId(request);
-    const { endpoint, keys, origin: bodyOrigin } = request.body as {
+    const {
+      endpoint,
+      keys,
+      origin: bodyOrigin,
+    } = request.body as {
       endpoint: string;
       keys: { p256dh: string; auth: string };
       origin?: string;

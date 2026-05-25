@@ -14,13 +14,13 @@ import webPush from "web-push";
 import { prisma } from "./db.js";
 import { isSafePushEndpoint } from "./is-safe-push-endpoint.js";
 import { type NotifCategory, shouldNotify } from "./notification-prefs.js";
-import { isAllowedPushOrigin } from "./push-origin-allowlist.js";
 import {
   createPushDeliveryAttempt,
   createSkippedPushDelivery,
   markPushAccepted,
   markPushFailed,
 } from "./push-delivery.js";
+import { isAllowedPushOrigin } from "./push-origin-allowlist.js";
 import { recordPushAttempt } from "./push-rate-limit.js";
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
