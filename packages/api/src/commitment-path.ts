@@ -81,7 +81,7 @@ export async function buildPath(userId: string, commitmentId: string): Promise<C
       max_tokens: 600,
       temperature: 0.2,
     },
-    { userId, priority: "background" },
+    { userId },
   );
 
   const raw = response.choices[0]?.message?.content?.trim() ?? "[]";
