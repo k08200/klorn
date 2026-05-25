@@ -74,10 +74,26 @@ function groupByDate(convs: Conversation[]): DateGroup[] {
 
 const NAV_ITEMS = [
   { href: "/inbox", label: "Decision queue", icon: "check" },
+  { href: "/ledger", label: "Ledger", icon: "list" },
   { href: "/email", label: "Mail", icon: "mail" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/briefing", label: "Briefing", icon: "bell" },
 ];
+
+// Threads whose entire title is shorter than this are treated as dev noise
+// (e.g. "hi", "ok", a stray Hangul jamo) and hidden from the sidebar list.
+// Pinned threads and search results bypass the filter, so users can still
+// reach a short-titled thread when they want it.
+const MIN_TITLE_LENGTH = 3;
+// Common test/noise titles that exceed MIN_TITLE_LENGTH but are still clearly
+// disposable. Compared case-insensitively against the trimmed title.
+const NOISE_TITLES = new Set(["test", "asdf", "qwer", "테스트", "test1", "test2"]);
+
+function hasMeaningfulTitle(conv: { title: string | null }): boolean {
+  const title = (conv.title ?? "").trim();
+  if (title.length < MIN_TITLE_LENGTH) return false;
+  return !NOISE_TITLES.has(title.toLowerCase());
+}
 
 function NavIcon({ type, size = 16 }: { type: string; size?: number }) {
   const props = {
@@ -113,6 +129,17 @@ function NavIcon({ type, size = 16 }: { type: string; size?: number }) {
         <svg aria-hidden="true" {...props}>
           <polyline points="9 11 12 14 22 4" />
           <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+        </svg>
+      );
+    case "list":
+      return (
+        <svg aria-hidden="true" {...props}>
+          <line x1="8" y1="6" x2="21" y2="6" />
+          <line x1="8" y1="12" x2="21" y2="12" />
+          <line x1="8" y1="18" x2="21" y2="18" />
+          <line x1="3" y1="6" x2="3.01" y2="6" />
+          <line x1="3" y1="12" x2="3.01" y2="12" />
+          <line x1="3" y1="18" x2="3.01" y2="18" />
         </svg>
       );
     case "calendar":
@@ -379,7 +406,11 @@ export default function Sidebar({
   );
   const totalPending = agentSuggestions.reduce((sum, c) => sum + (c.pendingActionCount || 0), 0);
   const pinned = regularConvs.filter((c) => c.pinned);
-  const unpinned = regularConvs.filter((c) => !c.pinned);
+  // Hide dev-noise threads ("hi", "ok", whitespace, empty) from the unpinned
+  // list unless the user is actively searching. Pinned threads stay visible
+  // regardless because the user explicitly chose to keep them.
+  const unpinnedAll = regularConvs.filter((c) => !c.pinned);
+  const unpinned = search ? unpinnedAll : unpinnedAll.filter(hasMeaningfulTitle);
   const groups = groupByDate(
     [...unpinned].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
   );

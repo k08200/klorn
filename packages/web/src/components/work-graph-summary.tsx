@@ -47,21 +47,17 @@ export default function WorkGraphSummaryCard() {
       aria-label="Work graph summary"
     >
       <div className="border-b border-stone-800 bg-gradient-to-br from-stone-950 via-stone-950 to-amber-950/20 p-4 md:p-5">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
+        <div className="flex flex-col gap-4">
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">
               Work graph
             </p>
             <h2 className="mt-2 text-lg font-semibold tracking-tight text-stone-100">
-              Active work contexts
+              Active contexts
             </h2>
-            <p className="mt-2 max-w-xl text-xs leading-5 text-stone-500">
-              Klorn groups mail, decision threads, and commitments into one work context so risk is
-              easier to see.
-            </p>
           </div>
 
-          <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-white/10 bg-black/20 md:min-w-[240px]">
+          <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-white/10 bg-black/20">
             <GraphMetric label="Contexts" value={data.contexts.length} />
             <GraphMetric label="Signals" value={totals.signals} />
             <GraphMetric label="Risk" value={totals.highRisk} />

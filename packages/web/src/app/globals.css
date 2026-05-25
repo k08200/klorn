@@ -27,7 +27,7 @@
 
 body {
   word-break: keep-all;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 /* iOS safe-area helpers (notch + home indicator).
