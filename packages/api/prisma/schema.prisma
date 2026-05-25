@@ -426,6 +426,12 @@ model PushSubscription {
   endpoint  String   @unique
   p256dh    String
   auth      String
+  // Web origin where the SW that owns this subscription is registered (e.g.
+  // "https://app.klorn.ai"). Required so the backend can stop pushing to
+  // subs belonging to retired origins whose SW would openWindow() to a
+  // dead URL. Nullable for rows created before this column existed; clean
+  // those up via scripts/cleanup-stale-push-subs.ts.
+  origin    String?
   createdAt DateTime @default(now())
 
   @@index([userId])
