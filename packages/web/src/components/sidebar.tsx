@@ -80,6 +80,21 @@ const NAV_ITEMS = [
   { href: "/briefing", label: "Briefing", icon: "bell" },
 ];
 
+// Threads whose entire title is shorter than this are treated as dev noise
+// (e.g. "hi", "ok", a stray Hangul jamo) and hidden from the sidebar list.
+// Pinned threads and search results bypass the filter, so users can still
+// reach a short-titled thread when they want it.
+const MIN_TITLE_LENGTH = 3;
+// Common test/noise titles that exceed MIN_TITLE_LENGTH but are still clearly
+// disposable. Compared case-insensitively against the trimmed title.
+const NOISE_TITLES = new Set(["test", "asdf", "qwer", "테스트", "test1", "test2"]);
+
+function hasMeaningfulTitle(conv: { title: string | null }): boolean {
+  const title = (conv.title ?? "").trim();
+  if (title.length < MIN_TITLE_LENGTH) return false;
+  return !NOISE_TITLES.has(title.toLowerCase());
+}
+
 function NavIcon({ type, size = 16 }: { type: string; size?: number }) {
   const props = {
     width: size,
@@ -391,7 +406,11 @@ export default function Sidebar({
   );
   const totalPending = agentSuggestions.reduce((sum, c) => sum + (c.pendingActionCount || 0), 0);
   const pinned = regularConvs.filter((c) => c.pinned);
-  const unpinned = regularConvs.filter((c) => !c.pinned);
+  // Hide dev-noise threads ("hi", "ok", whitespace, empty) from the unpinned
+  // list unless the user is actively searching. Pinned threads stay visible
+  // regardless because the user explicitly chose to keep them.
+  const unpinnedAll = regularConvs.filter((c) => !c.pinned);
+  const unpinned = search ? unpinnedAll : unpinnedAll.filter(hasMeaningfulTitle);
   const groups = groupByDate(
     [...unpinned].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
   );
