@@ -167,4 +167,57 @@ describe("buildBriefingSignals", () => {
     ]);
     expect(signals.crossLinks.some((link) => link.email?.id === "email-partnerco")).toBe(true);
   });
+
+  it("strips <untrusted_content> wrappers from event titles so the rule-based view stays readable", () => {
+    const signals = buildBriefingSignals(
+      {
+        tasks: { tasks: [] },
+        emails: { emails: [] },
+        events: {
+          events: [
+            {
+              id: "evt-1",
+              summary:
+                '<untrusted_content source="calendar:summary">생일 축하합니다!</untrusted_content>',
+              start: "2026-04-28T10:00:00.000Z",
+            },
+          ],
+        },
+      },
+      { now: NOW },
+    );
+
+    const titles = [
+      ...signals.deadlines.map((d) => d.title),
+      ...signals.topActions.map((a) => a.action),
+      ...signals.topActions.map((a) => a.reason),
+      ...signals.crossLinks.map((l) => l.reason),
+    ];
+    for (const text of titles) {
+      expect(text).not.toContain("<untrusted_content");
+      expect(text).not.toContain("</untrusted_content>");
+    }
+    expect(signals.deadlines[0]?.title).toBe("생일 축하합니다!");
+  });
+
+  it("dedups repeated calendar items so Top 3 cannot be filled with the same action three times", () => {
+    const signals = buildBriefingSignals(
+      {
+        tasks: { tasks: [] },
+        emails: { emails: [] },
+        events: {
+          events: [
+            { id: "b1", summary: "생일 축하합니다!", start: "2026-04-28T01:00:00.000Z" },
+            { id: "b2", summary: "생일 축하합니다!", start: "2026-04-28T02:00:00.000Z" },
+            { id: "b3", summary: "생일 축하합니다!", start: "2026-04-28T03:00:00.000Z" },
+            { id: "b4", summary: "생일 축하합니다!", start: "2026-04-28T04:00:00.000Z" },
+          ],
+        },
+      },
+      { now: NOW },
+    );
+
+    const distinctActions = new Set(signals.topActions.map((a) => a.action));
+    expect(distinctActions.size).toBe(signals.topActions.length);
+  });
 });

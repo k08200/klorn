@@ -15,3 +15,14 @@ export function wrapUntrusted(content: string | null | undefined, source: string
   const safe = content.replace(STRIP_RE, "");
   return `<untrusted_content source="${source}">${safe}</untrusted_content>`;
 }
+
+/**
+ * Strip <untrusted_content> wrappers for user-facing display. The wrappers
+ * exist so the LLM treats external text as data; once we render to a human
+ * (briefing fallback, lists, search results) the tags become visible noise
+ * and pollute downstream tokenizers.
+ */
+export function stripUntrusted(content: string | null | undefined): string {
+  if (!content) return "";
+  return content.replace(STRIP_RE, "");
+}

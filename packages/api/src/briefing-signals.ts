@@ -1,3 +1,5 @@
+import { stripUntrusted } from "./untrusted.js";
+
 export type BriefingSource = "email" | "task" | "calendar";
 
 export interface BriefingReference {
@@ -123,6 +125,16 @@ function readString(record: Record<string, unknown>, keys: string[]): string {
   return "";
 }
 
+/**
+ * Read a string field and strip <untrusted_content> wrappers. Used for fields
+ * that flow into rule-based briefing display (titles, snippets, locations) so
+ * the fallback never leaks safety markup or pollutes the tokenizer with the
+ * wrapper attribute names ("untrusted", "content", "source").
+ */
+function readDisplayString(record: Record<string, unknown>, keys: string[]): string {
+  return stripUntrusted(readString(record, keys));
+}
+
 function readNullableString(record: Record<string, unknown>, keys: string[]): string | null {
   const value = readString(record, keys);
   return value.trim() ? value : null;
@@ -138,8 +150,8 @@ function normalizeTasks(value: unknown): NormalizedTask[] {
   return unwrapArray(value, "tasks")
     .map((row) => ({
       id: readNullableString(row, ["id"]),
-      title: readString(row, ["title"]),
-      description: readString(row, ["description"]),
+      title: readDisplayString(row, ["title"]),
+      description: readDisplayString(row, ["description"]),
       status: readString(row, ["status"]),
       priority: readString(row, ["priority"]).toUpperCase(),
       dueDate: readNullableString(row, ["dueDate", "due_date"]),
@@ -151,9 +163,9 @@ function normalizeEvents(value: unknown): NormalizedEvent[] {
   return unwrapArray(value, "events")
     .map((row) => ({
       id: readNullableString(row, ["id"]),
-      title: readString(row, ["title", "summary"]),
-      description: readString(row, ["description"]),
-      location: readString(row, ["location"]),
+      title: readDisplayString(row, ["title", "summary"]),
+      description: readDisplayString(row, ["description"]),
+      location: readDisplayString(row, ["location"]),
       start: readNullableString(row, ["start", "startTime"]),
       end: readNullableString(row, ["end", "endTime"]),
     }))
@@ -164,9 +176,9 @@ function normalizeEmails(value: unknown): NormalizedEmail[] {
   return unwrapArray(value, "emails")
     .map((row) => ({
       id: readNullableString(row, ["id", "gmailId"]),
-      from: readString(row, ["from"]),
-      subject: readString(row, ["subject"]),
-      snippet: readString(row, ["snippet", "summary"]),
+      from: readDisplayString(row, ["from"]),
+      subject: readDisplayString(row, ["subject"]),
+      snippet: readDisplayString(row, ["snippet", "summary"]),
       date: readNullableString(row, ["date", "receivedAt"]),
     }))
     .filter((email) => email.subject.trim().length > 0 || email.snippet.trim().length > 0);
@@ -551,13 +563,19 @@ function buildTopActions(input: {
 
   const chosen: BriefingTopAction[] = [];
   const usedRefs = new Set<string>();
+  const usedActions = new Set<string>();
   for (const candidate of candidates.sort(
     (a, b) => b.score - a.score || a.id.localeCompare(b.id),
   )) {
     const keys = candidate.refs.map(refKey).filter((key): key is string => key !== null);
     if (keys.some((key) => usedRefs.has(key))) continue;
+    // Also dedup by action wording so repeated calendar items (e.g. Google's
+    // birthday calendar) don't fill all three slots with the same sentence.
+    const actionKey = candidate.action.trim().toLowerCase();
+    if (usedActions.has(actionKey)) continue;
     chosen.push({ ...candidate, rank: chosen.length + 1 });
     for (const key of keys) usedRefs.add(key);
+    usedActions.add(actionKey);
     if (chosen.length === 3) break;
   }
 
