@@ -317,6 +317,16 @@ async function runAutomations() {
       });
       const automationPlanMap = new Map(automationUsers.map((u) => [u.id, u.plan]));
 
+      // Pre-fetch which users have a Google token. Abandoned signups never
+      // OAuth-connect, so trying to sync Gmail/Calendar for them throws
+      // "Gmail not connected" on every tick — wasted DB+OAuth lookups and
+      // log noise. One query per batch beats N per-user roundtrips.
+      const googleTokens = await prisma.userToken.findMany({
+        where: { userId: { in: configUserIds }, provider: "google" },
+        select: { userId: true },
+      });
+      const googleConnectedUserIds = new Set(googleTokens.map((t) => t.userId));
+
       for (const config of configs) {
         const configUserPlan = automationPlanMap.get(config.userId) || "FREE";
         const timeZone = normalizeTimeZone((config as unknown as { timezone?: string }).timezone);
@@ -358,7 +368,7 @@ async function runAutomations() {
         }
 
         // --- Calendar Auto-Sync (every 15 minutes) ---
-        if (isCalendarSyncDue(config.userId)) {
+        if (isCalendarSyncDue(config.userId) && googleConnectedUserIds.has(config.userId)) {
           lastCalendarSyncAt.set(config.userId, Date.now());
           try {
             const auth = await getAuthedClient(config.userId);
@@ -468,7 +478,11 @@ async function runAutomations() {
         // emailAutoClassify now defaults to true in schema — we still honor an
         // explicit opt-out, but for the vast majority of users sync runs on
         // its own interval without any config step.
-        if (config.emailAutoClassify && planHasFeature(configUserPlan, "email_auto_classify")) {
+        if (
+          config.emailAutoClassify &&
+          planHasFeature(configUserPlan, "email_auto_classify") &&
+          googleConnectedUserIds.has(config.userId)
+        ) {
           if (isEmailSyncDue(config.userId)) {
             lastEmailSyncAt.set(config.userId, Date.now());
             try {
@@ -635,14 +649,22 @@ async function runAutomations() {
                 }
               }
             } catch (err) {
-              // Gmail not connected, token expired, rate-limited, or network
-              // flake — log + capture so "Eve stopped reading email" doesn't
-              // become an invisible outage. Returns early so the next tick
-              // still tries.
-              console.error(`[AUTOMATION] Email sync failed for ${config.userId}:`, err);
-              captureError(err, {
-                tags: { scope: "automation.email-sync", userId: config.userId },
-              });
+              // "Gmail not connected" is an expected state: the pre-filter
+              // catches it before we even try, but a token can be revoked
+              // mid-tick (race). Warn without Sentry to avoid noise.
+              if (err instanceof Error && err.message === "Gmail not connected") {
+                console.warn(
+                  `[AUTOMATION] Email sync skipped for ${config.userId}: Gmail not connected`,
+                );
+              } else {
+                // Token expired, rate-limited, or network flake — log +
+                // capture so "Eve stopped reading email" doesn't become an
+                // invisible outage. Returns early so the next tick still tries.
+                console.error(`[AUTOMATION] Email sync failed for ${config.userId}:`, err);
+                captureError(err, {
+                  tags: { scope: "automation.email-sync", userId: config.userId },
+                });
+              }
             }
           }
         }
