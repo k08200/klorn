@@ -31,6 +31,7 @@ import { resolveActionTarget } from "./action-target.js";
 import { AGENT_SYSTEM_PROMPT, NOTIFY_TOOL, PROPOSE_ACTION_TOOL } from "./agent/prompt.js";
 import { gatherUserContext } from "./agent-context.js";
 import { recordDedupKey, wasRecentlyDeduped } from "./agent-dedup.js";
+import { isUserIdleForAgent } from "./agent-idle.js";
 import {
   areSimilarProposalIssues,
   getNotifKey,
@@ -54,6 +55,7 @@ import {
 } from "./attention-mirror.js";
 import {
   AGENT_CHECK_INTERVAL_MS,
+  AGENT_IDLE_THRESHOLD_MS,
   AGENT_MAX_CONTEXT_ITEMS,
   AGENT_MAX_TOOLS_PER_LOOP,
 } from "./config.js";
@@ -1390,16 +1392,28 @@ async function runAutonomousAgent() {
 
     const now = Date.now();
 
-    // Fetch user plans for feature gating
+    // Fetch user plans for feature gating, plus the latest device.lastActiveAt
+    // per user so we can skip background cycles for abandoned/idle accounts.
     const userIds = configs.map((c) => c.userId);
-    const users = await prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, plan: true },
-    });
+    const [users, latestDevices] = await Promise.all([
+      prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, plan: true },
+      }),
+      prisma.device.groupBy({
+        by: ["userId"],
+        where: { userId: { in: userIds } },
+        _max: { lastActiveAt: true },
+      }),
+    ]);
     const userPlanMap = new Map(users.map((u) => [u.id, u.plan]));
+    const lastActiveMap = new Map<string, Date | null>(
+      latestDevices.map((row) => [row.userId, row._max.lastActiveAt ?? null]),
+    );
 
     // Filter users that are due for a run
     const usersToRun: Array<{ userId: string; mode: AgentMode }> = [];
+    let idleSkipped = 0;
     for (const config of configs) {
       const cfg = config as unknown as Record<string, unknown>;
       if (cfg.autonomousAgent === false) continue;
@@ -1407,6 +1421,14 @@ async function runAutonomousAgent() {
       // Plan-based gating: autonomous agent requires PRO+ plan
       const userPlan = userPlanMap.get(config.userId) || "FREE";
       if (!planHasFeature(userPlan, "autonomous_agent")) {
+        continue;
+      }
+
+      // Idle-user gating: don't burn shared free-tier quota on accounts that
+      // haven't touched the app in `AGENT_IDLE_THRESHOLD_MS`. Mostly catches
+      // abandoned signups but also gracefully handles users on vacation.
+      if (isUserIdleForAgent(lastActiveMap.get(config.userId), { now })) {
+        idleSkipped++;
         continue;
       }
 
@@ -1422,6 +1444,13 @@ async function runAutonomousAgent() {
 
       lastRunTime.set(config.userId, now);
       usersToRun.push({ userId: config.userId, mode });
+    }
+    if (idleSkipped > 0) {
+      console.log(
+        `[AGENT] Skipped ${idleSkipped} idle user(s) this tick (no activity in last ${Math.round(
+          AGENT_IDLE_THRESHOLD_MS / 3600_000,
+        )}h)`,
+      );
     }
 
     // Run in parallel with concurrency limit (not sequential)

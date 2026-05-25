@@ -61,9 +61,20 @@ export const FEEDBACK_DISMISS_THRESHOLD = intEnv("FEEDBACK_DISMISS_THRESHOLD", 4
 export const FEEDBACK_WINDOW_DAYS = intEnv("FEEDBACK_WINDOW_DAYS", 30);
 
 // ── Autonomous agent ──────────────────────────────────────────────────
-export const AGENT_CHECK_INTERVAL_MS = intEnv("AGENT_CHECK_INTERVAL_MS", 60_000);
-export const AGENT_MAX_TOOLS_PER_LOOP = intEnv("AGENT_MAX_TOOLS_PER_LOOP", 10);
+// Scheduler tick. Used to be 1 min, which meant 24 dogfood users × 5–10 LLM
+// calls/cycle = 7k–14k calls/hour, blowing through the free OpenRouter daily
+// cap of 50 within minutes. 10 min is a 10× reduction at the scheduler level.
+export const AGENT_CHECK_INTERVAL_MS = intEnv("AGENT_CHECK_INTERVAL_MS", 10 * 60_000);
+// Hard cap on tool calls per cycle. Used to be 10 which let one cycle fire
+// 10 follow-up completions; 3 is enough for "read inbox → classify → propose"
+// without runaway fan-out.
+export const AGENT_MAX_TOOLS_PER_LOOP = intEnv("AGENT_MAX_TOOLS_PER_LOOP", 3);
 export const AGENT_MAX_CONTEXT_ITEMS = intEnv("AGENT_MAX_CONTEXT_ITEMS", 10);
+// Skip autonomous-agent cycles for users whose last device activity is older
+// than this. Catches the 24-user dogfood case where most accounts never log
+// in but still trigger background LLM calls every minute. 24h is conservative
+// — anyone who opened the app in the last day still gets full background.
+export const AGENT_IDLE_THRESHOLD_MS = intEnv("AGENT_IDLE_THRESHOLD_MS", 24 * 60 * 60 * 1000);
 
 // ── Cost / quota ──────────────────────────────────────────────────────
 // Hard cap on LLM spend per user per UTC day, in cents (USD).
