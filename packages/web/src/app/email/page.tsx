@@ -554,11 +554,11 @@ function EmailView() {
               Klorn · Mail
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              답장이 필요한 메일부터
+              Mail that needs a reply
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-              긴급도와 답장 필요 여부 기준으로 정리됩니다.
-              {source === "demo" && <span className="ml-2 text-accent">데모 데이터</span>}
+              Sorted by urgency and reply-needed signal.
+              {source === "demo" && <span className="ml-2 text-accent">Demo data</span>}
             </p>
           </div>
           <button

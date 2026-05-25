@@ -78,10 +78,10 @@ interface TopAction {
 }
 
 const FEEDBACK_OPTIONS: Array<{ choice: BriefingFeedbackChoice; label: string }> = [
-  { choice: "useful", label: "유용" },
-  { choice: "wrong", label: "잘못" },
-  { choice: "later", label: "나중" },
-  { choice: "done", label: "완료" },
+  { choice: "useful", label: "Useful" },
+  { choice: "wrong", label: "Wrong" },
+  { choice: "later", label: "Later" },
+  { choice: "done", label: "Done" },
 ];
 
 export default function BriefingPage() {
@@ -227,11 +227,11 @@ function BriefingView() {
               Klorn · Briefing
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              오늘의 결정 요약
+              Today's decision brief
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-              메일과 일정에서 결정이 필요한 것만 모아 승인 · 보류 · 다음 행동으로 정리합니다.
-              {formattedTime && <span className="ml-2 text-stone-400">오늘 {formattedTime}</span>}
+              Mail and calendar items that need a call, sorted into approve, hold, and next steps.
+              {formattedTime && <span className="ml-2 text-stone-400">Today {formattedTime}</span>}
             </p>
           </div>
           <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
@@ -242,13 +242,13 @@ function BriefingView() {
               disabled={generating}
               className="absolute right-3 top-3 inline-flex min-h-11 items-center rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
             >
-              {generating ? "생성 중..." : content ? "다시 생성" : "지금 생성"}
+              {generating ? "Generating..." : content ? "Regenerate" : "Generate now"}
             </button>
           </div>
           <div className="grid grid-cols-3 gap-2 lg:col-span-2">
-            <BriefStat label="액션" value={topActions.length} />
-            <BriefStat label="피드백" value={Object.keys(feedback).length} />
-            <BriefStat label="상태" value={content ? "준비됨" : "비어 있음"} />
+            <BriefStat label="Actions" value={topActions.length} />
+            <BriefStat label="Feedback" value={Object.keys(feedback).length} />
+            <BriefStat label="Status" value={content ? "Ready" : "Empty"} />
           </div>
         </div>
       </header>
@@ -289,7 +289,7 @@ function BriefingView() {
             disabled={generating}
             className="rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
           >
-            {generating ? "생성 중..." : "지금 생성"}
+            {generating ? "Generating..." : "Generate now"}
           </button>
         </div>
       )}
@@ -304,9 +304,9 @@ function BriefingView() {
           {noteId && topActions.length > 0 && (
             <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
               <div className="mb-3">
-                <h2 className="text-sm font-semibold text-stone-100">Top 3 피드백</h2>
+                <h2 className="text-sm font-semibold text-stone-100">Top 3 feedback</h2>
                 <p className="mt-1 text-xs text-stone-500">
-                  오늘 선정된 항목이 실제로 유용했는지 표시해주세요.
+                  Mark whether today's surfaced items were actually useful.
                 </p>
               </div>
               <div className="space-y-3">
@@ -334,7 +334,7 @@ function BriefingView() {
                                 : "border-stone-700 text-stone-400 hover:bg-stone-800"
                             }`}
                           >
-                            {savingRank === action.rank && !selected ? "저장 중" : option.label}
+                            {savingRank === action.rank && !selected ? "Saving" : option.label}
                           </button>
                         );
                       })}
@@ -357,42 +357,42 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
   const auto = status.automation.enabled
     ? `${status.automation.briefingTime ?? "06:00"} · ${timezone}`
     : status.automation.reason === "no_config"
-      ? "설정 안 됨"
-      : "꺼짐";
+      ? "Not set up"
+      : "Off";
   const nextLabel = nextBriefingLabel(status.automation);
   const notification = status.notification
-    ? new Date(status.notification.createdAt).toLocaleTimeString("ko-KR", {
+    ? new Date(status.notification.createdAt).toLocaleTimeString(undefined, {
         hour: "2-digit",
         minute: "2-digit",
       })
-    : "없음";
+    : "None";
   const guidance = deliveryGuidance(status);
 
   return (
     <section className="mb-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-stone-100">브리핑 전송</h2>
+        <h2 className="text-sm font-semibold text-stone-100">Briefing delivery</h2>
         <Link href="/settings" className="text-xs text-amber-300 hover:underline">
-          설정
+          Settings
         </Link>
       </div>
       <div className="grid gap-2 text-xs sm:grid-cols-4">
         <DeliveryFact
-          label="자동화"
+          label="Automation"
           value={auto}
           tone={status.automation.enabled ? "ok" : "warn"}
         />
         <DeliveryFact
-          label="다음"
+          label="Next"
           value={nextLabel}
           tone={status.automation.enabled ? "ok" : "muted"}
         />
         <DeliveryFact
-          label="앱 알림"
+          label="In-app"
           value={notification}
           tone={status.notification ? "ok" : "muted"}
         />
-        <DeliveryFact label="푸시" value={push.label} tone={push.tone} />
+        <DeliveryFact label="Push" value={push.label} tone={push.tone} />
       </div>
       {guidance && (
         <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] leading-5 text-amber-100/90">
@@ -505,20 +505,20 @@ function pushStateCopy(
 ): { label: string; tone: "ok" | "warn" | "muted"; reason: string | null } {
   switch (state) {
     case "received":
-      return { label: "받음", tone: "ok", reason };
+      return { label: "Received", tone: "ok", reason };
     case "accepted":
-      return { label: "전송됨", tone: "ok", reason };
+      return { label: "Sent", tone: "ok", reason };
     case "pending":
-      return { label: "대기", tone: "warn", reason };
+      return { label: "Pending", tone: "warn", reason };
     case "failed":
-      return { label: "실패", tone: "warn", reason };
+      return { label: "Failed", tone: "warn", reason };
     case "skipped":
-      return { label: "건너뜀", tone: "warn", reason };
+      return { label: "Skipped", tone: "warn", reason };
     case "not_sent":
-      return { label: "전송 안 함", tone: "muted", reason };
+      return { label: "Not sent", tone: "muted", reason };
     case "no_subscription":
       return {
-        label: "브라우저 구독 없음",
+        label: "No browser subscription",
         tone: "warn",
         reason: reason ?? "no_subscriptions",
       };
