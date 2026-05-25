@@ -39,13 +39,16 @@ Be professional, clear, and well-structured. Use markdown formatting.`;
     return { title: topic, content: "LLM not configured.", noteId: "" };
   }
 
-  const response = await createCompletion({
-    model: MODEL,
-    messages: [
-      { role: "system", content: CHAT_SYSTEM_PROMPT },
-      { role: "user", content: prompt },
-    ],
-  });
+  const response = await createCompletion(
+    {
+      model: MODEL,
+      messages: [
+        { role: "system", content: CHAT_SYSTEM_PROMPT },
+        { role: "user", content: prompt },
+      ],
+    },
+    { userId },
+  );
 
   const content = response.choices[0]?.message?.content || "Failed to generate document.";
   const title = `${type.charAt(0).toUpperCase() + type.slice(1)}: ${topic}`;

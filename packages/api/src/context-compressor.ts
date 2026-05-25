@@ -40,6 +40,7 @@ interface ChatMessage {
 export async function compactHistory(
   conversationId: string,
   messages: ChatMessage[],
+  userId?: string,
 ): Promise<{ role: string; content: string }[]> {
   // Not enough messages to warrant compaction
   if (messages.length < MIN_MESSAGES_FOR_COMPACTION) {
@@ -78,7 +79,7 @@ export async function compactHistory(
     summaryText = existingSummary.summary;
   } else {
     // Generate summary of older messages
-    summaryText = await generateSummary(olderMessages);
+    summaryText = await generateSummary(olderMessages, userId);
 
     // Save summary for reuse
     try {
@@ -165,7 +166,7 @@ export async function forceCompact(
 }
 
 /** Generate a summary of older messages using LLM */
-async function generateSummary(messages: ChatMessage[]): Promise<string> {
+async function generateSummary(messages: ChatMessage[], userId?: string): Promise<string> {
   const transcript = messages
     .map((m) => {
       const role = m.role === "USER" ? "User" : "Eve";
@@ -176,12 +177,13 @@ async function generateSummary(messages: ChatMessage[]): Promise<string> {
     .join("\n");
 
   try {
-    const response = await createCompletion({
-      model: MODEL,
-      messages: [
-        {
-          role: "system",
-          content: `You are a conversation summarizer. Summarize the following conversation history into a concise but information-dense summary. Preserve:
+    const response = await createCompletion(
+      {
+        model: MODEL,
+        messages: [
+          {
+            role: "system",
+            content: `You are a conversation summarizer. Summarize the following conversation history into a concise but information-dense summary. Preserve:
 - Key decisions made
 - Important facts mentioned
 - Action items and their status
@@ -189,14 +191,16 @@ async function generateSummary(messages: ChatMessage[]): Promise<string> {
 - Any unresolved questions
 
 Keep the summary under 500 words. Use the same language as the conversation (Korean if Korean, English if English). Format as bullet points.`,
-        },
-        {
-          role: "user",
-          content: `Summarize this conversation:\n\n${transcript}`,
-        },
-      ],
-      max_tokens: 800,
-    });
+          },
+          {
+            role: "user",
+            content: `Summarize this conversation:\n\n${transcript}`,
+          },
+        ],
+        max_tokens: 800,
+      },
+      userId ? { userId } : undefined,
+    );
 
     return response.choices[0]?.message?.content || "Summary unavailable";
   } catch {
