@@ -149,9 +149,8 @@ function WelcomeStep({
 
       {/* Permissions disclosure — Klorn never sends without explicit approval. */}
       <p className="mt-6 text-center text-[11px] leading-5 text-stone-500">
-        Klorn은 Gmail과 Calendar를{" "}
-        <span className="text-stone-300">읽기만</span> 합니다. 메일 전송이나 일정 생성은 항상{" "}
-        <span className="text-stone-300">본인 승인 후</span> 진행됩니다.
+        Klorn은 Gmail과 Calendar를 <span className="text-stone-300">읽기만</span> 합니다. 메일
+        전송이나 일정 생성은 항상 <span className="text-stone-300">본인 승인 후</span> 진행됩니다.
       </p>
     </div>
   );
