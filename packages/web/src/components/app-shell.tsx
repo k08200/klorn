@@ -53,6 +53,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const showSidebar = !NO_SIDEBAR_ROUTES.includes(pathname) && isAppShellRoute(pathname);
   const sectionLabel = currentSectionLabel(pathname);
+  // Stadium mode: collapse the sidebar's thread list while on /inbox so the
+  // decision hero stays the only thing on screen. Workspace nav stays
+  // reachable so the user can leave the inbox in one click.
+  const sidebarCompact = pathname === "/inbox";
 
   if (!showSidebar) {
     return <>{children}</>;
@@ -68,7 +72,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-dvh overflow-hidden bg-[#0f1115] text-stone-100">
-      <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
+      <Sidebar
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+        compact={sidebarCompact}
+      />
       <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile header — pt-safe respects iPhone notch in PWA */}
         <div className="relative z-10 md:hidden flex items-center gap-3 px-4 h-12 pt-safe border-b border-stone-800 bg-[#111318]/95 backdrop-blur-xl shrink-0 box-content">

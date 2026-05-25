@@ -211,9 +211,17 @@ function NavIcon({ type, size = 16 }: { type: string; size?: number }) {
 export default function Sidebar({
   mobileOpen,
   onMobileClose,
+  compact = false,
 }: {
   mobileOpen: boolean;
   onMobileClose: () => void;
+  /**
+   * Stadium mode for /inbox: hide the search bar and the conversation
+   * list so the user keeps their focus on the decision hero. The
+   * workspace nav, brand mark, and user menu stay visible so other
+   * destinations are still reachable in one click.
+   */
+  compact?: boolean;
 }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -471,7 +479,7 @@ export default function Sidebar({
       </div>
 
       {/* Search */}
-      <div className="relative px-3 pb-2">
+      <div className={`relative px-3 pb-2 ${compact ? "hidden" : ""}`}>
         <div className="relative">
           <svg
             aria-hidden="true"
@@ -505,8 +513,8 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Conversation list */}
-      <div className="relative flex-1 overflow-y-auto px-2 pb-2">
+      {/* Conversation list — hidden in compact (Stadium) mode */}
+      <div className={`relative ${compact ? "hidden" : "flex-1 overflow-y-auto"} px-2 pb-2`}>
         {/* Decision queue threads with pending actions */}
         {agentSuggestions.length > 0 && (
           <div className="mb-3">
@@ -847,6 +855,10 @@ export default function Sidebar({
           </p>
         )}
       </div>
+
+      {/* Flex spacer keeps Workspace nav pinned to the bottom when the
+          conversation list is hidden (Stadium mode). */}
+      {compact && <div aria-hidden="true" className="flex-1" />}
 
       {/* Workspace nav */}
       <div className="relative border-t border-stone-800 px-2 py-2">
