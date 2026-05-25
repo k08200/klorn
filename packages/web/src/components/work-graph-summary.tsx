@@ -154,35 +154,6 @@ function GraphMetric({ label, value }: { label: string; value: number }) {
   );
 }
 
-function ContextGlyph({ risk }: { risk: WorkGraphRisk }) {
-  const color =
-    risk === "high"
-      ? "border-red-400/25 bg-red-400/10 text-red-200"
-      : risk === "medium"
-        ? "border-amber-300/25 bg-amber-300/10 text-amber-200"
-        : "border-amber-300/20 bg-amber-300/10 text-amber-100";
-
-  return (
-    <div
-      className={`relative hidden h-16 w-16 shrink-0 items-center justify-center rounded-full border ${color} md:flex`}
-      aria-hidden="true"
-    >
-      <span className="h-2 w-2 rounded-full bg-current" />
-      <span className="absolute left-3 top-4 h-1.5 w-1.5 rounded-full bg-stone-500" />
-      <span className="absolute right-4 top-3 h-1.5 w-1.5 rounded-full bg-stone-500" />
-      <span className="absolute bottom-4 right-5 h-1.5 w-1.5 rounded-full bg-stone-500" />
-      <svg
-        className="absolute inset-0 h-full w-full"
-        viewBox="0 0 64 64"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path d="M19 22 32 32 45 20M32 32l10 16" stroke="currentColor" strokeOpacity=".28" />
-      </svg>
-    </div>
-  );
-}
-
 function RiskBadge({ risk }: { risk: WorkGraphRisk }) {
   const entry = riskEntry(risk);
   return (
