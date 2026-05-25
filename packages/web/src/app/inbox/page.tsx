@@ -258,7 +258,9 @@ function CommandCenterView() {
           <h1 className="mt-1 text-xl font-semibold tracking-tight text-stone-50">
             {pendingCount > 0
               ? `${pendingCount} decision${pendingCount !== 1 ? "s" : ""} waiting`
-              : "All clear"}
+              : commitments.length > 0
+                ? `${commitments.length} commitment${commitments.length !== 1 ? "s" : ""} tracked`
+                : "All clear"}
           </h1>
         </div>
         <div className="flex shrink-0 items-center gap-3">
@@ -939,9 +941,6 @@ function CommitmentCard({
             "Snooze 24h"
           )}
         </button>
-        <span className="ml-auto text-[11px] text-stone-600">
-          Confidence {Math.round((commitment.confidence ?? 0.72) * 100)}%
-        </span>
       </div>
 
       {pathExpanded && (
