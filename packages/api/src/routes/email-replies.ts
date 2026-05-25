@@ -147,7 +147,7 @@ ${wrapUntrusted((input.body || "").slice(0, 3000), "email:body")}`,
         },
       ],
     },
-    { credentials },
+    { credentials, userId: input.userId },
   );
   return response.choices[0]?.message?.content?.trim() || "";
 }

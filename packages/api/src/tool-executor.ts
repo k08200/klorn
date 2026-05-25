@@ -461,6 +461,7 @@ async function executeToolCallInternal(
       case "summarize_meeting":
         return JSON.stringify(
           await summarizeMeeting(
+            userId,
             requireString(args.title, "title"),
             requireString(args.notes, "notes"),
             (args.attendees as string[]) || [],
@@ -471,7 +472,9 @@ async function executeToolCallInternal(
           await searchFiles(requireString(args.query, "query"), args.folder as string | undefined),
         );
       case "read_and_summarize_file":
-        return JSON.stringify(await readAndSummarize(requireString(args.file_path, "file_path")));
+        return JSON.stringify(
+          await readAndSummarize(userId, requireString(args.file_path, "file_path")),
+        );
       case "organize_downloads":
         return JSON.stringify(await organizeDownloads());
       case "list_recent_downloads":

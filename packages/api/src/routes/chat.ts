@@ -1077,7 +1077,7 @@ export function chatRoutes(app: FastifyInstance) {
       const buildHistory = async (force: boolean) => {
         const compacted = force
           ? await forceCompact(id, rawMessages)
-          : await compactHistory(id, rawMessages);
+          : await compactHistory(id, rawMessages, conversation.userId);
         return [
           {
             role: "system" as const,

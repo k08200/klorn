@@ -178,27 +178,31 @@ export async function stopRecording(pid: number): Promise<{ success: boolean }> 
 
 /** Summarize meeting notes using LLM */
 export async function summarizeMeeting(
+  userId: string,
   title: string,
   notes: string,
   attendees: string[],
 ): Promise<MeetingSummary> {
-  const response = await createCompletion({
-    model: MODEL,
-    messages: [
-      {
-        role: "system",
-        content: `You are a meeting notes summarizer. Given raw meeting notes, create a structured summary in JSON format with these fields:
+  const response = await createCompletion(
+    {
+      model: MODEL,
+      messages: [
+        {
+          role: "system",
+          content: `You are a meeting notes summarizer. Given raw meeting notes, create a structured summary in JSON format with these fields:
 - keyPoints: array of key discussion points (max 10)
 - actionItems: array of action items with assignees if mentioned
 - decisions: array of decisions made
 Keep it concise and actionable. Respond in the same language as the notes.`,
-      },
-      {
-        role: "user",
-        content: `Meeting: ${title}\nAttendees: ${attendees.join(", ")}\n\nNotes:\n${notes}`,
-      },
-    ],
-  });
+        },
+        {
+          role: "user",
+          content: `Meeting: ${title}\nAttendees: ${attendees.join(", ")}\n\nNotes:\n${notes}`,
+        },
+      ],
+    },
+    { userId },
+  );
 
   const content = response.choices[0]?.message?.content || "{}";
   let parsed: {
