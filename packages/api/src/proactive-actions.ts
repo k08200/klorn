@@ -27,6 +27,7 @@ import { prisma } from "./db.js";
 import { senderName } from "./notification-format.js";
 import type { NotifCategory } from "./notification-prefs.js";
 import { sendPushNotification } from "./push.js";
+import { sendSms } from "./sms.js";
 import { pushNotification } from "./websocket.js";
 
 /** Check for emails that haven't been replied to in 48 hours */
@@ -124,6 +125,12 @@ async function checkUpcomingMeetings(userId: string): Promise<void> {
       message,
       "/briefing",
     );
+
+    // Admin-only SMS escalation for time-sensitive meeting alerts. Gated
+    // inside sendSms (admin + phone + daily cap). Best-effort: never throws.
+    sendSms(userId, `Urgent: ${event.title} starting at ${time}`).catch((err) => {
+      console.warn(`[PROACTIVE] Meeting SMS failed for ${userId}:`, err);
+    });
   }
 }
 
