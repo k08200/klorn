@@ -1,9 +1,14 @@
+// Keep SSR and client in sync: both must resolve to the same string so React
+// hydration does not mismatch (e.g. an <a href> rendered on the server must
+// equal the one rendered on the client). The previous SSR fallback was
+// http://localhost:8000 while the client used :3001, which produced visible
+// hydration warnings and broken Google OAuth links in local dev.
 function resolveApiBase(): string {
   if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
   if (typeof window !== "undefined") {
     return `http://${window.location.hostname || "localhost"}:3001`;
   }
-  return "http://localhost:8000";
+  return "http://localhost:3001";
 }
 
 export const API_BASE = resolveApiBase();
@@ -82,4 +87,16 @@ export function authHeaders(extra?: Record<string, string>): Record<string, stri
   const h: Record<string, string> = { "Content-Type": "application/json", ...extra };
   if (token) h.Authorization = `Bearer ${token}`;
   return h;
+}
+
+// Start the Gmail/Calendar OAuth flow without leaking the user's JWT into the
+// URL. Calls the header-authed start endpoint, then navigates to the returned
+// Google URL. Throws if there is no session or the API rejects.
+export async function startGoogleConnect(): Promise<void> {
+  const { url } = await apiFetch<{ url: string }>("/api/auth/google/start", {
+    method: "POST",
+  });
+  if (typeof window !== "undefined") {
+    window.location.href = url;
+  }
 }

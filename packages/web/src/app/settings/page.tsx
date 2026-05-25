@@ -9,7 +9,7 @@ import { GoogleConnectRedirect } from "../../components/google-connect-redirect"
 import { ListSkeleton } from "../../components/skeleton";
 import { TeamRiskPanel } from "../../components/team-risk-panel";
 import { useToast } from "../../components/toast";
-import { API_BASE, apiFetch, authHeaders, getStoredAuthToken } from "../../lib/api";
+import { API_BASE, apiFetch, authHeaders, startGoogleConnect } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import {
   fetchVapidKey,
@@ -689,7 +689,7 @@ export default function SettingsPage() {
       name: "Google",
       description: "Reads Gmail and Calendar signals and connects them to meeting prep.",
       connected: googleConnected,
-      connectUrl: `${API_BASE}/api/auth/google?token=${getStoredAuthToken() || ""}`,
+      connectUrl: "google-oauth-start",
       statusUrl: `${API_BASE}/api/auth/google/status`,
     },
     {
@@ -1590,6 +1590,16 @@ export default function SettingsPage() {
                     <span className="text-sm text-stone-500 bg-stone-900 px-3 py-1.5 rounded-lg border border-stone-700">
                       Coming soon
                     </span>
+                  ) : int.connectUrl === "google-oauth-start" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void startGoogleConnect();
+                      }}
+                      className="bg-amber-300 hover:bg-amber-200 text-stone-950 px-4 py-2 rounded-lg text-sm font-medium transition"
+                    >
+                      Connect
+                    </button>
                   ) : int.connectUrl ? (
                     <a
                       href={int.connectUrl}

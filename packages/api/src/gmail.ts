@@ -6,7 +6,7 @@ import { wrapUntrusted } from "./untrusted.js";
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 const REDIRECT_URI =
-  process.env.GOOGLE_REDIRECT_URI || "http://localhost:8000/api/auth/google/callback";
+  process.env.GOOGLE_REDIRECT_URI || "http://localhost:3001/api/auth/google/callback";
 
 export interface GmailDraftAttachment {
   filename: string;

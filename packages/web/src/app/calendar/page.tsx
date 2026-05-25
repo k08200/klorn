@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { EveSignalField } from "../../components/brand-visuals";
-import { API_BASE, apiFetch, getStoredAuthToken } from "../../lib/api";
+import { apiFetch, startGoogleConnect } from "../../lib/api";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 
@@ -201,12 +201,15 @@ function CalendarView() {
               : "Google is connected. An empty calendar stays empty in the briefing."}
           </p>
           {googleConnected === false ? (
-            <a
-              href={`${API_BASE}/api/auth/google?token=${getStoredAuthToken() || ""}`}
+            <button
+              type="button"
+              onClick={() => {
+                void startGoogleConnect();
+              }}
               className="inline-flex min-h-11 items-center rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200"
             >
               Connect Google
-            </a>
+            </button>
           ) : (
             <button
               type="button"

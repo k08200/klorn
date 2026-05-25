@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { ONBOARDING_ACTIVE_KEY } from "../../components/google-connect-redirect";
-import { API_BASE } from "../../lib/api";
+import { startGoogleConnect } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 
 export default function OnboardingPage() {
@@ -26,9 +26,10 @@ function deriveStep(googleConnected: boolean | null, syncStatus: string): Step {
 }
 
 function OnboardingFlow() {
-  const { googleConnected, initSync, token } = useAuth();
+  const { googleConnected, initSync } = useAuth();
   const router = useRouter();
   const [manualStep, setManualStep] = useState<Step | null>(null);
+  const [connecting, setConnecting] = useState(false);
 
   const derivedStep = deriveStep(googleConnected, initSync.status);
   const step = manualStep ?? derivedStep;
@@ -44,13 +45,17 @@ function OnboardingFlow() {
     router.replace("/inbox");
   };
 
-  const handleConnectClick = () => {
+  const handleConnectClick = async () => {
     if (typeof window !== "undefined") {
       localStorage.setItem(ONBOARDING_ACTIVE_KEY, "true");
     }
+    setConnecting(true);
+    try {
+      await startGoogleConnect();
+    } catch {
+      setConnecting(false);
+    }
   };
-
-  const connectUrl = `${API_BASE}/api/auth/google?token=${token ?? ""}`;
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center px-4 py-10">
@@ -60,13 +65,7 @@ function OnboardingFlow() {
           Klorn
         </p>
 
-        {step === 1 && (
-          <WelcomeStep
-            connectUrl={connectUrl}
-            onConnectClick={handleConnectClick}
-            onSkip={handleDone}
-          />
-        )}
+        {step === 1 && <WelcomeStep connecting={connecting} onConnectClick={handleConnectClick} />}
         {step === 2 && <SyncingStep initSync={initSync} onContinue={handleDone} />}
         {step === 3 && <ReadyStep initSync={initSync} onDone={handleDone} />}
 
@@ -93,13 +92,11 @@ function OnboardingFlow() {
 // ─── Step 1: Welcome ──────────────────────────────────────────────────────
 
 function WelcomeStep({
-  connectUrl,
+  connecting,
   onConnectClick,
-  onSkip,
 }: {
-  connectUrl: string;
+  connecting: boolean;
   onConnectClick: () => void;
-  onSkip: () => void;
 }) {
   return (
     <div>
@@ -114,20 +111,14 @@ function WelcomeStep({
       </p>
 
       <div className="mt-8 space-y-3">
-        <a
-          href={connectUrl}
-          onClick={onConnectClick}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
-        >
-          Gmail &amp; Calendar 연결하기
-          <span aria-hidden>→</span>
-        </a>
         <button
           type="button"
-          onClick={onSkip}
-          className="w-full rounded-xl border border-stone-700 px-5 py-3 text-sm text-stone-400 transition hover:border-stone-600 hover:text-stone-200"
+          onClick={onConnectClick}
+          disabled={connecting}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          나중에 하기
+          {connecting ? "Google로 이동 중..." : "Gmail & Calendar 연결하기"}
+          {!connecting && <span aria-hidden>→</span>}
         </button>
       </div>
 

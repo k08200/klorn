@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getStoredAuthToken } from "../lib/api";
 
-const WS_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000")
+// Match the API default in lib/api.ts so WS and HTTP point at the same host
+// in local dev (Klorn API runs on :3001 via docker-compose).
+const WS_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001")
   .replace("http://", "ws://")
   .replace("https://", "wss://");
 
