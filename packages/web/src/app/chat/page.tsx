@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { useToast } from "../../components/toast";
-import { API_BASE, apiFetch, getStoredAuthToken } from "../../lib/api";
+import { apiFetch, startGoogleConnect } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 
 export default function ChatListPage() {
@@ -94,15 +94,17 @@ function NewChatWelcome() {
   ];
 
   const { googleConnected } = useAuth();
-  const connectUrl = `${API_BASE}/api/auth/google?token=${getStoredAuthToken() || ""}`;
 
   return (
     <div className="flex min-h-full px-4 pb-28 pt-6 md:py-10">
       <div className="mx-auto w-full max-w-4xl">
         {googleConnected === false && (
-          <a
-            href={connectUrl}
-            className="mx-auto mb-8 flex max-w-md items-center gap-3 rounded-lg border border-stone-700 bg-[#111318] px-5 py-3 text-left transition hover:bg-stone-900"
+          <button
+            type="button"
+            onClick={() => {
+              void startGoogleConnect();
+            }}
+            className="mx-auto mb-8 flex w-full max-w-md items-center gap-3 rounded-lg border border-stone-700 bg-[#111318] px-5 py-3 text-left transition hover:bg-stone-900"
           >
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-stone-600 text-sm text-stone-300">
               i
@@ -115,7 +117,7 @@ function NewChatWelcome() {
                 Turn Gmail and Calendar signals into decision cards, reminders, and meeting prep.
               </p>
             </div>
-          </a>
+          </button>
         )}
         <section>
           <div className="mb-7">

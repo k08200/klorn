@@ -60,7 +60,9 @@ export default function EarlyAccessPage() {
       setStatus(body.alreadyOnList ? "already" : "success");
     } catch (_err) {
       setStatus("error");
-      setErrorMsg("Waitlist service is offline. Please try again shortly.");
+      setErrorMsg(
+        "We could not reach the waitlist server. Check your connection and try again, or email hello@klorn.ai if this keeps happening.",
+      );
     }
   };
 

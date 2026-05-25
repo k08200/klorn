@@ -235,7 +235,7 @@ function LoginForm() {
         Continue with Google
       </a>
       <p className="mt-3 text-center text-[11px] leading-5 text-stone-600">
-        App is pending Google verification — approved test users only.
+        Klorn is in a private beta — sign in with an invited Google account.
       </p>
 
       <div className="mt-5 border-t border-stone-800/80 pt-4 text-center text-xs text-stone-500">
