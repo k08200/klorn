@@ -65,7 +65,7 @@ export default function WorkGraphSummaryCard() {
         </div>
       </div>
 
-      <ul className="grid gap-3 p-3 md:p-4">
+      <ul className="grid gap-2 p-3">
         {data.contexts.map((context) => (
           <li key={context.id}>
             <ContextCard context={context} />
@@ -100,77 +100,37 @@ export default function WorkGraphSummaryCard() {
 
 function ContextCard({ context }: { context: WorkGraphContext }) {
   const legacyContext = context as WorkGraphContext & { lastSignalAt?: string };
-  const chips = signalChips(context);
-  const people = peopleLabels(context);
-  const reasons = (context.reasons ?? []).slice(0, 2);
+  const chips = signalChips(context).slice(0, 2);
   const lastActivityAt = context.lastActivityAt ?? legacyContext.lastSignalAt;
 
+  // Slim list-item card sized for the narrow right rail on /inbox.
+  // The full breakdown (every signal, reason, person, the context glyph)
+  // lives on /work-graph for users who actually want to dig in.
   const body = (
-    <article className="rounded-xl border border-stone-800 bg-stone-900/40 p-4 transition hover:border-amber-300/30 hover:bg-stone-900/60">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <RiskBadge risk={context.risk} />
-            <span className="text-[11px] text-stone-500">{kindLabel(context.kind)}</span>
-            <span className="text-[11px] text-stone-600">{formatRelative(lastActivityAt)}</span>
-          </div>
-          <p className="mt-2 break-words text-sm font-semibold text-stone-100">
-            {displayText(context.title)}
-          </p>
-          <p className="mt-1 line-clamp-2 text-xs text-stone-400">
-            {subtitleFor(context) || "No linked signals yet"}
-          </p>
-        </div>
-
-        <ContextGlyph risk={context.risk} />
+    <article className="rounded-lg border border-stone-800 bg-stone-900/40 px-3 py-2.5 transition hover:border-amber-300/30 hover:bg-stone-900/60">
+      <div className="flex items-center gap-1.5">
+        <RiskBadge risk={context.risk} />
+        <span className="text-[10px] text-stone-500">{kindLabel(context.kind)}</span>
+        <span className="ml-auto shrink-0 text-[10px] text-stone-600">
+          {formatRelative(lastActivityAt)}
+        </span>
       </div>
-
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <ContextPanel label="Signals">
-          {chips.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {chips.map((chip) => (
-                <span
-                  key={chip}
-                  className="rounded border border-stone-800 bg-black/20 px-1.5 py-0.5 text-[11px] text-stone-400"
-                >
-                  {chip}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-stone-500">No clear signals yet.</p>
-          )}
-        </ContextPanel>
-
-        <ContextPanel label="Why it appears">
-          {reasons.length > 0 ? (
-            <ul className="space-y-1.5">
-              {reasons.map((reason) => (
-                <li key={reason} className="text-xs leading-5 text-stone-400">
-                  {displayText(reason)}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-xs text-stone-500">Shown from recent activity.</p>
-          )}
-        </ContextPanel>
-      </div>
-
-      {people.length > 0 && (
-        <div className="mt-3 flex items-center gap-2 border-t border-stone-800 pt-3">
-          <span className="shrink-0 text-[11px] text-stone-600">People</span>
-          <div className="flex min-w-0 flex-wrap gap-1.5">
-            {people.map((person) => (
-              <span
-                key={person}
-                className="max-w-full truncate rounded border border-stone-800 px-1.5 py-0.5 text-[11px] text-stone-400"
-              >
-                {person}
-              </span>
-            ))}
-          </div>
+      <p className="mt-1.5 line-clamp-2 break-words text-sm font-semibold leading-snug text-stone-100">
+        {displayText(context.title)}
+      </p>
+      {subtitleFor(context) && (
+        <p className="mt-1 line-clamp-1 text-xs text-stone-500">{subtitleFor(context)}</p>
+      )}
+      {chips.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {chips.map((chip) => (
+            <span
+              key={chip}
+              className="rounded border border-stone-800 bg-black/20 px-1.5 py-0.5 text-[10px] text-stone-400"
+            >
+              {chip}
+            </span>
+          ))}
         </div>
       )}
     </article>
@@ -191,17 +151,6 @@ function GraphMetric({ label, value }: { label: string; value: number }) {
       <p className="text-lg font-semibold text-stone-100">{value}</p>
       <p className="mt-0.5 text-[10px] text-stone-600">{label}</p>
     </div>
-  );
-}
-
-function ContextPanel({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-lg border border-stone-800 bg-black/20 p-3">
-      <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-amber-200">
-        {label}
-      </p>
-      {children}
-    </section>
   );
 }
 
