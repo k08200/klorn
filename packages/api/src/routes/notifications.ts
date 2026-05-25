@@ -9,6 +9,7 @@ import {
 import { prisma } from "../db.js";
 import { getVapidPublicKey, sendPushNotification } from "../push.js";
 import { getPushDeliveryStats, recordPushReceipt } from "../push-delivery.js";
+import { isAllowedPushOrigin } from "../push-origin-allowlist.js";
 
 export async function notificationRoutes(app: FastifyInstance) {
   // POST /api/notifications/push/receipts/:deliveryId — public, high-entropy
@@ -82,14 +83,29 @@ export async function notificationRoutes(app: FastifyInstance) {
   // POST /api/notifications/push/subscribe — Register push subscription
   app.post("/push/subscribe", async (request, reply) => {
     const userId = getUserId(request);
-    const { endpoint, keys } = request.body as {
+    const {
+      endpoint,
+      keys,
+      origin: bodyOrigin,
+    } = request.body as {
       endpoint: string;
       keys: { p256dh: string; auth: string };
+      origin?: string;
     };
 
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
       return reply.code(400).send({ error: "Invalid push subscription" });
     }
+
+    // The SW's web origin determines where a notificationclick openWindow()
+    // lands. Reject subs whose origin is not in the current allowlist so we
+    // never silently keep delivering to a retired domain (see
+    // push-origin-allowlist.ts).
+    const claimedOrigin = bodyOrigin || (request.headers.origin as string | undefined);
+    if (!claimedOrigin || !isAllowedPushOrigin(claimedOrigin)) {
+      return reply.code(400).send({ error: "Push subscription origin not allowed" });
+    }
+    const normalizedOrigin = new URL(claimedOrigin).origin;
 
     // Validate push endpoint URL to prevent SSRF
     let parsedEndpoint: URL;
@@ -127,8 +143,19 @@ export async function notificationRoutes(app: FastifyInstance) {
     );
     await prisma.pushSubscription.upsert({
       where: { endpoint },
-      create: { userId, endpoint, p256dh: keys.p256dh, auth: keys.auth },
-      update: { userId, p256dh: keys.p256dh, auth: keys.auth },
+      create: {
+        userId,
+        endpoint,
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+        origin: normalizedOrigin,
+      },
+      update: {
+        userId,
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+        origin: normalizedOrigin,
+      },
     });
     console.log(`[PUSH-SUB] Successfully registered push subscription for user ${userId}`);
 

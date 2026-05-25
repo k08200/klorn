@@ -2,6 +2,9 @@ import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 
+// Set before importing push-origin-allowlist (loaded transitively via routes).
+process.env.PUSH_ALLOWED_ORIGINS = "https://app.klorn.ai,http://localhost:8001";
+
 vi.mock("../email.js", () => ({ sendVerificationEmail: vi.fn(), sendPasswordResetEmail: vi.fn() }));
 vi.mock("../gmail.js", () => ({
   getAuthUrl: vi.fn(),
@@ -168,7 +171,7 @@ describe("notification routes", () => {
     await app.close();
   });
 
-  it("registers push subscription with valid HTTPS endpoint", async () => {
+  it("registers push subscription with valid HTTPS endpoint and allowed origin", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -177,9 +180,26 @@ describe("notification routes", () => {
       payload: {
         endpoint: "https://fcm.googleapis.com/fcm/send/abc123",
         keys: { p256dh: "key1", auth: "key2" },
+        origin: "https://app.klorn.ai",
       },
     });
     expect(res.statusCode).toBe(201);
+    await app.close();
+  });
+
+  it("rejects push subscribe from a non-allowlisted origin", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/subscribe",
+      headers: auth(),
+      payload: {
+        endpoint: "https://fcm.googleapis.com/fcm/send/abc123",
+        keys: { p256dh: "k1", auth: "k2" },
+        origin: "https://hire-eve-web.vercel.app",
+      },
+    });
+    expect(res.statusCode).toBe(400);
     await app.close();
   });
 
@@ -192,6 +212,7 @@ describe("notification routes", () => {
       payload: {
         endpoint: "http://insecure.example.com/push",
         keys: { p256dh: "k1", auth: "k2" },
+        origin: "https://app.klorn.ai",
       },
     });
     expect(res.statusCode).toBe(400);
@@ -207,6 +228,7 @@ describe("notification routes", () => {
       payload: {
         endpoint: "https://localhost:3000/push",
         keys: { p256dh: "k1", auth: "k2" },
+        origin: "https://app.klorn.ai",
       },
     });
     expect(res.statusCode).toBe(400);

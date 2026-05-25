@@ -20,6 +20,7 @@ import {
   markPushAccepted,
   markPushFailed,
 } from "./push-delivery.js";
+import { isAllowedPushOrigin } from "./push-origin-allowlist.js";
 import { recordPushAttempt } from "./push-rate-limit.js";
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
@@ -54,6 +55,7 @@ interface PushSubscriptionRow {
   endpoint: string;
   p256dh: string;
   auth: string;
+  origin: string | null;
 }
 
 export interface PushSendSummary {
@@ -115,9 +117,21 @@ export async function sendPushNotification(
     return skipped("rate_limited");
   }
 
-  const subscriptions = (await prisma.pushSubscription.findMany({
+  const allSubscriptions = (await prisma.pushSubscription.findMany({
     where: { userId },
   })) as PushSubscriptionRow[];
+
+  // Skip subs whose SW origin is no longer in the allowlist. Their SW would
+  // openWindow() to a domain we no longer serve. NULL origins are pre-migration
+  // rows of unknown provenance — treat as stale and let cleanup-stale-push-subs
+  // delete them.
+  const subscriptions = allSubscriptions.filter((sub) => isAllowedPushOrigin(sub.origin));
+  const droppedForOrigin = allSubscriptions.length - subscriptions.length;
+  if (droppedForOrigin > 0) {
+    console.log(
+      `[PUSH] Skipping ${droppedForOrigin} sub(s) for ${userId} with disallowed/missing origin`,
+    );
+  }
 
   if (subscriptions.length === 0) {
     console.log(`[PUSH] No push subscriptions for user ${userId} — browser push skipped`);

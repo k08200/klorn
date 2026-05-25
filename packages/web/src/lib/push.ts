@@ -42,10 +42,16 @@ export async function getOrCreatePushSubscription(
 
 export async function registerSubscriptionWithServer(sub: PushSubscription): Promise<void> {
   const subJson = sub.toJSON();
+  // window.location.origin tells the backend which SW owns this sub so it can
+  // refuse to push to subs from retired origins (see api/push-origin-allowlist).
   const res = await fetch(`${API_BASE}/api/notifications/push/subscribe`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys }),
+    body: JSON.stringify({
+      endpoint: subJson.endpoint,
+      keys: subJson.keys,
+      origin: window.location.origin,
+    }),
   });
   if (!res.ok) throw new Error(`Server registration failed: ${res.status}`);
 }
