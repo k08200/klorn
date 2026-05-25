@@ -10,6 +10,7 @@ import { apiFetch } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
+import { TodayActionsCard } from "./today-actions-card";
 
 interface BriefingResponse {
   briefing: { id: string; content: string; createdAt: string } | null;
@@ -251,6 +252,8 @@ function BriefingView() {
           </div>
         </div>
       </header>
+
+      <TodayActionsCard />
 
       {status && <BriefingDeliveryStatus status={status} />}
       {statusError && (

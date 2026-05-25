@@ -33,6 +33,7 @@ export const queryKeys = {
     today: () => ["briefing", "today"] as const,
     feedback: (noteId: string) => ["briefing", "feedback", noteId] as const,
     status: () => ["briefing", "status"] as const,
+    todayActions: () => ["briefing", "today-actions"] as const,
   },
   inbox: {
     all: ["inbox"] as const,
