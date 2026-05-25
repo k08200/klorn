@@ -77,10 +77,10 @@ interface TopAction {
 }
 
 const FEEDBACK_OPTIONS: Array<{ choice: BriefingFeedbackChoice; label: string }> = [
-  { choice: "useful", label: "Useful" },
-  { choice: "wrong", label: "Wrong" },
-  { choice: "later", label: "Later" },
-  { choice: "done", label: "Done" },
+  { choice: "useful", label: "유용" },
+  { choice: "wrong", label: "잘못" },
+  { choice: "later", label: "나중" },
+  { choice: "done", label: "완료" },
 ];
 
 export default function BriefingPage() {
@@ -241,13 +241,13 @@ function BriefingView() {
               disabled={generating}
               className="absolute right-3 top-3 inline-flex min-h-11 items-center rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
             >
-              {generating ? "Generating..." : content ? "Regenerate" : "Generate now"}
+              {generating ? "생성 중..." : content ? "다시 생성" : "지금 생성"}
             </button>
           </div>
           <div className="grid grid-cols-3 gap-2 lg:col-span-2">
-            <BriefStat label="Actions" value={topActions.length} />
-            <BriefStat label="Feedback" value={Object.keys(feedback).length} />
-            <BriefStat label="Status" value={content ? "Ready" : "Empty"} />
+            <BriefStat label="액션" value={topActions.length} />
+            <BriefStat label="피드백" value={Object.keys(feedback).length} />
+            <BriefStat label="상태" value={content ? "준비됨" : "비어 있음"} />
           </div>
         </div>
       </header>
@@ -286,7 +286,7 @@ function BriefingView() {
             disabled={generating}
             className="rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
           >
-            {generating ? "Generating..." : "Generate now"}
+            {generating ? "생성 중..." : "지금 생성"}
           </button>
         </div>
       )}
@@ -301,9 +301,9 @@ function BriefingView() {
           {noteId && topActions.length > 0 && (
             <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
               <div className="mb-3">
-                <h2 className="text-sm font-semibold text-stone-100">Top 3 feedback</h2>
+                <h2 className="text-sm font-semibold text-stone-100">Top 3 피드백</h2>
                 <p className="mt-1 text-xs text-stone-500">
-                  Mark whether today's selected items were actually useful.
+                  오늘 선정된 항목이 실제로 유용했는지 표시해주세요.
                 </p>
               </div>
               <div className="space-y-3">
@@ -331,7 +331,7 @@ function BriefingView() {
                                 : "border-stone-700 text-stone-400 hover:bg-stone-800"
                             }`}
                           >
-                            {savingRank === action.rank && !selected ? "Saving" : option.label}
+                            {savingRank === action.rank && !selected ? "저장 중" : option.label}
                           </button>
                         );
                       })}
@@ -354,42 +354,42 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
   const auto = status.automation.enabled
     ? `${status.automation.briefingTime ?? "06:00"} · ${timezone}`
     : status.automation.reason === "no_config"
-      ? "Not set"
-      : "Off";
+      ? "설정 안 됨"
+      : "꺼짐";
   const nextLabel = nextBriefingLabel(status.automation);
   const notification = status.notification
-    ? new Date(status.notification.createdAt).toLocaleTimeString("en-US", {
+    ? new Date(status.notification.createdAt).toLocaleTimeString("ko-KR", {
         hour: "2-digit",
         minute: "2-digit",
       })
-    : "None yet";
+    : "없음";
   const guidance = deliveryGuidance(status);
 
   return (
     <section className="mb-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-stone-100">Briefing delivery</h2>
+        <h2 className="text-sm font-semibold text-stone-100">브리핑 전송</h2>
         <Link href="/settings" className="text-xs text-amber-300 hover:underline">
-          Settings
+          설정
         </Link>
       </div>
       <div className="grid gap-2 text-xs sm:grid-cols-4">
         <DeliveryFact
-          label="Automation"
+          label="자동화"
           value={auto}
           tone={status.automation.enabled ? "ok" : "warn"}
         />
         <DeliveryFact
-          label="Next"
+          label="다음"
           value={nextLabel}
           tone={status.automation.enabled ? "ok" : "muted"}
         />
         <DeliveryFact
-          label="App alert"
+          label="앱 알림"
           value={notification}
           tone={status.notification ? "ok" : "muted"}
         />
-        <DeliveryFact label="Push" value={push.label} tone={push.tone} />
+        <DeliveryFact label="푸시" value={push.label} tone={push.tone} />
       </div>
       {guidance && (
         <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] leading-5 text-amber-100/90">
@@ -502,20 +502,20 @@ function pushStateCopy(
 ): { label: string; tone: "ok" | "warn" | "muted"; reason: string | null } {
   switch (state) {
     case "received":
-      return { label: "Received", tone: "ok", reason };
+      return { label: "받음", tone: "ok", reason };
     case "accepted":
-      return { label: "Sent", tone: "ok", reason };
+      return { label: "전송됨", tone: "ok", reason };
     case "pending":
-      return { label: "Pending", tone: "warn", reason };
+      return { label: "대기", tone: "warn", reason };
     case "failed":
-      return { label: "Failed", tone: "warn", reason };
+      return { label: "실패", tone: "warn", reason };
     case "skipped":
-      return { label: "Skipped", tone: "warn", reason };
+      return { label: "건너뜀", tone: "warn", reason };
     case "not_sent":
-      return { label: "Not sent", tone: "muted", reason };
+      return { label: "전송 안 함", tone: "muted", reason };
     case "no_subscription":
       return {
-        label: "No browser subscription",
+        label: "브라우저 구독 없음",
         tone: "warn",
         reason: reason ?? "no_subscriptions",
       };
