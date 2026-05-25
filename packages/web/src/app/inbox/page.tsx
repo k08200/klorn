@@ -434,31 +434,27 @@ function formatFrom(from: string): string {
 // ─── Quick links panel ─────────────────────────────────────────────────────
 
 function QuickLinksPanel() {
+  // Trimmed to the two destinations Stadium-mode users actually reach for
+  // from /inbox: today's receipt and the morning briefing. Agent timeline
+  // and the chat root live one click away through the sidebar nav already.
   const links = [
-    { href: "/inbox/receipt", label: "Today's receipt" },
-    { href: "/briefing", label: "Full briefing" },
-    { href: "/agent", label: "Agent timeline" },
-    { href: "/chat", label: "Start a thread" },
+    { href: "/inbox/receipt", label: "오늘의 처리 내역" },
+    { href: "/briefing", label: "전체 브리핑" },
   ] as const;
 
   return (
-    <div className="rounded-xl border border-stone-800 bg-stone-900/30 p-4">
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500">
-        Quick links
-      </p>
-      <nav className="space-y-0.5">
-        {links.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="flex items-center justify-between rounded-md px-2 py-2 text-xs text-stone-400 transition hover:bg-stone-800 hover:text-stone-200"
-          >
-            <span>{link.label}</span>
-            <span className="text-stone-600">→</span>
-          </Link>
-        ))}
-      </nav>
-    </div>
+    <nav className="flex flex-wrap gap-1.5">
+      {links.map((link) => (
+        <Link
+          key={link.href}
+          href={link.href}
+          className="inline-flex items-center gap-1 rounded-md border border-stone-800 bg-stone-900/30 px-2.5 py-1.5 text-[11px] text-stone-400 transition hover:border-stone-700 hover:bg-stone-900/60 hover:text-stone-200"
+        >
+          {link.label}
+          <span className="text-stone-600">→</span>
+        </Link>
+      ))}
+    </nav>
   );
 }
 
