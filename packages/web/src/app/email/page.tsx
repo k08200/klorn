@@ -550,15 +550,15 @@ function EmailView() {
       <header className="mb-5 rounded-lg border border-white/10 bg-[#11161A] p-5 shadow-xl shadow-black/10 md:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-light">
-              Mail
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+              Klorn · Mail
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              See mail that needs an answer first
+              답장이 필요한 메일부터
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-              Organized by urgency and reply need.
-              {source === "demo" && <span className="ml-2 text-accent">Demo data</span>}
+              긴급도와 답장 필요 여부 기준으로 정리됩니다.
+              {source === "demo" && <span className="ml-2 text-accent">데모 데이터</span>}
             </p>
           </div>
           <button

@@ -128,13 +128,13 @@ function CalendarView() {
           <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
             <div>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-                Calendar
+                Klorn · Calendar
               </p>
               <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-                Find the meetings that need prep first
+                준비가 필요한 회의부터
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-                Review the next 14 days with prep packs and related work signals.
+                앞으로 14일의 일정과 관련 작업 신호를 함께 확인하세요.
               </p>
             </div>
             <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
