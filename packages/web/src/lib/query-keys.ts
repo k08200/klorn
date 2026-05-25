@@ -87,4 +87,10 @@ export const queryKeys = {
     list: () => ["notifications", "list"] as const,
     count: () => ["notifications", "count"] as const,
   },
+  playbooks: {
+    all: ["playbooks"] as const,
+    list: () => ["playbooks", "list"] as const,
+    recommendations: (params?: { limit?: number; contextLimit?: number }) =>
+      ["playbooks", "recommendations", params ?? {}] as const,
+  },
 } as const;
