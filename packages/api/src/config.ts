@@ -105,7 +105,22 @@ export const SCHEDULER_RECONCILE_INTERVAL_MS = intEnv(
 // free tier (20 RPM upstream) — we cap each user well below so background
 // agents can still progress under load.
 export const LLM_USER_RPM = intEnv("LLM_USER_RPM", 15);
-export const LLM_USER_DAILY_CAP = intEnv("LLM_USER_DAILY_CAP", 500);
+
+// Daily quota is split into two independent buckets so background workers
+// (autonomous-agent, classifier, briefing, pattern-learner) can never starve
+// foreground chat. If background exhausts its cap, chat keeps working.
+//
+// Defaults total 500/user/day (same as before the split); the new property is
+// that foreground gets a reserved 300 even when background has burned its 200.
+export const LLM_USER_FOREGROUND_DAILY_CAP = intEnv("LLM_USER_FOREGROUND_DAILY_CAP", 300);
+export const LLM_USER_BACKGROUND_DAILY_CAP = intEnv("LLM_USER_BACKGROUND_DAILY_CAP", 200);
+// Legacy env var, kept so existing deployments don't break — when set, it
+// overrides the combined-total view used by the deprecated single-bucket API.
+const legacyDailyCap = intEnv("LLM_USER_DAILY_CAP", 0);
+export const LLM_USER_DAILY_CAP =
+  legacyDailyCap > 0
+    ? legacyDailyCap
+    : LLM_USER_FOREGROUND_DAILY_CAP + LLM_USER_BACKGROUND_DAILY_CAP;
 
 export const SCHEDULER_WATCH_RENEWAL_INTERVAL_MS = intEnv(
   "SCHEDULER_WATCH_RENEWAL_INTERVAL_MS",
