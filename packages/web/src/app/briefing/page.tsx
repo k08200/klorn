@@ -223,14 +223,14 @@ function BriefingView() {
         <div className="grid gap-5 p-5 md:p-6 lg:grid-cols-[1fr_300px] lg:items-stretch">
           <div>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-              Briefing
+              Klorn · Briefing
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              Compress today into decisions
+              오늘의 결정 요약
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-              Klorn summarizes mail, meetings, and tasks into approvals, deferrals, and next steps.
-              {formattedTime && <span className="ml-2 text-stone-400">Today {formattedTime}</span>}
+              메일과 일정에서 결정이 필요한 것만 모아 승인 · 보류 · 다음 행동으로 정리합니다.
+              {formattedTime && <span className="ml-2 text-stone-400">오늘 {formattedTime}</span>}
             </p>
           </div>
           <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
