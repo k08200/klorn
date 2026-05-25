@@ -32,6 +32,7 @@ import { formatUrgentEmailBody, senderName } from "./notification-format.js";
 import { runProactiveActions } from "./proactive-actions.js";
 import { sendPushNotification } from "./push.js";
 import { captureError } from "./sentry.js";
+import { sendSms } from "./sms.js";
 import { planHasFeature } from "./stripe.js";
 import {
   localDateKey,
@@ -646,6 +647,17 @@ async function runAutomations() {
                     },
                     "email_urgent",
                   );
+
+                  // Admin-only SMS escalation. Gated inside sendSms (admin +
+                  // phone + daily cap). Best-effort: never throws, never
+                  // blocks the scheduler. Body covers the first urgent email;
+                  // if many landed at once the user still gets the bell + push
+                  // for the rest via the existing notification record.
+                  const lead = newUrgent[0];
+                  const smsBody = `Urgent: ${lead.subject || "(no subject)"} — from ${senderName(lead.from)}`;
+                  sendSms(config.userId, smsBody).catch((err) => {
+                    console.warn(`[AUTOMATION] Urgent email SMS failed for ${config.userId}:`, err);
+                  });
                 }
               }
             } catch (err) {

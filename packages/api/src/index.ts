@@ -32,6 +32,7 @@ import { playbookRoutes } from "./routes/playbooks.js";
 import { receiptRoutes } from "./routes/receipt.js";
 import { reminderRoutes } from "./routes/reminders.js";
 import { skillRoutes } from "./routes/skills.js";
+import { smsRoutes } from "./routes/sms.js";
 import { taskRoutes } from "./routes/tasks.js";
 import { tokenUsageRoutes } from "./routes/token-usage.js";
 import { voiceProfileRoutes } from "./routes/voice-profile.js";
@@ -143,6 +144,7 @@ await app.register(patternRoutes, { prefix: "/api/patterns" });
 await app.register(tokenUsageRoutes, { prefix: "/api/usage" });
 await app.register(voiceProfileRoutes, { prefix: "/api/voice-profile" });
 await app.register(skillRoutes, { prefix: "/api/skills" });
+await app.register(smsRoutes, { prefix: "/api/sms" });
 await app.register(workGraphRoutes, { prefix: "/api/work-graph" });
 
 app.get("/api/health", async () => {

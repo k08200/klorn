@@ -93,4 +93,8 @@ export const queryKeys = {
     recommendations: (params?: { limit?: number; contextLimit?: number }) =>
       ["playbooks", "recommendations", params ?? {}] as const,
   },
+  sms: {
+    all: ["sms"] as const,
+    phone: () => ["sms", "phone"] as const,
+  },
 } as const;
