@@ -13,13 +13,6 @@ import {
   deleteEvent,
   listEvents,
 } from "./calendar.js";
-import {
-  CONTACT_TOOLS,
-  createContact,
-  deleteContact,
-  listContacts,
-  updateContact,
-} from "./contacts.js";
 import { prisma } from "./db.js";
 import {
   FILE_TOOLS,
@@ -56,7 +49,6 @@ import {
 import { getUpcomingMeetings, joinMeeting, MEETING_TOOLS, summarizeMeeting } from "./meeting.js";
 import { forget, MEMORY_TOOLS, recall, remember } from "./memory.js";
 import { getNews, NEWS_TOOLS } from "./news.js";
-import { createNote, deleteNote, listNotes, NOTE_TOOLS, updateNote } from "./notes.js";
 import {
   createNotionPage,
   listNotionDatabases,
@@ -64,19 +56,11 @@ import {
   NOTION_TOOLS,
   searchNotion,
 } from "./notion.js";
-import {
-  createReminder,
-  deleteReminder,
-  dismissReminder,
-  listReminders,
-  REMINDER_TOOLS,
-} from "./reminders.js";
 import { SEARCH_TOOLS, webSearch } from "./search.js";
 import { captureError } from "./sentry.js";
 import { executeSkill, listUserSkills, SKILL_TOOLS } from "./skill-executor.js";
 import { listSlackChannels, readSlackMessages, SLACK_TOOLS, sendSlackMessage } from "./slack.js";
 import { planHasFeature, TOOL_FEATURE_MAP } from "./stripe.js";
-import { createTask, deleteTask, listTasks, TASK_TOOLS, updateTask } from "./tasks.js";
 import { capToolResult } from "./tool-result-budget.js";
 import { wrapUntrusted } from "./untrusted.js";
 import {
@@ -104,10 +88,6 @@ const TIME_TOOL = {
 const GOOGLE_TOOLS = [...GMAIL_TOOLS, ...CALENDAR_TOOLS];
 
 export const ALWAYS_TOOLS = [
-  ...TASK_TOOLS,
-  ...NOTE_TOOLS,
-  ...REMINDER_TOOLS,
-  ...CONTACT_TOOLS,
   ...SEARCH_TOOLS,
   ...WRITER_TOOLS,
   ...BRIEFING_TOOLS,
@@ -137,7 +117,7 @@ export function getToolsForPlan(hasGoogle: boolean, plan: string) {
   const base = hasGoogle ? ALL_TOOLS : [...ALWAYS_TOOLS];
   return base.filter((tool) => {
     const featureKey = TOOL_FEATURE_MAP[tool.function.name];
-    // Tools not in the map are always available (tasks, notes, reminders, etc.)
+    // Tools not in the map are always available.
     if (!featureKey) return true;
     return planHasFeature(plan, featureKey);
   });
@@ -264,42 +244,6 @@ async function executeToolCallInternal(
             requireString(args.end_time, "end_time"),
           ),
         );
-      case "list_tasks":
-        return JSON.stringify(await listTasks(userId, args.status as string | undefined));
-      case "create_task":
-        return JSON.stringify(
-          await createTask(
-            userId,
-            requireString(args.title, "title"),
-            args.description as string | undefined,
-            args.priority as string | undefined,
-            args.due_date as string | undefined,
-          ),
-        );
-      case "update_task": {
-        const taskId = requireString(args.task_id, "task_id");
-        const { task_id: _, ...rest } = args;
-        return JSON.stringify(await updateTask(taskId, rest));
-      }
-      case "delete_task":
-        return JSON.stringify(await deleteTask(requireString(args.task_id, "task_id")));
-      case "list_notes":
-        return JSON.stringify(await listNotes(userId, args.search as string | undefined));
-      case "create_note":
-        return JSON.stringify(
-          await createNote(
-            userId,
-            requireString(args.title, "title"),
-            requireString(args.content, "content"),
-          ),
-        );
-      case "update_note": {
-        const noteId = requireString(args.note_id, "note_id");
-        const { note_id: _n, ...noteRest } = args;
-        return JSON.stringify(await updateNote(noteId, noteRest));
-      }
-      case "delete_note":
-        return JSON.stringify(await deleteNote(requireString(args.note_id, "note_id")));
       case "send_slack_message":
         return JSON.stringify(
           await sendSlackMessage({
@@ -322,69 +266,6 @@ async function executeToolCallInternal(
         const { briefing, note, notification, reused } = await createDailyBriefingDelivery(userId);
         return JSON.stringify({ briefing, note, notification, reused });
       }
-      case "list_reminders":
-        return JSON.stringify(
-          await listReminders(userId, (args.include_completed as boolean) || false),
-        );
-      case "create_reminder": {
-        const reminderTitle = requireString(args.title, "title");
-        const reminderAt = requireString(args.remind_at, "remind_at");
-        // Dedup: check if a similar reminder already exists within ±30 min
-        const remindDate = new Date(reminderAt);
-        if (!isNaN(remindDate.getTime())) {
-          const dupReminder = await prisma.reminder.findFirst({
-            where: {
-              userId,
-              title: { contains: reminderTitle.slice(0, 20) },
-              remindAt: {
-                gte: new Date(remindDate.getTime() - 30 * 60_000),
-                lte: new Date(remindDate.getTime() + 30 * 60_000),
-              },
-            },
-          });
-          if (dupReminder) {
-            return JSON.stringify({
-              skipped: true,
-              message: `Similar reminder already exists: "${dupReminder.title}" at ${dupReminder.remindAt}`,
-            });
-          }
-        }
-        return JSON.stringify(
-          await createReminder(
-            userId,
-            reminderTitle,
-            reminderAt,
-            args.description as string | undefined,
-          ),
-        );
-      }
-      case "dismiss_reminder":
-        return JSON.stringify(
-          await dismissReminder(requireString(args.reminder_id, "reminder_id")),
-        );
-      case "delete_reminder":
-        return JSON.stringify(await deleteReminder(requireString(args.reminder_id, "reminder_id")));
-      case "list_contacts":
-        return JSON.stringify(await listContacts(userId, args.search as string | undefined));
-      case "create_contact":
-        return JSON.stringify(
-          await createContact(userId, {
-            name: requireString(args.name, "name"),
-            email: args.email as string | undefined,
-            phone: args.phone as string | undefined,
-            company: args.company as string | undefined,
-            role: args.role as string | undefined,
-            notes: args.notes as string | undefined,
-            tags: args.tags as string | undefined,
-          }),
-        );
-      case "update_contact": {
-        const contactId = requireString(args.contact_id, "contact_id");
-        const { contact_id: _c, ...contactRest } = args;
-        return JSON.stringify(await updateContact(contactId, contactRest));
-      }
-      case "delete_contact":
-        return JSON.stringify(await deleteContact(requireString(args.contact_id, "contact_id")));
       case "web_search":
         return JSON.stringify(
           await webSearch(requireString(args.query, "query"), safeInt(args.max_results, 5, 20)),

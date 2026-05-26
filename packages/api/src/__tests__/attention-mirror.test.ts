@@ -61,7 +61,7 @@ describe("upsertAttentionForPendingAction", () => {
     await upsertAttentionForPendingAction({
       id: "pa-low",
       userId: "user-1",
-      toolName: "create_task",
+      toolName: "classify_emails",
       status: "PENDING",
       reasoning: null,
     });
@@ -112,13 +112,13 @@ describe("upsertAttentionForPendingAction", () => {
     await upsertAttentionForPendingAction({
       id: "pa-4",
       userId: "user-1",
-      toolName: "create_task",
+      toolName: "send_email",
       status: "PENDING",
       reasoning: null,
     });
 
     const call = upsertSpy.mock.calls[0]?.[0] as { create: { title: string } };
-    expect(call.create.title).toBe("create task");
+    expect(call.create.title).toBe("send email");
   });
 
   it("truncates very long reasoning into a usable title", async () => {

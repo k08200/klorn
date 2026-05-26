@@ -353,13 +353,13 @@ export async function runAgentForUser(
 Call tools DIRECTLY — the system will handle risk gating automatically.
 
 ### LOW risk (auto-executed immediately):
-- create_reminder, dismiss_reminder, update_task, classify_emails, create_task, update_note
+- classify_emails
 
 ### MEDIUM risk (system will ask user for approval):
-- create_event, send_email, create_note, update_contact, create_contact
+- create_event, send_email
 
 ### HIGH risk (system will warn user before approval):
-- delete_task, delete_reminder, delete_note, delete_event, archive_email, delete_email
+- delete_event, archive_email, delete_email
 
 You MUST call tools directly. Do NOT use propose_action.
 LOW-risk tools execute instantly. MEDIUM/HIGH tools are automatically converted to approval proposals.
@@ -400,9 +400,8 @@ Prefer one high-confidence action over completing a checklist.
 
 When confidence is high:
 1. call create_event only if the meeting is not already on the calendar
-2. call create_reminder only if the event/reminder would clearly help
-3. call send_email only to prepare an approval proposal for the reply
-4. call notify_user only when something was executed or genuinely needs attention
+2. call send_email only to prepare an approval proposal for the reply
+3. call notify_user only when something was executed or genuinely needs attention
 
 When confidence is low or the sender looks automated/no-reply, skip or create an approval proposal instead of executing.
 

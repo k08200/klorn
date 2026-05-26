@@ -16,17 +16,17 @@ describe("executeBatch", () => {
 
   it("executes single tool call", async () => {
     const results = await executeBatch([
-      { id: "call-1", userId: "u1", functionName: "list_tasks", args: {} },
+      { id: "call-1", userId: "u1", functionName: "list_emails", args: {} },
     ]);
     expect(results).toHaveLength(1);
     expect(results[0].tool_call_id).toBe("call-1");
-    expect(JSON.parse(results[0].content)).toMatchObject({ tool: "list_tasks", success: true });
+    expect(JSON.parse(results[0].content)).toMatchObject({ tool: "list_emails", success: true });
   });
 
   it("executes multiple tool calls in parallel", async () => {
     const results = await executeBatch([
-      { id: "call-1", userId: "u1", functionName: "list_tasks", args: {} },
-      { id: "call-2", userId: "u1", functionName: "list_notes", args: {} },
+      { id: "call-1", userId: "u1", functionName: "list_emails", args: {} },
+      { id: "call-2", userId: "u1", functionName: "list_events", args: {} },
       { id: "call-3", userId: "u1", functionName: "get_weather", args: { city: "Seoul" } },
     ]);
     expect(results).toHaveLength(3);
@@ -56,8 +56,8 @@ describe("executeBatch", () => {
 
 describe("isBatchable", () => {
   it("returns true for read-only tools", () => {
-    expect(isBatchable("list_tasks")).toBe(true);
-    expect(isBatchable("list_notes")).toBe(true);
+    expect(isBatchable("list_emails")).toBe(true);
+    expect(isBatchable("list_events")).toBe(true);
     expect(isBatchable("web_search")).toBe(true);
     expect(isBatchable("get_weather")).toBe(true);
     expect(isBatchable("recall")).toBe(true);
@@ -65,14 +65,13 @@ describe("isBatchable", () => {
   });
 
   it("returns true for idempotent writes", () => {
-    expect(isBatchable("create_task")).toBe(true);
     expect(isBatchable("mark_read")).toBe(true);
-    expect(isBatchable("create_reminder")).toBe(true);
+    expect(isBatchable("classify_emails")).toBe(true);
   });
 
   it("returns false for non-batchable tools", () => {
     expect(isBatchable("send_email")).toBe(false);
-    expect(isBatchable("delete_task")).toBe(false);
+    expect(isBatchable("delete_email")).toBe(false);
     expect(isBatchable("propose_action")).toBe(false);
     expect(isBatchable("unknown_tool")).toBe(false);
   });

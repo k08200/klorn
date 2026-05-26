@@ -46,20 +46,11 @@ function scenarioHighRiskDeletesGated(): EvalScenario {
     id: "risk-01",
     name: "Destructive tools require explicit confirmation",
     description:
-      "delete_task, delete_note, delete_email, archive_email, delete_event must all be HIGH risk so AUTO mode never runs them silently.",
+      "delete_email, archive_email, delete_event must all be HIGH risk so AUTO mode never runs them silently.",
     severity: "critical",
     category: "risk-gating",
     run() {
-      // Note: delete_contact is excluded — current design intentionally omits it
-      // from TOOL_RISK_LEVELS (it's gated at the route level via contact ownership).
-      const destructive = [
-        "delete_task",
-        "delete_note",
-        "delete_email",
-        "archive_email",
-        "delete_event",
-        "delete_reminder",
-      ];
+      const destructive = ["delete_email", "archive_email", "delete_event"];
       const offenders = destructive.filter((tool) => {
         const risk = getToolRisk(tool);
         return risk !== "HIGH";
@@ -78,11 +69,11 @@ function scenarioExternalWritesGated(): EvalScenario {
     id: "risk-02",
     name: "External-facing writes require approval",
     description:
-      "send_email, create_event, create_contact must never be LOW risk — they produce user-visible side effects.",
+      "send_email and create_event must never be LOW risk — they produce user-visible side effects.",
     severity: "critical",
     category: "risk-gating",
     run() {
-      const externalTools = ["send_email", "create_event", "create_contact"];
+      const externalTools = ["send_email", "create_event"];
       const lowRisk = externalTools.filter((t) => getToolRisk(t) === "LOW");
       if (lowRisk.length > 0) {
         return `External-facing tools marked LOW risk: ${lowRisk.join(", ")}`;
@@ -201,7 +192,7 @@ function scenarioProPlanAccess(): EvalScenario {
     severity: "medium",
     category: "plan-gating",
     run() {
-      const proTools = ["list_emails", "list_events", "create_task"];
+      const proTools = ["list_emails", "list_events"];
       for (const tool of proTools) {
         if (!isToolAllowedForPlan(tool, "PRO")) {
           return `Tool "${tool}" incorrectly gated on PRO plan`;

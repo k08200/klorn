@@ -16,12 +16,7 @@ export type RiskLevel = "LOW" | "MEDIUM" | "HIGH";
  */
 export const TOOL_RISK_LEVELS = new Map<string, RiskLevel>([
   // LOW — safe, easily reversible, no external side effects
-  ["create_reminder", "LOW"],
-  ["dismiss_reminder", "LOW"],
-  ["update_task", "LOW"],
   ["classify_emails", "LOW"],
-  ["create_task", "LOW"],
-  ["update_note", "LOW"],
   ["mark_read", "LOW"],
   ["generate_briefing", "LOW"],
 
@@ -30,9 +25,6 @@ export const TOOL_RISK_LEVELS = new Map<string, RiskLevel>([
 
   // MEDIUM — external-facing or calendar changes, reversible but visible
   ["create_event", "MEDIUM"],
-  ["create_note", "MEDIUM"],
-  ["update_contact", "MEDIUM"],
-  ["create_contact", "MEDIUM"],
 
   // MEDIUM — skills can trigger external-facing tools (send_email, create_event)
   // through the agent reasoning loop, so they need explicit user approval.
@@ -42,9 +34,6 @@ export const TOOL_RISK_LEVELS = new Map<string, RiskLevel>([
   ["record_skill", "MEDIUM"],
 
   // HIGH — destructive or hard to reverse
-  ["delete_task", "HIGH"],
-  ["delete_reminder", "HIGH"],
-  ["delete_note", "HIGH"],
   ["delete_event", "HIGH"],
   ["archive_email", "HIGH"],
   ["delete_email", "HIGH"],

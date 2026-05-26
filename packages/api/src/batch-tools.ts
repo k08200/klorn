@@ -57,10 +57,6 @@ export async function executeBatch(calls: ToolCallInput[]): Promise<ToolCallResu
  */
 const BATCHABLE_TOOLS = new Set([
   // Read-only
-  "list_tasks",
-  "list_notes",
-  "list_reminders",
-  "list_contacts",
   "list_emails",
   "read_email",
   "list_events",
@@ -80,12 +76,8 @@ const BATCHABLE_TOOLS = new Set([
   "translate",
   "convert_currency",
   // Idempotent writes (creating independent resources)
-  "create_task",
-  "create_reminder",
-  "create_note",
   "mark_read",
   "classify_emails",
-  "dismiss_reminder",
 ]);
 
 /** Check if a tool is safe to batch with others */
