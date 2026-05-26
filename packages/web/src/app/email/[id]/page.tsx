@@ -7,6 +7,7 @@ import AuthGuard from "../../../components/auth-guard";
 import { EveSignalField } from "../../../components/brand-visuals";
 import { useConfirm } from "../../../components/confirm-dialog";
 import { useToast } from "../../../components/toast";
+import { TrustBadgeChip } from "../../../components/trust-badge";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
 import { DetailStat, EmailActionButton, formatBytes, ProfileFact, senderName } from "./atoms";
@@ -655,6 +656,7 @@ function EmailDetailView() {
                   </h1>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
                     <span className="max-w-full truncate">{email.from}</span>
+                    {email.trust && <TrustBadgeChip trust={email.trust} />}
                     <span className="text-stone-600">·</span>
                     <time className="shrink-0 tabular-nums">{formatFull(email.date)}</time>
                     <span className="text-stone-600">·</span>

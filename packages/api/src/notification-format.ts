@@ -30,6 +30,26 @@ export function senderName(raw: string | null | undefined): string {
   return raw.replace(/[<>]/g, "").trim().slice(0, 30);
 }
 
+/**
+ * Extract just the address portion (lowercased): "Name <a@b.com>" → "a@b.com".
+ * Returns "" if no address is present — caller decides how to fall back.
+ * Lowercase to match how ContactTrustScore.contactEmail is stored.
+ */
+export function senderEmail(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const trimmed = raw.trim();
+  if (trimmed.endsWith(">")) {
+    const open = trimmed.lastIndexOf("<");
+    if (open !== -1)
+      return trimmed
+        .slice(open + 1, -1)
+        .trim()
+        .toLowerCase();
+  }
+  if (trimmed.includes("@")) return trimmed.toLowerCase();
+  return "";
+}
+
 /** Map autonomous-agent tool calls to a clear user-facing summary. */
 export function humanizeAutoExec(
   fnName: string,

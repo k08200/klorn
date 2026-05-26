@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { useToast } from "../../components/toast";
+import { TrustDot, type TrustScoreData } from "../../components/trust-badge";
 import { apiFetch } from "../../lib/api";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
@@ -40,6 +41,8 @@ interface EmailRow {
   id: string;
   gmailId: string;
   from: string;
+  senderEmail?: string | null;
+  trust?: TrustScoreData | null;
   subject: string;
   snippet: string | null;
   date: string;
@@ -1053,11 +1056,12 @@ function EmailRowItem({
           <div className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-start">
             <div className="min-w-0 flex-1">
               <EmailBadges email={email} unread={unread} />
-              <p
-                className={`mt-2 truncate text-sm ${unread ? "font-semibold text-stone-100" : "text-stone-300"}`}
+              <div
+                className={`mt-2 flex items-center gap-1.5 text-sm ${unread ? "font-semibold text-stone-100" : "text-stone-300"}`}
               >
-                {senderName(email.from)}
-              </p>
+                <TrustDot trust={email.trust} />
+                <span className="truncate">{senderName(email.from)}</span>
+              </div>
               <p className="mt-1 truncate text-[13px] text-stone-400">
                 {email.subject || "No subject"}
               </p>

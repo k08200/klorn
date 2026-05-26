@@ -12,7 +12,7 @@
   },
   "scripts": {
     "build": "pnpm -r build",
-    "dev": "pnpm -r --parallel dev",
+    "dev": "pnpm --filter @klorn/api --filter @klorn/web --parallel dev",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test"
   }
