@@ -151,8 +151,8 @@ export default function PrivacyPage() {
 
           <Section title="Your Rights (GDPR / CCPA)">
             <p>
-              Depending on where you live, you may have rights to access, correct, export, or
-              delete the personal data Klorn holds about you, and to object to or restrict certain
+              Depending on where you live, you may have rights to access, correct, export, or delete
+              the personal data Klorn holds about you, and to object to or restrict certain
               processing. To exercise any of these rights, contact{" "}
               <a className="text-amber-200 hover:text-amber-100" href="mailto:k0820086@gmail.com">
                 k0820086@gmail.com
