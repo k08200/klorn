@@ -434,6 +434,7 @@ function QuickLinksPanel() {
   // from /inbox: today's receipt and the morning briefing. Agent timeline
   // and the chat root live one click away through the sidebar nav already.
   const links = [
+    { href: "/inbox/firewall", label: "POC firewall view" },
     { href: "/inbox/receipt", label: "Today's receipt" },
     { href: "/briefing", label: "Full briefing" },
   ] as const;
