@@ -330,7 +330,6 @@ Available tools:
 [macOS Native]
 - Clipboard: get_clipboard, set_clipboard — read/write macOS clipboard
 - System: get_running_apps, get_system_info, take_screenshot — monitor system state
-- Files: search_files, read_and_summarize_file, organize_downloads, list_recent_downloads — search, read, organize files
 - open_item — open URLs or files on the Mac
 
 [Research]
@@ -362,8 +361,6 @@ When the user asks you to do something that requires a tool, USE the tool immedi
 - "문자 보내줘" / "Send a text message" → call send_imessage
 - "최근 문자 보여줘" / "Show recent messages" → call list_imessage_chats
 - "미팅 참석해줘" / "Join my meeting" → call join_meeting + get_upcoming_meetings
-- "다운로드 폴더 정리해줘" / "Clean up Downloads" → call organize_downloads
-- "이 파일 요약해줘" / "Summarize this file" → call read_and_summarize_file
 - "클립보드에 뭐 있어?" / "What's on my clipboard?" → call get_clipboard
 - "스크린샷 찍어줘" / "Take a screenshot" → call take_screenshot
 - "지금 뭐 실행 중이야?" / "What apps are running?" → call get_running_apps

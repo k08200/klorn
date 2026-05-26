@@ -15,13 +15,6 @@ import {
 } from "./calendar.js";
 import { prisma } from "./db.js";
 import {
-  FILE_TOOLS,
-  listRecentDownloads,
-  organizeDownloads,
-  readAndSummarize,
-  searchFiles,
-} from "./files.js";
-import {
   classifyEmails,
   GMAIL_TOOLS,
   listEmails,
@@ -92,7 +85,6 @@ export const ALWAYS_TOOLS = [
   ...WRITER_TOOLS,
   ...BRIEFING_TOOLS,
   ...MEETING_TOOLS,
-  ...FILE_TOOLS,
   ...WEATHER_TOOLS,
   ...NEWS_TOOLS,
   ...UTILITY_TOOLS,
@@ -348,18 +340,6 @@ async function executeToolCallInternal(
             (args.attendees as string[]) || [],
           ),
         );
-      case "search_files":
-        return JSON.stringify(
-          await searchFiles(requireString(args.query, "query"), args.folder as string | undefined),
-        );
-      case "read_and_summarize_file":
-        return JSON.stringify(
-          await readAndSummarize(userId, requireString(args.file_path, "file_path")),
-        );
-      case "organize_downloads":
-        return JSON.stringify(await organizeDownloads());
-      case "list_recent_downloads":
-        return JSON.stringify(await listRecentDownloads(safeInt(args.count, 10, 50)));
       case "get_weather":
         return JSON.stringify(await getWeather(requireString(args.location, "location")));
       case "get_news":
