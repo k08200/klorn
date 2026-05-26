@@ -72,7 +72,6 @@ export default function WorkGraphSummaryCard() {
           </li>
         ))}
       </ul>
-
     </section>
   );
 }
