@@ -251,9 +251,20 @@ async function fetchGmailEmailById(userId: string, gmailId: string): Promise<Gma
   }
 }
 
+/**
+ * Resolve the inbox owner's email address. Used by the needs-reply classifier
+ * so a sync loop pays one DB hit per batch instead of one per message; callers
+ * pass the cached value through {@link persistGmailEmail}.
+ */
+async function resolveUserEmail(userId: string): Promise<string | null> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  return user?.email ?? null;
+}
+
 async function persistGmailEmail(
   userId: string,
   email: GmailRawEmail,
+  options: { userEmail?: string | null } = {},
 ): Promise<{ emailId: string; isNew: boolean }> {
   const existing = await prisma.emailMessage.findUnique({
     where: { userId_gmailId: { userId, gmailId: email.gmailId } },
@@ -278,12 +289,14 @@ async function persistGmailEmail(
     return { emailId: existing.id, isNew: false };
   }
 
+  const userEmail = options.userEmail ?? (await resolveUserEmail(userId));
   const priority = classifyPriority(email.from, email.subject, email.labels);
   const replyNeeded = classifyNeedsReplyFromSignals({
     from: email.from,
     subject: email.subject,
     labels: email.labels,
     priority,
+    userEmail,
   });
 
   const createdEmail = await prisma.emailMessage.create({
@@ -371,10 +384,11 @@ export async function syncEmails(
   const rawEmails = await fetchGmailEmails(userId, maxResults, query);
   if (!rawEmails) throw new Error("Gmail not connected");
 
+  const userEmail = await resolveUserEmail(userId);
   let newCount = 0;
 
   for (const email of rawEmails) {
-    const persisted = await persistGmailEmail(userId, email);
+    const persisted = await persistGmailEmail(userId, email, { userEmail });
     if (persisted.isNew) newCount++;
   }
 
@@ -650,6 +664,16 @@ export function classifyPriority(
   return classifyPriorityDetailed(from, subject, labels).priority;
 }
 
+/**
+ * Pull just the email address from a header value like "Name <foo@bar.com>".
+ * Returns lowercase, or the full lowercased input when no angle brackets are
+ * present.
+ */
+export function extractEmailAddress(value: string): string {
+  const match = value.match(/<([^>]+)>/);
+  return (match?.[1] ?? value).trim().toLowerCase();
+}
+
 export function classifyNeedsReplyFromSignals(input: {
   from: string;
   subject: string;
@@ -657,12 +681,25 @@ export function classifyNeedsReplyFromSignals(input: {
   category?: string | null;
   actionItems?: string[];
   priority?: "URGENT" | "NORMAL" | "LOW";
+  /**
+   * Email of the inbox owner. When the message is sent by the owner to
+   * themselves (a frequent dogfood pattern — test mails, drafts, todos sent
+   * to self), it should never be flagged as needing a reply.
+   */
+  userEmail?: string | null;
 }): NeedsReplyClassification {
   const from = input.from.toLowerCase();
   const subject = input.subject.toLowerCase();
   const labels = input.labels ?? [];
   const actionItems = input.actionItems ?? [];
   const category = input.category ?? null;
+
+  if (input.userEmail) {
+    const senderAddr = extractEmailAddress(input.from);
+    if (senderAddr && senderAddr === input.userEmail.trim().toLowerCase()) {
+      return { needsReply: false, reason: "self_sent", confidence: 0.95 };
+    }
+  }
 
   if (
     labels.includes("CATEGORY_PROMOTIONS") ||
@@ -735,6 +772,7 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
 
   if (unsummarized.length === 0) return 0;
 
+  const userEmail = await resolveUserEmail(userId);
   let count = 0;
 
   for (const email of unsummarized) {
@@ -758,6 +796,7 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
         category: result.category,
         actionItems: result.actionItems,
         priority: aiPriority,
+        userEmail,
       });
 
       await prisma.emailMessage.update({

@@ -240,7 +240,11 @@ function EmailView() {
   const { toast } = useToast();
   const undoNotice = useMemo(() => parseUndoNotice(searchParams), [searchParams]);
   const queryClient = useQueryClient();
-  const [filter, setFilter] = useState<Filter>("all");
+  // The page promises "mail that needs a reply" — default to the matching
+  // filter so users don't land on a full-noise All view that contradicts the
+  // headline. A user with no reply-needed mail still has every other tab
+  // available one click away.
+  const [filter, setFilter] = useState<Filter>("reply-needed");
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [syncing, setSyncing] = useState(false);
@@ -679,11 +683,36 @@ function EmailView() {
       {!loading && !error && filter !== "threads" && emails.length === 0 && (
         <div className="mt-4 rounded-lg border border-white/10 bg-[#11161A] p-6 text-center">
           <p className="text-sm text-stone-300">
-            {filter === "all" ? "No mail signals yet." : "No signals match this filter."}
+            {filter === "all"
+              ? "No mail signals yet."
+              : filter === "reply-needed"
+                ? "Nothing needs a reply right now."
+                : "No signals match this filter."}
           </p>
           <p className="mt-1 text-xs text-stone-600">
-            After sync, mail that needs action rises to the top.
+            {filter === "reply-needed"
+              ? "Switch tabs to see urgent, unread, or all mail — Klorn promotes a thread here when it detects something you should answer."
+              : "After sync, mail that needs action rises to the top."}
           </p>
+          {filter === "reply-needed" && (
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setFilter("all")}
+                className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100"
+              >
+                Show all signals
+              </button>
+              <button
+                type="button"
+                onClick={syncNow}
+                disabled={syncing}
+                className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100 disabled:opacity-50"
+              >
+                {syncing ? "Syncing..." : "Sync now"}
+              </button>
+            </div>
+          )}
           {filter === "all" && (
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               <Link
