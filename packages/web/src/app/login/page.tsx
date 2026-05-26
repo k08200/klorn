@@ -1,11 +1,12 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import AuthScreen from "../../components/auth-screen";
 import { useToast } from "../../components/toast";
-import { API_BASE } from "../../lib/api";
+import { API_BASE, apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 
 export default function LoginPage() {
@@ -28,6 +29,20 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const nextPath = safeNextPath(searchParams.get("next"));
 
+  // Server controls whether sign-up is open. When BETA_GATE_ENABLED is on,
+  // hide the Sign-up tab and point new visitors at /early-access. Until the
+  // probe resolves we assume open so existing users with the gate off see
+  // no flash; signupOpen flips to false the moment the response arrives.
+  const signupStatus = useQuery({
+    queryKey: ["auth", "signup-status"],
+    queryFn: () => apiFetch<{ open: boolean }>("/api/auth/signup-status"),
+    staleTime: 5 * 60_000,
+  });
+  const signupOpen = signupStatus.data?.open ?? true;
+  useEffect(() => {
+    if (!signupOpen && mode === "register") setMode("login");
+  }, [signupOpen, mode]);
+
   useEffect(() => {
     if (!authLoading && user) {
       router.push(nextPath);
@@ -44,7 +59,9 @@ function LoginForm() {
           ? "Google sign-in could not be completed. Please try again."
           : error === "session_expired"
             ? "Your session expired. Please sign in again."
-            : error;
+            : error === "invite_only"
+              ? "Klorn is invite-only right now. Request access from the early access page."
+              : error;
       toast(message, "error");
     }
     if (verified) {
@@ -105,28 +122,32 @@ function LoginForm() {
         </div>
       )}
 
-      <div className="mb-5 grid grid-cols-2 rounded-md border border-stone-700/70 bg-black/20 p-1">
-        <button
-          type="button"
-          onClick={() => setMode("login")}
-          className={`h-11 rounded px-3 text-sm font-medium transition ${
-            mode === "login" ? "bg-stone-100 text-stone-950" : "text-stone-500 hover:text-stone-200"
-          }`}
-        >
-          Log in
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("register")}
-          className={`h-11 rounded px-3 text-sm font-medium transition ${
-            mode === "register"
-              ? "bg-stone-100 text-stone-950"
-              : "text-stone-500 hover:text-stone-200"
-          }`}
-        >
-          Sign up
-        </button>
-      </div>
+      {signupOpen && (
+        <div className="mb-5 grid grid-cols-2 rounded-md border border-stone-700/70 bg-black/20 p-1">
+          <button
+            type="button"
+            onClick={() => setMode("login")}
+            className={`h-11 rounded px-3 text-sm font-medium transition ${
+              mode === "login"
+                ? "bg-stone-100 text-stone-950"
+                : "text-stone-500 hover:text-stone-200"
+            }`}
+          >
+            Log in
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("register")}
+            className={`h-11 rounded px-3 text-sm font-medium transition ${
+              mode === "register"
+                ? "bg-stone-100 text-stone-950"
+                : "text-stone-500 hover:text-stone-200"
+            }`}
+          >
+            Sign up
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {mode === "register" && (
@@ -239,14 +260,28 @@ function LoginForm() {
       </p>
 
       <div className="mt-5 border-t border-stone-800/80 pt-4 text-center text-xs text-stone-500">
-        {mode === "login" ? "Need an account?" : "Already have an account?"}{" "}
-        <button
-          type="button"
-          onClick={() => setMode(mode === "login" ? "register" : "login")}
-          className="inline-flex min-h-10 items-center font-medium text-amber-300 transition hover:text-amber-200"
-        >
-          {mode === "login" ? "Switch to sign-up" : "Switch to log-in"}
-        </button>
+        {signupOpen ? (
+          <>
+            {mode === "login" ? "Need an account?" : "Already have an account?"}{" "}
+            <button
+              type="button"
+              onClick={() => setMode(mode === "login" ? "register" : "login")}
+              className="inline-flex min-h-10 items-center font-medium text-amber-300 transition hover:text-amber-200"
+            >
+              {mode === "login" ? "Switch to sign-up" : "Switch to log-in"}
+            </button>
+          </>
+        ) : (
+          <>
+            Don&apos;t have access yet?{" "}
+            <Link
+              href="/early-access"
+              className="inline-flex min-h-10 items-center font-medium text-amber-300 transition hover:text-amber-200"
+            >
+              Request an invite
+            </Link>
+          </>
+        )}
       </div>
     </AuthScreen>
   );

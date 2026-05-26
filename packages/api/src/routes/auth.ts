@@ -184,6 +184,15 @@ async function evaluateBetaAutoPro(): Promise<{
 }
 
 export function authRoutes(app: FastifyInstance) {
+  // GET /api/auth/signup-status — Public probe so the login UI can hide the
+  // sign-up tab when BETA_GATE_ENABLED is on. Returning a boolean keeps the
+  // surface minimal — clients should not need to know the reason; they just
+  // route to /early-access instead of /login when sign-ups are closed.
+  app.get("/signup-status", async () => {
+    const open = process.env.BETA_GATE_ENABLED !== "true";
+    return { open };
+  });
+
   // POST /api/auth/register — Create account
   app.post(
     "/register",
@@ -654,6 +663,20 @@ export function authRoutes(app: FastifyInstance) {
           { label: "oauth.find_user_by_email" },
         );
         if (!user) {
+          // Beta gate: when BETA_GATE_ENABLED=true, the Google sign-in path
+          // can only create a new user if they have an APPROVED waitlist
+          // entry. This mirrors the email/password register endpoint so the
+          // two paths cannot diverge. Existing users always pass through.
+          const betaGateEnabled = process.env.BETA_GATE_ENABLED === "true";
+          if (betaGateEnabled) {
+            const waitlistEntry = await prisma.waitlist.findUnique({
+              where: { email: profile.email },
+              select: { status: true },
+            });
+            if (waitlistEntry?.status !== "APPROVED") {
+              return reply.redirect(`${webUrl}/login?error=invite_only`);
+            }
+          }
           const betaAutoProGrant = await evaluateBetaAutoPro();
           user = await withDbRetry(
             () =>
@@ -663,6 +686,7 @@ export function authRoutes(app: FastifyInstance) {
                   name: profile.name || profile.email.split("@")[0],
                   passwordHash: null, // Google-only user, no password
                   emailVerified: true, // Google accounts are pre-verified
+                  ...(betaGateEnabled && { plan: "PRO" }),
                   ...(betaAutoProGrant ?? {}),
                 },
               }),
