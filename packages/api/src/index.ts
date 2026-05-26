@@ -14,7 +14,7 @@ import { authRoutes } from "./routes/auth.js";
 import { automationRoutes } from "./routes/automations.js";
 import { billingRoutes } from "./routes/billing.js";
 import { calendarRoutes } from "./routes/calendar.js";
-import { chatRoutes } from "./routes/chat.js";
+import { chatRoutes } from "./routes/chat-pending-actions.js";
 import { commitmentRoutes } from "./routes/commitments.js";
 import { contactRoutes } from "./routes/contacts.js";
 import { deviceRoutes } from "./routes/devices.js";
