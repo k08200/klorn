@@ -35,7 +35,6 @@ import { webhookRoutes } from "./routes/webhook.js";
 import { workGraphRoutes } from "./routes/work-graph.js";
 import { workspaceRoutes } from "./routes/workspace.js";
 import { captureError } from "./sentry.js";
-import { slackEventRoutes } from "./slack.js";
 import { getClientCount, initWebSocket } from "./websocket.js";
 
 type TxClient = Omit<
@@ -111,7 +110,6 @@ await app.register(deviceRoutes, { prefix: "/api/devices" });
 await app.register(webhookRoutes, { prefix: "/api/webhook" });
 await app.register(chatRoutes, { prefix: "/api/chat" });
 await app.register(authRoutes, { prefix: "/api/auth" });
-await app.register(slackEventRoutes, { prefix: "/api/slack" });
 await app.register(briefingRoutes, { prefix: "/api/briefing" });
 await app.register(notificationRoutes, { prefix: "/api/notifications" });
 await app.register(opsRoutes, { prefix: "/api/ops" });
