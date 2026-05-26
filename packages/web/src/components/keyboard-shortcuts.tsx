@@ -2,11 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { apiFetch } from "../lib/api";
 
 const SHORTCUTS = [
   { keys: ["Cmd", "K"], label: "Command palette" },
-  { keys: ["Cmd", "N"], label: "New decision thread" },
   { keys: ["Cmd", "B"], label: "Open briefing" },
   { keys: ["Cmd", "/"], label: "Show shortcuts" },
   { keys: ["Esc"], label: "Close window" },
@@ -30,14 +28,6 @@ export default function KeyboardShortcuts() {
       if (!meta) return;
 
       switch (e.key) {
-        case "n":
-          e.preventDefault();
-          apiFetch<{ id: string }>("/api/chat/conversations", {
-            method: "POST",
-          })
-            .then((conv) => router.push(`/chat/${conv.id}`))
-            .catch(() => router.push("/chat"));
-          break;
         case "b":
           e.preventDefault();
           router.push("/briefing");

@@ -232,7 +232,6 @@ export default function Sidebar({
   const { user, logout, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [creatingChat, setCreatingChat] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const loadConversations = useCallback(() => {
@@ -275,24 +274,6 @@ export default function Sidebar({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
-
-  const createChat = async () => {
-    if (creatingChat) return;
-    setCreatingChat(true);
-    try {
-      const conv = await apiFetch<{ id: string }>("/api/chat/conversations", {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-      router.push(`/chat/${conv.id}`);
-      onMobileClose();
-    } catch (err) {
-      captureClientError(err, { scope: "sidebar.create-chat" });
-      toast("Could not create a thread. Check your connection.", "error");
-    } finally {
-      setCreatingChat(false);
-    }
-  };
 
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<
@@ -341,7 +322,7 @@ export default function Sidebar({
       setConversations((prev) => prev.filter((c) => c.id !== id));
       setDeleteConfirm(null);
       if (pathname === `/chat/${id}`) {
-        router.push("/chat");
+        router.push("/inbox");
       }
     } catch {
       toast("Could not delete the thread.", "error");
@@ -452,29 +433,6 @@ export default function Sidebar({
         </Link>
         <div className="flex items-center gap-1">
           {user && <NotificationBell userId={user.id} />}
-          <button
-            type="button"
-            onClick={createChat}
-            disabled={creatingChat}
-            className="flex h-9 w-9 items-center justify-center rounded-md border border-stone-700 bg-stone-900 text-stone-400 transition hover:border-stone-600 hover:bg-stone-800 hover:text-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
-            title="New decision thread"
-            aria-label={creatingChat ? "Creating decision thread" : "New decision thread"}
-          >
-            <svg
-              aria-hidden="true"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 5v14" />
-              <path d="M5 12h14" />
-            </svg>
-          </button>
         </div>
       </div>
 
