@@ -19,6 +19,7 @@ import { createCompletion, MODEL } from "./openai.js";
 import { sendPushNotification } from "./push.js";
 import { listTasks } from "./tasks.js";
 import { localDayUtcRange, normalizeTimeZone } from "./time-zone.js";
+import { stripUntrusted } from "./untrusted.js";
 import { pushNotification } from "./websocket.js";
 
 const BRIEFING_CALENDAR_WINDOW_DAYS = 14;
@@ -76,16 +77,39 @@ async function listLocalBriefingEvents(userId: string, now: Date): Promise<{ eve
       endTime: true,
     },
   });
-  return {
-    events: rows.map((row) => ({
+
+  // Defense in depth: an older version of calendar sync wrote
+  // <untrusted_content> wrappers into CalendarEvent.title / .description /
+  // .location. Newer syncs write raw text, but stale prod rows still leak the
+  // wrapper into the rule-based briefing — the user sees raw XML-looking tags
+  // and the "shared terms" detector treats "untrusted", "content", "source"
+  // as meaningful tokens. Strip on the read side so fallback briefings stay
+  // clean even before a one-shot DB cleanup runs.
+  //
+  // Same row collapsed to a single signal: Google's birthday calendar emits
+  // one event per upcoming birthday occurrence, all sharing the same title.
+  // The fallback briefing previously listed each one as a separate deadline.
+  // Dedup by (clean title, day) so a repeating event takes one line.
+  const seenKeys = new Set<string>();
+  const events: unknown[] = [];
+  for (const row of rows) {
+    const summary = stripUntrusted(row.title);
+    const description = stripUntrusted(row.description);
+    const location = stripUntrusted(row.location);
+    const startIso = row.startTime.toISOString();
+    const dedupKey = `${summary.trim().toLowerCase()}|${startIso.slice(0, 10)}`;
+    if (seenKeys.has(dedupKey)) continue;
+    seenKeys.add(dedupKey);
+    events.push({
       id: row.id,
-      summary: row.title,
-      description: row.description ?? "",
-      location: row.location ?? "",
-      start: row.startTime.toISOString(),
+      summary,
+      description,
+      location,
+      start: startIso,
       end: row.endTime.toISOString(),
-    })),
-  };
+    });
+  }
+  return { events };
 }
 
 async function gatherBriefingData(userId: string): Promise<BriefingData> {
@@ -210,11 +234,21 @@ Recent Notes: ${JSON.stringify(data.notes)}`;
 
     const content = response.choices[0]?.message?.content?.trim();
     if (content) return content;
+    console.warn(
+      `[BRIEFING] LLM returned empty content for ${userId} — falling back to rule-based view`,
+    );
     return buildSignalOnlyBriefing(data.signals);
-  } catch {
+  } catch (err) {
     // LLM provider exhausted, rate-limited, or otherwise unreachable.
     // Fall back to the deterministic signal summary so the user still
     // gets a useful briefing instead of an error or empty screen.
+    // Log the reason — without it, "AI summary unavailable" is invisible
+    // in prod and the user has no idea whether the issue is credentials,
+    // the cost cap, or a transient provider outage.
+    console.warn(
+      `[BRIEFING] LLM call failed for ${userId} — falling back to rule-based view:`,
+      err instanceof Error ? err.message : err,
+    );
     return buildSignalOnlyBriefing(data.signals);
   }
 }

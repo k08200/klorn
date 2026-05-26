@@ -102,6 +102,26 @@ export default function TermsPage() {
             </p>
           </Section>
 
+          <Section title="Limitation of Liability">
+            <p>
+              To the maximum extent permitted by law, Klorn and its operators are not liable for
+              indirect, incidental, special, consequential, or punitive damages, or any loss of
+              profits, revenue, data, or goodwill arising from your use of Klorn. The total
+              aggregate liability for any claim relating to Klorn is limited to the amount you paid
+              for Klorn in the twelve months preceding the claim, or fifty US dollars if you paid
+              nothing.
+            </p>
+          </Section>
+
+          <Section title="Governing Law">
+            <p>
+              These terms are governed by the laws of the Republic of Korea, without regard to its
+              conflict of laws principles. Any dispute arising from or related to these terms will
+              be resolved in the courts located in Seoul, Republic of Korea, unless prohibited by
+              applicable law.
+            </p>
+          </Section>
+
           <Section title="Account Deletion">
             <p>
               To request deletion of Klorn account data, contact{" "}
