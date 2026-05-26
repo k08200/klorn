@@ -10,7 +10,6 @@ import { AGENT_SYSTEM_PROMPT } from "./agent/prompt.js";
 import { getUserId } from "./auth.js";
 import { type BriefingSignals, buildBriefingSignals } from "./briefing-signals.js";
 import { getBriefingStatus } from "./briefing-status.js";
-import { listEvents } from "./calendar.js";
 import { prisma } from "./db.js";
 import { recordFeedback } from "./feedback.js";
 import { listEmails } from "./gmail.js";
@@ -21,6 +20,8 @@ import { sendPushNotification } from "./push.js";
 import { listTasks } from "./tasks.js";
 import { localDayUtcRange, normalizeTimeZone } from "./time-zone.js";
 import { pushNotification } from "./websocket.js";
+
+const BRIEFING_CALENDAR_WINDOW_DAYS = 14;
 
 interface BriefingData {
   tasks: unknown;
@@ -52,10 +53,46 @@ const BRIEFING_CHOICE_BY_SIGNAL = {
   DISMISSED: "done",
 } as const;
 
+/**
+ * Read upcoming events from the local calendar table that the Calendar page
+ * and the Status readiness check already consume. Previously the briefing
+ * pulled events directly from the Google API, which surfaced auto-imported
+ * birthdays and other side calendars that the Calendar page never showed —
+ * so the briefing claimed eight birthday events while Calendar said "0
+ * events in the next 14 days." Sharing the same source removes that lie.
+ */
+async function listLocalBriefingEvents(userId: string, now: Date): Promise<{ events: unknown[] }> {
+  const windowEnd = new Date(now.getTime() + BRIEFING_CALENDAR_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const rows = await prisma.calendarEvent.findMany({
+    where: { userId, startTime: { gte: now, lte: windowEnd } },
+    orderBy: { startTime: "asc" },
+    take: 20,
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      location: true,
+      startTime: true,
+      endTime: true,
+    },
+  });
+  return {
+    events: rows.map((row) => ({
+      id: row.id,
+      summary: row.title,
+      description: row.description ?? "",
+      location: row.location ?? "",
+      start: row.startTime.toISOString(),
+      end: row.endTime.toISOString(),
+    })),
+  };
+}
+
 async function gatherBriefingData(userId: string): Promise<BriefingData> {
+  const now = new Date();
   const results = await Promise.allSettled([
     listTasks(userId),
-    listEvents(userId, 10).catch(() => ({ events: [] })),
+    listLocalBriefingEvents(userId, now).catch(() => ({ events: [] })),
     listEmails(userId, 5).catch(() => ({ emails: [] })),
     listNotes(userId).catch(() => ({ notes: [] })),
   ]);
