@@ -85,10 +85,22 @@ export const DAILY_COST_CAP_MESSAGE =
 const PROVIDERS_EXHAUSTED_BASE =
   "All AI providers are unavailable right now. To unblock yourself, add your own OpenRouter or Gemini key in Settings.";
 
+/**
+ * Strip the user UUID from a provider quotaKey before showing it to the user.
+ * Quota keys flow as `<provider>:env` or `<provider>:user:<uuid>`. Without
+ * this, the error message leaks the inbox owner's user id to anyone who can
+ * read the chat — including support screenshots — and gives an attacker a
+ * stable id to enumerate against. The cooldown timing is still useful, just
+ * not the identifier.
+ */
+export function redactQuotaKey(quotaKey: string): string {
+  return quotaKey.replace(/:user:[^:\s]+/i, ":user");
+}
+
 function formatProviderEta(info: ReturnType<typeof getProviderCooldownInfo>): string | null {
   const until = info.keyLimitedUntil ?? info.creditRetryAt;
   if (!until) return null;
-  return `${info.quotaKey} until ${until.toISOString()}`;
+  return `${redactQuotaKey(info.quotaKey)} until ${until.toISOString()}`;
 }
 
 function buildExhaustedMessage(chain: Provider[], lastError: unknown): string {
@@ -100,9 +112,10 @@ function buildExhaustedMessage(chain: Provider[], lastError: unknown): string {
   if (reasons.length > 0) {
     parts.push(`Cooldown: ${reasons.join("; ")}.`);
   }
-  if (lastError instanceof Error && lastError.message) {
-    parts.push(`Last error: ${lastError.message}`);
-  }
+  // Provider 4xx bodies (Gemini billing URL, OpenRouter dashboard links) leak
+  // operator surface area to end users without giving them anything they can
+  // act on — the base message already tells them what to do. We capture the
+  // raw error via Sentry separately for operators.
   return parts.join(" ");
 }
 

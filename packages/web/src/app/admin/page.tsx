@@ -478,7 +478,9 @@ function AdminDashboard() {
                   {ops.recentErrors.map((e) => (
                     <div key={`${e.createdAt}-${e.userId}-${e.summary}`} className="p-3 text-xs">
                       <div className="flex justify-between mb-1">
-                        <span className="text-red-400 font-mono">{e.tool || "Unknown tool"}</span>
+                        <span className="text-red-400 font-mono">
+                          {e.tool || (e.summary.startsWith("Agent error") ? "Agent loop" : "Agent")}
+                        </span>
                         <span className="text-stone-600">
                           {new Date(e.createdAt).toLocaleString("en-US")}
                         </span>
