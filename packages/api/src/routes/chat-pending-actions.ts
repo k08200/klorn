@@ -1,10 +1,12 @@
 /**
- * Chat pending-action routes — list, approve, reject, snooze.
+ * Chat routes — pending-action list / approve / reject / snooze.
  *
- * Split out of routes/chat.ts so the approval surface (the user-visible
- * gating that turns proposed tool calls into executed ones) lives in one
- * place. Registered by chatRoutes() against the same `/api/chat` prefix so
- * client paths stay byte-identical.
+ * The /api/chat surface used to host conversation CRUD (create/list/get/
+ * update/delete) plus the agent send-message loop, but POC scope dropped
+ * the entire user-initiated chat surface. What remains is the approval
+ * gating that turns agent-proposed tool calls into executed ones — the
+ * inbox card uses these endpoints to approve, reject, or snooze each
+ * PendingAction.
  */
 
 import type { FastifyInstance } from "fastify";
@@ -15,14 +17,38 @@ import { db, prisma } from "../db.js";
 import { recipientFromToolArgs, recordFeedback } from "../feedback.js";
 import { executeToolCall } from "../tool-executor.js";
 import { pushNotification } from "../websocket.js";
-import {
-  actionIdParamSchema,
-  hasMeaningfulText,
-  idParamSchema,
-  rejectActionBodySchema,
-} from "./chat.js";
 
-export async function registerChatPendingActionsRoutes(app: FastifyInstance) {
+const idParamSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id"],
+  properties: {
+    id: { type: "string", minLength: 1 },
+  },
+} as const;
+
+const actionIdParamSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["actionId"],
+  properties: {
+    actionId: { type: "string", minLength: 1 },
+  },
+} as const;
+
+const rejectActionBodySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    reason: { type: "string", minLength: 1, maxLength: 500 },
+  },
+} as const;
+
+function hasMeaningfulText(value: string | undefined): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+export async function chatRoutes(app: FastifyInstance) {
   // GET /api/chat/pending-actions — All pending actions for the current user across conversations.
   // Powers the mobile inbox so users can see & act on every "needs your attention" item in one place.
   app.get("/pending-actions", async (request) => {
