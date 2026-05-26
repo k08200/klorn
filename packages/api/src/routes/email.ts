@@ -39,8 +39,9 @@ import {
   syncEmails,
 } from "../email-sync.js";
 import { sendEmail, toggleReadGmail } from "../gmail.js";
-import { senderName } from "../notification-format.js";
+import { senderEmail, senderName } from "../notification-format.js";
 import { sendPushNotification } from "../push.js";
+import { getTrustScore, getTrustScoresBulk, type TrustScoreResult } from "../trust-score.js";
 import { pushNotification } from "../websocket.js";
 import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
 import { registerEmailBulkRoutes } from "./email-bulk.js";
@@ -49,6 +50,21 @@ import { registerEmailFeedbackRoutes } from "./email-feedback.js";
 import { registerEmailMutationsRoutes } from "./email-mutations.js";
 import { registerEmailRepliesRoutes } from "./email-replies.js";
 import { registerEmailRulesRoutes } from "./email-rules.js";
+
+/**
+ * Slice of TrustScoreResult that we ship to the inbox UI. Keeping this
+ * compact (no avgDelayDays / lateCount) so list payloads stay small —
+ * details live in /contacts/:id when the user wants the full picture.
+ */
+function trustToWire(t: TrustScoreResult | undefined | null) {
+  if (!t) return null;
+  return {
+    badge: t.badge,
+    label: t.label,
+    onTimeRate: t.onTimeRate,
+    totalCount: t.totalCount,
+  };
+}
 
 // ─── Demo Data ────────────────────────────────────────────────────────────
 
@@ -554,6 +570,8 @@ export async function emailRoutes(app: FastifyInstance) {
       return {
         emails: emails.map((e) => ({
           ...e,
+          senderEmail: senderEmail(e.from) || null,
+          trust: null,
           needsReply: looksReplyNeeded({
             priority: e.priority,
             category: e.category,
@@ -666,15 +684,24 @@ export async function emailRoutes(app: FastifyInstance) {
         if (intake) candidateIntakes[emailId] = intake;
       }
     }
+    // Bulk-fetch Trust Scores for every unique sender on this page so the
+    // inbox row can render a dot without an N+1 query per email.
+    const senderAddresses = Array.from(
+      new Set(emails.map((e) => senderEmail(e.from)).filter(Boolean)),
+    );
+    const trustMap = await getTrustScoresBulk(uid, senderAddresses);
     const mapped = emails.map((e) => {
       const actionItems = parseJsonArray(e.actionItems);
       const candidateProfile = candidateProfiles[e.id] ?? null;
       const candidateIntake = candidateIntakes[e.id] ?? null;
+      const addr = senderEmail(e.from);
       return {
         id: e.id,
         gmailId: e.gmailId,
         threadId: e.threadId,
         from: e.from,
+        senderEmail: addr || null,
+        trust: trustToWire(addr ? trustMap.get(addr) : null),
         to: e.to,
         subject: e.subject,
         snippet: e.snippet,
@@ -895,11 +922,15 @@ export async function emailRoutes(app: FastifyInstance) {
       const candidateIntake = candidateProfile
         ? await syncCandidateIntakeForEmail({ userId: uid, emailId: dbEmail.id })
         : null;
+      const addr = senderEmail(dbEmail.from);
+      const trust = addr ? await getTrustScore(uid, addr) : null;
       return {
         id: dbEmail.id,
         gmailId: dbEmail.gmailId,
         threadId: dbEmail.threadId,
         from: dbEmail.from,
+        senderEmail: addr || null,
+        trust: trustToWire(trust),
         to: dbEmail.to,
         cc: dbEmail.cc,
         subject: dbEmail.subject,

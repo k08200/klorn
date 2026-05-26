@@ -7,6 +7,8 @@
  * Nothing here imports React or any runtime — pure types only.
  */
 
+import type { TrustScoreData } from "../../../components/trust-badge";
+
 export type EmailPriority = "URGENT" | "NORMAL" | "LOW";
 
 export interface EmailAttachment {
@@ -95,6 +97,8 @@ export interface EmailDetail {
   gmailId: string;
   threadId?: string | null;
   from: string;
+  senderEmail?: string | null;
+  trust?: TrustScoreData | null;
   to: string;
   cc: string | null;
   subject: string;
