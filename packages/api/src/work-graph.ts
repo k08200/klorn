@@ -11,6 +11,14 @@
 
 import { prisma } from "./db.js";
 
+/**
+ * How far back the work graph reaches when scanning mail. Active contexts
+ * means "things you might still need to act on" — surfacing a month-old
+ * Vercel notification as today's "High Mail" makes the dashboard noisy and
+ * trains the user to ignore it.
+ */
+const EMAIL_RECENCY_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
 export type WorkGraphContextKind = "email_thread" | "chat_conversation" | "loose_commitment";
 export type WorkGraphRisk = "high" | "medium" | "low";
 
@@ -326,9 +334,10 @@ export async function buildWorkGraphSummary(
   const now = opts?.now ?? Date.now();
   const limit = normalizeLimit(opts?.limit);
 
+  const recencyFloor = new Date(now - EMAIL_RECENCY_WINDOW_MS);
   const [emails, conversations, pendingActions, commitments] = await Promise.all([
     prisma.emailMessage.findMany({
-      where: { userId },
+      where: { userId, receivedAt: { gte: recencyFloor } },
       orderBy: { receivedAt: "desc" },
       take: 100,
     }),

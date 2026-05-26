@@ -60,8 +60,16 @@ function byUser<T extends { userId: string }>(rows: T[], userId?: string): T[] {
 vi.mock("../db.js", () => ({
   prisma: {
     emailMessage: {
-      findMany: vi.fn(async ({ where }: { where: { userId?: string } }) =>
-        byUser(stores.emails, where.userId),
+      findMany: vi.fn(
+        async ({
+          where,
+        }: {
+          where: { userId?: string; receivedAt?: { gte?: Date } };
+        }) => {
+          const rows = byUser(stores.emails, where.userId);
+          const floor = where.receivedAt?.gte;
+          return floor ? rows.filter((row) => row.receivedAt >= floor) : rows;
+        },
       ),
     },
     conversation: {
@@ -241,5 +249,39 @@ describe("buildWorkGraphSummary", () => {
 
     expect(limited.contexts).toHaveLength(1);
     expect(invalid.contexts).toHaveLength(2);
+  });
+
+  it("excludes emails older than the 14-day active window so stale signals stop surfacing", async () => {
+    const recent = new Date(NOW - 2 * 24 * 60 * 60 * 1000);
+    const stale = new Date(NOW - 30 * 24 * 60 * 60 * 1000);
+    stores.emails.push(
+      {
+        id: "email-recent",
+        userId: "user-1",
+        threadId: "thread-recent",
+        from: "Sarah <sarah@example.com>",
+        to: "me@example.com",
+        subject: "Follow-up this week",
+        isRead: false,
+        priority: "URGENT",
+        receivedAt: recent,
+      },
+      {
+        id: "email-stale",
+        userId: "user-1",
+        threadId: "thread-stale",
+        from: "Vercel <noreply@vercel.com>",
+        to: "me@example.com",
+        subject: "Failed preview deployment",
+        isRead: false,
+        priority: "URGENT",
+        receivedAt: stale,
+      },
+    );
+
+    const summary = await buildWorkGraphSummary("user-1", { now: NOW });
+    const ids = summary.contexts.map((c) => c.id);
+    expect(ids).toContain("email:thread-recent");
+    expect(ids).not.toContain("email:thread-stale");
   });
 });
