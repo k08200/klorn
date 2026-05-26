@@ -27,8 +27,6 @@ model User {
   resetToken                String?
   resetTokenExp             DateTime?
   betaProGrantedAt          DateTime?
-  agents                    Agent[]
-  testRuns                  TestRun[]
   conversations             Conversation[]
   tokens                    UserToken[]
   tasks                     Task[]
@@ -36,7 +34,6 @@ model User {
   reminders                 Reminder[]
   contacts                  Contact[]
   calendarEvents            CalendarEvent[]
-  workspaceMembers          WorkspaceMember[]
   automationConfig          AutomationConfig?
   agentLogs                 AgentLog[]
   notifications             Notification[]
@@ -83,104 +80,11 @@ model Device {
   @@index([userId])
 }
 
-model Workspace {
-  id        String            @id @default(uuid())
-  name      String
-  slug      String            @unique
-  plan      Plan              @default(FREE)
-  stripeId  String?           @unique
-  members   WorkspaceMember[]
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-}
-
-model WorkspaceMember {
-  id          String        @id @default(uuid())
-  userId      String
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspaceId String
-  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  role        WorkspaceRole @default(MEMBER)
-  createdAt   DateTime      @default(now())
-
-  @@unique([userId, workspaceId])
-}
-
-enum WorkspaceRole {
-  OWNER
-  ADMIN
-  MEMBER
-}
-
-model Agent {
-  id        String    @id @default(uuid())
-  name      String
-  endpoint  String
-  apiKey    String?
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  testRuns  TestRun[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  @@index([userId])
-}
-
-model TestRun {
-  id            String       @id @default(uuid())
-  status        TestStatus   @default(QUEUED)
-  score         Int?
-  passCount     Int?
-  failCount     Int?
-  warnCount     Int?
-  scenarioCount Int          @default(100)
-  agentId       String
-  agent         Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  userId        String
-  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  evaluations   Evaluation[]
-  startedAt     DateTime?
-  completedAt   DateTime?
-  createdAt     DateTime     @default(now())
-
-  @@index([userId, createdAt])
-  @@index([agentId, createdAt])
-}
-
-model Evaluation {
-  id         String   @id @default(uuid())
-  testRunId  String
-  testRun    TestRun  @relation(fields: [testRunId], references: [id], onDelete: Cascade)
-  scenario   String
-  category   String
-  verdict    Verdict
-  reason     String?
-  evidence   String?
-  confidence Float?
-  latencyMs  Int?
-  createdAt  DateTime @default(now())
-
-  @@index([testRunId])
-}
-
 enum Plan {
   FREE
   PRO
   TEAM
   ENTERPRISE
-}
-
-enum TestStatus {
-  QUEUED
-  RUNNING
-  COMPLETED
-  FAILED
-}
-
-enum Verdict {
-  PASS
-  FAIL
-  WARNING
 }
 
 model Conversation {
