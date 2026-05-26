@@ -22,37 +22,11 @@ import {
   readEmail,
   sendEmail,
 } from "./gmail.js";
-import {
-  IMESSAGE_TOOLS,
-  isIMessageAvailable,
-  listRecentChats as listIMessageChats,
-  readIMessages,
-  sendIMessage,
-} from "./imessage.js";
-import {
-  getClipboard,
-  getRunningApps,
-  getSystemInfo,
-  isMacOS,
-  MACOS_TOOLS,
-  openItem,
-  setClipboard,
-  takeScreenshot,
-} from "./macos.js";
 import { getUpcomingMeetings, joinMeeting, MEETING_TOOLS, summarizeMeeting } from "./meeting.js";
 import { forget, MEMORY_TOOLS, recall, remember } from "./memory.js";
-import { getNews, NEWS_TOOLS } from "./news.js";
-import {
-  createNotionPage,
-  listNotionDatabases,
-  NOTION_CONFIGURED,
-  NOTION_TOOLS,
-  searchNotion,
-} from "./notion.js";
 import { SEARCH_TOOLS, webSearch } from "./search.js";
 import { captureError } from "./sentry.js";
 import { executeSkill, listUserSkills, SKILL_TOOLS } from "./skill-executor.js";
-import { listSlackChannels, readSlackMessages, SLACK_TOOLS, sendSlackMessage } from "./slack.js";
 import { planHasFeature, TOOL_FEATURE_MAP } from "./stripe.js";
 import { capToolResult } from "./tool-result-budget.js";
 import { wrapUntrusted } from "./untrusted.js";
@@ -64,10 +38,6 @@ import {
   translate,
   UTILITY_TOOLS,
 } from "./utilities.js";
-import { getWeather, WEATHER_TOOLS } from "./weather.js";
-import { WRITER_TOOLS, writeDocument } from "./writer.js";
-
-const SLACK_CONFIGURED = !!(process.env.SLACK_BOT_TOKEN || process.env.SLACK_WEBHOOK_URL);
 
 const TIME_TOOL = {
   type: "function" as const,
@@ -82,19 +52,12 @@ const GOOGLE_TOOLS = [...GMAIL_TOOLS, ...CALENDAR_TOOLS];
 
 export const ALWAYS_TOOLS = [
   ...SEARCH_TOOLS,
-  ...WRITER_TOOLS,
   ...BRIEFING_TOOLS,
   ...MEETING_TOOLS,
-  ...WEATHER_TOOLS,
-  ...NEWS_TOOLS,
   ...UTILITY_TOOLS,
   ...MEMORY_TOOLS,
   ...SKILL_TOOLS,
   TIME_TOOL,
-  ...(SLACK_CONFIGURED ? SLACK_TOOLS : []),
-  ...(NOTION_CONFIGURED ? NOTION_TOOLS : []),
-  ...(isMacOS() ? MACOS_TOOLS : []),
-  ...(isIMessageAvailable() ? IMESSAGE_TOOLS : []),
 ];
 
 export const ALL_TOOLS = [...ALWAYS_TOOLS, ...GOOGLE_TOOLS];
@@ -236,23 +199,6 @@ async function executeToolCallInternal(
             requireString(args.end_time, "end_time"),
           ),
         );
-      case "send_slack_message":
-        return JSON.stringify(
-          await sendSlackMessage({
-            channel: requireString(args.channel, "channel"),
-            text: requireString(args.text, "text"),
-            thread_ts: args.thread_ts as string | undefined,
-          }),
-        );
-      case "list_slack_channels":
-        return JSON.stringify(await listSlackChannels());
-      case "read_slack_messages":
-        return JSON.stringify(
-          await readSlackMessages(
-            requireString(args.channel, "channel"),
-            safeInt(args.limit, 10, 100),
-          ),
-        );
       case "generate_briefing": {
         const { createDailyBriefingDelivery } = await import("./briefing.js");
         const { briefing, note, notification, reused } = await createDailyBriefingDelivery(userId);
@@ -261,15 +207,6 @@ async function executeToolCallInternal(
       case "web_search":
         return JSON.stringify(
           await webSearch(requireString(args.query, "query"), safeInt(args.max_results, 5, 20)),
-        );
-      case "write_document":
-        return JSON.stringify(
-          await writeDocument(
-            userId,
-            requireString(args.type, "type"),
-            requireString(args.topic, "topic"),
-            args.details as string | undefined,
-          ),
         );
       case "get_current_time": {
         const now = new Date();
@@ -290,43 +227,6 @@ async function executeToolCallInternal(
           day_of_week: now.toLocaleDateString("ko-KR", { weekday: "long", timeZone: "Asia/Seoul" }),
         });
       }
-      case "search_notion":
-        return wrapUntrusted(
-          JSON.stringify(await searchNotion(requireString(args.query, "query"))),
-          "notion:search",
-        );
-      case "create_notion_page":
-        return JSON.stringify(
-          await createNotionPage(
-            requireString(args.parent_id, "parent_id"),
-            requireString(args.title, "title"),
-            requireString(args.content, "content"),
-          ),
-        );
-      case "list_notion_databases":
-        return wrapUntrusted(JSON.stringify(await listNotionDatabases()), "notion:databases");
-      case "send_imessage":
-        return JSON.stringify(
-          await sendIMessage(requireString(args.to, "to"), requireString(args.text, "text")),
-        );
-      case "read_imessages":
-        return JSON.stringify(
-          await readIMessages(requireString(args.from, "from"), safeInt(args.count, 10, 100)),
-        );
-      case "list_imessage_chats":
-        return JSON.stringify(await listIMessageChats(safeInt(args.count, 20, 100)));
-      case "get_clipboard":
-        return JSON.stringify(await getClipboard());
-      case "set_clipboard":
-        return JSON.stringify(await setClipboard(requireString(args.text, "text")));
-      case "get_running_apps":
-        return JSON.stringify(await getRunningApps());
-      case "open_item":
-        return JSON.stringify(await openItem(requireString(args.path, "path")));
-      case "get_system_info":
-        return JSON.stringify(await getSystemInfo());
-      case "take_screenshot":
-        return JSON.stringify(await takeScreenshot());
       case "get_upcoming_meetings":
         return JSON.stringify(await getUpcomingMeetings(userId));
       case "join_meeting":
@@ -339,12 +239,6 @@ async function executeToolCallInternal(
             requireString(args.notes, "notes"),
             (args.attendees as string[]) || [],
           ),
-        );
-      case "get_weather":
-        return JSON.stringify(await getWeather(requireString(args.location, "location")));
-      case "get_news":
-        return JSON.stringify(
-          await getNews(args.topic as string | undefined, args.sources as string[] | undefined),
         );
       case "translate_text":
         return JSON.stringify(
