@@ -324,7 +324,12 @@ function EmailView() {
       await load(filter, appliedSearch);
     } catch (err) {
       captureClientError(err, { scope: "email.sync" });
-      setError("Gmail sync failed.");
+      const message = err instanceof Error ? err.message : "";
+      if (message.toLowerCase().includes("not connected")) {
+        setError("Gmail isn't connected. Reconnect in Settings → Connections.");
+      } else {
+        setError("Gmail sync failed. Check Settings → Connections to reconnect.");
+      }
     } finally {
       setSyncing(false);
     }

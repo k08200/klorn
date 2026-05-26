@@ -678,29 +678,51 @@ export function authRoutes(app: FastifyInstance) {
           );
         }
 
-        // Auto-save Google tokens for Gmail/Calendar integration (one-click setup)
-        await withDbRetry(
+        // Auto-save Google tokens for Gmail/Calendar integration (one-click setup).
+        // Refuse to save a token without a refresh_token unless we already have
+        // one on file to preserve. Otherwise Google's silent omission of
+        // refresh_token (G Suite + unverified-app policy) leaves the user with
+        // a 1-hour working window followed by a "Gmail sync failed" loop with
+        // no actionable error message.
+        const existingToken = await withDbRetry(
           () =>
-            prisma.userToken.upsert({
+            prisma.userToken.findUnique({
               where: { userId_provider: { userId: user!.id, provider: "google" } },
-              create: {
-                userId: user!.id,
-                provider: "google",
-                accessToken: encryptToken(tokens.access_token ?? ""),
-                refreshToken: encryptOptional(tokens.refresh_token),
-                expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-              },
-              update: {
-                accessToken: encryptToken(tokens.access_token ?? ""),
-                // Only overwrite refreshToken if Google returned a new one — preserve existing otherwise
-                ...(tokens.refresh_token
-                  ? { refreshToken: encryptToken(tokens.refresh_token) }
-                  : {}),
-                expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-              },
+              select: { refreshToken: true },
             }),
-          { label: "oauth.upsert_user_token" },
+          { label: "oauth.find_existing_token" },
         );
+        const haveUsableRefreshToken = !!tokens.refresh_token || !!existingToken?.refreshToken;
+        if (!haveUsableRefreshToken) {
+          console.warn(
+            `[GOOGLE] Refusing to save partial token for ${user!.email} — refresh_token missing, no prior token to preserve`,
+          );
+          // Still let the user finish signing in — they just have to retry the
+          // Gmail integration from /settings where we explain why it failed.
+        } else {
+          await withDbRetry(
+            () =>
+              prisma.userToken.upsert({
+                where: { userId_provider: { userId: user!.id, provider: "google" } },
+                create: {
+                  userId: user!.id,
+                  provider: "google",
+                  accessToken: encryptToken(tokens.access_token ?? ""),
+                  refreshToken: encryptOptional(tokens.refresh_token),
+                  expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+                },
+                update: {
+                  accessToken: encryptToken(tokens.access_token ?? ""),
+                  // Only overwrite refreshToken if Google returned a new one — preserve existing otherwise
+                  ...(tokens.refresh_token
+                    ? { refreshToken: encryptToken(tokens.refresh_token) }
+                    : {}),
+                  expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+                },
+              }),
+            { label: "oauth.upsert_user_token" },
+          );
+        }
 
         // Auto-create AutomationConfig with defaults
         await withDbRetry(
@@ -748,7 +770,12 @@ export function authRoutes(app: FastifyInstance) {
         const xcode = crypto.randomBytes(20).toString("hex");
         exchangeCodes.set(xcode, { jwt: token, expiresAt: Date.now() + 60_000 });
         setTimeout(() => exchangeCodes.delete(xcode), 60_000);
-        return reply.redirect(`${webUrl}/auth/callback?code=${xcode}`);
+        // Pass google integration status forward so the post-login UI can
+        // either flash "connected" or surface the offline_access guidance.
+        const integrationFlag = haveUsableRefreshToken
+          ? "google=connected"
+          : "google=offline_access_denied";
+        return reply.redirect(`${webUrl}/auth/callback?code=${xcode}&${integrationFlag}`);
       }
 
       // --- Gmail/Calendar integration flow (state signed with __oauth_state__ marker) ---
@@ -761,6 +788,27 @@ export function authRoutes(app: FastifyInstance) {
       });
       if (!user) {
         return reply.code(404).send({ error: "User not found" });
+      }
+
+      // Refuse partial token. See the matching guard in the Google login flow
+      // above for the full reasoning — G Suite + unverified-app sometimes
+      // strips refresh_token, and a 1-hour-then-fail loop is worse than a
+      // visible error.
+      const existingIntegrationToken = await withDbRetry(
+        () =>
+          prisma.userToken.findUnique({
+            where: { userId_provider: { userId: user.id, provider: "google" } },
+            select: { refreshToken: true },
+          }),
+        { label: "oauth.integration.find_existing_token" },
+      );
+      const integrationHasUsableRefreshToken =
+        !!tokens.refresh_token || !!existingIntegrationToken?.refreshToken;
+      if (!integrationHasUsableRefreshToken) {
+        console.warn(
+          `[GOOGLE] Refusing to save partial integration token for ${user.email} — refresh_token missing, no prior token to preserve`,
+        );
+        return reply.redirect(`${webUrl}/settings?google=offline_access_denied`);
       }
 
       await withDbRetry(

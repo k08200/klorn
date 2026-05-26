@@ -6,6 +6,7 @@ import AuthGuard from "../../components/auth-guard";
 import { useConfirm } from "../../components/confirm-dialog";
 import { FeedbackPolicyPanel } from "../../components/feedback-policy-panel";
 import { GoogleConnectRedirect } from "../../components/google-connect-redirect";
+import { OAuthErrorBanner } from "../../components/oauth-error-banner";
 import { ListSkeleton } from "../../components/skeleton";
 import { TeamRiskPanel } from "../../components/team-risk-panel";
 import { useToast } from "../../components/toast";
@@ -1543,6 +1544,9 @@ export default function SettingsPage() {
         {/* Integrations */}
         <section className="mb-8">
           <h2 className="text-sm font-semibold text-stone-300 mb-3">Connections</h2>
+          <Suspense>
+            <OAuthErrorBanner />
+          </Suspense>
           <div className="space-y-3">
             {loading ? (
               <ListSkeleton count={3} />
