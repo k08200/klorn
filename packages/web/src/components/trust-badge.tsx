@@ -64,6 +64,7 @@ export function TrustDot({ trust }: TrustDotProps) {
   const meta = BADGE_META[trust.badge];
   return (
     <span
+      role="img"
       title={`${meta.label} — ${trust.label}`}
       aria-label={`Trust: ${meta.label}. ${trust.label}`}
       className={`inline-block h-2 w-2 shrink-0 rounded-full ${meta.dot}`}
