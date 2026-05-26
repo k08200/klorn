@@ -61,11 +61,7 @@ vi.mock("../db.js", () => ({
   prisma: {
     emailMessage: {
       findMany: vi.fn(
-        async ({
-          where,
-        }: {
-          where: { userId?: string; receivedAt?: { gte?: Date } };
-        }) => {
+        async ({ where }: { where: { userId?: string; receivedAt?: { gte?: Date } } }) => {
           const rows = byUser(stores.emails, where.userId);
           const floor = where.receivedAt?.gte;
           return floor ? rows.filter((row) => row.receivedAt >= floor) : rows;
