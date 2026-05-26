@@ -201,17 +201,31 @@ export function buildSignalOnlyBriefing(signals: BriefingSignals): string {
 
   if (signals.deadlines.length > 0) {
     lines.push("**Deadlines**");
-    for (const d of signals.deadlines.slice(0, 5)) {
+    const seen = new Set<string>();
+    let printed = 0;
+    for (const d of signals.deadlines) {
+      const key = `${d.source}:${d.title.trim().toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       const due = d.dueText || d.dueAt || "soon";
       lines.push(`- ${d.title} (${due}) — ${d.reason}`);
+      printed += 1;
+      if (printed === 5) break;
     }
     lines.push("");
   }
 
   if (signals.urgentItems.length > 0) {
     lines.push("**Urgent**");
-    for (const u of signals.urgentItems.slice(0, 5)) {
+    const seen = new Set<string>();
+    let printed = 0;
+    for (const u of signals.urgentItems) {
+      const key = `${u.source}:${u.title.trim().toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       lines.push(`- ${u.title} — ${u.reason}`);
+      printed += 1;
+      if (printed === 5) break;
     }
     lines.push("");
   }

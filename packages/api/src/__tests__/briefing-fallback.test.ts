@@ -73,6 +73,41 @@ describe("buildSignalOnlyBriefing", () => {
     expect(out).toMatch(/Legal review needed — blocking signature/);
   });
 
+  it("dedups deadlines by title so repeated calendar entries cannot fill the section", () => {
+    const signals: BriefingSignals = {
+      ...EMPTY_SIGNALS,
+      deadlines: [
+        {
+          source: "calendar",
+          id: "b1",
+          title: "생일 축하합니다!",
+          dueAt: null,
+          dueText: "event start",
+          reason: "scheduled today/upcoming",
+        },
+        {
+          source: "calendar",
+          id: "b2",
+          title: "생일 축하합니다!",
+          dueAt: null,
+          dueText: "event start",
+          reason: "scheduled today/upcoming",
+        },
+        {
+          source: "calendar",
+          id: "b3",
+          title: "생일 축하합니다!",
+          dueAt: null,
+          dueText: "event start",
+          reason: "scheduled today/upcoming",
+        },
+      ],
+    };
+    const out = buildSignalOnlyBriefing(signals);
+    const matches = out.match(/생일 축하합니다!/g) || [];
+    expect(matches.length).toBe(1);
+  });
+
   it("caps top actions at 3 and deadlines at 5 to keep output one-screen", () => {
     const signals: BriefingSignals = {
       ...EMPTY_SIGNALS,

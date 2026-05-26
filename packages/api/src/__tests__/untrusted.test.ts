@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { wrapUntrusted } from "../untrusted.js";
+import { stripUntrusted, wrapUntrusted } from "../untrusted.js";
 
 describe("wrapUntrusted", () => {
   it("wraps content with source-tagged markers", () => {
@@ -30,5 +30,26 @@ describe("wrapUntrusted", () => {
       "email:body",
     );
     expect(out.match(/<untrusted_content/gi)?.length).toBe(1);
+  });
+});
+
+describe("stripUntrusted", () => {
+  it("removes opening and closing wrappers from display strings", () => {
+    const raw = '<untrusted_content source="calendar:summary">생일 축하합니다!</untrusted_content>';
+    expect(stripUntrusted(raw)).toBe("생일 축하합니다!");
+  });
+
+  it("returns empty string for null or undefined", () => {
+    expect(stripUntrusted(null)).toBe("");
+    expect(stripUntrusted(undefined)).toBe("");
+    expect(stripUntrusted("")).toBe("");
+  });
+
+  it("leaves plain text untouched", () => {
+    expect(stripUntrusted("Standup at 10am")).toBe("Standup at 10am");
+  });
+
+  it("strips case-insensitive variants", () => {
+    expect(stripUntrusted("<UNTRUSTED_CONTENT source='x'>hi</Untrusted_Content>")).toBe("hi");
   });
 });
