@@ -578,11 +578,10 @@ export function authRoutes(app: FastifyInstance) {
   );
 
   // POST /api/auth/google/start — Build Google OAuth URL using header auth.
-  // Web clients fetch this and then set window.location.href, which avoids
-  // putting the user's session JWT in a query string (browser history, server
-  // logs, Referer). The legacy GET ?token= flow below stays for backwards
-  // compatibility with older link-style entry points and is scheduled for
-  // removal once all callers have migrated.
+  // Web clients fetch this and then set window.location.href, which keeps
+  // the user's session JWT out of URLs, browser history, server logs, and
+  // Referer. This replaces the older GET /api/auth/google?token=… flow,
+  // which was removed in PR #410.
   app.post("/google/start", async (request, reply) => {
     const userId = getUserId(request);
     if (isDemoUser(userId)) {
@@ -591,30 +590,6 @@ export function authRoutes(app: FastifyInstance) {
     const signedState = signToken({ userId, email: "__oauth_state__" });
     const url = getAuthUrl(signedState);
     return reply.send({ url });
-  });
-
-  // GET /api/auth/google — Start OAuth flow for Gmail/Calendar integration (signed state)
-  // Accepts auth via Authorization header OR ?token= query param (needed for <a href> navigation)
-  app.get("/google", async (request, reply) => {
-    let userId: string;
-    const queryToken = (request.query as { token?: string }).token;
-    if (queryToken) {
-      try {
-        const payload = verifyToken(queryToken);
-        userId = payload.userId;
-      } catch {
-        return reply.code(401).send({ error: "Invalid token" });
-      }
-    } else {
-      userId = getUserId(request);
-    }
-    if (isDemoUser(userId)) {
-      return reply.code(403).send({ error: "Authentication required to connect Google" });
-    }
-    // Sign the state to prevent CSRF — attacker can't forge a valid state for another user
-    const signedState = signToken({ userId, email: "__oauth_state__" });
-    const url = getAuthUrl(signedState);
-    return reply.redirect(url);
   });
 
   // GET /api/auth/google/callback — OAuth callback (handles both login and integration)
