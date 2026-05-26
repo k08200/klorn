@@ -72,7 +72,7 @@ export default function EarlyAccessPage() {
     <AuthScreen
       eyebrow="Early access"
       title="Apply for the private Klorn beta"
-      description="We are inviting teams that live in mail, meetings, and follow-ups first."
+      description="We are inviting teams that live in mail, meetings, and follow-ups first. Free during the private beta."
       navCtaHref="/login"
       navCtaLabel="Log in"
       asideTitle="A focused beta for busy operators"

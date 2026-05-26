@@ -286,6 +286,7 @@ export default function LandingPage() {
                 Log in
               </Link>
             </div>
+            <p className="mt-4 text-xs text-stone-500">Free during private beta.</p>
           </div>
 
           <MobilePreview />
@@ -426,6 +427,7 @@ export default function LandingPage() {
           Request early access
           <Icon type="arrow" className="h-4 w-4" />
         </Link>
+        <p className="mt-4 text-xs text-stone-500">Free during private beta.</p>
       </section>
 
       <footer className="border-t border-white/8 px-5 py-8 md:px-8">
