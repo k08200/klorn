@@ -124,10 +124,6 @@ export async function adminRoutes(app: FastifyInstance) {
       prisma.message.deleteMany({ where: { conversation: { userId: id } } }),
       prisma.conversation.deleteMany({ where: { userId: id } }),
       prisma.userToken.deleteMany({ where: { userId: id } }),
-      prisma.evaluation.deleteMany({ where: { testRun: { userId: id } } }),
-      prisma.testRun.deleteMany({ where: { userId: id } }),
-      prisma.agent.deleteMany({ where: { userId: id } }),
-      prisma.workspaceMember.deleteMany({ where: { userId: id } }),
       prisma.user.delete({ where: { id } }),
     ]);
 

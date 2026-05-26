@@ -33,7 +33,6 @@ import { voiceProfileRoutes } from "./routes/voice-profile.js";
 import { waitlistRoutes } from "./routes/waitlist.js";
 import { webhookRoutes } from "./routes/webhook.js";
 import { workGraphRoutes } from "./routes/work-graph.js";
-import { workspaceRoutes } from "./routes/workspace.js";
 import { captureError } from "./sentry.js";
 import { getClientCount, initWebSocket } from "./websocket.js";
 
@@ -121,7 +120,6 @@ await app.register(feedbackRoutes, { prefix: "/api/feedback" });
 await app.register(calendarRoutes, { prefix: "/api/calendar" });
 await app.register(emailRoutes, { prefix: "/api/email" });
 await app.register(gmailPushRoutes, { prefix: "/api/gmail" });
-await app.register(workspaceRoutes, { prefix: "/api/workspaces" });
 await app.register(automationRoutes, { prefix: "/api/automations" });
 await app.register(waitlistRoutes, { prefix: "/api/waitlist" });
 await app.register(adminRoutes, { prefix: "/api/admin" });
