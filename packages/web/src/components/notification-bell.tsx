@@ -229,7 +229,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
     // A pending action the user still needs to approve/reject — Inbox is
     // the one place that shows every unresolved item with action buttons.
     if (n.pendingActionId && n.pendingActionStatus === "PENDING") return "/inbox";
-    if (n.conversationId) return `/chat/${n.conversationId}`;
+    if (n.conversationId) return "/inbox";
     const typeRoutes: Record<string, string> = {
       briefing: "/briefing",
       meeting: "/briefing",

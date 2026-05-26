@@ -106,7 +106,7 @@ export function TodayActionsCard() {
             tone="pending"
             tool={item.toolName}
             text={item.summary || "No summary"}
-            href={`/chat/${item.conversationId}`}
+            href="/inbox"
           />
         ))}
         {data.urgent.slice(0, 1).map((item) => (

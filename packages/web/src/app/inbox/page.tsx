@@ -617,26 +617,12 @@ function ActionCard({
               "Snooze 1h"
             )}
           </button>
-          <Link
-            href={`/chat/${action.conversationId}`}
-            className="ml-auto text-xs text-stone-500 transition hover:text-stone-300"
-          >
-            Open thread →
-          </Link>
         </div>
       )}
 
-      {!isPending && (
-        <div className="flex items-center justify-between gap-2 border-t border-stone-800 bg-stone-900/40 px-5 py-3">
-          {action.result && (
-            <p className="flex-1 truncate text-[11px] text-stone-500">{action.result}</p>
-          )}
-          <Link
-            href={`/chat/${action.conversationId}`}
-            className="shrink-0 text-xs text-stone-400 transition hover:text-stone-200"
-          >
-            Open thread →
-          </Link>
+      {!isPending && action.result && (
+        <div className="border-t border-stone-800 bg-stone-900/40 px-5 py-3">
+          <p className="truncate text-[11px] text-stone-500">{action.result}</p>
         </div>
       )}
     </article>

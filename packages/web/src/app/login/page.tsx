@@ -297,7 +297,6 @@ function safeNextPath(value: string | null): string {
 function returnDestinationLabel(path: string): string {
   const cleanPath = path.split("?")[0] || path;
   if (cleanPath === "/inbox") return "Decision queue";
-  if (cleanPath === "/chat" || cleanPath.startsWith("/chat/")) return "Decision thread";
   if (cleanPath === "/email" || cleanPath.startsWith("/email/")) return "Mail";
   if (cleanPath === "/calendar") return "Calendar";
   if (cleanPath === "/briefing") return "Briefing";
