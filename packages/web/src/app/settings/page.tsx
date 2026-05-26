@@ -54,21 +54,6 @@ interface UserProfile {
   timezone: string;
 }
 
-interface ModelUsage {
-  rpmUsed: number;
-  rpmCap: number;
-  dailyUsed: number;
-  dailyCap: number;
-  dailyResetAt: string;
-}
-
-interface ModelSettings {
-  activeModel: string;
-  hasOpenRouterApiKey: boolean;
-  hasGeminiApiKey: boolean;
-  usage?: ModelUsage;
-}
-
 export default function SettingsPage() {
   const [googleConnected, setGoogleConnected] = useState(false);
   const [slackConnected, setSlackConnected] = useState(false);
@@ -97,10 +82,6 @@ export default function SettingsPage() {
   const [agentInterval, setAgentInterval] = useState(5);
   const [dailyBriefingEnabled, setDailyBriefingEnabled] = useState(true);
   const [briefingTime, setBriefingTime] = useState("06:00");
-  const [modelSettings, setModelSettings] = useState<ModelSettings | null>(null);
-  const [modelSaving, setModelSaving] = useState(false);
-  const [openRouterApiKey, setOpenRouterApiKey] = useState("");
-  const [geminiApiKey, setGeminiApiKey] = useState("");
   const [alwaysAllowedTools, setAlwaysAllowedTools] = useState<string[]>([]);
   const [autoMarkReadEnabled, setAutoMarkReadEnabled] = useState(false);
   const [proactiveActionsEnabled, setProactiveActionsEnabled] = useState(false);
@@ -643,41 +624,6 @@ export default function SettingsPage() {
     ]).finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    apiFetch<ModelSettings>("/api/billing/models")
-      .then(setModelSettings)
-      .catch((err) => captureClientError(err, { scope: "settings.model-settings" }));
-  }, []);
-
-  const patchModelSettings = async (body: Record<string, unknown>, successMessage: string) => {
-    setModelSaving(true);
-    try {
-      const updated = await apiFetch<Partial<ModelSettings> & { success: boolean }>(
-        "/api/billing/models",
-        {
-          method: "PATCH",
-          body: JSON.stringify(body),
-        },
-      );
-      setModelSettings((prev) =>
-        prev
-          ? {
-              ...prev,
-              hasOpenRouterApiKey: updated.hasOpenRouterApiKey ?? prev.hasOpenRouterApiKey,
-              hasGeminiApiKey: updated.hasGeminiApiKey ?? prev.hasGeminiApiKey,
-            }
-          : prev,
-      );
-      setOpenRouterApiKey("");
-      setGeminiApiKey("");
-      toast(successMessage, "success");
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not save key settings.", "error");
-    } finally {
-      setModelSaving(false);
-    }
-  };
-
   const integrations: Integration[] = [
     {
       name: "Google",
@@ -1096,126 +1042,6 @@ export default function SettingsPage() {
                   onChange={(e) => updateNotifPref("quietHoursEnd", e.target.value || null)}
                   className="bg-stone-900 border border-stone-700 rounded px-2 py-1 text-sm text-stone-200"
                 />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* API keys */}
-        <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">AI provider keys</h2>
-          <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-5 space-y-4">
-            <div className="text-xs text-stone-500">
-              Klorn auto-selects the model and routes between OpenRouter and Gemini for you. Active
-              model: <span className="text-stone-300">{modelSettings?.activeModel || "—"}</span>.
-              Paste your own key below to get a private quota independent of the shared pool.
-            </div>
-
-            {modelSettings?.usage && (
-              <div className="grid grid-cols-2 gap-4 rounded-lg border border-stone-800 bg-stone-950/50 p-3 text-xs">
-                <div>
-                  <div className="text-stone-500">This minute</div>
-                  <div className="mt-0.5 text-stone-200">
-                    {modelSettings.usage.rpmUsed} / {modelSettings.usage.rpmCap}
-                    <span className="ml-1 text-stone-500">requests</span>
-                  </div>
-                </div>
-                <div>
-                  <div className="text-stone-500">Today (UTC)</div>
-                  <div className="mt-0.5 text-stone-200">
-                    {modelSettings.usage.dailyUsed} / {modelSettings.usage.dailyCap}
-                    <span className="ml-1 text-stone-500">requests</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <div className="mb-1 flex items-center justify-between gap-3">
-                  <label htmlFor="openrouter-key" className="text-sm text-stone-400">
-                    OpenRouter API key
-                  </label>
-                  <span className="text-[11px] text-stone-500">
-                    {modelSettings?.hasOpenRouterApiKey ? "Saved" : "Not set"}
-                  </span>
-                </div>
-                <input
-                  id="openrouter-key"
-                  type="password"
-                  value={openRouterApiKey}
-                  onChange={(e) => setOpenRouterApiKey(e.target.value)}
-                  placeholder="sk-or-..."
-                  className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition placeholder-stone-500"
-                />
-                <div className="mt-2 flex gap-2">
-                  <button
-                    type="button"
-                    disabled={modelSaving || !openRouterApiKey.trim()}
-                    onClick={() =>
-                      patchModelSettings({ openRouterApiKey }, "OpenRouter key saved.")
-                    }
-                    className="rounded-lg bg-amber-300 px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-amber-200 disabled:bg-stone-700 disabled:text-stone-500"
-                  >
-                    Save
-                  </button>
-                  {modelSettings?.hasOpenRouterApiKey && (
-                    <button
-                      type="button"
-                      disabled={modelSaving}
-                      onClick={() =>
-                        patchModelSettings(
-                          { clearOpenRouterApiKey: true },
-                          "OpenRouter key removed.",
-                        )
-                      }
-                      className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-1.5 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <div className="mb-1 flex items-center justify-between gap-3">
-                  <label htmlFor="gemini-key" className="text-sm text-stone-400">
-                    Gemini API key
-                  </label>
-                  <span className="text-[11px] text-stone-500">
-                    {modelSettings?.hasGeminiApiKey ? "Saved" : "Not set"}
-                  </span>
-                </div>
-                <input
-                  id="gemini-key"
-                  type="password"
-                  value={geminiApiKey}
-                  onChange={(e) => setGeminiApiKey(e.target.value)}
-                  placeholder="AIza..."
-                  className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition placeholder-stone-500"
-                />
-                <div className="mt-2 flex gap-2">
-                  <button
-                    type="button"
-                    disabled={modelSaving || !geminiApiKey.trim()}
-                    onClick={() => patchModelSettings({ geminiApiKey }, "Gemini key saved.")}
-                    className="rounded-lg bg-amber-300 px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-amber-200 disabled:bg-stone-700 disabled:text-stone-500"
-                  >
-                    Save
-                  </button>
-                  {modelSettings?.hasGeminiApiKey && (
-                    <button
-                      type="button"
-                      disabled={modelSaving}
-                      onClick={() =>
-                        patchModelSettings({ clearGeminiApiKey: true }, "Gemini key removed.")
-                      }
-                      className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-1.5 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
               </div>
             </div>
           </div>
@@ -1676,52 +1502,6 @@ export default function SettingsPage() {
                 Generate briefing
               </button>
             </div>
-          </div>
-        </section>
-
-        {/* Capabilities */}
-        <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Execution surfaces</h2>
-          <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-4 space-y-4">
-            <div>
-              <p className="text-xs text-amber-300 font-medium mb-2">Signal intake</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-sm text-stone-400">
-                <p>Mail - urgency, sender, and reply-needed triage</p>
-                <p>Calendar - conflicts, prep time, and attendee context</p>
-                <p>Tasks - blockers, overdue items, and ready decisions</p>
-                <p>Slack and Notion - threads and docs in the work graph</p>
-              </div>
-            </div>
-            <div>
-              <p className="text-xs text-green-400 font-medium mb-2">Decision output</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-sm text-stone-400">
-                <p>Approval queue - prepared replies and calendar changes</p>
-                <p>Decision cards - recommendation, risk, evidence, next step</p>
-                <p>Daily briefing - priority actions instead of raw lists</p>
-                <p>Draft tools - briefs, proposals, and follow-ups with context</p>
-              </div>
-            </div>
-            <div>
-              <p className="text-xs text-rose-300 font-medium mb-2">Trust controls</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-sm text-stone-400">
-                <p>Pre-approval rules - allow low-risk work inside clear limits</p>
-                <p>Execution history - track run, skipped, and review states</p>
-                <p>Memory controls - tune what Klorn remembers</p>
-                <p>Notifications - keep only interruption-worthy signals</p>
-              </div>
-            </div>
-            <div>
-              <p className="text-xs text-teal-300 font-medium mb-2">Local work surfaces</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-sm text-stone-400">
-                <p>Files - find, organize, and attach needed context</p>
-                <p>Screen and clipboard - capture local state only when requested</p>
-                <p>iMessage - prepare personal follow-ups in the same queue</p>
-                <p>Web research - enrich decisions with current external context</p>
-              </div>
-            </div>
-            <p className="text-xs text-stone-600 mt-1">
-              Manage signal intake, approvals, memory, and connected work surfaces in one place.
-            </p>
           </div>
         </section>
 
