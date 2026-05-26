@@ -225,7 +225,7 @@ function bodyFor(item: AttentionItem): { title: string; subtitle: string | null 
 function hrefFor(item: AttentionItem): string | null {
   switch (item.kind) {
     case "pending_action":
-      return `/chat/${item.conversationId}`;
+      return "/inbox";
     case "overdue_task":
       return null;
     case "today_event":
