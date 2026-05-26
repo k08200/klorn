@@ -72,28 +72,6 @@ export default function WorkGraphSummaryCard() {
           </li>
         ))}
       </ul>
-
-      <div className="border-t border-stone-800 px-4 py-2.5">
-        <Link
-          href="/work-graph"
-          className="flex items-center justify-end gap-1 text-[11px] text-stone-600 transition hover:text-amber-300"
-        >
-          View all contexts
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M5 12h14M12 5l7 7-7 7" />
-          </svg>
-        </Link>
-      </div>
     </section>
   );
 }
