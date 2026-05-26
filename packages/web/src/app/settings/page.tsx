@@ -133,7 +133,6 @@ export default function SettingsPage() {
   const [gmailPushEnabled, setGmailPushEnabled] = useState(false);
   const [gmailPushExpiresAt, setGmailPushExpiresAt] = useState<string | null>(null);
   const [gmailPushLoading, setGmailPushLoading] = useState(false);
-  const [emailFeedbackCount, setEmailFeedbackCount] = useState<number | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
   const { confirm } = useConfirm();
@@ -642,12 +641,6 @@ export default function SettingsPage() {
         .then((d) => setNotionConnected(d.configured))
         .catch((err) => captureClientError(err, { scope: "settings.notion-status" })),
     ]).finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    apiFetch<{ fixtures: unknown[]; count: number }>("/api/email/feedback?limit=200")
-      .then((data) => setEmailFeedbackCount(data.count))
-      .catch((err) => captureClientError(err, { scope: "settings.email-feedback-count" }));
   }, []);
 
   useEffect(() => {
@@ -1736,34 +1729,6 @@ export default function SettingsPage() {
         <section className="mb-8">
           <h2 className="text-sm font-semibold text-stone-300 mb-3">Workspace data</h2>
           <div className="space-y-3">
-            <Link
-              href="/settings/status"
-              className="flex items-center justify-between rounded-xl border border-stone-700/45 bg-stone-950/35 p-4 transition hover:border-stone-700 hover:bg-stone-950"
-            >
-              <div className="min-w-0">
-                <h3 className="font-medium">Klorn status</h3>
-                <p className="text-sm text-stone-400">
-                  Check deployment, push, reminders, briefings, and connection health.
-                </p>
-              </div>
-              <span className="ml-4 shrink-0 text-sm font-medium text-stone-400">Open {"->"}</span>
-            </Link>
-            <Link
-              href="/settings/email-feedback"
-              className="flex items-center justify-between rounded-xl border border-stone-700/45 bg-stone-950/35 p-4 transition hover:border-stone-700 hover:bg-stone-950"
-            >
-              <div className="min-w-0">
-                <h3 className="font-medium">Mail triage corrections</h3>
-                <p className="text-sm text-stone-400">
-                  {emailFeedbackCount === null
-                    ? "Checking correction history..."
-                    : `${emailFeedbackCount} correction${emailFeedbackCount === 1 ? "" : "s"}`}
-                </p>
-              </div>
-              <span className="ml-4 shrink-0 text-sm font-medium text-stone-400">
-                Review {"->"}
-              </span>
-            </Link>
             <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-4 flex items-center justify-between">
               <div>
                 <h3 className="font-medium">Export workspace data</h3>
