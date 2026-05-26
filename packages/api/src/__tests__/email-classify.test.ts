@@ -5,6 +5,7 @@ import {
   classifyNeedsReplyFromSignals,
   classifyPriority,
   classifyPriorityDetailed,
+  extractEmailAddress,
 } from "../email-sync.js";
 
 describe("classifyPriority — heuristic gate before LLM", () => {
@@ -169,5 +170,54 @@ describe("classifyNeedsReplyFromSignals — canonical reply-needed gate", () => 
         priority: "NORMAL",
       }),
     ).toMatchObject({ needsReply: true, reason: "reply_language_in_subject" });
+  });
+
+  it("never flags mail sent by the inbox owner to themselves as reply needed", () => {
+    expect(
+      classifyNeedsReplyFromSignals({
+        from: "Yongrean Kim <k0820086@gmail.com>",
+        subject: "내나난",
+        category: "conversation",
+        actionItems: ["fix this later"],
+        priority: "URGENT",
+        userEmail: "k0820086@gmail.com",
+      }),
+    ).toMatchObject({ needsReply: false, reason: "self_sent" });
+  });
+
+  it("self-sent check is case insensitive and tolerates surrounding whitespace", () => {
+    expect(
+      classifyNeedsReplyFromSignals({
+        from: "  <K0820086@Gmail.com>  ",
+        subject: "todo for tomorrow",
+        category: "conversation",
+        priority: "NORMAL",
+        userEmail: "k0820086@gmail.com",
+      }),
+    ).toMatchObject({ needsReply: false, reason: "self_sent" });
+  });
+
+  it("does not short-circuit when the userEmail is missing", () => {
+    expect(
+      classifyNeedsReplyFromSignals({
+        from: "Yongrean Kim <k0820086@gmail.com>",
+        subject: "Can you confirm?",
+        category: "conversation",
+        actionItems: ["confirm"],
+        priority: "NORMAL",
+      }),
+    ).toMatchObject({ needsReply: true, reason: "action_items_present" });
+  });
+});
+
+describe("extractEmailAddress", () => {
+  it("pulls the angle-bracketed address from a From header", () => {
+    expect(extractEmailAddress("Yongrean Kim <k0820086@gmail.com>")).toBe("k0820086@gmail.com");
+  });
+  it("returns the lowercased bare address when no name is present", () => {
+    expect(extractEmailAddress("FOO@BAR.com")).toBe("foo@bar.com");
+  });
+  it("trims surrounding whitespace", () => {
+    expect(extractEmailAddress("  alice@example.com  ")).toBe("alice@example.com");
   });
 });
