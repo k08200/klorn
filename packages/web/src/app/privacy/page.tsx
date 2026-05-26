@@ -108,6 +108,67 @@ export default function PrivacyPage() {
               Email sending is treated as a sensitive action. During beta, Klorn does not send
               replies without your awareness. Email actions require your approval before sending.
             </p>
+            <p>
+              <strong className="text-white">Limited Use disclosure.</strong> Klorn's use and
+              transfer to any other app of information received from Google APIs will adhere to{" "}
+              <a
+                className="text-amber-200 hover:text-amber-100"
+                href="https://developers.google.com/terms/api-services-user-data-policy"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Google API Services User Data Policy
+              </a>
+              , including the Limited Use requirements. Specifically: Klorn does not transfer Google
+              user data to third parties except as necessary to provide or improve user-facing
+              features, comply with applicable law, or as part of a merger or acquisition; Klorn
+              does not use Google user data for serving ads; and Klorn does not allow humans to read
+              Google user data unless we obtain affirmative agreement from the user, it is necessary
+              for security purposes, to comply with applicable law, or the data is aggregated and
+              used for internal operations in accordance with the Limited Use requirements.
+            </p>
+            <p>
+              <strong className="text-white">Scopes Klorn requests and why.</strong>
+            </p>
+            <ul className="list-disc space-y-2 pl-5">
+              <li>
+                <code className="text-stone-100">gmail.readonly</code> — read message metadata and
+                bodies to classify priority, detect reply-needed signals, extract commitments and
+                deadlines, and prepare daily briefings.
+              </li>
+              <li>
+                <code className="text-stone-100">gmail.modify</code> — toggle read/star labels and
+                archive on user-initiated commands; send replies only when the user explicitly
+                approves a draft.
+              </li>
+              <li>
+                <code className="text-stone-100">calendar.events</code> — read upcoming events to
+                surface meetings, link commitment due dates, and prepare meeting context. Edits
+                require user approval.
+              </li>
+            </ul>
+          </Section>
+
+          <Section title="Your Rights (GDPR / CCPA)">
+            <p>
+              Depending on where you live, you may have rights to access, correct, export, or
+              delete the personal data Klorn holds about you, and to object to or restrict certain
+              processing. To exercise any of these rights, contact{" "}
+              <a className="text-amber-200 hover:text-amber-100" href="mailto:k0820086@gmail.com">
+                k0820086@gmail.com
+              </a>
+              . We respond within a reasonable time after verifying your identity. You may also
+              revoke Klorn's Google access at any time from your{" "}
+              <a
+                className="text-amber-200 hover:text-amber-100"
+                href="https://myaccount.google.com/permissions"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Google account permissions
+              </a>
+              .
+            </p>
           </Section>
 
           <Section title="AI Processing">
