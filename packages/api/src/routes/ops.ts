@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { getBriefingStatus } from "../briefing-status.js";
 import { prisma } from "../db.js";
+import { snapshotUserProviderCooldowns } from "../model-fallback.js";
 
 type CheckStatus = "ok" | "warning" | "error";
 
@@ -38,6 +39,7 @@ interface ReadinessData {
   recentEmails: number;
   todayEvents: number;
   briefing: Awaited<ReturnType<typeof getBriefingStatus>>;
+  aiProviders: ReturnType<typeof snapshotUserProviderCooldowns>;
   now: Date;
 }
 
@@ -128,6 +130,7 @@ async function collectReadinessData(userId: string, now: Date): Promise<Readines
     recentEmails,
     todayEvents,
     briefing,
+    aiProviders: snapshotUserProviderCooldowns(userId),
     now,
   };
 }
@@ -138,6 +141,7 @@ function buildChecks(data: ReadinessData): ReadinessCheck[] {
     deviceCheck(data),
     pushCheck(data),
     googleCheck(data),
+    aiProviderCheck(data),
     automationCheck(data),
     reminderCheck(data),
     briefingCheck(data),
@@ -200,6 +204,41 @@ function googleCheck(data: ReadinessData): ReadinessCheck {
       gmailPushConfigured: Boolean(process.env.GMAIL_PUBSUB_TOPIC),
       gmailPushEnabled,
       gmailPushExpiresAt: gmailWatchExpiresAt?.toISOString() ?? null,
+    },
+  };
+}
+
+function aiProviderCheck(data: ReadinessData): ReadinessCheck {
+  // Treat AI as healthy if at least one provider key (env or user) is usable.
+  // If every provider is in cooldown the dashboard must say so plainly so
+  // "Overall OK" stops lying while chat and briefing silently fall back.
+  const total = data.aiProviders.providers.length;
+  const downCount = data.aiProviders.unavailable.length;
+  const allDown = downCount > 0 && downCount === total;
+  const someDown = downCount > 0 && downCount < total;
+
+  const nextRetry = data.aiProviders.unavailable
+    .map((info) => info.keyLimitedUntil?.getTime() ?? info.creditRetryAt?.getTime() ?? null)
+    .filter((value): value is number => value !== null)
+    .sort((a, b) => a - b)[0];
+
+  return {
+    key: "aiProvider",
+    label: "AI provider",
+    status: allDown ? "error" : someDown ? "warning" : "ok",
+    message: allDown
+      ? "All AI providers are in cooldown — chat and briefing fall back to rule-based view"
+      : someDown
+        ? `${downCount}/${total} providers in cooldown — fallback active`
+        : "All providers available",
+    detail: {
+      providers: data.aiProviders.providers.map((info) => ({
+        quotaKey: info.quotaKey,
+        keyLimitedUntil: info.keyLimitedUntil?.toISOString() ?? null,
+        creditRetryAt: info.creditRetryAt?.toISOString() ?? null,
+      })),
+      unavailableCount: downCount,
+      nextRetryAt: nextRetry ? new Date(nextRetry).toISOString() : null,
     },
   };
 }

@@ -188,6 +188,29 @@ export function getProviderCooldownInfo(quotaKey: string): ProviderCooldownInfo 
   };
 }
 
+/**
+ * Snapshot the per-user AI provider cooldown state. Used by the readiness
+ * check so the dashboard reports "AI unavailable" instead of the stale
+ * "Overall OK" when every provider for this user is in cooldown.
+ *
+ * The four keys mirror how createCompletion routes calls: env-wide keys for
+ * the shared Klorn account plus user-supplied keys that override them.
+ */
+export function snapshotUserProviderCooldowns(userId: string): {
+  providers: ProviderCooldownInfo[];
+  unavailable: ProviderCooldownInfo[];
+} {
+  const quotaKeys = [
+    "openrouter:env",
+    "gemini:env",
+    `openrouter:user:${userId}`,
+    `gemini:user:${userId}`,
+  ];
+  const providers = quotaKeys.map(getProviderCooldownInfo);
+  const unavailable = providers.filter((info) => isProviderUnavailable(info.quotaKey));
+  return { providers, unavailable };
+}
+
 /** 402 insufficient_credits — same-provider, swap to :free model */
 export function isCreditError(error: unknown): boolean {
   const status =

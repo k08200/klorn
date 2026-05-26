@@ -1,6 +1,7 @@
 import Fastify from "fastify";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
+import { clearFallbackState, markKeyLimited } from "../model-fallback.js";
 
 vi.mock("../email.js", () => ({ sendVerificationEmail: vi.fn(), sendPasswordResetEmail: vi.fn() }));
 vi.mock("../gmail.js", () => ({
@@ -96,6 +97,10 @@ async function buildApp() {
 }
 
 describe("ops routes", () => {
+  afterEach(() => {
+    clearFallbackState();
+  });
+
   it("rejects unauthenticated readiness requests", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/api/ops/readiness" });
@@ -116,11 +121,41 @@ describe("ops routes", () => {
     expect(res.statusCode, res.body).toBe(200);
     const body = res.json();
     expect(body.status).toBe("ok");
-    expect(body.checks.map((check: { key: string }) => check.key)).toContain("push");
+    const keys = body.checks.map((check: { key: string }) => check.key);
+    expect(keys).toContain("push");
+    expect(keys).toContain("aiProvider");
     expect(body.checks.find((check: { key: string }) => check.key === "push").detail).toMatchObject(
       { subscriptions: 2, received: 1 },
     );
+    const ai = body.checks.find((check: { key: string }) => check.key === "aiProvider");
+    expect(ai.status).toBe("ok");
+    expect(ai.detail.unavailableCount).toBe(0);
     expect(body.system).toHaveProperty("uptime");
+    await app.close();
+  });
+
+  it("downgrades overall status to error when every AI provider is in cooldown", async () => {
+    process.env.VAPID_PUBLIC_KEY = "public";
+    process.env.VAPID_PRIVATE_KEY = "private";
+    markKeyLimited("openrouter:env");
+    markKeyLimited("gemini:env");
+    markKeyLimited("openrouter:user:user-1");
+    markKeyLimited("gemini:user:user-1");
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/ops/readiness",
+      headers: auth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    const ai = body.checks.find((check: { key: string }) => check.key === "aiProvider");
+    expect(ai.status).toBe("error");
+    expect(ai.detail.unavailableCount).toBe(4);
+    expect(ai.message).toMatch(/cooldown/i);
+    expect(body.status).toBe("error");
     await app.close();
   });
 });
