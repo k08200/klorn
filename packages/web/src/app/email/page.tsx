@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
@@ -263,34 +263,55 @@ function EmailView() {
 
   // filter + search drive the cached query key. /api/email/threads and
   // /api/email return discriminated shapes so we route the query body on
-  // filter === "threads".
-  const listQuery = useQuery({
+  // filter === "threads". useInfiniteQuery accumulates pages so the user
+  // can keep loading past the 20-row default cap.
+  const PAGE_SIZE = 20;
+  const listQuery = useInfiniteQuery({
     queryKey: queryKeys.email.list({ filter, search: appliedSearch }),
-    queryFn: async () => {
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }) => {
       const q = FILTERS.find((x) => x.key === filter)?.query || "";
       const params = new URLSearchParams(q);
       if (appliedSearch.trim()) params.set("search", appliedSearch.trim());
+      const pageNum = typeof pageParam === "number" ? pageParam : 1;
+      params.set("page", String(pageNum));
       try {
         if (filter === "threads") {
           const data = await apiFetch<ThreadListResponse>(
-            `/api/email/threads${params.toString() ? `?${params.toString()}` : ""}`,
+            `/api/email/threads?${params.toString()}`,
           );
-          return { kind: "threads" as const, threads: data.threads, source: data.source };
+          return {
+            kind: "threads" as const,
+            threads: data.threads,
+            source: data.source,
+            total: data.total,
+            page: pageNum,
+          };
         }
-        const data = await apiFetch<ListResponse>(
-          `/api/email${params.toString() ? `?${params.toString()}` : ""}`,
-        );
-        return { kind: "list" as const, emails: data.emails, source: data.source };
+        const data = await apiFetch<ListResponse>(`/api/email?${params.toString()}`);
+        return {
+          kind: "list" as const,
+          emails: data.emails,
+          source: data.source,
+          total: data.total,
+          page: pageNum,
+        };
       } catch (err) {
-        captureClientError(err, { scope: "email.load", filter });
+        captureClientError(err, { scope: "email.load", filter, page: pageNum });
         throw err;
       }
     },
+    getNextPageParam: (lastPage) => {
+      const seen = lastPage.page * PAGE_SIZE;
+      return seen < lastPage.total ? lastPage.page + 1 : undefined;
+    },
   });
 
-  const emails = listQuery.data?.kind === "list" ? listQuery.data.emails : [];
-  const threads = listQuery.data?.kind === "threads" ? listQuery.data.threads : [];
-  const source = listQuery.data?.source ?? null;
+  const pages = listQuery.data?.pages ?? [];
+  const emails = pages.flatMap((p) => (p.kind === "list" ? p.emails : []));
+  const threads = pages.flatMap((p) => (p.kind === "threads" ? p.threads : []));
+  const source = pages[0]?.source ?? null;
+  const totalAvailable = pages[pages.length - 1]?.total ?? 0;
   const loading = listQuery.isLoading;
 
   useEffect(() => {
@@ -403,15 +424,22 @@ function EmailView() {
         method: "POST",
         body: JSON.stringify({ ids, action, priority: options.priority }),
       });
-      // Update the cached list optimistically for the current filter,
+      // Update each cached page optimistically for the current filter,
       // then invalidate so a background refetch pulls truth.
       queryClient.setQueryData<typeof listQuery.data>(
         queryKeys.email.list({ filter, search: appliedSearch }),
         (prev) => {
-          if (!prev || prev.kind !== "list") return prev;
+          if (!prev) return prev;
           return {
             ...prev,
-            emails: updateEmailsAfterBulk(prev.emails, ids, action, options.priority),
+            pages: prev.pages.map((page) =>
+              page.kind === "list"
+                ? {
+                    ...page,
+                    emails: updateEmailsAfterBulk(page.emails, ids, action, options.priority),
+                  }
+                : page,
+            ),
           };
         },
       );
@@ -796,6 +824,16 @@ function EmailView() {
           ))}
         </ul>
       )}
+
+      {!loading && !error && (emails.length > 0 || threads.length > 0) && (
+        <LoadMoreBar
+          loadedCount={emails.length + threads.length}
+          totalAvailable={totalAvailable}
+          isFetching={listQuery.isFetchingNextPage}
+          hasNext={!!listQuery.hasNextPage}
+          onLoadMore={() => listQuery.fetchNextPage()}
+        />
+      )}
     </div>
   );
 }
@@ -1033,6 +1071,41 @@ function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filt
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function LoadMoreBar({
+  loadedCount,
+  totalAvailable,
+  isFetching,
+  hasNext,
+  onLoadMore,
+}: {
+  loadedCount: number;
+  totalAvailable: number;
+  isFetching: boolean;
+  hasNext: boolean;
+  onLoadMore: () => void;
+}) {
+  return (
+    <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-stone-800 bg-stone-950/50 px-4 py-3 text-xs text-stone-500">
+      <span>
+        Showing {loadedCount}
+        {totalAvailable > loadedCount ? ` of ${totalAvailable}` : ""}
+      </span>
+      {hasNext ? (
+        <button
+          type="button"
+          onClick={onLoadMore}
+          disabled={isFetching}
+          className="rounded-md border border-stone-700 px-3 py-1.5 text-xs text-stone-300 transition hover:border-amber-300/40 hover:text-amber-200 disabled:opacity-50"
+        >
+          {isFetching ? "Loading…" : "Load more"}
+        </button>
+      ) : (
+        <span className="text-stone-600">All loaded.</span>
+      )}
     </div>
   );
 }
