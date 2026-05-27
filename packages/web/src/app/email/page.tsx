@@ -3,7 +3,7 @@
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { useToast } from "../../components/toast";
 import { TrustDot, type TrustScoreData } from "../../components/trust-badge";
@@ -265,7 +265,9 @@ function EmailView() {
   // /api/email return discriminated shapes so we route the query body on
   // filter === "threads". useInfiniteQuery accumulates pages so the user
   // can keep loading past the 20-row default cap.
-  const PAGE_SIZE = 20;
+  // Match the API pageSize bump. Heavy-email users were clicking through
+  // /api/email pages of 20 ten times to see one morning's intake.
+  const PAGE_SIZE = 50;
   const listQuery = useInfiniteQuery({
     queryKey: queryKeys.email.list({ filter, search: appliedSearch }),
     initialPageParam: 1,
@@ -1088,8 +1090,36 @@ function LoadMoreBar({
   hasNext: boolean;
   onLoadMore: () => void;
 }) {
+  // Auto-fetch when the bar scrolls into view. Sentinel sits at the same
+  // node as the bar itself; rootMargin pre-loads ~400px before the user
+  // hits the bottom so the perceived scroll is continuous. The manual
+  // 'Load more' button stays as a fallback for keyboard / a11y users and
+  // for the rare case where IntersectionObserver is throttled by the
+  // browser (e.g. background tab).
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!hasNext || isFetching) return;
+    const node = sentinelRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          onLoadMore();
+        }
+      },
+      { rootMargin: "400px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasNext, isFetching, onLoadMore]);
+
   return (
-    <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-stone-800 bg-stone-950/50 px-4 py-3 text-xs text-stone-500">
+    <div
+      ref={sentinelRef}
+      className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-stone-800 bg-stone-950/50 px-4 py-3 text-xs text-stone-500"
+    >
       <span>
         Showing {loadedCount}
         {totalAvailable > loadedCount ? ` of ${totalAvailable}` : ""}
