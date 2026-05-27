@@ -1,7 +1,8 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { API_BASE } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
 // Pages that stay reachable while Google is unconnected. /onboarding is the
@@ -52,27 +53,118 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (authError === "api_unavailable") {
-    return (
-      <main className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-6 text-center">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300">
-          Connection issue
-        </p>
-        <h1 className="mt-3 text-2xl font-semibold text-stone-50">Klorn API is offline.</h1>
-        <p className="mt-3 text-sm leading-6 text-stone-400">
-          Your session is still saved. Start the API service, then retry this screen.
-        </p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="mt-6 inline-flex min-h-11 items-center rounded-md bg-amber-300 px-5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
-        >
-          Retry
-        </button>
-      </main>
-    );
+    return <ApiOfflineScreen />;
   }
 
   if (!user) return null;
 
   return <>{children}</>;
+}
+
+// Render free tier sleeps after ~15 min idle. Cold starts take 10–30 s. The
+// old screen made the user wake the API themselves by mashing Retry — fine
+// at a desk, awful on mobile during a meeting. Now we poll /api/health
+// automatically with backoff and reload when it comes back. Eight attempts
+// over ~28 s covers most cold starts; after that we fall back to manual
+// retry so the user still has an escape hatch when Render is actually down.
+
+const ATTEMPT_DELAYS_MS = [1500, 3000, 3000, 3000, 4000, 5000, 5000, 5000];
+const TOTAL_BUDGET_MS = ATTEMPT_DELAYS_MS.reduce((a, b) => a + b, 0);
+
+function ApiOfflineScreen() {
+  const [attempt, setAttempt] = useState(0);
+  const [exhausted, setExhausted] = useState(false);
+  const cancelledRef = useRef(false);
+
+  useEffect(() => {
+    cancelledRef.current = false;
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (exhausted) return;
+    const delay = ATTEMPT_DELAYS_MS[attempt];
+    if (delay === undefined) {
+      setExhausted(true);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      if (cancelledRef.current) return;
+      try {
+        const res = await fetch(`${API_BASE}/api/health`, {
+          cache: "no-store",
+          credentials: "omit",
+        });
+        if (cancelledRef.current) return;
+        if (res.ok) {
+          const data = (await res.json()) as { status?: string; db?: string };
+          // Only reload when the API + DB are both back. Half-up state would
+          // bounce the user straight back into the offline screen.
+          if (data.status === "ok" && data.db === "connected") {
+            window.location.reload();
+            return;
+          }
+        }
+      } catch {
+        // Network error / timeout — fall through to next attempt
+      }
+      if (!cancelledRef.current) setAttempt((n) => n + 1);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [attempt, exhausted]);
+
+  const elapsedMs = ATTEMPT_DELAYS_MS.slice(0, attempt).reduce((a, b) => a + b, 0);
+  const elapsedSec = Math.round(elapsedMs / 1000);
+  const totalSec = Math.round(TOTAL_BUDGET_MS / 1000);
+
+  const retryNow = () => {
+    setExhausted(false);
+    setAttempt(0);
+  };
+
+  return (
+    <main
+      className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-6 text-center"
+      role="status"
+      aria-live="polite"
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300">
+        Connection issue
+      </p>
+      <h1 className="mt-3 text-2xl font-semibold text-stone-50">
+        {exhausted ? "Couldn't reach the API." : "Waking the API up…"}
+      </h1>
+      <p className="mt-3 text-sm leading-6 text-stone-400">
+        {exhausted
+          ? "Render free tier may be down. Your session is still saved — tap Retry to try again, or check Render."
+          : `First request after idle wakes the server (≈${totalSec}s). Your session is still saved.`}
+      </p>
+
+      {!exhausted && (
+        <div className="mt-5 flex items-center gap-3 text-xs text-stone-500">
+          <span
+            aria-hidden="true"
+            className="h-4 w-4 animate-spin rounded-full border-2 border-amber-300 border-t-transparent"
+          />
+          <span className="tabular-nums">
+            Attempt {attempt + 1} / {ATTEMPT_DELAYS_MS.length} · {elapsedSec}s elapsed
+          </span>
+        </div>
+      )}
+
+      {exhausted && (
+        <button
+          type="button"
+          onClick={retryNow}
+          className="mt-6 inline-flex min-h-11 items-center rounded-md bg-amber-300 px-5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
+        >
+          Retry
+        </button>
+      )}
+    </main>
+  );
 }
