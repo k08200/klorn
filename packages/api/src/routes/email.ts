@@ -536,7 +536,11 @@ export async function emailRoutes(app: FastifyInstance) {
     };
     const uid = getUserId(request);
     const pageNum = parseInt(page || "1", 10);
-    const pageSize = 20;
+    // Heavy-email users (~200/day) clicking "Load more" 10 times to see one
+    // morning's intake was the #1 dogfood friction. 50 keeps the first
+    // payload under ~25 KB once joined with attachment summaries and trust
+    // scores; the cap stays as a Gmail throttle guardrail.
+    const pageSize = 50;
 
     // Check if Gmail is connected
     const token = await prisma.userToken.findFirst({ where: { userId: uid, provider: "google" } });
@@ -782,13 +786,16 @@ export async function emailRoutes(app: FastifyInstance) {
     }
 
     const pageNum = parseInt(page || "1", 10);
+    // Match the /api/email pageSize bump (heavy-user friction). Threads
+    // are heavier per row but a single page still fits in the same envelope.
+    const pageSize = 50;
     const result = await getEmailThreads(uid, {
       search,
       priority,
       unreadOnly: unread === "true",
       category,
-      skip: (pageNum - 1) * 20,
-      take: 20,
+      skip: (pageNum - 1) * pageSize,
+      take: pageSize,
     });
 
     return { ...result, source: "gmail", page: pageNum };
