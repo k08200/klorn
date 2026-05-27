@@ -18,6 +18,8 @@
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
+import { senderEmail } from "../notification-format.js";
+import { getTrustScoresBulk } from "../trust-score.js";
 
 type Tier = "SILENT" | "QUEUE" | "PUSH" | "CALL" | "AUTO";
 
@@ -46,12 +48,23 @@ const overrideBodySchema = {
   },
 } as const;
 
+interface TrustWire {
+  badge: "reliable" | "mostly_reliable" | "unreliable" | "unknown";
+  label: string;
+  onTimeRate: number;
+  totalCount: number;
+}
+
 interface EmailContext {
   // EmailMessage.id (DB id) — used by /email/[id]
   emailDbId: string;
   subject: string | null;
   from: string | null;
   snippet: string | null;
+  // Sender trust signal (null when no ContactTrustScore row exists for
+  // this address yet). Heavy email users said this is the single most
+  // useful per-row signal — render via <TrustDot /> on the firewall card.
+  trust: TrustWire | null;
 }
 
 interface FirewallItem {
@@ -168,6 +181,18 @@ export async function firewallRoutes(app: FastifyInstance) {
       : [];
     const emailByGmailId = new Map(emailRows.map((e) => [e.gmailId, e]));
 
+    // Batch-fetch trust scores for every distinct sender address surfaced
+    // by this page. One round-trip; the bulk helper returns a Map keyed by
+    // normalized lowercase email.
+    const senderAddrs = new Set<string>();
+    for (const e of emailRows) {
+      const addr = senderEmail(e.from);
+      if (addr) senderAddrs.add(addr);
+    }
+    const trustMap = senderAddrs.size
+      ? await getTrustScoresBulk(userId, [...senderAddrs])
+      : new Map();
+
     const tiers: Record<Tier, FirewallItem[]> = {
       SILENT: [],
       QUEUE: [],
@@ -201,11 +226,21 @@ export async function firewallRoutes(app: FastifyInstance) {
           if (emailId) {
             const email = emailByGmailId.get(emailId);
             if (email) {
+              const addr = senderEmail(email.from);
+              const trust = addr ? trustMap.get(addr) : null;
               item.email = {
                 emailDbId: email.id,
                 subject: email.subject ?? null,
                 from: email.from ?? null,
                 snippet: email.snippet ?? null,
+                trust: trust
+                  ? {
+                      badge: trust.badge,
+                      label: trust.label,
+                      onTimeRate: trust.onTimeRate,
+                      totalCount: trust.totalCount,
+                    }
+                  : null,
               };
               item.href = `/email/${email.id}`;
             }
