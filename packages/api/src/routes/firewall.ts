@@ -3,17 +3,16 @@
  *
  * GET  /api/inbox/firewall      — open AttentionItems grouped by tier
  *                                 plus today's receipt summary counts.
+ *                                 Each PENDING_ACTION item is enriched
+ *                                 with toolName/toolArgs and, when the
+ *                                 args reference an email_id, with the
+ *                                 source email's subject + sender + DB
+ *                                 id so the UI can preview and link.
  * POST /api/inbox/firewall/:id  — manually override one item's tier.
  *
- * This powers the POC `/inbox/firewall` screen. The user sees what
- * Klorn decided (tier-by-tier) and can drag/click an item into a
- * different tier when the classifier got it wrong — that override
- * doubles as ground-truth training signal.
- *
- * Backend was already 99% built: AttentionItem has tier + tierReason,
- * attention-mirror.ts decides the tier for each source, and
- * routes/receipt.ts returns today's categorized lists. This route
- * just exposes the OPEN slice for the live queue view.
+ * Override stamps tierReason as 'Manual override — user moved to X' so
+ * the row is identifiable as a human-labelled ground-truth example for
+ * poc-judge.
  */
 
 import type { FastifyInstance } from "fastify";
@@ -23,6 +22,17 @@ import { prisma } from "../db.js";
 type Tier = "SILENT" | "QUEUE" | "PUSH" | "CALL" | "AUTO";
 
 const TIER_VALUES: ReadonlyArray<Tier> = ["SILENT", "QUEUE", "PUSH", "CALL", "AUTO"];
+
+// Tool args that carry a Gmail message id we can map back to a stored
+// EmailMessage row. Other tools (create_event, send_email, etc.) carry
+// the user-meaningful payload directly in toolArgs and don't need a join.
+const EMAIL_ID_TOOLS = new Set([
+  "read_email",
+  "mark_read",
+  "archive_email",
+  "delete_email",
+  "reply_to_email",
+]);
 
 const overrideBodySchema = {
   type: "object",
@@ -36,6 +46,14 @@ const overrideBodySchema = {
   },
 } as const;
 
+interface EmailContext {
+  // EmailMessage.id (DB id) — used by /email/[id]
+  emailDbId: string;
+  subject: string | null;
+  from: string | null;
+  snippet: string | null;
+}
+
 interface FirewallItem {
   id: string;
   source: string;
@@ -46,6 +64,12 @@ interface FirewallItem {
   tierReason: string | null;
   priority: number;
   surfacedAt: string;
+  // Source-specific enrichment for the preview / drill-down. Populated
+  // best-effort; missing fields just mean "no extra context to show".
+  toolName?: string;
+  toolArgs?: Record<string, unknown>;
+  email?: EmailContext;
+  href?: string; // where the firewall card should link on click
 }
 
 interface FirewallResponse {
@@ -58,6 +82,20 @@ interface FirewallResponse {
     AUTO: number;
     total: number;
   };
+}
+
+function safeRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
+}
+
+function extractEmailId(
+  toolName: string,
+  toolArgs: Record<string, unknown> | undefined,
+): string | undefined {
+  if (!toolArgs || !EMAIL_ID_TOOLS.has(toolName)) return undefined;
+  const raw = toolArgs.email_id ?? toolArgs.emailId ?? toolArgs.gmail_id;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : undefined;
 }
 
 export async function firewallRoutes(app: FastifyInstance) {
@@ -102,6 +140,34 @@ export async function firewallRoutes(app: FastifyInstance) {
       take: 200,
     });
 
+    // Batch-fetch PendingActions referenced by the PENDING_ACTION items —
+    // gives us toolName / toolArgs / reasoning to render in the card.
+    const pendingActionIds = items
+      .filter((row) => row.source === "PENDING_ACTION")
+      .map((row) => row.sourceId);
+    const pendingActions = pendingActionIds.length
+      ? await prisma.pendingAction.findMany({
+          where: { id: { in: pendingActionIds } },
+          select: { id: true, toolName: true, toolArgs: true },
+        })
+      : [];
+    const paById = new Map(pendingActions.map((pa) => [pa.id, pa]));
+
+    // Batch-fetch EmailMessage rows for any PA that references an email.
+    const gmailIdsNeeded = new Set<string>();
+    for (const pa of pendingActions) {
+      const args = safeRecord(pa.toolArgs);
+      const emailId = extractEmailId(pa.toolName, args);
+      if (emailId) gmailIdsNeeded.add(emailId);
+    }
+    const emailRows = gmailIdsNeeded.size
+      ? await prisma.emailMessage.findMany({
+          where: { userId, gmailId: { in: [...gmailIdsNeeded] } },
+          select: { id: true, gmailId: true, subject: true, from: true, snippet: true },
+        })
+      : [];
+    const emailByGmailId = new Map(emailRows.map((e) => [e.gmailId, e]));
+
     const tiers: Record<Tier, FirewallItem[]> = {
       SILENT: [],
       QUEUE: [],
@@ -112,7 +178,7 @@ export async function firewallRoutes(app: FastifyInstance) {
 
     for (const row of items) {
       const tier = (TIER_VALUES.includes(row.tier as Tier) ? row.tier : "QUEUE") as Tier;
-      tiers[tier].push({
+      const item: FirewallItem = {
         id: row.id,
         source: row.source,
         sourceId: row.sourceId,
@@ -122,7 +188,32 @@ export async function firewallRoutes(app: FastifyInstance) {
         tierReason: row.tierReason,
         priority: row.priority,
         surfacedAt: row.surfacedAt.toISOString(),
-      });
+      };
+
+      // Enrich PENDING_ACTION items with tool context + maybe email
+      if (row.source === "PENDING_ACTION") {
+        const pa = paById.get(row.sourceId);
+        if (pa) {
+          item.toolName = pa.toolName;
+          const args = safeRecord(pa.toolArgs);
+          if (args) item.toolArgs = args;
+          const emailId = extractEmailId(pa.toolName, args);
+          if (emailId) {
+            const email = emailByGmailId.get(emailId);
+            if (email) {
+              item.email = {
+                emailDbId: email.id,
+                subject: email.subject ?? null,
+                from: email.from ?? null,
+                snippet: email.snippet ?? null,
+              };
+              item.href = `/email/${email.id}`;
+            }
+          }
+        }
+      }
+
+      tiers[tier].push(item);
     }
 
     return {

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { useToast } from "../../../components/toast";
@@ -7,6 +8,13 @@ import { apiFetch } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
 
 type Tier = "SILENT" | "QUEUE" | "PUSH" | "CALL" | "AUTO";
+
+interface EmailContext {
+  emailDbId: string;
+  subject: string | null;
+  from: string | null;
+  snippet: string | null;
+}
 
 interface FirewallItem {
   id: string;
@@ -18,6 +26,10 @@ interface FirewallItem {
   tierReason: string | null;
   priority: number;
   surfacedAt: string;
+  toolName?: string;
+  toolArgs?: Record<string, unknown>;
+  email?: EmailContext;
+  href?: string;
 }
 
 interface FirewallResponse {
@@ -283,40 +295,142 @@ function TierColumn({
       ) : (
         <ul className="space-y-2">
           {items.map((item) => (
-            <li
+            <FirewallCard
               key={item.id}
-              className="rounded-md border border-stone-800 bg-stone-950/60 p-3 text-sm"
-            >
-              <p className="line-clamp-2 break-words text-stone-100">{item.title}</p>
-              <div className="mt-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-stone-600">
-                <SourceBadge source={item.source} />
-                <span>·</span>
-                <span>{relativeTime(item.surfacedAt)}</span>
-              </div>
-              {item.tierReason && (
-                <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-stone-500">
-                  {item.tierReason}
-                </p>
-              )}
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {OVERRIDE_TARGETS.filter((t) => t !== tier).map((target) => (
-                  <button
-                    key={target}
-                    type="button"
-                    disabled={overrideId === item.id}
-                    onClick={() => onOverride(item, target)}
-                    className="inline-flex min-h-7 items-center rounded border border-stone-700 px-2 text-[10px] font-medium uppercase tracking-wider text-stone-400 transition hover:border-amber-300/50 hover:text-amber-200 disabled:opacity-40"
-                  >
-                    Move → {target}
-                  </button>
-                ))}
-              </div>
-            </li>
+              item={item}
+              tier={tier}
+              overrideId={overrideId}
+              onOverride={onOverride}
+            />
           ))}
         </ul>
       )}
     </section>
   );
+}
+
+function FirewallCard({
+  item,
+  tier,
+  overrideId,
+  onOverride,
+}: {
+  item: FirewallItem;
+  tier: "PUSH" | "QUEUE" | "SILENT";
+  overrideId: string | null;
+  onOverride: (item: FirewallItem, newTier: Tier) => void;
+}) {
+  // Best-effort meaningful heading: actual email subject beats the
+  // tool-arg subject beats the agent's auto-title fallback.
+  const subject = item.email?.subject || toolSubject(item) || item.title;
+  const sender = item.email?.from || toolRecipient(item);
+  const snippet = item.email?.snippet || toolBodyPreview(item);
+
+  return (
+    <li className="rounded-md border border-stone-800 bg-stone-950/60 p-3 text-sm">
+      <p className="line-clamp-2 break-words text-stone-100">{subject}</p>
+      {sender && (
+        <p className="mt-0.5 truncate text-[11px] text-stone-500">
+          {item.email?.from ? "From" : "To"}: {sender}
+        </p>
+      )}
+      <div className="mt-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-stone-600">
+        <SourceBadge source={item.source} />
+        {item.toolName && (
+          <>
+            <span>·</span>
+            <span>{item.toolName.replace(/_/g, " ")}</span>
+          </>
+        )}
+        <span>·</span>
+        <span>{relativeTime(item.surfacedAt)}</span>
+      </div>
+
+      {snippet && (
+        <details className="mt-2 rounded border border-stone-800 bg-black/30">
+          <summary className="cursor-pointer list-none px-2 py-1.5 text-[11px] text-stone-400 transition hover:text-stone-200">
+            Preview
+          </summary>
+          <p className="line-clamp-6 whitespace-pre-wrap border-t border-stone-800 px-2 py-2 text-[11px] leading-4 text-stone-300">
+            {snippet}
+          </p>
+        </details>
+      )}
+
+      {item.tierReason && (
+        <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-stone-500">{item.tierReason}</p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        {OVERRIDE_TARGETS.filter((t) => t !== tier).map((target) => (
+          <button
+            key={target}
+            type="button"
+            disabled={overrideId === item.id}
+            onClick={() => onOverride(item, target)}
+            className="inline-flex min-h-7 items-center rounded border border-stone-700 px-2 text-[10px] font-medium uppercase tracking-wider text-stone-400 transition hover:border-amber-300/50 hover:text-amber-200 disabled:opacity-40"
+          >
+            Move → {target}
+          </button>
+        ))}
+        {item.href && (
+          <Link
+            href={item.href}
+            className="ml-auto text-[11px] text-amber-300/80 transition hover:text-amber-200"
+          >
+            Open email →
+          </Link>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function pickString(
+  args: Record<string, unknown> | undefined,
+  ...keys: string[]
+): string | undefined {
+  if (!args) return undefined;
+  for (const key of keys) {
+    const v = args[key];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return undefined;
+}
+
+function toolSubject(item: FirewallItem): string | undefined {
+  if (!item.toolArgs || !item.toolName) return undefined;
+  if (item.toolName === "send_email" || item.toolName === "reply_to_email") {
+    return pickString(item.toolArgs, "subject");
+  }
+  if (item.toolName === "create_event") {
+    return pickString(item.toolArgs, "title", "summary");
+  }
+  return undefined;
+}
+
+function toolRecipient(item: FirewallItem): string | undefined {
+  if (!item.toolArgs || !item.toolName) return undefined;
+  if (item.toolName === "send_email" || item.toolName === "reply_to_email") {
+    return pickString(item.toolArgs, "to", "recipient");
+  }
+  return undefined;
+}
+
+function toolBodyPreview(item: FirewallItem): string | undefined {
+  if (!item.toolArgs || !item.toolName) return undefined;
+  if (item.toolName === "send_email" || item.toolName === "reply_to_email") {
+    return pickString(item.toolArgs, "body");
+  }
+  if (item.toolName === "create_event") {
+    const start = pickString(item.toolArgs, "start_time", "startTime");
+    const loc = pickString(item.toolArgs, "location");
+    const parts: string[] = [];
+    if (start) parts.push(`Starts: ${start}`);
+    if (loc) parts.push(`Location: ${loc}`);
+    return parts.length ? parts.join("\n") : undefined;
+  }
+  return undefined;
 }
 
 function AutoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
