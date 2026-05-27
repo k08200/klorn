@@ -6,7 +6,6 @@ import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import type { CommitmentItem } from "../../components/commitment-card";
 import { useToast } from "../../components/toast";
-import WorkGraphSummaryCard from "../../components/work-graph-summary";
 import { apiFetch } from "../../lib/api";
 import type { ReplyNeededEmail } from "../../lib/inbox-summary";
 import { queryKeys } from "../../lib/query-keys";
@@ -304,9 +303,7 @@ function CommandCenterView() {
           )}
         </div>
 
-        {/* ── RIGHT: Slim Work Graph rail ── */}
         <div className="space-y-4">
-          <WorkGraphSummaryCard />
           <ReplyNeededPanel />
           <QuickLinksPanel />
         </div>
