@@ -188,6 +188,7 @@ function CommandCenterView() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 md:py-8">
+      <OnboardingHint />
       {/* Minimal page header */}
       <div className="mb-6 flex items-center justify-between gap-4">
         <div className="min-w-0">
@@ -346,6 +347,83 @@ function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
         >
           Open mail
         </Link>
+      </div>
+    </div>
+  );
+}
+
+// ─── Onboarding hint ──────────────────────────────────────────────────────
+//
+// Founder dogfood found that new users land on /inbox without knowing what
+// the product is or where to click first. This banner shows the 4 core
+// destinations once and stays dismissed in localStorage thereafter.
+
+const ONBOARDING_STORAGE_KEY = "klorn.inbox.onboarding.v1.dismissed";
+
+function OnboardingHint() {
+  const [dismissed, setDismissed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    try {
+      setDismissed(localStorage.getItem(ONBOARDING_STORAGE_KEY) === "1");
+    } catch {
+      setDismissed(true);
+    }
+  }, []);
+
+  const dismiss = () => {
+    setDismissed(true);
+    try {
+      localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+    } catch {
+      // localStorage unavailable; banner stays dismissed for this session only
+    }
+  };
+
+  if (dismissed !== false) return null;
+
+  return (
+    <div className="mb-5 rounded-xl border border-amber-300/30 bg-amber-300/5 p-4 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300">
+            New here? 30-second tour
+          </p>
+          <ul className="space-y-1 text-[13px] leading-5 text-stone-300">
+            <li>
+              1. <span className="text-stone-100">This page</span> — agent decisions waiting on your
+              approval.
+            </li>
+            <li>
+              2.{" "}
+              <Link href="/inbox/firewall" className="text-amber-200 hover:text-amber-100">
+                POC firewall view
+              </Link>{" "}
+              — see every signal sorted into SILENT / QUEUE / PUSH. Move what we got wrong.
+            </li>
+            <li>
+              3.{" "}
+              <Link href="/settings" className="text-amber-200 hover:text-amber-100">
+                Settings → Connections
+              </Link>{" "}
+              — connect Google so Klorn can read mail and calendar.
+            </li>
+            <li>
+              4.{" "}
+              <Link href="/inbox/receipt" className="text-amber-200 hover:text-amber-100">
+                Today's receipt
+              </Link>{" "}
+              — what Klorn silenced, surfaced, and auto-handled today.
+            </li>
+          </ul>
+        </div>
+        <button
+          type="button"
+          onClick={dismiss}
+          className="shrink-0 rounded-md border border-stone-700 px-2.5 py-1 text-[11px] text-stone-400 transition hover:border-stone-500 hover:text-stone-200"
+        >
+          Dismiss
+        </button>
       </div>
     </div>
   );

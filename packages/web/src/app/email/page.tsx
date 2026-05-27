@@ -320,15 +320,29 @@ function EmailView() {
     setSyncing(true);
     setError(null);
     try {
-      await apiFetch("/api/email/sync", { method: "POST", body: JSON.stringify({}) });
+      const result = await apiFetch<{ synced?: number; newCount?: number }>("/api/email/sync", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
       await load(filter, appliedSearch);
+      const newCount = typeof result?.newCount === "number" ? result.newCount : 0;
+      const synced = typeof result?.synced === "number" ? result.synced : 0;
+      if (newCount > 0) {
+        toast(`Synced ${synced} — ${newCount} new.`, "success");
+      } else if (synced > 0) {
+        toast(`Synced ${synced} — nothing new.`, "success");
+      } else {
+        toast("Sync complete. Nothing new.", "success");
+      }
     } catch (err) {
       captureClientError(err, { scope: "email.sync" });
       const message = err instanceof Error ? err.message : "";
       if (message.toLowerCase().includes("not connected")) {
         setError("Gmail isn't connected. Reconnect in Settings → Connections.");
+        toast("Gmail isn't connected.", "error");
       } else {
         setError("Gmail sync failed. Check Settings → Connections to reconnect.");
+        toast("Gmail sync failed.", "error");
       }
     } finally {
       setSyncing(false);
