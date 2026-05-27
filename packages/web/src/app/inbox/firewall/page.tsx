@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { useToast } from "../../../components/toast";
+import { TrustDot, type TrustScoreData } from "../../../components/trust-badge";
 import { apiFetch } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
 
@@ -14,6 +15,7 @@ interface EmailContext {
   subject: string | null;
   from: string | null;
   snippet: string | null;
+  trust: TrustScoreData | null;
 }
 
 interface FirewallItem {
@@ -330,8 +332,11 @@ function FirewallCard({
     <li className="rounded-md border border-stone-800 bg-stone-950/60 p-3 text-sm">
       <p className="line-clamp-2 break-words text-stone-100">{subject}</p>
       {sender && (
-        <p className="mt-0.5 truncate text-[11px] text-stone-500">
-          {item.email?.from ? "From" : "To"}: {sender}
+        <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-stone-500">
+          {item.email?.trust && <TrustDot trust={item.email.trust} />}
+          <span className="truncate">
+            {item.email?.from ? "From" : "To"}: {sender}
+          </span>
         </p>
       )}
       <div className="mt-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-stone-600">
