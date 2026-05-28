@@ -15,7 +15,7 @@
  * pure makes Day 7 GATE measurement and Day 6 prompt iteration cheap.
  */
 
-import { type ClassifiableEmail, fastClassify } from "./email-classifier.js";
+import type { ClassifiableEmail } from "./email-classifier.js";
 import { createCompletion, MODEL } from "./openai.js";
 import { captureError } from "./sentry.js";
 
@@ -51,9 +51,15 @@ export interface PocJudgement {
 const CLAMP = (n: number): number => Math.max(0, Math.min(1, n));
 
 /**
- * Deterministic 4-feature → 4-tier mapping. Tuned by hand after Day 6
- * disagreement analysis; treat this as the "policy" the LLM doesn't get
- * to override. Order matters — earlier branches dominate.
+ * Deterministic 4-feature → 4-tier mapping.
+ *
+ * Re-tuned 2026-05-28 after first 50-email accuracy run. The original rule
+ * defaulted to SILENT and produced 50% accuracy because the founder's
+ * mental model is the opposite: QUEUE is the default ("things I'll look
+ * at on my own schedule"), and SILENT is narrow ("clear marketing/promo
+ * I never want to see").
+ *
+ * Order matters — earlier branches dominate.
  */
 export function tierFromFeatures(features: PocFeatures): {
   tier: PocTier;
@@ -66,13 +72,10 @@ export function tierFromFeatures(features: PocFeatures): {
     urgency: CLAMP(features.urgency),
   };
 
-  // 1. Low confidence OR unknown sender → user must see it.
-  //    Hiding uncertain mail behind a wrong AUTO is the worst failure mode.
+  // 1. Very low confidence → QUEUE.
+  //    Hiding uncertain mail behind a wrong tier is the worst failure mode.
   if (f.confidence < 0.5) {
     return { tier: "QUEUE", reason: "Low classification confidence — queued for review" };
-  }
-  if (f.senderTrust < 0.3) {
-    return { tier: "QUEUE", reason: "Unknown sender — queued for review" };
   }
 
   // 2. Urgent + sure → wake the user.
@@ -80,16 +83,29 @@ export function tierFromFeatures(features: PocFeatures): {
     return { tier: "PUSH", reason: "Urgent and confident" };
   }
 
-  // 3. Trivially reversible + sure + not urgent → AUTO.
-  //    Floors are high so we never auto-handle a destructive action or a
+  // 3. Clear promotional / marketing signal → SILENT.
+  //    Very narrow: only when the sender is anonymous-ish AND there is no
+  //    time signal AND any wrong action would be trivially reversible. This
+  //    matches the founder's SILENT bucket (LinkedIn invites, 광고, view-in-browser).
+  //    System notifications (Vercel deploy, account confirmations, own-product
+  //    signups) do NOT match because they carry context worth a manual glance.
+  if (f.senderTrust < 0.2 && f.urgency < 0.2 && f.reversibility > 0.9) {
+    return { tier: "SILENT", reason: "Promotional / marketing — no human attention needed" };
+  }
+
+  // 4. Trivially reversible + very sure + not urgent → AUTO.
+  //    Floors stay high so we never auto-handle a destructive action or a
   //    misclassification. Per POC.md OUT scope, AUTO is *classified only*
   //    during the POC; actual execution stays disabled.
   if (f.reversibility >= 0.85 && f.confidence >= 0.85 && f.urgency < 0.5) {
     return { tier: "AUTO", reason: "Reversible, confident, not urgent" };
   }
 
-  // 4. Default → SILENT (recorded, not interrupted).
-  return { tier: "SILENT", reason: "No action expected" };
+  // 5. Default → QUEUE.
+  //    Everything that isn't clearly marketing, urgent, or auto-handleable
+  //    belongs in the manual review queue. The founder's mental model treats
+  //    "I'll look at this on my own pace" as the dominant bucket.
+  return { tier: "QUEUE", reason: "Visible in queue for manual review" };
 }
 
 interface LlmFeatureResponse {
@@ -168,17 +184,32 @@ async function extractFeaturesWithLlm(
 
 /**
  * Coarse keyword-only feature scorer for when the LLM is unavailable.
- * Never as good as the LLM but lets `judgeEmail` keep producing tiers
- * during provider outages so the firewall stays warm.
+ *
+ * Re-tuned 2026-05-28 to separate two automated-sender signals that the
+ * founder treats differently:
+ *  - "marketing"   = newsletter / digest / promo / "광고" → SILENT bucket
+ *  - "notification"= no-reply / notifications@ / updates.* → still QUEUE
+ *
+ * The old `isAutomated` mashed both together and forced everything into
+ * the SILENT branch.
  */
 function keywordFeatures(email: ClassifiableEmail): PocFeatures {
   const from = (email.from || "").toLowerCase();
   const subject = (email.subject || "").toLowerCase();
   const snippet = (email.snippet || "").toLowerCase();
   const hay = `${subject} ${snippet}`;
+  const fromAndSubject = `${from} ${subject}`;
 
-  const isAutomated =
-    /no[-_]?reply|noreply|donotreply|notifications?@|newsletter|digest|marketing|promo/.test(from);
+  // Narrow marketing signal — the patterns the founder permanently silences.
+  const isMarketing =
+    /newsletter|digest|marketing|promo|\[광고\]|\[알림\]|\(광고\)|unsubscribe|수신거부/.test(
+      fromAndSubject,
+    );
+  // Broader system-notification signal — these the founder still wants in QUEUE.
+  const isSystemNotification =
+    /no[-_]?reply@|noreply@|donotreply@|notifications?@|@updates\.|@email\.|@notifications\./.test(
+      from,
+    );
   const isInvestor = /investor|vc|capital|ventures|partner@|fund/.test(from);
   const isUrgentWord = /urgent|asap|긴급|중요|action required|today|tomorrow|deadline|due/.test(
     hay,
@@ -186,8 +217,14 @@ function keywordFeatures(email: ClassifiableEmail): PocFeatures {
   const isMeeting = /meeting|invite|calendar|zoom|reschedule|미팅|일정/.test(hay);
   const isQuestion = /\?|could you|can you|would you|please/.test(hay);
 
-  let senderTrust = 0.4;
-  if (isAutomated) senderTrust = 0.1;
+  // senderTrust calibrated against the founder's 50-email ground truth:
+  //   marketing       → 0.05 (clear SILENT signal — passes the trust<0.2 floor)
+  //   system notice   → 0.4  (QUEUE — visible but not interrupting)
+  //   investor        → 0.85
+  //   default         → 0.45 (queue-by-default per tierFromFeatures rule 5)
+  let senderTrust = 0.45;
+  if (isMarketing) senderTrust = 0.05;
+  else if (isSystemNotification) senderTrust = 0.4;
   else if (isInvestor) senderTrust = 0.85;
 
   let urgency = 0.2;
@@ -198,31 +235,49 @@ function keywordFeatures(email: ClassifiableEmail): PocFeatures {
   let reversibility = 0.9;
   if (isQuestion || isInvestor) reversibility = 0.3;
 
-  // Confidence is intentionally lower than LLM path — we want the rule to
-  // push borderline keyword-only judgements into QUEUE for safety.
-  const confidence = isAutomated ? 0.7 : 0.55;
+  // Higher confidence when a pattern matched; lower otherwise so the rule
+  // defaults to QUEUE for unfamiliar cases.
+  const confidence = isMarketing || isSystemNotification || isInvestor ? 0.7 : 0.55;
 
   return { confidence, senderTrust, reversibility, urgency };
 }
 
 /**
+ * Patterns that the founder has confirmed they always want silenced.
+ * Re-tuned 2026-05-28: previously fast-path fired on any fastClassify
+ * "automated" result, which over-claimed Vercel notifications / own-product
+ * waitlist signups / Google account confirms as SILENT.
+ */
+const MARKETING_SUBJECT_RE =
+  /unsubscribe|view (this email )?in (your )?browser|\[광고\]|\[알림\]|\(광고\)|수신거부|무료\s*체험|할인\s*쿠폰/i;
+
+/**
  * Judge a single email → 4-tier. Pure: does not persist anything.
  *
  * Hot path:
- *  1. fastClassify automated/marketing → SILENT.
+ *  1. Clear marketing/promo (Gmail PROMOTIONS label OR marketing subject) → SILENT.
+ *     Narrowed from "any automated sender" so system notifications keep
+ *     getting LLM evaluation.
  *  2. LLM 4-feature extraction → tier rule.
  *  3. LLM down → keyword feature fallback → tier rule.
  */
 export async function judgeEmail(email: ClassifiableEmail, userId?: string): Promise<PocJudgement> {
-  // Fast-path: obvious promo/marketing/no-reply automated mail. Skip LLM.
-  // Security alerts (fastClassify category === "system") are NOT shortcut
-  // because account-lockout-style alerts can legitimately deserve PUSH.
-  const fast = fastClassify(email);
-  if (fast && fast.category === "automated" && !fast.needsReply) {
+  // Fast-path: only the patterns we are certain the founder treats as SILENT.
+  //   - Gmail's CATEGORY_PROMOTIONS label (calibrated, ad-targeted mail)
+  //   - Explicit marketing subject markers (광고, view-in-browser, unsubscribe)
+  // Anything else, including no-reply / notifications@ system mail, falls
+  // through to the LLM (or keyword fallback) so the rule can decide between
+  // QUEUE and SILENT based on senderTrust + urgency + reversibility.
+  const labels = email.labels || [];
+  const subject = email.subject || "";
+  const isClearMarketing =
+    labels.includes("CATEGORY_PROMOTIONS") || MARKETING_SUBJECT_RE.test(subject);
+
+  if (isClearMarketing) {
     return {
       tier: "SILENT",
-      reason: "Automated / marketing — no human attention needed",
-      features: { confidence: 0.95, senderTrust: 0.1, reversibility: 1.0, urgency: 0.0 },
+      reason: "Promotional / marketing — no human attention needed",
+      features: { confidence: 0.95, senderTrust: 0.05, reversibility: 1.0, urgency: 0.0 },
       source: "fast-path",
     };
   }
