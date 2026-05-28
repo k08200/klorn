@@ -1,0 +1,268 @@
+/**
+ * POC judge — single-email 4-tier classifier.
+ *
+ * Per POC.md (locked 2026-05-26): "분류기 — `poc-judge.ts` 기반.
+ * 4-feature scorer (confidence + sender trust + reversibility + urgency)
+ * → 4-tier output. 기존 코드 위에서 정제."
+ *
+ * Day 7 Technical POC HARD GATE: ≥80% agreement with founder hand-labels
+ * on 50 real emails. Used by:
+ *   - scripts/poc-label-emails.ts (extracts 50 emails to label)
+ *   - scripts/poc-accuracy.ts     (measures labels vs judgeEmail output)
+ *
+ * Side effects: none. This file does not persist anything. Integration
+ * with EmailMessage/AttentionItem is a follow-up PR — keeping the judge
+ * pure makes Day 7 GATE measurement and Day 6 prompt iteration cheap.
+ */
+
+import { type ClassifiableEmail, fastClassify } from "./email-classifier.js";
+import { createCompletion, MODEL } from "./openai.js";
+import { captureError } from "./sentry.js";
+
+export type PocTier = "SILENT" | "QUEUE" | "PUSH" | "AUTO";
+
+export const POC_TIERS: ReadonlyArray<PocTier> = ["SILENT", "QUEUE", "PUSH", "AUTO"];
+
+/**
+ * Four features that drive the tier decision. All values are 0.0–1.0 floats
+ * so the rule (tierFromFeatures) can be reviewed, tuned, and overridden by
+ * a human without re-running the LLM.
+ */
+export interface PocFeatures {
+  /** Model's own confidence that its other three scores are right. */
+  confidence: number;
+  /** 1.0 = sender is a known, important human; 0.0 = unknown / promotional. */
+  senderTrust: number;
+  /** 1.0 = if AUTO is wrong it's trivial to undo; 0.0 = irreversible (e.g. a sent reply). */
+  reversibility: number;
+  /** 1.0 = needs attention within hours; 0.0 = informational, no clock. */
+  urgency: number;
+}
+
+export interface PocJudgement {
+  tier: PocTier;
+  /** Short, human-readable explanation suitable for tooltip / receipt line. */
+  reason: string;
+  features: PocFeatures;
+  /** Which path produced this judgement — useful for accuracy diffs. */
+  source: "fast-path" | "llm" | "keyword-fallback";
+}
+
+const CLAMP = (n: number): number => Math.max(0, Math.min(1, n));
+
+/**
+ * Deterministic 4-feature → 4-tier mapping. Tuned by hand after Day 6
+ * disagreement analysis; treat this as the "policy" the LLM doesn't get
+ * to override. Order matters — earlier branches dominate.
+ */
+export function tierFromFeatures(features: PocFeatures): {
+  tier: PocTier;
+  reason: string;
+} {
+  const f: PocFeatures = {
+    confidence: CLAMP(features.confidence),
+    senderTrust: CLAMP(features.senderTrust),
+    reversibility: CLAMP(features.reversibility),
+    urgency: CLAMP(features.urgency),
+  };
+
+  // 1. Low confidence OR unknown sender → user must see it.
+  //    Hiding uncertain mail behind a wrong AUTO is the worst failure mode.
+  if (f.confidence < 0.5) {
+    return { tier: "QUEUE", reason: "Low classification confidence — queued for review" };
+  }
+  if (f.senderTrust < 0.3) {
+    return { tier: "QUEUE", reason: "Unknown sender — queued for review" };
+  }
+
+  // 2. Urgent + sure → wake the user.
+  if (f.urgency >= 0.7 && f.confidence >= 0.7) {
+    return { tier: "PUSH", reason: "Urgent and confident" };
+  }
+
+  // 3. Trivially reversible + sure + not urgent → AUTO.
+  //    Floors are high so we never auto-handle a destructive action or a
+  //    misclassification. Per POC.md OUT scope, AUTO is *classified only*
+  //    during the POC; actual execution stays disabled.
+  if (f.reversibility >= 0.85 && f.confidence >= 0.85 && f.urgency < 0.5) {
+    return { tier: "AUTO", reason: "Reversible, confident, not urgent" };
+  }
+
+  // 4. Default → SILENT (recorded, not interrupted).
+  return { tier: "SILENT", reason: "No action expected" };
+}
+
+interface LlmFeatureResponse {
+  confidence?: number;
+  senderTrust?: number;
+  reversibility?: number;
+  urgency?: number;
+  reason?: string;
+}
+
+function buildJudgePrompt(email: ClassifiableEmail): string {
+  const subject = (email.subject || "").slice(0, 200);
+  const from = (email.from || "").slice(0, 200);
+  const snippet = (email.snippet || "").replace(/\s+/g, " ").slice(0, 400);
+  const labels = (email.labels || []).slice(0, 10).join(",");
+
+  return `You score one email on four 0.0–1.0 features. The features feed a deterministic tier rule, so be honest, not generous.
+
+Features:
+- confidence: how sure you are that your other three scores are right (1.0 = certain, 0.5 = could go either way)
+- senderTrust: is this sender a real person the recipient knows or cares about? (1.0 = clear known/important human; 0.5 = professional but unfamiliar; 0.0 = anonymous / no-reply / marketing list)
+- reversibility: if this mail were auto-handled (e.g. archived, replied) and that turned out wrong, how easy is it to recover? (1.0 = trivial undo, just unarchive; 0.5 = mildly awkward; 0.0 = irreversible action, e.g. lost an investor)
+- urgency: does this need attention within hours? (1.0 = today / time-bound; 0.5 = this week; 0.0 = informational, no clock)
+
+Also give a short reason (under 12 words) describing what the email is.
+
+Respond with JSON only:
+{"confidence":0.0,"senderTrust":0.0,"reversibility":0.0,"urgency":0.0,"reason":"short phrase"}
+
+Email:
+from: ${from}
+subject: ${subject}
+labels: ${labels}
+snippet: ${snippet}`;
+}
+
+async function extractFeaturesWithLlm(
+  email: ClassifiableEmail,
+  userId?: string,
+): Promise<{ features: PocFeatures; reason: string } | null> {
+  try {
+    const response = await createCompletion(
+      {
+        model: MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a strict JSON scorer for an email triage POC. Respond with valid JSON only — no prose, no code fences.",
+          },
+          { role: "user", content: buildJudgePrompt(email) },
+        ],
+        response_format: { type: "json_object" },
+      },
+      userId ? { userId, priority: "background" as const } : {},
+    );
+
+    const raw = response.choices[0]?.message?.content;
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as LlmFeatureResponse;
+
+    const features: PocFeatures = {
+      confidence: CLAMP(Number(parsed.confidence ?? 0)),
+      senderTrust: CLAMP(Number(parsed.senderTrust ?? 0)),
+      reversibility: CLAMP(Number(parsed.reversibility ?? 0)),
+      urgency: CLAMP(Number(parsed.urgency ?? 0)),
+    };
+    const reason = typeof parsed.reason === "string" ? parsed.reason : "";
+    return { features, reason };
+  } catch (err) {
+    captureError(err, { tags: { scope: "poc-judge.llm" } });
+    return null;
+  }
+}
+
+/**
+ * Coarse keyword-only feature scorer for when the LLM is unavailable.
+ * Never as good as the LLM but lets `judgeEmail` keep producing tiers
+ * during provider outages so the firewall stays warm.
+ */
+function keywordFeatures(email: ClassifiableEmail): PocFeatures {
+  const from = (email.from || "").toLowerCase();
+  const subject = (email.subject || "").toLowerCase();
+  const snippet = (email.snippet || "").toLowerCase();
+  const hay = `${subject} ${snippet}`;
+
+  const isAutomated =
+    /no[-_]?reply|noreply|donotreply|notifications?@|newsletter|digest|marketing|promo/.test(from);
+  const isInvestor = /investor|vc|capital|ventures|partner@|fund/.test(from);
+  const isUrgentWord = /urgent|asap|긴급|중요|action required|today|tomorrow|deadline|due/.test(
+    hay,
+  );
+  const isMeeting = /meeting|invite|calendar|zoom|reschedule|미팅|일정/.test(hay);
+  const isQuestion = /\?|could you|can you|would you|please/.test(hay);
+
+  let senderTrust = 0.4;
+  if (isAutomated) senderTrust = 0.1;
+  else if (isInvestor) senderTrust = 0.85;
+
+  let urgency = 0.2;
+  if (isUrgentWord) urgency = 0.85;
+  else if (isMeeting) urgency = 0.55;
+
+  // Replies to a human are hard to undo; archives are trivial.
+  let reversibility = 0.9;
+  if (isQuestion || isInvestor) reversibility = 0.3;
+
+  // Confidence is intentionally lower than LLM path — we want the rule to
+  // push borderline keyword-only judgements into QUEUE for safety.
+  const confidence = isAutomated ? 0.7 : 0.55;
+
+  return { confidence, senderTrust, reversibility, urgency };
+}
+
+/**
+ * Judge a single email → 4-tier. Pure: does not persist anything.
+ *
+ * Hot path:
+ *  1. fastClassify automated/marketing → SILENT.
+ *  2. LLM 4-feature extraction → tier rule.
+ *  3. LLM down → keyword feature fallback → tier rule.
+ */
+export async function judgeEmail(email: ClassifiableEmail, userId?: string): Promise<PocJudgement> {
+  // Fast-path: obvious promo/marketing/no-reply automated mail. Skip LLM.
+  // Security alerts (fastClassify category === "system") are NOT shortcut
+  // because account-lockout-style alerts can legitimately deserve PUSH.
+  const fast = fastClassify(email);
+  if (fast && fast.category === "automated" && !fast.needsReply) {
+    return {
+      tier: "SILENT",
+      reason: "Automated / marketing — no human attention needed",
+      features: { confidence: 0.95, senderTrust: 0.1, reversibility: 1.0, urgency: 0.0 },
+      source: "fast-path",
+    };
+  }
+
+  const llm = await extractFeaturesWithLlm(email, userId);
+  if (llm) {
+    const { tier, reason: ruleReason } = tierFromFeatures(llm.features);
+    return {
+      tier,
+      reason: llm.reason || ruleReason,
+      features: llm.features,
+      source: "llm",
+    };
+  }
+
+  const features = keywordFeatures(email);
+  const { tier, reason } = tierFromFeatures(features);
+  return { tier, reason, features, source: "keyword-fallback" };
+}
+
+/**
+ * Bulk wrapper for the accuracy script and offline batch jobs. Caps
+ * concurrency so a 50-email run doesn't open 50 simultaneous provider
+ * connections (provider rate limits kick in around 10 RPS).
+ */
+export async function judgeEmails(
+  emails: ClassifiableEmail[],
+  options: { userId?: string; concurrency?: number } = {},
+): Promise<PocJudgement[]> {
+  const concurrency = Math.max(1, options.concurrency ?? 4);
+  const results: PocJudgement[] = new Array(emails.length);
+
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, emails.length) }, async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= emails.length) return;
+      results[i] = await judgeEmail(emails[i], options.userId);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
