@@ -287,20 +287,6 @@ function CommandCenterView() {
             )}
           </section>
 
-          {/* Commitment Ledger now lives on its own page (added in next PR).
-              Until then, just a slim link when commitments exist. */}
-          {commitments.length > 0 && (
-            <Link
-              href="/ledger"
-              className="flex items-center justify-between rounded-lg border border-stone-800 bg-stone-900/30 px-4 py-3 text-sm text-stone-300 transition hover:border-stone-700 hover:bg-stone-900/50"
-            >
-              <span>
-                <span className="text-stone-500">Commitments tracked today</span>{" "}
-                <span className="text-stone-100">{commitments.length}</span>
-              </span>
-              <span className="text-stone-500">Open ledger →</span>
-            </Link>
-          )}
         </div>
 
         <div className="space-y-4">
@@ -328,7 +314,7 @@ function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
       <p className="text-base text-stone-200">Nothing to decide today.</p>
       <p className="mx-auto mt-2 max-w-sm text-xs text-stone-500">
         {commitmentCount > 0
-          ? `Klorn is watching your mail and calendar. The ${commitmentCount} tracked commitment${commitmentCount === 1 ? "" : "s"} live in the ledger.`
+          ? `Klorn is watching your mail and calendar. ${commitmentCount} tracked commitment${commitmentCount === 1 ? "" : "s"} in the background.`
           : "Klorn is watching your mail and calendar. When something needs a decision, it lands here."}
       </p>
       <div className="mt-5 flex justify-center gap-2">

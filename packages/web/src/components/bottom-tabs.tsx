@@ -6,12 +6,11 @@ import { usePathname } from "next/navigation";
 interface Tab {
   href: string;
   label: string;
-  icon: "calendar" | "email" | "briefing" | "inbox" | "ledger";
+  icon: "calendar" | "email" | "briefing" | "inbox";
 }
 
 const TABS: Tab[] = [
   { href: "/inbox", label: "Queue", icon: "inbox" },
-  { href: "/ledger", label: "Ledger", icon: "ledger" },
   { href: "/email", label: "Mail", icon: "email" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/briefing", label: "Briefing", icon: "briefing" },
@@ -25,7 +24,7 @@ export default function BottomTabs() {
       aria-label="Primary navigation"
       className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-stone-700/50 bg-[#10100d]/92 pb-safe shadow-[0_-16px_44px_rgba(0,0,0,0.35)] backdrop-blur-xl"
     >
-      <ul className="grid grid-cols-5">
+      <ul className="grid grid-cols-4">
         {TABS.map((tab) => {
           const active = isActive(pathname, tab.href);
           return (
@@ -93,17 +92,6 @@ function TabIcon({ type, active }: { type: Tab["icon"]; active: boolean }) {
         <svg {...props}>
           <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
           <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
-        </svg>
-      );
-    case "ledger":
-      return (
-        <svg {...props}>
-          <line x1="8" y1="6" x2="21" y2="6" />
-          <line x1="8" y1="12" x2="21" y2="12" />
-          <line x1="8" y1="18" x2="21" y2="18" />
-          <line x1="3" y1="6" x2="3.01" y2="6" />
-          <line x1="3" y1="12" x2="3.01" y2="12" />
-          <line x1="3" y1="18" x2="3.01" y2="18" />
         </svg>
       );
   }
