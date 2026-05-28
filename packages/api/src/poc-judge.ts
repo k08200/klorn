@@ -301,13 +301,16 @@ export async function judgeEmail(email: ClassifiableEmail, userId?: string): Pro
 /**
  * Bulk wrapper for the accuracy script and offline batch jobs. Caps
  * concurrency so a 50-email run doesn't open 50 simultaneous provider
- * connections (provider rate limits kick in around 10 RPS).
+ * connections, and optionally sleeps between calls so a free-tier provider
+ * (Gemini AI Studio is 15 RPM) doesn't trip its per-minute rate limit and
+ * silently force every email back to keyword-fallback.
  */
 export async function judgeEmails(
   emails: ClassifiableEmail[],
-  options: { userId?: string; concurrency?: number } = {},
+  options: { userId?: string; concurrency?: number; interCallDelayMs?: number } = {},
 ): Promise<PocJudgement[]> {
   const concurrency = Math.max(1, options.concurrency ?? 4);
+  const delayMs = Math.max(0, options.interCallDelayMs ?? 0);
   const results: PocJudgement[] = new Array(emails.length);
 
   let cursor = 0;
@@ -316,6 +319,11 @@ export async function judgeEmails(
       const i = cursor++;
       if (i >= emails.length) return;
       results[i] = await judgeEmail(emails[i], options.userId);
+      // Throttle for free-tier RPM caps. Only sleep when there's more
+      // work in the queue — saves the final wait at the end of the run.
+      if (delayMs > 0 && cursor < emails.length) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
     }
   });
   await Promise.all(workers);
