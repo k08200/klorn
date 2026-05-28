@@ -166,10 +166,7 @@ function CandidateDetailView() {
           role="status"
           className="mb-3 rounded-lg border border-emerald-700/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200"
         >
-          {commitmentToast}{" "}
-          <Link href="/commitments" className="underline hover:text-emerald-100">
-            Open ledger
-          </Link>
+          {commitmentToast}
         </div>
       )}
 
