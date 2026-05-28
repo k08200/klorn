@@ -31,10 +31,8 @@ import { receiptRoutes } from "./routes/receipt.js";
 import { skillRoutes } from "./routes/skills.js";
 import { smsRoutes } from "./routes/sms.js";
 import { tokenUsageRoutes } from "./routes/token-usage.js";
-import { voiceProfileRoutes } from "./routes/voice-profile.js";
 import { waitlistRoutes } from "./routes/waitlist.js";
 import { webhookRoutes } from "./routes/webhook.js";
-import { workGraphRoutes } from "./routes/work-graph.js";
 import { captureError } from "./sentry.js";
 import { getClientCount, initWebSocket } from "./websocket.js";
 
@@ -130,10 +128,8 @@ await app.register(adminRoutes, { prefix: "/api/admin" });
 await app.register(memoryRoutes, { prefix: "/api/memories" });
 await app.register(patternRoutes, { prefix: "/api/patterns" });
 await app.register(tokenUsageRoutes, { prefix: "/api/usage" });
-await app.register(voiceProfileRoutes, { prefix: "/api/voice-profile" });
 await app.register(skillRoutes, { prefix: "/api/skills" });
 await app.register(smsRoutes, { prefix: "/api/sms" });
-await app.register(workGraphRoutes, { prefix: "/api/work-graph" });
 
 app.get("/api/health", async () => {
   let dbOk = false;

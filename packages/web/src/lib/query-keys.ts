@@ -63,10 +63,6 @@ export const queryKeys = {
     all: ["reminders"] as const,
     list: () => ["reminders", "list"] as const,
   },
-  workGraph: {
-    all: ["work-graph"] as const,
-    summary: () => ["work-graph", "summary"] as const,
-  },
   settings: {
     all: ["settings"] as const,
     profile: () => ["settings", "profile"] as const,
