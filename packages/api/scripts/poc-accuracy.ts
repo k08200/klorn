@@ -40,6 +40,7 @@ interface CliArgs {
   in: string;
   out?: string;
   concurrency: number;
+  delayMs: number;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -54,7 +55,14 @@ function parseArgs(argv: string[]): CliArgs {
   if (!Number.isFinite(concurrency) || concurrency < 1 || concurrency > 16) {
     throw new Error("--concurrency must be between 1 and 16");
   }
-  return { in: input, out: map.get("out"), concurrency };
+  // Free-tier providers (Gemini AI Studio: 15 RPM) need a per-call sleep
+  // so the 50-email run doesn't burst past the limit. 5000ms with
+  // concurrency=1 keeps us under 12 RPM with margin.
+  const delayMs = Number(map.get("delay") ?? "0");
+  if (!Number.isFinite(delayMs) || delayMs < 0 || delayMs > 60000) {
+    throw new Error("--delay must be 0–60000 (ms)");
+  }
+  return { in: input, out: map.get("out"), concurrency, delayMs };
 }
 
 function pad(value: string | number, width: number): string {
@@ -154,7 +162,7 @@ async function main() {
       snippet: i.snippet ?? null,
       labels: i.labels,
     })),
-    { concurrency: args.concurrency },
+    { concurrency: args.concurrency, interCallDelayMs: args.delayMs },
   );
   const elapsedMs = Date.now() - startedAt;
 
