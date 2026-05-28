@@ -23,6 +23,12 @@ import { stripUntrusted } from "./untrusted.js";
 import { pushNotification } from "./websocket.js";
 
 const BRIEFING_CALENDAR_WINDOW_DAYS = 14;
+// The briefing is the founder's first read of the day. Five emails was too
+// thin once real volume kicked in — anyone with 50+ emails overnight saw a
+// brief that named nothing they actually got. Thirty is a reasonable upper
+// bound: it stays well under the model's context budget while letting the
+// LLM see most overnight signal.
+const BRIEFING_EMAIL_WINDOW = 30;
 
 interface BriefingData {
   tasks: unknown;
@@ -117,7 +123,7 @@ async function gatherBriefingData(userId: string): Promise<BriefingData> {
   const results = await Promise.allSettled([
     listTasks(userId),
     listLocalBriefingEvents(userId, now).catch(() => ({ events: [] })),
-    listEmails(userId, 5).catch(() => ({ emails: [] })),
+    listEmails(userId, BRIEFING_EMAIL_WINDOW).catch(() => ({ emails: [] })),
     listNotes(userId).catch(() => ({ notes: [] })),
   ]);
 
