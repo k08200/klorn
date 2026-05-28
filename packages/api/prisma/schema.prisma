@@ -706,6 +706,9 @@ enum AttentionSource {
   CALENDAR_EVENT
   NOTIFICATION
   COMMITMENT
+  // POC firewall: each EmailMessage that poc-judge classifies surfaces as
+  // its own AttentionItem with source=EMAIL, sourceId=EmailMessage.id.
+  EMAIL
 }
 
 enum AttentionType {
