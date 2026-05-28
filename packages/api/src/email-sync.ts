@@ -9,6 +9,7 @@
  */
 
 import { type gmail_v1, google } from "googleapis";
+import { upsertAttentionForEmailJudgement } from "./attention-mirror.js";
 import { extractAndUpsertCommitmentsFromText } from "./commitment-ingestion.js";
 import { prisma } from "./db.js";
 import { extractAttachmentContent, isReadableEmailAttachment } from "./email-attachment-text.js";
@@ -19,6 +20,7 @@ import {
 } from "./email-attachments.js";
 import { getAuthedClient, isGoogleAuthError, markGoogleTokenForReconnect } from "./gmail.js";
 import { createCompletion, MODEL, openai } from "./openai.js";
+import { judgeEmail } from "./poc-judge.js";
 import { captureError } from "./sentry.js";
 import { wrapUntrusted } from "./untrusted.js";
 
@@ -352,6 +354,40 @@ async function persistGmailEmail(
       });
     });
   }
+
+  // POC firewall: classify the email into SILENT/QUEUE/PUSH/AUTO and mirror
+  // it to an AttentionItem so the firewall route surfaces it next to other
+  // tier-grouped items. Fire-and-forget — sync should never block on the
+  // LLM call, and an upsert failure just leaves the email out of the queue
+  // until the next sync (or a manual override) reclassifies it.
+  judgeEmail(
+    {
+      from: email.from,
+      subject: email.subject,
+      snippet: email.snippet,
+      labels: email.labels,
+    },
+    userId,
+  )
+    .then((judgement) =>
+      upsertAttentionForEmailJudgement(
+        {
+          id: createdEmail.id,
+          userId,
+          from: email.from,
+          subject: email.subject,
+          snippet: email.snippet,
+          receivedAt: email.receivedAt,
+        },
+        judgement,
+      ),
+    )
+    .catch((err) => {
+      captureError(err, {
+        tags: { scope: "poc-judge.email_sync" },
+        extra: { userId, emailId: createdEmail.id, gmailId: email.gmailId },
+      });
+    });
 
   return { emailId: createdEmail.id, isNew: true };
 }

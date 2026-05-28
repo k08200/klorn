@@ -166,26 +166,42 @@ export async function firewallRoutes(app: FastifyInstance) {
       : [];
     const paById = new Map(pendingActions.map((pa) => [pa.id, pa]));
 
-    // Batch-fetch EmailMessage rows for any PA that references an email.
+    // Batch-fetch EmailMessage rows for any PA that references an email
+    // (by Gmail id) AND for any EMAIL-source AttentionItem (by EmailMessage id).
     const gmailIdsNeeded = new Set<string>();
     for (const pa of pendingActions) {
       const args = safeRecord(pa.toolArgs);
       const emailId = extractEmailId(pa.toolName, args);
       if (emailId) gmailIdsNeeded.add(emailId);
     }
-    const emailRows = gmailIdsNeeded.size
-      ? await prisma.emailMessage.findMany({
-          where: { userId, gmailId: { in: [...gmailIdsNeeded] } },
-          select: { id: true, gmailId: true, subject: true, from: true, snippet: true },
-        })
-      : [];
-    const emailByGmailId = new Map(emailRows.map((e) => [e.gmailId, e]));
+    const emailRowIds = items.filter((row) => row.source === "EMAIL").map((row) => row.sourceId);
+
+    const [emailRowsByGmailId, emailRowsById] = await Promise.all([
+      gmailIdsNeeded.size
+        ? prisma.emailMessage.findMany({
+            where: { userId, gmailId: { in: [...gmailIdsNeeded] } },
+            select: { id: true, gmailId: true, subject: true, from: true, snippet: true },
+          })
+        : Promise.resolve([] as never[]),
+      emailRowIds.length
+        ? prisma.emailMessage.findMany({
+            where: { userId, id: { in: emailRowIds } },
+            select: { id: true, gmailId: true, subject: true, from: true, snippet: true },
+          })
+        : Promise.resolve([] as never[]),
+    ]);
+    const emailByGmailId = new Map(emailRowsByGmailId.map((e) => [e.gmailId, e]));
+    const emailById = new Map(emailRowsById.map((e) => [e.id, e]));
 
     // Batch-fetch trust scores for every distinct sender address surfaced
     // by this page. One round-trip; the bulk helper returns a Map keyed by
     // normalized lowercase email.
     const senderAddrs = new Set<string>();
-    for (const e of emailRows) {
+    for (const e of emailRowsByGmailId) {
+      const addr = senderEmail(e.from);
+      if (addr) senderAddrs.add(addr);
+    }
+    for (const e of emailRowsById) {
       const addr = senderEmail(e.from);
       if (addr) senderAddrs.add(addr);
     }
@@ -245,6 +261,31 @@ export async function firewallRoutes(app: FastifyInstance) {
               item.href = `/email/${email.id}`;
             }
           }
+        }
+      }
+
+      // Enrich EMAIL items directly from EmailMessage. sourceId is the
+      // EmailMessage.id, set by poc-judge when the email syncs.
+      if (row.source === "EMAIL") {
+        const email = emailById.get(row.sourceId);
+        if (email) {
+          const addr = senderEmail(email.from);
+          const trust = addr ? trustMap.get(addr) : null;
+          item.email = {
+            emailDbId: email.id,
+            subject: email.subject ?? null,
+            from: email.from ?? null,
+            snippet: email.snippet ?? null,
+            trust: trust
+              ? {
+                  badge: trust.badge,
+                  label: trust.label,
+                  onTimeRate: trust.onTimeRate,
+                  totalCount: trust.totalCount,
+                }
+              : null,
+          };
+          item.href = `/email/${email.id}`;
         }
       }
 

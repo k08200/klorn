@@ -763,3 +763,115 @@ export async function deleteAttentionForCommitments(commitmentIds: string[]): Pr
     console.warn("[attention-mirror] deleteAttentionForCommitments failed", err);
   }
 }
+
+// ─── POC firewall: EmailMessage → AttentionItem ────────────────────────────
+//
+// Every email the poc-judge classifies gets mirrored to an AttentionItem
+// keyed on (source=EMAIL, sourceId=EmailMessage.id). The existing firewall
+// route already groups items by tier, so emails appear in the same SILENT/
+// QUEUE/PUSH/AUTO buckets as PendingActions, with the email's own subject
+// and sender shown via the EMAIL source-specific join below.
+//
+// Idempotent — re-running for the same email simply overwrites the tier
+// and tier reason. Override via POST /api/inbox/firewall/:id continues to
+// work because the route mutates the AttentionItem row directly.
+
+export interface EmailJudgementLike {
+  tier: "SILENT" | "QUEUE" | "PUSH" | "AUTO";
+  reason: string;
+  features?: {
+    confidence: number;
+    senderTrust: number;
+    reversibility: number;
+    urgency: number;
+  };
+  source?: "fast-path" | "llm" | "keyword-fallback";
+}
+
+export interface EmailLike {
+  id: string;
+  userId: string;
+  from: string;
+  subject: string;
+  snippet: string | null;
+  receivedAt: Date;
+}
+
+function emailTitleFor(email: EmailLike): string {
+  const subject = email.subject?.trim() || "(no subject)";
+  return subject.length > TITLE_MAX_LEN ? `${subject.slice(0, TITLE_MAX_LEN - 1)}…` : subject;
+}
+
+// Map 4 features to a 0-100 priority so the firewall queue can sort
+// stably even when many emails share the same tier. Higher urgency and
+// higher confidence float to the top.
+function emailPriority(j: EmailJudgementLike): number {
+  const f = j.features;
+  if (!f) return 50;
+  const urgencyScore = f.urgency * 60;
+  const confidenceScore = f.confidence * 30;
+  const trustScore = f.senderTrust * 10;
+  return Math.round(Math.min(100, Math.max(1, urgencyScore + confidenceScore + trustScore)));
+}
+
+export async function upsertAttentionForEmailJudgement(
+  email: EmailLike,
+  judgement: EmailJudgementLike,
+): Promise<void> {
+  try {
+    await upsertAttentionItem({
+      where: { source_sourceId: { source: "EMAIL", sourceId: email.id } },
+      create: {
+        userId: email.userId,
+        source: "EMAIL",
+        sourceId: email.id,
+        type: "REPLY_NEEDED",
+        status: "OPEN",
+        priority: emailPriority(judgement),
+        // Confidence on the classification itself (not the underlying ground
+        // truth). Used by callers that surface "the model is unsure" UI.
+        confidence: judgement.features?.confidence ?? 0.5,
+        autonomyLevel: AUTOPILOT_LEVEL.OBSERVE,
+        title: emailTitleFor(email),
+        body: email.snippet ?? null,
+        suggestedAction: null,
+        costOfIgnoring: null,
+        evidence: evidence("EMAIL", email.id, [
+          { label: "From", value: email.from },
+          { label: "Received", value: email.receivedAt.toISOString() },
+          { label: "Judged by", value: judgement.source ?? "unknown" },
+        ]),
+        surfacedAt: email.receivedAt,
+        tier: judgement.tier,
+        tierReason: judgement.reason,
+      },
+      update: {
+        status: "OPEN",
+        priority: emailPriority(judgement),
+        confidence: judgement.features?.confidence ?? 0.5,
+        title: emailTitleFor(email),
+        body: email.snippet ?? null,
+        evidence: evidence("EMAIL", email.id, [
+          { label: "From", value: email.from },
+          { label: "Received", value: email.receivedAt.toISOString() },
+          { label: "Judged by", value: judgement.source ?? "unknown" },
+        ]),
+        tier: judgement.tier,
+        tierReason: judgement.reason,
+      },
+    });
+  } catch (err) {
+    console.warn("[attention-mirror] upsert failed for Email", email.id, err);
+  }
+}
+
+export async function deleteAttentionForEmails(emailIds: string[]): Promise<void> {
+  if (emailIds.length === 0) return;
+  try {
+    await prisma.attentionItem.deleteMany({
+      where: { source: "EMAIL", sourceId: { in: emailIds } },
+    });
+  } catch (err) {
+    console.warn("[attention-mirror] deleteAttentionForEmails failed", err);
+  }
+}
