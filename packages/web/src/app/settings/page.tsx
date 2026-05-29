@@ -6,6 +6,7 @@ import AuthGuard from "../../components/auth-guard";
 import { useConfirm } from "../../components/confirm-dialog";
 import { FeedbackPolicyPanel } from "../../components/feedback-policy-panel";
 import { GoogleConnectRedirect } from "../../components/google-connect-redirect";
+import { NaverImapSection } from "../../components/naver-imap-section";
 import { OAuthErrorBanner } from "../../components/oauth-error-banner";
 import { ListSkeleton } from "../../components/skeleton";
 import { useToast } from "../../components/toast";
@@ -1478,6 +1479,11 @@ export default function SettingsPage() {
               )}
             </div>
           )}
+        </section>
+
+        {/* Naver Mail (IMAP) */}
+        <section className="mb-8">
+          <NaverImapSection />
         </section>
 
         {/* Manual Runs */}
