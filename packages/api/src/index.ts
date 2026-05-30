@@ -23,6 +23,7 @@ import { firewallRoutes } from "./routes/firewall.js";
 import { gmailPushRoutes } from "./routes/gmail-push.js";
 import { inboxRoutes } from "./routes/inbox.js";
 import { memoryRoutes } from "./routes/memory.js";
+import { naverImapRoutes } from "./routes/naver-imap.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { opsRoutes } from "./routes/ops.js";
 import { patternRoutes } from "./routes/patterns.js";
@@ -126,6 +127,7 @@ await app.register(automationRoutes, { prefix: "/api/automations" });
 await app.register(waitlistRoutes, { prefix: "/api/waitlist" });
 await app.register(adminRoutes, { prefix: "/api/admin" });
 await app.register(memoryRoutes, { prefix: "/api/memories" });
+await app.register(naverImapRoutes, { prefix: "/api/naver-imap" });
 await app.register(patternRoutes, { prefix: "/api/patterns" });
 await app.register(tokenUsageRoutes, { prefix: "/api/usage" });
 await app.register(skillRoutes, { prefix: "/api/skills" });
@@ -395,6 +397,16 @@ try {
     .catch((err) => {
       console.error("[STARTUP] automation-scheduler failed to start:", err);
       captureError(err, { tags: { context: "startup:automation-scheduler" } });
+    });
+
+  // Start Naver IMAP polling scheduler (5min interval per connected user)
+  import("./naver-imap-scheduler.js")
+    .then(({ startNaverImapScheduler }) => {
+      startNaverImapScheduler();
+    })
+    .catch((err) => {
+      console.error("[STARTUP] naver-imap-scheduler failed to start:", err);
+      captureError(err, { tags: { context: "startup:naver-imap-scheduler" } });
     });
 
   // Start autonomous LLM reasoning agent

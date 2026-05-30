@@ -20,6 +20,16 @@ model User {
   agentModel                String?
   openRouterApiKey          String?
   geminiApiKey              String?
+  // Naver IMAP connection (Korean ICP support).
+  // OAuth is intentionally skipped — Naver issues a separate "외부 메일
+  // 가져오기 비밀번호" the user generates in their Naver settings; we
+  // store the encrypted form so a DB leak doesn't expose the live IMAP
+  // password. Host defaults to imap.naver.com:993 (SSL) but is
+  // overridable for other IMAP providers in the future.
+  naverImapEmail            String?
+  naverImapPasswordCipher   String?
+  naverImapHost             String?
+  naverImapConnectedAt      DateTime?
   stripeId                  String?                    @unique
   emailVerified             Boolean                    @default(false)
   verifyToken               String?
