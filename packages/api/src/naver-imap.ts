@@ -22,6 +22,7 @@
  */
 
 import { ImapFlow } from "imapflow";
+import sanitizeHtml from "sanitize-html";
 import { upsertAttentionForEmailJudgement } from "./attention-mirror.js";
 import { decryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
@@ -127,15 +128,16 @@ function formatAddress(addr: ImapEnvelopeAddress | undefined): string {
 
 function snippetFromBody(buf: Buffer | undefined, max = 200): string | null {
   if (!buf) return null;
-  // Strip HTML coarsely, collapse whitespace, slice. The judge prompt
-  // never needs more than the first sentence or two.
-  const text = buf
-    .toString("utf8")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  // Strip HTML through sanitize-html (proper parser) rather than regex —
+  // CodeQL flags regex-based tag stripping as bad-tag-filter even when
+  // the output is never rendered. The judge prompt only needs the first
+  // sentence or two so we collapse whitespace and slice.
+  const stripped = sanitizeHtml(buf.toString("utf8"), {
+    allowedTags: [],
+    allowedAttributes: {},
+    disallowedTagsMode: "discard",
+  });
+  const text = stripped.replace(/\s+/g, " ").trim();
   return text.slice(0, max) || null;
 }
 
