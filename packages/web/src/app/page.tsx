@@ -293,6 +293,47 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section className="mx-auto max-w-6xl px-5 pb-16 pt-6 md:px-8 md:pb-24 md:pt-10">
+        <div className="mx-auto mb-8 max-w-2xl text-center">
+          <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-brand-gold">
+            Live demo
+          </p>
+          <h2 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">
+            Watch Klorn sort a real inbox.
+          </h2>
+          <p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-stone-400 md:text-base">
+            Every signal triaged into four tiers — push, queue, silent, and reversible
+            auto-handling. Drafts wait for your approval before anything leaves your hands.
+          </p>
+        </div>
+
+        <figure className="overflow-hidden rounded-xl border border-stone-600/70 bg-surface-elevated shadow-2xl shadow-black/40">
+          <div className="flex h-11 items-center gap-2 border-b border-stone-800 px-4">
+            <span className="h-2.5 w-2.5 rounded-full bg-stone-700" />
+            <span className="h-2.5 w-2.5 rounded-full bg-stone-700" />
+            <span className="h-2.5 w-2.5 rounded-full bg-stone-700" />
+            <span className="ml-4 text-xs font-medium text-stone-500">Klorn / Today</span>
+          </div>
+          <video
+            className="block aspect-video w-full bg-black"
+            autoPlay
+            muted
+            loop
+            playsInline
+            controls
+            preload="metadata"
+            poster="/klorn-demo-poster.jpg"
+            aria-label="Klorn walkthrough: an inbox is sorted into push, queue, silent, and auto-handled tiers"
+          >
+            <source src="/klorn-walkthrough.webm" type="video/webm" />
+            <source src="/klorn-walkthrough.mp4" type="video/mp4" />
+          </video>
+          <figcaption className="border-t border-stone-800 px-4 py-3 text-xs text-stone-500">
+            60-second walkthrough · recorded on a live build, May 2026
+          </figcaption>
+        </figure>
+      </section>
+
       <section className="mx-auto grid max-w-7xl gap-10 px-5 py-20 md:grid-cols-[0.82fr_1.18fr] md:px-8 md:py-28">
         <div>
           <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-brand-gold">
