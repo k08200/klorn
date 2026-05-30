@@ -75,7 +75,7 @@
 → `/settings`만 남기고 Google 연결 / 알림 / 승인 경계 / 데이터 삭제 4개 섹션만.
 
 ### API 라우트 (제거 대상)
-- `chat.ts`, `chat-pending-actions.ts`
+- `chat.ts`
 - `tasks.ts`, `notes.ts`, `reminders.ts`, `contacts.ts`
 - `files.ts`, `email-attachments.ts`
 - `work-graph.ts`
@@ -87,6 +87,9 @@
 - `sms.ts` (Twilio frozen)
 - `billing.ts`
 - `voice-profile.ts` (backend 보존 OK, route만 제거)
+
+### API 라우트 (IN scope — 명시적 유지)
+- `chat-pending-actions.ts` + Prisma `PendingAction` 모델 — **firewall AUTO tier가 실제로 실행되는 transition에 필수**. read path는 cached AttentionItem만 쓰고, action은 `/api/chat/pending-actions/:id/approve` 경유 explicit user transition으로만 실행됨 (read/reason/action 분리 원칙). dev.to 2026-05-28 reply에서 본 패턴을 그대로 유지함 — 회귀 방어는 `firewall-classifier-readpath.test.ts` 참고.
 
 ### Integration
 - Slack, Notion, iMessage, macOS control, Weather, News, Writer
