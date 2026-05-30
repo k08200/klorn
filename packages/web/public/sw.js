@@ -1,5 +1,5 @@
 // Klorn Service Worker — offline caching + push notification support
-const CACHE_NAME = "klorn-v1";
+const CACHE_NAME = "klorn-v2";
 const PRECACHE_URLS = ["/", "/chat", "/briefing", "/manifest.json"];
 
 // Install: precache shell
