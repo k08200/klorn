@@ -695,6 +695,32 @@
       transition: opacity 0.5s ease, transform 0.5s ease;
     }
     .reveal.in { opacity: 1; transform: translateY(0); }
+
+    /* ── Walkthrough demo section ─────────────── */
+    .demo-section { max-width: var(--max-w-narrow); }
+    .demo-section .section-eyebrow,
+    .demo-section .section-h { text-align: center; }
+    .demo-section .section-lead {
+      max-width: 720px;
+      margin-left: auto;
+      margin-right: auto;
+      text-align: center;
+    }
+    .demo-frame {
+      margin-top: 40px;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border-medium);
+      background: var(--surface-elevated);
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4);
+    }
+    .demo-frame video {
+      width: 100%;
+      display: block;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      background: var(--surface-canvas);
+    }
   </style>
 </head>
 <body>
@@ -827,6 +853,18 @@
           </div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- ── Walkthrough demo section ─────────────── -->
+  <section class="section demo-section" aria-label="Klorn walkthrough">
+    <p class="mono section-eyebrow">See it in action</p>
+    <h2 class="section-h">60 seconds. The full firewall.</h2>
+    <p class="section-lead">PUSH / QUEUE / SILENT / AUTO classification. Email + Calendar approval gate — never sent silently, locked by an invariant test. One-click override. Daily receipt.</p>
+    <div class="demo-frame">
+      <video autoplay muted loop playsinline preload="metadata" poster="/demo-poster.jpg">
+        <source src="/demo.webm" type="video/webm">
+      </video>
     </div>
   </section>
 
