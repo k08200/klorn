@@ -83,6 +83,31 @@ async function invalidateGoogleToken(
   token: { id: string; userId: string },
   reason: GoogleConnectionStatus["reason"],
 ): Promise<void> {
+  // Guard — never mutate the prod token row from a non-prod environment.
+  //
+  // Why: this function is called whenever decryptToken() throws, and the
+  // most common cause of that is a developer running a one-off script
+  // (or a CI job) that hits the *prod* DATABASE_URL with a *local*
+  // TOKEN_ENCRYPTION_KEY. The decrypt fails 100% of the time and the
+  // function used to wipe the prod row, forcing the founder to reconnect
+  // Google. Real cause was the env mismatch, not a stale token.
+  //
+  // Incident: 2026-06-01. A diagnostic script (klorn-briefing-prove.ts)
+  // hit prod with a local key and silently invalidated the founder's
+  // token at the moment of dogfood; google/status returned 500 and
+  // every dependent surface (Run agent now, briefing push, learned
+  // signals panel) broke for hours.
+  //
+  // Production keeps the original behaviour. Anywhere else we just log
+  // loudly and leave the row alone — let the env owner notice and fix
+  // their key, instead of breaking the real user.
+  if (process.env.NODE_ENV !== "production" && process.env.RENDER !== "true") {
+    console.warn(
+      `[GOOGLE] invalidateGoogleToken called from non-prod env for user ${token.userId} (reason=${reason}) — SKIPPING DB write to avoid corrupting prod token. Check your TOKEN_ENCRYPTION_KEY matches the DB you're pointed at.`,
+    );
+    return;
+  }
+
   await prisma.userToken
     .update({
       where: { id: token.id },
