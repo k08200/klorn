@@ -267,6 +267,53 @@ Do NOT notify the user. Do NOT ask for immediate attention. Do NOT call notify_u
   );
 }
 
+/**
+ * Should this notify_user call be dropped at the server before it ever
+ * becomes a notification + push? Exported so the rule can be unit-tested
+ * against the actual patterns seen in prod (notification-flood incident
+ * 2026-05-31: 3 identical "mark read finished" pushes within 1 second).
+ *
+ * Two categories:
+ *   - "noise":       newsletter / promo / marketing language the LLM
+ *                    misclassified as worth surfacing.
+ *   - "housekeeping": outcome of LOW-risk tools the user reviews in the
+ *                    daily receipt page — never warrants a push. The
+ *                    agent prompt also tells the LLM not to call here,
+ *                    but the server guard is the durable defense.
+ *
+ * Returns the reason string to log, or null when the notification
+ * should be allowed through.
+ */
+export function notificationSuppressionReason(args: {
+  title?: string | null;
+  message?: string | null;
+}): "noise" | "housekeeping" | null {
+  const title = args.title || "";
+  const message = args.message || "";
+  const combined = `${title} ${message}`.toLowerCase();
+
+  if (
+    /^\[새 메일\]/.test(title) ||
+    /newsletter|광고|marketing|promotion|unsubscribe|수신거부|digest|\[ad\]|\[광고\]|할인|coupon|\bsale\b|deal|welcome to |verify your |confirm your /.test(
+      combined,
+    )
+  ) {
+    return "noise";
+  }
+
+  if (
+    /^\s*\[?(?:klorn|eve|이브)\]?\s*action complete/i.test(title) ||
+    /^\s*action complete\b/i.test(title) ||
+    /\bmark read finished\b/i.test(combined) ||
+    /\bemails? classified\b/i.test(combined) ||
+    /\bclassify_emails finished\b/i.test(combined)
+  ) {
+    return "housekeeping";
+  }
+
+  return null;
+}
+
 function categoryForAgentNotification(category: unknown): NotifCategory {
   switch (category) {
     case "email":
@@ -364,7 +411,23 @@ Call tools DIRECTLY — the system will handle risk gating automatically.
 You MUST call tools directly. Do NOT use propose_action.
 LOW-risk tools execute instantly. MEDIUM/HIGH tools are automatically converted to approval proposals.
 Email replies are never sent silently in this build. send_email must become an approval proposal unless the server explicitly allows it.
-After LOW-risk execution, use notify_user to inform the user what you did.
+
+## Notification policy (STRICT — read carefully)
+
+Routine housekeeping is SILENT. The user reviews these in the daily receipt at /inbox/receipt — they DO NOT need a push for each one.
+
+Do NOT call notify_user after:
+- mark_read (the email is just less unread)
+- classify_emails (a background batch finished)
+- list_skills / execute_skill (internal lookups)
+- any tool whose outcome the user can see by opening the inbox or the receipt page
+
+Call notify_user ONLY when one of these is true:
+- (a) NEW INFORMATION the user can't see otherwise — e.g. generate_briefing produced today's briefing, a security alert was detected, a deadline was found in mail
+- (b) TIME-SENSITIVE — something needs the user's attention within hours
+- (c) A MEDIUM/HIGH tool was just approved and executed — the user explicitly opted in and should see the outcome
+
+If the only reason you'd call notify_user is "I just did something," DO NOT call it. The receipt page handles that.
 
 ## Secondary Tool: notify_user`,
         ) +
@@ -401,7 +464,7 @@ Prefer one high-confidence action over completing a checklist.
 When confidence is high:
 1. call create_event only if the meeting is not already on the calendar
 2. call send_email only to prepare an approval proposal for the reply
-3. call notify_user only when something was executed or genuinely needs attention
+3. call notify_user only when (a) a MEDIUM/HIGH tool actually executed and the outcome matters, or (b) the situation is time-sensitive enough that a push beats the user opening the receipt page. Routine "I read your mail" is NOT a reason.
 
 When confidence is low or the sender looks automated/no-reply, skip or create an approval proposal instead of executing.
 
@@ -798,25 +861,26 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
               args.category,
             );
           } else {
-            // Server-side guard against NOISE notifications. Even if the LLM
-            // misclassifies a newsletter/marketing/promo email as worth
-            // surfacing, we block the push here. Cheaper to drop a legit
-            // alert once than to burn user trust with every ad that lands.
-            const combined = `${args.title || ""} ${args.message || ""}`.toLowerCase();
-            const isNoise =
-              /^\[새 메일\]/.test(args.title || "") ||
-              /newsletter|광고|marketing|promotion|unsubscribe|수신거부|digest|\[ad\]|\[광고\]|할인|coupon|\bsale\b|deal|welcome to |verify your |confirm your /.test(
-                combined,
-              );
-            if (isNoise) {
+            // Server-side guards — see notificationSuppressionReason()
+            // for the rule. Two categories: marketing/promo "noise" and
+            // mark_read/classify_emails "housekeeping" the user reviews
+            // in the daily receipt page. Drop both before they hit push.
+            const suppression = notificationSuppressionReason({
+              title: args.title,
+              message: args.message,
+            });
+            if (suppression) {
               result = JSON.stringify({
                 skipped: true,
-                reason: "noise notification suppressed",
+                reason:
+                  suppression === "noise"
+                    ? "noise notification suppressed"
+                    : "housekeeping notification suppressed — user reviews these in the receipt",
               });
               await logAgentAction(
                 userId,
                 "skip",
-                `Noise suppressed: "${args.title}"`,
+                `${suppression === "noise" ? "Noise" : "Housekeeping"} suppressed: "${args.title}"`,
                 "notify_user",
                 args.category,
               );
