@@ -66,6 +66,35 @@ describe("notificationSuppressionReason — housekeeping", () => {
       }),
     ).toBe("housekeeping");
   });
+
+  it("drops empty Daily Briefing — 'No action needed' (prod 2026-05-31, founder dogfood)", () => {
+    expect(
+      notificationSuppressionReason({
+        title: "Daily Briefing Ready",
+        message: "No action needed.",
+      }),
+    ).toBe("housekeeping");
+  });
+
+  it("drops Daily Briefing — 'nothing to surface' phrasing", () => {
+    expect(
+      notificationSuppressionReason({
+        title: "Daily Briefing Ready",
+        message: "Nothing to surface today — your calendar is clear.",
+      }),
+    ).toBe("housekeeping");
+  });
+
+  it("PASSES Daily Briefing with real content (the CRAZY8 sale deadline case)", () => {
+    expect(
+      notificationSuppressionReason({
+        title: "Daily Briefing Ready",
+        message:
+          "The CRAZY8 sale deadline is the only active signal today — everything else is open for focus.",
+        notificationType: "briefing",
+      }),
+    ).toBeNull();
+  });
 });
 
 describe("notificationSuppressionReason — noise", () => {

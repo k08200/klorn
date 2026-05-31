@@ -93,6 +93,11 @@ export async function sendPushNotification(
   const suppression = notificationSuppressionReason({
     title: payload.title,
     message: payload.body,
+    // category is a routing/preference dimension; we co-opt it as the
+    // first-party surface hint so authored content (briefing) bypasses
+    // the noise heuristic. "daily_briefing" is the briefing path; map it
+    // to the policy's "briefing" type token.
+    notificationType: category === "daily_briefing" ? "briefing" : null,
   });
   if (suppression) {
     console.log(`[PUSH] Suppressed (${suppression}) for ${userId}: "${payload.title}"`);
