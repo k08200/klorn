@@ -13,6 +13,7 @@
 import webPush from "web-push";
 import { prisma } from "./db.js";
 import { isSafePushEndpoint } from "./is-safe-push-endpoint.js";
+import { notificationSuppressionReason } from "./notification-policy.js";
 import { type NotifCategory, shouldNotify } from "./notification-prefs.js";
 import {
   createPushDeliveryAttempt,
@@ -80,6 +81,25 @@ export async function sendPushNotification(
   payload: { title: string; body: string; url?: string; notificationId?: string },
   category: NotifCategory = "system",
 ): Promise<PushSendSummary> {
+  // First line of defense: drop housekeeping + noise pushes BEFORE any
+  // other check. Six other modules call this function (briefing,
+  // reminder-scheduler, automation-scheduler, proactive-actions,
+  // background, autonomous-agent). Patching each one is whack-a-mole;
+  // the policy check belongs here.
+  //
+  // Anchored to the 2026-05-31 prod incident: 5 identical phone pushes
+  // ("[Klorn] Action complete — mark read finished") from the LOW-risk
+  // auto-exec path that PR #456's notify_user-tool guard did not cover.
+  const suppression = notificationSuppressionReason({
+    title: payload.title,
+    message: payload.body,
+  });
+  if (suppression) {
+    console.log(`[PUSH] Suppressed (${suppression}) for ${userId}: "${payload.title}"`);
+    await recordSkipped(userId, payload.title, category, `policy_${suppression}`);
+    return skipped(`policy_${suppression}`);
+  }
+
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
     console.log(`[PUSH] Skipped — VAPID keys not configured`);
     await recordSkipped(userId, payload.title, category, "missing_vapid_keys");

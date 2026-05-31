@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { notificationSuppressionReason } from "../autonomous-agent.js";
+import { notificationSuppressionReason } from "../notification-policy.js";
 
 describe("notificationSuppressionReason — housekeeping", () => {
   it("drops the exact prod-incident title", () => {
@@ -54,6 +54,15 @@ describe("notificationSuppressionReason — housekeeping", () => {
       notificationSuppressionReason({
         title: "[Klorn] Mail prioritized",
         message: "12 emails classified, inbox refreshed.",
+      }),
+    ).toBe("housekeeping");
+  });
+
+  it("drops [Klorn] Mail prioritized — the classify_emails humanizer output (prod 2026-05-31)", () => {
+    expect(
+      notificationSuppressionReason({
+        title: "[Klorn] Mail prioritized",
+        message: "Inbox priority has been refreshed.",
       }),
     ).toBe("housekeeping");
   });

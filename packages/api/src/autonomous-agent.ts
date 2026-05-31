@@ -56,6 +56,7 @@ import { isNoReplyAddress, markAsRead } from "./gmail.js";
 import { loadMemoriesForPrompt } from "./memory.js";
 import { estimateModelCostUsd } from "./model-fallback.js";
 import { humanizeAutoExec } from "./notification-format.js";
+import { notificationSuppressionReason } from "./notification-policy.js";
 import type { NotifCategory } from "./notification-prefs.js";
 import { AGENT_MODEL, createCompletion } from "./openai.js";
 import { getFeedbackPolicyContextForPrompt } from "./policy-extraction.js";
@@ -265,53 +266,6 @@ Do NOT notify the user. Do NOT ask for immediate attention. Do NOT call notify_u
 
 ## Message Format for Proposals`,
   );
-}
-
-/**
- * Should this notify_user call be dropped at the server before it ever
- * becomes a notification + push? Exported so the rule can be unit-tested
- * against the actual patterns seen in prod (notification-flood incident
- * 2026-05-31: 3 identical "mark read finished" pushes within 1 second).
- *
- * Two categories:
- *   - "noise":       newsletter / promo / marketing language the LLM
- *                    misclassified as worth surfacing.
- *   - "housekeeping": outcome of LOW-risk tools the user reviews in the
- *                    daily receipt page — never warrants a push. The
- *                    agent prompt also tells the LLM not to call here,
- *                    but the server guard is the durable defense.
- *
- * Returns the reason string to log, or null when the notification
- * should be allowed through.
- */
-export function notificationSuppressionReason(args: {
-  title?: string | null;
-  message?: string | null;
-}): "noise" | "housekeeping" | null {
-  const title = args.title || "";
-  const message = args.message || "";
-  const combined = `${title} ${message}`.toLowerCase();
-
-  if (
-    /^\[새 메일\]/.test(title) ||
-    /newsletter|광고|marketing|promotion|unsubscribe|수신거부|digest|\[ad\]|\[광고\]|할인|coupon|\bsale\b|deal|welcome to |verify your |confirm your /.test(
-      combined,
-    )
-  ) {
-    return "noise";
-  }
-
-  if (
-    /^\s*\[?(?:klorn|eve|이브)\]?\s*action complete/i.test(title) ||
-    /^\s*action complete\b/i.test(title) ||
-    /\bmark read finished\b/i.test(combined) ||
-    /\bemails? classified\b/i.test(combined) ||
-    /\bclassify_emails finished\b/i.test(combined)
-  ) {
-    return "housekeeping";
-  }
-
-  return null;
 }
 
 function categoryForAgentNotification(category: unknown): NotifCategory {
@@ -1303,36 +1257,54 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
             fnName,
           );
 
-          // Auto-notify user about automatic actions taken
+          // Auto-notify user about automatic actions taken.
+          //
+          // 2026-05-31 fix: humanizeAutoExec produces titles like
+          // "[Klorn] Action complete" and bodies like "mark read finished"
+          // for housekeeping tools. Those flood the bell — and previously
+          // also flooded phone push. PR #456 dropped them from the
+          // notify_user tool path; this branch is the OTHER path that
+          // bypassed that guard. Apply the same rule here so the bell
+          // and the in-app surface stay quiet for housekeeping work, the
+          // same way the daily receipt page already does.
           if (isSafeWrite && isAutoMode) {
             const { autoTitle, autoMessage } = humanizeAutoExec(fnName, args);
-            // Dedicated list pages (/calendar, /email, /tasks, /notes) were
-            // removed in Week 1. Every auto-executed action now opens the
-            // chat so the user can review or continue the thread.
-            const autoLink = "/chat";
-            const notification = await (prisma.notification.create as Function)({
-              data: {
-                userId,
+            const suppression = notificationSuppressionReason({
+              title: autoTitle,
+              message: autoMessage,
+            });
+            if (suppression) {
+              console.log(
+                `[AGENT] Auto-executed ${fnName} for ${userId} — ${suppression} notification suppressed`,
+              );
+            } else {
+              // Dedicated list pages (/calendar, /email, /tasks, /notes) were
+              // removed in Week 1. Every auto-executed action now opens the
+              // chat so the user can review or continue the thread.
+              const autoLink = "/chat";
+              const notification = await (prisma.notification.create as Function)({
+                data: {
+                  userId,
+                  type: "insight",
+                  title: autoTitle,
+                  message: autoMessage,
+                  link: autoLink,
+                },
+              });
+              pushNotification(userId, {
+                id: notification.id,
                 type: "insight",
                 title: autoTitle,
                 message: autoMessage,
+                createdAt: notification.createdAt.toISOString(),
                 link: autoLink,
-              },
-            });
-            pushNotification(userId, {
-              id: notification.id,
-              type: "insight",
-              title: autoTitle,
-              message: autoMessage,
-              createdAt: notification.createdAt.toISOString(),
-              link: autoLink,
-            });
+              });
 
-            // No phone push for LOW-risk auto-exec — the DB notification above
-            // keeps the bell badge updating, but we no longer ring the phone
-            // for every tool call. A single cycle that updates N tasks used
-            // to fire N pushes in one second (see 2026-04-20 dogfood logs).
-            console.log(`[AGENT] Auto-executed ${fnName} for ${userId}`);
+              // No phone push for LOW-risk auto-exec — the DB notification above
+              // keeps the bell badge updating, but we no longer ring the phone
+              // for every tool call.
+              console.log(`[AGENT] Auto-executed ${fnName} for ${userId}`);
+            }
           }
         }
 
