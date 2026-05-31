@@ -14,18 +14,22 @@ export const metadata: Metadata = {
   description:
     "Klorn filters mail, calendar, and AI signals into one clear decision queue — with approval before any action.",
   manifest: "/manifest.json",
+  metadataBase: new URL("https://app.klorn.ai"),
   openGraph: {
     title: "Klorn — The clear signal worth acting on",
     description:
       "Other AI agents act. Klorn helps you decide what's worth acting on — with evidence and approval before anything leaves your hands.",
     siteName: "Klorn",
+    url: "https://app.klorn.ai/",
     type: "website",
+    images: [{ url: "/brand/og-image.png", width: 1200, height: 630 }],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "Klorn — The clear signal worth acting on",
     description:
       "The approval layer for AI agents. Mail, calendar, and signals filtered into one clear decision queue.",
+    images: ["/brand/og-image.png"],
   },
   appleWebApp: {
     capable: true,
