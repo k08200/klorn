@@ -1,9 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" fill="none">
-  <rect width="192" height="192" rx="42" fill="#101318"/>
-  <path d="M39 126C63 84 95 55 148 41C127 63 118 83 116 110C93 111 70 116 39 126Z" fill="#F5F1E8"/>
-  <path d="M39 126C71 115 94 111 116 110C114 127 119 142 132 157C95 151 64 141 39 126Z" fill="#FF6B4A"/>
-  <path d="M49 65C79 50 113 42 148 41C97 56 66 84 39 126C43 106 46 84 49 65Z" fill="#F5F1E8"/>
-  <path d="M55 79C78 62 106 50 148 41C117 58 98 78 86 103C71 108 56 114 39 126C46 109 51 92 55 79Z" fill="#FF6B4A"/>
-  <path d="M40 126C64 141 95 151 132 157C113 139 105 122 108 103C92 112 70 119 40 126Z" fill="#F5F1E8" fill-opacity=".92"/>
-  <circle cx="147" cy="41" r="10" fill="#7DD3FC"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0a1628"/>
+  <text x="256" y="378"
+        font-family="'Geist','Inter Tight',Inter,system-ui,sans-serif"
+        font-size="360" font-weight="600" letter-spacing="-0.055em"
+        fill="#f0e9d8" text-anchor="middle">k</text>
 </svg>
