@@ -90,7 +90,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <img src="/brand/mark.svg?v=flow-5" alt="" className="h-6 w-6" />
+          <img src="/brand/mark.svg?v=navy1" alt="" className="h-6 w-6" />
           <div className="min-w-0">
             <p className="text-sm font-semibold leading-none text-stone-100">Klorn</p>
             <p
@@ -118,7 +118,7 @@ function SessionTransition({ label }: { label: string }) {
       aria-live="polite"
     >
       <div className="flex flex-col items-center gap-4 text-center">
-        <img src="/brand/mark.svg?v=flow-5" alt="" className="h-10 w-10" />
+        <img src="/brand/mark.svg?v=navy1" alt="" className="h-10 w-10" />
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-300 border-t-transparent" />
         <p className="text-sm text-stone-400">{label}...</p>
       </div>
