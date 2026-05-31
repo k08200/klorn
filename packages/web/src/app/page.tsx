@@ -1,7 +1,16 @@
 import Link from "next/link";
 import LandingRedirect from "../components/landing-redirect";
 
-type IconName = "arrow" | "compass" | "graph" | "shield" | "thread" | "github" | "x" | "mail";
+type IconName =
+  | "arrow"
+  | "compass"
+  | "graph"
+  | "shield"
+  | "thread"
+  | "github"
+  | "x"
+  | "mail"
+  | "slack";
 
 const decisionCards = [
   {
@@ -200,13 +209,27 @@ function Icon({ type, className = "" }: { type: IconName; className?: string }) 
       );
     case "github":
       return (
-        <svg aria-hidden="true" className={className} width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <svg
+          aria-hidden="true"
+          className={className}
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
           <path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.16-.02-2.1-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.02 11.02 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.8-.01 3.18 0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z" />
         </svg>
       );
     case "x":
       return (
-        <svg aria-hidden="true" className={className} width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+        <svg
+          aria-hidden="true"
+          className={className}
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
           <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.66l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z" />
         </svg>
       );
@@ -215,6 +238,19 @@ function Icon({ type, className = "" }: { type: IconName; className?: string }) 
         <svg aria-hidden="true" {...props}>
           <rect x="3" y="5" width="18" height="14" rx="2" />
           <path d="m3.5 7 8.5 6 8.5-6" />
+        </svg>
+      );
+    case "slack":
+      return (
+        <svg
+          aria-hidden="true"
+          className={className}
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" />
         </svg>
       );
   }
@@ -522,6 +558,15 @@ export default function LandingPage() {
                 className="inline-flex h-10 w-10 items-center justify-center rounded-md transition hover:bg-white/[0.06] hover:text-stone-200"
               >
                 <Icon type="mail" className="h-5 w-5" />
+              </a>
+              <a
+                href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg"
+                target="_blank"
+                rel="noreferrer noopener"
+                aria-label="Join the Klorn Slack"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-md transition hover:bg-white/[0.06] hover:text-stone-200"
+              >
+                <Icon type="slack" className="h-[18px] w-[18px]" />
               </a>
             </div>
             <span className="hidden h-4 w-px bg-white/10 md:block" />
