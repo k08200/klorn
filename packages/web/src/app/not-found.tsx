@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function NotFound() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-[#0f1115] px-6 text-center text-stone-100">
-      <img src="/brand/mark.svg?v=navy1" alt="" className="mb-6 h-10 w-10" />
+      <img src="/brand/mark.svg?v=cres1" alt="" className="mb-6 h-10 w-10" />
       <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.18em] text-amber-300">
         Page not found
       </p>
