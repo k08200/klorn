@@ -110,7 +110,7 @@ export default function Sidebar({
           className="flex items-center gap-2 rounded-lg px-1 py-1 text-sm font-semibold text-stone-100 transition hover:text-white"
           onClick={onMobileClose}
         >
-          <img src="/brand/mark.svg?v=flow-5" alt="" className="h-7 w-7" />
+          <img src="/brand/mark.svg?v=navy1" alt="" className="h-7 w-7" />
           <span>
             <span className="block leading-none">Klorn</span>
             <span className="mt-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-stone-500">
