@@ -1,9 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <rect width="512" height="512" fill="#101318"/>
-  <path d="M104 332C169 223 253 145 394 108C339 167 314 220 309 291C249 292 188 305 104 332Z" fill="#F5F1E8"/>
-  <path d="M103 333C188 304 249 292 309 291C304 337 316 378 350 418C251 401 171 375 103 333Z" fill="#FF6B4A"/>
-  <path d="M129 173C210 133 299 111 394 108C258 148 176 223 104 332C114 279 122 222 129 173Z" fill="#F5F1E8"/>
-  <path d="M147 210C208 164 282 134 394 108C312 152 260 206 228 274C188 285 148 302 104 332C122 286 136 246 147 210Z" fill="#FF6B4A"/>
-  <path d="M106 332C171 375 251 401 350 418C299 371 278 326 287 273C245 296 187 315 106 332Z" fill="#F5F1E8" fill-opacity=".92"/>
-  <circle cx="390" cy="107" r="28" fill="#7DD3FC"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Maskable: full-bleed navy, 'k' kept inside the ~80% safe zone. -->
+  <rect width="512" height="512" fill="#0a1628"/>
+  <text x="256" y="358"
+        font-family="'Geist','Inter Tight',Inter,system-ui,sans-serif"
+        font-size="300" font-weight="600" letter-spacing="-0.055em"
+        fill="#f0e9d8" text-anchor="middle">k</text>
 </svg>

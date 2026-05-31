@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <rect width="512" height="512" rx="112" fill="#F5F0E8"/>
-  <path d="M314 118H386V286C386 359 336 405 260 405C190 405 142 368 130 306L198 286C207 323 229 342 263 342C296 342 314 320 314 281V118Z" fill="#151515"/>
-  <path d="M154 119H270V183H154V119Z" fill="#151515"/>
-  <path d="M120 256H252" stroke="#C7A46A" stroke-width="22" stroke-linecap="round"/>
-  <path d="M120 256H208" stroke="#151515" stroke-opacity=".16" stroke-width="22" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0a1628"/>
+  <text x="256" y="378"
+        font-family="'Geist','Inter Tight',Inter,system-ui,sans-serif"
+        font-size="360" font-weight="600" letter-spacing="-0.055em"
+        fill="#f0e9d8" text-anchor="middle">k</text>
 </svg>
