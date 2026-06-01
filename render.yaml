@@ -9,6 +9,7 @@ services:
       pnpm install --frozen-lockfile --prod=false &&
       cd packages/core && pnpm build &&
       cd ../api && npx prisma generate && pnpm build
+    preDeployCommand: cd packages/api && npx prisma migrate deploy
     startCommand: cd packages/api && pnpm start:prod
     envVars:
       - key: NODE_VERSION
