@@ -85,7 +85,7 @@ const briefingSentToday = new Map<string, string>(); // userId -> date string
 let lastWatchRenewalAt = 0;
 
 /** DB-based check: did we already send a briefing notification today? */
-async function hasBriefingBeenSentToday(userId: string, timeZone: string): Promise<boolean> {
+export async function hasBriefingBeenSentToday(userId: string, timeZone: string): Promise<boolean> {
   const today = localDayUtcRange(new Date(), timeZone);
   const existing = await prisma.notification.findFirst({
     where: {
