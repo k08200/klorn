@@ -19,6 +19,7 @@
 import type { AttentionStatus, AttentionType } from "@prisma/client";
 import { getToolRisk } from "./agent-logic.js";
 import { AUTOPILOT_LEVEL, type AutopilotLevel } from "./agent-mode.js";
+import { computeAttentionInputHash } from "./attention-input-hash.js";
 import { prisma } from "./db.js";
 import { getSuppressionSet, isSuppressed } from "./feedback-adaptor.js";
 
@@ -794,6 +795,12 @@ export interface EmailLike {
   from: string;
   subject: string;
   snippet: string | null;
+  // Labels participate in the classification decision (CATEGORY_PROMOTIONS
+  // is one of the fast-path SILENT triggers, see poc-judge.ts), so they
+  // must be part of the content-addressed hash. Callers that don't know
+  // the label set yet should pass [] explicitly rather than relying on
+  // an undefined default — null vs [] would invalidate every legacy row.
+  labels: string[];
   receivedAt: Date;
 }
 
@@ -818,6 +825,17 @@ export async function upsertAttentionForEmailJudgement(
   email: EmailLike,
   judgement: EmailJudgementLike,
 ): Promise<void> {
+  // Content-addressed classification — see attention-input-hash.ts.
+  // Same bytes that fed the classifier are the bytes we hash so any
+  // post-decision mutation invalidates the cached tier at read time.
+  const inputHash = computeAttentionInputHash({
+    from: email.from,
+    subject: email.subject,
+    snippet: email.snippet,
+    labels: email.labels,
+  });
+  const inputHashAt = new Date();
+
   try {
     await upsertAttentionItem({
       where: { source_sourceId: { source: "EMAIL", sourceId: email.id } },
@@ -844,6 +862,8 @@ export async function upsertAttentionForEmailJudgement(
         surfacedAt: email.receivedAt,
         tier: judgement.tier,
         tierReason: judgement.reason,
+        inputHash,
+        inputHashAt,
       },
       update: {
         status: "OPEN",
@@ -858,6 +878,8 @@ export async function upsertAttentionForEmailJudgement(
         ]),
         tier: judgement.tier,
         tierReason: judgement.reason,
+        inputHash,
+        inputHashAt,
       },
     });
   } catch (err) {

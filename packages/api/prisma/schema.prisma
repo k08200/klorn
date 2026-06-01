@@ -697,6 +697,15 @@ model AttentionItem {
   tier       String? // "SILENT" | "QUEUE" | "PUSH" | "AUTO"
   tierReason String? // why this tier was chosen
 
+  // Content-addressed classification. Hash of the decision-relevant input
+  // bytes (from, subject, snippet, labels) at the moment tier was decided.
+  // Read paths must re-hash the current input and compare; mismatch means
+  // the input was mutated after classification and the cached tier is
+  // stale (silent re-invocation risk, see dev.to thread + content-hash
+  // doctrine in attention-input-hash.ts).
+  inputHash   String? // sha256 hex, 64 chars
+  inputHashAt DateTime? // when the hash was computed
+
   surfacedAt      DateTime  @default(now())
   resolvedAt      DateTime?
   snoozedUntil    DateTime?

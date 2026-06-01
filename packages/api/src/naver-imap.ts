@@ -266,6 +266,7 @@ export async function syncNaverImap(args: SyncArgs): Promise<SyncResult> {
                   from,
                   subject,
                   snippet,
+                  labels,
                   receivedAt,
                 },
                 judgement,
