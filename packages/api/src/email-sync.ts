@@ -377,6 +377,7 @@ async function persistGmailEmail(
           from: email.from,
           subject: email.subject,
           snippet: email.snippet,
+          labels: email.labels,
           receivedAt: email.receivedAt,
         },
         judgement,
