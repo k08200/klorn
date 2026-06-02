@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
-import { useAuth } from "../../../lib/auth";
 import { apiFetch } from "../../../lib/api";
+import { useAuth } from "../../../lib/auth";
 import { captureClientError } from "../../../lib/sentry";
 
 type Readiness = "ready" | "watch" | "needs_review";
