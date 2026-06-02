@@ -18,7 +18,12 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const searchParams = useSearchParams();
+  // Honor ?mode=register so external CTAs (landing "Get started", DM links)
+  // can land directly on the sign-up tab instead of the default login tab.
+  const initialMode: "login" | "register" =
+    searchParams.get("mode") === "register" ? "register" : "login";
+  const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -26,7 +31,6 @@ function LoginForm() {
   const { login, register, user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const nextPath = safeNextPath(searchParams.get("next"));
 
   // Server controls whether sign-up is open. When BETA_GATE_ENABLED is on,
