@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { EveSignalField } from "../../components/brand-visuals";
 import { apiFetch, startGoogleConnect } from "../../lib/api";
+import { useAuth } from "../../lib/auth";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 
@@ -44,6 +45,10 @@ export default function CalendarPage() {
 
 function CalendarView() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  // Always have a deterministic IANA zone in hand — never rely on browser
+  // default (iOS PWA has been observed to fall back to UTC).
+  const userTimezone = user?.timezone ?? "Asia/Seoul";
   const [error, setError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
@@ -112,9 +117,9 @@ function CalendarView() {
   const syncing = syncMutation.isPending;
   const syncNow = () => syncMutation.mutate();
 
-  const groups = groupByDay(events);
-  const todayCount =
-    groups.find((group) => group.key === dayKeyFor(new Date()))?.events.length ?? 0;
+  const groups = groupByDay(events, userTimezone);
+  const todayKey = dayKeyForInZone(new Date(), userTimezone);
+  const todayCount = groups.find((group) => group.key === todayKey)?.events.length ?? 0;
   const nextEvent = events
     .map((event) => ({ event, start: new Date(event.startTime) }))
     .filter(({ start }) => start.getTime() >= Date.now())
@@ -154,7 +159,7 @@ function CalendarView() {
             <CalendarStat label="Today" value={todayCount} />
             <CalendarStat
               label="Next"
-              value={nextEvent ? formatTime(new Date(nextEvent.startTime)) : "-"}
+              value={nextEvent ? formatTime(new Date(nextEvent.startTime), userTimezone) : "-"}
             />
           </div>
           {nextEvent && (
@@ -235,7 +240,7 @@ function CalendarView() {
               </h2>
               <ul className="space-y-2 mt-2">
                 {g.events.map((ev) => (
-                  <EventRow key={ev.id} event={ev} />
+                  <EventRow key={ev.id} event={ev} timeZone={userTimezone} />
                 ))}
               </ul>
             </section>
@@ -257,14 +262,16 @@ function CalendarStat({ label, value }: { label: string; value: number | string 
   );
 }
 
-function EventRow({ event }: { event: CalendarEvent }) {
+function EventRow({ event, timeZone }: { event: CalendarEvent; timeZone: string }) {
   const [prepOpen, setPrepOpen] = useState(false);
   const [prepLoading, setPrepLoading] = useState(false);
   const [prep, setPrep] = useState<MeetingPrepPack | null>(null);
   const [prepError, setPrepError] = useState<string | null>(null);
   const start = new Date(event.startTime);
   const end = new Date(event.endTime);
-  const timeLabel = event.allDay ? "All day" : `${formatTime(start)}–${formatTime(end)}`;
+  const timeLabel = event.allDay
+    ? "All day"
+    : `${formatTime(start, timeZone)}–${formatTime(end, timeZone)}`;
 
   const togglePrep = async () => {
     if (prepOpen) {
@@ -456,48 +463,62 @@ function readinessClass(readiness: MeetingPrepPack["readiness"]): string {
   }
 }
 
-function formatTime(d: Date): string {
+// 24-hour format keeps "13:00" unambiguous (the AM/PM split has been a
+// dogfood pain point — "04:00 AM" in the calendar looked like 4 in the
+// morning when the underlying event was 13:00 KST). The timezone arg is
+// the user's stored IANA zone, NOT the browser default.
+function formatTime(d: Date, timeZone: string): string {
   return d.toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
+    timeZone,
   });
 }
 
-function groupByDay(events: CalendarEvent[]): DayGroup[] {
+// Day grouping must also respect the user's timezone — otherwise an event
+// at 23:30 KST stored as 14:30 UTC ends up grouped under the wrong local
+// day (the browser would call it "today" while the user calls it "tomorrow").
+function dayKeyForInZone(d: Date, timeZone: string): string {
+  // en-CA returns YYYY-MM-DD, which is exactly the key shape we want and is
+  // stable across locales.
+  return d.toLocaleDateString("en-CA", { timeZone });
+}
+
+function groupByDay(events: CalendarEvent[], timeZone: string): DayGroup[] {
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const tomorrow = new Date(today.getTime() + 86400000);
+  const todayKey = dayKeyForInZone(now, timeZone);
+  const tomorrowKey = dayKeyForInZone(new Date(now.getTime() + 86400000), timeZone);
 
   const groups = new Map<string, DayGroup>();
   for (const ev of events) {
     const d = new Date(ev.startTime);
-    const dayKey = dayKeyFor(d);
+    const dayKey = dayKeyForInZone(d, timeZone);
     if (!groups.has(dayKey)) {
-      groups.set(dayKey, { key: dayKey, label: dayLabel(d, today, tomorrow), events: [] });
+      groups.set(dayKey, {
+        key: dayKey,
+        label: dayLabel(d, dayKey, todayKey, tomorrowKey, timeZone),
+        events: [],
+      });
     }
     groups.get(dayKey)?.events.push(ev);
   }
   return [...groups.values()];
 }
 
-function dayKeyFor(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function dayLabel(d: Date, today: Date, tomorrow: Date): string {
-  if (sameDay(d, today)) return "Today";
-  if (sameDay(d, tomorrow)) return "Tomorrow";
+function dayLabel(
+  d: Date,
+  dayKey: string,
+  todayKey: string,
+  tomorrowKey: string,
+  timeZone: string,
+): string {
+  if (dayKey === todayKey) return "Today";
+  if (dayKey === tomorrowKey) return "Tomorrow";
   return d.toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
     weekday: "short",
+    timeZone,
   });
-}
-
-function sameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
 }

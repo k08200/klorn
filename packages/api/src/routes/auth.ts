@@ -349,6 +349,11 @@ export function authRoutes(app: FastifyInstance) {
           name: user.name,
           plan: user.plan,
           role: user.role,
+          // Stored IANA timezone (User.timezone, default "Asia/Seoul").
+          // Surfaced so the web client can render calendar/briefing times
+          // in the user's intended zone instead of the browser default
+          // (which can disagree — e.g., iOS PWA falling back to UTC).
+          timezone: (user as unknown as { timezone?: string | null }).timezone ?? "Asia/Seoul",
           googleConnected: googleStatus.connected,
           googleNeedsReconnect: googleStatus.needsReconnect,
         },
