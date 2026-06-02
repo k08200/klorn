@@ -16,9 +16,11 @@
  */
 
 import type { FastifyInstance } from "fastify";
+import { checkAttentionInputHash } from "../attention-input-hash.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { senderEmail } from "../notification-format.js";
+import { captureError } from "../sentry.js";
 import { getTrustScoresBulk } from "../trust-score.js";
 
 type Tier = "SILENT" | "QUEUE" | "PUSH" | "CALL" | "AUTO";
@@ -83,6 +85,13 @@ interface FirewallItem {
   toolArgs?: Record<string, unknown>;
   email?: EmailContext;
   href?: string; // where the firewall card should link on click
+  // True iff the stored AttentionItem.inputHash does NOT match a fresh hash
+  // of the email's current bytes (from/subject/snippet/labels). Means the
+  // input was mutated after classification and the cached tier may be
+  // stale. Soft signal — the row is still shown, but the UI can render
+  // a "stale, re-classifying" badge and clients shouldn't trust the tier.
+  // See attention-input-hash.ts doctrine.
+  hashStale?: boolean;
 }
 
 interface FirewallResponse {
@@ -120,6 +129,8 @@ export async function firewallRoutes(app: FastifyInstance) {
     // Pull OPEN items only — resolved/dismissed don't belong in the live queue.
     // tier is nullable on AttentionItem because the migration backfill is
     // lazy; anything still null gets bucketed as QUEUE so it's visible.
+    // inputHash is also nullable (legacy rows pre-PR #468) and is verified
+    // soft-mode below; null hash short-circuits the check.
     const items = await (
       prisma.attentionItem as unknown as {
         findMany: (args: unknown) => Promise<
@@ -133,6 +144,7 @@ export async function firewallRoutes(app: FastifyInstance) {
             tierReason: string | null;
             priority: number;
             surfacedAt: Date;
+            inputHash: string | null;
           }>
         >;
       }
@@ -148,6 +160,7 @@ export async function firewallRoutes(app: FastifyInstance) {
         tierReason: true,
         priority: true,
         surfacedAt: true,
+        inputHash: true,
       },
       orderBy: [{ priority: "desc" }, { surfacedAt: "desc" }],
       take: 200,
@@ -186,7 +199,16 @@ export async function firewallRoutes(app: FastifyInstance) {
       emailRowIds.length
         ? prisma.emailMessage.findMany({
             where: { userId, id: { in: emailRowIds } },
-            select: { id: true, gmailId: true, subject: true, from: true, snippet: true },
+            // labels is needed for the hash-verify integration — it's one
+            // of the four hashed fields (see attention-input-hash.ts).
+            select: {
+              id: true,
+              gmailId: true,
+              subject: true,
+              from: true,
+              snippet: true,
+              labels: true,
+            },
           })
         : Promise.resolve([] as never[]),
     ]);
@@ -269,6 +291,35 @@ export async function firewallRoutes(app: FastifyInstance) {
       if (row.source === "EMAIL") {
         const email = emailById.get(row.sourceId);
         if (email) {
+          // Hash-verify integration (the read-side half of PR #468). For each
+          // row that has a stored inputHash, recompute the hash of the email's
+          // current bytes and compare. Mismatch means something mutated the
+          // input after classification — the cached tier is stale. Soft mode
+          // (checkAttentionInputHash, not verify) so the page still renders,
+          // and clients see hashStale=true to either re-classify or warn.
+          const hashCheck = checkAttentionInputHash(row.inputHash, {
+            from: email.from,
+            subject: email.subject,
+            snippet: email.snippet,
+            labels: email.labels,
+          });
+          if (!hashCheck.ok) {
+            item.hashStale = true;
+            captureError(
+              new Error(
+                `AttentionItem hash mismatch — stored=${hashCheck.storedHash.slice(0, 12)}… current=${hashCheck.currentHash.slice(0, 12)}…`,
+              ),
+              {
+                tags: { scope: "firewall.hashVerify" },
+                extra: {
+                  attentionItemId: row.id,
+                  emailDbId: email.id,
+                  storedTier: row.tier,
+                },
+              },
+            );
+          }
+
           const addr = senderEmail(email.from);
           const trust = addr ? trustMap.get(addr) : null;
           item.email = {
