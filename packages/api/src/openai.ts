@@ -35,6 +35,12 @@ export const openai = (getProvider("openrouter")?.client ?? null) as unknown as 
 
 export const MODEL = process.env.CHAT_MODEL || "google/gemma-4-31b-it:free";
 export const AGENT_MODEL = process.env.AGENT_MODEL || MODEL;
+// Vision requires a multimodal model — Gemma (the chat default) is text-only,
+// so we keep VISION_MODEL on its own track. Default ends in `:free` so a
+// deploy that forgets to set the env doesn't silently route to OpenRouter's
+// paid catalog. Override at the env layer if the `:free` SKU is missing or
+// daily-quota-zero on OpenRouter.
+export const VISION_MODEL = process.env.VISION_MODEL || "google/gemini-2.5-flash:free";
 
 /** User-facing error thrown when every configured provider has failed */
 export class AllProvidersExhaustedError extends Error {
@@ -273,7 +279,7 @@ export async function createVisionCompletion(
     ...chain.filter((provider) => provider.name === "gemini"),
     ...chain.filter((provider) => provider.name !== "gemini"),
   ];
-  const visionModel = process.env.VISION_MODEL || "google/gemini-2.5-flash";
+  const visionModel = VISION_MODEL;
 
   let lastError: unknown;
   for (const provider of ordered) {
