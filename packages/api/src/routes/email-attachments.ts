@@ -34,7 +34,7 @@ import {
 } from "../file-conversions.js";
 import { getAuthedClient } from "../gmail.js";
 import { getUserLlmCredentials } from "../llm-credentials.js";
-import { createVisionCompletion } from "../openai.js";
+import { createVisionCompletion, VISION_MODEL } from "../openai.js";
 import { parseJsonArray, parseJsonRecord, safeAttachmentFilename } from "./email.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -175,7 +175,7 @@ async function analyzeVisualAttachment(input: {
   const dataUrl = `data:${mimeType};base64,${input.content.toString("base64")}`;
   const response = await createVisionCompletion(
     {
-      model: process.env.VISION_MODEL || "google/gemini-2.5-flash",
+      model: VISION_MODEL,
       temperature: 0.05,
       response_format: { type: "json_object" },
       messages: [

@@ -126,6 +126,31 @@ if (!providers.openrouter && !providers.gemini) {
   } else {
     console.log("[providers] Gemini secondary provider active (daily quota fallback)");
   }
+  // Cost guardrail — OpenRouter bills any `<vendor>/<model>` ID without a
+  // `:free` suffix. A deploy that drops the suffix silently routes to the
+  // paid catalog (the 2026-06-02 incident). Loudly warn at startup so the
+  // founder doesn't discover it on the invoice.
+  if (providers.openrouter) {
+    warnIfPaidModel("CHAT_MODEL", process.env.CHAT_MODEL);
+    warnIfPaidModel("AGENT_MODEL", process.env.AGENT_MODEL);
+    warnIfPaidModel("VISION_MODEL", process.env.VISION_MODEL);
+  }
+}
+
+export function isLikelyPaidOpenRouterModel(value: string): boolean {
+  if (!value) return false;
+  if (value.includes(":free")) return false;
+  // Only flag vendor-prefixed IDs — bare `gemini-2.5-flash` is a Gemini-
+  // direct route (free) and shouldn't trigger the OpenRouter warning.
+  return /^[a-z0-9-]+\//i.test(value);
+}
+
+function warnIfPaidModel(envName: string, value: string | undefined): void {
+  if (!value || !isLikelyPaidOpenRouterModel(value)) return;
+  console.warn(
+    `[providers] ${envName}="${value}" routes to OpenRouter's PAID catalog. ` +
+      `Append ":free" (e.g. ${value}:free) or unset to use the in-code free default.`,
+  );
 }
 
 /** Get a provider by name, or null if not configured */
