@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { apiFetch } from "../../../lib/api";
+import { useAuth } from "../../../lib/auth";
 import { captureClientError } from "../../../lib/sentry";
 
 type Readiness = "ready" | "watch" | "needs_review";
@@ -72,28 +73,53 @@ const READINESS_META: Record<Readiness, { label: string; className: string }> = 
   },
 };
 
-function formatRange(start: string, end: string, allDay: boolean): string {
+// `timeZone` is the user's stored IANA zone — never rely on the browser
+// default. 24-hour format keeps AM/PM ambiguity out of the rendered range.
+function formatRange(start: string, end: string, allDay: boolean, timeZone: string): string {
   const s = new Date(start);
   const e = new Date(end);
   if (allDay) {
-    return s.toLocaleDateString(undefined, {
+    return s.toLocaleDateString("en-US", {
       weekday: "long",
       month: "long",
       day: "numeric",
       year: "numeric",
+      timeZone,
     });
   }
-  const sameDay = s.toDateString() === e.toDateString();
-  const dateStr = s.toLocaleDateString(undefined, {
+  const sameLocalDay =
+    s.toLocaleDateString("en-CA", { timeZone }) === e.toLocaleDateString("en-CA", { timeZone });
+  const dateStr = s.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
+    timeZone,
   });
-  const startTime = s.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  const endTime = e.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  return sameDay
-    ? `${dateStr} · ${startTime} – ${endTime}`
-    : `${s.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} → ${e.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
+  const startTime = s.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone,
+  });
+  const endTime = e.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone,
+  });
+  if (sameLocalDay) {
+    return `${dateStr} · ${startTime} – ${endTime}`;
+  }
+  const longRange = (d: Date) =>
+    d.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone,
+    });
+  return `${longRange(s)} → ${longRange(e)}`;
 }
 
 function ExternalLinkIcon() {
@@ -118,6 +144,8 @@ function ExternalLinkIcon() {
 
 function CalendarEventDetail({ id }: { id: string }) {
   const router = useRouter();
+  const { user } = useAuth();
+  const userTimezone = user?.timezone ?? "Asia/Seoul";
   const [event, setEvent] = useState<CalendarEvent | null>(null);
   const [pack, setPack] = useState<PrepPack | null>(null);
   const [loading, setLoading] = useState(true);
@@ -211,7 +239,7 @@ function CalendarEventDetail({ id }: { id: string }) {
             <div className="min-w-0 flex-1">
               <h1 className="break-words text-xl font-semibold text-stone-100">{event.title}</h1>
               <p className="mt-1 text-[13px] text-stone-400">
-                {formatRange(event.startTime, event.endTime, event.allDay)}
+                {formatRange(event.startTime, event.endTime, event.allDay, userTimezone)}
               </p>
               {event.location && (
                 <p className="mt-1 break-words text-[12px] text-stone-500">📍 {event.location}</p>

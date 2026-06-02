@@ -10,6 +10,11 @@ interface User {
   name: string | null;
   plan: string;
   role: string;
+  // IANA timezone (e.g., "Asia/Seoul"). Always present — defaults server-side
+  // to "Asia/Seoul" when the column is null. Used for date/time rendering so
+  // the UI doesn't silently fall back to the browser timezone, which on iOS
+  // PWA can disagree with the user's actual locale (e.g., shows UTC).
+  timezone: string;
 }
 
 interface AuthContextType {

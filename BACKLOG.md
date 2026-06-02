@@ -37,7 +37,21 @@ instinct during V2.
 
 ## Deferred to V2 (POC sprint must end first)
 
-(empty — add here when "이것만 더 하면" thoughts come up during dogfood)
+### Calendar — dense day / dense week view (2026-06-02 dogfood)
+When a day has many events or a week is packed, the current vertical card
+list with large gaps wastes vertical space and reads as overwhelming.
+
+**Founder report (2026-06-02 dogfood):**
+> 캘린더 페이지 하루에 스케쥴 아예 꽉 차있고 일주일이 꽉차있으면 오히려 보기가 힘듬.
+
+**Why deferred:** UX polish — not a credibility blocker for ICP onboarding.
+The P0 timezone fix in the same dogfood session has higher impact for
+Day 14 demo. Revisit after POC retention measurement (Day 14+7).
+
+**Candidate fixes (when picked up):**
+- Compact mode (1-line per event) when day count ≥3
+- Per-day collapsible group with summary count
+- Week-at-a-glance summary at top, expand-on-click for detail
 
 ---
 
