@@ -11,7 +11,8 @@
     "start:prod": "sh scripts/start.sh",
     "lint": "biome check src/",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "calibration": "tsx scripts/calibration.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
