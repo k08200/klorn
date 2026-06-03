@@ -229,16 +229,21 @@ function CalendarView() {
       )}
 
       {!loading && events.length > 0 && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {groups.map((g) => (
             <section key={g.key}>
-              <h2 className="sticky top-0 z-10 -mx-4 bg-[#10100d]/92 px-4 py-2 text-[13px] font-medium text-stone-300 backdrop-blur-xl">
+              {/* Day header — compact single line, like Google Calendar
+                  agenda view. The day label + event count carry the same
+                  density signal without the heavy boxed treatment that
+                  made a packed week unreadable in the prior layout. */}
+              <h2 className="sticky top-0 z-10 -mx-4 flex items-baseline gap-2 border-b border-stone-800/50 bg-[#10100d]/92 px-4 py-1.5 text-[12px] font-medium text-stone-400 backdrop-blur-xl">
                 <span>{g.label}</span>
-                <span className="ml-2 text-[11px] font-normal text-stone-500">
-                  {g.events.length}
+                <span className="text-[11px] font-normal text-stone-600">·</span>
+                <span className="text-[11px] font-normal text-stone-600">
+                  {g.events.length} event{g.events.length === 1 ? "" : "s"}
                 </span>
               </h2>
-              <ul className="space-y-2 mt-2">
+              <ul className="divide-y divide-stone-800/40">
                 {g.events.map((ev) => (
                   <EventRow key={ev.id} event={ev} timeZone={userTimezone} />
                 ))}
@@ -263,10 +268,12 @@ function CalendarStat({ label, value }: { label: string; value: number | string 
 }
 
 function EventRow({ event, timeZone }: { event: CalendarEvent; timeZone: string }) {
+  const queryClient = useQueryClient();
   const [prepOpen, setPrepOpen] = useState(false);
   const [prepLoading, setPrepLoading] = useState(false);
   const [prep, setPrep] = useState<MeetingPrepPack | null>(null);
   const [prepError, setPrepError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const start = new Date(event.startTime);
   const end = new Date(event.endTime);
   const timeLabel = event.allDay
@@ -299,59 +306,73 @@ function EventRow({ event, timeZone }: { event: CalendarEvent; timeZone: string 
     }
   };
 
+  const deleteEvent = async () => {
+    // Confirm in-place because most deletes target agent-created events
+    // with wrong times — a "muscle memory" delete shouldn't nuke a real
+    // calendar entry by accident.
+    if (!window.confirm(`Delete "${event.title || "Untitled"}"? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await apiFetch(`/api/calendar/${event.id}`, { method: "DELETE" });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all });
+    } catch (err) {
+      captureClientError(err, { scope: "calendar.delete", eventId: event.id });
+      setDeleting(false);
+    }
+  };
+
+  // Compact, Google-Calendar-style single-line row. Time is fixed-width
+  // and tabular so vertically stacked rows align. Actions (Prep, delete)
+  // are subtle until hover/focus — the agenda is what the eye scans first.
   return (
-    <li className="relative overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/45 p-4 pl-5 transition hover:border-amber-500/30 hover:bg-amber-500/5 active:bg-stone-900/70">
-      <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-teal-300 via-amber-300 to-stone-700" />
-      <div className="grid gap-3 md:grid-cols-[96px_1fr]">
-        <div className="rounded-lg border border-stone-800 bg-black/20 px-3 py-2 text-[12px] font-medium tabular-nums text-stone-400">
+    <li className="group">
+      <div className="flex items-center gap-3 py-2 pl-1 pr-2 transition hover:bg-stone-900/40">
+        <span className="w-[112px] shrink-0 text-[12px] font-medium tabular-nums leading-tight text-stone-400">
           {timeLabel}
-        </div>
+        </span>
         <div className="min-w-0 flex-1">
           <Link
             href={`/calendar/${event.id}`}
-            className="text-sm font-medium leading-snug text-stone-100 hover:text-amber-200"
+            className="block truncate text-sm font-medium text-stone-100 hover:text-amber-200"
+            title={event.title || "Untitled"}
           >
             {event.title || "Untitled"}
           </Link>
-          {event.location && (
-            <p className="mt-0.5 truncate text-xs text-stone-500">{event.location}</p>
+          {(event.location || event.meetingLink) && (
+            <div className="mt-0.5 flex items-center gap-2 text-[11px] text-stone-500">
+              {event.location && <span className="truncate">{event.location}</span>}
+              {event.meetingLink && (
+                <a
+                  href={event.meetingLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 text-amber-300/80 hover:text-amber-200"
+                >
+                  Join
+                </a>
+              )}
+            </div>
           )}
-          {event.meetingLink && (
-            <a
-              href={event.meetingLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-1 inline-flex min-h-11 items-center gap-1 text-xs text-amber-300 hover:text-amber-200"
-            >
-              Join meeting
-              <svg
-                aria-hidden="true"
-                width="11"
-                height="11"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                <polyline points="15 3 21 3 21 9" />
-                <line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
-            </a>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={togglePrep}
-              aria-expanded={prepOpen}
-              aria-label={`Toggle prep pack for ${event.title || "untitled event"}`}
-              className="inline-flex min-h-11 items-center gap-1 rounded-md border border-amber-300/20 bg-amber-300/10 px-2.5 py-1.5 text-xs text-amber-200 transition hover:bg-amber-300/15 hover:text-amber-100"
-            >
-              Prep pack
-            </button>
-          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={togglePrep}
+            aria-expanded={prepOpen}
+            aria-label={`Toggle prep pack for ${event.title || "untitled event"}`}
+            className="rounded px-2 py-1 text-[11px] text-amber-200/80 transition hover:bg-amber-300/10 hover:text-amber-100"
+          >
+            Prep
+          </button>
+          <button
+            type="button"
+            onClick={deleteEvent}
+            disabled={deleting}
+            aria-label={`Delete ${event.title || "untitled event"}`}
+            className="rounded px-2 py-1 text-[11px] text-stone-500 opacity-0 transition hover:text-red-300 group-hover:opacity-100 focus:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            {deleting ? "..." : "Delete"}
+          </button>
         </div>
       </div>
       {prepOpen && (
