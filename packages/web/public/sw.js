@@ -1,5 +1,5 @@
 // Klorn Service Worker — offline caching + push notification support
-const CACHE_NAME = "klorn-v5";
+const CACHE_NAME = "klorn-v6";
 const PRECACHE_URLS = ["/", "/chat", "/briefing", "/manifest.json"];
 
 // Install: precache shell
@@ -93,8 +93,9 @@ self.addEventListener("push", (event) => {
   let title = "Klorn";
   let options = {
     body: "You have a new notification",
-    icon: "/icon-192.svg",
-    badge: "/icon-192.svg",
+    // Chrome notifications can't render SVG icons — must be raster (PNG).
+    icon: "/icon-192.png",
+    badge: "/badge-96.png",
     data: { url: "/chat", deliveryId: null, receiptUrl: null },
   };
   try {
@@ -103,8 +104,8 @@ self.addEventListener("push", (event) => {
     title = data.title || "Klorn";
     options = {
       body: data.body || "You have a new notification",
-      icon: "/icon-192.svg",
-      badge: "/icon-192.svg",
+      icon: "/icon-192.png",
+      badge: "/badge-96.png",
       data: {
         url: data.url || "/chat",
         deliveryId: data.deliveryId || null,
