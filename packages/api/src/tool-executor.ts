@@ -202,16 +202,39 @@ async function executeToolCallInternal(
           args.location as string | undefined,
         );
 
-        // Also save to local DB
+        // Refuse to create a local row when Google insert failed. Otherwise
+        // we end up with an orphan row whose startTime is whatever string
+        // the LLM produced, with no way to reconcile against the source of
+        // truth. The 2026-06-04 +13h shift was a direct consequence of
+        // these orphans — Klorn showed agent-fabricated times that were
+        // never in Google.
+        if ("error" in evResult) {
+          return JSON.stringify(evResult);
+        }
+
         const evGoogleId =
           "eventId" in evResult && evResult.eventId ? (evResult.eventId as string) : null;
+
+        // Use Google's canonical timestamps for local DB. These are what
+        // Google actually stored after applying its own offset/timeZone
+        // resolution, so they round-trip through subsequent syncs cleanly.
+        // Fall back to the LLM input only if Google didn't echo back a
+        // dateTime (rare; defensive).
+        const canonicalStart =
+          "canonicalStart" in evResult && typeof evResult.canonicalStart === "string"
+            ? evResult.canonicalStart
+            : evStart;
+        const canonicalEnd =
+          "canonicalEnd" in evResult && typeof evResult.canonicalEnd === "string"
+            ? evResult.canonicalEnd
+            : evEnd;
         const localEvent = await prisma.calendarEvent.create({
           data: {
             userId,
             title: evSummary,
             description: (args.description as string) || null,
-            startTime: new Date(evStart),
-            endTime: new Date(evEnd),
+            startTime: new Date(canonicalStart),
+            endTime: new Date(canonicalEnd),
             location: (args.location as string) || null,
             googleId: evGoogleId,
           },

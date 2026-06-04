@@ -28,6 +28,7 @@ import {
   syncEmails,
 } from "./email-sync.js";
 import { getAuthedClient, renewExpiringGmailWatches, sendEmail } from "./gmail.js";
+import { parseGoogleDateTime } from "./google-calendar-time.js";
 import { formatUrgentEmailBody, senderName } from "./notification-format.js";
 import { runProactiveActions } from "./proactive-actions.js";
 import { sendPushNotification } from "./push.js";
@@ -379,6 +380,11 @@ async function runAutomations() {
               const now = new Date();
               const later = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
+              const userRow = (await prisma.user.findUnique({
+                where: { id: config.userId },
+              })) as { timezone?: string | null } | null;
+              const userTimezone = normalizeTimeZone(userRow?.timezone);
+
               const response = await calendar.events.list({
                 calendarId: "primary",
                 timeMin: now.toISOString(),
@@ -386,6 +392,10 @@ async function runAutomations() {
                 singleEvents: true,
                 orderBy: "startTime",
                 maxResults: 100,
+                // See note in routes/calendar.ts /sync — pass timeZone so
+                // Google canonicalizes the response, and the defensive
+                // parseGoogleDateTime below handles any stray naive strings.
+                timeZone: userTimezone,
               });
 
               for (const item of response.data.items || []) {
@@ -404,27 +414,34 @@ async function runAutomations() {
                 }
                 if (!meetingLink && item.hangoutLink) meetingLink = item.hangoutLink;
 
+                const isTimed = Boolean(item.start?.dateTime);
+                const parsedStart = isTimed
+                  ? parseGoogleDateTime(startTime, item.start?.timeZone ?? null, userTimezone)
+                  : new Date(startTime);
+                const parsedEnd = isTimed
+                  ? parseGoogleDateTime(endTime, item.end?.timeZone ?? null, userTimezone)
+                  : new Date(endTime);
                 await prisma.calendarEvent.upsert({
                   where: { googleId },
                   create: {
                     userId: config.userId,
                     title: item.summary || "Untitled",
                     description: item.description || null,
-                    startTime: new Date(startTime),
-                    endTime: new Date(endTime),
+                    startTime: parsedStart,
+                    endTime: parsedEnd,
                     location: item.location || null,
                     meetingLink,
-                    allDay: !item.start?.dateTime,
+                    allDay: !isTimed,
                     googleId,
                   },
                   update: {
                     title: item.summary || "Untitled",
                     description: item.description || null,
-                    startTime: new Date(startTime),
-                    endTime: new Date(endTime),
+                    startTime: parsedStart,
+                    endTime: parsedEnd,
                     location: item.location || null,
                     meetingLink,
-                    allDay: !item.start?.dateTime,
+                    allDay: !isTimed,
                   },
                 });
               }

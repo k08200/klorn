@@ -12,7 +12,9 @@ import { getUserId, requireAuth } from "../auth.js";
 import { createEvent as googleCreateEvent, deleteEvent as googleDeleteEvent } from "../calendar.js";
 import { prisma } from "../db.js";
 import { getAuthedClient, isGoogleAuthError, markGoogleTokenForReconnect } from "../gmail.js";
+import { parseGoogleDateTime } from "../google-calendar-time.js";
 import { buildMeetingPrepPack } from "../meeting-prep-pack.js";
+import { normalizeTimeZone } from "../time-zone.js";
 
 export async function calendarRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
@@ -190,6 +192,13 @@ export async function calendarRoutes(app: FastifyInstance) {
       const now = new Date();
       const later = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // next 30 days
 
+      // Fetch the user's stored timezone so we can pass it both to Google
+      // (canonicalize the response) AND to our naive-string fallback parser.
+      const userRow = (await prisma.user.findUnique({ where: { id: uid } })) as {
+        timezone?: string | null;
+      } | null;
+      const userTimezone = normalizeTimeZone(userRow?.timezone);
+
       const response = await calendar.events.list({
         calendarId: "primary",
         timeMin: now.toISOString(),
@@ -197,6 +206,11 @@ export async function calendarRoutes(app: FastifyInstance) {
         singleEvents: true,
         orderBy: "startTime",
         maxResults: 100,
+        // Tell Google to render dateTimes in the user's zone. Combined with
+        // the defensive parser below, this eliminates the "naive dateTime
+        // gets parsed as server-local UTC" failure mode that caused the
+        // 2026-06-04 ±N-hour shift.
+        timeZone: userTimezone,
       });
 
       let synced = 0;
@@ -216,15 +230,20 @@ export async function calendarRoutes(app: FastifyInstance) {
         }
         if (!meetingLink && item.hangoutLink) meetingLink = item.hangoutLink;
 
+        const isTimed = Boolean(item.start?.dateTime);
         const data = {
           userId: uid,
           title: item.summary || "Untitled",
           description: item.description || null,
-          startTime: new Date(startTime),
-          endTime: new Date(endTime),
+          startTime: isTimed
+            ? parseGoogleDateTime(startTime, item.start?.timeZone ?? null, userTimezone)
+            : new Date(startTime),
+          endTime: isTimed
+            ? parseGoogleDateTime(endTime, item.end?.timeZone ?? null, userTimezone)
+            : new Date(endTime),
           location: item.location || null,
           meetingLink,
-          allDay: !item.start?.dateTime,
+          allDay: !isTimed,
           googleId,
         };
 
