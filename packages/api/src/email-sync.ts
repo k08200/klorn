@@ -12,6 +12,7 @@ import { type gmail_v1, google } from "googleapis";
 import { upsertAttentionForEmailJudgement } from "./attention-mirror.js";
 import { extractAndUpsertCommitmentsFromText } from "./commitment-ingestion.js";
 import { prisma } from "./db.js";
+import { scheduleAgentForActionableEmail } from "./email-action-trigger.js";
 import { extractAttachmentContent, isReadableEmailAttachment } from "./email-attachment-text.js";
 import {
   analyzePendingEmailAttachments,
@@ -369,8 +370,8 @@ async function persistGmailEmail(
     },
     userId,
   )
-    .then((judgement) =>
-      upsertAttentionForEmailJudgement(
+    .then(async (judgement) => {
+      await upsertAttentionForEmailJudgement(
         {
           id: createdEmail.id,
           userId,
@@ -381,8 +382,12 @@ async function persistGmailEmail(
           receivedAt: email.receivedAt,
         },
         judgement,
-      ),
-    )
+      );
+      // Actionable tiers (PUSH/QUEUE) trigger an immediate agent run so the
+      // user sees a draft proposal in the decision queue without waiting for
+      // the 5-minute cron. Debounced inside the trigger to bound LLM cost.
+      scheduleAgentForActionableEmail(userId, judgement.tier);
+    })
     .catch((err) => {
       captureError(err, {
         tags: { scope: "poc-judge.email_sync" },
