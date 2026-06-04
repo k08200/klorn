@@ -4,6 +4,13 @@
  * Extracts executeToolCall from chat.ts so background agents can use the same tools.
  */
 
+import {
+  type ActionReceipt,
+  ActionReceiptMismatchError,
+  ActionReceiptSchemaError,
+  sendEmailPayloadHash,
+  verifyReceipt,
+} from "./attention-floor.js";
 import { upsertAttentionForCalendarEvent } from "./attention-mirror.js";
 import { BRIEFING_TOOLS } from "./briefing.js";
 import {
@@ -103,12 +110,31 @@ function safeInt(val: unknown, fallback: number, max: number): number {
   return Math.min(Math.round(n), max);
 }
 
+/**
+ * Deterministic-floor enforcement on the caller side. When the tool being
+ * invoked is in FLOOR_ACTIONS, the caller MUST provide a verified
+ * ActionReceipt — otherwise this throws FloorReceiptRequiredError and the
+ * action is refused before any side-effect.
+ *
+ * The receipt is minted at /approve time (chat-pending-actions.ts) so
+ * direct executeToolCall callers (autonomous-agent, batch-executor) that
+ * try to side-step the user approval flow now fail closed instead of
+ * silently sending mail / forwarding / hard-deleting.
+ */
+export class FloorReceiptRequiredError extends Error {
+  constructor(public readonly toolName: string) {
+    super(`floor action "${toolName}" requires a verified ActionReceipt — none provided`);
+    this.name = "FloorReceiptRequiredError";
+  }
+}
+
 export async function executeToolCall(
   userId: string,
   functionName: string,
   args: Record<string, unknown>,
+  receipt?: ActionReceipt | null,
 ): Promise<string> {
-  const raw = await executeToolCallInternal(userId, functionName, args);
+  const raw = await executeToolCallInternal(userId, functionName, args, receipt ?? null);
   return capToolResult(raw);
 }
 
@@ -116,6 +142,7 @@ async function executeToolCallInternal(
   userId: string,
   functionName: string,
   args: Record<string, unknown>,
+  receipt: ActionReceipt | null,
 ): Promise<string> {
   try {
     switch (functionName) {
@@ -123,15 +150,19 @@ async function executeToolCallInternal(
         return JSON.stringify(await listEmails(userId, safeInt(args.max_results, 10, 100)));
       case "read_email":
         return JSON.stringify(await readEmail(userId, requireString(args.email_id, "email_id")));
-      case "send_email":
-        return JSON.stringify(
-          await sendEmail(
-            userId,
-            requireString(args.to, "to"),
-            requireString(args.subject, "subject"),
-            requireString(args.body, "body"),
-          ),
-        );
+      case "send_email": {
+        const to = requireString(args.to, "to");
+        const subject = requireString(args.subject, "subject");
+        const body = requireString(args.body, "body");
+        // Floor: refuse to execute without a verified receipt. The receipt's
+        // payloadHash must match a fresh hash of the bytes about to leave.
+        if (!receipt) throw new FloorReceiptRequiredError("send_email");
+        verifyReceipt(receipt, {
+          action: "send_email",
+          currentPayloadHash: sendEmailPayloadHash({ to, subject, body }),
+        });
+        return JSON.stringify(await sendEmail(userId, to, subject, body));
+      }
       case "classify_emails":
         return JSON.stringify(await classifyEmails(userId, safeInt(args.max_results, 10, 100)));
       case "mark_read":
@@ -312,6 +343,22 @@ async function executeToolCallInternal(
         return JSON.stringify({ error: `Unknown function: ${functionName}` });
     }
   } catch (err) {
+    // Floor refusals bubble up to the caller (e.g. the /approve route) so
+    // the PendingAction can be rolled back to FAILED and the audit row
+    // captures the verify failure. Wrapping these in a tool-result string
+    // would let the LLM read "execution failed" and silently move on,
+    // which is the exact silent-failure mode the floor is meant to refuse.
+    if (
+      err instanceof FloorReceiptRequiredError ||
+      err instanceof ActionReceiptMismatchError ||
+      err instanceof ActionReceiptSchemaError
+    ) {
+      captureError(err, {
+        tags: { area: "tool_executor", tool: functionName, scope: "floor_refusal" },
+        extra: { userId, argKeys: Object.keys(args) },
+      });
+      throw err;
+    }
     const message = err instanceof Error ? err.message : "Unknown error";
     captureError(err, {
       tags: { area: "tool_executor", tool: functionName },

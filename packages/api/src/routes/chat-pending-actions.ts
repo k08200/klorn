@@ -11,12 +11,54 @@
 
 import type { FastifyInstance } from "fastify";
 import { resolveActionTarget } from "../action-target.js";
+import {
+  type ActionReceipt,
+  isFloorAction,
+  mintReceipt,
+  sendEmailPayloadHash,
+} from "../attention-floor.js";
 import { upsertAttentionForPendingAction } from "../attention-mirror.js";
 import { getUserId } from "../auth.js";
 import { db, prisma } from "../db.js";
 import { recipientFromToolArgs, recordFeedback } from "../feedback.js";
 import { executeToolCall } from "../tool-executor.js";
 import { pushNotification } from "../websocket.js";
+
+/**
+ * Mint an ActionReceipt for the about-to-execute floor action. The receipt
+ * pins the bytes the user just clicked "approve" on so that any mutation
+ * between this call and the tool-executor read will throw at verify time.
+ *
+ * inputHash is left empty when the PendingAction wasn't classifier-driven
+ * (PR #468 hash lives on AttentionItem; PendingAction may not have one
+ * yet for legacy / manual flows). Empty string is metadata-only; verify
+ * checks payloadHash, not inputHash.
+ */
+function mintReceiptForToolArgs(input: {
+  toolName: string;
+  toolArgs: Record<string, unknown>;
+  approvedBy: string;
+  inputHash: string;
+}): ActionReceipt | null {
+  if (!isFloorAction(input.toolName)) return null;
+  if (input.toolName === "send_email") {
+    const to = typeof input.toolArgs.to === "string" ? input.toolArgs.to : "";
+    const subject = typeof input.toolArgs.subject === "string" ? input.toolArgs.subject : "";
+    const body = typeof input.toolArgs.body === "string" ? input.toolArgs.body : "";
+    return mintReceipt({
+      action: "send_email",
+      inputHash: input.inputHash,
+      payloadHash: sendEmailPayloadHash({ to, subject, body }),
+      target: to.trim().toLowerCase(),
+      approvedAt: new Date(),
+      approvedBy: input.approvedBy,
+    });
+  }
+  // delete_permanent / forward_external aren't shipped as tools yet — wiring
+  // here is a no-op until those tools land. The doctrine list still locks
+  // them, so adding them later requires only this case + the executor case.
+  return null;
+}
 
 const idParamSchema = {
   type: "object",
@@ -193,7 +235,22 @@ export async function chatRoutes(app: FastifyInstance) {
           typeof action.toolArgs === "string"
             ? JSON.parse(action.toolArgs)
             : (action.toolArgs ?? {});
-        const toolResult = await executeToolCall(userId, action.toolName, toolArgs);
+        // Floor: mint and persist the receipt before we hand off to the
+        // tool executor. Persisting first means even if the executor
+        // crashes after sending, the audit row exists.
+        const receipt = mintReceiptForToolArgs({
+          toolName: action.toolName,
+          toolArgs,
+          approvedBy: userId,
+          inputHash: "",
+        });
+        if (receipt) {
+          await db.pendingAction.update({
+            where: { id: actionId },
+            data: { actionReceipt: receipt as unknown as object },
+          });
+        }
+        const toolResult = await executeToolCall(userId, action.toolName, toolArgs, receipt);
 
         await db.pendingAction.update({
           where: { id: actionId },
