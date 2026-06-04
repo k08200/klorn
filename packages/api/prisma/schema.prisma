@@ -470,6 +470,11 @@ model PendingAction {
   // return value) — leaving as text keeps the column open for any tool
   // that returns a non-JSON message.
   result         String?
+  // Deterministic floor: ActionReceipt minted at /approve time for floor
+  // actions (see attention-floor.ts). NULL for non-floor actions and for
+  // legacy rows pre-#481. tool-executor verifies this against the
+  // about-to-execute payload bytes and refuses on mismatch.
+  actionReceipt  Json?
   notification   Notification?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
