@@ -67,7 +67,21 @@ export async function createEvent(
       },
     });
 
-    return { success: true, eventId: res.data.id, htmlLink: res.data.htmlLink };
+    // Canonical timestamps come back from Google's response — these are the
+    // values Google actually stored, after applying its own offset/timeZone
+    // resolution rules. Local DB writes should use these, NOT the LLM's
+    // raw input, to prevent the 2026-06-04 +13h shift bug: when the LLM
+    // produces a dateTime with a wrong offset (e.g. "-04:00" instead of
+    // "+09:00"), Google sanitizes via the timeZone field but
+    // `new Date(rawLlmString)` parses the raw offset and stores the wrong
+    // UTC moment locally.
+    return {
+      success: true,
+      eventId: res.data.id,
+      htmlLink: res.data.htmlLink,
+      canonicalStart: res.data.start?.dateTime ?? res.data.start?.date ?? null,
+      canonicalEnd: res.data.end?.dateTime ?? res.data.end?.date ?? null,
+    };
   } catch (err: unknown) {
     if (isGoogleAuthError(err)) {
       await markGoogleTokenForReconnect(userId);
