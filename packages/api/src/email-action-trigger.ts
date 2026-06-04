@@ -14,8 +14,8 @@
  * but they still appear in the decision queue, which is the desired behavior.
  */
 
-import { runAgentForUser } from "./autonomous-agent.js";
 import { normalizeAgentMode } from "./agent-mode.js";
+import { runAgentForUser } from "./autonomous-agent.js";
 import { prisma } from "./db.js";
 import type { PocTier } from "./poc-judge.js";
 
