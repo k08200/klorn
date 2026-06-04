@@ -27,6 +27,7 @@
  *     meeting-task / email-contact links)
  */
 
+import { buildAgentEmailWhere } from "./agent-email-context-filter.js";
 import {
   filterSuppressedContextItems,
   formatRecentProposalSuppressions,
@@ -122,15 +123,14 @@ export async function gatherUserContext(userId: string): Promise<string> {
     prisma.notification.count({
       where: { userId, isRead: false },
     }),
-    // Use DB-synced emails: only UNREAD from the last 24h so we don't
-    // re-process old threads on every cycle.
+    // Email context: unread from last 24h (long dedup window) OR any email
+    // from last 30min regardless of read state. The recent-any-read branch
+    // is critical for the approval flow — Gmail auto-marks self-sends and
+    // notification mail as read, which would otherwise permanently hide a
+    // just-arrived meeting request from the agent.
     prisma.emailMessage
       .findMany({
-        where: {
-          userId,
-          isRead: false,
-          receivedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-        },
+        where: buildAgentEmailWhere(userId, now),
         orderBy: { receivedAt: "desc" },
         take: 10,
         select: {
