@@ -9,6 +9,7 @@ import {
   isCreditError,
   isFreeModel,
   isKeyLimitError,
+  isModelUnavailableError,
   isProviderUnavailable,
   markCreditExhausted,
   markKeyLimited,
@@ -241,6 +242,15 @@ export async function createCompletion(
       // quota window (RPM=5min, daily=until UTC midnight, ambiguous=1h).
       if (isKeyLimitError(err)) {
         markKeyLimited(provider.quotaKey, err);
+        continue;
+      }
+
+      // Model retired / not served by this provider (OpenRouter "No endpoints
+      // found for ..." 404): the call CAN succeed against another provider
+      // that hosts the same family (Gemini direct hosts gemini-2.5-flash
+      // natively even when OpenRouter has retired the :free SKU). Skip this
+      // provider for the rest of the call without poisoning its cooldown.
+      if (isModelUnavailableError(err)) {
         continue;
       }
 

@@ -276,6 +276,54 @@ export function isBudgetError(error: unknown): boolean {
   return isCreditError(error) || isKeyLimitError(error);
 }
 
+/**
+ * Provider has no endpoint for the requested model — typically because the
+ * model SKU was retired (OpenRouter's "No endpoints found for ..." 404), the
+ * caller misspelled an id, or no provider on that platform serves it. The
+ * call CAN succeed against a different provider that has the same family
+ * (e.g. native Gemini direct API), so we treat this the same as a quota
+ * limit for failover purposes: skip this provider, try the next.
+ *
+ * Deliberately NOT matching every 404 — we narrow to error texts that name
+ * a model/endpoint, so a routing-level 404 in a different layer (auth, etc.)
+ * is left to its existing handler.
+ */
+export function isModelUnavailableError(error: unknown): boolean {
+  if (error == null || (typeof error !== "object" && !(error instanceof Error))) return false;
+
+  const status =
+    typeof error === "object" && error !== null && "status" in error
+      ? (error as { status: number }).status
+      : undefined;
+
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : typeof (error as { message?: unknown }).message === "string"
+        ? (error as { message: string }).message.toLowerCase()
+        : "";
+
+  const isModelyText =
+    message.includes("no endpoints found") ||
+    message.includes("model not found") ||
+    message.includes("no allowed providers") ||
+    message.includes("model has been deprecated") ||
+    message.includes("model is unavailable") ||
+    message.includes("invalid model");
+
+  if (isModelyText) return true;
+
+  // Bare 404 status alone is too broad (route 404s, auth 404s). Require the
+  // message to mention a model/endpoint, OR the literal phrase that OpenRouter
+  // uses for retired SKUs.
+  const isStatus404 = status === 404 || /^\s*404\b/.test(message);
+  if (isStatus404 && (message.includes("endpoint") || message.includes("model"))) {
+    return true;
+  }
+
+  return false;
+}
+
 /** Returns true if the model is already a free tier model */
 export function isFreeModel(model: string): boolean {
   return model.endsWith(":free") || model === "openrouter/free";
