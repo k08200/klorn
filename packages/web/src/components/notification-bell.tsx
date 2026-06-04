@@ -139,7 +139,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
           try {
             new window.Notification(notif.title, {
               body: notif.message,
-              icon: "/icon-192.svg",
+              icon: "/icon-192.png",
               requireInteraction: true,
             });
           } catch {

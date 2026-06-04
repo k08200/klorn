@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#0a1628"/>
-  <text x="256" y="378"
-        font-family="'Geist','Inter Tight',Inter,system-ui,sans-serif"
-        font-size="360" font-weight="600" letter-spacing="-0.055em"
-        fill="#f0e9d8" text-anchor="middle">k</text>
-</svg>
