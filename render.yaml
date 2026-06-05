@@ -9,7 +9,12 @@ services:
       pnpm install --frozen-lockfile --prod=false &&
       cd packages/core && pnpm build &&
       cd ../api && npx prisma generate && pnpm build
-    preDeployCommand: cd packages/api && npx prisma migrate deploy
+    # preDeployCommand intentionally omitted — start.sh runs prisma migrate
+    # deploy with cold-start retry, so a separate preDeploy pass duplicates
+    # that work AND its hang risk. The 2026-06-05 deploy timed out at 15min
+    # silently between preDeploy and startCommand; collapsing into a single
+    # migrate-with-retry path (start.sh) makes the failure mode visible
+    # in the container logs.
     startCommand: cd packages/api && pnpm start:prod
     envVars:
       - key: NODE_VERSION

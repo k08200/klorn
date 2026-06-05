@@ -378,55 +378,86 @@ try {
   const httpServer = app.server;
   initWebSocket(httpServer);
 
+  // Emergency kill switch for ALL background LLM-driven loops. Set
+  // BACKGROUND_AGENTS_DISABLED=true on Render when prod is bleeding to
+  // upstream provider billing — the HTTP server still answers requests,
+  // but no scheduler tick fires, no agent loop runs, no LLM call is
+  // emitted from this container. Flip it back to false (or unset) after
+  // the bleed has stopped and the runaway loop has been identified.
+  //
+  // Origin: 2026-06-05 Google Cloud billing alert at 150% of budget with
+  // no clear single offender — the cost gate only fires for calls that
+  // pass `userId`, so any system-call path that omits it is invisible
+  // to the cap. Until that gap is closed, this switch is the only
+  // bytes-down brake.
+  const BG_DISABLED =
+    process.env.BACKGROUND_AGENTS_DISABLED === "true" ||
+    process.env.BACKGROUND_AGENTS_DISABLED === "1";
+  if (BG_DISABLED) {
+    console.warn(
+      "[STARTUP] BACKGROUND_AGENTS_DISABLED is set — skipping all schedulers and background agents. The HTTP API still serves; no LLM calls from this container.",
+    );
+  }
+
   // Start autonomous background agent
-  startBackgroundAgent();
+  if (!BG_DISABLED) startBackgroundAgent();
 
   // Start reminder notification scheduler
-  import("./reminder-scheduler.js")
-    .then(({ startReminderScheduler }) => {
-      startReminderScheduler();
-    })
-    .catch((err) => {
-      console.error("[STARTUP] reminder-scheduler failed to start:", err);
-      captureError(err, { tags: { context: "startup:reminder-scheduler" } });
-    });
+  if (!BG_DISABLED) {
+    import("./reminder-scheduler.js")
+      .then(({ startReminderScheduler }) => {
+        startReminderScheduler();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] reminder-scheduler failed to start:", err);
+        captureError(err, { tags: { context: "startup:reminder-scheduler" } });
+      });
+  }
 
   // Start automation scheduler (daily briefing, email classify)
-  import("./automation-scheduler.js")
-    .then(({ startAutomationScheduler }) => {
-      startAutomationScheduler();
-    })
-    .catch((err) => {
-      console.error("[STARTUP] automation-scheduler failed to start:", err);
-      captureError(err, { tags: { context: "startup:automation-scheduler" } });
-    });
+  if (!BG_DISABLED) {
+    import("./automation-scheduler.js")
+      .then(({ startAutomationScheduler }) => {
+        startAutomationScheduler();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] automation-scheduler failed to start:", err);
+        captureError(err, { tags: { context: "startup:automation-scheduler" } });
+      });
+  }
 
   // Start Naver IMAP polling scheduler (5min interval per connected user)
-  import("./naver-imap-scheduler.js")
-    .then(({ startNaverImapScheduler }) => {
-      startNaverImapScheduler();
-    })
-    .catch((err) => {
-      console.error("[STARTUP] naver-imap-scheduler failed to start:", err);
-      captureError(err, { tags: { context: "startup:naver-imap-scheduler" } });
-    });
+  if (!BG_DISABLED) {
+    import("./naver-imap-scheduler.js")
+      .then(({ startNaverImapScheduler }) => {
+        startNaverImapScheduler();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] naver-imap-scheduler failed to start:", err);
+        captureError(err, { tags: { context: "startup:naver-imap-scheduler" } });
+      });
+  }
 
   // Start autonomous LLM reasoning agent
-  import("./autonomous-agent-scheduler.js")
-    .then(({ startAutonomousAgent }) => {
-      startAutonomousAgent();
-    })
-    .catch((err) => {
-      console.error("[STARTUP] autonomous-agent failed to start:", err);
-      captureError(err, { tags: { context: "startup:autonomous-agent" } });
-    });
+  if (!BG_DISABLED) {
+    import("./autonomous-agent-scheduler.js")
+      .then(({ startAutonomousAgent }) => {
+        startAutonomousAgent();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] autonomous-agent failed to start:", err);
+        captureError(err, { tags: { context: "startup:autonomous-agent" } });
+      });
+  }
 
   // Start pattern learner (6-hour cycle for learning user behavior patterns)
-  import("./pattern-learner.js")
-    .then(({ startPatternLearner }) => {
-      startPatternLearner();
-    })
-    .catch((_err) => {});
+  if (!BG_DISABLED) {
+    import("./pattern-learner.js")
+      .then(({ startPatternLearner }) => {
+        startPatternLearner();
+      })
+      .catch((_err) => {});
+  }
 
   // Self-ping to prevent Render free tier from sleeping after 15 min inactivity
   const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
