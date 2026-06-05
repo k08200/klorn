@@ -14,6 +14,7 @@ import {
   markCreditExhausted,
   markKeyLimited,
 } from "./model-fallback.js";
+import { OPENROUTER_FALLBACK_CHAIN, walkFallbackChain } from "./openrouter-fallback-chain.js";
 import {
   getProvider,
   getProviderChain,
@@ -246,11 +247,18 @@ export async function createCompletion(
       }
 
       // Model retired / not served by this provider (OpenRouter "No endpoints
-      // found for ..." 404): the call CAN succeed against another provider
-      // that hosts the same family (Gemini direct hosts gemini-2.5-flash
-      // natively even when OpenRouter has retired the :free SKU). Skip this
-      // provider for the rest of the call without poisoning its cooldown.
+      // found for ..." 404). On OpenRouter we first walk the free-model
+      // fallback chain on the SAME provider — losing one :free SKU shouldn't
+      // force us off OpenRouter (where tools/function-calling work) and onto
+      // Gemini (where tools are stripped). If every chain entry is also gone,
+      // then we move on to the next provider as a last resort.
       if (isModelUnavailableError(err)) {
+        if (provider.name === "openrouter") {
+          const result = await walkFallbackChain(OPENROUTER_FALLBACK_CHAIN, model, (m) =>
+            call(provider, m),
+          );
+          if (result !== null) return result;
+        }
         continue;
       }
 
