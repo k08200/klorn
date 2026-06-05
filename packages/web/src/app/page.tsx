@@ -378,13 +378,13 @@ export default function LandingPage() {
             controls
             preload="metadata"
             poster="/klorn-demo-poster.jpg"
-            aria-label="Klorn walkthrough: an inbox is sorted into push, queue, silent, and auto-handled tiers"
+            aria-label="Klorn walkthrough: an inbox is sorted into push, queue, silent, and auto-handled tiers, then Klorn drafts a calendar event and reply from a meeting request"
           >
             <source src="/klorn-walkthrough.webm" type="video/webm" />
             <source src="/klorn-walkthrough.mp4" type="video/mp4" />
           </video>
           <figcaption className="border-t border-stone-800 px-4 py-3 text-xs text-stone-500">
-            60-second walkthrough · recorded on a live build, May 2026
+            One-minute walkthrough · recorded on a live build, June 2026
           </figcaption>
         </figure>
       </section>
