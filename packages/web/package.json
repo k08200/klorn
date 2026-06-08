@@ -1,6 +1,6 @@
 {
   "name": "@klorn/web",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "predev": "node scripts/ensure-next-dev-manifests.mjs .next-dev",

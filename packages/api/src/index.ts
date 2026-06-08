@@ -135,6 +135,24 @@ await app.register(tokenUsageRoutes, { prefix: "/api/usage" });
 await app.register(skillRoutes, { prefix: "/api/skills" });
 await app.register(smsRoutes, { prefix: "/api/sms" });
 
+// Version is read once at startup from package.json on disk — keeps the
+// string in lockstep with the published artifact without a separate
+// manifest to forget about. Read sync at module load so /api/health is
+// answer-ready the moment the listener binds.
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+const PKG_VERSION: string | null = (() => {
+  try {
+    const pkgPath = fileURLToPath(new URL("../package.json", import.meta.url));
+    const raw = readFileSync(pkgPath, "utf-8");
+    const parsed = JSON.parse(raw) as { version?: string };
+    return parsed.version ?? null;
+  } catch {
+    return null;
+  }
+})();
+
 app.get("/api/health", async () => {
   let dbOk = false;
   try {
@@ -148,6 +166,7 @@ app.get("/api/health", async () => {
     db: dbOk ? "connected" : "unreachable",
     timestamp: new Date().toISOString(),
     uptime: Math.floor(process.uptime()),
+    version: PKG_VERSION ?? null,
     commit:
       process.env.RENDER_GIT_COMMIT ||
       process.env.GIT_COMMIT_SHA ||
