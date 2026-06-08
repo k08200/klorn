@@ -102,55 +102,100 @@ cd klorn
 pnpm install
 ```
 
-### API environment
+### Environment files
+
+Klorn reads **two** env files in local dev. Both need to exist before the database container will even start.
+
+**1. Root `.env`** — only used by docker-compose to interpolate required vars
+into the postgres + api services. Without it, `docker compose up -d postgres`
+fails with `required variable JWT_SECRET is missing a value`.
 
 ```bash
-cp packages/api/.env.example packages/api/.env
+cp .env.example .env
 ```
 
-Minimum values:
-
-```bash
-DATABASE_URL="postgresql://user:password@localhost:5432/klorn"
-JWT_SECRET="local-dev-secret"
-TOKEN_ENCRYPTION_KEY="" # generate via the command below (32-byte base64)
-OPENROUTER_API_KEY=""
-WEB_URL="http://localhost:8001"
-PORT=8000
-```
-
-Generate a `TOKEN_ENCRYPTION_KEY`:
+Generate a 32-byte base64 key for `TOKEN_ENCRYPTION_KEY` and paste it into
+the root `.env`:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
+**2. API `.env`** — the actual runtime env for the Fastify server.
+
+```bash
+cp packages/api/.env.example packages/api/.env
+```
+
+Open `packages/api/.env` and at minimum set:
+
+```bash
+DATABASE_URL="postgresql://klorn:klorn-local-dev@localhost:5432/klorn"
+OPENROUTER_API_KEY=""  # https://openrouter.ai/keys — free key works
+WEB_URL="http://localhost:8001"
+PORT=8000
+```
+
+`JWT_SECRET` and `TOKEN_ENCRYPTION_KEY` are optional in dev — the server
+falls back to insecure defaults with a warning. Set them if you want
+the same dev cookies/tokens across restarts.
+
 For Google integration also set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI`.
 
 ### Database
 
-Run a local PostgreSQL or use the Postgres in Docker Compose.
+The bundled docker-compose ships a Postgres 16 with the credentials the
+default `DATABASE_URL` expects. If you have a Postgres already listening
+on `5432`, either stop it or change the port mapping in
+`docker-compose.yml` and update `DATABASE_URL` accordingly.
 
 ```bash
 docker compose up -d postgres
-pnpm --filter @klorn/api exec prisma migrate dev
+pnpm --filter @klorn/api exec prisma migrate deploy
+pnpm --filter @klorn/api exec prisma generate
 ```
+
+`migrate deploy` is the non-interactive path. `migrate dev` would prompt
+for a migration name on first run, which is friction in a smoke test.
 
 ### Dev servers
 
-Terminal 1:
+Terminal 1 — API:
 
 ```bash
 pnpm --filter @klorn/api dev
 ```
 
-Terminal 2:
+Wait for `Server listening at http://127.0.0.1:8000` (can take 5–10s
+while background imports load — silence in between is normal). Verify
+the server is alive in a third terminal:
+
+```bash
+curl http://localhost:8000/api/health
+# → {"status":"ok","db":"connected","version":"0.3.0",...}
+```
+
+Terminal 2 — Web:
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:8000 pnpm --filter @klorn/web dev
 ```
 
-Default ports: API `8000`, Web `8001`.
+Default ports: API `8000`, Web `8001`. If either is taken on your
+machine — common collision is another Postgres on `5432`, or a Docker
+gateway on `8000` — override:
+
+```bash
+# API on 8002
+PORT=8002 pnpm --filter @klorn/api dev
+
+# Web on 8003 pointing at the moved API
+NEXT_PUBLIC_API_URL=http://localhost:8002 \
+  pnpm --filter @klorn/web exec next dev --port 8003
+```
+
+Open `http://localhost:8001` (or your override) — you should see the
+Klorn landing page.
 
 ## Docker
 
