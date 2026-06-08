@@ -1,10 +1,41 @@
 # Klorn
 
-> **The clear signal worth acting on.**
+> **An attention firewall for your inbox. Not a suggestion engine.**
 
-Klorn is the approval layer for AI agents. It filters mail, calendar, and work signals into one clear decision queue — with evidence and approval before any action leaves your hands.
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![Self-hosted](https://img.shields.io/badge/deploy-self--hosted-success.svg)](#docker)
+[![Version](https://img.shields.io/badge/version-v0.3.0-blue.svg)](CHANGELOG.md)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
-Other AI agents act. Klorn helps you decide what's worth acting on.
+Most AI assistants surface more — another card, another badge, another "AI thinks you should…" Klorn ships the opposite: a **single classification output** (`SILENT` / `QUEUE` / `PUSH` / `AUTO`) bound to the exact bytes that produced it. No suggestion surface. No autonomous send. No 60-tool agentic spread.
+
+**Read the [doctrine](docs/doctrine/deterministic-floor.md) before the code.** That's the actual product.
+
+![Klorn decision queue](packages/web/public/klorn-demo-poster.jpg)
+
+▶️ **[60-second walkthrough](packages/web/public/klorn-walkthrough.mp4)** · 📖 **[Editions / open-core boundary](docs/EDITIONS.md)** · 📋 **[CHANGELOG v0.3.0](CHANGELOG.md)**
+
+## Why this exists
+
+The pattern almost every AI inbox tool ships into: a new surface on top of the old surface. A suggestion card next to every email. A badge that says "AI thinks you should reply." A draft waiting for your review. The inbox got louder, not quieter — the work of judging got moved from the mail itself to the mail-plus-AI-suggestions.
+
+Klorn refuses to surface. The classifier emits exactly one of four tiers:
+
+- **`SILENT`** — the row exists but is not rendered. Recorded for ground-truth feedback, not displayed.
+- **`QUEUE`** — visible in the inbox queue. No push, no notification.
+- **`PUSH`** — wake the user. Send a notification. Limited.
+- **`AUTO`** — classification only today; the action side is gated behind a deterministic floor (see below).
+
+Every classification is **content-hash-bound**: the exact bytes the scorer read (`from`, `subject`, `snippet`, `labels`) are sha256'd at decision time and stored with the row. The read path re-hashes and throws `AttentionHashMismatchError` on mismatch. A future enrichment PR cannot silently invalidate trust in a tier ([PR #468](https://github.com/k08200/klorn/pull/468)).
+
+Three actions cross the **deterministic floor** — anything that can't be undone with one user click: `send_email`, `permanent_delete`, `forward_external`. These require an `ActionReceipt` minted at `/approve` time, pinning the payload bytes. Verify-or-throw at execute. The autonomous agent's direct invocation path fails closed. ([PR #480](https://github.com/k08200/klorn/pull/480), [PR #481](https://github.com/k08200/klorn/pull/481), [doctrine doc](docs/doctrine/deterministic-floor.md)).
+
+## What it's NOT
+
+- Not finished. POC sprint just hit Day 14; ICP retention measurement starts now. The [CHANGELOG](CHANGELOG.md) is honest about what's solid vs what's stitched.
+- Not a "chat with your inbox" thing. There is no chat surface.
+- Not multi-tenant cloud. Self-host is the only path right now.
+- Not feature-gated against open source. See [`docs/EDITIONS.md`](docs/EDITIONS.md) for what Cloud will sell on top (managed hosting, verified Gmail scope, team workspaces) — the firewall doctrine and code stay in the repo on both editions.
 
 ## What we're building
 
@@ -158,6 +189,14 @@ When touching core UX, verify at least:
 - **Mobile** — the decision queue, mail, and top/bottom nav work at 390px width.
 - **New user** — pre-connection state, initial learning hint, and the first settings screen are clear.
 
+## Contributing
+
+Issues and pull requests are welcome. For anything non-trivial, open an issue first
+to discuss the approach. Run `pnpm -r test` and `biome check packages/` before
+submitting.
+
 ## License
 
-MIT
+[AGPL-3.0](LICENSE). You are free to use, self-host, and modify Klorn. If you run a
+modified version as a network service, the AGPL requires you to offer your modified
+source to that service's users. Copyright (C) 2026 k08200.
