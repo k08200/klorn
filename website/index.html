@@ -359,6 +359,20 @@
     }
     @media (min-width: 640px) { .hero-ctas { flex-direction: row; } }
 
+    .hero-cta-note {
+      margin-top: 16px;
+      max-width: 480px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--stone-400);
+    }
+    .hero-cta-note svg {
+      display: inline-block;
+      vertical-align: -2px;
+      margin-right: 6px;
+      color: var(--brand-gold);
+    }
+
     /* ── Mobile product preview ──────────────── */
     .mobile-preview {
       margin-top: 40px;
@@ -635,7 +649,7 @@
       margin-top: 12px;
       font-size: 12px;
       line-height: 1.65;
-      color: var(--stone-500);
+      color: var(--stone-400);
     }
 
     /* ── Final CTA ────────────────────────────── */
@@ -678,7 +692,7 @@
       flex-direction: column;
       gap: 16px;
       font-size: 14px;
-      color: var(--stone-500);
+      color: var(--stone-400);
     }
     @media (min-width: 768px) {
       .footer-inner { flex-direction: row; align-items: center; justify-content: space-between; }
@@ -737,6 +751,43 @@
       object-fit: cover;
       background: var(--surface-canvas);
     }
+
+    /* Tier legend — the video text is small, so the four tiers are
+       spelled out here as the readable source of truth. */
+    .demo-legend {
+      margin-top: 20px;
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 640px) {
+      .demo-legend { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 900px) {
+      .demo-legend { grid-template-columns: repeat(4, 1fr); }
+    }
+    .demo-tier {
+      border: 1px solid var(--border-soft);
+      background: var(--surface-panel);
+      border-radius: 8px;
+      padding: 14px 16px;
+      text-align: left;
+    }
+    .demo-tier .tier-name {
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      font-weight: 600;
+    }
+    .demo-tier .tier-desc {
+      margin-top: 6px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--stone-400);
+    }
+    .demo-tier.push .tier-name { color: var(--brand-gold-bright); }
+    .demo-tier.queue .tier-name { color: var(--sky-200); }
+    .demo-tier.silent .tier-name { color: var(--stone-300); }
+    .demo-tier.auto .tier-name { color: var(--emerald-200); }
   </style>
 </head>
 <body>
@@ -844,6 +895,13 @@
           </a>
           <a href="https://app.klorn.ai/login" class="btn btn-ghost">Log in</a>
         </div>
+        <p class="hero-cta-note">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3 5 6v5c0 4.4 2.7 8 7 10 4.3-2 7-5.6 7-10V6l-7-3Z"></path>
+            <path d="m8.8 12.2 2.1 2.1 4.5-5"></path>
+          </svg>
+          Connects securely with Google. You approve every action — Klorn never sends, deletes, or shares on its own.
+        </p>
       </div>
 
       <div class="mobile-preview">
@@ -875,12 +933,30 @@
   <!-- ── Walkthrough demo section ─────────────── -->
   <section class="section demo-section" aria-label="Klorn walkthrough">
     <p class="mono section-eyebrow">See it in action</p>
-    <h2 class="section-h">One minute. The full firewall.</h2>
-    <p class="section-lead">PUSH / QUEUE / SILENT / AUTO classification. Klorn drafts the calendar event and reply for every meeting request — you stay in control with one-click approval. Daily receipt logs every action.</p>
+    <h2 class="section-h">One minute. Inbox to decision queue.</h2>
+    <p class="section-lead">Every signal sorts into one of four tiers, then the ones that matter become decision cards you approve with one click. Nothing leaves your hands without that approval, and a daily receipt logs every action.</p>
     <div class="demo-frame">
-      <video autoplay muted loop playsinline preload="metadata" poster="/demo-poster.jpg">
+      <video controls autoplay muted loop playsinline preload="metadata" poster="/demo-poster.jpg">
         <source src="/demo.webm" type="video/webm">
       </video>
+    </div>
+    <div class="demo-legend">
+      <div class="demo-tier push">
+        <p class="mono tier-name">Push</p>
+        <p class="tier-desc">Time-sensitive and high-stakes. Surfaced the moment it lands.</p>
+      </div>
+      <div class="demo-tier queue">
+        <p class="mono tier-name">Queue</p>
+        <p class="tier-desc">Worth a look, not urgent. Batched into the decision queue.</p>
+      </div>
+      <div class="demo-tier silent">
+        <p class="mono tier-name">Silent</p>
+        <p class="tier-desc">Noise and FYIs. Filed quietly so they never interrupt.</p>
+      </div>
+      <div class="demo-tier auto">
+        <p class="mono tier-name">Auto</p>
+        <p class="tier-desc">Routine items pre-sorted for you — still staged, never sent on their own.</p>
+      </div>
     </div>
   </section>
 
