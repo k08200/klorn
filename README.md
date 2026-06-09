@@ -37,6 +37,18 @@ Three actions cross the **deterministic floor** — anything that can't be undon
 - Not multi-tenant cloud. Self-host is the only path right now.
 - Not feature-gated against open source. See [`docs/EDITIONS.md`](docs/EDITIONS.md) for what Cloud will sell on top (managed hosting, verified Gmail scope, team workspaces) — the firewall doctrine and code stay in the repo on both editions.
 
+## Trying the hosted demo (klorn.ai)
+
+The hosted demo is **in Google OAuth testing mode** while we hold off on CASA Tier 2 verification (we use Gmail's restricted `gmail.modify` scope). To try it without self-hosting, you need to be added as a test user first.
+
+Three paths, fastest first:
+
+- **Open an issue** with the Google email you want to use: [github.com/k08200/klorn/issues/new?title=oauth-tester](https://github.com/k08200/klorn/issues/new?title=oauth-tester&labels=oauth-tester) — we add you, comment "added", you log in.
+- **Email** `k0820086@gmail.com` with the same info.
+- **Or skip the gating entirely** and [self-host](#quick-start) — full feature parity, you bring your own Google OAuth credentials, no verification needed.
+
+Google caps test-user slots at 100 in this mode. Once we ship CASA verification (gated on POC retention measurement), the OAuth screen flips to production and the gating goes away.
+
 ## What we're building
 
 Klorn's first screen is not a chat or an inbox — it's a decision queue. Scattered signals are collected and presented as cards that answer three questions: **what to look at**, **why it matters**, and **what action is ready**.
