@@ -33,6 +33,24 @@ What you do NOT get on self-host:
 - Team-mode collaboration surfaces (not yet shipped on Cloud either —
   this is the roadmap line, not a behind-paywall feature today)
 
+## Cloud demo access (today)
+
+The hosted klorn.ai is in **Google OAuth testing mode** pending CASA
+Tier 2 verification. Test-user slots are added manually until then:
+
+- **Issue:** [open an `oauth-tester` issue](https://github.com/k08200/klorn/issues/new?title=oauth-tester&labels=oauth-tester) with the email you want to use
+- **Email:** `k0820086@gmail.com`
+
+We add the address in Google Cloud Console (~5 minutes), comment
+"added" on the issue, and you can complete the OAuth flow.
+
+Google caps this at 100 test users — once we ship verification, the
+gate goes away and anyone with a Google account can sign in.
+
+Self-host bypasses this gate entirely. You bring your own OAuth client
+ID/secret, register them in your own Cloud Console, and the verification
+question is between you and Google.
+
 ## Why AGPLv3 and not MIT
 
 The moat is the doctrine + the implementation discipline, not the
