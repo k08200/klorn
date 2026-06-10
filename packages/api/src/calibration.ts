@@ -10,9 +10,9 @@
 
 // Imported from the canonical vocabulary so calibration math and the
 // classifier can never count a different number of tiers. See tiers.ts.
-import { type Tier, TIERS } from "./tiers.js";
+import { TIERS, type Tier } from "./tiers.js";
 
-export { type Tier, TIERS };
+export { TIERS, type Tier };
 
 export interface AttentionRow {
   id: string;

@@ -18,7 +18,7 @@
 import type { ClassifiableEmail } from "./email-classifier.js";
 import { createCompletion, MODEL } from "./openai.js";
 import { captureError } from "./sentry.js";
-import { type Tier, TIERS } from "./tiers.js";
+import { TIERS, type Tier } from "./tiers.js";
 
 // PocTier is the canonical 4-tier vocabulary — re-exported from tiers.ts so
 // the judge, calibration, mirror, and API can never drift apart again.

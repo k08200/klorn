@@ -153,14 +153,12 @@ function LoginForm() {
       {signupOpen ? (
         <div className="mt-3 space-y-2 text-center text-[11px] leading-5 text-stone-500">
           <p>
-            Free during the private beta. Google flags unverified apps with the
-            restricted Gmail scope until CASA review clears — standard for every
-            Gmail integration.
+            Free during the private beta. Google flags unverified apps with the restricted Gmail
+            scope until CASA review clears — standard for every Gmail integration.
           </p>
           <p>
-            What we don’t do: send mail without a click-through receipt. Every
-            send, permanent delete, and external forward is hash-bound and
-            verifiable on read.
+            What we don’t do: send mail without a click-through receipt. Every send, permanent
+            delete, and external forward is hash-bound and verifiable on read.
           </p>
           <p className="text-stone-400">
             <a

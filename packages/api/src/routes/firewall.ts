@@ -21,7 +21,7 @@ import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { senderEmail } from "../notification-format.js";
 import { captureError } from "../sentry.js";
-import { type Tier, TIERS, normalizeTier } from "../tiers.js";
+import { normalizeTier, TIERS, type Tier } from "../tiers.js";
 import { getTrustScoresBulk } from "../trust-score.js";
 
 // Tool args that carry a Gmail message id we can map back to a stored

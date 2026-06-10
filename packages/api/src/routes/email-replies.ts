@@ -165,36 +165,37 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
     },
     async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const uid = getUserId(request);
-    const { intent } = (request.body as { intent?: string }) || {};
+      const { id } = request.params as { id: string };
+      const uid = getUserId(request);
+      const { intent } = (request.body as { intent?: string }) || {};
 
-    const dbEmail = await prisma.emailMessage.findFirst({
-      where: { userId: uid, OR: [{ id }, { gmailId: id }] },
-    });
-    if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
+      const dbEmail = await prisma.emailMessage.findFirst({
+        where: { userId: uid, OR: [{ id }, { gmailId: id }] },
+      });
+      if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
 
-    const actionItems = parseJsonArray(dbEmail.actionItems);
-    const attachments = await listEmailAttachments([dbEmail.id]);
-    const candidateProfile = buildAttachmentCandidateProfile(attachments);
-    const body = await generateReplyDraft({
-      userId: uid,
-      from: dbEmail.from,
-      subject: dbEmail.subject,
-      body: dbEmail.body,
-      summary: dbEmail.summary,
-      actionItems,
-      candidateProfile,
-      intent,
-    });
+      const actionItems = parseJsonArray(dbEmail.actionItems);
+      const attachments = await listEmailAttachments([dbEmail.id]);
+      const candidateProfile = buildAttachmentCandidateProfile(attachments);
+      const body = await generateReplyDraft({
+        userId: uid,
+        from: dbEmail.from,
+        subject: dbEmail.subject,
+        body: dbEmail.body,
+        summary: dbEmail.summary,
+        actionItems,
+        candidateProfile,
+        intent,
+      });
 
-    return {
-      to: extractReplyAddress(dbEmail.from),
-      subject: dbEmail.subject.startsWith("Re:") ? dbEmail.subject : `Re: ${dbEmail.subject}`,
-      body,
-      candidateProfile,
-    };
-  });
+      return {
+        to: extractReplyAddress(dbEmail.from),
+        subject: dbEmail.subject.startsWith("Re:") ? dbEmail.subject : `Re: ${dbEmail.subject}`,
+        body,
+        candidateProfile,
+      };
+    },
+  );
 
   // POST /api/email/:id/gmail-draft
   app.post("/:id/gmail-draft", { preHandler: requireAuth }, async (request, reply) => {
