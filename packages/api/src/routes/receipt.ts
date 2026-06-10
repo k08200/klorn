@@ -43,11 +43,10 @@ interface DailyReceipt {
   silenced: ReceiptItem[];
   queued: ReceiptItem[];
   pushed: ReceiptItem[];
-  called: ReceiptItem[];
   auto: ReceiptItem[];
   summary: {
     totalSeen: number; // signals EVE evaluated
-    totalInterrupted: number; // push + called + pending that user saw
+    totalInterrupted: number; // pushed + pending that user saw
     savedFromInbox: number; // silenced (would have been noise)
     autoHandled: number; // executed without asking
     narrative: string; // 1-2 sentence human summary
@@ -131,7 +130,6 @@ export async function receiptRoutes(app: FastifyInstance) {
     const silenced: ReceiptItem[] = [];
     const queued: ReceiptItem[] = [];
     const pushed: ReceiptItem[] = [];
-    const called: ReceiptItem[] = [];
 
     for (const item of attentionItems) {
       const base: ReceiptItem = {
@@ -143,22 +141,18 @@ export async function receiptRoutes(app: FastifyInstance) {
         surfacedAt: item.surfacedAt.toISOString(),
       };
 
-      const tier = item.tier || "QUEUE";
+      // Legacy CALL rows (retired tier) deliver as PUSH — see tiers.ts.
+      const tier = item.tier === "CALL" ? "PUSH" : item.tier || "QUEUE";
       if (tier === "SILENT") {
         silenced.push(base);
-      } else if (tier === "PUSH" || tier === "CALL") {
+      } else if (tier === "PUSH") {
         // Find matching push log
         const push = pushLogs.find((p) => pushByNotifId.has(p.notificationId ?? ""));
-        const enriched = {
+        pushed.push({
           ...base,
           pushStatus: push?.status ?? "SENT",
           pushClickedAt: push?.clickedAt?.toISOString() ?? null,
-        };
-        if (tier === "CALL") {
-          called.push(enriched);
-        } else {
-          pushed.push(enriched);
-        }
+        });
       } else {
         queued.push(base);
       }
@@ -186,7 +180,7 @@ export async function receiptRoutes(app: FastifyInstance) {
 
     const allSilenced = [...silenced, ...silencedEmails];
     const totalSeen = attentionItems.length + shadowLogs.length;
-    const totalInterrupted = pushed.length + called.length;
+    const totalInterrupted = pushed.length;
     const autoHandled = auto.length;
     const savedFromInbox = allSilenced.length;
 
@@ -197,7 +191,6 @@ export async function receiptRoutes(app: FastifyInstance) {
       silenced: allSilenced,
       queued,
       pushed,
-      called,
       auto,
       summary: {
         totalSeen,

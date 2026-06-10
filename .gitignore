@@ -13,3 +13,12 @@ test-results/
 # and to keep internal prioritization notes private)
 CLAUDE.md
 .claude/
+.gstack/
+
+# PoC measurement artifacts — contain real personal email addresses and
+# snippet text from the founder's inbox. Never commit to this public repo.
+poc-*.json
+poc-demo-mock-server.cjs
+.record-scenes*.mjs
+packages/api/scripts/poc-label-interactive.ts
+packages/api/scripts/diagnose-calendar-times.ts

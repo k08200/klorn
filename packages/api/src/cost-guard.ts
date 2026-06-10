@@ -14,7 +14,7 @@
  * `callCount` and `lastModel` for visibility, but they never trip the cap.
  */
 
-import { DAILY_COST_CAP_CENTS } from "./config.js";
+import { DAILY_COST_CAP_CENTS, GLOBAL_DAILY_COST_CAP_CENTS } from "./config.js";
 import { prisma } from "./db.js";
 
 export interface CostGateResult {
@@ -94,4 +94,53 @@ export async function recordCostUsage(
 export function usdToCents(usd: number): number {
   if (!Number.isFinite(usd) || usd <= 0) return 0;
   return Math.max(1, Math.ceil(usd * 100));
+}
+
+// ── Global daily ceiling ──────────────────────────────────────────────────
+// In-memory aggregate across every LLM call (per-user AND system-initiated),
+// reset at UTC-day rollover. This is the circuit breaker the per-user gate
+// can't be: it sees userId-less calls. It is intentionally in-memory — the
+// deployment is a single instance, and this is a runaway-burst breaker, not
+// exact accounting. A process restart resets it (rare; per-user DB caps still
+// hold). If the app is ever scaled out, this must move to a shared store.
+const globalSpend = { dayKey: utcDayKey(), cents: 0 };
+
+function rollGlobalDayIfNeeded(): void {
+  const today = utcDayKey();
+  if (globalSpend.dayKey !== today) {
+    globalSpend.dayKey = today;
+    globalSpend.cents = 0;
+  }
+}
+
+/** Check whether the global daily ceiling still allows another paid call. */
+export function checkGlobalCostGate(): CostGateResult {
+  const cap = GLOBAL_DAILY_COST_CAP_CENTS;
+  if (cap <= 0) {
+    return { allowed: true, remainingCents: Number.POSITIVE_INFINITY, usedCents: 0, capCents: 0 };
+  }
+  rollGlobalDayIfNeeded();
+  const used = globalSpend.cents;
+  if (used >= cap) {
+    return {
+      allowed: false,
+      remainingCents: 0,
+      usedCents: used,
+      capCents: cap,
+      reason: `Global daily cap reached (${used}¢/${cap}¢)`,
+    };
+  }
+  return { allowed: true, remainingCents: cap - used, usedCents: used, capCents: cap };
+}
+
+/** Record cost against the global ceiling. Called for every LLM call. */
+export function recordGlobalCostUsage(cents: number): void {
+  rollGlobalDayIfNeeded();
+  globalSpend.cents += Math.max(0, Math.round(cents));
+}
+
+/** Test seam: reset the in-memory global accumulator. */
+export function __resetGlobalSpendForTest(): void {
+  globalSpend.dayKey = utcDayKey();
+  globalSpend.cents = 0;
 }

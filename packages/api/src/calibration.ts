@@ -8,8 +8,11 @@
  * motivation (Day 14+7 retention POC infra, dev.to thread response).
  */
 
-export const TIERS = ["SILENT", "QUEUE", "PUSH", "AUTO"] as const;
-export type Tier = (typeof TIERS)[number];
+// Imported from the canonical vocabulary so calibration math and the
+// classifier can never count a different number of tiers. See tiers.ts.
+import { TIERS, type Tier } from "./tiers.js";
+
+export { TIERS, type Tier };
 
 export interface AttentionRow {
   id: string;

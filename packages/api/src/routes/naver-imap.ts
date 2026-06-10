@@ -54,36 +54,46 @@ export async function naverImapRoutes(app: FastifyInstance) {
 
   app.post<{
     Body: { email: string; password: string; host?: string };
-  }>("/connect", { schema: { body: connectBodySchema } }, async (request, reply) => {
-    const userId = getUserId(request);
-    const { email, password, host } = request.body;
-    const imapHost = (host ?? DEFAULT_NAVER_IMAP_HOST).trim();
+  }>(
+    "/connect",
+    {
+      schema: { body: connectBodySchema },
+      // Every call opens a real IMAP connection to Naver; without a tight
+      // limit this is both a credential-stuffing oracle and a way to get
+      // our egress IP blocked by Naver.
+      config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
+    },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const { email, password, host } = request.body;
+      const imapHost = (host ?? DEFAULT_NAVER_IMAP_HOST).trim();
 
-    // Smoke-test the credentials before persisting. We don't want the
-    // user to leave the settings page thinking they're connected when
-    // every subsequent poll will silently 401.
-    const verify = await verifyNaverImapCredentials({
-      email,
-      password,
-      host: imapHost,
-    });
-    if (!verify.ok) {
-      reply.code(400);
-      return { ok: false, message: verify.message };
-    }
+      // Smoke-test the credentials before persisting. We don't want the
+      // user to leave the settings page thinking they're connected when
+      // every subsequent poll will silently 401.
+      const verify = await verifyNaverImapCredentials({
+        email,
+        password,
+        host: imapHost,
+      });
+      if (!verify.ok) {
+        reply.code(400);
+        return { ok: false, message: verify.message };
+      }
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        naverImapEmail: email,
-        naverImapPasswordCipher: encryptToken(password),
-        naverImapHost: imapHost,
-        naverImapConnectedAt: new Date(),
-      },
-    });
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          naverImapEmail: email,
+          naverImapPasswordCipher: encryptToken(password),
+          naverImapHost: imapHost,
+          naverImapConnectedAt: new Date(),
+        },
+      });
 
-    return { ok: true, email, host: imapHost };
-  });
+      return { ok: true, email, host: imapHost };
+    },
+  );
 
   app.post("/disconnect", async (request) => {
     const userId = getUserId(request);

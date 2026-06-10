@@ -8,7 +8,7 @@ import { TrustDot, type TrustScoreData } from "../../../components/trust-badge";
 import { apiFetch } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
 
-type Tier = "SILENT" | "QUEUE" | "PUSH" | "CALL" | "AUTO";
+type Tier = "SILENT" | "QUEUE" | "PUSH" | "AUTO";
 
 interface EmailContext {
   emailDbId: string;
@@ -59,11 +59,6 @@ const TIER_META: Record<Tier, { label: string; tone: string; description: string
     label: "PUSH",
     tone: "border-rose-400/40 bg-rose-500/5",
     description: "Worth interrupting you for. Push notifications fire here.",
-  },
-  CALL: {
-    label: "CALL",
-    tone: "border-rose-400/40 bg-rose-500/5",
-    description: "Highest-urgency interrupt — rendered with PUSH for now.",
   },
   QUEUE: {
     label: "QUEUE",
@@ -139,13 +134,12 @@ function FirewallView() {
     }
   };
 
-  // Visible columns: PUSH, QUEUE, SILENT. CALL collapses into PUSH for the
-  // POC view; AUTO sits below as a one-line summary because the user already
-  // chose not to be interrupted by it.
+  // Visible columns: PUSH, QUEUE, SILENT. AUTO sits below as a one-line
+  // summary because the user already chose not to be interrupted by it.
   const visibleColumns = useMemo(() => {
     if (!data) return null;
     return {
-      PUSH: [...data.tiers.PUSH, ...data.tiers.CALL],
+      PUSH: data.tiers.PUSH,
       QUEUE: data.tiers.QUEUE,
       SILENT: data.tiers.SILENT,
     } as Record<"PUSH" | "QUEUE" | "SILENT", FirewallItem[]>;
@@ -214,7 +208,7 @@ function moveItemBetweenTiers(
     tiers: { ...prev.tiers, summary: { ...prev.summary } },
   } as FirewallResponse;
   // Copy each tier array so we mutate a fresh structure
-  for (const t of TIER_ORDER.concat(["AUTO", "CALL"])) {
+  for (const t of TIER_ORDER.concat(["AUTO"])) {
     next.tiers[t] = [...prev.tiers[t]];
   }
   next.tiers[item.tier] = next.tiers[item.tier].filter((row) => row.id !== item.id);
@@ -223,7 +217,6 @@ function moveItemBetweenTiers(
     SILENT: next.tiers.SILENT.length,
     QUEUE: next.tiers.QUEUE.length,
     PUSH: next.tiers.PUSH.length,
-    CALL: next.tiers.CALL.length,
     AUTO: next.tiers.AUTO.length,
     total: prev.summary.total,
   };
@@ -242,7 +235,7 @@ function DailyReceiptStrip({
     { label: "QUEUE", value: data.summary.QUEUE, tone: "text-amber-300" },
     {
       label: "PUSH",
-      value: data.summary.PUSH + data.summary.CALL,
+      value: data.summary.PUSH,
       tone: "text-rose-300",
     },
     { label: "AUTO", value: data.summary.AUTO, tone: "text-emerald-300" },

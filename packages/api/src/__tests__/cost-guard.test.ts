@@ -24,6 +24,7 @@ vi.mock("../db.js", () => ({
 }));
 
 const ORIGINAL_CAP = process.env.DAILY_COST_CAP_CENTS;
+const ORIGINAL_GLOBAL_CAP = process.env.GLOBAL_DAILY_COST_CAP_CENTS;
 
 afterEach(() => {
   mockRow = null;
@@ -32,6 +33,11 @@ afterEach(() => {
     delete process.env.DAILY_COST_CAP_CENTS;
   } else {
     process.env.DAILY_COST_CAP_CENTS = ORIGINAL_CAP;
+  }
+  if (ORIGINAL_GLOBAL_CAP === undefined) {
+    delete process.env.GLOBAL_DAILY_COST_CAP_CENTS;
+  } else {
+    process.env.GLOBAL_DAILY_COST_CAP_CENTS = ORIGINAL_GLOBAL_CAP;
   }
 });
 
@@ -91,5 +97,32 @@ describe("checkCostGate", () => {
     const { checkCostGate } = await import("../cost-guard.js");
     const result = await checkCostGate("user-1");
     expect(result.allowed).toBe(false);
+  });
+});
+
+describe("checkGlobalCostGate", () => {
+  it("is disabled (infinite) when the global cap is 0", async () => {
+    process.env.GLOBAL_DAILY_COST_CAP_CENTS = "0";
+    vi.resetModules();
+    const { checkGlobalCostGate } = await import("../cost-guard.js");
+    expect(checkGlobalCostGate().allowed).toBe(true);
+    expect(checkGlobalCostGate().capCents).toBe(0);
+  });
+
+  it("blocks system (userId-less) spend once the aggregate reaches the cap", async () => {
+    process.env.GLOBAL_DAILY_COST_CAP_CENTS = "50";
+    vi.resetModules();
+    const { checkGlobalCostGate, recordGlobalCostUsage, __resetGlobalSpendForTest } = await import(
+      "../cost-guard.js"
+    );
+    __resetGlobalSpendForTest();
+    expect(checkGlobalCostGate().allowed).toBe(true);
+    recordGlobalCostUsage(30);
+    expect(checkGlobalCostGate().allowed).toBe(true);
+    expect(checkGlobalCostGate().remainingCents).toBe(20);
+    recordGlobalCostUsage(20); // now at 50, the cap
+    const blocked = checkGlobalCostGate();
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.reason).toMatch(/global/i);
   });
 });

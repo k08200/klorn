@@ -18,10 +18,13 @@
 import type { ClassifiableEmail } from "./email-classifier.js";
 import { createCompletion, MODEL } from "./openai.js";
 import { captureError } from "./sentry.js";
+import { TIERS, type Tier } from "./tiers.js";
 
-export type PocTier = "SILENT" | "QUEUE" | "PUSH" | "AUTO";
+// PocTier is the canonical 4-tier vocabulary — re-exported from tiers.ts so
+// the judge, calibration, mirror, and API can never drift apart again.
+export type PocTier = Tier;
 
-export const POC_TIERS: ReadonlyArray<PocTier> = ["SILENT", "QUEUE", "PUSH", "AUTO"];
+export const POC_TIERS: ReadonlyArray<PocTier> = TIERS;
 
 /**
  * Four features that drive the tier decision. All values are 0.0–1.0 floats
