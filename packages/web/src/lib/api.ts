@@ -32,6 +32,10 @@ export function getStoredAuthToken(): string | null {
 export function setStoredAuthToken(token: string): void {
   localStorage.setItem(AUTH_TOKEN_KEY, token);
   localStorage.removeItem(LEGACY_AUTH_TOKEN_KEY);
+  // A fresh session means any in-flight expiry handling is stale. Without this
+  // reset, a 401 race during login (or a bfcache restore) leaves the flag stuck
+  // at true and every future session expiry is silently ignored.
+  isHandling401 = false;
 }
 
 export function clearStoredAuthToken(): void {

@@ -25,27 +25,7 @@ import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { syncEmails } from "../email-sync.js";
 import { registerGmailWatch, stopGmailWatch } from "../gmail.js";
-
-const GMAIL_PUSH_OIDC_EMAIL = process.env.GMAIL_PUSH_OIDC_EMAIL;
-
-interface OidcClaims {
-  email?: string;
-  email_verified?: boolean;
-  aud?: string;
-  iss?: string;
-  exp?: number;
-}
-
-function decodeJwtClaims(token: string): OidcClaims | null {
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  try {
-    const payload = Buffer.from(parts[1], "base64url").toString("utf-8");
-    return JSON.parse(payload) as OidcClaims;
-  } catch {
-    return null;
-  }
-}
+import { verifyGoogleOidcToken } from "../google-oidc.js";
 
 function extractBearerToken(req: FastifyRequest): string | null {
   const auth = req.headers.authorization;
@@ -55,21 +35,24 @@ function extractBearerToken(req: FastifyRequest): string | null {
   return null;
 }
 
-function authorizePushRequest(req: FastifyRequest): { ok: true } | { ok: false; reason: string } {
+async function authorizePushRequest(
+  req: FastifyRequest,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const oidcEmail = process.env.GMAIL_PUSH_OIDC_EMAIL;
   const shared = process.env.GMAIL_PUSH_TOKEN;
   const token = extractBearerToken(req);
 
-  if (GMAIL_PUSH_OIDC_EMAIL) {
+  if (oidcEmail) {
     if (!token) return { ok: false, reason: "missing OIDC token" };
-    const claims = decodeJwtClaims(token);
-    if (!claims) return { ok: false, reason: "malformed OIDC token" };
-    if (typeof claims.exp === "number" && claims.exp * 1000 < Date.now()) {
-      return { ok: false, reason: "expired OIDC token" };
+    // Signature, expiry, and issuer are verified against Google's certs —
+    // claims from an unverified decode are attacker-controlled and must
+    // never be trusted on their own.
+    const claims = await verifyGoogleOidcToken(token);
+    if (!claims) return { ok: false, reason: "OIDC token failed verification" };
+    if (claims.email_verified !== true) {
+      return { ok: false, reason: "OIDC email not verified" };
     }
-    if (claims.iss !== "https://accounts.google.com" && claims.iss !== "accounts.google.com") {
-      return { ok: false, reason: "unexpected OIDC issuer" };
-    }
-    if (claims.email?.toLowerCase() !== GMAIL_PUSH_OIDC_EMAIL.toLowerCase()) {
+    if (claims.email?.toLowerCase() !== oidcEmail.toLowerCase()) {
       return { ok: false, reason: "OIDC email mismatch" };
     }
     return { ok: true };
@@ -100,13 +83,14 @@ interface GmailPushPayload {
 
 export async function gmailPushRoutes(app: FastifyInstance) {
   // ── Public Pub/Sub push target ────────────────────────────────────────
-  // No requireAuth here — Pub/Sub posts as Google, not as the user. The
-  // GMAIL_PUSH_TOKEN query parameter is the auth boundary.
+  // No requireAuth here — Pub/Sub posts as Google, not as the user. The auth
+  // boundary is a signature-verified Google OIDC token (or the GMAIL_PUSH_TOKEN
+  // shared secret via Authorization header).
   app.post("/push", async (request, reply) => {
-    if (!process.env.GMAIL_PUSH_TOKEN && !GMAIL_PUSH_OIDC_EMAIL) {
+    if (!process.env.GMAIL_PUSH_TOKEN && !process.env.GMAIL_PUSH_OIDC_EMAIL) {
       return reply.code(503).send({ error: "Gmail push not configured" });
     }
-    const result = authorizePushRequest(request);
+    const result = await authorizePushRequest(request);
     if (!result.ok) {
       return reply.code(401).send({ error: "Unauthorized" });
     }

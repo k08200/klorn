@@ -83,6 +83,13 @@ export const AGENT_IDLE_THRESHOLD_MS = intEnv("AGENT_IDLE_THRESHOLD_MS", 24 * 60
 // bypass the gate because their cost-per-token is 0.
 export const DAILY_COST_CAP_CENTS = intEnv("DAILY_COST_CAP_CENTS", 100);
 
+// Global hard cap across ALL users + system-initiated calls per UTC day, in
+// cents (USD). The per-user gate can't see calls made without a userId
+// (background reconcilers, system briefings), so a runaway system loop is
+// invisible to it. This ceiling catches the aggregate. 0 disables it.
+// Default 1000¢ = $10/day — generous for a small beta, fatal-bill-proof.
+export const GLOBAL_DAILY_COST_CAP_CENTS = intEnv("GLOBAL_DAILY_COST_CAP_CENTS", 1000);
+
 // ── Email classifier ──────────────────────────────────────────────────
 export const EMAIL_CLASSIFY_BATCH_SIZE = intEnv("EMAIL_CLASSIFY_BATCH_SIZE", 15);
 

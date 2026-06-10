@@ -90,6 +90,35 @@ export class DailyCostCapExceededError extends Error {
 export const DAILY_COST_CAP_MESSAGE =
   "You've used today's AI quota. It resets at 00:00 UTC. To unblock right now, add your own API key in Settings.";
 
+/**
+ * Enforce both cost gates before a call:
+ *  - the global ceiling (always; catches system calls with no userId), and
+ *  - the per-user daily cap (only when a userId is present).
+ * Pre-bills the estimated floor cost to both so a runaway loop of individually
+ * cheap calls can't sneak under either cap. Throws DailyCostCapExceededError
+ * when either gate is closed.
+ */
+async function enforceCostGates(model: string, userId?: string): Promise<void> {
+  const { checkCostGate, recordCostUsage, checkGlobalCostGate, recordGlobalCostUsage, usdToCents } =
+    await import("./cost-guard.js");
+  const { estimateModelCostUsd } = await import("./model-fallback.js");
+  const estCents = usdToCents(estimateModelCostUsd(model, 0, 0));
+
+  const globalGate = checkGlobalCostGate();
+  if (!globalGate.allowed) {
+    throw new DailyCostCapExceededError(DAILY_COST_CAP_MESSAGE);
+  }
+
+  if (userId) {
+    const gate = await checkCostGate(userId);
+    if (!gate.allowed) {
+      throw new DailyCostCapExceededError(DAILY_COST_CAP_MESSAGE);
+    }
+    void recordCostUsage(userId, estCents, model);
+  }
+  recordGlobalCostUsage(estCents);
+}
+
 const PROVIDERS_EXHAUSTED_BASE =
   "All AI providers are unavailable right now. To unblock yourself, add your own OpenRouter or Gemini key in Settings.";
 
@@ -171,20 +200,9 @@ export async function createCompletion(
   }
 
   // Daily-cost gate: enforce BEFORE the call so we don't burn budget twice
-  // when a runaway loop has already crossed the cap.
-  if (options.userId) {
-    const { checkCostGate, recordCostUsage, usdToCents } = await import("./cost-guard.js");
-    const gate = await checkCostGate(options.userId);
-    if (!gate.allowed) {
-      throw new DailyCostCapExceededError(DAILY_COST_CAP_MESSAGE);
-    }
-    // Pre-emptively bill the estimated cost; success path is recorded below.
-    // We use a tiny floor (1¢) for paid models so runaway calls can't sneak
-    // under the cap by being individually cheap.
-    const { estimateModelCostUsd } = await import("./model-fallback.js");
-    const estUsd = estimateModelCostUsd(params.model, 0, 0); // floor for the call itself
-    void recordCostUsage(options.userId, usdToCents(estUsd), params.model);
-  }
+  // when a runaway loop has already crossed the cap. Covers the global
+  // ceiling (always) and the per-user cap (when a userId is present).
+  await enforceCostGates(params.model, options.userId);
 
   /**
    * Per-provider call. Strips OpenAI-only params that providers like Gemini's
@@ -279,19 +297,9 @@ export async function createVisionCompletion(
     throw new Error("No LLM providers configured — set OPENROUTER_API_KEY and/or GEMINI_API_KEY");
   }
 
-  // Daily-cost gate: vision/OCR calls bill the same per-user daily ledger as
-  // chat. Without this, a runaway attachment-analysis batch can blow past the
-  // cap because checkCostGate was only wired into createCompletion.
-  if (options.userId) {
-    const { checkCostGate, recordCostUsage, usdToCents } = await import("./cost-guard.js");
-    const gate = await checkCostGate(options.userId);
-    if (!gate.allowed) {
-      throw new DailyCostCapExceededError(DAILY_COST_CAP_MESSAGE);
-    }
-    const { estimateModelCostUsd } = await import("./model-fallback.js");
-    const estUsd = estimateModelCostUsd(params.model, 0, 0);
-    void recordCostUsage(options.userId, usdToCents(estUsd), params.model);
-  }
+  // Daily-cost gate: vision/OCR calls bill the same ledgers as chat. Without
+  // this, a runaway attachment-analysis batch can blow past the cap.
+  await enforceCostGates(params.model, options.userId);
 
   const ordered = [
     ...chain.filter((provider) => provider.name === "gemini"),

@@ -156,7 +156,15 @@ ${wrapUntrusted((input.body || "").slice(0, 3000), "email:body")}`,
 
 export async function registerEmailRepliesRoutes(app: FastifyInstance) {
   // POST /api/email/:id/reply-draft
-  app.post("/:id/reply-draft", { preHandler: requireAuth }, async (request, reply) => {
+  // Tighter than the global 100/min limit: every call here is an LLM
+  // completion, so the global limit alone allows ~$1/min of forced spend.
+  app.post(
+    "/:id/reply-draft",
+    {
+      preHandler: requireAuth,
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
     const { intent } = (request.body as { intent?: string }) || {};

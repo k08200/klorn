@@ -54,7 +54,16 @@ export async function naverImapRoutes(app: FastifyInstance) {
 
   app.post<{
     Body: { email: string; password: string; host?: string };
-  }>("/connect", { schema: { body: connectBodySchema } }, async (request, reply) => {
+  }>(
+    "/connect",
+    {
+      schema: { body: connectBodySchema },
+      // Every call opens a real IMAP connection to Naver; without a tight
+      // limit this is both a credential-stuffing oracle and a way to get
+      // our egress IP blocked by Naver.
+      config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
+    },
+    async (request, reply) => {
     const userId = getUserId(request);
     const { email, password, host } = request.body;
     const imapHost = (host ?? DEFAULT_NAVER_IMAP_HOST).trim();

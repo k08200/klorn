@@ -5,9 +5,49 @@ const apiUrl =
   process.env.NEXT_PUBLIC_API_URL ||
   (process.env.NODE_ENV === "production" ? "https://klorn-api.onrender.com" : undefined);
 
+// CSP only makes sense against the production API origin; in dev the API host
+// varies (localhost/127.0.2.x) and React Refresh needs eval, so we skip it there.
+const apiWsUrl = apiUrl?.replace("https://", "wss://").replace("http://", "ws://");
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  // Next.js injects inline bootstrap scripts; without a nonce setup
+  // 'unsafe-inline' is required for the app to boot at all.
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  `connect-src 'self' ${apiUrl ?? ""} ${apiWsUrl ?? ""} https://*.sentry.io https://*.ingest.sentry.io https://*.ingest.us.sentry.io`,
+  "media-src 'self'",
+  "worker-src 'self'",
+  "manifest-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "upgrade-insecure-requests",
+]
+  .join("; ")
+  .replace(/\s+/g, " ");
+
+const securityHeaders = [
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  ...(process.env.NODE_ENV === "production"
+    ? [
+        { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+        { key: "Content-Security-Policy", value: contentSecurityPolicy },
+      ]
+    : []),
+];
+
 const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DEV_DIST === "1" ? ".next-dev" : ".next",
   outputFileTracingRoot: path.join(import.meta.dirname, "../../"),
+  async headers() {
+    return [{ source: "/(.*)", headers: securityHeaders }];
+  },
   async redirects() {
     return [
       { source: "/dashboard", destination: "/inbox", permanent: false },
