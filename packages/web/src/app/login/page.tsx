@@ -152,7 +152,7 @@ function LoginForm() {
       </a>
       <p className="mt-3 text-center text-[11px] leading-5 text-stone-500">
         {signupOpen
-          ? "Free during the private beta. Google may show an “unverified app” screen while verification is pending — that’s expected."
+          ? "Free during the private beta. We use Google’s restricted Gmail scope, so Google may flag the app as unverified while CASA review is in progress — this is the same review every Gmail integration goes through."
           : "Klorn is in a private beta — sign in with an invited Google account."}
       </p>
 
