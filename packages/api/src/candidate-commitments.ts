@@ -107,8 +107,13 @@ export async function openCommitmentForCandidateTransition(
     });
     return { id: commitment.id };
   } catch (err) {
+    // Keep tainted values out of the format-string position and encode them
+    // so they cannot forge log lines (CodeQL js/tainted-format-string +
+    // js/log-injection).
     console.warn(
-      `[candidate-commitments] failed to open commitment for candidate=${candidate.id} status=${nextStatus}:`,
+      "[candidate-commitments] failed to open commitment for candidate=%s status=%s:",
+      encodeURIComponent(candidate.id),
+      encodeURIComponent(nextStatus),
       err,
     );
     return null;
