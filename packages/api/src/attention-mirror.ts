@@ -22,6 +22,7 @@ import { AUTOPILOT_LEVEL, type AutopilotLevel } from "./agent-mode.js";
 import { computeAttentionInputHash } from "./attention-input-hash.js";
 import { prisma } from "./db.js";
 import { getSuppressionSet, isSuppressed } from "./feedback-adaptor.js";
+import type { Tier } from "./tiers.js";
 
 // Tier fields (tier, tierReason) are added via migration. Until `prisma generate`
 // reflects the schema change, we use this typed wrapper to avoid TS errors.
@@ -99,20 +100,18 @@ function pendingActionCost(pa: PendingActionLike): string {
   return "If the decision stays pending, the related workstream may stall.";
 }
 
-// ─── 5-Tier Escalation ─────────────────────────────────────────────────────
-// Maps item characteristics to SILENT | QUEUE | PUSH | CALL | AUTO.
+// ─── 4-Tier Escalation ─────────────────────────────────────────────────────
+// Maps item characteristics to the canonical SILENT | QUEUE | PUSH | AUTO.
 // SILENT: not worth surfacing (noise reduction)
 // QUEUE:  added to inbox for async review
-// PUSH:   warrants an active push notification
-// CALL:   highest-urgency interrupt — reserved for cases where missing the
-//         signal causes hard external damage (e.g. meeting started, deadline
-//         expiring within minutes, counterparty actively blocked). Today we
-//         render CALL the same as PUSH at the delivery layer; the tier
-//         distinction lets the UI/receipt page show it separately and lets
-//         the eventual SMS/phone integration target this tier only.
+// PUSH:   warrants an active push notification — this is the top of the
+//         escalation ladder. The highest-urgency cases (meeting starting,
+//         deadline expiring, counterparty blocked) are still PUSH; their
+//         urgency lives in the tierReason copy, not in a separate tier. See
+//         tiers.ts for why the old CALL tier was retired.
 // AUTO:   low-risk, pre-approved action eligible for auto-execution
 
-export type Tier = "SILENT" | "QUEUE" | "PUSH" | "CALL" | "AUTO";
+export type { Tier };
 
 function tierForPendingAction(autonomyLevel: AutopilotLevel): { tier: Tier; tierReason: string } {
   if (autonomyLevel === AUTOPILOT_LEVEL.SAFE_AUTO) {
@@ -124,7 +123,7 @@ function tierForPendingAction(autonomyLevel: AutopilotLevel): { tier: Tier; tier
 function tierForTask(priority: string, isOverdue: boolean): { tier: Tier; tierReason: string } {
   if (isOverdue && priority === "URGENT") {
     return {
-      tier: "CALL",
+      tier: "PUSH",
       tierReason: "Overdue URGENT task — last-chance interrupt before damage compounds",
     };
   }
@@ -138,10 +137,10 @@ function tierForTask(priority: string, isOverdue: boolean): { tier: Tier; tierRe
 }
 
 function tierForCalendarEvent(priority: number): { tier: Tier; tierReason: string } {
-  // priority 90+ means starting within ~15 minutes — treat as CALL.
+  // priority 90+ means starting within ~15 minutes — top-urgency PUSH.
   // 70–89 keeps the existing "within the hour" PUSH.
   if (priority >= 90) {
-    return { tier: "CALL", tierReason: "Meeting starts in minutes — interrupt now" };
+    return { tier: "PUSH", tierReason: "Meeting starts in minutes — interrupt now" };
   }
   if (priority >= 70) {
     return { tier: "PUSH", tierReason: "Meeting starts within the hour — prep now" };
@@ -156,7 +155,7 @@ function tierForCommitment(
 ): { tier: Tier; tierReason: string } {
   if (type === "COMMITMENT_OVERDUE" && priority >= 80) {
     return {
-      tier: "CALL",
+      tier: "PUSH",
       tierReason: "High-priority commitment is overdue — counterparty actively blocked",
     };
   }

@@ -21,11 +21,8 @@ import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { senderEmail } from "../notification-format.js";
 import { captureError } from "../sentry.js";
+import { type Tier, TIERS, normalizeTier } from "../tiers.js";
 import { getTrustScoresBulk } from "../trust-score.js";
-
-type Tier = "SILENT" | "QUEUE" | "PUSH" | "CALL" | "AUTO";
-
-const TIER_VALUES: ReadonlyArray<Tier> = ["SILENT", "QUEUE", "PUSH", "CALL", "AUTO"];
 
 // Tool args that carry a Gmail message id we can map back to a stored
 // EmailMessage row. Other tools (create_event, send_email, etc.) carry
@@ -45,7 +42,7 @@ const overrideBodySchema = {
   properties: {
     tier: {
       type: "string",
-      enum: ["SILENT", "QUEUE", "PUSH", "CALL", "AUTO"],
+      enum: TIERS,
     },
   },
 } as const;
@@ -100,7 +97,6 @@ interface FirewallResponse {
     SILENT: number;
     QUEUE: number;
     PUSH: number;
-    CALL: number;
     AUTO: number;
     total: number;
   };
@@ -235,12 +231,13 @@ export async function firewallRoutes(app: FastifyInstance) {
       SILENT: [],
       QUEUE: [],
       PUSH: [],
-      CALL: [],
       AUTO: [],
     };
 
     for (const row of items) {
-      const tier = (TIER_VALUES.includes(row.tier as Tier) ? row.tier : "QUEUE") as Tier;
+      // normalizeTier maps legacy CALL rows → PUSH (not QUEUE) and any
+      // unknown/null tier → QUEUE. See tiers.ts.
+      const tier = normalizeTier(row.tier);
       const item: FirewallItem = {
         id: row.id,
         source: row.source,
@@ -349,7 +346,6 @@ export async function firewallRoutes(app: FastifyInstance) {
         SILENT: tiers.SILENT.length,
         QUEUE: tiers.QUEUE.length,
         PUSH: tiers.PUSH.length,
-        CALL: tiers.CALL.length,
         AUTO: tiers.AUTO.length,
         total: items.length,
       },
