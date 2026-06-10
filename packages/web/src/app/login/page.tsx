@@ -150,11 +150,35 @@ function LoginForm() {
         </svg>
         Continue with Google
       </a>
-      <p className="mt-3 text-center text-[11px] leading-5 text-stone-500">
-        {signupOpen
-          ? "Free during the private beta. We use Google’s restricted Gmail scope, so Google may flag the app as unverified while CASA review is in progress — this is the same review every Gmail integration goes through."
-          : "Klorn is in a private beta — sign in with an invited Google account."}
-      </p>
+      {signupOpen ? (
+        <div className="mt-3 space-y-2 text-center text-[11px] leading-5 text-stone-500">
+          <p>
+            Free during the private beta. Google flags unverified apps with the
+            restricted Gmail scope until CASA review clears — standard for every
+            Gmail integration.
+          </p>
+          <p>
+            What we don’t do: send mail without a click-through receipt. Every
+            send, permanent delete, and external forward is hash-bound and
+            verifiable on read.
+          </p>
+          <p className="text-stone-400">
+            <a
+              href="https://github.com/k08200/klorn/blob/main/docs/doctrine/deterministic-floor.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline decoration-stone-700 underline-offset-2 hover:text-amber-200 hover:decoration-amber-300"
+            >
+              Read the doctrine before the login flow →
+            </a>
+            <span className="ml-2 text-stone-600">Open source · AGPLv3 · v0.3.0</span>
+          </p>
+        </div>
+      ) : (
+        <p className="mt-3 text-center text-[11px] leading-5 text-stone-500">
+          Klorn is in a private beta — sign in with an invited Google account.
+        </p>
+      )}
 
       <div className="my-5 flex items-center gap-3">
         <div className="h-px flex-1 bg-stone-800/80" />

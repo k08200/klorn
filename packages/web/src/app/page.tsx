@@ -341,7 +341,10 @@ export default function LandingPage() {
                 Log in
               </Link>
             </div>
-            <p className="mt-4 text-xs text-stone-500">Free during private beta.</p>
+            <p className="mt-4 text-xs text-stone-500">
+              Free during private beta — capped at 100 testers until Google
+              CASA review clears.
+            </p>
           </div>
 
           <MobilePreview />
