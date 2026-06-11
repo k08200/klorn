@@ -300,6 +300,7 @@ export async function runAgentForUser(
     const { buildTrustHintForPrompt } = await import("./trust-score.js");
     const { buildInteractionHintForPrompt } = await import("./interaction-graph.js");
     const { buildPlaybookHintForPrompt } = await import("./playbooks.js");
+    const { buildRejectionHintForPrompt } = await import("./rejection-hint.js");
     const [
       context,
       feedback,
@@ -310,6 +311,7 @@ export async function runAgentForUser(
       trustHint,
       interactionHint,
       playbookHint,
+      rejectionHint,
     ] = await Promise.all([
       gatherUserContext(userId),
       getAgentFeedback(userId),
@@ -320,6 +322,7 @@ export async function runAgentForUser(
       buildTrustHintForPrompt(userId).catch(() => ""),
       buildInteractionHintForPrompt(userId).catch(() => ""),
       buildPlaybookHintForPrompt(userId).catch(() => ""),
+      buildRejectionHintForPrompt(userId).catch(() => ""),
     ]);
 
     // Skip if context is minimal (no tasks, no calendar, no emails)
@@ -495,6 +498,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
     if (patternContext) systemPromptWithMemory += patternContext;
     if (trustHint) systemPromptWithMemory += trustHint;
     if (interactionHint) systemPromptWithMemory += interactionHint;
+    if (rejectionHint) systemPromptWithMemory += rejectionHint;
 
     const messages: unknown[] = [
       { role: "system", content: systemPromptWithMemory },

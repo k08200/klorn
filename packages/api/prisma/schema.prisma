@@ -470,6 +470,11 @@ model PendingAction {
   // return value) — leaving as text keeps the column open for any tool
   // that returns a non-JSON message.
   result         String?
+  // Reject-with-feedback (HITL): the user's stated "why" captured at
+  // reject time (≤500 chars, trimmed). NULL for rejections without a
+  // reason and for legacy rows. Surfaced back into agent prompts via
+  // rejection-hint.ts so the agent stops repeating rejected proposals.
+  rejectionReason String?
   // Deterministic floor: ActionReceipt minted at /approve time for floor
   // actions (see attention-floor.ts). NULL for non-floor actions and for
   // legacy rows pre-#481. tool-executor verifies this against the
