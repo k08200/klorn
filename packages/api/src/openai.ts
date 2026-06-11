@@ -3,7 +3,7 @@ import type {
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
 } from "openai/resources/chat/completions";
-import { estimatePrebillCents, recordLlmUsage } from "./llm-usage.js";
+import { estimatePrebillCents, recordLlmUsage, trueUpCostLedgers } from "./llm-usage.js";
 import {
   FALLBACK_MODEL,
   getProviderCooldownInfo,
@@ -100,10 +100,11 @@ export const DAILY_COST_CAP_MESSAGE =
  * when either gate is closed.
  */
 async function enforceCostGates(model: string, userId?: string): Promise<void> {
-  const { checkCostGate, recordCostUsage, checkGlobalCostGate, recordGlobalCostUsage, usdToCents } =
+  const { checkCostGate, recordCostUsage, checkGlobalCostGate, recordGlobalCostUsage } =
     await import("./cost-guard.js");
-  const { estimateModelCostUsd } = await import("./model-fallback.js");
-  const estCents = usdToCents(estimateModelCostUsd(model, 0, 0));
+  // Single source of truth for the pre-bill arithmetic lives in llm-usage.ts
+  // (nominal-token floor; the post-call true-up settles against actuals).
+  const estCents = estimatePrebillCents(model);
 
   const globalGate = checkGlobalCostGate();
   if (!globalGate.allowed) {
@@ -242,13 +243,23 @@ export async function createCompletion(
     // supports include_usage on streams, but changing stream behavior is out
     // of scope) — record a usageMissing row with zero counts instead so the
     // call is still visible in the ledger.
+    const usage = isStreaming
+      ? null
+      : ((result as OpenAI.Chat.Completions.ChatCompletion).usage ?? null);
     void recordLlmUsage({
       ...usageContext,
       provider: provider.name,
       model,
-      usage: isStreaming
-        ? null
-        : ((result as OpenAI.Chat.Completions.ChatCompletion).usage ?? null),
+      usage,
+    });
+    // Settle the cost ledgers against actual token counts (positive delta
+    // only). Uses the model that actually served the request — failover may
+    // have swapped it since the pre-bill.
+    void trueUpCostLedgers({
+      userId: usageContext.userId,
+      model,
+      prebilledCents: usageContext.estimatedCostCents,
+      usage,
     });
     return result;
   };
@@ -359,6 +370,12 @@ export async function createVisionCompletion(
         estimatedCostCents: estimatePrebillCents(params.model),
         provider: provider.name,
         model,
+        usage: result.usage ?? null,
+      });
+      void trueUpCostLedgers({
+        userId: options.userId ?? null,
+        model,
+        prebilledCents: estimatePrebillCents(params.model),
         usage: result.usage ?? null,
       });
       return result;

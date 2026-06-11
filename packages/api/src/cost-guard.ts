@@ -90,11 +90,10 @@ export async function recordCostUsage(
   }
 }
 
-/** Convert a USD float (e.g. 0.0042) to integer cents rounded up. */
-export function usdToCents(usd: number): number {
-  if (!Number.isFinite(usd) || usd <= 0) return 0;
-  return Math.max(1, Math.ceil(usd * 100));
-}
+// Moved to cents.ts (leaf module — llm-usage.ts needs it without dragging
+// in this file's db.js/Prisma .env-autoload side effect). Re-exported so
+// existing importers keep working.
+export { usdToCents } from "./cents.js";
 
 // ── Global daily ceiling ──────────────────────────────────────────────────
 // In-memory aggregate across every LLM call (per-user AND system-initiated),
