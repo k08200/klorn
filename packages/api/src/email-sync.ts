@@ -13,6 +13,7 @@ import { upsertAttentionForEmailJudgement } from "./attention-mirror.js";
 import { extractAndUpsertCommitmentsFromText } from "./commitment-ingestion.js";
 import { prisma } from "./db.js";
 import { scheduleAgentForActionableEmail } from "./email-action-trigger.js";
+import { extractEmailAddress } from "./email-address.js";
 import { extractAttachmentContent, isReadableEmailAttachment } from "./email-attachment-text.js";
 import {
   analyzePendingEmailAttachments,
@@ -20,6 +21,7 @@ import {
   upsertEmailAttachments,
 } from "./email-attachments.js";
 import { getAuthedClient, isGoogleAuthError, markGoogleTokenForReconnect } from "./gmail.js";
+import { buildJudgeContext } from "./judge-context.js";
 import { createCompletion, MODEL, openai } from "./openai.js";
 import { judgeEmail } from "./poc-judge.js";
 import { captureError } from "./sentry.js";
@@ -361,15 +363,21 @@ async function persistGmailEmail(
   // tier-grouped items. Fire-and-forget — sync should never block on the
   // LLM call, and an upsert failure just leaves the email out of the queue
   // until the next sync (or a manual override) reclassifies it.
-  judgeEmail(
-    {
-      from: email.from,
-      subject: email.subject,
-      snippet: email.snippet,
-      labels: email.labels,
-    },
-    userId,
-  )
+  // buildJudgeContext mines past manual overrides (few-shot + sender
+  // short-circuit) and never throws — worst case is an empty context.
+  buildJudgeContext(userId, { from: email.from, excludeEmailId: createdEmail.id })
+    .then((judgeContext) =>
+      judgeEmail(
+        {
+          from: email.from,
+          subject: email.subject,
+          snippet: email.snippet,
+          labels: email.labels,
+        },
+        userId,
+        judgeContext,
+      ),
+    )
     .then(async (judgement) => {
       await upsertAttentionForEmailJudgement(
         {
@@ -706,15 +714,9 @@ export function classifyPriority(
   return classifyPriorityDetailed(from, subject, labels).priority;
 }
 
-/**
- * Pull just the email address from a header value like "Name <foo@bar.com>".
- * Returns lowercase, or the full lowercased input when no angle brackets are
- * present.
- */
-export function extractEmailAddress(value: string): string {
-  const match = value.match(/<([^>]+)>/);
-  return (match?.[1] ?? value).trim().toLowerCase();
-}
+// extractEmailAddress moved to email-address.ts (leaf module — judge-context.ts
+// needs it without importing this file). Re-exported so importers keep working.
+export { extractEmailAddress };
 
 export function classifyNeedsReplyFromSignals(input: {
   from: string;
