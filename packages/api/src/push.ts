@@ -14,7 +14,7 @@ import webPush from "web-push";
 import { prisma } from "./db.js";
 import { isSafePushEndpoint } from "./is-safe-push-endpoint.js";
 import { notificationSuppressionReason } from "./notification-policy.js";
-import { type NotifCategory, shouldNotify } from "./notification-prefs.js";
+import { evaluateNotificationGate, type NotifCategory } from "./notification-prefs.js";
 import {
   createPushDeliveryAttempt,
   createSkippedPushDelivery,
@@ -111,12 +111,15 @@ export async function sendPushNotification(
     return skipped("missing_vapid_keys");
   }
 
-  // Respect per-user preferences and quiet hours
-  const allowed = await shouldNotify(userId, category);
-  if (!allowed) {
-    console.log(`[PUSH] Suppressed by user prefs for ${userId} (${category})`);
-    await recordSkipped(userId, payload.title, category, "user_preferences_or_quiet_hours");
-    return skipped("user_preferences_or_quiet_hours");
+  // Respect per-user category preferences and quiet hours. Quiet hours get
+  // their own skipReason so PushDeliveryLog can tell "user opted out of this
+  // category" apart from "user is asleep". Either way the browser stays
+  // silent while the upstream Notification row keeps the event in the bell.
+  const gate = await evaluateNotificationGate(userId, category);
+  if (!gate.allowed) {
+    console.log(`[PUSH] Suppressed (${gate.reason}) for ${userId} (${category})`);
+    await recordSkipped(userId, payload.title, category, gate.reason);
+    return skipped(gate.reason);
   }
 
   if (category === "agent_proposal") {
