@@ -6,6 +6,7 @@ import type {
 import {
   FALLBACK_MODEL,
   getProviderCooldownInfo,
+  isConnectionError,
   isCreditError,
   isFreeModel,
   isKeyLimitError,
@@ -188,7 +189,9 @@ export async function createCompletion(
 
   const chain = getProviderChain(options.credentials);
   if (chain.length === 0) {
-    throw new Error("No LLM providers configured — set OPENROUTER_API_KEY and/or GEMINI_API_KEY");
+    throw new Error(
+      "No LLM providers configured — set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL (local Ollama/LM Studio/vLLM)",
+    );
   }
 
   // Per-user RPM + daily-cap gate: trip before the call so a runaway loop
@@ -264,6 +267,16 @@ export async function createCompletion(
         continue;
       }
 
+      // Local/OpenAI-compat endpoint unreachable (Ollama not running, box
+      // asleep): fail over to the next provider WITHOUT a cooldown — a
+      // local endpoint can come back any second, and cooling down the only
+      // provider of a local-only chain would blackhole every request.
+      // Scoped to openai-compat so genuine network failures on cloud
+      // providers still surface loudly instead of being masked by a swap.
+      if (provider.name === "openai-compat" && isConnectionError(err)) {
+        continue;
+      }
+
       // Model retired / not served by this provider (OpenRouter "No endpoints
       // found for ..." 404). On OpenRouter we first walk the free-model
       // fallback chain on the SAME provider — losing one :free SKU shouldn't
@@ -294,7 +307,9 @@ export async function createVisionCompletion(
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   const chain = getProviderChain(options.credentials);
   if (chain.length === 0) {
-    throw new Error("No LLM providers configured — set OPENROUTER_API_KEY and/or GEMINI_API_KEY");
+    throw new Error(
+      "No LLM providers configured — set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL (local Ollama/LM Studio/vLLM)",
+    );
   }
 
   // Daily-cost gate: vision/OCR calls bill the same ledgers as chat. Without

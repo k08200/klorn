@@ -277,6 +277,35 @@ export function isBudgetError(error: unknown): boolean {
 }
 
 /**
+ * Transport-level failure — the endpoint itself is unreachable (connection
+ * refused/reset, DNS, timeout, undici "fetch failed"). Matters for the
+ * local/OpenAI-compat provider: a self-hoster's Ollama being down should
+ * fail over to the next configured provider, not hard-fail the request.
+ * Deliberately NOT given a cooldown — a local endpoint can come back any
+ * second, and for a local-only chain a cooldown would blackhole everything.
+ */
+export function isConnectionError(error: unknown): boolean {
+  if (error == null) return false;
+  const code =
+    typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
+  if (/^(ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EHOSTUNREACH|UND_ERR)/.test(code)) {
+    return true;
+  }
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (!message) return false;
+  if (
+    /econnrefused|econnreset|enotfound|etimedout|ehostunreach|fetch failed|connection error|socket hang up/.test(
+      message,
+    )
+  ) {
+    return true;
+  }
+  // OpenAI SDK wraps transport failures in APIConnectionError with a cause.
+  const cause = (error as { cause?: unknown }).cause;
+  return cause !== undefined && cause !== error && isConnectionError(cause);
+}
+
+/**
  * Provider has no endpoint for the requested model — typically because the
  * model SKU was retired (OpenRouter's "No endpoints found for ..." 404), the
  * caller misspelled an id, or no provider on that platform serves it. The
