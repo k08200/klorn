@@ -115,7 +115,8 @@ export async function sendWaitlistAdminAlert(entry: {
 export async function sendBetaInviteEmail(to: string, name?: string | null): Promise<boolean> {
   const loginUrl = `${WEB_URL}/login`;
   const safeAddr = maskEmail(to);
-  const greeting = name?.trim() ? `Hi ${name.trim().replace(/[<>]/g, "")},` : "Hi,";
+  const safeName = name?.trim()?.replace(/[<>]/g, "");
+  const greeting = safeName ? `Hi ${safeName},` : "Hi,";
 
   if (!resend) {
     console.log("[EMAIL] No RESEND_API_KEY — invite link generated for", safeAddr);
@@ -126,21 +127,27 @@ export async function sendBetaInviteEmail(to: string, name?: string | null): Pro
     await resend.emails.send({
       from: FROM_EMAIL,
       to,
-      subject: "You're in — early access to Klorn",
+      subject: "You're approved — sign in to Klorn",
       html: `
-        <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-          <h2 style="color: #d8a45d; margin-bottom: 24px;">Welcome to Klorn</h2>
+        <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px;">
+          <h2 style="color: #d8a45d; margin-bottom: 24px;">You're approved</h2>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
             ${greeting}
           </p>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-            You're approved for early access. Create your account with the email you signed up with, and Klorn will start connecting your Gmail and Calendar into a decision queue — surfacing the context, risk, and next move before anything runs.
+            I've added <strong style="color: #111827;">${to}</strong> to the Klorn test-user list in Google Cloud Console. Google's "Access blocked" screen should be gone for you now.
+          </p>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            Open the login page below and click <strong>Continue with Google</strong> using this exact address. Klorn will start connecting your Gmail and Calendar into a single decision queue — every send, permanent delete, or external forward stops at an approval step with a verifiable receipt.
           </p>
           <a href="${loginUrl}" style="display: inline-block; background: #d8a45d; color: #10100d; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
-            Create your account
+            Open Klorn → Continue with Google
           </a>
           <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
-            Heads-up: the first few days Klorn is still learning your decision patterns. Tell it "less" or "more" and it adjusts.
+            Heads-up: Klorn spends the first couple of days learning your patterns. Tell it "less" or "more" on any item and the tier policy adjusts.
+          </p>
+          <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
+            Found a bug or hit friction? Just reply to this email — I read every one personally and turn around fixes in hours, not weeks.
           </p>
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
           <p style="color: #9ca3af; font-size: 12px;">
