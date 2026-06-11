@@ -27,7 +27,7 @@ import {
   createCompletionStreaming as geminiStreaming,
 } from "./gemini-native.js";
 
-export type ProviderName = "openrouter" | "gemini";
+export type ProviderName = "openai-compat" | "openrouter" | "gemini";
 
 type ChatParams = ChatCompletionCreateParamsNonStreaming | ChatCompletionCreateParamsStreaming;
 type ChatResult =
@@ -75,6 +75,46 @@ function buildOpenRouter(apiKey = process.env.OPENROUTER_API_KEY, scope = "env")
   };
 }
 
+/**
+ * Self-host local provider — any OpenAI-compatible endpoint (Ollama,
+ * LM Studio, vLLM, llama.cpp server, LiteLLM...). The privacy answer for
+ * "does my email leave my machine?": set OPENAI_COMPAT_BASE_URL (e.g.
+ * http://localhost:11434/v1 for Ollama) and classification runs against it
+ * FIRST; cloud providers (if configured) remain as failover only.
+ *
+ * Deliberately env-only — there is no per-user credential path. Letting a
+ * hosted-cloud user supply an arbitrary base URL would hand the server an
+ * SSRF primitive (internal-network probing via "my Ollama"). Self-host
+ * operators own their env; that's the only place this belongs.
+ */
+function buildOpenAICompat(): Provider | null {
+  const baseUrl = process.env.OPENAI_COMPAT_BASE_URL;
+  if (!baseUrl) return null;
+  // Many local servers ignore auth entirely; the OpenAI SDK still requires
+  // a non-empty key string.
+  const apiKey = process.env.OPENAI_COMPAT_API_KEY || "local";
+  const defaultModel = process.env.OPENAI_COMPAT_MODEL || "qwen3:8b";
+  const client = new OpenAISDK({ apiKey, baseURL: baseUrl });
+  return {
+    name: "openai-compat",
+    quotaKey: "openai-compat:env",
+    client,
+    defaultModel,
+    // Small local models' function-calling is unreliable; opt in explicitly
+    // when the chosen model/server handles tools well.
+    supportsTools: process.env.OPENAI_COMPAT_SUPPORTS_TOOLS === "true",
+    // Caller model IDs are OpenRouter/Gemini-namespaced and meaningless to a
+    // local server — the operator picked ONE local model, always use it.
+    resolveModel: () => defaultModel,
+    call: async (params, model) => {
+      const create = client.chat.completions.create.bind(client.chat.completions) as (
+        ...args: unknown[]
+      ) => Promise<ChatResult>;
+      return await create({ ...params, model });
+    },
+  };
+}
+
 function buildGemini(apiKey = process.env.GEMINI_API_KEY, scope = "env"): Provider | null {
   if (!apiKey) return null;
   const defaultModel = process.env.GEMINI_FALLBACK_MODEL || "gemini-2.5-flash";
@@ -107,15 +147,28 @@ function buildGemini(apiKey = process.env.GEMINI_API_KEY, scope = "env"): Provid
 }
 
 const providers: Record<ProviderName, Provider | null> = {
+  "openai-compat": buildOpenAICompat(),
   openrouter: buildOpenRouter(process.env.OPENROUTER_API_KEY),
   gemini: buildGemini(process.env.GEMINI_API_KEY),
 };
 
-if (!providers.openrouter && !providers.gemini) {
+if (!providers.openrouter && !providers.gemini && !providers["openai-compat"]) {
   console.error(
-    "[providers] NEITHER OPENROUTER_API_KEY NOR GEMINI_API_KEY is set — every chat request will fail. Set at least one in your env.",
+    "[providers] No LLM provider configured — every chat request will fail. Set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL (local Ollama/LM Studio/vLLM) in your env.",
   );
 } else {
+  if (providers["openai-compat"]) {
+    const host = (() => {
+      try {
+        return new URL(process.env.OPENAI_COMPAT_BASE_URL ?? "").host;
+      } catch {
+        return process.env.OPENAI_COMPAT_BASE_URL;
+      }
+    })();
+    console.log(
+      `[providers] Local/OpenAI-compatible provider active at ${host} (model ${providers["openai-compat"].defaultModel}) — tried FIRST; cloud providers are failover only`,
+    );
+  }
   if (!providers.openrouter) {
     console.warn("[providers] OPENROUTER_API_KEY not set — primary provider disabled");
   }
@@ -158,14 +211,29 @@ export function getProvider(name: ProviderName): Provider | null {
   return providers[name];
 }
 
-/** Ordered list of providers to try, skipping any that aren't configured */
+/**
+ * Ordered list of providers to try, skipping any that aren't configured.
+ *
+ * The local/OpenAI-compat provider leads the chain by default — a
+ * self-hoster who configured a local endpoint wants their mail to stay in
+ * their perimeter, with cloud as failover. Set OPENAI_COMPAT_PRIORITY=last
+ * to flip that (local as the cheap fallback instead).
+ */
 export function getProviderChain(credentials: ProviderCredentials = {}): Provider[] {
   const userScope = credentials.quotaScope ? `user:${credentials.quotaScope}` : "user";
+  const compatLast = process.env.OPENAI_COMPAT_PRIORITY === "last";
+  const compat = providers["openai-compat"];
+  // User-credential providers are built ONLY from explicitly supplied keys.
+  // Passing undefined through would hit the builders' env-default params and
+  // register the env key a second time under a `user` quotaKey — duplicate
+  // tries and a cooldown bypass for the same underlying key.
   const chain = [
-    buildOpenRouter(credentials.openRouterApiKey ?? undefined, userScope),
-    buildGemini(credentials.geminiApiKey ?? undefined, userScope),
+    ...(compatLast ? [] : [compat]),
+    credentials.openRouterApiKey ? buildOpenRouter(credentials.openRouterApiKey, userScope) : null,
+    credentials.geminiApiKey ? buildGemini(credentials.geminiApiKey, userScope) : null,
     providers.openrouter,
     providers.gemini,
+    ...(compatLast ? [compat] : []),
   ].filter((p): p is Provider => p !== null);
 
   const seen = new Set<string>();

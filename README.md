@@ -154,6 +154,21 @@ the same dev cookies/tokens across restarts.
 
 For Google integration also set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI`.
 
+### Local LLM (keep your email on your machine)
+
+Klorn speaks to any OpenAI-compatible endpoint. Point it at a local
+server (Ollama, LM Studio, vLLM, llama.cpp) and email classification
+runs against it **first** — cloud keys, if configured at all, are
+failover only:
+
+```bash
+OPENAI_COMPAT_BASE_URL="http://localhost:11434/v1"  # Ollama default
+OPENAI_COMPAT_MODEL="qwen3:8b"
+```
+
+With no cloud keys set, Klorn is fully local. See `.env.example` for
+`OPENAI_COMPAT_PRIORITY` and the other knobs.
+
 ### Database
 
 The bundled docker-compose ships a Postgres 16 with the credentials the
