@@ -17,11 +17,12 @@
 
 import type { FastifyInstance } from "fastify";
 import { checkAttentionInputHash } from "../attention-input-hash.js";
+import { overrideAttentionTier } from "../attention-override.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { senderEmail } from "../notification-format.js";
 import { captureError } from "../sentry.js";
-import { normalizeTier, TIERS, type Tier } from "../tiers.js";
+import { manualOverrideReason, normalizeTier, TIERS, type Tier } from "../tiers.js";
 import { getTrustScoresBulk } from "../trust-score.js";
 
 // Tool args that carry a Gmail message id we can map back to a stored
@@ -356,7 +357,8 @@ export async function firewallRoutes(app: FastifyInstance) {
   // Sets the tier directly and stamps a tierReason explaining it was a
   // human override. The override is the ground-truth signal the POC
   // judge uses to score the classifier (Day 7 bar = 80% agreement
-  // between auto-tier and user-override-tier).
+  // between auto-tier and user-override-tier). The actual mutation lives
+  // in attention-override.ts, shared with the Telegram webhook buttons.
   app.post<{
     Params: { id: string };
     Body: { tier: Tier };
@@ -377,34 +379,13 @@ export async function firewallRoutes(app: FastifyInstance) {
       const { id } = request.params;
       const { tier } = request.body;
 
-      // Ownership check before mutating
-      const existing = await (
-        prisma.attentionItem as unknown as {
-          findFirst: (args: unknown) => Promise<{ id: string } | null>;
-        }
-      ).findFirst({
-        where: { id, userId },
-        select: { id: true },
-      });
-
-      if (!existing) {
+      const result = await overrideAttentionTier(userId, id, tier);
+      if (!result.ok) {
         reply.code(404);
         return { ok: false, message: "Attention item not found." };
       }
 
-      await (
-        prisma.attentionItem as unknown as {
-          update: (args: unknown) => Promise<unknown>;
-        }
-      ).update({
-        where: { id },
-        data: {
-          tier,
-          tierReason: `Manual override — user moved to ${tier}`,
-        },
-      });
-
-      return { ok: true, tier };
+      return { ok: true, tier: result.tier };
     },
   );
 }

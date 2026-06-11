@@ -154,6 +154,21 @@ the same dev cookies/tokens across restarts.
 
 For Google integration also set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI`.
 
+### Local LLM (keep your email on your machine)
+
+Klorn speaks to any OpenAI-compatible endpoint. Point it at a local
+server (Ollama, LM Studio, vLLM, llama.cpp) and email classification
+runs against it **first** — cloud keys, if configured at all, are
+failover only:
+
+```bash
+OPENAI_COMPAT_BASE_URL="http://localhost:11434/v1"  # Ollama default
+OPENAI_COMPAT_MODEL="qwen3:8b"
+```
+
+With no cloud keys set, Klorn is fully local. See `.env.example` for
+`OPENAI_COMPAT_PRIORITY` and the other knobs.
+
 ### Database
 
 The bundled docker-compose ships a Postgres 16 with the credentials the
@@ -209,6 +224,40 @@ NEXT_PUBLIC_API_URL=http://localhost:8002 \
 Open `http://localhost:8001` (or your override) — you should see the
 Klorn landing page.
 
+### Telegram notifications (optional)
+
+PUSH-tier interrupts can also be delivered to Telegram — useful when you
+self-host without web-push (VAPID) configured. Bring your own bot:
+
+1. Open [@BotFather](https://t.me/BotFather) in Telegram, send `/newbot`,
+   and follow the prompts. Note the **bot token** and the **bot username**.
+2. Set the env vars on the API:
+
+```bash
+TELEGRAM_BOT_TOKEN="123456:your-botfather-token"
+TELEGRAM_BOT_USERNAME="your_bot_username"   # without the @
+TELEGRAM_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+```
+
+3. Register the webhook (the API must be reachable over HTTPS):
+
+```bash
+curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+  -d "url=https://your-api-host/api/telegram/webhook" \
+  -d "secret_token=$TELEGRAM_WEBHOOK_SECRET"
+```
+
+4. Link your account: call `POST /api/telegram/link` with your Klorn
+   bearer token — it returns a one-time code (10-minute expiry) and a
+   `https://t.me/<bot>?start=<code>` deep link. Open the link and hit
+   Start; the bot confirms the chat is bound.
+
+PUSH-tier messages arrive with **Move to Queue** / **Silence** buttons
+(the same manual tier override as the firewall UI, so your taps feed the
+classifier's ground truth) plus an **Open Klorn** link. `DELETE
+/api/telegram/link` unlinks. The webhook rejects requests that don't carry
+the `X-Telegram-Bot-Api-Secret-Token` header matching your secret.
+
 ## Docker
 
 Run the full stack with the required secrets in the root `.env`:
@@ -228,6 +277,35 @@ pnpm --filter @klorn/api test
 packages/api/node_modules/.bin/biome format packages/
 packages/api/node_modules/.bin/biome check packages/
 ```
+
+## Phone escalation (optional, off by default)
+
+If a PUSH-tier notification sits unacknowledged for 5 minutes, Klorn can place
+**one** plain text-to-speech phone call (press 1 to repeat, press 2 to
+acknowledge). No AI on the line — it is the PagerDuty/GoAlert escalation
+pattern applied to your inbox. Bring your own Twilio account:
+
+```bash
+PHONE_ESCALATION_ENABLED=true
+TWILIO_ACCOUNT_SID="ACxxxxxxxx"
+TWILIO_AUTH_TOKEN="..."
+TWILIO_FROM_NUMBER="+15555550000"   # a voice-capable Twilio number you own
+PUBLIC_URL="https://your-api.example.com"  # Twilio must reach /api/phone/gather
+```
+
+Each user must additionally opt in (`AutomationConfig.phoneEscalationEnabled`)
+and have a phone number on file. Hard rails, none of them configurable away:
+at most **one call per notification ever**, a per-user daily cap (default 3,
+`PHONE_ESCALATION_DAILY_CAP`), a 10-minute cooldown between calls, and
+**quiet hours always win — there is no urgency bypass.** Klorn will never
+ring you at 3 a.m., that is the whole point of an attention firewall.
+
+Cost reality: every escalation call costs real money — roughly **$0.02–0.06
+per call** depending on the destination country (US ≈ $0.014/min, Korea and
+most of Asia/EU more). The daily cap bounds worst-case spend. Note for
+Korean numbers: Twilio outbound calls to +82 may display an international
+caller ID and can be filtered by carrier spam apps — test with your own
+number before relying on it.
 
 ## Deployment notes
 

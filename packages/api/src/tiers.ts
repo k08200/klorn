@@ -33,3 +33,21 @@ export function normalizeTier(value: string | null | undefined): Tier {
 export function isTier(value: unknown): value is Tier {
   return typeof value === "string" && TIER_SET.has(value);
 }
+
+/**
+ * Prefix stamped into AttentionItem.tierReason when the user manually moves
+ * an item to a different tier. This string IS the ground-truth marker: the
+ * POC accuracy gate counts rows with this prefix as founder labels, and the
+ * correction loop (judge-context.ts) mines them as few-shot examples. Always
+ * build override reasons through manualOverrideReason() so the marker can't
+ * drift.
+ */
+export const MANUAL_OVERRIDE_PREFIX = "Manual override";
+
+export function manualOverrideReason(tier: Tier): string {
+  return `${MANUAL_OVERRIDE_PREFIX} — user moved to ${tier}`;
+}
+
+export function isManualOverrideReason(reason: string | null | undefined): boolean {
+  return typeof reason === "string" && reason.startsWith(MANUAL_OVERRIDE_PREFIX);
+}

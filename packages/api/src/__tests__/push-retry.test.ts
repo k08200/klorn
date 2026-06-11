@@ -18,7 +18,7 @@ vi.mock("../push-delivery.js", () => ({
   markPushFailed: vi.fn(async () => {}),
 }));
 vi.mock("../notification-prefs.js", () => ({
-  shouldNotify: vi.fn(async () => true),
+  evaluateNotificationGate: vi.fn(async () => ({ allowed: true })),
 }));
 vi.mock("../push-rate-limit.js", () => ({
   recordPushAttempt: vi.fn(() => ({ allowed: true })),

@@ -48,8 +48,43 @@ export interface PocJudgement {
   reason: string;
   features: PocFeatures;
   /** Which path produced this judgement — useful for accuracy diffs. */
-  source: "fast-path" | "llm" | "keyword-fallback";
+  source: "fast-path" | "sender-prior" | "llm" | "keyword-fallback";
 }
+
+/**
+ * One past manual tier correction, rendered into the judge prompt as a
+ * few-shot example. Mined from AttentionItem rows whose tierReason carries
+ * MANUAL_OVERRIDE_PREFIX (see judge-context.ts). The judge stays pure —
+ * callers fetch these and pass them in.
+ */
+export interface CorrectionExample {
+  from: string;
+  subject: string;
+  tier: PocTier;
+}
+
+/**
+ * A stable per-sender tier pattern strong enough to skip the LLM entirely.
+ *  - "override": the user manually corrected this sender ≥2 times to the
+ *    same tier — the strongest possible signal (any tier except AUTO).
+ *  - "history": ≥3 consecutive past classifications agreed on QUEUE/SILENT.
+ *    Never PUSH (urgency is content-dependent) and never AUTO (floors are
+ *    the LLM's job).
+ * Thresholds are enforced where the prior is constructed (judge-context.ts);
+ * judgeEmail re-checks only the tier allowlist and the urgency guard.
+ */
+export interface SenderPrior {
+  tier: PocTier;
+  count: number;
+  kind: "override" | "history";
+}
+
+export interface JudgeContext {
+  corrections: CorrectionExample[];
+  senderPrior: SenderPrior | null;
+}
+
+export const EMPTY_JUDGE_CONTEXT: JudgeContext = { corrections: [], senderPrior: null };
 
 const CLAMP = (n: number): number => Math.max(0, Math.min(1, n));
 
@@ -119,7 +154,25 @@ interface LlmFeatureResponse {
   reason?: string;
 }
 
-function buildJudgePrompt(email: ClassifiableEmail): string {
+const MAX_FEW_SHOT_EXAMPLES = 5;
+
+/**
+ * Render past manual corrections as a ground-truth block. The model scores
+ * features (not tiers), so the block spells out the feature→tier rule it
+ * should aim for when an example matches the incoming email's pattern.
+ */
+function buildCorrectionsBlock(corrections: CorrectionExample[]): string {
+  if (corrections.length === 0) return "";
+  const lines = corrections
+    .slice(0, MAX_FEW_SHOT_EXAMPLES)
+    .map((c) => `- from: ${c.from.slice(0, 120)} | subject: ${c.subject.slice(0, 80)} → ${c.tier}`);
+  return `
+
+The user manually corrected these past classifications (ground truth for how THIS user tiers similar mail — PUSH = interrupt now, QUEUE = review later, SILENT = clear marketing, AUTO = safe to auto-handle). When the email matches one of these patterns, score your features so the rule lands on the corrected tier:
+${lines.join("\n")}`;
+}
+
+function buildJudgePrompt(email: ClassifiableEmail, corrections: CorrectionExample[] = []): string {
   const subject = (email.subject || "").slice(0, 200);
   const from = (email.from || "").slice(0, 200);
   const snippet = (email.snippet || "").replace(/\s+/g, " ").slice(0, 400);
@@ -136,7 +189,7 @@ Features:
 Also give a short reason (under 12 words) describing what the email is.
 
 Respond with JSON only:
-{"confidence":0.0,"senderTrust":0.0,"reversibility":0.0,"urgency":0.0,"reason":"short phrase"}
+{"confidence":0.0,"senderTrust":0.0,"reversibility":0.0,"urgency":0.0,"reason":"short phrase"}${buildCorrectionsBlock(corrections)}
 
 Email:
 from: ${from}
@@ -148,6 +201,7 @@ snippet: ${snippet}`;
 async function extractFeaturesWithLlm(
   email: ClassifiableEmail,
   userId?: string,
+  corrections: CorrectionExample[] = [],
 ): Promise<{ features: PocFeatures; reason: string } | null> {
   try {
     const response = await createCompletion(
@@ -159,7 +213,7 @@ async function extractFeaturesWithLlm(
             content:
               "You are a strict JSON scorer for an email triage POC. Respond with valid JSON only — no prose, no code fences.",
           },
-          { role: "user", content: buildJudgePrompt(email) },
+          { role: "user", content: buildJudgePrompt(email, corrections) },
         ],
         response_format: { type: "json_object" },
       },
@@ -214,9 +268,7 @@ function keywordFeatures(email: ClassifiableEmail): PocFeatures {
       from,
     );
   const isInvestor = /investor|vc|capital|ventures|partner@|fund/.test(from);
-  const isUrgentWord = /urgent|asap|긴급|중요|action required|today|tomorrow|deadline|due/.test(
-    hay,
-  );
+  const isUrgentWord = URGENT_WORDS_RE.test(hay);
   const isMeeting = /meeting|invite|calendar|zoom|reschedule|미팅|일정/.test(hay);
   const isQuestion = /\?|could you|can you|would you|please/.test(hay);
 
@@ -230,13 +282,20 @@ function keywordFeatures(email: ClassifiableEmail): PocFeatures {
   else if (isSystemNotification) senderTrust = 0.4;
   else if (isInvestor) senderTrust = 0.85;
 
+  // Marketing gets 0.1/0.95 (not the 0.2/0.9 defaults) because the SILENT
+  // branch in tierFromFeatures requires urgency < 0.2 AND reversibility > 0.9
+  // — strict inequalities. With the old defaults a clear newsletter sat
+  // exactly ON both boundaries, so the keyword fallback could never SILENT
+  // marketing mail when the LLM was down (caught by eval/judge-eval-set.json).
   let urgency = 0.2;
   if (isUrgentWord) urgency = 0.85;
   else if (isMeeting) urgency = 0.55;
+  else if (isMarketing) urgency = 0.1;
 
   // Replies to a human are hard to undo; archives are trivial.
   let reversibility = 0.9;
   if (isQuestion || isInvestor) reversibility = 0.3;
+  else if (isMarketing) reversibility = 0.95;
 
   // Higher confidence when a pattern matched; lower otherwise so the rule
   // defaults to QUEUE for unfamiliar cases.
@@ -255,16 +314,76 @@ const MARKETING_SUBJECT_RE =
   /unsubscribe|view (this email )?in (your )?browser|\[광고\]|\[알림\]|\(광고\)|수신거부|무료\s*체험|할인\s*쿠폰/i;
 
 /**
+ * Time-pressure vocabulary shared by the keyword fallback and the
+ * sender-prior urgency guard. Case-insensitive on purpose — callers pass
+ * raw subject/snippet.
+ */
+const URGENT_WORDS_RE = /urgent|asap|긴급|중요|action required|today|tomorrow|deadline|due/i;
+
+/** Cheap content check: does this email carry any time-pressure signal? */
+export function looksUrgent(email: ClassifiableEmail): boolean {
+  const hay = `${email.subject || ""} ${email.snippet || ""}`;
+  return URGENT_WORDS_RE.test(hay);
+}
+
+/**
+ * Representative feature vector for a short-circuited tier so receipts and
+ * accuracy diffs stay shaped like every other judgement. Confidence reflects
+ * "repeated identical outcomes", not an LLM score.
+ */
+function priorFeatures(tier: PocTier): PocFeatures {
+  switch (tier) {
+    case "SILENT":
+      return { confidence: 0.9, senderTrust: 0.05, reversibility: 0.95, urgency: 0.1 };
+    case "PUSH":
+      return { confidence: 0.9, senderTrust: 0.9, reversibility: 0.5, urgency: 0.8 };
+    case "AUTO":
+      return { confidence: 0.9, senderTrust: 0.5, reversibility: 0.9, urgency: 0.2 };
+    default:
+      return { confidence: 0.9, senderTrust: 0.45, reversibility: 0.9, urgency: 0.2 };
+  }
+}
+
+const OVERRIDE_PRIOR_TIERS: ReadonlySet<PocTier> = new Set(["PUSH", "QUEUE", "SILENT"]);
+const HISTORY_PRIOR_TIERS: ReadonlySet<PocTier> = new Set(["QUEUE", "SILENT"]);
+
+/**
+ * Whether a sender prior is allowed to bypass the LLM for THIS email.
+ *
+ * Guards (in addition to the construction thresholds in judge-context.ts):
+ *  - tier allowlist per prior kind (see SenderPrior docs)
+ *  - urgency guard: a sender we normally QUEUE/SILENT can still send a
+ *    time-critical email. Any urgency vocabulary in the content sends the
+ *    email to the LLM instead. A PUSH override prior skips the guard —
+ *    urgent content and "always interrupt" agree.
+ */
+function canShortCircuit(prior: SenderPrior, email: ClassifiableEmail): boolean {
+  const allowed = prior.kind === "override" ? OVERRIDE_PRIOR_TIERS : HISTORY_PRIOR_TIERS;
+  if (!allowed.has(prior.tier)) return false;
+  if (prior.tier !== "PUSH" && looksUrgent(email)) return false;
+  return true;
+}
+
+/**
  * Judge a single email → 4-tier. Pure: does not persist anything.
  *
  * Hot path:
  *  1. Clear marketing/promo (Gmail PROMOTIONS label OR marketing subject) → SILENT.
  *     Narrowed from "any automated sender" so system notifications keep
  *     getting LLM evaluation.
- *  2. LLM 4-feature extraction → tier rule.
- *  3. LLM down → keyword feature fallback → tier rule.
+ *  2. Sender prior (context) — a stable per-sender pattern from manual
+ *     overrides / consistent history skips the LLM (see canShortCircuit).
+ *  3. LLM 4-feature extraction (with correction few-shots) → tier rule.
+ *  4. LLM down → keyword feature fallback → tier rule.
+ *
+ * `context` is optional and fetched by callers (judge-context.ts) so the
+ * judge itself stays DB-free.
  */
-export async function judgeEmail(email: ClassifiableEmail, userId?: string): Promise<PocJudgement> {
+export async function judgeEmail(
+  email: ClassifiableEmail,
+  userId?: string,
+  context: JudgeContext = EMPTY_JUDGE_CONTEXT,
+): Promise<PocJudgement> {
   // Fast-path: only the patterns we are certain the founder treats as SILENT.
   //   - Gmail's CATEGORY_PROMOTIONS label (calibrated, ad-targeted mail)
   //   - Explicit marketing subject markers (광고, view-in-browser, unsubscribe)
@@ -285,7 +404,21 @@ export async function judgeEmail(email: ClassifiableEmail, userId?: string): Pro
     };
   }
 
-  const llm = await extractFeaturesWithLlm(email, userId);
+  const prior = context.senderPrior;
+  if (prior && canShortCircuit(prior, email)) {
+    const basis =
+      prior.kind === "override"
+        ? `${prior.count} manual corrections`
+        : `${prior.count} consistent past classifications`;
+    return {
+      tier: prior.tier,
+      reason: `Sender pattern — ${basis} → ${prior.tier}`,
+      features: priorFeatures(prior.tier),
+      source: "sender-prior",
+    };
+  }
+
+  const llm = await extractFeaturesWithLlm(email, userId, context.corrections);
   if (llm) {
     const { tier, reason: ruleReason } = tierFromFeatures(llm.features);
     return {

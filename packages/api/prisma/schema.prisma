@@ -30,6 +30,14 @@ model User {
   naverImapPasswordCipher   String?
   naverImapHost             String?
   naverImapConnectedAt      DateTime?
+  // Telegram delivery (self-hoster BYO bot via BotFather).
+  // telegramChatId is the bound chat for outbound PUSH-tier interrupts —
+  // unique so a chat can only ever belong to one account. telegramLinkCode
+  // is a one-time crypto-random code minted by POST /api/telegram/link and
+  // consumed by the bot webhook's `/start <code>` handler within 10 minutes.
+  telegramChatId            String?                    @unique
+  telegramLinkCode          String?                    @unique
+  telegramLinkCodeExpiresAt DateTime?
   stripeId                  String?                    @unique
   emailVerified             Boolean                    @default(false)
   verifyToken               String?
@@ -49,6 +57,7 @@ model User {
   notifications             Notification[]
   pushSubscriptions         PushSubscription[]
   pushDeliveryLogs          PushDeliveryLog[]
+  phoneEscalations          PhoneEscalation[]
   memories                  Memory[]
   skills                    Skill[]
   tokenUsages               TokenUsage[]
@@ -69,6 +78,7 @@ model User {
   emailProcessingLogs       EmailProcessingLog[]
   contactTrustScores        ContactTrustScore[]
   llmCostLedger             LlmCostLedger[]
+  llmUsageLogs              LlmUsageLog[]
 }
 
 enum UserRole {
@@ -279,6 +289,10 @@ model AutomationConfig {
   notifyEmailCandidate Boolean  @default(true) // candidate/profile attachment intake alerts
   quietHoursStart      String? // "22:00" — suppress push during this window
   quietHoursEnd        String? // "08:00"
+  // Phone escalation v0 opt-in. Default false: a phone call is the most
+  // intrusive delivery channel Klorn has — nobody gets dialed without
+  // explicitly flipping this on (and PHONE_ESCALATION_ENABLED=true globally).
+  phoneEscalationEnabled Boolean @default(false)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
@@ -373,6 +387,27 @@ model PushDeliveryLog {
   @@index([userId, createdAt])
   @@index([userId, status, createdAt])
   @@index([subscriptionId])
+}
+
+// Phone escalation v0 — ONE plain TTS call when a PUSH-tier push goes
+// unacknowledged. This is a DELIVERY channel for the PUSH tier, not a 5th
+// tier (tiers.ts vocabulary is locked). The UNIQUE index on notificationId
+// is the hard "max one call per notification, ever" rail — racing scheduler
+// ticks collapse into a single row instead of a double dial.
+model PhoneEscalation {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notificationId String    @unique // Notification.id (soft reference, like EmailProcessingLog.emailId)
+  gatherToken    String    @unique // capability token embedded in the <Gather> action URL
+  title          String // sanitized spoken title — re-<Say> source for "press 1"
+  status         String    @default("PLACED") // PLACED | ANSWERED | ACKNOWLEDGED | FAILED
+  twilioCallSid  String?
+  acknowledgedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([userId, createdAt])
 }
 
 // Memory System — Eve remembers facts about each user across conversations
@@ -470,6 +505,11 @@ model PendingAction {
   // return value) — leaving as text keeps the column open for any tool
   // that returns a non-JSON message.
   result         String?
+  // Reject-with-feedback (HITL): the user's stated "why" captured at
+  // reject time (≤500 chars, trimmed). NULL for rejections without a
+  // reason and for legacy rows. Surfaced back into agent prompts via
+  // rejection-hint.ts so the agent stops repeating rejected proposals.
+  rejectionReason String?
   // Deterministic floor: ActionReceipt minted at /approve time for floor
   // actions (see attention-floor.ts). NULL for non-floor actions and for
   // legacy rows pre-#481. tool-executor verifies this against the
@@ -1031,4 +1071,32 @@ model LlmCostLedger {
 
   @@unique([userId, dayKey])
   @@index([userId, dayKey])
+}
+
+// ─── LLM usage log ─────────────────────────────────────────────────────────
+// Ground-truth token accounting: one row per successful provider call,
+// written at the createCompletion/createVisionCompletion chokepoints
+// (openai.ts) with the ACTUAL usage the provider returned and the
+// provider+model that actually served the request after failover. The
+// pre-bill estimate is stored alongside so estimate-vs-reality drift is
+// measurable. Cost gates still run on estimates (cost-guard.ts /
+// LlmCostLedger) — this table never gates anything.
+// userId is nullable so system-initiated calls are captured too; SetNull on
+// user deletion keeps the cost history (rows carry token counts only, no
+// content).
+model LlmUsageLog {
+  id                 String   @id @default(uuid())
+  userId             String? // null = system-initiated call (no user accounting)
+  user               User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  provider           String // "openrouter" | "gemini"
+  model              String // model that actually served the call (post-failover)
+  promptTokens       Int      @default(0)
+  completionTokens   Int      @default(0)
+  totalTokens        Int      @default(0)
+  usageMissing       Boolean  @default(false) // provider returned no usage (e.g. streaming)
+  estimatedCostCents Int      @default(0) // what the pre-bill gate charged for this call
+  source             String   @default("foreground") // "foreground" | "background"
+  createdAt          DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

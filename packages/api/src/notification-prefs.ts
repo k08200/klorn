@@ -1,12 +1,14 @@
 /**
  * Notification Preferences — per-user opt-out by category + quiet hours.
  *
- * Pure functions so push.ts and autonomous-agent.ts can gate notifications
- * consistently. Falls open when config is missing (default: notify).
+ * Gates push.ts notifications consistently across every call site. Falls
+ * open when config is missing (default: notify). Quiet-window math lives
+ * in quiet-hours.ts; this module only loads config and combines the checks.
  */
 
 import { prisma } from "./db.js";
-import { localMinuteOfDay, normalizeTimeZone } from "./time-zone.js";
+import { isWithinQuietHours } from "./quiet-hours.js";
+import { normalizeTimeZone } from "./time-zone.js";
 
 export type NotifCategory =
   | "email_urgent"
@@ -48,41 +50,25 @@ function categoryEnabled(prefs: NotifPrefs, category: NotifCategory): boolean {
   }
 }
 
+/** Why a notification was blocked — doubles as the PushDeliveryLog skipReason. */
+export type NotificationGateReason = "user_preferences" | "quiet_hours";
+
+export type NotificationGateResult =
+  | { allowed: true }
+  | { allowed: false; reason: NotificationGateReason };
+
 /**
- * Check if the current time falls within the user's quiet hours.
- * Supports windows that wrap midnight (e.g. 22:00 → 08:00).
+ * Decide whether a notification may be pushed for a user + category.
+ * Distinguishes "category opted out" from "inside quiet hours" so push.ts
+ * can record an honest skipReason for each.
  */
-export function isInQuietHours(
-  start: string | null,
-  end: string | null,
+export async function evaluateNotificationGate(
+  userId: string,
+  category: NotifCategory,
   now: Date = new Date(),
-  timeZone: string = "Asia/Seoul",
-): boolean {
-  if (!start || !end) return false;
-  const [sh, sm] = start.split(":").map((n) => Number.parseInt(n, 10));
-  const [eh, em] = end.split(":").map((n) => Number.parseInt(n, 10));
-  if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) return false;
-
-  const nowMin = localMinuteOfDay(now, normalizeTimeZone(timeZone));
-  const startMin = sh * 60 + sm;
-  const endMin = eh * 60 + em;
-
-  if (startMin === endMin) return false;
-  if (startMin < endMin) {
-    // Same-day window: e.g. 13:00–17:00
-    return nowMin >= startMin && nowMin < endMin;
-  }
-  // Wraps midnight: e.g. 22:00–08:00
-  return nowMin >= startMin || nowMin < endMin;
-}
-
-/**
- * Check if a notification should be delivered for a user + category.
- * Returns false if the category is disabled OR we're in quiet hours.
- */
-export async function shouldNotify(userId: string, category: NotifCategory): Promise<boolean> {
+): Promise<NotificationGateResult> {
   const config = await prisma.automationConfig.findUnique({ where: { userId } });
-  if (!config) return true; // default: notify
+  if (!config) return { allowed: true }; // default: notify
 
   const prefs: NotifPrefs = {
     notifyEmailUrgent:
@@ -101,8 +87,11 @@ export async function shouldNotify(userId: string, category: NotifCategory): Pro
     quietHoursEnd: (config as unknown as { quietHoursEnd?: string | null }).quietHoursEnd ?? null,
   };
 
-  if (!categoryEnabled(prefs, category)) return false;
-  if (isInQuietHours(prefs.quietHoursStart, prefs.quietHoursEnd, new Date(), prefs.timezone))
-    return false;
-  return true;
+  if (!categoryEnabled(prefs, category)) {
+    return { allowed: false, reason: "user_preferences" };
+  }
+  if (isWithinQuietHours(now, prefs, prefs.timezone)) {
+    return { allowed: false, reason: "quiet_hours" };
+  }
+  return { allowed: true };
 }

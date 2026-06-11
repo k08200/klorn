@@ -9,6 +9,7 @@
  * Runs every 60 seconds, checks all users with active automation configs.
  */
 
+import { findOpenEmailAttentionItemId } from "./attention-override.js";
 import { createDailyBriefingDelivery } from "./briefing.js";
 import {
   SCHEDULER_CALENDAR_SYNC_INTERVAL_MS,
@@ -30,6 +31,7 @@ import {
 import { getAuthedClient, renewExpiringGmailWatches, sendEmail } from "./gmail.js";
 import { parseGoogleDateTime } from "./google-calendar-time.js";
 import { formatUrgentEmailBody, senderName } from "./notification-format.js";
+import { escalateUnackedPush } from "./phone-escalation.js";
 import { runProactiveActions } from "./proactive-actions.js";
 import { sendPushNotification } from "./push.js";
 import { captureError } from "./sentry.js";
@@ -49,6 +51,7 @@ const CHECK_INTERVAL_MS = SCHEDULER_CHECK_INTERVAL_MS;
 const WATCH_RENEWAL_INTERVAL_MS = SCHEDULER_WATCH_RENEWAL_INTERVAL_MS;
 const DB_HEARTBEAT_ENABLED = process.env.DB_HEARTBEAT_ENABLED === "true";
 const PROACTIVE_ACTIONS_ENABLED = process.env.PROACTIVE_ACTIONS_ENABLED === "true";
+const PHONE_ESCALATION_ENABLED = process.env.PHONE_ESCALATION_ENABLED === "true";
 
 // Stable 32-bit hash used as Postgres advisory lock key. Same int across
 // every worker that imports this module — distributed mutual exclusion.
@@ -302,7 +305,12 @@ async function runAutomations() {
     for (;;) {
       const configs = await prisma.automationConfig.findMany({
         where: {
-          OR: [{ dailyBriefing: true }, { emailAutoClassify: true }, { autonomousAgent: true }],
+          OR: [
+            { dailyBriefing: true },
+            { emailAutoClassify: true },
+            { autonomousAgent: true },
+            { phoneEscalationEnabled: true },
+          ],
         },
         take: BATCH_SIZE,
         skip: cursor ? 1 : 0,
@@ -655,12 +663,22 @@ async function runAutomations() {
                     createdAt: notification.createdAt.toISOString(),
                   });
 
+                  // Best-effort AttentionItem lookup for the lead urgent email
+                  // (source=EMAIL, sourceId=EmailMessage.id, set by poc-judge).
+                  // Lets the Telegram channel attach tier-override buttons;
+                  // null just means the message ships without them.
+                  const attentionItemId = await findOpenEmailAttentionItemId(
+                    config.userId,
+                    newUrgent[0].id,
+                  );
+
                   sendPushNotification(
                     config.userId,
                     {
                       title: "Urgent mail",
                       body: userBody,
                       url: "/briefing",
+                      attentionItemId: attentionItemId ?? undefined,
                     },
                     "email_urgent",
                   );
@@ -706,6 +724,20 @@ async function runAutomations() {
         if (PROACTIVE_ACTIONS_ENABLED || perUserProactive) {
           runProactiveActions(config.userId).catch((err) => {
             console.error(`[PROACTIVE] Failed for ${config.userId}:`, err);
+          });
+        }
+
+        // --- Phone escalation v0 (opt-in delivery channel for PUSH, not a tier) ---
+        // Doubly gated: global PHONE_ESCALATION_ENABLED flag AND the per-user
+        // AutomationConfig.phoneEscalationEnabled opt-in. All hard rails
+        // (1-call-per-notification, daily cap, cooldown, quiet hours) live
+        // inside escalateUnackedPush/placeEscalationCall. Best-effort: never
+        // blocks or crashes the tick.
+        const phoneOptIn =
+          (config as unknown as Record<string, unknown>).phoneEscalationEnabled === true;
+        if (PHONE_ESCALATION_ENABLED && phoneOptIn) {
+          escalateUnackedPush(config.userId).catch((err) => {
+            console.warn(`[PHONE] Escalation sweep failed for ${config.userId}:`, err);
           });
         }
       }

@@ -26,6 +26,7 @@ import sanitizeHtml from "sanitize-html";
 import { upsertAttentionForEmailJudgement } from "./attention-mirror.js";
 import { decryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
+import { buildJudgeContext } from "./judge-context.js";
 import { judgeEmail } from "./poc-judge.js";
 import { captureError } from "./sentry.js";
 
@@ -249,15 +250,21 @@ export async function syncNaverImap(args: SyncArgs): Promise<SyncResult> {
 
           // Classify + mirror — fire-and-forget so a slow LLM doesn't
           // block the IMAP loop. Failures are captured to Sentry.
-          judgeEmail(
-            {
-              from,
-              subject,
-              snippet,
-              labels,
-            },
-            args.userId,
-          )
+          // buildJudgeContext feeds past manual overrides back in and
+          // never throws — worst case is an empty context.
+          buildJudgeContext(args.userId, { from, excludeEmailId: upserted.id })
+            .then((judgeContext) =>
+              judgeEmail(
+                {
+                  from,
+                  subject,
+                  snippet,
+                  labels,
+                },
+                args.userId,
+                judgeContext,
+              ),
+            )
             .then((judgement) =>
               upsertAttentionForEmailJudgement(
                 {

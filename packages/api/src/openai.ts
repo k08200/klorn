@@ -3,9 +3,11 @@ import type {
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
 } from "openai/resources/chat/completions";
+import { estimatePrebillCents, recordLlmUsage, trueUpCostLedgers } from "./llm-usage.js";
 import {
   FALLBACK_MODEL,
   getProviderCooldownInfo,
+  isConnectionError,
   isCreditError,
   isFreeModel,
   isKeyLimitError,
@@ -99,10 +101,11 @@ export const DAILY_COST_CAP_MESSAGE =
  * when either gate is closed.
  */
 async function enforceCostGates(model: string, userId?: string): Promise<void> {
-  const { checkCostGate, recordCostUsage, checkGlobalCostGate, recordGlobalCostUsage, usdToCents } =
+  const { checkCostGate, recordCostUsage, checkGlobalCostGate, recordGlobalCostUsage } =
     await import("./cost-guard.js");
-  const { estimateModelCostUsd } = await import("./model-fallback.js");
-  const estCents = usdToCents(estimateModelCostUsd(model, 0, 0));
+  // Single source of truth for the pre-bill arithmetic lives in llm-usage.ts
+  // (nominal-token floor; the post-call true-up settles against actuals).
+  const estCents = estimatePrebillCents(model);
 
   const globalGate = checkGlobalCostGate();
   if (!globalGate.allowed) {
@@ -188,7 +191,9 @@ export async function createCompletion(
 
   const chain = getProviderChain(options.credentials);
   if (chain.length === 0) {
-    throw new Error("No LLM providers configured — set OPENROUTER_API_KEY and/or GEMINI_API_KEY");
+    throw new Error(
+      "No LLM providers configured — set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL (local Ollama/LM Studio/vLLM)",
+    );
   }
 
   // Per-user RPM + daily-cap gate: trip before the call so a runaway loop
@@ -204,11 +209,28 @@ export async function createCompletion(
   // ceiling (always) and the per-user cap (when a userId is present).
   await enforceCostGates(params.model, options.userId);
 
+  // Ground-truth usage ledger context, frozen before the failover loop so
+  // every retry records the same caller identity + the same pre-bill
+  // estimate the gate charged (computed from the REQUESTED model, exactly
+  // like enforceCostGates).
+  const isStreaming = params.stream === true;
+  const usageContext = {
+    userId: options.userId ?? null,
+    source: options.priority ?? "foreground",
+    estimatedCostCents: estimatePrebillCents(params.model),
+  } as const;
+
   /**
    * Per-provider call. Strips OpenAI-only params that providers like Gemini's
    * OpenAI-compat don't reliably handle (tools/function calling), so a
    * fallback to a tools-incapable provider degrades to plain chat instead of
    * silently returning empty content.
+   *
+   * On success it also records the provider+model that ACTUALLY served the
+   * request to the usage ledger — this closure is the single place that
+   * knows both, so failover swaps are captured without threading state
+   * through the loop. Fire-and-forget: recordLlmUsage never throws and
+   * never delays the caller.
    */
   const call = async (provider: Provider, model: string): Promise<Result> => {
     let effectiveParams = params as typeof params & {
@@ -219,7 +241,30 @@ export async function createCompletion(
       const { tools: _t, tool_choice: _tc, ...rest } = effectiveParams;
       effectiveParams = rest as typeof effectiveParams;
     }
-    return (await provider.call(effectiveParams as typeof params, model)) as Result;
+    const result = (await provider.call(effectiveParams as typeof params, model)) as Result;
+    // v1 limitation: streaming responses carry no `usage` block (OpenRouter
+    // supports include_usage on streams, but changing stream behavior is out
+    // of scope) — record a usageMissing row with zero counts instead so the
+    // call is still visible in the ledger.
+    const usage = isStreaming
+      ? null
+      : ((result as OpenAI.Chat.Completions.ChatCompletion).usage ?? null);
+    void recordLlmUsage({
+      ...usageContext,
+      provider: provider.name,
+      model,
+      usage,
+    });
+    // Settle the cost ledgers against actual token counts (positive delta
+    // only). Uses the model that actually served the request — failover may
+    // have swapped it since the pre-bill.
+    void trueUpCostLedgers({
+      userId: usageContext.userId,
+      model,
+      prebilledCents: usageContext.estimatedCostCents,
+      usage,
+    });
+    return result;
   };
 
   let lastError: unknown;
@@ -264,6 +309,16 @@ export async function createCompletion(
         continue;
       }
 
+      // Local/OpenAI-compat endpoint unreachable (Ollama not running, box
+      // asleep): fail over to the next provider WITHOUT a cooldown — a
+      // local endpoint can come back any second, and cooling down the only
+      // provider of a local-only chain would blackhole every request.
+      // Scoped to openai-compat so genuine network failures on cloud
+      // providers still surface loudly instead of being masked by a swap.
+      if (provider.name === "openai-compat" && isConnectionError(err)) {
+        continue;
+      }
+
       // Model retired / not served by this provider (OpenRouter "No endpoints
       // found for ..." 404). On OpenRouter we first walk the free-model
       // fallback chain on the SAME provider — losing one :free SKU shouldn't
@@ -294,7 +349,9 @@ export async function createVisionCompletion(
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   const chain = getProviderChain(options.credentials);
   if (chain.length === 0) {
-    throw new Error("No LLM providers configured — set OPENROUTER_API_KEY and/or GEMINI_API_KEY");
+    throw new Error(
+      "No LLM providers configured — set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL (local Ollama/LM Studio/vLLM)",
+    );
   }
 
   // Daily-cost gate: vision/OCR calls bill the same ledgers as chat. Without
@@ -315,10 +372,28 @@ export async function createVisionCompletion(
         ? provider.resolveModel(visionModel)
         : provider.resolveModel(visionModel);
     try {
-      return (await provider.call(
+      const result = (await provider.call(
         { ...params, stream: false },
         model,
       )) as OpenAI.Chat.Completions.ChatCompletion;
+      // Ground-truth usage ledger — same contract as createCompletion's
+      // `call` helper: record the provider+model that actually served the
+      // request, fire-and-forget.
+      void recordLlmUsage({
+        userId: options.userId ?? null,
+        source: options.priority ?? "foreground",
+        estimatedCostCents: estimatePrebillCents(params.model),
+        provider: provider.name,
+        model,
+        usage: result.usage ?? null,
+      });
+      void trueUpCostLedgers({
+        userId: options.userId ?? null,
+        model,
+        prebilledCents: estimatePrebillCents(params.model),
+        usage: result.usage ?? null,
+      });
+      return result;
     } catch (err) {
       lastError = err;
       if (isKeyLimitError(err) || isCreditError(err) || isProviderUnavailable(provider.quotaKey)) {
