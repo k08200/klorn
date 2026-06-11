@@ -34,6 +34,7 @@ vi.mock("../llm-usage.js", () => ({
     recorded.push(input);
   }),
   estimatePrebillCents: vi.fn(() => 0),
+  trueUpCostLedgers: vi.fn(async () => {}),
 }));
 
 // openai.ts pulls cost-guard (which pulls db.js) in via enforceCostGates.
