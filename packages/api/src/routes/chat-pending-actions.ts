@@ -367,11 +367,15 @@ export async function chatRoutes(app: FastifyInstance) {
       }
 
       // Atomic status claim — prevents race condition with concurrent approve/reject
+      const trimmedReason = reason?.trim() || null;
       const claimed = await db.pendingAction.updateMany({
         where: { id: actionId, status: "PENDING" },
         data: {
           status: "REJECTED",
-          result: reason ? `Rejected: ${reason}` : "User rejected without reason",
+          result: trimmedReason ? `Rejected: ${trimmedReason}` : "User rejected without reason",
+          // Reject-with-feedback: persist the "why" so rejection-hint.ts can
+          // feed it back into agent prompts instead of throwing it away.
+          rejectionReason: trimmedReason,
         },
       });
       if (claimed.count === 0) {
@@ -380,8 +384,8 @@ export async function chatRoutes(app: FastifyInstance) {
       await upsertAttentionForPendingAction({ ...action, status: "REJECTED" });
 
       // Add a follow-up message (include reason if provided)
-      const rejectMsg = reason
-        ? `Understood. I rejected this suggestion: "${reason}".`
+      const rejectMsg = trimmedReason
+        ? `Understood. I rejected this suggestion: "${trimmedReason}".`
         : "Understood. I rejected this suggestion.";
 
       await db.message.create({
@@ -396,7 +400,7 @@ export async function chatRoutes(app: FastifyInstance) {
       // Learn from rejection for pattern detection
       import("../pattern-learner.js")
         .then(({ learnFromRejection }) =>
-          learnFromRejection(userId, action.toolName, action.reasoning || "", reason?.trim() || ""),
+          learnFromRejection(userId, action.toolName, action.reasoning || "", trimmedReason || ""),
         )
         .catch(() => {});
 
@@ -408,7 +412,7 @@ export async function chatRoutes(app: FastifyInstance) {
         toolName: action.toolName,
         recipient: recipientFromToolArgs(action.toolArgs),
         threadId: action.conversationId,
-        evidence: reason?.trim() || null,
+        evidence: trimmedReason,
       });
 
       // Never suggest this tool type again if requested
