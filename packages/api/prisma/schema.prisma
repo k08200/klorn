@@ -57,6 +57,7 @@ model User {
   notifications             Notification[]
   pushSubscriptions         PushSubscription[]
   pushDeliveryLogs          PushDeliveryLog[]
+  phoneEscalations          PhoneEscalation[]
   memories                  Memory[]
   skills                    Skill[]
   tokenUsages               TokenUsage[]
@@ -288,6 +289,10 @@ model AutomationConfig {
   notifyEmailCandidate Boolean  @default(true) // candidate/profile attachment intake alerts
   quietHoursStart      String? // "22:00" — suppress push during this window
   quietHoursEnd        String? // "08:00"
+  // Phone escalation v0 opt-in. Default false: a phone call is the most
+  // intrusive delivery channel Klorn has — nobody gets dialed without
+  // explicitly flipping this on (and PHONE_ESCALATION_ENABLED=true globally).
+  phoneEscalationEnabled Boolean @default(false)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
@@ -382,6 +387,27 @@ model PushDeliveryLog {
   @@index([userId, createdAt])
   @@index([userId, status, createdAt])
   @@index([subscriptionId])
+}
+
+// Phone escalation v0 — ONE plain TTS call when a PUSH-tier push goes
+// unacknowledged. This is a DELIVERY channel for the PUSH tier, not a 5th
+// tier (tiers.ts vocabulary is locked). The UNIQUE index on notificationId
+// is the hard "max one call per notification, ever" rail — racing scheduler
+// ticks collapse into a single row instead of a double dial.
+model PhoneEscalation {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notificationId String    @unique // Notification.id (soft reference, like EmailProcessingLog.emailId)
+  gatherToken    String    @unique // capability token embedded in the <Gather> action URL
+  title          String // sanitized spoken title — re-<Say> source for "press 1"
+  status         String    @default("PLACED") // PLACED | ANSWERED | ACKNOWLEDGED | FAILED
+  twilioCallSid  String?
+  acknowledgedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([userId, createdAt])
 }
 
 // Memory System — Eve remembers facts about each user across conversations

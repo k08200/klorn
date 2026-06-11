@@ -278,6 +278,35 @@ packages/api/node_modules/.bin/biome format packages/
 packages/api/node_modules/.bin/biome check packages/
 ```
 
+## Phone escalation (optional, off by default)
+
+If a PUSH-tier notification sits unacknowledged for 5 minutes, Klorn can place
+**one** plain text-to-speech phone call (press 1 to repeat, press 2 to
+acknowledge). No AI on the line — it is the PagerDuty/GoAlert escalation
+pattern applied to your inbox. Bring your own Twilio account:
+
+```bash
+PHONE_ESCALATION_ENABLED=true
+TWILIO_ACCOUNT_SID="ACxxxxxxxx"
+TWILIO_AUTH_TOKEN="..."
+TWILIO_FROM_NUMBER="+15555550000"   # a voice-capable Twilio number you own
+PUBLIC_URL="https://your-api.example.com"  # Twilio must reach /api/phone/gather
+```
+
+Each user must additionally opt in (`AutomationConfig.phoneEscalationEnabled`)
+and have a phone number on file. Hard rails, none of them configurable away:
+at most **one call per notification ever**, a per-user daily cap (default 3,
+`PHONE_ESCALATION_DAILY_CAP`), a 10-minute cooldown between calls, and
+**quiet hours always win — there is no urgency bypass.** Klorn will never
+ring you at 3 a.m., that is the whole point of an attention firewall.
+
+Cost reality: every escalation call costs real money — roughly **$0.02–0.06
+per call** depending on the destination country (US ≈ $0.014/min, Korea and
+most of Asia/EU more). The daily cap bounds worst-case spend. Note for
+Korean numbers: Twilio outbound calls to +82 may display an international
+caller ID and can be filtered by carrier spam apps — test with your own
+number before relying on it.
+
 ## Deployment notes
 
 - **Vercel Web**: set `NEXT_PUBLIC_API_URL` to the deployed API URL.
