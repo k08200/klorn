@@ -132,9 +132,7 @@ function WaitlistPageInner() {
             ⚠️ Do this BEFORE clicking Approve — every time.
           </p>
           <ol className="mt-2 list-decimal space-y-1 pl-6 text-[13px] text-amber-100/85">
-            <li>
-              Copy the email from the row below (click the address to copy).
-            </li>
+            <li>Copy the email from the row below (click the address to copy).</li>
             <li>
               Open{" "}
               <a
@@ -148,9 +146,9 @@ function WaitlistPageInner() {
               and click <strong>Add users</strong>. Paste, Save.
             </li>
             <li>
-              <strong>Then</strong> click Approve here. Clicking Approve fires the "you're in"
-              email — if the Cloud Console step is skipped, the user still hits "Access blocked"
-              and bounces.
+              <strong>Then</strong> click Approve here. Clicking Approve fires the "you're in" email
+              — if the Cloud Console step is skipped, the user still hits "Access blocked" and
+              bounces.
             </li>
           </ol>
         </div>
