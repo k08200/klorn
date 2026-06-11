@@ -1,0 +1,70 @@
+name: Judge Eval
+
+# LLM accuracy gate for the 4-tier judge. Runs the committed synthetic
+# 50-email set (packages/api/eval/judge-eval-set.json) through the REAL
+# LLM pipeline and fails below the 80% POC bar (poc-accuracy exits 2).
+#
+# This complements the deterministic gate that always runs in CI tests
+# (src/__tests__/judge-eval-set.test.ts — fast-path + keyword fallback,
+# no keys needed). Fork PRs don't receive secrets, so this job degrades
+# to a skip-with-notice instead of a false failure.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "packages/api/src/poc-judge.ts"
+      - "packages/api/src/email-classifier.ts"
+      - "packages/api/src/tiers.ts"
+      - "packages/api/eval/**"
+      - ".github/workflows/eval.yml"
+
+concurrency:
+  group: eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  llm-eval:
+    name: LLM judge accuracy (synthetic set, ≥80%)
+    runs-on: ubuntu-latest
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # poc-accuracy never queries the DB, but the Prisma client is
+      # constructed at import time and needs a syntactically valid URL.
+      DATABASE_URL: "postgresql://eval:eval@localhost:5432/eval"
+    steps:
+      - name: Check for provider key
+        id: key
+        run: |
+          if [ -n "$OPENROUTER_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No provider key in this context (fork PR?) — skipping LLM eval. The deterministic eval gate still runs in the CI test job."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.key.outputs.present == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.present == 'true'
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+        if: steps.key.outputs.present == 'true'
+
+      - name: Install dependencies
+        if: steps.key.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma types
+        if: steps.key.outputs.present == 'true'
+        run: cd packages/api && npx prisma generate
+
+      - name: Run judge accuracy gate
+        if: steps.key.outputs.present == 'true'
+        # concurrency=1 + 4.5s delay keeps a free-tier provider (Gemini AI
+        # Studio is 15 RPM) under its per-minute cap. ~4 min for 50 emails.
+        run: cd packages/api && npx tsx scripts/poc-accuracy.ts --in=eval/judge-eval-set.json --concurrency=1 --delay=4500

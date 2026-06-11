@@ -230,13 +230,20 @@ function keywordFeatures(email: ClassifiableEmail): PocFeatures {
   else if (isSystemNotification) senderTrust = 0.4;
   else if (isInvestor) senderTrust = 0.85;
 
+  // Marketing gets 0.1/0.95 (not the 0.2/0.9 defaults) because the SILENT
+  // branch in tierFromFeatures requires urgency < 0.2 AND reversibility > 0.9
+  // — strict inequalities. With the old defaults a clear newsletter sat
+  // exactly ON both boundaries, so the keyword fallback could never SILENT
+  // marketing mail when the LLM was down (caught by eval/judge-eval-set.json).
   let urgency = 0.2;
   if (isUrgentWord) urgency = 0.85;
   else if (isMeeting) urgency = 0.55;
+  else if (isMarketing) urgency = 0.1;
 
   // Replies to a human are hard to undo; archives are trivial.
   let reversibility = 0.9;
   if (isQuestion || isInvestor) reversibility = 0.3;
+  else if (isMarketing) reversibility = 0.95;
 
   // Higher confidence when a pattern matched; lower otherwise so the rule
   // defaults to QUEUE for unfamiliar cases.
