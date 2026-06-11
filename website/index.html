@@ -16,6 +16,7 @@
   <meta name="twitter:image" content="https://klorn.ai/brand/og-image.png">
   <link rel="icon" href="/brand/favicon.svg?v=cres1" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=cres1">
+  <noscript><style>.reveal { opacity: 1 !important; transform: none !important; }</style></noscript>
   <style>
     /* ── Reset & Tokens ───────────────────────── */
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -25,7 +26,7 @@
       --surface-elevated: #151922;
       --surface-panel: #111318;
       --surface-translucent: #12161b;
-      --surface-strip: #11151a;
+      --surface-strip: #131722;
 
       --brand-gold: #d8a45d;
       --brand-gold-bright: #f0c982;
@@ -106,6 +107,42 @@
       font-weight: 500;
     }
     .btn-ghost:hover { border-color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.08); }
+    .btn-github svg { flex-shrink: 0; }
+    .btn-github .star-count {
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.08);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--brand-gold-bright);
+    }
+    .btn-github .star-count:empty { display: none; }
+
+    /* ── OSS badges ───────────────────────────── */
+    .hero-badges {
+      margin-top: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border: 1px solid var(--border-soft);
+      border-radius: 9999px;
+      background: rgba(255,255,255,0.03);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--stone-300);
+    }
+    .hero-badge .dot-gold {
+      width: 6px;
+      height: 6px;
+      border-radius: 9999px;
+      background: var(--brand-gold);
+    }
 
     /* ── Hero ─────────────────────────────────── */
     .hero {
@@ -122,7 +159,9 @@
     .hero-scene-bg {
       position: absolute;
       inset: 0;
-      background: var(--surface-canvas);
+      background:
+        radial-gradient(ellipse 1000px 640px at 76% 16%, rgba(216,164,93,0.10), transparent 65%),
+        var(--surface-canvas);
     }
     .hero-product {
       position: absolute;
@@ -131,10 +170,12 @@
       width: 900px;
       height: 548px;
       transform: rotate(-1deg);
-      border: 1px solid rgba(87,83,78,0.7);
+      border: 1px solid rgba(216,164,93,0.28);
       border-radius: 12px;
       background: var(--surface-elevated);
-      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4);
+      box-shadow:
+        0 25px 50px -12px rgba(0,0,0,0.5),
+        0 0 90px -20px rgba(216,164,93,0.22);
       display: none;
     }
     @media (min-width: 1024px) { .hero-product { display: block; } }
@@ -250,7 +291,7 @@
     .hero-overlay {
       position: absolute;
       inset: 0;
-      background: linear-gradient(90deg, #0f1115 0%, rgba(15,17,21,0.94) 39%, rgba(15,17,21,0.34) 74%, rgba(15,17,21,0.64) 100%);
+      background: linear-gradient(90deg, #0f1115 0%, rgba(15,17,21,0.92) 42%, rgba(15,17,21,0.16) 78%, rgba(15,17,21,0.02) 100%);
     }
     .hero-fade {
       position: absolute;
@@ -337,6 +378,8 @@
       line-height: 1.04;
       letter-spacing: -0.025em;
       color: #fff;
+      text-wrap: balance;
+      text-shadow: 0 2px 28px rgba(15,17,21,0.85);
     }
     @media (min-width: 640px) { .hero-headline { font-size: 48px; } }
     @media (min-width: 768px) { .hero-headline { font-size: 60px; line-height: 1.02; } }
@@ -422,8 +465,8 @@
     .mobile-row .meta { margin-top: 4px; font-size: 12px; color: var(--stone-500); }
 
     /* ── Decision-card section ───────────────── */
-    .section { margin: 0 auto; max-width: var(--max-w); padding: 80px 20px; }
-    @media (min-width: 768px) { .section { padding: 112px 32px; } }
+    .section { margin: 0 auto; max-width: var(--max-w); padding: 72px 20px; }
+    @media (min-width: 768px) { .section { padding: 88px 32px; } }
 
     .section-narrow { max-width: var(--max-w-narrow); }
 
@@ -432,7 +475,7 @@
       gap: 40px;
     }
     @media (min-width: 768px) {
-      .decision-grid { grid-template-columns: 0.82fr 1.18fr; }
+      .decision-grid { grid-template-columns: 0.82fr 1.18fr; align-items: center; }
     }
 
     .section-eyebrow {
@@ -445,6 +488,7 @@
       font-weight: 600;
       letter-spacing: -0.025em;
       color: #fff;
+      text-wrap: balance;
     }
     @media (min-width: 768px) { .section-h { font-size: 48px; } }
 
@@ -576,7 +620,7 @@
       padding: 80px 20px;
     }
     @media (min-width: 768px) {
-      .pillars-grid { grid-template-columns: repeat(3,1fr); padding: 96px 32px; }
+      .pillars-grid { grid-template-columns: repeat(3,1fr); padding: 80px 32px; }
     }
     .pillar {
       border-top: 1px solid #d7c9b6;
@@ -614,7 +658,7 @@
       gap: 32px;
     }
     @media (min-width: 768px) {
-      .principle-grid { grid-template-columns: 0.8fr 1.2fr; align-items: start; }
+      .principle-grid { grid-template-columns: 0.8fr 1.2fr; align-items: center; }
     }
     .principle-steps {
       display: grid;
@@ -656,19 +700,28 @@
     .final-cta {
       max-width: var(--max-w);
       margin: 0 auto;
-      padding: 0 20px 96px;
+      padding: 24px 20px 96px;
       text-align: center;
+      background: radial-gradient(ellipse 800px 420px at 50% 35%, rgba(216,164,93,0.08), transparent 70%);
     }
-    @media (min-width: 768px) { .final-cta { padding: 0 32px 128px; } }
+    @media (min-width: 768px) { .final-cta { padding: 32px 32px 112px; } }
     .final-cta-h {
       margin: 0 auto;
-      max-width: 768px;
+      max-width: 880px;
       font-size: 36px;
       font-weight: 600;
       letter-spacing: -0.025em;
       color: #fff;
+      text-wrap: balance;
     }
     @media (min-width: 768px) { .final-cta-h { font-size: 60px; } }
+    .final-cta-actions {
+      margin-top: 36px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+    }
     .final-cta-p {
       margin: 24px auto 0;
       max-width: 640px;
@@ -677,7 +730,6 @@
       color: var(--stone-400);
     }
     @media (min-width: 768px) { .final-cta-p { font-size: 16px; } }
-    .final-cta .btn { margin-top: 36px; }
 
     /* ── Footer ───────────────────────────────── */
     footer {
@@ -725,6 +777,8 @@
       transition: opacity 0.5s ease, transform 0.5s ease;
     }
     .reveal.in { opacity: 1; transform: translateY(0); }
+    /* Reveal depends on IntersectionObserver — without JS the sections must
+       still render, so noscript disables the hidden initial state. */
 
     /* ── Walkthrough demo section ─────────────── */
     .demo-section { max-width: var(--max-w-narrow); }
@@ -736,13 +790,18 @@
       margin-right: auto;
       text-align: center;
     }
+    .demo-section {
+      background: radial-gradient(ellipse 900px 520px at 50% 38%, rgba(216,164,93,0.07), transparent 65%);
+    }
     .demo-frame {
       margin-top: 40px;
       border-radius: 16px;
       overflow: hidden;
-      border: 1px solid var(--border-medium);
+      border: 1px solid rgba(216,164,93,0.22);
       background: var(--surface-elevated);
-      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4);
+      box-shadow:
+        0 25px 50px -12px rgba(0,0,0,0.4),
+        0 0 110px -25px rgba(216,164,93,0.20);
     }
     .demo-frame video {
       width: 100%;
@@ -893,7 +952,11 @@
               <path d="M5 12h14M13 6l6 6-6 6"></path>
             </svg>
           </a>
-          <a href="https://app.klorn.ai/login" class="btn btn-ghost">Log in</a>
+          <a href="https://github.com/k08200/klorn" target="_blank" rel="noreferrer noopener" class="btn btn-ghost btn-github" aria-label="Star Klorn on GitHub">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.16-.02-2.1-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.02 11.02 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.8-.01 3.18 0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"/></svg>
+            Star on GitHub
+            <span class="star-count" data-gh-stars></span>
+          </a>
         </div>
         <p class="hero-cta-note">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -902,6 +965,11 @@
           </svg>
           Connects securely with Google. You approve every action — Klorn never sends, deletes, or shares on its own.
         </p>
+        <div class="hero-badges">
+          <span class="hero-badge"><span class="dot-gold"></span>Open source — AGPLv3</span>
+          <span class="hero-badge"><span class="dot-gold"></span>Self-hostable</span>
+          <span class="hero-badge"><span class="dot-gold"></span>Every action needs your approval</span>
+        </div>
       </div>
 
       <div class="mobile-preview">
@@ -1100,12 +1168,19 @@
     <p class="mono section-eyebrow">Built for decisions</p>
     <h2 class="final-cta-h">The next inbox is a decision queue.</h2>
     <p class="final-cta-p">Before the day gets noisy, align context, evidence, and action in one clean line.</p>
-    <a href="https://app.klorn.ai/login?mode=register" class="btn btn-cream" aria-label="Get started — free during the private beta">
-      Get started — it's free
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M5 12h14M13 6l6 6-6 6"></path>
-      </svg>
-    </a>
+    <div class="final-cta-actions">
+      <a href="https://app.klorn.ai/login?mode=register" class="btn btn-cream" aria-label="Get started — free during the private beta">
+        Get started — it's free
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 12h14M13 6l6 6-6 6"></path>
+        </svg>
+      </a>
+      <a href="https://github.com/k08200/klorn" target="_blank" rel="noreferrer noopener" class="btn btn-ghost btn-github" aria-label="View Klorn on GitHub">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.16-.02-2.1-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.02 11.02 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.8-.01 3.18 0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"/></svg>
+        Self-host on GitHub
+        <span class="star-count" data-gh-stars></span>
+      </a>
+    </div>
   </section>
 
   <!-- ── Footer ──────────────────────────────── -->
@@ -1142,6 +1217,18 @@
     }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
 
     document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
+
+    fetch('https://api.github.com/repos/k08200/klorn')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((repo) => {
+        if (!repo || typeof repo.stargazers_count !== 'number') return;
+        const count = repo.stargazers_count;
+        const label = count >= 1000 ? (count / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(count);
+        document.querySelectorAll('[data-gh-stars]').forEach((el) => {
+          el.textContent = '★ ' + label;
+        });
+      })
+      .catch(() => {});
   </script>
 
 </body>
