@@ -21,7 +21,7 @@ vi.mock("../notification-policy.js", () => ({
   notificationSuppressionReason: vi.fn(() => null),
 }));
 vi.mock("../notification-prefs.js", () => ({
-  shouldNotify: vi.fn(async () => true),
+  evaluateNotificationGate: vi.fn(async () => ({ allowed: true as const })),
 }));
 vi.mock("../push-rate-limit.js", () => ({
   recordPushAttempt: vi.fn(() => ({ allowed: true })),
@@ -38,14 +38,14 @@ vi.mock("../telegram-notify.js", () => ({
   sendTelegramForPush: vi.fn(async () => "sent"),
 }));
 
-import { shouldNotify } from "../notification-prefs.js";
+import { evaluateNotificationGate } from "../notification-prefs.js";
 import { sendPushNotification } from "../push.js";
 import { recordPushAttempt } from "../push-rate-limit.js";
 import { sendTelegramForPush } from "../telegram-notify.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(shouldNotify).mockResolvedValue(true);
+  vi.mocked(evaluateNotificationGate).mockResolvedValue({ allowed: true });
   vi.mocked(recordPushAttempt).mockReturnValue({ allowed: true });
   vi.mocked(sendTelegramForPush).mockResolvedValue("sent");
 });
@@ -86,9 +86,12 @@ describe("sendPushNotification — Telegram secondary channel", () => {
   });
 
   it("does NOT send Telegram when user prefs / quiet hours suppress (same gate result)", async () => {
-    vi.mocked(shouldNotify).mockResolvedValueOnce(false);
+    vi.mocked(evaluateNotificationGate).mockResolvedValueOnce({
+      allowed: false,
+      reason: "quiet_hours",
+    });
     const result = await sendPushNotification("user-1", { title: "T", body: "B" }, "email_urgent");
-    expect(result.reason).toBe("user_preferences_or_quiet_hours");
+    expect(result.reason).toBe("quiet_hours");
     expect(sendTelegramForPush).not.toHaveBeenCalled();
   });
 
