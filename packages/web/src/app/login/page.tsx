@@ -126,6 +126,19 @@ function LoginForm() {
         </div>
       )}
 
+      {signupOpen && (
+        <div className="mb-4 rounded-md border border-amber-300/25 bg-amber-300/[0.06] px-3 py-2.5 text-[11px] leading-5 text-amber-100/90">
+          <span className="font-semibold text-amber-100">First time here?</span> Klorn is
+          invite-only — Google will block sign-in unless I've added your email as a test user.{" "}
+          <Link
+            href="/early-access"
+            className="font-medium text-amber-200 underline decoration-amber-400/50 underline-offset-2 hover:text-amber-100"
+          >
+            Request access first →
+          </Link>
+        </div>
+      )}
+
       <a
         href={`${API_BASE}/api/auth/google/login`}
         className="flex h-11 w-full items-center justify-center gap-3 rounded-md bg-stone-100 text-sm font-semibold text-stone-900 shadow-sm transition hover:bg-white"

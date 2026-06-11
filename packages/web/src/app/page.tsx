@@ -325,7 +325,24 @@ export default function LandingPage() {
               and AI signals filtered into one clear decision queue — with evidence and approval
               before anything leaves your hands.
             </p>
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-9 max-w-xl rounded-md border border-amber-300/30 bg-amber-300/5 p-4 text-sm leading-6 text-amber-100/90">
+              <p className="flex items-start gap-2 font-semibold text-amber-100">
+                <span aria-hidden="true" className="mt-0.5 shrink-0 text-amber-300">
+                  🔒
+                </span>
+                Klorn is invite-only beta. You can't log in until I add your Google
+                email as a test user.
+              </p>
+              <ol className="mt-3 space-y-1 pl-7 text-[13px] text-amber-100/80 list-decimal">
+                <li>Request access below (takes 30 seconds).</li>
+                <li>
+                  I approve within 5 minutes when I'm awake (KST), within a few hours
+                  otherwise — capped at 100 testers until Google CASA review clears.
+                </li>
+                <li>You get an email from noreply@klorn.ai. Then Log in works.</li>
+              </ol>
+            </div>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link
                 href="/early-access"
                 aria-label="Request early access from hero"
@@ -336,14 +353,11 @@ export default function LandingPage() {
               </Link>
               <Link
                 href="/login"
-                className="inline-flex h-12 items-center justify-center rounded-md border border-white/[0.18] px-6 text-sm font-medium text-stone-200 transition hover:border-white/[0.35] hover:bg-white/[0.08]"
+                className="inline-flex items-center justify-center gap-1 px-1 text-sm text-stone-400 underline decoration-stone-700 underline-offset-4 transition hover:text-stone-200 hover:decoration-stone-400"
               >
-                Log in
+                Already approved? Log in →
               </Link>
             </div>
-            <p className="mt-4 text-xs text-stone-500">
-              Free during private beta — capped at 100 testers until Google CASA review clears.
-            </p>
           </div>
 
           <MobilePreview />
