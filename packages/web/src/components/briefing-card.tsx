@@ -200,6 +200,9 @@ function pushMeta(
 
 function skipReasonLabel(reason: string | null): string {
   if (!reason) return "Skipped";
+  if (reason === "quiet_hours") return "Quiet hours";
+  if (reason === "user_preferences") return "Notifications off";
+  // Legacy rows logged before the reasons were split apart.
   if (reason === "user_preferences_or_quiet_hours") return "Quiet hours";
   if (reason.startsWith("rate_limited")) return "Rate limited";
   if (reason === "missing_vapid_keys") return "Push setup needed";
