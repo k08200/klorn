@@ -72,15 +72,26 @@ export default function EarlyAccessPage() {
     <AuthScreen
       eyebrow="Early access"
       title="Apply for the private Klorn beta"
-      description="We are inviting teams that live in mail, meetings, and follow-ups first. Free during the private beta."
+      description="Klorn uses Gmail's restricted scope and is in Google OAuth testing mode until CASA review clears. I have to add your Google email as a test user before login works — this form is that request."
       navCtaHref="/login"
       navCtaLabel="Log in"
-      asideTitle="A focused beta for busy operators"
-      asideBody="We review teams where mail, meetings, and follow-ups create real decision load."
+      asideTitle="What happens after you submit"
+      asideBody="Three steps. The third one is the one you actually wait on."
       asideItems={[
-        { label: "Apply", value: "Leave your email and the work pattern you want organized." },
-        { label: "Review", value: "We check beta fit within 24 hours." },
-        { label: "Invite", value: "Approved teams receive access by email." },
+        {
+          label: "1. Submit",
+          value: "Your email lands in my inbox as a noreply@klorn.ai alert.",
+        },
+        {
+          label: "2. Approve",
+          value:
+            "I add you to Google Cloud Console as a test user (~30 seconds). Within 5 min when I'm awake (KST), within a few hours otherwise.",
+        },
+        {
+          label: "3. Log in",
+          value:
+            "You get an email from noreply@klorn.ai. Open klorn.ai/login, Continue with Google — works.",
+        },
       ]}
       footer={
         <span>
@@ -104,12 +115,39 @@ export default function EarlyAccessPage() {
         <div>
           <div className="rounded-md border border-amber-300/25 bg-amber-300/10 p-4">
             <h2 className="text-base font-semibold text-white">
-              {status === "already" ? "You are already on the list" : "Request received"}
+              {status === "already"
+                ? "You're already on the list"
+                : "Request received — here's what's next"}
             </h2>
             <p className="mt-2 text-sm leading-6 text-stone-300">
-              {status === "already"
-                ? "We will review your existing request and follow up by email."
-                : "We will review within 24 hours. If invited, you can sign in to Klorn."}
+              {status === "already" ? (
+                <>
+                  Your previous request is still in the queue. If it's been more than a few hours
+                  and you haven't heard back, email{" "}
+                  <a
+                    href="mailto:k0820086@gmail.com"
+                    className="underline decoration-stone-600 underline-offset-2 hover:text-stone-200"
+                  >
+                    k0820086@gmail.com
+                  </a>{" "}
+                  with the same email and I'll surface it.
+                </>
+              ) : (
+                <>
+                  I'll add you to Google Cloud Console as a test user{" "}
+                  <span className="font-medium text-stone-100">within 5 minutes</span> if I'm awake
+                  (KST), otherwise within a few hours. You'll get an email from{" "}
+                  <span className="font-mono text-stone-100">noreply@klorn.ai</span> the moment
+                  you're approved — then{" "}
+                  <Link
+                    href="/login"
+                    className="underline decoration-amber-400/60 underline-offset-2 hover:text-amber-100"
+                  >
+                    Log in
+                  </Link>{" "}
+                  works.
+                </>
+              )}
             </p>
           </div>
           <div className="mt-5 grid grid-cols-2 gap-3">
