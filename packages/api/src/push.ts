@@ -23,6 +23,7 @@ import {
 } from "./push-delivery.js";
 import { isAllowedPushOrigin } from "./push-origin-allowlist.js";
 import { recordPushAttempt } from "./push-rate-limit.js";
+import { sendTelegramForPush } from "./telegram-notify.js";
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
@@ -78,7 +79,15 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 /** Send push notification to all subscriptions of a user */
 export async function sendPushNotification(
   userId: string,
-  payload: { title: string; body: string; url?: string; notificationId?: string },
+  payload: {
+    title: string;
+    body: string;
+    url?: string;
+    notificationId?: string;
+    // AttentionItem id, when the interrupt maps 1:1 to a firewall item.
+    // Lets secondary channels (Telegram) attach tier-override buttons.
+    attentionItemId?: string;
+  },
   category: NotifCategory = "system",
 ): Promise<PushSendSummary> {
   // First line of defense: drop housekeeping + noise pushes BEFORE any
@@ -103,12 +112,6 @@ export async function sendPushNotification(
     console.log(`[PUSH] Suppressed (${suppression}) for ${userId}: "${payload.title}"`);
     await recordSkipped(userId, payload.title, category, `policy_${suppression}`);
     return skipped(`policy_${suppression}`);
-  }
-
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-    console.log(`[PUSH] Skipped — VAPID keys not configured`);
-    await recordSkipped(userId, payload.title, category, "missing_vapid_keys");
-    return skipped("missing_vapid_keys");
   }
 
   // Respect per-user preferences and quiet hours
@@ -140,6 +143,20 @@ export async function sendPushNotification(
       `rate_limited:${rate.reason ?? "unknown"}`,
     );
     return skipped("rate_limited");
+  }
+
+  // Secondary channel: Telegram (best-effort). Runs AFTER the shared gates
+  // above so it inherits exactly the same suppression decisions as web push,
+  // and BEFORE the VAPID check so a Telegram-only self-hoster (no VAPID keys,
+  // no browser subscriptions) still gets PUSH-tier interrupts. Contained:
+  // sendTelegramForPush never throws by design, and the .catch is a second
+  // belt so a bug there can never fail the web-push path.
+  await sendTelegramForPush(userId, payload, category).catch(() => {});
+
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+    console.log(`[PUSH] Skipped — VAPID keys not configured`);
+    await recordSkipped(userId, payload.title, category, "missing_vapid_keys");
+    return skipped("missing_vapid_keys");
   }
 
   const allSubscriptions = (await prisma.pushSubscription.findMany({

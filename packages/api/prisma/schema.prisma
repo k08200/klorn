@@ -30,6 +30,14 @@ model User {
   naverImapPasswordCipher   String?
   naverImapHost             String?
   naverImapConnectedAt      DateTime?
+  // Telegram delivery (self-hoster BYO bot via BotFather).
+  // telegramChatId is the bound chat for outbound PUSH-tier interrupts —
+  // unique so a chat can only ever belong to one account. telegramLinkCode
+  // is a one-time crypto-random code minted by POST /api/telegram/link and
+  // consumed by the bot webhook's `/start <code>` handler within 10 minutes.
+  telegramChatId            String?                    @unique
+  telegramLinkCode          String?                    @unique
+  telegramLinkCodeExpiresAt DateTime?
   stripeId                  String?                    @unique
   emailVerified             Boolean                    @default(false)
   verifyToken               String?

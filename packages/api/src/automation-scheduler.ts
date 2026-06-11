@@ -9,6 +9,7 @@
  * Runs every 60 seconds, checks all users with active automation configs.
  */
 
+import { findOpenEmailAttentionItemId } from "./attention-override.js";
 import { createDailyBriefingDelivery } from "./briefing.js";
 import {
   SCHEDULER_CALENDAR_SYNC_INTERVAL_MS,
@@ -655,12 +656,22 @@ async function runAutomations() {
                     createdAt: notification.createdAt.toISOString(),
                   });
 
+                  // Best-effort AttentionItem lookup for the lead urgent email
+                  // (source=EMAIL, sourceId=EmailMessage.id, set by poc-judge).
+                  // Lets the Telegram channel attach tier-override buttons;
+                  // null just means the message ships without them.
+                  const attentionItemId = await findOpenEmailAttentionItemId(
+                    config.userId,
+                    newUrgent[0].id,
+                  );
+
                   sendPushNotification(
                     config.userId,
                     {
                       title: "Urgent mail",
                       body: userBody,
                       url: "/briefing",
+                      attentionItemId: attentionItemId ?? undefined,
                     },
                     "email_urgent",
                   );

@@ -32,6 +32,7 @@ import { playbookRoutes } from "./routes/playbooks.js";
 import { receiptRoutes } from "./routes/receipt.js";
 import { skillRoutes } from "./routes/skills.js";
 import { smsRoutes } from "./routes/sms.js";
+import { telegramRoutes } from "./routes/telegram.js";
 import { tokenUsageRoutes } from "./routes/token-usage.js";
 import { waitlistRoutes } from "./routes/waitlist.js";
 import { webhookRoutes } from "./routes/webhook.js";
@@ -134,6 +135,7 @@ await app.register(patternRoutes, { prefix: "/api/patterns" });
 await app.register(tokenUsageRoutes, { prefix: "/api/usage" });
 await app.register(skillRoutes, { prefix: "/api/skills" });
 await app.register(smsRoutes, { prefix: "/api/sms" });
+await app.register(telegramRoutes, { prefix: "/api/telegram" });
 
 // Version is read once at startup from package.json on disk — keeps the
 // string in lockstep with the published artifact without a separate

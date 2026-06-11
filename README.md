@@ -209,6 +209,40 @@ NEXT_PUBLIC_API_URL=http://localhost:8002 \
 Open `http://localhost:8001` (or your override) — you should see the
 Klorn landing page.
 
+### Telegram notifications (optional)
+
+PUSH-tier interrupts can also be delivered to Telegram — useful when you
+self-host without web-push (VAPID) configured. Bring your own bot:
+
+1. Open [@BotFather](https://t.me/BotFather) in Telegram, send `/newbot`,
+   and follow the prompts. Note the **bot token** and the **bot username**.
+2. Set the env vars on the API:
+
+```bash
+TELEGRAM_BOT_TOKEN="123456:your-botfather-token"
+TELEGRAM_BOT_USERNAME="your_bot_username"   # without the @
+TELEGRAM_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+```
+
+3. Register the webhook (the API must be reachable over HTTPS):
+
+```bash
+curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+  -d "url=https://your-api-host/api/telegram/webhook" \
+  -d "secret_token=$TELEGRAM_WEBHOOK_SECRET"
+```
+
+4. Link your account: call `POST /api/telegram/link` with your Klorn
+   bearer token — it returns a one-time code (10-minute expiry) and a
+   `https://t.me/<bot>?start=<code>` deep link. Open the link and hit
+   Start; the bot confirms the chat is bound.
+
+PUSH-tier messages arrive with **Move to Queue** / **Silence** buttons
+(the same manual tier override as the firewall UI, so your taps feed the
+classifier's ground truth) plus an **Open Klorn** link. `DELETE
+/api/telegram/link` unlinks. The webhook rejects requests that don't carry
+the `X-Telegram-Bot-Api-Secret-Token` header matching your secret.
+
 ## Docker
 
 Run the full stack with the required secrets in the root `.env`:
