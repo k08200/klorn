@@ -22,6 +22,7 @@ import { AUTOPILOT_LEVEL, type AutopilotLevel } from "./agent-mode.js";
 import { computeAttentionInputHash } from "./attention-input-hash.js";
 import { prisma } from "./db.js";
 import { getSuppressionSet, isSuppressed } from "./feedback-adaptor.js";
+import type { PocJudgement } from "./poc-judge.js";
 import type { Tier } from "./tiers.js";
 
 // Tier fields (tier, tierReason) are added via migration. Until `prisma generate`
@@ -785,7 +786,7 @@ export interface EmailJudgementLike {
     reversibility: number;
     urgency: number;
   };
-  source?: "fast-path" | "llm" | "keyword-fallback";
+  source?: PocJudgement["source"];
 }
 
 export interface EmailLike {

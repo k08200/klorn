@@ -21,7 +21,7 @@ import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { senderEmail } from "../notification-format.js";
 import { captureError } from "../sentry.js";
-import { normalizeTier, TIERS, type Tier } from "../tiers.js";
+import { manualOverrideReason, normalizeTier, TIERS, type Tier } from "../tiers.js";
 import { getTrustScoresBulk } from "../trust-score.js";
 
 // Tool args that carry a Gmail message id we can map back to a stored
@@ -400,7 +400,7 @@ export async function firewallRoutes(app: FastifyInstance) {
         where: { id },
         data: {
           tier,
-          tierReason: `Manual override — user moved to ${tier}`,
+          tierReason: manualOverrideReason(tier),
         },
       });
 
