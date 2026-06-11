@@ -1,0 +1,535 @@
+{
+  "metadata": {
+    "userEmail": "synthetic@klorn.ai",
+    "extractedAt": "2026-06-12T00:00:00.000Z",
+    "count": 50,
+    "note": "Synthetic, PII-free eval set for the 4-tier judge. NOT the founder's private 50-email ground truth (that file is gitignored). Labels encode the locked founder mental model: QUEUE is the default, SILENT is narrow marketing, PUSH is urgent+confident, AUTO is reversible+confident+not-urgent. See eval/README.md."
+  },
+  "items": [
+    {
+      "id": "eval-001",
+      "gmailId": "synthetic",
+      "from": "Coupang <deals@coupang.com>",
+      "subject": "Mega summer sale — up to 70% off everything",
+      "snippet": "Shop the biggest deals of the season before they sell out.",
+      "labels": ["CATEGORY_PROMOTIONS"],
+      "receivedAt": "2026-06-01T09:00:00.000Z",
+      "label": "SILENT",
+      "note": "fast-path: Gmail promotions label"
+    },
+    {
+      "id": "eval-002",
+      "gmailId": "synthetic",
+      "from": "Notion Team <team@mail.notion.so>",
+      "subject": "New: Notion AI for your wiki",
+      "snippet": "Discover what Notion AI can do for your team workspace today.",
+      "labels": ["CATEGORY_PROMOTIONS"],
+      "receivedAt": "2026-06-01T09:05:00.000Z",
+      "label": "SILENT",
+      "note": "fast-path: Gmail promotions label"
+    },
+    {
+      "id": "eval-003",
+      "gmailId": "synthetic",
+      "from": "Agoda <hello@agoda.com>",
+      "subject": "Flight + hotel bundles to Jeju from $99",
+      "snippet": "Limited-time travel packages picked for you.",
+      "labels": ["CATEGORY_PROMOTIONS"],
+      "receivedAt": "2026-06-01T09:10:00.000Z",
+      "label": "SILENT",
+      "note": "fast-path: Gmail promotions label"
+    },
+    {
+      "id": "eval-004",
+      "gmailId": "synthetic",
+      "from": "올리브영 <news@oliveyoung.co.kr>",
+      "subject": "[광고] 6월 한정 특가, 오늘만 이 가격",
+      "snippet": "회원님만을 위한 특별 혜택을 확인하세요.",
+      "labels": [],
+      "receivedAt": "2026-06-01T09:15:00.000Z",
+      "label": "SILENT",
+      "note": "fast-path: [광고] subject marker"
+    },
+    {
+      "id": "eval-005",
+      "gmailId": "synthetic",
+      "from": "마켓컬리 <md@kurly.com>",
+      "subject": "(광고) 신상품 출시 기념 첫 구매 혜택",
+      "snippet": "지금 가입하면 인기 상품을 특가로 만나보세요.",
+      "labels": [],
+      "receivedAt": "2026-06-01T09:20:00.000Z",
+      "label": "SILENT",
+      "note": "fast-path: (광고) subject marker"
+    },
+    {
+      "id": "eval-006",
+      "gmailId": "synthetic",
+      "from": "Yes24 <mail@yes24.com>",
+      "subject": "여름 프로모션 안내 (수신거부 안내 포함)",
+      "snippet": "이달의 베스트셀러와 할인 정보를 전해드립니다.",
+      "labels": [],
+      "receivedAt": "2026-06-01T09:25:00.000Z",
+      "label": "SILENT",
+      "note": "fast-path: 수신거부 subject marker"
+    },
+    {
+      "id": "eval-007",
+      "gmailId": "synthetic",
+      "from": "Linear <hello@linear.app>",
+      "subject": "무료 체험 마지막 기회 — 연장 안내",
+      "snippet": "트라이얼이 곧 종료됩니다. 지금 업그레이드하세요.",
+      "labels": [],
+      "receivedAt": "2026-06-01T09:30:00.000Z",
+      "label": "SILENT",
+      "note": "fast-path: 무료 체험 subject marker"
+    },
+    {
+      "id": "eval-008",
+      "gmailId": "synthetic",
+      "from": "배달의민족 <event@baemin.com>",
+      "subject": "할인 쿠폰이 도착했습니다",
+      "snippet": "이번 주말까지 사용 가능한 쿠폰을 확인하세요.",
+      "labels": [],
+      "receivedAt": "2026-06-01T09:35:00.000Z",
+      "label": "SILENT",
+      "note": "fast-path: 할인 쿠폰 subject marker"
+    },
+    {
+      "id": "eval-009",
+      "gmailId": "synthetic",
+      "from": "TechCrunch <newsletter@techcrunch.com>",
+      "subject": "Your weekly startup roundup",
+      "snippet": "The week in startups: funding rounds, launches, and analysis.",
+      "labels": [],
+      "receivedAt": "2026-06-01T10:00:00.000Z",
+      "label": "SILENT",
+      "note": "keyword path: newsletter sender"
+    },
+    {
+      "id": "eval-010",
+      "gmailId": "synthetic",
+      "from": "Morning Brew <crew@morningbrew.com>",
+      "subject": "Morning Brew newsletter: markets edition",
+      "snippet": "Everything you need to know about business this morning.",
+      "labels": [],
+      "receivedAt": "2026-06-01T10:05:00.000Z",
+      "label": "SILENT",
+      "note": "keyword path: newsletter in subject"
+    },
+    {
+      "id": "eval-011",
+      "gmailId": "synthetic",
+      "from": "Grab Rewards <promo@grab.com>",
+      "subject": "Rides you'll love, prices you'll love more",
+      "snippet": "Member-only ride and food vouchers are waiting for you.",
+      "labels": [],
+      "receivedAt": "2026-06-01T10:10:00.000Z",
+      "label": "SILENT",
+      "note": "keyword path: promo@ sender"
+    },
+    {
+      "id": "eval-012",
+      "gmailId": "synthetic",
+      "from": "Medium <updates@medium.com>",
+      "subject": "Stories digest picked for you",
+      "snippet": "Top stories from writers you follow, summarized.",
+      "labels": [],
+      "receivedAt": "2026-06-01T10:15:00.000Z",
+      "label": "SILENT",
+      "note": "keyword path: digest subject"
+    },
+    {
+      "id": "eval-013",
+      "gmailId": "synthetic",
+      "from": "Vercel <noreply@vercel.com>",
+      "subject": "Deployment completed: klorn-web",
+      "snippet": "Your production deployment finished successfully in 42s.",
+      "labels": [],
+      "receivedAt": "2026-06-01T11:00:00.000Z",
+      "label": "QUEUE",
+      "note": "system notification — visible, not interrupting"
+    },
+    {
+      "id": "eval-014",
+      "gmailId": "synthetic",
+      "from": "GitHub <notifications@github.com>",
+      "subject": "[acme/webapp] Review requested on PR #500",
+      "snippet": "jamie requested your review on: refactor session middleware.",
+      "labels": [],
+      "receivedAt": "2026-06-01T11:05:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-015",
+      "gmailId": "synthetic",
+      "from": "Google <no-reply@accounts.google.com>",
+      "subject": "Security alert: new sign-in on Mac",
+      "snippet": "We noticed a new sign-in to your Google Account.",
+      "labels": [],
+      "receivedAt": "2026-06-01T11:10:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-016",
+      "gmailId": "synthetic",
+      "from": "Stripe <noreply@stripe.com>",
+      "subject": "Your invoice from Acme Inc is available",
+      "snippet": "Invoice #1042 for $49.00 was finalized.",
+      "labels": [],
+      "receivedAt": "2026-06-01T11:15:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-017",
+      "gmailId": "synthetic",
+      "from": "Linear <notifications@linear.app>",
+      "subject": "Issue KLO-218 assigned to you",
+      "snippet": "Push receipt rate dashboard — assigned by jamie.",
+      "labels": [],
+      "receivedAt": "2026-06-01T11:20:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-018",
+      "gmailId": "synthetic",
+      "from": "Render <billing@render.com>",
+      "subject": "Payment processed for June",
+      "snippet": "Your card was charged $14.00 for the starter plan.",
+      "labels": [],
+      "receivedAt": "2026-06-01T11:25:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-019",
+      "gmailId": "synthetic",
+      "from": "Sarah Kim <sarah@acmecorp.com>",
+      "subject": "FYI: updated the partnership deck",
+      "snippet": "No action needed — just sharing the latest version before Thursday.",
+      "labels": [],
+      "receivedAt": "2026-06-01T12:00:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-020",
+      "gmailId": "synthetic",
+      "from": "Daniel Park <daniel@searchtalent.io>",
+      "subject": "Opportunity: founding engineer at a YC startup",
+      "snippet": "Came across your profile and thought of a role you might like.",
+      "labels": [],
+      "receivedAt": "2026-06-01T12:05:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-021",
+      "gmailId": "synthetic",
+      "from": "DevWorld Conference <speakers@devworld.io>",
+      "subject": "Would you speak at DevWorld this fall?",
+      "snippet": "We'd love to have you present a session on AI assistants.",
+      "labels": [],
+      "receivedAt": "2026-06-01T12:10:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-022",
+      "gmailId": "synthetic",
+      "from": "Acme Support <support@acmetools.com>",
+      "subject": "Re: API rate limit question",
+      "snippet": "Thanks for reaching out — here is how the limits work on your plan.",
+      "labels": [],
+      "receivedAt": "2026-06-01T12:15:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-023",
+      "gmailId": "synthetic",
+      "from": "Dev Lee <dev@buildstack.dev>",
+      "subject": "Question about your webhook payloads",
+      "snippet": "Could you clarify whether the payload includes the message id?",
+      "labels": [],
+      "receivedAt": "2026-06-01T12:20:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-024",
+      "gmailId": "synthetic",
+      "from": "Jamie Cho <jamie@acmecorp.com>",
+      "subject": "Notes from yesterday's product review",
+      "snippet": "Summary of decisions and owners from the meeting.",
+      "labels": [],
+      "receivedAt": "2026-06-01T12:25:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-025",
+      "gmailId": "synthetic",
+      "from": "Alex Rivera <alex@bridgeintro.com>",
+      "subject": "Intro: you two should meet",
+      "snippet": "Connecting you both — I'll let you take it from here.",
+      "labels": [],
+      "receivedAt": "2026-06-01T12:30:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-026",
+      "gmailId": "synthetic",
+      "from": "Klorn <noreply@klorn.ai>",
+      "subject": "New waitlist signup",
+      "snippet": "A new user joined the waitlist: t***@example.com.",
+      "labels": [],
+      "receivedAt": "2026-06-01T12:35:00.000Z",
+      "label": "QUEUE",
+      "note": "own-product signal — founder wants these visible"
+    },
+    {
+      "id": "eval-027",
+      "gmailId": "synthetic",
+      "from": "AWS <no-reply@aws.amazon.com>",
+      "subject": "Your monthly AWS bill is available",
+      "snippet": "Your invoice for May is now available in the billing console.",
+      "labels": [],
+      "receivedAt": "2026-06-01T12:40:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-028",
+      "gmailId": "synthetic",
+      "from": "Minji Seo <minji@partnerstudio.kr>",
+      "subject": "Re: collaboration proposal",
+      "snippet": "Thanks — will review the doc and get back to you next week.",
+      "labels": [],
+      "receivedAt": "2026-06-01T12:45:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-029",
+      "gmailId": "synthetic",
+      "from": "Jamie Cho <jamie@acmecorp.com>",
+      "subject": "Calendar invite: roadmap sync next Tuesday",
+      "snippet": "Sending over an invite for a 30-minute roadmap sync.",
+      "labels": [],
+      "receivedAt": "2026-06-01T12:50:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-030",
+      "gmailId": "synthetic",
+      "from": "OpenAI DevRel <devrel@openai.com>",
+      "subject": "API changelog: new models and deprecations",
+      "snippet": "What changed in the API this month and what to migrate.",
+      "labels": [],
+      "receivedAt": "2026-06-01T12:55:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-031",
+      "gmailId": "synthetic",
+      "from": "Hana Bank <service@hanabank.com>",
+      "subject": "Statement ready for your account",
+      "snippet": "Your monthly statement is ready to view in the app.",
+      "labels": [],
+      "receivedAt": "2026-06-01T13:00:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-032",
+      "gmailId": "synthetic",
+      "from": "Notion <team@makernotes.io>",
+      "subject": "Your shared doc was commented on",
+      "snippet": "Jamie left 3 comments on 'Q3 plan draft'.",
+      "labels": [],
+      "receivedAt": "2026-06-01T13:05:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-033",
+      "gmailId": "synthetic",
+      "from": "Chris Tan <chris@umbrellaops.com>",
+      "subject": "Following up on last month's chat",
+      "snippet": "Circling back on the integration idea we discussed.",
+      "labels": [],
+      "receivedAt": "2026-06-01T13:10:00.000Z",
+      "label": "QUEUE"
+    },
+    {
+      "id": "eval-034",
+      "gmailId": "synthetic",
+      "from": "Sequoia <partner@sequoiacap.com>",
+      "subject": "Need the updated deck today",
+      "snippet": "Partner meeting moved up — can you send the latest deck today?",
+      "labels": [],
+      "receivedAt": "2026-06-01T14:00:00.000Z",
+      "label": "PUSH"
+    },
+    {
+      "id": "eval-035",
+      "gmailId": "synthetic",
+      "from": "Accel <associate@accelventures.com>",
+      "subject": "Term sheet timing — deadline tomorrow",
+      "snippet": "We need your response on the term sheet by tomorrow morning.",
+      "labels": [],
+      "receivedAt": "2026-06-01T14:05:00.000Z",
+      "label": "PUSH"
+    },
+    {
+      "id": "eval-036",
+      "gmailId": "synthetic",
+      "from": "Growth Fund <ir@growthfund.kr>",
+      "subject": "Due diligence docs due Friday",
+      "snippet": "Reminder: the remaining DD documents are due this Friday.",
+      "labels": [],
+      "receivedAt": "2026-06-01T14:10:00.000Z",
+      "label": "PUSH"
+    },
+    {
+      "id": "eval-037",
+      "gmailId": "synthetic",
+      "from": "500 Global <investor@500.co>",
+      "subject": "Quick call today?",
+      "snippet": "Have 15 minutes today? Wanted to discuss the bridge round.",
+      "labels": [],
+      "receivedAt": "2026-06-01T14:15:00.000Z",
+      "label": "PUSH"
+    },
+    {
+      "id": "eval-038",
+      "gmailId": "synthetic",
+      "from": "Y Combinator <partner@ycombinator.com>",
+      "subject": "Action required: confirm your interview slot",
+      "snippet": "Please confirm your interview time within 24 hours.",
+      "labels": [],
+      "receivedAt": "2026-06-01T14:20:00.000Z",
+      "label": "PUSH"
+    },
+    {
+      "id": "eval-039",
+      "gmailId": "synthetic",
+      "from": "Altos <ops@altoscapital.com>",
+      "subject": "Wire confirmation needed today",
+      "snippet": "Please confirm receipt of the wire before end of day.",
+      "labels": [],
+      "receivedAt": "2026-06-01T14:25:00.000Z",
+      "label": "PUSH"
+    },
+    {
+      "id": "eval-040",
+      "gmailId": "synthetic",
+      "from": "Kelly Moon <kelly@bigcustomer.com>",
+      "subject": "URGENT: production down, need response ASAP",
+      "snippet": "Our integration is failing in production — please respond ASAP.",
+      "labels": [],
+      "receivedAt": "2026-06-01T14:30:00.000Z",
+      "label": "PUSH",
+      "note": "hard for keyword fallback: urgent human, non-investor"
+    },
+    {
+      "id": "eval-041",
+      "gmailId": "synthetic",
+      "from": "Hyun Lee <hyun@klorn.ai>",
+      "subject": "Demo moved to 3pm TODAY",
+      "snippet": "The investor demo got moved up — be ready by 2:30 today.",
+      "labels": [],
+      "receivedAt": "2026-06-01T14:35:00.000Z",
+      "label": "PUSH",
+      "note": "hard for keyword fallback: urgent human, non-investor"
+    },
+    {
+      "id": "eval-042",
+      "gmailId": "synthetic",
+      "from": "Lina Choi <lina@lawfirmchoi.com>",
+      "subject": "Signature needed today — filing deadline",
+      "snippet": "The incorporation filing closes today; please sign the attached.",
+      "labels": [],
+      "receivedAt": "2026-06-01T14:40:00.000Z",
+      "label": "PUSH",
+      "note": "hard for keyword fallback: urgent human, non-investor"
+    },
+    {
+      "id": "eval-043",
+      "gmailId": "synthetic",
+      "from": "Sarah Kim <sarah@acmecorp.com>",
+      "subject": "Can you review before EOD today? urgent",
+      "snippet": "Need your sign-off on the contract revision before EOD.",
+      "labels": [],
+      "receivedAt": "2026-06-01T14:45:00.000Z",
+      "label": "PUSH",
+      "note": "hard for keyword fallback: urgent human, non-investor"
+    },
+    {
+      "id": "eval-044",
+      "gmailId": "synthetic",
+      "from": "TalentCo HR <offers@talentco.com>",
+      "subject": "Your candidate's offer expires tomorrow",
+      "snippet": "The signed offer needs to be returned by tomorrow noon.",
+      "labels": [],
+      "receivedAt": "2026-06-01T14:50:00.000Z",
+      "label": "PUSH",
+      "note": "hard for keyword fallback: urgent, non-investor"
+    },
+    {
+      "id": "eval-045",
+      "gmailId": "synthetic",
+      "from": "Mark Webb <mark@shopfront.io>",
+      "subject": "Site is down — losing sales ASAP help",
+      "snippet": "Checkout has been broken for an hour. We need a fix ASAP.",
+      "labels": [],
+      "receivedAt": "2026-06-01T14:55:00.000Z",
+      "label": "PUSH",
+      "note": "hard for keyword fallback: urgent customer, non-investor"
+    },
+    {
+      "id": "eval-046",
+      "gmailId": "synthetic",
+      "from": "Shinhan Card <alert@shinhancard.com>",
+      "subject": "Action required: verify unusual transaction",
+      "snippet": "A transaction was flagged on your card ending 1234.",
+      "labels": [],
+      "receivedAt": "2026-06-01T15:00:00.000Z",
+      "label": "PUSH",
+      "note": "hard for keyword fallback: urgent alert, non-investor"
+    },
+    {
+      "id": "eval-047",
+      "gmailId": "synthetic",
+      "from": "Notion <receipts@makernotes.io>",
+      "subject": "Receipt: your subscription renewed",
+      "snippet": "Your plan renewed for $10/month. No action needed.",
+      "labels": [],
+      "receivedAt": "2026-06-01T16:00:00.000Z",
+      "label": "AUTO",
+      "note": "trivially reversible to archive — AUTO is classify-only"
+    },
+    {
+      "id": "eval-048",
+      "gmailId": "synthetic",
+      "from": "Jamie Cho <jamie@acmecorp.com>",
+      "subject": "Accepted: Roadmap sync",
+      "snippet": "Jamie Cho has accepted this event.",
+      "labels": [],
+      "receivedAt": "2026-06-01T16:05:00.000Z",
+      "label": "AUTO",
+      "note": "calendar acceptance receipt — archive candidate"
+    },
+    {
+      "id": "eval-049",
+      "gmailId": "synthetic",
+      "from": "CJ Logistics <tracking@cjlogistics.com>",
+      "subject": "Your package was delivered",
+      "snippet": "Delivered to the front door at 2:14 PM.",
+      "labels": [],
+      "receivedAt": "2026-06-01T16:10:00.000Z",
+      "label": "AUTO",
+      "note": "delivery confirmation — archive candidate"
+    },
+    {
+      "id": "eval-050",
+      "gmailId": "synthetic",
+      "from": "GitHub <noreply@github.com>",
+      "subject": "Your weekly contribution summary",
+      "snippet": "You opened 4 PRs and reviewed 6 this week.",
+      "labels": [],
+      "receivedAt": "2026-06-01T16:15:00.000Z",
+      "label": "AUTO",
+      "note": "informational stat mail — archive candidate"
+    }
+  ]
+}
