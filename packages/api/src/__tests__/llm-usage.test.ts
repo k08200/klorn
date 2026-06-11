@@ -186,12 +186,10 @@ describe("estimatePrebillCents", () => {
     expect(estimatePrebillCents("google/gemma-4-31b-it:free")).toBe(0);
   });
 
-  it("matches usdToCents(estimateModelCostUsd(model, 0, 0)) for paid models", async () => {
+  it("charges a non-zero nominal-token floor for paid models (0\u00a2 pre-bill regression)", async () => {
     const { estimatePrebillCents } = await import("../llm-usage.js");
-    const { usdToCents } = await import("../cost-guard.js");
-    const { estimateModelCostUsd } = await import("../model-fallback.js");
     const model = "anthropic/claude-sonnet-4";
-    expect(estimatePrebillCents(model)).toBe(usdToCents(estimateModelCostUsd(model, 0, 0)));
+    expect(estimatePrebillCents(model)).toBeGreaterThanOrEqual(1);
   });
 });
 

@@ -17,8 +17,13 @@
  * gate; this table never gates anything.
  */
 
-import { usdToCents } from "./cost-guard.js";
-import { prisma } from "./db.js";
+// NOTE: db.js (Prisma) is imported LAZILY inside the async functions below.
+// openai.ts imports this module statically, and a static db.js import here
+// would run Prisma's .env autoload BEFORE providers/index.js initializes —
+// injecting real API keys into unit tests and flipping them from offline to
+// live-LLM on any machine with a local .env. cents.ts exists for the same
+// reason (usdToCents without the cost-guard → db.js chain).
+import { usdToCents } from "./cents.js";
 import { estimateModelCostUsd } from "./model-fallback.js";
 import { captureError } from "./sentry.js";
 
@@ -53,12 +58,67 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_SUMMARY_DAYS = 7;
 
 /**
- * Pre-bill estimate for `model`, computed exactly the way enforceCostGates()
- * in openai.ts charges the cost ledgers. Kept here so the recorded estimate
- * can never diverge from the gate's arithmetic.
+ * Nominal token counts for the pre-bill floor. The old pre-bill called
+ * estimateModelCostUsd(model, 0, 0), which is token-linear and therefore
+ * ALWAYS 0¢ — the daily caps never accumulated through the gate at all
+ * (found while building this ledger). A typical classification/chat call
+ * runs ~2k prompt / ~0.5k completion tokens; pre-billing that floor makes
+ * a runaway loop of paid-model calls trip the cap, and the post-call
+ * true-up (trueUpCostLedgers) settles the difference against actuals.
+ * Free models still estimate to 0¢ regardless of token counts.
+ */
+const PREBILL_NOMINAL_PROMPT_TOKENS = 2000;
+const PREBILL_NOMINAL_COMPLETION_TOKENS = 500;
+
+/**
+ * Pre-bill estimate for `model` — the single source of truth used both by
+ * enforceCostGates() in openai.ts (what the gate charges) and by the ledger
+ * row (what we record), so the two can never diverge.
  */
 export function estimatePrebillCents(model: string): number {
-  return usdToCents(estimateModelCostUsd(model, 0, 0));
+  return usdToCents(
+    estimateModelCostUsd(model, PREBILL_NOMINAL_PROMPT_TOKENS, PREBILL_NOMINAL_COMPLETION_TOKENS),
+  );
+}
+
+/**
+ * Post-call settlement: once a response carries real token counts, charge
+ * the cost ledgers the difference between the actual model cost and what
+ * the gate pre-billed. Only positive deltas are charged — the ledgers are
+ * a protective cap, so when the pre-bill overshot we deliberately keep the
+ * conservative (higher) figure rather than refunding.
+ *
+ * Never throws; failures are captured and swallowed (same contract as
+ * recordLlmUsage).
+ */
+export async function trueUpCostLedgers(input: {
+  userId: string | null;
+  model: string;
+  prebilledCents: number;
+  usage: ProviderUsage | null | undefined;
+}): Promise<void> {
+  try {
+    const promptTokens = input.usage?.prompt_tokens ?? null;
+    const completionTokens = input.usage?.completion_tokens ?? null;
+    if (promptTokens == null && completionTokens == null) return;
+
+    const actualCents = usdToCents(
+      estimateModelCostUsd(input.model, promptTokens ?? 0, completionTokens ?? 0),
+    );
+    const deltaCents = actualCents - Math.max(0, Math.round(input.prebilledCents));
+    if (deltaCents <= 0) return;
+
+    const { recordCostUsage, recordGlobalCostUsage } = await import("./cost-guard.js");
+    if (input.userId) {
+      void recordCostUsage(input.userId, deltaCents, input.model);
+    }
+    recordGlobalCostUsage(deltaCents);
+  } catch (err) {
+    captureError(err, {
+      tags: { component: "llm-usage" },
+      extra: { model: input.model, phase: "true-up" },
+    });
+  }
 }
 
 /**
@@ -80,6 +140,7 @@ export async function recordLlmUsage(input: RecordLlmUsageInput): Promise<void> 
     const completionTokens = usage?.completion_tokens ?? 0;
     const totalTokens = usage?.total_tokens ?? promptTokens + completionTokens;
 
+    const { prisma } = await import("./db.js");
     await prisma.llmUsageLog.create({
       data: {
         userId: input.userId,
@@ -140,6 +201,7 @@ export async function getUsageSummary(
     ...(userId ? { userId } : {}),
   };
 
+  const { prisma } = await import("./db.js");
   const [totals, byModel, usageMissingCalls] = await Promise.all([
     prisma.llmUsageLog.aggregate({
       where,
