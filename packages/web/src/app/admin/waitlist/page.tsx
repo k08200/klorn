@@ -127,6 +127,32 @@ function WaitlistPageInner() {
           </p>
         </header>
 
+        <div className="mb-6 rounded-xl border border-amber-300/35 bg-amber-300/[0.06] p-4 text-sm leading-6 text-amber-100/90">
+          <p className="font-semibold text-amber-100">
+            ⚠️ Do this BEFORE clicking Approve — every time.
+          </p>
+          <ol className="mt-2 list-decimal space-y-1 pl-6 text-[13px] text-amber-100/85">
+            <li>Copy the email from the row below (click the address to copy).</li>
+            <li>
+              Open{" "}
+              <a
+                href="https://console.cloud.google.com/apis/credentials/consent"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline decoration-amber-400/60 underline-offset-2 hover:text-amber-50"
+              >
+                Google Cloud Console → OAuth consent screen → Test users
+              </a>{" "}
+              and click <strong>Add users</strong>. Paste, Save.
+            </li>
+            <li>
+              <strong>Then</strong> click Approve here. Clicking Approve fires the "you're in" email
+              — if the Cloud Console step is skipped, the user still hits "Access blocked" and
+              bounces.
+            </li>
+          </ol>
+        </div>
+
         <section className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
           {FILTERS.map((f) => {
             const value = f.key === "ALL" ? entries.length : (counts[f.key] ?? 0);

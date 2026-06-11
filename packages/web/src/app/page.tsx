@@ -330,14 +330,14 @@ export default function LandingPage() {
                 <span aria-hidden="true" className="mt-0.5 shrink-0 text-amber-300">
                   🔒
                 </span>
-                Klorn is invite-only beta. You can't log in until I add your Google
-                email as a test user.
+                Klorn is invite-only beta. You can't log in until I add your Google email as a test
+                user.
               </p>
               <ol className="mt-3 space-y-1 pl-7 text-[13px] text-amber-100/80 list-decimal">
                 <li>Request access below (takes 30 seconds).</li>
                 <li>
-                  I approve within 5 minutes when I'm awake (KST), within a few hours
-                  otherwise — capped at 100 testers until Google CASA review clears.
+                  I approve within 5 minutes when I'm awake (KST), within a few hours otherwise —
+                  capped at 100 testers until Google CASA review clears.
                 </li>
                 <li>You get an email from noreply@klorn.ai. Then Log in works.</li>
               </ol>
