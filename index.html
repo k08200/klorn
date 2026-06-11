@@ -416,6 +416,50 @@
       color: var(--brand-gold);
     }
 
+    /* ── Invite-only banner (above hero CTAs) ── */
+    .invite-banner {
+      margin-top: 28px;
+      max-width: 560px;
+      padding: 16px 18px;
+      border-radius: 10px;
+      border: 1px solid rgba(216, 164, 93, 0.32);
+      background: rgba(216, 164, 93, 0.06);
+      font-size: 14px;
+      line-height: 1.55;
+      color: #f0e3c8;
+    }
+    .invite-banner-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-weight: 600;
+      color: #fbeacb;
+    }
+    .invite-banner-head .lock {
+      flex-shrink: 0;
+      color: var(--brand-gold);
+    }
+    .invite-banner ol {
+      margin: 10px 0 0 0;
+      padding-left: 28px;
+      font-size: 13px;
+      color: rgba(240, 227, 200, 0.85);
+    }
+    .invite-banner ol li { margin-top: 4px; }
+    .invite-banner ol li:first-child { margin-top: 0; }
+
+    .hero-secondary-link {
+      display: inline-block;
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--stone-400);
+      text-decoration: underline;
+      text-decoration-color: rgba(216, 164, 93, 0.4);
+      text-underline-offset: 3px;
+      transition: color 0.15s;
+    }
+    .hero-secondary-link:hover { color: #fbeacb; }
+
     /* ── Mobile product preview ──────────────── */
     .mobile-preview {
       margin-top: 40px;
@@ -928,7 +972,7 @@
       </a>
       <div class="hero-nav-actions">
         <a href="https://app.klorn.ai/login" class="nav-link">Log in</a>
-        <a href="https://app.klorn.ai/login?mode=register" class="nav-cta">Get started</a>
+        <a href="https://app.klorn.ai/early-access" class="nav-cta">Early access</a>
       </div>
     </nav>
 
@@ -945,9 +989,23 @@
         <p class="hero-sub">
           Other AI agents act. Klorn helps you decide what's worth acting on. Mail, calendar, and AI signals filtered into one clear decision queue — with evidence and approval before anything leaves your hands.
         </p>
+        <div class="invite-banner">
+          <p class="invite-banner-head">
+            <svg class="lock" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="4" y="11" width="16" height="10" rx="2"></rect>
+              <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+            </svg>
+            Klorn is invite-only beta. You can't log in until I add your Google email as a test user.
+          </p>
+          <ol>
+            <li>Request access below (takes 30 seconds).</li>
+            <li>I approve within 5 minutes when I'm awake (KST), within a few hours otherwise — capped at 100 testers until Google CASA review clears.</li>
+            <li>You get an email from noreply@klorn.ai. Then Log in works.</li>
+          </ol>
+        </div>
         <div class="hero-ctas">
-          <a href="https://app.klorn.ai/login?mode=register" class="btn btn-gold" aria-label="Get started — free during the private beta">
-            Get started — it's free
+          <a href="https://app.klorn.ai/early-access" class="btn btn-gold" aria-label="Request early access — free during the private beta">
+            Request early access
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M5 12h14M13 6l6 6-6 6"></path>
             </svg>
@@ -958,13 +1016,7 @@
             <span class="star-count" data-gh-stars></span>
           </a>
         </div>
-        <p class="hero-cta-note">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 3 5 6v5c0 4.4 2.7 8 7 10 4.3-2 7-5.6 7-10V6l-7-3Z"></path>
-            <path d="m8.8 12.2 2.1 2.1 4.5-5"></path>
-          </svg>
-          Connects securely with Google. You approve every action — Klorn never sends, deletes, or shares on its own.
-        </p>
+        <a href="https://app.klorn.ai/login" class="hero-secondary-link">Already approved? Log in →</a>
         <div class="hero-badges">
           <span class="hero-badge"><span class="dot-gold"></span>Open source — AGPLv3</span>
           <span class="hero-badge"><span class="dot-gold"></span>Self-hostable</span>
@@ -1169,8 +1221,8 @@
     <h2 class="final-cta-h">The next inbox is a decision queue.</h2>
     <p class="final-cta-p">Before the day gets noisy, align context, evidence, and action in one clean line.</p>
     <div class="final-cta-actions">
-      <a href="https://app.klorn.ai/login?mode=register" class="btn btn-cream" aria-label="Get started — free during the private beta">
-        Get started — it's free
+      <a href="https://app.klorn.ai/early-access" class="btn btn-cream" aria-label="Request early access — free during the private beta">
+        Request early access
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M5 12h14M13 6l6 6-6 6"></path>
         </svg>
