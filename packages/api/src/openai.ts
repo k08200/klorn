@@ -3,6 +3,7 @@ import type {
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
 } from "openai/resources/chat/completions";
+import { estimatePrebillCents, recordLlmUsage } from "./llm-usage.js";
 import {
   FALLBACK_MODEL,
   getProviderCooldownInfo,
@@ -204,11 +205,28 @@ export async function createCompletion(
   // ceiling (always) and the per-user cap (when a userId is present).
   await enforceCostGates(params.model, options.userId);
 
+  // Ground-truth usage ledger context, frozen before the failover loop so
+  // every retry records the same caller identity + the same pre-bill
+  // estimate the gate charged (computed from the REQUESTED model, exactly
+  // like enforceCostGates).
+  const isStreaming = params.stream === true;
+  const usageContext = {
+    userId: options.userId ?? null,
+    source: options.priority ?? "foreground",
+    estimatedCostCents: estimatePrebillCents(params.model),
+  } as const;
+
   /**
    * Per-provider call. Strips OpenAI-only params that providers like Gemini's
    * OpenAI-compat don't reliably handle (tools/function calling), so a
    * fallback to a tools-incapable provider degrades to plain chat instead of
    * silently returning empty content.
+   *
+   * On success it also records the provider+model that ACTUALLY served the
+   * request to the usage ledger — this closure is the single place that
+   * knows both, so failover swaps are captured without threading state
+   * through the loop. Fire-and-forget: recordLlmUsage never throws and
+   * never delays the caller.
    */
   const call = async (provider: Provider, model: string): Promise<Result> => {
     let effectiveParams = params as typeof params & {
@@ -219,7 +237,20 @@ export async function createCompletion(
       const { tools: _t, tool_choice: _tc, ...rest } = effectiveParams;
       effectiveParams = rest as typeof effectiveParams;
     }
-    return (await provider.call(effectiveParams as typeof params, model)) as Result;
+    const result = (await provider.call(effectiveParams as typeof params, model)) as Result;
+    // v1 limitation: streaming responses carry no `usage` block (OpenRouter
+    // supports include_usage on streams, but changing stream behavior is out
+    // of scope) — record a usageMissing row with zero counts instead so the
+    // call is still visible in the ledger.
+    void recordLlmUsage({
+      ...usageContext,
+      provider: provider.name,
+      model,
+      usage: isStreaming
+        ? null
+        : ((result as OpenAI.Chat.Completions.ChatCompletion).usage ?? null),
+    });
+    return result;
   };
 
   let lastError: unknown;
@@ -315,10 +346,22 @@ export async function createVisionCompletion(
         ? provider.resolveModel(visionModel)
         : provider.resolveModel(visionModel);
     try {
-      return (await provider.call(
+      const result = (await provider.call(
         { ...params, stream: false },
         model,
       )) as OpenAI.Chat.Completions.ChatCompletion;
+      // Ground-truth usage ledger — same contract as createCompletion's
+      // `call` helper: record the provider+model that actually served the
+      // request, fire-and-forget.
+      void recordLlmUsage({
+        userId: options.userId ?? null,
+        source: options.priority ?? "foreground",
+        estimatedCostCents: estimatePrebillCents(params.model),
+        provider: provider.name,
+        model,
+        usage: result.usage ?? null,
+      });
+      return result;
     } catch (err) {
       lastError = err;
       if (isKeyLimitError(err) || isCreditError(err) || isProviderUnavailable(provider.quotaKey)) {

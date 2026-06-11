@@ -69,6 +69,7 @@ model User {
   emailProcessingLogs       EmailProcessingLog[]
   contactTrustScores        ContactTrustScore[]
   llmCostLedger             LlmCostLedger[]
+  llmUsageLogs              LlmUsageLog[]
 }
 
 enum UserRole {
@@ -1031,4 +1032,32 @@ model LlmCostLedger {
 
   @@unique([userId, dayKey])
   @@index([userId, dayKey])
+}
+
+// ─── LLM usage log ─────────────────────────────────────────────────────────
+// Ground-truth token accounting: one row per successful provider call,
+// written at the createCompletion/createVisionCompletion chokepoints
+// (openai.ts) with the ACTUAL usage the provider returned and the
+// provider+model that actually served the request after failover. The
+// pre-bill estimate is stored alongside so estimate-vs-reality drift is
+// measurable. Cost gates still run on estimates (cost-guard.ts /
+// LlmCostLedger) — this table never gates anything.
+// userId is nullable so system-initiated calls are captured too; SetNull on
+// user deletion keeps the cost history (rows carry token counts only, no
+// content).
+model LlmUsageLog {
+  id                 String   @id @default(uuid())
+  userId             String? // null = system-initiated call (no user accounting)
+  user               User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  provider           String // "openrouter" | "gemini"
+  model              String // model that actually served the call (post-failover)
+  promptTokens       Int      @default(0)
+  completionTokens   Int      @default(0)
+  totalTokens        Int      @default(0)
+  usageMissing       Boolean  @default(false) // provider returned no usage (e.g. streaming)
+  estimatedCostCents Int      @default(0) // what the pre-bill gate charged for this call
+  source             String   @default("foreground") // "foreground" | "background"
+  createdAt          DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
