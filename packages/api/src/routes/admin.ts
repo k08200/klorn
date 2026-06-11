@@ -4,6 +4,7 @@ import { runAllScenarios, summarizeEval } from "../agent-eval.js";
 import { requireAdmin } from "../auth.js";
 import { db, prisma } from "../db.js";
 import { sendBetaInviteEmail } from "../email.js";
+import { getUsageSummary } from "../llm-usage.js";
 import { clearFallbackState, getProviderCooldownInfo } from "../model-fallback.js";
 import { MODEL } from "../openai.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
@@ -423,6 +424,20 @@ export async function adminRoutes(app: FastifyInstance) {
     }
     clearFallbackState(target);
     return { success: true, cleared: target ?? "all", clearedAt: new Date().toISOString() };
+  });
+
+  // GET /api/admin/llm-usage — Ground-truth LLM token usage (LlmUsageLog).
+  // Unlike /ops (TokenUsage, agent-loop only, estimates) this reads the
+  // chokepoint ledger: actual provider-reported tokens per call, with the
+  // model that really served each request after failover.
+  // Query: ?userId=<uuid> to scope to one user, ?days=1..90 (default 7).
+  app.get("/llm-usage", async (request, reply) => {
+    const { userId, days } = request.query as { userId?: string; days?: string };
+    const sinceDays = days === undefined ? 7 : Number.parseInt(days, 10);
+    if (!Number.isInteger(sinceDays) || sinceDays < 1 || sinceDays > 90) {
+      return reply.code(400).send({ error: "days must be an integer between 1 and 90" });
+    }
+    return await getUsageSummary(userId || undefined, sinceDays);
   });
 
   // GET /api/admin/eval — Run agent decision-logic eval scenarios
