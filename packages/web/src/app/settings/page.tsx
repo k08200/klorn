@@ -9,6 +9,7 @@ import { GoogleConnectRedirect } from "../../components/google-connect-redirect"
 import { NaverImapSection } from "../../components/naver-imap-section";
 import { OAuthErrorBanner } from "../../components/oauth-error-banner";
 import { ListSkeleton } from "../../components/skeleton";
+import { TelegramSection } from "../../components/telegram-section";
 import { useToast } from "../../components/toast";
 import { API_BASE, apiFetch, authHeaders, startGoogleConnect } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
@@ -85,6 +86,7 @@ export default function SettingsPage() {
   const [alwaysAllowedTools, setAlwaysAllowedTools] = useState<string[]>([]);
   const [autoMarkReadEnabled, setAutoMarkReadEnabled] = useState(false);
   const [proactiveActionsEnabled, setProactiveActionsEnabled] = useState(false);
+  const [phoneEscalationEnabled, setPhoneEscalationEnabled] = useState(false);
   const [preApprovableTools, setPreApprovableTools] = useState<string[]>([]);
   const [notifPrefs, setNotifPrefs] = useState({
     notifyEmailUrgent: true,
@@ -377,9 +379,11 @@ export default function SettingsPage() {
       quietHoursStart?: string | null;
       quietHoursEnd?: string | null;
       proactiveActions?: boolean;
+      phoneEscalationEnabled?: boolean;
     }>("/api/automations")
       .then((d) => {
         setProactiveActionsEnabled(d.proactiveActions ?? false);
+        setPhoneEscalationEnabled(d.phoneEscalationEnabled ?? false);
         setAgentEnabled(d.autonomousAgent ?? true);
         setAgentMode(normalizeAgentMode(d.agentMode));
         setAgentModeOptions(normalizeAgentModeOptions(d.agentModes));
@@ -422,6 +426,20 @@ export default function SettingsPage() {
       });
     } catch {
       setAutoMarkReadEnabled(!value);
+      toast("Could not save setting.", "error");
+    }
+  };
+
+  const updatePhoneEscalation = async (value: boolean) => {
+    setPhoneEscalationEnabled(value);
+    try {
+      await apiFetch("/api/automations", {
+        method: "PATCH",
+        body: JSON.stringify({ phoneEscalationEnabled: value }),
+      });
+      toast(value ? "Phone escalation enabled." : "Phone escalation disabled.", "success");
+    } catch {
+      setPhoneEscalationEnabled(!value);
       toast("Could not save setting.", "error");
     }
   };
@@ -1044,6 +1062,34 @@ export default function SettingsPage() {
                 />
               </div>
             </div>
+            <div className="pt-3 border-t border-stone-800">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-stone-200">Phone escalation</p>
+                  <p className="text-xs text-stone-500 mt-1">
+                    Calls you once when an urgent notification goes unacknowledged for 5 minutes.
+                    Max 3 calls/day. Quiet hours always win. Requires a verified phone number and
+                    server-side Twilio setup.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updatePhoneEscalation(!phoneEscalationEnabled)}
+                  className={`relative inline-flex min-h-11 min-w-14 shrink-0 items-center rounded-full transition-colors ${
+                    phoneEscalationEnabled ? "bg-amber-300" : "bg-stone-700"
+                  }`}
+                  role="switch"
+                  aria-checked={phoneEscalationEnabled}
+                  aria-label="Toggle phone escalation"
+                >
+                  <span
+                    className={`absolute left-1 h-6 w-6 rounded-full bg-white transition-transform ${
+                      phoneEscalationEnabled ? "translate-x-6" : ""
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -1479,6 +1525,9 @@ export default function SettingsPage() {
               )}
             </div>
           )}
+
+          {/* Telegram channel */}
+          <TelegramSection />
         </section>
 
         {/* Naver Mail (IMAP) */}

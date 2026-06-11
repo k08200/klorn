@@ -44,6 +44,7 @@ import { answerTelegramCallback, isTelegramConfigured, sendTelegramMessage } fro
 import {
   consumeTelegramLinkCode,
   findUserIdByTelegramChatId,
+  getLinkedTelegramChatId,
   unlinkTelegram,
 } from "../telegram-link.js";
 
@@ -69,6 +70,35 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.TELEGRAM_WEBHOOK_SECRET;
+});
+
+describe("GET /api/telegram/link", () => {
+  it("requires authentication", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/telegram/link" });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("returns linked:false when no chat is bound", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/telegram/link", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ linked: false });
+    expect(getLinkedTelegramChatId).toHaveBeenCalledWith("user-1");
+    await app.close();
+  });
+
+  it("returns linked:true without leaking the chat id", async () => {
+    vi.mocked(getLinkedTelegramChatId).mockResolvedValueOnce("777");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/telegram/link", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    // Strict equality: the response must be the boolean flag and nothing else.
+    expect(res.json()).toEqual({ linked: true });
+    expect(res.body).not.toContain("777");
+    await app.close();
+  });
 });
 
 describe("POST /api/telegram/link", () => {
