@@ -74,6 +74,36 @@ export async function buildInteractionGraph(userId: string): Promise<Interaction
 }
 
 /**
+ * Cache-only lookup of one contact's interaction node. Unlike
+ * getInteractionGraph this NEVER rebuilds — the judge path calls it per
+ * email, and a stale cache must cost one Memory read, not a mailbox scan
+ * (a sync burst would otherwise fan out N simultaneous rebuilds). The
+ * weekly batch + agent paths keep the cache warm. Returns null when the
+ * cache is missing, stale, unparsable, or has no node for the address.
+ * Absence of a node means "not a top contact", NOT "stranger" — the graph
+ * only keeps the top MAX_NODES contacts.
+ */
+export async function getCachedInteractionNode(
+  userId: string,
+  email: string,
+): Promise<InteractionNode | null> {
+  const address = email.toLowerCase().trim();
+  if (!address) return null;
+  try {
+    const mem = await prisma.memory.findUnique({
+      where: { userId_type_key: { userId, type: "CONTEXT", key: GRAPH_KEY } },
+    });
+    if (!mem) return null;
+    const parsed = JSON.parse(mem.content) as InteractionGraph;
+    const ageMs = Date.now() - new Date(parsed.builtAt).getTime();
+    if (!(ageMs < GRAPH_TTL_DAYS * 24 * 60 * 60 * 1000)) return null;
+    return parsed.nodes.find((n) => n.email.toLowerCase() === address) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Returns a compact prompt block listing the top contacts with relationship
  * context. Empty string if no graph data is available.
  */

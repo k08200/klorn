@@ -79,12 +79,42 @@ export interface SenderPrior {
   kind: "override" | "history";
 }
 
+/**
+ * Deterministic, DB-derived facts about the sender, rendered into the judge
+ * prompt as evidence for the senderTrust score. The LLM still scores — facts
+ * ground it instead of letting it guess trust from surface cues alone
+ * (engine review 2026-06-12: trust-score.ts was computed but never consumed
+ * by classification). Assembled in judge-context.ts; the judge stays pure.
+ */
+export interface SenderFacts {
+  /** Recent tier counts for this sender's mail, e.g. { QUEUE: 6, SILENT: 3 }. */
+  tierHistory: Partial<Record<PocTier, number>>;
+  /** How many of those classifications were manual user corrections. */
+  manualOverrides: number;
+  /**
+   * Interaction-graph node from the top-contacts cache. null means "not a
+   * cached top contact", NOT "stranger" — never render absence as a fact.
+   */
+  interaction: {
+    emailCount: number;
+    lastEmailDaysAgo: number | null;
+    upcomingMeetings: number;
+  } | null;
+  /** Commitment track record (only when the trust badge is load-bearing). */
+  commitments: { onTime: number; total: number } | null;
+}
+
 export interface JudgeContext {
   corrections: CorrectionExample[];
   senderPrior: SenderPrior | null;
+  senderFacts?: SenderFacts | null;
 }
 
-export const EMPTY_JUDGE_CONTEXT: JudgeContext = { corrections: [], senderPrior: null };
+export const EMPTY_JUDGE_CONTEXT: JudgeContext = {
+  corrections: [],
+  senderPrior: null,
+  senderFacts: null,
+};
 
 const CLAMP = (n: number): number => Math.max(0, Math.min(1, n));
 
@@ -172,7 +202,66 @@ The user manually corrected these past classifications (ground truth for how THI
 ${lines.join("\n")}`;
 }
 
-function buildJudgePrompt(email: ClassifiableEmail, corrections: CorrectionExample[] = []): string {
+/**
+ * Render observed sender history as a facts block. Only ever lists facts
+ * that exist — absence of history must not be presented as evidence (a
+ * first-time sender is unknown, not untrusted). Empty string when there is
+ * nothing to say, keeping the prompt byte-identical to the pre-facts era
+ * (the synthetic eval set has no sender history, so the CI gate measures
+ * the same prompt).
+ */
+export function buildSenderFactsBlock(facts?: SenderFacts | null): string {
+  if (!facts) return "";
+  const lines: string[] = [];
+
+  const tierCounts = (Object.entries(facts.tierHistory) as Array<[PocTier, number]>)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([tier, n]) => `${tier}×${n}`)
+    .join(", ");
+  if (tierCounts) {
+    const overrides =
+      facts.manualOverrides > 0
+        ? ` (${facts.manualOverrides} were manual corrections by the recipient)`
+        : "";
+    lines.push(`- Recipient's recent tiering of this sender's mail: ${tierCounts}${overrides}`);
+  }
+
+  if (facts.interaction) {
+    const i = facts.interaction;
+    const last =
+      i.lastEmailDaysAgo === null
+        ? ""
+        : i.lastEmailDaysAgo === 0
+          ? ", last email today"
+          : `, last email ${i.lastEmailDaysAgo}d ago`;
+    const meetings =
+      i.upcomingMeetings > 0
+        ? `, ${i.upcomingMeetings} upcoming meeting${i.upcomingMeetings > 1 ? "s" : ""}`
+        : "";
+    lines.push(
+      `- Active correspondent: ${i.emailCount} emails in the recipient's recent activity${last}${meetings}`,
+    );
+  }
+
+  if (facts.commitments) {
+    lines.push(
+      `- Commitment track record: kept ${facts.commitments.onTime} of ${facts.commitments.total} on time`,
+    );
+  }
+
+  if (lines.length === 0) return "";
+  return `
+
+Known history for this sender, observed in the recipient's own mailbox. Ground senderTrust on these facts — they outrank surface cues in the email itself. Where no fact is listed, score from the email alone:
+${lines.join("\n")}`;
+}
+
+function buildJudgePrompt(
+  email: ClassifiableEmail,
+  corrections: CorrectionExample[] = [],
+  senderFacts: SenderFacts | null = null,
+): string {
   const subject = (email.subject || "").slice(0, 200);
   const from = (email.from || "").slice(0, 200);
   const snippet = (email.snippet || "").replace(/\s+/g, " ").slice(0, 400);
@@ -189,7 +278,7 @@ Features:
 Also give a short reason (under 12 words) describing what the email is.
 
 Respond with JSON only:
-{"confidence":0.0,"senderTrust":0.0,"reversibility":0.0,"urgency":0.0,"reason":"short phrase"}${buildCorrectionsBlock(corrections)}
+{"confidence":0.0,"senderTrust":0.0,"reversibility":0.0,"urgency":0.0,"reason":"short phrase"}${buildCorrectionsBlock(corrections)}${buildSenderFactsBlock(senderFacts)}
 
 Email:
 from: ${from}
@@ -202,6 +291,7 @@ async function extractFeaturesWithLlm(
   email: ClassifiableEmail,
   userId?: string,
   corrections: CorrectionExample[] = [],
+  senderFacts: SenderFacts | null = null,
 ): Promise<{ features: PocFeatures; reason: string } | null> {
   try {
     const response = await createCompletion(
@@ -213,7 +303,7 @@ async function extractFeaturesWithLlm(
             content:
               "You are a strict JSON scorer for an email triage POC. Respond with valid JSON only — no prose, no code fences.",
           },
-          { role: "user", content: buildJudgePrompt(email, corrections) },
+          { role: "user", content: buildJudgePrompt(email, corrections, senderFacts) },
         ],
         response_format: { type: "json_object" },
       },
@@ -418,8 +508,21 @@ export async function judgeEmail(
     };
   }
 
-  const llm = await extractFeaturesWithLlm(email, userId, context.corrections);
+  const senderFacts = context.senderFacts ?? null;
+  const llm = await extractFeaturesWithLlm(email, userId, context.corrections, senderFacts);
   if (llm) {
+    if (senderFacts) {
+      // Measurement hook for a future deterministic senderTrust override:
+      // grep "[JUDGE] sender-facts" in prod logs to compare the LLM's
+      // scored trust against observed history before hard-wiring any rule.
+      const history =
+        (Object.entries(senderFacts.tierHistory) as Array<[PocTier, number]>)
+          .map(([t, n]) => `${t}×${n}`)
+          .join(",") || "none";
+      console.log(
+        `[JUDGE] sender-facts grounded: llmTrust=${llm.features.senderTrust.toFixed(2)} history=${history} overrides=${senderFacts.manualOverrides} interaction=${senderFacts.interaction ? "yes" : "no"} commitments=${senderFacts.commitments ? `${senderFacts.commitments.onTime}/${senderFacts.commitments.total}` : "none"}`,
+      );
+    }
     const { tier, reason: ruleReason } = tierFromFeatures(llm.features);
     return {
       tier,
