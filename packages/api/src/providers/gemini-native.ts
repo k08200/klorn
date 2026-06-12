@@ -46,6 +46,8 @@ interface GeminiResponse {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
     totalTokenCount?: number;
+    /** Implicit-cache hits (Gemini 2.5+). Absent on cache miss / older models. */
+    cachedContentTokenCount?: number;
   };
 }
 
@@ -197,6 +199,10 @@ export async function createCompletionNonStreaming(
       prompt_tokens: data.usageMetadata?.promptTokenCount ?? 0,
       completion_tokens: data.usageMetadata?.candidatesTokenCount ?? 0,
       total_tokens: data.usageMetadata?.totalTokenCount ?? 0,
+      // OpenAI-shape cache detail so the usage ledger records real hit rates.
+      prompt_tokens_details: {
+        cached_tokens: data.usageMetadata?.cachedContentTokenCount ?? 0,
+      },
     },
   } as unknown as OpenAI.Chat.Completions.ChatCompletion;
 }

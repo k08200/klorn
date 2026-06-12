@@ -1122,6 +1122,10 @@ model LlmUsageLog {
   provider           String // "openrouter" | "gemini"
   model              String // model that actually served the call (post-failover)
   promptTokens       Int      @default(0)
+  // Prompt tokens served from the provider's prompt cache (OpenAI
+  // prompt_tokens_details.cached_tokens / Gemini cachedContentTokenCount).
+  // 0 when the serving provider doesn't cache or doesn't report it.
+  cachedPromptTokens Int      @default(0)
   completionTokens   Int      @default(0)
   totalTokens        Int      @default(0)
   usageMissing       Boolean  @default(false) // provider returned no usage (e.g. streaming)

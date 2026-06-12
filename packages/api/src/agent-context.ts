@@ -12,7 +12,6 @@
  * is the `system` message.
  *
  * Sections produced (in order):
- *   - Current Time (KST + UTC)
  *   - Suppressed Recent Proposal Topics (if any)
  *   - Open Tasks
  *   - Upcoming Calendar (next 7 days)
@@ -25,6 +24,9 @@
  *   - Your Previous Decisions (if any)
  *   - Cross-Domain Insights (deadline cluster / free time / meeting-contact /
  *     meeting-task / email-contact links)
+ *   - Current Time (KST + UTC) — LAST on purpose: it changes every call,
+ *     and provider prompt caching matches on prefix, so putting it first
+ *     would bust the cache for the entire context every tick.
  */
 
 import { buildAgentEmailWhere } from "./agent-email-context-filter.js";
@@ -258,7 +260,11 @@ export async function gatherUserContext(userId: string): Promise<string> {
 
   const sections: string[] = [];
 
-  sections.push(`## Current Time\nKST: ${kstStr}\nUTC: ${now.toISOString()}`);
+  // NOTE: the volatile "Current Time" section is pushed LAST (see the end
+  // of this function). Provider-side prompt caching (OpenAI automatic,
+  // Gemini implicit) matches on prefix — a second-precision timestamp as
+  // the first section busts the cache for every byte after it on every
+  // 5-minute tick.
 
   const suppressionSummary = formatRecentProposalSuppressions(recentProposalSuppressions);
   if (suppressionSummary) {
@@ -542,6 +548,10 @@ export async function gatherUserContext(userId: string): Promise<string> {
       `## 🔗 Cross-Domain Insights (use OBSERVE → CONNECT → PROPOSE on these)\n${crossDomainHints.join("\n")}`,
     );
   }
+
+  // Volatile timestamp LAST — every section above stays a cacheable prefix
+  // across the agent's 5-minute ticks (see NOTE at the top of this list).
+  sections.push(`## Current Time\nKST: ${kstStr}\nUTC: ${now.toISOString()}`);
 
   return sections.join("\n\n");
 }
