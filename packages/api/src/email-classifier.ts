@@ -9,7 +9,7 @@
  * never silently stops classifying.
  */
 
-import { createCompletion, MODEL } from "./openai.js";
+import { createCompletion, JUDGE_MODEL } from "./openai.js";
 import { captureError } from "./sentry.js";
 
 export type EmailPriority = "high" | "medium" | "low";
@@ -210,7 +210,10 @@ async function classifyBatchWithLlm(
   try {
     const response = await createCompletion(
       {
-        model: MODEL,
+        // Same paid model as the tier judge: the :free default's daily
+        // quota lockouts silently demoted whole batches to the keyword
+        // fallback for an hour at a time (PR #511 found the cliff).
+        model: JUDGE_MODEL,
         messages: [
           {
             role: "system",
