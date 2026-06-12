@@ -7,7 +7,12 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/web/package.json packages/web/
 RUN pnpm install --frozen-lockfile --filter @klorn/web...
 
-# Copy source and build
+# Copy source and build.
+# NEXT_PUBLIC_* values are inlined into the client bundle at BUILD time —
+# a runtime `environment:` entry cannot change them. Self-hosters serving
+# the web app anywhere other than localhost must pass this build arg.
+ARG NEXT_PUBLIC_API_URL=http://localhost:3001
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY packages/web/ packages/web/
 RUN pnpm --filter @klorn/web build
 

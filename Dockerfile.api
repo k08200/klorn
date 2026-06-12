@@ -18,4 +18,7 @@ RUN cd packages/api && npx prisma generate
 RUN pnpm --filter @klorn/api build
 
 EXPOSE 3001
-CMD ["node", "packages/api/dist/index.js"]
+# start.sh runs `prisma migrate deploy` (with cold-start retry + baseline
+# fallback) before exec'ing the server — a fresh `docker compose up` must
+# create the schema itself or the API boots against an empty database.
+CMD ["sh", "packages/api/scripts/start.sh"]

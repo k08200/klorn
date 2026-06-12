@@ -1,0 +1,29 @@
+# Dependencies — reinstalled inside the image. Host copies are
+# platform-native (macOS arm64) and pnpm-symlinked; copying them both
+# breaks the container install and adds ~1GB to the build context.
+node_modules
+**/node_modules
+
+# Secrets — env files must NEVER end up in an image layer. Anyone with
+# the image can read every layer.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Build output — rebuilt inside the image.
+**/dist
+packages/web/.next
+
+# Repo content the images don't need (keeps the context small).
+.git
+.github
+.claude
+website
+docs
+examples
+*.md
+poc-*.json
+poc-demo-mock-server.cjs
