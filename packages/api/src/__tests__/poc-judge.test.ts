@@ -99,6 +99,19 @@ describe("tierFromFeatures", () => {
     expect(tier).toBe("QUEUE");
   });
 
+  it("does NOT return AUTO for a low-trust sender (system notices stay QUEUE)", () => {
+    // 2026-06-12 flash eval: invoice/bill/deploy notices scored conf=1.0,
+    // rev=1.0, trust=0.3 and auto-claimed. Never auto-handle mail from a
+    // sender with no trust signal — "floors stay high".
+    const { tier } = tierFromFeatures({
+      confidence: 1.0,
+      senderTrust: 0.3,
+      reversibility: 1.0,
+      urgency: 0.0,
+    });
+    expect(tier).toBe("QUEUE");
+  });
+
   it("defaults to QUEUE for low-urgency mid-trust informational mail", () => {
     const { tier } = tierFromFeatures({
       confidence: 0.6,

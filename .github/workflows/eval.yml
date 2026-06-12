@@ -67,6 +67,7 @@ jobs:
 
       - name: Run judge accuracy gate
         if: steps.key.outputs.present == 'true'
-        # concurrency=1 + 4.5s delay keeps a free-tier provider (Gemini AI
-        # Studio is 15 RPM) under its per-minute cap. ~4 min for 50 emails.
-        run: cd packages/api && npx tsx scripts/poc-accuracy.ts --in=eval/judge-eval-set.json --concurrency=1 --delay=4500
+        # The judge defaults to a paid model (JUDGE_MODEL, openai.ts), so the
+        # run no longer competes with prod for :free daily quota and modest
+        # parallelism is safe. ~1 min for 50 emails.
+        run: cd packages/api && npx tsx scripts/poc-accuracy.ts --in=eval/judge-eval-set.json --concurrency=2 --delay=500
