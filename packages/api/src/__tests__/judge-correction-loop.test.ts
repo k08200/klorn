@@ -169,6 +169,8 @@ describe("few-shot correction injection", () => {
     // notices 0.0 and the rule buried them in SILENT. QUEUE is doctrine.
     expect(prompt).toContain("0.3 = automated system/transactional notice");
     expect(prompt).toContain("NOT marketing");
+    // And the date≠urgency clarification (flash scored a next-week invite 1.0).
+    expect(prompt).toContain("A scheduled date alone is NOT urgency");
   });
 });
 

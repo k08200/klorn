@@ -161,11 +161,15 @@ export function tierFromFeatures(features: PocFeatures): {
     return { tier: "SILENT", reason: "Promotional / marketing — no human attention needed" };
   }
 
-  // 4. Trivially reversible + very sure + not urgent → AUTO.
+  // 4. Trivially reversible + very sure + not urgent + trusted → AUTO.
   //    Floors stay high so we never auto-handle a destructive action or a
-  //    misclassification. Per POC.md OUT scope, AUTO is *classified only*
+  //    misclassification. The senderTrust floor was added 2026-06-12 after
+  //    the first flash eval: precise models score routine system notices
+  //    (invoices, bills, deploy alerts) conf=1.0/rev=1.0 and auto-claimed
+  //    them — mail from a sender with no trust signal must never be
+  //    auto-handled. Per POC.md OUT scope, AUTO is *classified only*
   //    during the POC; actual execution stays disabled.
-  if (f.reversibility >= 0.85 && f.confidence >= 0.85 && f.urgency < 0.5) {
+  if (f.reversibility >= 0.85 && f.confidence >= 0.85 && f.urgency < 0.5 && f.senderTrust >= 0.5) {
     return { tier: "AUTO", reason: "Reversible, confident, not urgent" };
   }
 
@@ -273,7 +277,7 @@ Features:
 - confidence: how sure you are that your other three scores are right (1.0 = certain, 0.5 = could go either way)
 - senderTrust: is this sender a real person the recipient knows or cares about? (1.0 = clear known/important human; 0.5 = professional but unfamiliar; 0.3 = automated system/transactional notice the recipient signed up for — receipts, invoices, deploy/security/account alerts, own-product signups; these stay visible in the queue, they are NOT marketing; 0.0 = anonymous bulk marketing / promo list)
 - reversibility: if this mail were auto-handled (e.g. archived, replied) and that turned out wrong, how easy is it to recover? (1.0 = trivial undo, just unarchive; 0.5 = mildly awkward; 0.0 = irreversible action, e.g. lost an investor)
-- urgency: does this need attention within hours? (1.0 = today / time-bound; 0.5 = this week; 0.0 = informational, no clock)
+- urgency: does this need attention within hours? (1.0 = today / time-bound; 0.5 = this week; 0.0 = informational, no clock). A scheduled date alone is NOT urgency — an invite or reminder for next week is ≤0.3, and routine security/sign-in confirmations without suspicious context are ≤0.3
 
 Also give a short reason (under 12 words) describing what the email is.
 
