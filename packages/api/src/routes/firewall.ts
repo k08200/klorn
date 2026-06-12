@@ -20,6 +20,7 @@ import { checkAttentionInputHash } from "../attention-input-hash.js";
 import { overrideAttentionTier } from "../attention-override.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
+import { ensureFreshGmailWatch } from "../gmail.js";
 import { senderEmail } from "../notification-format.js";
 import { captureError } from "../sentry.js";
 import { manualOverrideReason, normalizeTier, TIERS, type Tier } from "../tiers.js";
@@ -122,6 +123,12 @@ export async function firewallRoutes(app: FastifyInstance) {
 
   app.get("/", async (request): Promise<FirewallResponse> => {
     const userId = getUserId(request);
+
+    // Activity-driven self-heal: the firewall view is the app's front door,
+    // so opening it re-registers an expired Gmail watch even when the
+    // in-process renewal scheduler slept through the expiry (free-tier
+    // dynos). Fire-and-forget — never blocks or fails the queue response.
+    void ensureFreshGmailWatch(userId);
 
     // Pull OPEN items only — resolved/dismissed don't belong in the live queue.
     // tier is nullable on AttentionItem because the migration backfill is

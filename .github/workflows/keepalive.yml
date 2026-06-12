@@ -1,0 +1,28 @@
+name: Keepalive
+
+# Render free-tier instances spin down after ~15 min without inbound
+# traffic, freezing the in-process schedulers (classification, push,
+# Gmail watch renewal). The API self-pings while awake, but once asleep
+# it can't wake itself — this external ping is the belt that brings it
+# back. Set the repository VARIABLE (not secret) KEEPALIVE_URL to the
+# public health endpoint, e.g. https://<your-api-host>/api/health
+#
+# GitHub cron is best-effort (delays of several minutes are normal);
+# combined with the in-process self-ping that's good enough to keep the
+# schedulers ticking.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping API health
+        if: vars.KEEPALIVE_URL != ''
+        run: curl -fsS --max-time 60 --retry 2 "${{ vars.KEEPALIVE_URL }}" > /dev/null && echo "alive"
+      - name: Not configured
+        if: vars.KEEPALIVE_URL == ''
+        run: echo "::notice::Set repository variable KEEPALIVE_URL to enable keepalive pings."

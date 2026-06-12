@@ -56,6 +56,19 @@ export async function registerSubscriptionWithServer(sub: PushSubscription): Pro
   if (!res.ok) throw new Error(`Server registration failed: ${res.status}`);
 }
 
+/**
+ * Hand the SW the rotate-endpoint URL so its `pushsubscriptionchange`
+ * handler can re-register a swapped subscription while the app is closed.
+ * No tokens cross this boundary — the old endpoint is the capability.
+ */
+export function sendSwConfig(reg: ServiceWorkerRegistration): void {
+  const target = reg.active ?? reg.waiting ?? reg.installing;
+  target?.postMessage({
+    type: "klorn-config",
+    rotateUrl: `${API_BASE}/api/notifications/push/rotate`,
+  });
+}
+
 export async function unregisterPushSubscription(): Promise<void> {
   if (!("serviceWorker" in navigator)) return;
   const reg = await navigator.serviceWorker.ready;
