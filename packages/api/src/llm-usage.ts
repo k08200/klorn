@@ -34,6 +34,13 @@ export interface ProviderUsage {
   prompt_tokens?: number | null;
   completion_tokens?: number | null;
   total_tokens?: number | null;
+  /**
+   * Cache-hit detail (OpenAI automatic prompt caching, Gemini implicit
+   * caching via the gemini-native mapping, OpenRouter passthrough for
+   * providers that report it). Absent = the provider doesn't cache or
+   * doesn't say — recorded as 0, never estimated.
+   */
+  prompt_tokens_details?: { cached_tokens?: number | null } | null;
 }
 
 export interface RecordLlmUsageInput {
@@ -137,6 +144,7 @@ export async function recordLlmUsage(input: RecordLlmUsageInput): Promise<void> 
         usage.completion_tokens == null &&
         usage.total_tokens == null);
     const promptTokens = usage?.prompt_tokens ?? 0;
+    const cachedPromptTokens = usage?.prompt_tokens_details?.cached_tokens ?? 0;
     const completionTokens = usage?.completion_tokens ?? 0;
     const totalTokens = usage?.total_tokens ?? promptTokens + completionTokens;
 
@@ -149,6 +157,7 @@ export async function recordLlmUsage(input: RecordLlmUsageInput): Promise<void> 
         source: input.source,
         estimatedCostCents: Math.max(0, Math.round(input.estimatedCostCents)),
         promptTokens,
+        cachedPromptTokens,
         completionTokens,
         totalTokens,
         usageMissing,
@@ -165,6 +174,7 @@ export async function recordLlmUsage(input: RecordLlmUsageInput): Promise<void> 
 export interface UsageSummaryBucket {
   calls: number;
   promptTokens: number;
+  cachedPromptTokens: number;
   completionTokens: number;
   totalTokens: number;
   estimatedCostCents: number;
@@ -174,12 +184,14 @@ export interface UsageSummary {
   sinceDays: number;
   since: string;
   userId: string | null;
-  totals: UsageSummaryBucket & { usageMissingCalls: number };
+  /** cacheHitRate = cachedPromptTokens / promptTokens (0 when no prompts). */
+  totals: UsageSummaryBucket & { usageMissingCalls: number; cacheHitRate: number };
   byModel: Array<UsageSummaryBucket & { provider: string; model: string }>;
 }
 
 const USAGE_SUMS = {
   promptTokens: true,
+  cachedPromptTokens: true,
   completionTokens: true,
   totalTokens: true,
   estimatedCostCents: true,
@@ -218,23 +230,29 @@ export async function getUsageSummary(
     prisma.llmUsageLog.count({ where: { ...where, usageMissing: true } }),
   ]);
 
+  const promptTokens = totals._sum.promptTokens ?? 0;
+  const cachedPromptTokens = totals._sum.cachedPromptTokens ?? 0;
+
   return {
     sinceDays: days,
     since: since.toISOString(),
     userId: userId ?? null,
     totals: {
       calls: totals._count._all,
-      promptTokens: totals._sum.promptTokens ?? 0,
+      promptTokens,
+      cachedPromptTokens,
       completionTokens: totals._sum.completionTokens ?? 0,
       totalTokens: totals._sum.totalTokens ?? 0,
       estimatedCostCents: totals._sum.estimatedCostCents ?? 0,
       usageMissingCalls,
+      cacheHitRate: promptTokens === 0 ? 0 : Number((cachedPromptTokens / promptTokens).toFixed(4)),
     },
     byModel: byModel.map((row) => ({
       provider: row.provider,
       model: row.model,
       calls: row._count._all,
       promptTokens: row._sum.promptTokens ?? 0,
+      cachedPromptTokens: row._sum.cachedPromptTokens ?? 0,
       completionTokens: row._sum.completionTokens ?? 0,
       totalTokens: row._sum.totalTokens ?? 0,
       estimatedCostCents: row._sum.estimatedCostCents ?? 0,

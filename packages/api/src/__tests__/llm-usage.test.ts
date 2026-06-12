@@ -51,6 +51,7 @@ beforeEach(() => {
     _count: { _all: 0 },
     _sum: {
       promptTokens: null,
+      cachedPromptTokens: null,
       completionTokens: null,
       totalTokens: null,
       estimatedCostCents: null,
@@ -100,6 +101,43 @@ describe("recordLlmUsage — happy path", () => {
 
     expect(created).toHaveLength(1);
     expect(created[0].userId).toBeNull();
+  });
+
+  it("records cached prompt tokens from prompt_tokens_details", async () => {
+    const { recordLlmUsage } = await import("../llm-usage.js");
+    await recordLlmUsage({
+      userId: "user-1",
+      provider: "openrouter",
+      model: "openai/gpt-4o-mini",
+      source: "background",
+      estimatedCostCents: 1,
+      usage: {
+        prompt_tokens: 2000,
+        completion_tokens: 100,
+        total_tokens: 2100,
+        prompt_tokens_details: { cached_tokens: 1500 },
+      },
+    });
+
+    expect(created[0]).toMatchObject({
+      promptTokens: 2000,
+      cachedPromptTokens: 1500,
+      usageMissing: false,
+    });
+  });
+
+  it("defaults cachedPromptTokens to 0 when the provider reports no details", async () => {
+    const { recordLlmUsage } = await import("../llm-usage.js");
+    await recordLlmUsage({
+      userId: "user-1",
+      provider: "openrouter",
+      model: "google/gemma-4-31b-it:free",
+      source: "background",
+      estimatedCostCents: 0,
+      usage: { prompt_tokens: 120, completion_tokens: 30, total_tokens: 150 },
+    });
+
+    expect(created[0]).toMatchObject({ cachedPromptTokens: 0 });
   });
 
   it("derives totalTokens from prompt+completion when the provider omits it", async () => {
@@ -199,6 +237,7 @@ describe("getUsageSummary — aggregation", () => {
       _count: { _all: 12 },
       _sum: {
         promptTokens: 1000,
+        cachedPromptTokens: 400,
         completionTokens: 200,
         totalTokens: 1200,
         estimatedCostCents: 5,
@@ -211,6 +250,7 @@ describe("getUsageSummary — aggregation", () => {
         _count: { _all: 10 },
         _sum: {
           promptTokens: 900,
+          cachedPromptTokens: 0,
           completionTokens: 150,
           totalTokens: 1050,
           estimatedCostCents: 0,
@@ -220,7 +260,13 @@ describe("getUsageSummary — aggregation", () => {
         provider: "gemini",
         model: "gemini-2.5-flash",
         _count: { _all: 2 },
-        _sum: { promptTokens: 100, completionTokens: 50, totalTokens: 150, estimatedCostCents: 5 },
+        _sum: {
+          promptTokens: 100,
+          cachedPromptTokens: 400,
+          completionTokens: 50,
+          totalTokens: 150,
+          estimatedCostCents: 5,
+        },
       },
     ];
     countResult = 3;
@@ -233,10 +279,12 @@ describe("getUsageSummary — aggregation", () => {
     expect(summary.totals).toEqual({
       calls: 12,
       promptTokens: 1000,
+      cachedPromptTokens: 400,
       completionTokens: 200,
       totalTokens: 1200,
       estimatedCostCents: 5,
       usageMissingCalls: 3,
+      cacheHitRate: 0.4,
     });
     expect(summary.byModel).toEqual([
       {
@@ -244,6 +292,7 @@ describe("getUsageSummary — aggregation", () => {
         model: "google/gemma-4-31b-it:free",
         calls: 10,
         promptTokens: 900,
+        cachedPromptTokens: 0,
         completionTokens: 150,
         totalTokens: 1050,
         estimatedCostCents: 0,
@@ -253,6 +302,7 @@ describe("getUsageSummary — aggregation", () => {
         model: "gemini-2.5-flash",
         calls: 2,
         promptTokens: 100,
+        cachedPromptTokens: 400,
         completionTokens: 50,
         totalTokens: 150,
         estimatedCostCents: 5,
@@ -287,10 +337,12 @@ describe("getUsageSummary — aggregation", () => {
     expect(summary.totals).toEqual({
       calls: 0,
       promptTokens: 0,
+      cachedPromptTokens: 0,
       completionTokens: 0,
       totalTokens: 0,
       estimatedCostCents: 0,
       usageMissingCalls: 0,
+      cacheHitRate: 0,
     });
   });
 });
