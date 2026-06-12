@@ -18,11 +18,16 @@
 
 import { isCreditError, isKeyLimitError, isModelUnavailableError } from "./model-fallback.js";
 
+// Verified against the live catalog 2026-06-12 — three of the previous five
+// entries (deepseek-r1, qwen-2.5-72b, mistral-small) had already been retired
+// upstream, which is exactly the failure mode the daily catalog check now
+// alerts on. Ordered most-capable-first among currently-listed :free SKUs
+// with reliable tool support.
 export const DEFAULT_OPENROUTER_FALLBACK_CHAIN: ReadonlyArray<string> = [
   "meta-llama/llama-3.3-70b-instruct:free",
-  "deepseek/deepseek-r1:free",
-  "qwen/qwen-2.5-72b-instruct:free",
-  "mistralai/mistral-small:free",
+  "qwen/qwen3-next-80b-a3b-instruct:free",
+  "openai/gpt-oss-120b:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
   "google/gemma-4-31b-it:free",
 ];
 
