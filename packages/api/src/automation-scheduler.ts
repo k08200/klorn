@@ -87,6 +87,9 @@ async function releaseSchedulerLock(): Promise<void> {
 // Actual dedup is DB-based (survives server restarts).
 const briefingSentToday = new Map<string, string>(); // userId -> date string
 let lastWatchRenewalAt = 0;
+// UTC date ("YYYY-MM-DD") of the last OpenRouter catalog check. In-memory is
+// fine — a restart re-running the check the same day is harmless (read-only).
+let lastCatalogCheckDate = "";
 
 /** DB-based check: did we already send a briefing notification today? */
 export async function hasBriefingBeenSentToday(userId: string, timeZone: string): Promise<boolean> {
@@ -752,6 +755,18 @@ async function runAutomations() {
       import("./voice-profile-extractor.js")
         .then(({ extractVoiceProfilesForAllUsers }) => extractVoiceProfilesForAllUsers())
         .catch((err) => console.error("[AUTOMATION] Voice profile extraction failed:", err));
+    }
+
+    // --- Daily: OpenRouter catalog check ---
+    // Proactively verify every model the fallback chain depends on still
+    // exists upstream, so a retired/renamed :free SKU surfaces as a named
+    // alert instead of mystery 404s in the agent logs.
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    if (lastCatalogCheckDate !== todayUtc) {
+      lastCatalogCheckDate = todayUtc;
+      import("./openrouter-catalog-check.js")
+        .then(({ runOpenRouterCatalogCheck }) => runOpenRouterCatalogCheck())
+        .catch((err) => console.warn("[AUTOMATION] Catalog check failed:", err));
     }
 
     // --- Every tick: Resurrect snoozed AttentionItems whose snooze has expired ---
