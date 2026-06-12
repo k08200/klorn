@@ -28,7 +28,12 @@ export async function notificationRoutes(app: FastifyInstance) {
     const path = request.url.split("?")[0] ?? "";
     if (
       path.startsWith("/push/receipts/") ||
-      path.startsWith("/api/notifications/push/receipts/")
+      path.startsWith("/api/notifications/push/receipts/") ||
+      // The SW's pushsubscriptionchange handler has no auth token; the
+      // rotate route authenticates by matching the OLD endpoint (a
+      // high-entropy capability URL) against an existing row instead.
+      path.startsWith("/push/rotate") ||
+      path.startsWith("/api/notifications/push/rotate")
     ) {
       return;
     }
@@ -107,34 +112,9 @@ export async function notificationRoutes(app: FastifyInstance) {
     }
     const normalizedOrigin = new URL(claimedOrigin).origin;
 
-    // Validate push endpoint URL to prevent SSRF
-    let parsedEndpoint: URL;
-    try {
-      parsedEndpoint = new URL(endpoint);
-    } catch {
-      return reply.code(400).send({ error: "Invalid endpoint URL" });
-    }
-    if (parsedEndpoint.protocol !== "https:") {
-      return reply.code(400).send({ error: "Push endpoints must use HTTPS" });
-    }
-    const host = parsedEndpoint.hostname.toLowerCase();
-    // Block private/internal addresses
-    const blockedHosts = ["localhost", "127.0.0.1", "::1", "metadata.google.internal"];
-    if (blockedHosts.includes(host) || host.endsWith(".internal") || host.endsWith(".local")) {
-      return reply.code(400).send({ error: "Invalid push endpoint host" });
-    }
-    const ipMatch = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-    if (ipMatch) {
-      const [, a, b] = ipMatch.map(Number);
-      if (
-        a === 10 ||
-        (a === 172 && b >= 16 && b <= 31) ||
-        (a === 192 && b === 168) ||
-        (a === 169 && b === 254) ||
-        a === 0
-      ) {
-        return reply.code(400).send({ error: "Invalid push endpoint host" });
-      }
+    const endpointError = validatePushEndpointUrl(endpoint);
+    if (endpointError) {
+      return reply.code(400).send({ error: endpointError });
     }
 
     const safeEndpointForLog = endpoint.replace(/[\r\n]/g, "").slice(0, 60);
@@ -160,6 +140,48 @@ export async function notificationRoutes(app: FastifyInstance) {
     console.log(`[PUSH-SUB] Successfully registered push subscription for user ${userId}`);
 
     return reply.code(201).send({ success: true });
+  });
+
+  // POST /api/notifications/push/rotate — Swap a rotated subscription.
+  // Called by the service worker's pushsubscriptionchange handler, which has
+  // no auth token. The OLD endpoint is the credential: it is an unguessable
+  // capability URL that must match an existing row. Rows are only ever
+  // UPDATED in place (same user, same origin) — this route can never create
+  // a subscription for an attacker-chosen user.
+  app.post("/push/rotate", async (request, reply) => {
+    const { oldEndpoint, endpoint, keys } = request.body as {
+      oldEndpoint?: string;
+      endpoint?: string;
+      keys?: { p256dh?: string; auth?: string };
+    };
+    if (!oldEndpoint || !endpoint || !keys?.p256dh || !keys?.auth) {
+      return reply.code(400).send({ error: "Invalid rotate payload" });
+    }
+    const endpointError = validatePushEndpointUrl(endpoint);
+    if (endpointError) {
+      return reply.code(400).send({ error: endpointError });
+    }
+
+    const existing = await prisma.pushSubscription.findUnique({
+      where: { endpoint: oldEndpoint },
+      select: { id: true, userId: true },
+    });
+    if (!existing) {
+      // Unknown old endpoint — nothing to rotate (and nothing to leak).
+      return reply.code(404).send({ error: "Unknown subscription" });
+    }
+
+    // The new endpoint may already exist (double-fired event) — clear it
+    // first so the unique constraint can't fail the swap.
+    await prisma.pushSubscription.deleteMany({
+      where: { endpoint, id: { not: existing.id } },
+    });
+    await prisma.pushSubscription.update({
+      where: { id: existing.id },
+      data: { endpoint, p256dh: keys.p256dh, auth: keys.auth },
+    });
+    console.log(`[PUSH-SUB] Rotated subscription for user ${existing.userId}`);
+    return reply.code(204).send();
   });
 
   // POST /api/notifications/push/test — Send a test push notification
@@ -194,6 +216,42 @@ export async function notificationRoutes(app: FastifyInstance) {
     await prisma.pushSubscription.deleteMany({ where: { endpoint, userId } });
     return reply.code(204).send();
   });
+}
+
+/**
+ * Validate a Web Push endpoint URL (HTTPS, no private/internal hosts) to
+ * prevent SSRF via attacker-supplied endpoints. Returns an error message or
+ * null when valid. Shared by subscribe and rotate.
+ */
+function validatePushEndpointUrl(endpoint: string): string | null {
+  let parsedEndpoint: URL;
+  try {
+    parsedEndpoint = new URL(endpoint);
+  } catch {
+    return "Invalid endpoint URL";
+  }
+  if (parsedEndpoint.protocol !== "https:") {
+    return "Push endpoints must use HTTPS";
+  }
+  const host = parsedEndpoint.hostname.toLowerCase();
+  const blockedHosts = ["localhost", "127.0.0.1", "::1", "metadata.google.internal"];
+  if (blockedHosts.includes(host) || host.endsWith(".internal") || host.endsWith(".local")) {
+    return "Invalid push endpoint host";
+  }
+  const ipMatch = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (ipMatch) {
+    const [, a, b] = ipMatch.map(Number);
+    if (
+      a === 10 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254) ||
+      a === 0
+    ) {
+      return "Invalid push endpoint host";
+    }
+  }
+  return null;
 }
 
 function parseOptionalInteger(value: string | undefined): number | undefined {

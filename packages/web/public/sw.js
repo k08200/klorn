@@ -155,3 +155,63 @@ function sendPushReceipt(data, event) {
     console.warn("[SW] Push receipt failed:", err);
   });
 }
+
+// ── Subscription rotation ───────────────────────────────────────────────
+// Push services can replace a subscription while the app is closed
+// (key rotation, browser update). Without this handler the server keeps
+// the dead endpoint, gets 410s, deletes the row — and the phone silently
+// stops receiving pushes until the user happens to reopen the web app.
+// The page posts the rotate URL after registration (no tokens — the old
+// endpoint itself is the capability that authenticates the swap).
+const CONFIG_CACHE = "klorn-sw-config-v1";
+const ROTATE_URL_KEY = "/__klorn/rotate-url";
+
+self.addEventListener("message", (event) => {
+  const data = event.data || {};
+  if (data.type !== "klorn-config" || typeof data.rotateUrl !== "string") return;
+  event.waitUntil(
+    caches.open(CONFIG_CACHE).then((cache) => cache.put(ROTATE_URL_KEY, new Response(data.rotateUrl))),
+  );
+});
+
+async function readRotateUrl() {
+  try {
+    const cache = await caches.open(CONFIG_CACHE);
+    const res = await cache.match(ROTATE_URL_KEY);
+    return res ? await res.text() : null;
+  } catch {
+    return null;
+  }
+}
+
+self.addEventListener("pushsubscriptionchange", (event) => {
+  const oldSubscription = event.oldSubscription;
+  event.waitUntil(
+    (async () => {
+      const appServerKey =
+        (oldSubscription && oldSubscription.options && oldSubscription.options.applicationServerKey) ||
+        (event.newSubscription &&
+          event.newSubscription.options &&
+          event.newSubscription.options.applicationServerKey);
+      if (!appServerKey) return; // app-open re-registration will heal it
+      const newSub =
+        event.newSubscription ||
+        (await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: appServerKey,
+        }));
+      const rotateUrl = await readRotateUrl();
+      if (!rotateUrl || !oldSubscription) return;
+      const json = newSub.toJSON();
+      await fetch(rotateUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          oldEndpoint: oldSubscription.endpoint,
+          endpoint: json.endpoint,
+          keys: json.keys,
+        }),
+      }).catch((err) => console.warn("[SW] Subscription rotate failed:", err));
+    })(),
+  );
+});

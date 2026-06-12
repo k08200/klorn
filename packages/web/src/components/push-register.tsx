@@ -7,6 +7,7 @@ import {
   getOrCreatePushSubscription,
   getSwRegistration,
   registerSubscriptionWithServer,
+  sendSwConfig,
 } from "../lib/push";
 
 export default function PushRegister() {
@@ -37,6 +38,7 @@ async function registerPush() {
 
     const subscription = await getOrCreatePushSubscription(reg, publicKey);
     await registerSubscriptionWithServer(subscription);
+    sendSwConfig(reg);
   } catch (err) {
     console.error("[PUSH] Registration failed:", err);
   }

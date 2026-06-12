@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import { decryptOptional, decryptToken, encryptOptional, encryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
+import { captureError } from "./sentry.js";
 import { wrapUntrusted } from "./untrusted.js";
 
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
@@ -978,12 +979,68 @@ export async function renewExpiringGmailWatches(): Promise<{ renewed: number; fa
     const result = await registerGmailWatch(t.userId);
     if ("error" in result) {
       console.warn(`[GMAIL-WATCH] Renew failed for ${t.userId}: ${result.error}`);
+      // A lapsed watch means real-time email push silently dies for this
+      // user — that must page the operator, not vanish into stdout.
+      captureError(new Error(`Gmail watch renew failed: ${result.error}`), {
+        tags: { scope: "gmail-watch.renew" },
+        extra: { userId: t.userId },
+      });
       failed++;
     } else {
       renewed++;
     }
   }
   return { renewed, failed };
+}
+
+// ── Activity-driven watch self-heal ────────────────────────────────────────
+// The hourly renewal tick lives in the in-process scheduler, which freezes
+// whenever a free-tier dyno sleeps. If the process sleeps through the renewal
+// window, the watch expires SILENTLY and Gmail stops pushing — the failure
+// mode behind "my phone got no notifications for a week". This hook runs on
+// user activity (firewall GET) instead, so the watch heals the moment the
+// user opens the app, scheduler or not.
+const watchEnsureLastRun = new Map<string, number>();
+const WATCH_ENSURE_DEBOUNCE_MS = 10 * 60 * 1000;
+const WATCH_RENEW_MARGIN_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Re-register the Gmail watch when it is expired or expiring within 24h.
+ * Fire-and-forget safe: never throws, debounced per user (10 min, in-memory).
+ * Deliberately does NOT resurrect watches the user stopped (expiresAt null).
+ * `register` is injectable for tests only.
+ */
+export async function ensureFreshGmailWatch(
+  userId: string,
+  register: typeof registerGmailWatch = registerGmailWatch,
+): Promise<void> {
+  try {
+    if (!process.env.GMAIL_PUBSUB_TOPIC) return;
+    const last = watchEnsureLastRun.get(userId);
+    if (last && Date.now() - last < WATCH_ENSURE_DEBOUNCE_MS) return;
+    watchEnsureLastRun.set(userId, Date.now());
+
+    const token = await prisma.userToken.findFirst({
+      where: { userId, provider: "google" },
+      select: { gmailWatchExpiresAt: true },
+    });
+    const expiresAt = (token as { gmailWatchExpiresAt?: Date | null } | null)
+      ?.gmailWatchExpiresAt;
+    if (!expiresAt) return;
+    if (expiresAt.getTime() > Date.now() + WATCH_RENEW_MARGIN_MS) return;
+
+    const result = await register(userId);
+    if ("error" in result) {
+      captureError(new Error(`Gmail watch self-heal failed: ${result.error}`), {
+        tags: { scope: "gmail-watch.ensure" },
+        extra: { userId },
+      });
+    } else {
+      console.log(`[GMAIL-WATCH] Self-healed expiring watch for ${userId}`);
+    }
+  } catch (err) {
+    captureError(err, { tags: { scope: "gmail-watch.ensure" }, extra: { userId } });
+  }
 }
 
 // Tool definitions for function calling
