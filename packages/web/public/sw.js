@@ -170,7 +170,9 @@ self.addEventListener("message", (event) => {
   const data = event.data || {};
   if (data.type !== "klorn-config" || typeof data.rotateUrl !== "string") return;
   event.waitUntil(
-    caches.open(CONFIG_CACHE).then((cache) => cache.put(ROTATE_URL_KEY, new Response(data.rotateUrl))),
+    caches
+      .open(CONFIG_CACHE)
+      .then((cache) => cache.put(ROTATE_URL_KEY, new Response(data.rotateUrl))),
   );
 });
 
@@ -189,10 +191,10 @@ self.addEventListener("pushsubscriptionchange", (event) => {
   event.waitUntil(
     (async () => {
       const appServerKey =
-        (oldSubscription && oldSubscription.options && oldSubscription.options.applicationServerKey) ||
-        (event.newSubscription &&
-          event.newSubscription.options &&
-          event.newSubscription.options.applicationServerKey);
+        oldSubscription?.options?.applicationServerKey ||
+        (event.newSubscription && event.newSubscription.options
+          ? event.newSubscription.options.applicationServerKey
+          : null);
       if (!appServerKey) return; // app-open re-registration will heal it
       const newSub =
         event.newSubscription ||
