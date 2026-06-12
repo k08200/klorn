@@ -11,6 +11,7 @@ import {
   unreadGroupCount,
 } from "../lib/notification-grouping";
 import { formatRelative } from "../lib/text";
+import { RejectReasonDialog } from "./reject-reason-dialog";
 import { useToast } from "./toast";
 import { useWebSocket } from "./use-websocket";
 
@@ -55,6 +56,8 @@ export default function NotificationBell({ userId }: { userId: string }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
   const [flash, setFlash] = useState(false);
+  // Notification awaiting the reject-with-reason dialog; null when closed.
+  const [rejectTarget, setRejectTarget] = useState<Notification | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const bellRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -85,10 +88,13 @@ export default function NotificationBell({ userId }: { userId: string }) {
     }
   }, [open]);
 
-  // Click outside / Escape to close — check both bell container and portal dropdown
+  // Click outside / Escape to close — check both bell container and portal dropdown.
+  // While the reject-with-reason dialog is open it owns those interactions,
+  // so the dropdown stays put underneath it.
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
+      if (rejectTarget) return;
       const target = e.target as Node;
       const inBell = containerRef.current?.contains(target);
       const inDropdown = dropdownRef.current?.contains(target);
@@ -97,6 +103,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
       }
     };
     const escHandler = (e: KeyboardEvent) => {
+      if (rejectTarget) return;
       if (e.key === "Escape") setOpen(false);
     };
     document.addEventListener("mousedown", handler);
@@ -105,7 +112,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
       document.removeEventListener("mousedown", handler);
       document.removeEventListener("keydown", escHandler);
     };
-  }, [open]);
+  }, [open, rejectTarget]);
 
   // Listen for real-time push notifications via WebSocket
   useEffect(() => {
@@ -198,14 +205,21 @@ export default function NotificationBell({ userId }: { userId: string }) {
     }
   };
 
-  const handleRejectPendingAction = async (notif: Notification, e: React.MouseEvent) => {
+  // Opens the reject-with-reason dialog; the actual API call happens in
+  // performRejectPendingAction once the user confirms (reason optional).
+  const handleRejectPendingAction = (notif: Notification, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!notif.pendingActionId || pendingActionLoading[notif.id]) return;
+    setRejectTarget(notif);
+  };
+
+  const performRejectPendingAction = async (notif: Notification, reason: string | null) => {
     if (!notif.pendingActionId || pendingActionLoading[notif.id]) return;
     setPendingActionLoading((prev) => ({ ...prev, [notif.id]: "reject" }));
     try {
       await apiFetch(`/api/chat/pending-actions/${notif.pendingActionId}/reject`, {
         method: "POST",
-        body: JSON.stringify({}),
+        body: JSON.stringify(reason ? { reason } : {}),
       });
       setNotifications((prev) =>
         prev.map((x) =>
@@ -518,6 +532,16 @@ export default function NotificationBell({ userId }: { userId: string }) {
           </div>,
           document.body,
         )}
+
+      <RejectReasonDialog
+        open={rejectTarget !== null}
+        onCancel={() => setRejectTarget(null)}
+        onReject={(reason) => {
+          const notif = rejectTarget;
+          setRejectTarget(null);
+          if (notif) void performRejectPendingAction(notif, reason);
+        }}
+      />
     </div>
   );
 }

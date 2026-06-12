@@ -1,6 +1,8 @@
 /**
  * Telegram linking + bot webhook.
  *
+ * - GET    /api/telegram/link    (auth) — link status as `{ linked: boolean }`.
+ *          Boolean-only on purpose: the chat id never leaves the server.
  * - POST   /api/telegram/link    (auth) — mint a one-time link code (10-min
  *          expiry) and the bot deep link `https://t.me/<bot>?start=<code>`.
  * - DELETE /api/telegram/link    (auth) — unlink the chat.
@@ -30,6 +32,7 @@ import {
   consumeTelegramLinkCode,
   createTelegramLinkCode,
   findUserIdByTelegramChatId,
+  getLinkedTelegramChatId,
   unlinkTelegram,
 } from "../telegram-link.js";
 
@@ -60,6 +63,13 @@ function chatIdString(chat: TelegramChat | undefined): string | null {
 }
 
 export async function telegramRoutes(app: FastifyInstance) {
+  app.get("/link", { preHandler: requireAuth }, async (request) => {
+    const userId = getUserId(request);
+    const chatId = await getLinkedTelegramChatId(userId);
+    // Boolean-only response — never echo the chat id to the client.
+    return { linked: chatId !== null };
+  });
+
   app.post("/link", { preHandler: requireAuth }, async (request, reply) => {
     if (!isTelegramConfigured()) {
       return reply

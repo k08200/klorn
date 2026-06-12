@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import type { CommitmentItem } from "../../components/commitment-card";
+import { RejectReasonDialog } from "../../components/reject-reason-dialog";
 import { useToast } from "../../components/toast";
 import { apiFetch } from "../../lib/api";
 import type { ReplyNeededEmail } from "../../lib/inbox-summary";
@@ -43,6 +44,8 @@ function CommandCenterView() {
   const [actionLoading, setActionLoading] = useState<
     Record<string, "approve" | "reject" | "snooze" | null>
   >({});
+  // Action id awaiting the reject-with-reason dialog; null when closed.
+  const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Parallel fetch via useQueries. Each branch has independent loading
@@ -133,13 +136,13 @@ function CommandCenterView() {
     }
   };
 
-  const handleReject = async (actionId: string) => {
+  const handleReject = async (actionId: string, reason: string | null) => {
     if (actionLoading[actionId]) return;
     setActionLoading((prev) => ({ ...prev, [actionId]: "reject" }));
     try {
       await apiFetch(`/api/chat/pending-actions/${actionId}/reject`, {
         method: "POST",
-        body: JSON.stringify({}),
+        body: JSON.stringify(reason ? { reason } : {}),
       });
       queryClient.setQueryData<PendingActionItem[]>(
         [...queryKeys.inbox.pending(), filter] as unknown as readonly unknown[],
@@ -278,7 +281,7 @@ function CommandCenterView() {
                       action={action}
                       loading={actionLoading[action.id] ?? null}
                       onApprove={() => handleApprove(action.id)}
-                      onReject={() => handleReject(action.id)}
+                      onReject={() => setRejectTargetId(action.id)}
                       onSnooze={() => handleSnooze(action.id, 1)}
                     />
                   </li>
@@ -293,6 +296,16 @@ function CommandCenterView() {
           <QuickLinksPanel />
         </div>
       </div>
+
+      <RejectReasonDialog
+        open={rejectTargetId !== null}
+        onCancel={() => setRejectTargetId(null)}
+        onReject={(reason) => {
+          const id = rejectTargetId;
+          setRejectTargetId(null);
+          if (id) void handleReject(id, reason);
+        }}
+      />
     </div>
   );
 }

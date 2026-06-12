@@ -54,6 +54,7 @@ describe("PATCH /api/automations alwaysAllowedTools validation", () => {
       agentMode: (args.update.agentMode as string) ?? "AUTO",
       agentIntervalMin: 5,
       alwaysAllowedTools: (args.update.alwaysAllowedTools as string[]) ?? [],
+      phoneEscalationEnabled: (args.update.phoneEscalationEnabled as boolean) ?? false,
     }));
   });
 
@@ -184,6 +185,22 @@ describe("PATCH /api/automations alwaysAllowedTools validation", () => {
     await app.close();
   });
 
+  it("persists phoneEscalationEnabled (whitelisted field)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/automations",
+      payload: { phoneEscalationEnabled: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().phoneEscalationEnabled).toBe(true);
+
+    const call = upsertSpy.mock.calls[0][0];
+    expect(call.update.phoneEscalationEnabled).toBe(true);
+    await app.close();
+  });
+
   it("ignores unknown top-level fields", async () => {
     const app = await buildApp();
     const res = await app.inject({
@@ -251,6 +268,31 @@ describe("GET /api/automations", () => {
     expect(body.preApprovableTools).not.toContain("delete_email");
     expect(body.preApprovableTools).not.toContain("archive_email");
     expect(body.preApprovableTools).not.toContain("delete_task");
+    await app.close();
+  });
+
+  it("exposes phoneEscalationEnabled (default false when unset)", async () => {
+    findUniqueSpy.mockResolvedValue({
+      userId: "test-user-id",
+      meetingAutoJoin: true,
+      meetingAutoSummarize: true,
+      emailAutoClassify: false,
+      reminderAutoCheck: true,
+      dailyBriefing: true,
+      briefingTime: "09:00",
+      downloadAutoOrganize: false,
+      autonomousAgent: true,
+      agentMode: "AUTO",
+      agentIntervalMin: 5,
+      alwaysAllowedTools: [],
+      phoneEscalationEnabled: true,
+    });
+
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/automations" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().phoneEscalationEnabled).toBe(true);
     await app.close();
   });
 });
