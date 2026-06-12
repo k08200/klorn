@@ -2,7 +2,9 @@ name: Judge Eval
 
 # LLM accuracy gate for the 4-tier judge. Runs the committed synthetic
 # 50-email set (packages/api/eval/judge-eval-set.json) through the REAL
-# LLM pipeline and fails below the 80% POC bar (poc-accuracy exits 2).
+# LLM pipeline and fails when any gate is below its floor (poc-accuracy
+# exits 2): overall ≥80%, PUSH recall ≥90%, SILENT precision ≥90%
+# (see packages/api/src/eval-floors.ts for the floor rationale).
 #
 # This complements the deterministic gate that always runs in CI tests
 # (src/__tests__/judge-eval-set.test.ts — fast-path + keyword fallback,
@@ -25,7 +27,7 @@ concurrency:
 
 jobs:
   llm-eval:
-    name: LLM judge accuracy (synthetic set, ≥80%)
+    name: LLM judge accuracy (overall ≥80%, PUSH recall ≥90%, SILENT precision ≥90%)
     runs-on: ubuntu-latest
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}

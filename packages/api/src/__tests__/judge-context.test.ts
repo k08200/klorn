@@ -273,6 +273,24 @@ describe("buildJudgeContext", () => {
     const historyCall = emailFindMany.mock.calls.find((c) => "from" in c[0].where);
     expect(historyCall?.[0].where.id).toEqual({ not: "self-id" });
   });
+
+  it("keeps the email's own correction in the few-shot pool by default (runtime path)", async () => {
+    wireMocks({});
+    await buildJudgeContext("u1", { from: "A <a@b.com>", excludeEmailId: "self-id" });
+    const correctionsCall = attentionFindMany.mock.calls.find((c) => "tierReason" in c[0].where);
+    expect(correctionsCall?.[0].where.sourceId).toBeUndefined();
+  });
+
+  it("hides the email's own correction when excludeOwnCorrection is set (counterfactual eval)", async () => {
+    wireMocks({});
+    await buildJudgeContext("u1", {
+      from: "A <a@b.com>",
+      excludeEmailId: "self-id",
+      excludeOwnCorrection: true,
+    });
+    const correctionsCall = attentionFindMany.mock.calls.find((c) => "tierReason" in c[0].where);
+    expect(correctionsCall?.[0].where.sourceId).toEqual({ not: "self-id" });
+  });
 });
 
 describe("buildJudgeContext — sender facts", () => {

@@ -17,6 +17,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { evaluateTierFloors } from "../src/eval-floors.js";
 import { judgeEmails, POC_TIERS, type PocJudgement, type PocTier } from "../src/poc-judge.js";
 
 interface GroundTruthItem {
@@ -184,11 +185,25 @@ async function main() {
   const right = rows.filter((r) => r.truth === r.predicted).length;
   const accuracy = right / rows.length;
   const accuracyPct = (accuracy * 100).toFixed(1);
-  const passed = accuracy >= 0.8;
 
-  console.log(`\nOverall accuracy: ${right}/${rows.length} = ${accuracyPct}%  (HARD GATE: ≥80%)`);
+  // Per-tier floors on top of the overall bar — asymmetric failure costs:
+  // a missed PUSH is the worst failure, a real mail buried in SILENT is
+  // second. See src/eval-floors.ts for the floor rationale.
+  const floors = evaluateTierFloors(rows.map((r) => ({ truth: r.truth, predicted: r.predicted })));
+  const passed = floors.pass;
+
+  console.log(`\nOverall accuracy: ${right}/${rows.length} = ${accuracyPct}%`);
   console.log(`Elapsed: ${(elapsedMs / 1000).toFixed(1)}s`);
-  console.log(passed ? "RESULT: PASS — Day 7 GATE met." : "RESULT: FAIL — below 80% bar.");
+  console.log("\nGate checks:");
+  for (const check of floors.checks) {
+    const mark = check.pass ? "PASS" : "FAIL";
+    console.log(
+      `  [${mark}] ${check.name}: ${(check.value * 100).toFixed(1)}% (floor ${(check.floor * 100).toFixed(0)}%) — ${check.detail}`,
+    );
+  }
+  console.log(
+    passed ? "RESULT: PASS — all gates met." : "RESULT: FAIL — a gate is below its floor.",
+  );
 
   printPerTierAccuracy(rows);
   printConfusionMatrix(rows);
@@ -208,6 +223,7 @@ async function main() {
             accuracy,
             accuracyPct,
             passed,
+            floorChecks: floors.checks,
             labelledCount: labelled.length,
             skippedCount: skipped,
           },
