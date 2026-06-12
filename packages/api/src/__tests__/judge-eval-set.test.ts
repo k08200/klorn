@@ -24,6 +24,7 @@ const createCompletionMock = vi.hoisted(() => vi.fn());
 vi.mock("../openai.js", () => ({
   createCompletion: createCompletionMock,
   MODEL: "test-model",
+  JUDGE_MODEL: "test-judge-model",
 }));
 
 vi.mock("../sentry.js", () => ({

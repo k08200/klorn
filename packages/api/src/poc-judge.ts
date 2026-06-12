@@ -16,7 +16,7 @@
  */
 
 import type { ClassifiableEmail } from "./email-classifier.js";
-import { createCompletion, MODEL } from "./openai.js";
+import { createCompletion, JUDGE_MODEL } from "./openai.js";
 import { captureError } from "./sentry.js";
 import { TIERS, type Tier } from "./tiers.js";
 
@@ -296,7 +296,7 @@ async function extractFeaturesWithLlm(
   try {
     const response = await createCompletion(
       {
-        model: MODEL,
+        model: JUDGE_MODEL,
         messages: [
           {
             role: "system",

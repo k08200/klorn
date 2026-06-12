@@ -39,6 +39,14 @@ export const openai = (getProvider("openrouter")?.client ?? null) as unknown as 
 
 export const MODEL = process.env.CHAT_MODEL || "google/gemma-4-31b-it:free";
 export const AGENT_MODEL = process.env.AGENT_MODEL || MODEL;
+// Tier judge model — separate knob from chat/agent. The firewall's PUSH
+// promise dies with the judge's LLM availability: the 2026-06-12 eval run
+// hit the :free daily quota 38s in, locked the provider out for an hour,
+// and the keyword fallback structurally cannot emit PUSH (confidence 0.55
+// < the 0.7 rule floor). Classification is ~700 tokens/email — cents per
+// month at dogfood volume on a paid model. Self-hosters without paid
+// credit: set JUDGE_MODEL to a :free or local model (see .env.example).
+export const JUDGE_MODEL = process.env.JUDGE_MODEL || "google/gemini-2.5-flash";
 // Vision requires a multimodal model — Gemma (the chat default) is text-only,
 // so we keep VISION_MODEL on its own track. Default ends in `:free` so a
 // deploy that forgets to set the env doesn't silently route to OpenRouter's

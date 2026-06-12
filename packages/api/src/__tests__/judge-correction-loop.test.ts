@@ -10,6 +10,7 @@ const createCompletionMock = vi.hoisted(() => vi.fn());
 vi.mock("../openai.js", () => ({
   createCompletion: createCompletionMock,
   MODEL: "test-model",
+  JUDGE_MODEL: "test-judge-model",
 }));
 
 vi.mock("../sentry.js", () => ({
@@ -151,6 +152,12 @@ describe("few-shot correction injection", () => {
     llmRespondsWith({ confidence: 0.6, senderTrust: 0.5, reversibility: 0.5, urgency: 0.3 });
     await judgeEmail(PLAIN_EMAIL, undefined, ctx({}));
     expect(sentPrompt()).not.toContain("manually corrected");
+  });
+
+  it("calls the LLM with the dedicated judge model, not the chat model", async () => {
+    llmRespondsWith({ confidence: 0.6, senderTrust: 0.5, reversibility: 0.5, urgency: 0.3 });
+    await judgeEmail(PLAIN_EMAIL, undefined, ctx({}));
+    expect(createCompletionMock.mock.calls[0]?.[0]?.model).toBe("test-judge-model");
   });
 });
 
