@@ -1,83 +1,105 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import {
-  PUSH_CAP_10MIN,
-  PUSH_CAP_60MIN,
-  PUSH_WINDOW_10MIN_MS,
-  PUSH_WINDOW_60MIN_MS,
-  recordPushAttempt,
-  resetPushRateLimit,
-} from "../push-rate-limit.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PUSH_WINDOW_10MIN_MS } from "../config.js";
 
-describe("push-rate-limit", () => {
+// DB-backed limiter: PushRingEvent rows are the source of truth so caps
+// survive process restarts (Render deploys) and horizontal scaling. The
+// mock distinguishes the two windows by the `gte` cutoff each count uses.
+const NOW = new Date("2026-06-12T12:00:00.000Z");
+
+const state = {
+  in10: 0,
+  in60: 0,
+  countError: null as Error | null,
+};
+const countWheres: Array<{ userId: string; gte: Date }> = [];
+const createCalls: Array<{ userId: string }> = [];
+const deleteCalls: Array<{ userId: string; lt: Date }> = [];
+
+vi.mock("../db.js", () => ({
+  prisma: {
+    pushRingEvent: {
+      count: vi.fn(async (args: { where: { userId: string; createdAt: { gte: Date } } }) => {
+        if (state.countError) throw state.countError;
+        countWheres.push({ userId: args.where.userId, gte: args.where.createdAt.gte });
+        const isTenMinWindow =
+          args.where.createdAt.gte.getTime() === NOW.getTime() - PUSH_WINDOW_10MIN_MS;
+        return isTenMinWindow ? state.in10 : state.in60;
+      }),
+      create: vi.fn(async (args: { data: { userId: string } }) => {
+        createCalls.push({ userId: args.data.userId });
+        return { id: "ring-1" };
+      }),
+      deleteMany: vi.fn(async (args: { where: { userId: string; createdAt: { lt: Date } } }) => {
+        deleteCalls.push({ userId: args.where.userId, lt: args.where.createdAt.lt });
+        return { count: 0 };
+      }),
+    },
+  },
+}));
+
+async function loadLimiter() {
+  return await import("../push-rate-limit.js");
+}
+
+describe("push-rate-limit (DB-backed)", () => {
   beforeEach(() => {
-    resetPushRateLimit();
+    state.in10 = 0;
+    state.in60 = 0;
+    state.countError = null;
+    countWheres.length = 0;
+    createCalls.length = 0;
+    deleteCalls.length = 0;
   });
 
-  it("allows the first push for a fresh user", () => {
-    const result = recordPushAttempt("user-a", Date.now());
+  it("allows a push under both caps and records a ring event", async () => {
+    const { recordPushAttempt } = await loadLimiter();
+    const result = await recordPushAttempt("user-a", NOW);
     expect(result.allowed).toBe(true);
+    expect(createCalls).toEqual([{ userId: "user-a" }]);
   });
 
-  it("allows up to the 10-minute cap", () => {
-    const now = Date.now();
-    for (let i = 0; i < PUSH_CAP_10MIN; i++) {
-      expect(recordPushAttempt("user-a", now + i * 1000).allowed).toBe(true);
+  it("prunes rows older than the 60-minute window on allowed attempts", async () => {
+    const { PUSH_WINDOW_60MIN_MS, recordPushAttempt } = await loadLimiter();
+    await recordPushAttempt("user-a", NOW);
+    expect(deleteCalls).toHaveLength(1);
+    expect(deleteCalls[0]?.userId).toBe("user-a");
+    expect(deleteCalls[0]?.lt.getTime()).toBe(NOW.getTime() - PUSH_WINDOW_60MIN_MS);
+  });
+
+  it("blocks at the 10-minute cap without recording a ring event", async () => {
+    const { PUSH_CAP_10MIN, recordPushAttempt } = await loadLimiter();
+    state.in10 = PUSH_CAP_10MIN;
+    state.in60 = PUSH_CAP_10MIN;
+    const result = await recordPushAttempt("user-a", NOW);
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain("10min cap");
+    expect(createCalls).toHaveLength(0);
+  });
+
+  it("blocks at the 60-minute cap even when the 10-minute window is clear", async () => {
+    const { PUSH_CAP_60MIN, recordPushAttempt } = await loadLimiter();
+    state.in10 = 0;
+    state.in60 = PUSH_CAP_60MIN;
+    const result = await recordPushAttempt("user-a", NOW);
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain("60min cap");
+    expect(createCalls).toHaveLength(0);
+  });
+
+  it("scopes both window counts to the requesting user", async () => {
+    const { recordPushAttempt } = await loadLimiter();
+    await recordPushAttempt("user-a", NOW);
+    expect(countWheres).toHaveLength(2);
+    for (const where of countWheres) {
+      expect(where.userId).toBe("user-a");
     }
   });
 
-  it("blocks when the 10-minute cap is exceeded", () => {
-    const now = Date.now();
-    for (let i = 0; i < PUSH_CAP_10MIN; i++) {
-      recordPushAttempt("user-a", now + i);
-    }
-    const blocked = recordPushAttempt("user-a", now + PUSH_CAP_10MIN);
-    expect(blocked.allowed).toBe(false);
-    expect(blocked.reason).toContain("10min");
-  });
-
-  it("releases the 10-minute window after the cutoff", () => {
-    const now = Date.now();
-    for (let i = 0; i < PUSH_CAP_10MIN; i++) {
-      recordPushAttempt("user-a", now + i);
-    }
-    const later = now + PUSH_WINDOW_10MIN_MS + 1;
-    expect(recordPushAttempt("user-a", later).allowed).toBe(true);
-  });
-
-  it("blocks when the 60-minute cap is exceeded even if spaced out", () => {
-    const now = Date.now();
-    // Spread PUSH_CAP_60MIN sends across ~50 minutes so the 10-min window
-    // never fills. We expect the 60-min cap to catch the next one.
-    const spacingMs = (PUSH_WINDOW_60MIN_MS - 60_000) / PUSH_CAP_60MIN;
-    for (let i = 0; i < PUSH_CAP_60MIN; i++) {
-      const ts = now + Math.floor(i * spacingMs);
-      expect(recordPushAttempt("user-a", ts).allowed).toBe(true);
-    }
-    const blocked = recordPushAttempt("user-a", now + PUSH_WINDOW_60MIN_MS - 1000);
-    expect(blocked.allowed).toBe(false);
-    expect(blocked.reason).toContain("60min");
-  });
-
-  it("tracks each user independently", () => {
-    const now = Date.now();
-    for (let i = 0; i < PUSH_CAP_10MIN; i++) {
-      recordPushAttempt("user-a", now + i);
-    }
-    // user-a is capped, user-b is fresh
-    expect(recordPushAttempt("user-a", now + PUSH_CAP_10MIN).allowed).toBe(false);
-    expect(recordPushAttempt("user-b", now + PUSH_CAP_10MIN).allowed).toBe(true);
-  });
-
-  it("does not count blocked attempts toward the window", () => {
-    const now = Date.now();
-    for (let i = 0; i < PUSH_CAP_10MIN; i++) {
-      recordPushAttempt("user-a", now + i);
-    }
-    // Blocked attempts should not extend the window — once the earliest
-    // allowed attempt ages out, capacity returns.
-    recordPushAttempt("user-a", now + PUSH_CAP_10MIN);
-    recordPushAttempt("user-a", now + PUSH_CAP_10MIN + 1);
-    const later = now + PUSH_WINDOW_10MIN_MS + 10;
-    expect(recordPushAttempt("user-a", later).allowed).toBe(true);
+  it("fails open when the DB is unreachable (push must not die with the limiter)", async () => {
+    const { recordPushAttempt } = await loadLimiter();
+    state.countError = new Error("connection refused");
+    const result = await recordPushAttempt("user-a", NOW);
+    expect(result.allowed).toBe(true);
+    expect(createCalls).toHaveLength(0);
   });
 });

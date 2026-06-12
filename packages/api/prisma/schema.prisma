@@ -57,6 +57,7 @@ model User {
   notifications             Notification[]
   pushSubscriptions         PushSubscription[]
   pushDeliveryLogs          PushDeliveryLog[]
+  pushRingEvents            PushRingEvent[]
   phoneEscalations          PhoneEscalation[]
   memories                  Memory[]
   skills                    Skill[]
@@ -387,6 +388,19 @@ model PushDeliveryLog {
   @@index([userId, createdAt])
   @@index([userId, status, createdAt])
   @@index([subscriptionId])
+}
+
+// Persistent push rate-limit window. One row per allowed "ring" — a logical
+// notification dispatch that passed every gate — so the per-user caps
+// survive process restarts and horizontal scaling. Rows older than the
+// widest window are pruned opportunistically on each allowed attempt.
+model PushRingEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 // Phone escalation v0 — ONE plain TTS call when a PUSH-tier push goes

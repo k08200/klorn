@@ -1,12 +1,15 @@
 /**
  * Twilio SMS client — admin-only outbound notifications.
  *
- * Gated three ways:
+ * Gated four ways:
  *   1. Admin gate: ADMIN_EMAILS env or User.role === ADMIN. Non-admins
  *      silently no-op so an accidental call site can't text everyone.
- *   2. Phone gate: user must have stored an E.164 number via
+ *   2. Quiet hours: the user's configured quiet window blocks SMS outright.
+ *      Scheduler code calls sendSms directly (it never passes through the
+ *      push.ts gates), so without this check a 2am "urgent" text is live.
+ *   3. Phone gate: user must have stored an E.164 number via
  *      setPhoneNumber(). No phone = no SMS.
- *   3. Daily cap: SMS_DAILY_CAP_PER_USER (default 10). Hard wall — SMS is
+ *   4. Daily cap: SMS_DAILY_CAP_PER_USER (default 10). Hard wall — SMS is
  *      dollars-per-message and a stuck loop is too expensive to allow.
  *
  * Twilio failures are best-effort. They warn but do not throw and do not
@@ -23,6 +26,7 @@
 
 import twilio from "twilio";
 import { prisma } from "./db.js";
+import { isUserInQuietHours } from "./notification-prefs.js";
 import { checkAndRecordSmsSend } from "./sms-limiter.js";
 import { getPhoneNumber } from "./sms-phone.js";
 
@@ -35,6 +39,7 @@ const SMS_BODY_MAX_CHARS = 320;
 
 export type SmsReason =
   | "not_admin"
+  | "quiet_hours"
   | "no_phone"
   | "rate_limited"
   | "twilio_not_configured"
@@ -115,17 +120,26 @@ export async function sendSms(userId: string, body: string): Promise<SmsResult> 
     return { sent: false, reason: "not_admin" };
   }
 
-  // 2. Phone gate
+  // 2. Quiet hours. Checked here — not only at the push.ts chokepoint —
+  //    because scheduler code calls sendSms directly, bypassing
+  //    evaluateNotificationGate. A 2am text for an "urgent" newsletter is
+  //    the exact failure this product exists to prevent. Checked before the
+  //    daily cap so a quiet-window skip never burns paid capacity.
+  if (await isUserInQuietHours(userId)) {
+    return { sent: false, reason: "quiet_hours" };
+  }
+
+  // 3. Phone gate
   const to = await getPhoneNumber(userId);
   if (!to) return { sent: false, reason: "no_phone" };
 
-  // 3. Daily cap. Silent skip with warn so a runaway loop doesn't burn $.
+  // 4. Daily cap. Silent skip with warn so a runaway loop doesn't burn $.
   if (!checkAndRecordSmsSend(userId)) {
     console.warn(`[SMS] Daily cap reached for user ${userId} — skipping`);
     return { sent: false, reason: "rate_limited" };
   }
 
-  // 4. Twilio config gate. If unconfigured, no-op (return false) — cap was
+  // 5. Twilio config gate. If unconfigured, no-op (return false) — cap was
   //    already incremented, so a misconfigured prod can't pretend to send.
   const client = getClient();
   if (!client) return { sent: false, reason: "twilio_not_configured" };

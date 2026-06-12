@@ -24,7 +24,7 @@ vi.mock("../notification-prefs.js", () => ({
   evaluateNotificationGate: vi.fn(async () => ({ allowed: true as const })),
 }));
 vi.mock("../push-rate-limit.js", () => ({
-  recordPushAttempt: vi.fn(() => ({ allowed: true })),
+  recordPushAttempt: vi.fn(async () => ({ allowed: true })),
 }));
 vi.mock("../is-safe-push-endpoint.js", () => ({
   isSafePushEndpoint: vi.fn(() => true),
@@ -46,7 +46,7 @@ import { sendTelegramForPush } from "../telegram-notify.js";
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(evaluateNotificationGate).mockResolvedValue({ allowed: true });
-  vi.mocked(recordPushAttempt).mockReturnValue({ allowed: true });
+  vi.mocked(recordPushAttempt).mockResolvedValue({ allowed: true });
   vi.mocked(sendTelegramForPush).mockResolvedValue("sent");
 });
 
@@ -96,7 +96,7 @@ describe("sendPushNotification — Telegram secondary channel", () => {
   });
 
   it("does NOT send Telegram when the global push rate limit trips", async () => {
-    vi.mocked(recordPushAttempt).mockReturnValueOnce({ allowed: false, reason: "hourly_cap" });
+    vi.mocked(recordPushAttempt).mockResolvedValueOnce({ allowed: false, reason: "hourly_cap" });
     const result = await sendPushNotification("user-1", { title: "T", body: "B" }, "email_urgent");
     expect(result.reason).toBe("rate_limited");
     expect(sendTelegramForPush).not.toHaveBeenCalled();
