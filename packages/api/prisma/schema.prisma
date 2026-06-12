@@ -59,6 +59,7 @@ model User {
   pushDeliveryLogs          PushDeliveryLog[]
   pushRingEvents            PushRingEvent[]
   phoneEscalations          PhoneEscalation[]
+  calibrationSnapshots      CalibrationSnapshot[]
   memories                  Memory[]
   skills                    Skill[]
   tokenUsages               TokenUsage[]
@@ -401,6 +402,22 @@ model PushRingEvent {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+// Daily classification-quality snapshot, written by the automation
+// scheduler. Override rate is THE product KPI (the firewall is wrong
+// exactly when the user has to move an item) and judgeSourceCounts makes
+// silent keyword-fallback demotion visible. One row per user per UTC day;
+// payload is a CalibrationSnapshotPayload (calibration-snapshot.ts).
+model CalibrationSnapshot {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayKey    String // UTC "YYYY-MM-DD"
+  payload   Json
+  createdAt DateTime @default(now())
+
+  @@unique([userId, dayKey])
 }
 
 // Phone escalation v0 — ONE plain TTS call when a PUSH-tier push goes

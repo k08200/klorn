@@ -90,6 +90,9 @@ let lastWatchRenewalAt = 0;
 // UTC date ("YYYY-MM-DD") of the last OpenRouter catalog check. In-memory is
 // fine — a restart re-running the check the same day is harmless (read-only).
 let lastCatalogCheckDate = "";
+// UTC date of the last calibration snapshot run. Same trade-off: the daily
+// job upserts on (userId, dayKey), so a restart re-running it is idempotent.
+let lastCalibrationSnapshotDate = "";
 
 /** DB-based check: did we already send a briefing notification today? */
 export async function hasBriefingBeenSentToday(userId: string, timeZone: string): Promise<boolean> {
@@ -767,6 +770,18 @@ async function runAutomations() {
       import("./openrouter-catalog-check.js")
         .then(({ runOpenRouterCatalogCheck }) => runOpenRouterCatalogCheck())
         .catch((err) => console.warn("[AUTOMATION] Catalog check failed:", err));
+    }
+
+    // --- Daily: calibration snapshot ---
+    // Persists per-user classification-quality KPIs (override rate, judge
+    // source mix incl. keyword-fallback demotion, drift) as one
+    // CalibrationSnapshot row per UTC day, so /api/admin/calibration can
+    // trend the product KPI instead of waiting for a manual CLI run.
+    if (lastCalibrationSnapshotDate !== todayUtc) {
+      lastCalibrationSnapshotDate = todayUtc;
+      import("./calibration-snapshot.js")
+        .then(({ runDailyCalibrationSnapshots }) => runDailyCalibrationSnapshots())
+        .catch((err) => console.warn("[AUTOMATION] Calibration snapshot failed:", err));
     }
 
     // --- Every tick: Resurrect snoozed AttentionItems whose snooze has expired ---
