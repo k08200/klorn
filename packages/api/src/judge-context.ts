@@ -44,6 +44,14 @@ export interface JudgeContextInput {
   from: string;
   /** EmailMessage.id of the email being judged — excluded from its own prior. */
   excludeEmailId?: string;
+  /**
+   * COUNTERFACTUAL EVAL ONLY (correction-eval.ts): also hide this email's
+   * own manual correction from the few-shot pool, so the eval measures
+   * "would the judge have gotten it right without the user's fix". The
+   * runtime path must NOT set this — re-judging a corrected email is
+   * supposed to see its correction; that is the correction loop working.
+   */
+  excludeOwnCorrection?: boolean;
 }
 
 interface OverrideRow {
@@ -101,6 +109,7 @@ function rankCorrections(
 async function fetchCorrections(
   userId: string,
   senderAddress: string,
+  excludeSourceId?: string,
 ): Promise<CorrectionExample[]> {
   const rows = (await db.attentionItem.findMany({
     where: {
@@ -108,6 +117,7 @@ async function fetchCorrections(
       source: "EMAIL",
       tierReason: { startsWith: MANUAL_OVERRIDE_PREFIX },
       tier: { not: null },
+      ...(excludeSourceId ? { sourceId: { not: excludeSourceId } } : {}),
     },
     orderBy: { updatedAt: "desc" },
     take: CORRECTION_POOL_SIZE,
@@ -236,8 +246,10 @@ export async function buildJudgeContext(
 ): Promise<JudgeContext> {
   try {
     const senderAddress = extractEmailAddress(input.from || "");
+    const correctionExcludeId =
+      input.excludeOwnCorrection && input.excludeEmailId ? input.excludeEmailId : undefined;
     const [corrections, senderItems, interaction, commitments] = await Promise.all([
-      fetchCorrections(userId, senderAddress),
+      fetchCorrections(userId, senderAddress, correctionExcludeId),
       fetchSenderItems(userId, senderAddress, input.excludeEmailId),
       fetchInteractionFact(userId, senderAddress),
       fetchCommitmentFact(userId, senderAddress),

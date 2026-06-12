@@ -23,6 +23,8 @@ function calibrationSeriesEntry(row: { dayKey: string; payload: unknown }) {
     feedbackOverrides: p?.feedbackOverrides ?? null,
     judgeSourceCounts: p?.judgeSourceCounts ?? null,
     driftDeltaMax: p?.driftSignal?.deltaMax ?? null,
+    // Weekly counterfactual accuracy on real overrides (Sundays only).
+    correctionEval: p?.correctionEval ?? null,
   };
 }
 

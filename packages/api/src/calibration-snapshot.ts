@@ -33,6 +33,9 @@ import {
   type Tier,
   type TierStats,
 } from "./calibration.js";
+// Type-only: the implementation is dynamically imported in the Sunday
+// branch so the daily snapshot path never loads the LLM provider stack.
+import type { CorrectionEvalPayload } from "./correction-eval.js";
 import { prisma } from "./db.js";
 import { captureError } from "./sentry.js";
 import { isManualOverrideReason } from "./tiers.js";
@@ -67,6 +70,11 @@ export interface CalibrationSnapshotPayload {
   manualOverrides: OverallOverrides;
   judgeSourceCounts: JudgeSourceCounts;
   driftSignal: DriftSignal;
+  /**
+   * Weekly counterfactual accuracy on real overrides (correction-eval.ts).
+   * Merged in on Sundays; preserved by the daily upsert in between.
+   */
+  correctionEval?: CorrectionEvalPayload;
 }
 
 /** Snapshot row — AttentionRow plus the fields the new KPIs need. */
@@ -202,6 +210,20 @@ export async function snapshotUserCalibration(
   });
 
   const dayKey = now.toISOString().slice(0, 10);
+  // A same-day re-run must not wipe a correction eval merged earlier today
+  // — carry it over from the existing row before overwriting the payload.
+  const existing = (await (
+    prisma.calibrationSnapshot as unknown as {
+      findUnique: (args: unknown) => Promise<{ payload?: unknown } | null>;
+    }
+  ).findUnique({
+    where: { userId_dayKey: { userId, dayKey } },
+    select: { payload: true },
+  })) as { payload?: { correctionEval?: CorrectionEvalPayload } } | null;
+  if (existing?.payload?.correctionEval) {
+    payload.correctionEval = existing.payload.correctionEval;
+  }
+
   await (
     prisma.calibrationSnapshot as unknown as {
       upsert: (args: unknown) => Promise<unknown>;
@@ -210,6 +232,34 @@ export async function snapshotUserCalibration(
     where: { userId_dayKey: { userId, dayKey } },
     create: { userId, dayKey, payload },
     update: { payload },
+  });
+}
+
+/**
+ * Sunday-only: run the counterfactual correction eval and merge the result
+ * into today's snapshot. Idempotent — a snapshot that already carries a
+ * correctionEval (same-day restart) skips the LLM batch entirely.
+ */
+async function maybeMergeWeeklyCorrectionEval(userId: string, now: Date): Promise<void> {
+  const dayKey = now.toISOString().slice(0, 10);
+  const snapshot = prisma.calibrationSnapshot as unknown as {
+    findUnique: (args: unknown) => Promise<{ payload?: unknown } | null>;
+    update: (args: unknown) => Promise<unknown>;
+  };
+
+  const row = (await snapshot.findUnique({
+    where: { userId_dayKey: { userId, dayKey } },
+    select: { payload: true },
+  })) as { payload?: { correctionEval?: CorrectionEvalPayload } } | null;
+  if (!row || row.payload?.correctionEval) return;
+
+  const { runCorrectionEval } = await import("./correction-eval.js");
+  const result = await runCorrectionEval(userId, now);
+  if (!result) return;
+
+  await snapshot.update({
+    where: { userId_dayKey: { userId, dayKey } },
+    data: { payload: { ...row.payload, correctionEval: result } },
   });
 }
 
@@ -229,9 +279,11 @@ export async function runDailyCalibrationSnapshots(now: Date = new Date()): Prom
     where: { createdAt: { gte: since } },
   })) as Array<{ userId: string }>;
 
+  const isSundayUtc = now.getUTCDay() === 0;
   for (const { userId } of groups) {
     try {
       await snapshotUserCalibration(userId, now);
+      if (isSundayUtc) await maybeMergeWeeklyCorrectionEval(userId, now);
     } catch (err) {
       captureError(err, { tags: { scope: "calibration-snapshot" }, extra: { userId } });
     }

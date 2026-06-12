@@ -12,19 +12,30 @@ const attentionFindMany = vi.hoisted(() => vi.fn());
 const attentionGroupBy = vi.hoisted(() => vi.fn());
 const feedbackFindMany = vi.hoisted(() => vi.fn());
 const snapshotUpsert = vi.hoisted(() => vi.fn());
+const snapshotFindUnique = vi.hoisted(() => vi.fn());
+const snapshotUpdate = vi.hoisted(() => vi.fn());
 const captureErrorMock = vi.hoisted(() => vi.fn());
+const runCorrectionEvalMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../db.js", () => ({
   prisma: {
     attentionItem: { findMany: attentionFindMany, groupBy: attentionGroupBy },
     feedbackEvent: { findMany: feedbackFindMany },
-    calibrationSnapshot: { upsert: snapshotUpsert },
+    calibrationSnapshot: {
+      upsert: snapshotUpsert,
+      findUnique: snapshotFindUnique,
+      update: snapshotUpdate,
+    },
   },
   db: {},
 }));
 
 vi.mock("../sentry.js", () => ({
   captureError: captureErrorMock,
+}));
+
+vi.mock("../correction-eval.js", () => ({
+  runCorrectionEval: runCorrectionEvalMock,
 }));
 
 import {
@@ -74,8 +85,14 @@ beforeEach(() => {
   attentionGroupBy.mockReset();
   feedbackFindMany.mockReset();
   snapshotUpsert.mockReset();
+  snapshotFindUnique.mockReset();
+  snapshotUpdate.mockReset();
   captureErrorMock.mockReset();
+  runCorrectionEvalMock.mockReset();
   snapshotUpsert.mockResolvedValue({});
+  snapshotFindUnique.mockResolvedValue(null);
+  snapshotUpdate.mockResolvedValue({});
+  runCorrectionEvalMock.mockResolvedValue(null);
   feedbackFindMany.mockResolvedValue([]);
 });
 
@@ -187,5 +204,73 @@ describe("runDailyCalibrationSnapshots", () => {
     attentionGroupBy.mockResolvedValue([]);
     await runDailyCalibrationSnapshots(NOW);
     expect(snapshotUpsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("weekly correction eval merge", () => {
+  // NOW (2026-06-13) is a Saturday; SUNDAY is the weekly trigger day.
+  const SUNDAY = new Date("2026-06-14T01:00:00.000Z");
+
+  it("daily upsert preserves an existing correctionEval section", async () => {
+    attentionFindMany.mockResolvedValue([]);
+    snapshotFindUnique.mockResolvedValue({
+      payload: { windowDays: 7, correctionEval: { n: 12, agreement: 0.75 } },
+    });
+
+    await snapshotUserCalibration("u1", NOW);
+
+    const args = snapshotUpsert.mock.calls[0][0];
+    expect(args.create.payload.correctionEval).toEqual({ n: 12, agreement: 0.75 });
+    expect(args.update.payload.correctionEval).toEqual({ n: 12, agreement: 0.75 });
+  });
+
+  it("on Sunday, runs the correction eval and merges it into the day's snapshot", async () => {
+    attentionGroupBy.mockResolvedValue([{ userId: "u1" }]);
+    attentionFindMany.mockResolvedValue([]);
+    snapshotFindUnique.mockResolvedValue({ payload: { windowDays: 7 } });
+    runCorrectionEvalMock.mockResolvedValue({ n: 9, agreement: 0.78 });
+
+    await runDailyCalibrationSnapshots(SUNDAY);
+
+    expect(runCorrectionEvalMock).toHaveBeenCalledWith("u1", SUNDAY);
+    expect(snapshotUpdate).toHaveBeenCalledTimes(1);
+    const updateArgs = snapshotUpdate.mock.calls[0][0];
+    expect(updateArgs.where).toEqual({
+      userId_dayKey: { userId: "u1", dayKey: "2026-06-14" },
+    });
+    expect(updateArgs.data.payload.correctionEval).toEqual({ n: 9, agreement: 0.78 });
+  });
+
+  it("does not run the correction eval on non-Sundays", async () => {
+    attentionGroupBy.mockResolvedValue([{ userId: "u1" }]);
+    attentionFindMany.mockResolvedValue([]);
+
+    await runDailyCalibrationSnapshots(NOW); // Saturday
+
+    expect(runCorrectionEvalMock).not.toHaveBeenCalled();
+  });
+
+  it("is idempotent: skips the eval when today's snapshot already has one", async () => {
+    attentionGroupBy.mockResolvedValue([{ userId: "u1" }]);
+    attentionFindMany.mockResolvedValue([]);
+    snapshotFindUnique.mockResolvedValue({
+      payload: { windowDays: 7, correctionEval: { n: 5, agreement: 0.6 } },
+    });
+
+    await runDailyCalibrationSnapshots(SUNDAY);
+
+    expect(runCorrectionEvalMock).not.toHaveBeenCalled();
+    expect(snapshotUpdate).not.toHaveBeenCalled();
+  });
+
+  it("leaves the snapshot untouched when the eval returns null (no key / no corrections)", async () => {
+    attentionGroupBy.mockResolvedValue([{ userId: "u1" }]);
+    attentionFindMany.mockResolvedValue([]);
+    snapshotFindUnique.mockResolvedValue({ payload: { windowDays: 7 } });
+    runCorrectionEvalMock.mockResolvedValue(null);
+
+    await runDailyCalibrationSnapshots(SUNDAY);
+
+    expect(snapshotUpdate).not.toHaveBeenCalled();
   });
 });
