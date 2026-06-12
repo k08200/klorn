@@ -1024,8 +1024,7 @@ export async function ensureFreshGmailWatch(
       where: { userId, provider: "google" },
       select: { gmailWatchExpiresAt: true },
     });
-    const expiresAt = (token as { gmailWatchExpiresAt?: Date | null } | null)
-      ?.gmailWatchExpiresAt;
+    const expiresAt = (token as { gmailWatchExpiresAt?: Date | null } | null)?.gmailWatchExpiresAt;
     if (!expiresAt) return;
     if (expiresAt.getTime() > Date.now() + WATCH_RENEW_MARGIN_MS) return;
 
