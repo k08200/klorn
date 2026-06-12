@@ -113,6 +113,9 @@ vi.mock("../db.js", () => {
       count: vi.fn(async () => 1),
       update: vi.fn(async () => ({})),
     },
+    calibrationSnapshot: {
+      findMany: vi.fn(async () => []),
+    },
   };
   return { prisma, db: prisma };
 });
@@ -384,5 +387,82 @@ describe("PATCH /api/admin/waitlist/:id", () => {
       payload: { status: "GARBAGE" },
     });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("GET /api/admin/calibration", () => {
+  function snapshotRow(userId: string, dayKey: string, totalItems: number) {
+    return {
+      id: `${userId}-${dayKey}`,
+      userId,
+      dayKey,
+      createdAt: new Date(`${dayKey}T02:00:00Z`),
+      payload: {
+        windowDays: 7,
+        windowEnd: `${dayKey}T02:00:00.000Z`,
+        totalItems,
+        manualOverrides: { count: 1, total: totalItems, rate: 0.1 },
+        feedbackOverrides: { count: 2, total: totalItems, rate: 0.2 },
+        judgeSourceCounts: {
+          "fast-path": 1,
+          "sender-prior": 2,
+          llm: 5,
+          "keyword-fallback": 1,
+          unknown: 0,
+        },
+        driftSignal: { deltaMax: 0.12, deltaMaxTier: "QUEUE" },
+      },
+    };
+  }
+
+  it("returns a per-user series with compact KPI entries", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.calibrationSnapshot.findMany).mockResolvedValueOnce([
+      snapshotRow("user-1", "2026-06-13", 40),
+      snapshotRow("user-1", "2026-06-12", 35),
+    ] as never);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/calibration?userId=user-1&days=14",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.userId).toBe("user-1");
+    expect(body.series).toHaveLength(2);
+    expect(body.series[0]).toMatchObject({
+      dayKey: "2026-06-13",
+      totalItems: 40,
+      manualOverrides: { count: 1, total: 40, rate: 0.1 },
+      driftDeltaMax: 0.12,
+    });
+    expect(body.series[0].judgeSourceCounts["keyword-fallback"]).toBe(1);
+    // Latest full payload rides along for the dashboard detail view.
+    expect(body.latest.windowDays).toBe(7);
+  });
+
+  it("returns the latest snapshot per user as an overview when no userId is given", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.calibrationSnapshot.findMany).mockResolvedValueOnce([
+      snapshotRow("user-1", "2026-06-13", 40),
+      snapshotRow("user-2", "2026-06-13", 12),
+      snapshotRow("user-1", "2026-06-12", 35),
+      snapshotRow("user-2", "2026-06-11", 9),
+    ] as never);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/calibration",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.overview).toHaveLength(2);
+    const u1 = body.overview.find((o: { userId: string }) => o.userId === "user-1");
+    expect(u1.dayKey).toBe("2026-06-13");
+    expect(u1.totalItems).toBe(40);
   });
 });

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { Resend } from "resend";
 import { runAllScenarios, summarizeEval } from "../agent-eval.js";
 import { requireAdmin } from "../auth.js";
+import type { CalibrationSnapshotPayload } from "../calibration-snapshot.js";
 import { db, prisma } from "../db.js";
 import { sendBetaInviteEmail } from "../email.js";
 import { getUsageSummary } from "../llm-usage.js";
@@ -11,6 +12,19 @@ import { getPerfSnapshot } from "../perf-monitor.js";
 import { getProviderChain } from "../providers/index.js";
 
 type FeedbackGroup = { signal: string; _count: { signal: number } };
+
+/** Compact per-day KPI entry for the calibration trend (full payload only on `latest`). */
+function calibrationSeriesEntry(row: { dayKey: string; payload: unknown }) {
+  const p = row.payload as Partial<CalibrationSnapshotPayload> | null;
+  return {
+    dayKey: row.dayKey,
+    totalItems: p?.totalItems ?? 0,
+    manualOverrides: p?.manualOverrides ?? null,
+    feedbackOverrides: p?.feedbackOverrides ?? null,
+    judgeSourceCounts: p?.judgeSourceCounts ?? null,
+    driftDeltaMax: p?.driftSignal?.deltaMax ?? null,
+  };
+}
 
 function summarizeTrustFeedback(rows: FeedbackGroup[]) {
   const counts = { useful: 0, wrong: 0, later: 0, done: 0 };
@@ -438,6 +452,44 @@ export async function adminRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "days must be an integer between 1 and 90" });
     }
     return await getUsageSummary(userId || undefined, sinceDays);
+  });
+
+  // GET /api/admin/calibration — classification-quality KPIs over time.
+  //   ?userId=&days=N → daily series (+ latest full payload) for one user
+  //   no userId      → latest snapshot per user (overview)
+  // Reads CalibrationSnapshot rows written by the scheduler's daily job —
+  // never recomputes live, so the endpoint stays cheap and consistent.
+  app.get("/calibration", async (request) => {
+    const q = request.query as { userId?: string; days?: string };
+    const days = Math.min(90, Math.max(1, Number(q.days ?? "14") || 14));
+
+    if (q.userId) {
+      const rows = (await prisma.calibrationSnapshot.findMany({
+        where: { userId: q.userId },
+        orderBy: { dayKey: "desc" },
+        take: days,
+      })) as Array<{ dayKey: string; payload: unknown }>;
+      return {
+        userId: q.userId,
+        days,
+        latest: rows[0]?.payload ?? null,
+        series: rows.map(calibrationSeriesEntry),
+      };
+    }
+
+    // Overview: rows arrive newest-first; keep the first row seen per user.
+    const rows = (await prisma.calibrationSnapshot.findMany({
+      orderBy: { dayKey: "desc" },
+      take: 365,
+    })) as Array<{ userId: string; dayKey: string; payload: unknown }>;
+    const seen = new Set<string>();
+    const overview: Array<Record<string, unknown>> = [];
+    for (const row of rows) {
+      if (seen.has(row.userId)) continue;
+      seen.add(row.userId);
+      overview.push({ userId: row.userId, ...calibrationSeriesEntry(row) });
+    }
+    return { overview };
   });
 
   // GET /api/admin/eval — Run agent decision-logic eval scenarios
