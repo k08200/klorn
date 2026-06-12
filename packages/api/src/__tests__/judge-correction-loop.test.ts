@@ -159,6 +159,54 @@ describe("few-shot correction injection", () => {
     await judgeEmail(PLAIN_EMAIL, undefined, ctx({}));
     expect(createCompletionMock.mock.calls[0]?.[0]?.model).toBe("test-judge-model");
   });
+
+  it("rubric scores system/transactional notices above the marketing floor", async () => {
+    llmRespondsWith({ confidence: 0.6, senderTrust: 0.5, reversibility: 0.5, urgency: 0.3 });
+    await judgeEmail(PLAIN_EMAIL, undefined, ctx({}));
+    const prompt = sentPrompt();
+    // Regression for the 2026-06-12 flash run: the rubric only defined 0.0
+    // (marketing) and 0.5 (human), so a precise model scored deploy/invoice
+    // notices 0.0 and the rule buried them in SILENT. QUEUE is doctrine.
+    expect(prompt).toContain("0.3 = automated system/transactional notice");
+    expect(prompt).toContain("NOT marketing");
+  });
+});
+
+describe("LLM retry", () => {
+  function valid() {
+    return {
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              confidence: 0.9,
+              senderTrust: 0.9,
+              reversibility: 0.3,
+              urgency: 0.9,
+              reason: "urgent human ask",
+            }),
+          },
+        },
+      ],
+    };
+  }
+
+  it("retries once and recovers from a transient provider failure", async () => {
+    createCompletionMock
+      .mockRejectedValueOnce(new Error("502 upstream"))
+      .mockResolvedValueOnce(valid());
+    const result = await judgeEmail(PLAIN_EMAIL, undefined, ctx({}));
+    expect(result.source).toBe("llm");
+    expect(result.tier).toBe("PUSH");
+    expect(createCompletionMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to keywords only after both attempts fail", async () => {
+    createCompletionMock.mockRejectedValue(new Error("provider down"));
+    const result = await judgeEmail(PLAIN_EMAIL, undefined, ctx({}));
+    expect(result.source).toBe("keyword-fallback");
+    expect(createCompletionMock).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("sender-facts grounding", () => {

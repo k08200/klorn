@@ -271,7 +271,7 @@ function buildJudgePrompt(
 
 Features:
 - confidence: how sure you are that your other three scores are right (1.0 = certain, 0.5 = could go either way)
-- senderTrust: is this sender a real person the recipient knows or cares about? (1.0 = clear known/important human; 0.5 = professional but unfamiliar; 0.0 = anonymous / no-reply / marketing list)
+- senderTrust: is this sender a real person the recipient knows or cares about? (1.0 = clear known/important human; 0.5 = professional but unfamiliar; 0.3 = automated system/transactional notice the recipient signed up for — receipts, invoices, deploy/security/account alerts, own-product signups; these stay visible in the queue, they are NOT marketing; 0.0 = anonymous bulk marketing / promo list)
 - reversibility: if this mail were auto-handled (e.g. archived, replied) and that turned out wrong, how easy is it to recover? (1.0 = trivial undo, just unarchive; 0.5 = mildly awkward; 0.0 = irreversible action, e.g. lost an investor)
 - urgency: does this need attention within hours? (1.0 = today / time-bound; 0.5 = this week; 0.0 = informational, no clock)
 
@@ -287,46 +287,63 @@ labels: ${labels}
 snippet: ${snippet}`;
 }
 
+// One retry: a single transient provider failure must not demote the email
+// to the keyword fallback — the fallback structurally cannot emit PUSH, so
+// every fallback on an urgent mail is a missed interrupt. The 2026-06-12
+// eval runs showed isolated per-call failures knocking 3 of 13 PUSH items
+// to the fallback while the LLM scored the other 10 perfectly.
+const JUDGE_LLM_ATTEMPTS = 2;
+
 async function extractFeaturesWithLlm(
   email: ClassifiableEmail,
   userId?: string,
   corrections: CorrectionExample[] = [],
   senderFacts: SenderFacts | null = null,
 ): Promise<{ features: PocFeatures; reason: string } | null> {
-  try {
-    const response = await createCompletion(
-      {
-        model: JUDGE_MODEL,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a strict JSON scorer for an email triage POC. Respond with valid JSON only — no prose, no code fences.",
-          },
-          { role: "user", content: buildJudgePrompt(email, corrections, senderFacts) },
-        ],
-        response_format: { type: "json_object" },
-      },
-      userId ? { userId, priority: "background" as const } : {},
-    );
+  for (let attempt = 1; attempt <= JUDGE_LLM_ATTEMPTS; attempt++) {
+    try {
+      const response = await createCompletion(
+        {
+          model: JUDGE_MODEL,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a strict JSON scorer for an email triage POC. Respond with valid JSON only — no prose, no code fences.",
+            },
+            { role: "user", content: buildJudgePrompt(email, corrections, senderFacts) },
+          ],
+          response_format: { type: "json_object" },
+        },
+        userId ? { userId, priority: "background" as const } : {},
+      );
 
-    const raw = response.choices[0]?.message?.content;
-    if (!raw) return null;
+      const raw = response.choices[0]?.message?.content;
+      if (!raw) throw new Error("empty completion content");
 
-    const parsed = JSON.parse(raw) as LlmFeatureResponse;
+      const parsed = JSON.parse(raw) as LlmFeatureResponse;
 
-    const features: PocFeatures = {
-      confidence: CLAMP(Number(parsed.confidence ?? 0)),
-      senderTrust: CLAMP(Number(parsed.senderTrust ?? 0)),
-      reversibility: CLAMP(Number(parsed.reversibility ?? 0)),
-      urgency: CLAMP(Number(parsed.urgency ?? 0)),
-    };
-    const reason = typeof parsed.reason === "string" ? parsed.reason : "";
-    return { features, reason };
-  } catch (err) {
-    captureError(err, { tags: { scope: "poc-judge.llm" } });
-    return null;
+      const features: PocFeatures = {
+        confidence: CLAMP(Number(parsed.confidence ?? 0)),
+        senderTrust: CLAMP(Number(parsed.senderTrust ?? 0)),
+        reversibility: CLAMP(Number(parsed.reversibility ?? 0)),
+        urgency: CLAMP(Number(parsed.urgency ?? 0)),
+      };
+      const reason = typeof parsed.reason === "string" ? parsed.reason : "";
+      return { features, reason };
+    } catch (err) {
+      // Surface WHY in plain logs — captureError is a no-op without a
+      // Sentry DSN (e.g. CI), which made eval fallbacks undiagnosable.
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[JUDGE] LLM feature extraction attempt ${attempt}/${JUDGE_LLM_ATTEMPTS} failed: ${message}`,
+      );
+      if (attempt === JUDGE_LLM_ATTEMPTS) {
+        captureError(err, { tags: { scope: "poc-judge.llm" } });
+      }
+    }
   }
+  return null;
 }
 
 /**
