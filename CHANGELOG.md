@@ -12,6 +12,62 @@ calendar time.
 
 ## [Unreleased]
 
+### Added — Engine sprint (PR #500)
+- **Judge eval gate.** Synthetic, PII-free 50-email eval set
+  (`packages/api/eval/`) with two enforcement layers: a deterministic CI
+  gate (fast-path + keyword fallback, 70% accuracy ratchet plus two safety
+  invariants — a missed PUSH degrades to QUEUE, never SILENT; SILENT
+  marketing is never predicted PUSH) and an LLM end-to-end workflow
+  (≥80%, runs on PRs touching judge files when a provider secret exists).
+- **Correction loop.** Manual tier overrides now feed back into
+  classification: up to 5 few-shot examples (same-sender → same-domain →
+  recency) injected into the judge prompt, plus a sender prior that skips
+  the LLM for stable senders (≥2 identical overrides in 60 days, or ≥3
+  unanimous recent classifications for QUEUE/SILENT). Urgent-looking
+  content always routes back to the LLM unless the prior itself is PUSH.
+- **Quiet hours enforcement.** Extracted into `quiet-hours.ts` with its own
+  `quiet_hours` skip reason (previously conflated with category opt-outs),
+  midnight-crossing windows and timezones tested.
+- **Telegram delivery adapter.** BYO BotFather token, one-time link codes,
+  secret-verified webhook, PUSH interrupts mirrored with Move-to-Queue /
+  Silence inline buttons that feed override ground truth. Works without
+  VAPID keys.
+- **Phone escalation v0.** One plain Twilio TTS call when a PUSH
+  notification stays unacknowledged for 5 minutes. Rails: one call per
+  notification ever (DB-unique), daily cap of 3, 10-minute cooldown, quiet
+  hours always win, per-user opt-in on top of a global flag, Twilio
+  signature verification. A delivery channel for PUSH — not a new tier.
+- **Local/OpenAI-compatible LLM provider.** `OPENAI_COMPAT_BASE_URL`
+  (Ollama, LM Studio, vLLM) routes classification local-first with cloud
+  as failover only; fully local when no cloud keys are set. Env-only by
+  design (no per-user URLs — SSRF surface).
+- **LLM usage ledger.** `LlmUsageLog` records the actual post-failover
+  provider, model, and token counts per call; founder-facing summary at
+  `GET /api/admin/llm-usage`.
+- **Reject-with-feedback.** Rejections persist an optional reason; the
+  last five feed the agent prompt so repeated bad proposals stop.
+
+### Added — Web wiring (PR #501)
+- Settings: Telegram connect card (deep link + one-time code + disconnect)
+  and a phone-escalation opt-in toggle with the rails spelled out.
+- Inbox + notification bell: reject now opens an optional-reason dialog
+  (500-char max); skipping the reason keeps the old behavior.
+
+### Fixed
+- **Cost gate charged 0¢ per call** (PR #500). The pre-bill estimated
+  `estimateModelCostUsd(model, 0, 0)`, which is token-linear and therefore
+  always zero — daily caps never accumulated for paid models. Pre-bill now
+  uses a nominal-token floor and settles against actual usage after each
+  call (the cost-gate gap named in the v1.0.0 threshold above).
+- Keyword fallback could never SILENT a newsletter during an LLM outage —
+  marketing features sat exactly on the SILENT branch's strict floors
+  (PR #500).
+- Unit tests silently hit the live LLM provider on machines with a local
+  `.env` (Prisma's env autoload ran before provider-registry init); the
+  suite is offline again (PR #500).
+- `getProviderChain()` registered the env API key twice under separate
+  quota keys, duplicating attempts and bypassing cooldowns (PR #500).
+
 ## [0.3.0] — 2026-06-09
 
 First release after the firewall doctrine work and the production incident
