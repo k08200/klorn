@@ -95,3 +95,29 @@ export async function evaluateNotificationGate(
   }
   return { allowed: true };
 }
+
+/**
+ * Quiet-hours check alone, by userId — no category dimension. For loud
+ * channels invoked directly from scheduler code (SMS escalation via
+ * sendSms) that bypass evaluateNotificationGate. Defense in depth: a
+ * direct caller must never ring a sleeping phone. Falls open like the
+ * gate above — missing config means not quiet.
+ */
+export async function isUserInQuietHours(userId: string, now: Date = new Date()): Promise<boolean> {
+  const config = await prisma.automationConfig.findUnique({ where: { userId } });
+  if (!config) return false;
+
+  const raw = config as unknown as {
+    timezone?: string | null;
+    quietHoursStart?: string | null;
+    quietHoursEnd?: string | null;
+  };
+  return isWithinQuietHours(
+    now,
+    {
+      quietHoursStart: raw.quietHoursStart ?? null,
+      quietHoursEnd: raw.quietHoursEnd ?? null,
+    },
+    normalizeTimeZone(raw.timezone),
+  );
+}

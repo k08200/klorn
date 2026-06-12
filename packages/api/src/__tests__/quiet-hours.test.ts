@@ -30,7 +30,7 @@ vi.mock("../push-delivery.js", () => ({
   markPushFailed: mocks.markPushFailed,
 }));
 vi.mock("../push-rate-limit.js", () => ({
-  recordPushAttempt: vi.fn(() => ({ allowed: true })),
+  recordPushAttempt: vi.fn(async () => ({ allowed: true })),
 }));
 vi.mock("../is-safe-push-endpoint.js", () => ({
   isSafePushEndpoint: vi.fn(() => true),

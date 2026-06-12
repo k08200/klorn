@@ -8,6 +8,7 @@ interface UserRow {
 
 const users = new Map<string, UserRow>();
 const phones = new Map<string, string | null>();
+const quietUsers = new Set<string>();
 const createCalls: Array<{ from: string; to: string; body: string }> = [];
 let twilioError: Error | null = null;
 
@@ -24,6 +25,10 @@ vi.mock("../db.js", () => ({
 
 vi.mock("../sms-phone.js", () => ({
   getPhoneNumber: vi.fn(async (userId: string) => phones.get(userId) ?? null),
+}));
+
+vi.mock("../notification-prefs.js", () => ({
+  isUserInQuietHours: vi.fn(async (userId: string) => quietUsers.has(userId)),
 }));
 
 vi.mock("twilio", () => {
@@ -56,6 +61,7 @@ beforeEach(async () => {
 
   users.clear();
   phones.clear();
+  quietUsers.clear();
   createCalls.length = 0;
   twilioError = null;
 
@@ -133,6 +139,35 @@ describe("sendSms — daily cap", () => {
     const blocked = await sms.sendSms("u1", "3");
     expect(blocked).toEqual({ sent: false, reason: "rate_limited" });
     expect(createCalls).toHaveLength(2);
+  });
+});
+
+describe("sendSms — quiet hours", () => {
+  it("skips with reason=quiet_hours during the user's quiet window", async () => {
+    users.set("u1", { role: "ADMIN", email: "admin@klorn.ai" });
+    phones.set("u1", "+821012345678");
+    quietUsers.add("u1");
+    const { sendSms } = await import("../sms.js");
+    const result = await sendSms("u1", "Urgent: 2am newsletter");
+    expect(result).toEqual({ sent: false, reason: "quiet_hours" });
+    expect(createCalls).toHaveLength(0);
+  });
+
+  it("a quiet-hours skip does not burn the daily cap", async () => {
+    process.env.SMS_DAILY_CAP_PER_USER = "1";
+    users.set("u1", { role: "ADMIN", email: "admin@klorn.ai" });
+    phones.set("u1", "+821012345678");
+    vi.resetModules();
+    const limiter = await import("../sms-limiter.js");
+    limiter._resetAllSmsWindowsForTests();
+    const sms = await import("../sms.js");
+    sms._resetSmsClientForTests();
+
+    quietUsers.add("u1");
+    expect((await sms.sendSms("u1", "blocked")).reason).toBe("quiet_hours");
+    quietUsers.delete("u1");
+    // Cap is 1 — if the quiet skip had burned it, this send would be blocked.
+    expect((await sms.sendSms("u1", "allowed")).sent).toBe(true);
   });
 });
 

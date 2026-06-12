@@ -136,9 +136,10 @@ export async function sendPushNotification(
     }
   }
 
-  // Global per-user rate limit — blocks phone ring; DB notification is
-  // already persisted upstream so the bell still surfaces this event.
-  const rate = recordPushAttempt(userId);
+  // Global per-user rate limit (Postgres-backed, survives deploys) — blocks
+  // phone ring; DB notification is already persisted upstream so the bell
+  // still surfaces this event.
+  const rate = await recordPushAttempt(userId);
   if (!rate.allowed) {
     console.log(`[PUSH] Rate-limited for ${userId}: ${rate.reason} — "${payload.title}"`);
     await recordSkipped(
