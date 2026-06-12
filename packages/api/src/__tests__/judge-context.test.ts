@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const attentionFindMany = vi.hoisted(() => vi.fn());
 const emailFindMany = vi.hoisted(() => vi.fn());
+const getTrustScoreMock = vi.hoisted(() => vi.fn());
+const getCachedNodeMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../db.js", () => ({
   db: {
@@ -20,6 +22,14 @@ vi.mock("../sentry.js", () => ({
   captureError: vi.fn(),
 }));
 
+vi.mock("../trust-score.js", () => ({
+  getTrustScore: getTrustScoreMock,
+}));
+
+vi.mock("../interaction-graph.js", () => ({
+  getCachedInteractionNode: getCachedNodeMock,
+}));
+
 import { buildJudgeContext } from "../judge-context.js";
 
 const NOW = new Date("2026-06-12T00:00:00Z");
@@ -30,6 +40,10 @@ beforeEach(() => {
   vi.setSystemTime(NOW);
   attentionFindMany.mockReset();
   emailFindMany.mockReset();
+  getTrustScoreMock.mockReset();
+  getTrustScoreMock.mockResolvedValue(null);
+  getCachedNodeMock.mockReset();
+  getCachedNodeMock.mockResolvedValue(null);
 });
 
 /**
@@ -68,14 +82,14 @@ describe("buildJudgeContext", () => {
   it("returns empty context when there is no history at all", async () => {
     wireMocks({});
     const ctx = await buildJudgeContext("u1", { from: "Alice <alice@corp.com>" });
-    expect(ctx).toEqual({ corrections: [], senderPrior: null });
+    expect(ctx).toEqual({ corrections: [], senderPrior: null, senderFacts: null });
   });
 
   it("returns empty context (and does not throw) when the DB fails", async () => {
     attentionFindMany.mockRejectedValue(new Error("db down"));
     emailFindMany.mockRejectedValue(new Error("db down"));
     const ctx = await buildJudgeContext("u1", { from: "Alice <alice@corp.com>" });
-    expect(ctx).toEqual({ corrections: [], senderPrior: null });
+    expect(ctx).toEqual({ corrections: [], senderPrior: null, senderFacts: null });
   });
 
   it("ranks correction examples: same sender, then same domain, then recency — capped at 5", async () => {
@@ -258,5 +272,93 @@ describe("buildJudgeContext", () => {
     await buildJudgeContext("u1", { from: "A <a@b.com>", excludeEmailId: "self-id" });
     const historyCall = emailFindMany.mock.calls.find((c) => "from" in c[0].where);
     expect(historyCall?.[0].where.id).toEqual({ not: "self-id" });
+  });
+});
+
+describe("buildJudgeContext — sender facts", () => {
+  it("assembles tier history + manual override count from sender items", async () => {
+    wireMocks({
+      senderEmailIds: ["m1", "m2", "m3", "m4"],
+      senderItems: [
+        {
+          sourceId: "m1",
+          tier: "QUEUE",
+          tierReason: "Manual override — user moved to QUEUE",
+          updatedAt: DAYS(2),
+        },
+        { sourceId: "m2", tier: "QUEUE", tierReason: "Visible in queue", updatedAt: DAYS(5) },
+        { sourceId: "m3", tier: "SILENT", tierReason: "Promotional", updatedAt: DAYS(9) },
+        { sourceId: "m4", tier: "CALL", tierReason: "legacy tier — ignored", updatedAt: DAYS(3) },
+      ],
+    });
+    const ctx = await buildJudgeContext("u1", { from: "Mixed <mixed@corp.com>" });
+    // Mixed tiers → no prior, but the distribution itself is a fact.
+    expect(ctx.senderPrior).toBeNull();
+    expect(ctx.senderFacts).toEqual({
+      tierHistory: { QUEUE: 2, SILENT: 1 },
+      manualOverrides: 1,
+      interaction: null,
+      commitments: null,
+    });
+  });
+
+  it("returns senderFacts null when there is no signal at all", async () => {
+    wireMocks({});
+    const ctx = await buildJudgeContext("u1", { from: "New <new@nowhere.com>" });
+    expect(ctx.senderFacts).toBeNull();
+  });
+
+  it("includes the interaction fact from the cached graph node", async () => {
+    wireMocks({});
+    getCachedNodeMock.mockResolvedValue({
+      email: "alice@corp.com",
+      name: "Alice",
+      score: 80,
+      emailCount: 14,
+      lastEmailDaysAgo: 2,
+      upcomingMeetings: 1,
+      tags: ["frequent"],
+    });
+    const ctx = await buildJudgeContext("u1", { from: "Alice <alice@corp.com>" });
+    expect(ctx.senderFacts).toEqual({
+      tierHistory: {},
+      manualOverrides: 0,
+      interaction: { emailCount: 14, lastEmailDaysAgo: 2, upcomingMeetings: 1 },
+      commitments: null,
+    });
+  });
+
+  it("includes the commitment fact when the trust badge is load-bearing", async () => {
+    wireMocks({});
+    getTrustScoreMock.mockResolvedValue({
+      contactEmail: "alice@corp.com",
+      displayName: "Alice",
+      totalCount: 5,
+      onTimeCount: 4,
+      lateCount: 1,
+      onTimeRate: 0.8,
+      avgDelayDays: 1,
+      badge: "reliable",
+      label: "Reliable",
+    });
+    const ctx = await buildJudgeContext("u1", { from: "Alice <alice@corp.com>" });
+    expect(ctx.senderFacts?.commitments).toEqual({ onTime: 4, total: 5 });
+  });
+
+  it("excludes the commitment fact when the badge is unknown (too few / stale data)", async () => {
+    wireMocks({});
+    getTrustScoreMock.mockResolvedValue({
+      contactEmail: "alice@corp.com",
+      displayName: "Alice",
+      totalCount: 2,
+      onTimeCount: 2,
+      lateCount: 0,
+      onTimeRate: 1,
+      avgDelayDays: 0,
+      badge: "unknown",
+      label: "Not enough data",
+    });
+    const ctx = await buildJudgeContext("u1", { from: "Alice <alice@corp.com>" });
+    expect(ctx.senderFacts).toBeNull();
   });
 });

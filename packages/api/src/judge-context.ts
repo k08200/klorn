@@ -19,14 +19,17 @@
 
 import { db } from "./db.js";
 import { extractEmailAddress } from "./email-address.js";
+import { getCachedInteractionNode } from "./interaction-graph.js";
 import {
   type CorrectionExample,
   EMPTY_JUDGE_CONTEXT,
   type JudgeContext,
+  type SenderFacts,
   type SenderPrior,
 } from "./poc-judge.js";
 import { captureError } from "./sentry.js";
 import { isManualOverrideReason, isTier, MANUAL_OVERRIDE_PREFIX } from "./tiers.js";
+import { getTrustScore } from "./trust-score.js";
 
 const CORRECTION_POOL_SIZE = 50;
 const MAX_FEW_SHOT = 5;
@@ -151,12 +154,12 @@ function buildPrior(items: SenderItemRow[]): SenderPrior | null {
   return { tier, count: recent.length, kind: "history" };
 }
 
-async function fetchSenderPrior(
+async function fetchSenderItems(
   userId: string,
   senderAddress: string,
   excludeEmailId?: string,
-): Promise<SenderPrior | null> {
-  if (!senderAddress) return null;
+): Promise<SenderItemRow[]> {
+  if (!senderAddress) return [];
 
   const emails = (await db.emailMessage.findMany({
     where: {
@@ -168,20 +171,64 @@ async function fetchSenderPrior(
     take: SENDER_HISTORY_SAMPLE,
     select: { id: true },
   })) as Array<{ id: string }>;
-  if (emails.length === 0) return null;
+  if (emails.length === 0) return [];
 
-  const items = (await db.attentionItem.findMany({
+  return (await db.attentionItem.findMany({
     where: { userId, source: "EMAIL", sourceId: { in: emails.map((e) => e.id) } },
     select: { sourceId: true, tier: true, tierReason: true, updatedAt: true },
   })) as SenderItemRow[];
-  if (items.length === 0) return null;
-
-  return buildPrior(items);
 }
 
 /**
- * Fetch correction few-shots + sender prior for one email. Never throws —
- * a broken correction loop must degrade to plain classification.
+ * Tier distribution of the sampled sender history. The same rows feed
+ * buildPrior — but a mixed history that is too weak for a short-circuit
+ * prior is still evidence worth showing the judge (e.g. QUEUE×2, SILENT×1).
+ */
+function buildTierHistory(
+  items: SenderItemRow[],
+): { tierHistory: SenderFacts["tierHistory"]; manualOverrides: number } | null {
+  const tierHistory: SenderFacts["tierHistory"] = {};
+  let manualOverrides = 0;
+  for (const item of items) {
+    if (!isTier(item.tier)) continue;
+    tierHistory[item.tier] = (tierHistory[item.tier] ?? 0) + 1;
+    if (isManualOverrideReason(item.tierReason)) manualOverrides++;
+  }
+  if (Object.keys(tierHistory).length === 0) return null;
+  return { tierHistory, manualOverrides };
+}
+
+/** Top-contact activity from the cached interaction graph (never rebuilds). */
+async function fetchInteractionFact(
+  userId: string,
+  senderAddress: string,
+): Promise<SenderFacts["interaction"]> {
+  if (!senderAddress) return null;
+  const node = await getCachedInteractionNode(userId, senderAddress);
+  if (!node) return null;
+  return {
+    emailCount: node.emailCount,
+    lastEmailDaysAgo: node.lastEmailDaysAgo,
+    upcomingMeetings: node.upcomingMeetings,
+  };
+}
+
+/** Commitment track record — only when the badge is load-bearing (≥3 fresh data points). */
+async function fetchCommitmentFact(
+  userId: string,
+  senderAddress: string,
+): Promise<SenderFacts["commitments"]> {
+  if (!senderAddress) return null;
+  const score = await getTrustScore(userId, senderAddress);
+  if (!score || score.badge === "unknown") return null;
+  return { onTime: score.onTimeCount, total: score.totalCount };
+}
+
+/**
+ * Fetch correction few-shots, sender prior, and sender facts for one email.
+ * Never throws — a broken correction loop must degrade to plain
+ * classification. (getCachedInteractionNode and getTrustScore are
+ * internally fail-soft; the outer catch covers the two history queries.)
  */
 export async function buildJudgeContext(
   userId: string,
@@ -189,11 +236,26 @@ export async function buildJudgeContext(
 ): Promise<JudgeContext> {
   try {
     const senderAddress = extractEmailAddress(input.from || "");
-    const [corrections, senderPrior] = await Promise.all([
+    const [corrections, senderItems, interaction, commitments] = await Promise.all([
       fetchCorrections(userId, senderAddress),
-      fetchSenderPrior(userId, senderAddress, input.excludeEmailId),
+      fetchSenderItems(userId, senderAddress, input.excludeEmailId),
+      fetchInteractionFact(userId, senderAddress),
+      fetchCommitmentFact(userId, senderAddress),
     ]);
-    return { corrections, senderPrior };
+
+    const senderPrior = senderItems.length > 0 ? buildPrior(senderItems) : null;
+    const history = buildTierHistory(senderItems);
+    const senderFacts: SenderFacts | null =
+      history || interaction || commitments
+        ? {
+            tierHistory: history?.tierHistory ?? {},
+            manualOverrides: history?.manualOverrides ?? 0,
+            interaction,
+            commitments,
+          }
+        : null;
+
+    return { corrections, senderPrior, senderFacts };
   } catch (err) {
     captureError(err, { tags: { scope: "judge-context" }, extra: { userId } });
     return EMPTY_JUDGE_CONTEXT;

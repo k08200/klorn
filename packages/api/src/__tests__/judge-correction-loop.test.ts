@@ -153,3 +153,61 @@ describe("few-shot correction injection", () => {
     expect(sentPrompt()).not.toContain("manually corrected");
   });
 });
+
+describe("sender-facts grounding", () => {
+  function llmRespondsWith(features: Record<string, number | string>) {
+    createCompletionMock.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify(features) } }],
+    });
+  }
+
+  function sentPrompt(): string {
+    const call = createCompletionMock.mock.calls[0]?.[0];
+    return call?.messages?.find((m: { role: string }) => m.role === "user")?.content ?? "";
+  }
+
+  const FULL_FACTS = {
+    tierHistory: { QUEUE: 6, SILENT: 3 },
+    manualOverrides: 2,
+    interaction: { emailCount: 14, lastEmailDaysAgo: 2, upcomingMeetings: 1 },
+    commitments: { onTime: 4, total: 5 },
+  };
+
+  it("renders observed sender facts into the judge prompt", async () => {
+    llmRespondsWith({ confidence: 0.6, senderTrust: 0.5, reversibility: 0.5, urgency: 0.3 });
+    await judgeEmail(PLAIN_EMAIL, undefined, ctx({ senderFacts: FULL_FACTS }));
+    const prompt = sentPrompt();
+    expect(prompt).toContain("Known history for this sender");
+    expect(prompt).toContain("QUEUE×6, SILENT×3");
+    expect(prompt).toContain("2 were manual corrections");
+    expect(prompt).toContain("14 emails");
+    expect(prompt).toContain("kept 4 of 5 on time");
+  });
+
+  it("omits the block entirely when senderFacts is absent", async () => {
+    llmRespondsWith({ confidence: 0.6, senderTrust: 0.5, reversibility: 0.5, urgency: 0.3 });
+    await judgeEmail(PLAIN_EMAIL, undefined, ctx({}));
+    expect(sentPrompt()).not.toContain("Known history for this sender");
+  });
+
+  it("renders partial facts without the missing lines", async () => {
+    llmRespondsWith({ confidence: 0.6, senderTrust: 0.5, reversibility: 0.5, urgency: 0.3 });
+    await judgeEmail(
+      PLAIN_EMAIL,
+      undefined,
+      ctx({
+        senderFacts: {
+          tierHistory: { SILENT: 4 },
+          manualOverrides: 0,
+          interaction: null,
+          commitments: null,
+        },
+      }),
+    );
+    const prompt = sentPrompt();
+    expect(prompt).toContain("SILENT×4");
+    expect(prompt).not.toContain("manual corrections");
+    expect(prompt).not.toContain("Active correspondent");
+    expect(prompt).not.toContain("Commitment track record");
+  });
+});
