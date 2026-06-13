@@ -16,8 +16,10 @@
  * snapshot shows GitHub tiers are systematically wrong, THAT is when a
  * GitHub feature adapter earns its keep.
  *
- * PR1 (this module): pure mapping + the ingest core, no network. The
- * BYO-token poller and firewall link land in PR2.
+ * Layers: pure mapping (githubNotificationToClassifiable) → batch ingest
+ * (ingestGitHubNotifications, no network) → per-user poll (syncGitHubForUser,
+ * loads the BYO token + drives github-client). The 5-minute scheduler that
+ * calls syncGitHubForUser lives in github-scheduler.ts.
  */
 
 import {
@@ -25,7 +27,10 @@ import {
   type GitHubNotificationLike,
   upsertAttentionForGitHubNotification,
 } from "./attention-mirror.js";
+import { decryptToken } from "./crypto-tokens.js";
+import { prisma } from "./db.js";
 import type { ClassifiableEmail } from "./email-classifier.js";
+import { fetchGitHubNotifications } from "./github-client.js";
 import { judgeEmail } from "./poc-judge.js";
 
 /** A GitHub notification thread, normalized from the Notifications API. */
@@ -128,4 +133,37 @@ export async function ingestGitHubNotifications(
     }
   }
   return surfaced;
+}
+
+export interface GitHubSyncResult {
+  fetched: number;
+  surfaced: number;
+}
+
+/**
+ * Poll one user's GitHub notifications and surface them. Loads the
+ * encrypted PAT, fetches since the stored cursor, ingests, then advances
+ * the cursor to the run time. The cursor advances ONLY on a successful
+ * fetch — a failed fetch throws (caller logs) and leaves the window intact
+ * so the next tick retries it. Returns null when the user is disconnected.
+ */
+export async function syncGitHubForUser(
+  userId: string,
+  now: Date = new Date(),
+): Promise<GitHubSyncResult | null> {
+  const user = (await prisma.user.findUnique({
+    where: { id: userId },
+    select: { githubTokenCipher: true, githubLastPolledAt: true },
+  })) as { githubTokenCipher: string | null; githubLastPolledAt: Date | null } | null;
+
+  if (!user?.githubTokenCipher) return null;
+
+  const token = decryptToken(user.githubTokenCipher);
+  const notifications = await fetchGitHubNotifications(token, user.githubLastPolledAt ?? undefined);
+
+  const surfaced =
+    notifications.length > 0 ? await ingestGitHubNotifications(userId, notifications) : 0;
+
+  await prisma.user.update({ where: { id: userId }, data: { githubLastPolledAt: now } });
+  return { fetched: notifications.length, surfaced };
 }
