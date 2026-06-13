@@ -887,6 +887,89 @@ export async function upsertAttentionForEmailJudgement(
   }
 }
 
+// ─── GitHub source ─────────────────────────────────────────────────────────
+
+export interface GitHubNotificationLike {
+  /** GitHub notification thread id — the AttentionItem sourceId. */
+  id: string;
+  userId: string;
+  repo: string;
+  subjectTitle: string;
+  subjectType: string;
+  reason: string;
+  url: string | null;
+  updatedAt: Date;
+}
+
+const GITHUB_ACTIONABLE_REASONS = new Set([
+  "review_requested",
+  "mention",
+  "assign",
+  "team_mention",
+]);
+
+function githubTitleFor(n: GitHubNotificationLike): string {
+  const title = n.subjectTitle?.trim() || `${n.repo} ${n.subjectType}`;
+  return title.length > TITLE_MAX_LEN ? `${title.slice(0, TITLE_MAX_LEN - 1)}…` : title;
+}
+
+/**
+ * Mirror a judged GitHub notification into the firewall's AttentionItem
+ * table, keyed by source=GITHUB + the GitHub thread id. Reuses the email
+ * judgement shape (the judge is shared) and the generic priority mapping,
+ * so a GitHub item sorts and renders alongside email with no read-path
+ * changes. Best-effort: never throws.
+ */
+export async function upsertAttentionForGitHubNotification(
+  n: GitHubNotificationLike,
+  judgement: EmailJudgementLike,
+): Promise<void> {
+  const type: AttentionType = GITHUB_ACTIONABLE_REASONS.has(n.reason) ? "REPLY_NEEDED" : "FOLLOWUP";
+  const facts = [
+    { label: "Repository", value: n.repo },
+    { label: "Reason", value: n.reason },
+    { label: "Type", value: n.subjectType },
+    ...(n.url ? [{ label: "Link", value: n.url }] : []),
+  ];
+
+  try {
+    await upsertAttentionItem({
+      where: { source_sourceId: { source: "GITHUB", sourceId: n.id } },
+      create: {
+        userId: n.userId,
+        source: "GITHUB",
+        sourceId: n.id,
+        type,
+        status: "OPEN",
+        priority: emailPriority(judgement),
+        confidence: judgement.features?.confidence ?? 0.5,
+        autonomyLevel: AUTOPILOT_LEVEL.OBSERVE,
+        title: githubTitleFor(n),
+        body: null,
+        suggestedAction: null,
+        costOfIgnoring: null,
+        evidence: evidence("GITHUB", n.id, facts),
+        surfacedAt: n.updatedAt,
+        tier: judgement.tier,
+        tierReason: judgement.reason,
+      },
+      update: {
+        status: "OPEN",
+        type,
+        priority: emailPriority(judgement),
+        confidence: judgement.features?.confidence ?? 0.5,
+        title: githubTitleFor(n),
+        evidence: evidence("GITHUB", n.id, facts),
+        surfacedAt: n.updatedAt,
+        tier: judgement.tier,
+        tierReason: judgement.reason,
+      },
+    });
+  } catch (err) {
+    console.warn("[attention-mirror] upsert failed for GitHub", n.id, err);
+  }
+}
+
 export async function deleteAttentionForEmails(emailIds: string[]): Promise<void> {
   if (emailIds.length === 0) return;
   try {
