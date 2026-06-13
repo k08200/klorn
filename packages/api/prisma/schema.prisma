@@ -804,6 +804,11 @@ enum AttentionSource {
   // POC firewall: each EmailMessage that poc-judge classifies surfaces as
   // its own AttentionItem with source=EMAIL, sourceId=EmailMessage.id.
   EMAIL
+  // Second attention source: a GitHub notification thread (PR/issue/CI/
+  // mention). sourceId = the GitHub notification thread id. The poller
+  // (BYO token) lands in a follow-up; the schema slot + ingest/mirror are
+  // the foundation.
+  GITHUB
 }
 
 enum AttentionType {
