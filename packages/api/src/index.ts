@@ -21,6 +21,7 @@ import { diagnosticsRoutes } from "./routes/diagnostics.js";
 import { emailRoutes } from "./routes/email.js";
 import { feedbackRoutes } from "./routes/feedback.js";
 import { firewallRoutes } from "./routes/firewall.js";
+import { githubRoutes } from "./routes/github.js";
 import { gmailPushRoutes } from "./routes/gmail-push.js";
 import { inboxRoutes } from "./routes/inbox.js";
 import { memoryRoutes } from "./routes/memory.js";
@@ -132,6 +133,7 @@ await app.register(waitlistRoutes, { prefix: "/api/waitlist" });
 await app.register(adminRoutes, { prefix: "/api/admin" });
 await app.register(memoryRoutes, { prefix: "/api/memories" });
 await app.register(naverImapRoutes, { prefix: "/api/naver-imap" });
+await app.register(githubRoutes, { prefix: "/api/github" });
 await app.register(patternRoutes, { prefix: "/api/patterns" });
 await app.register(tokenUsageRoutes, { prefix: "/api/usage" });
 await app.register(skillRoutes, { prefix: "/api/skills" });
@@ -458,6 +460,18 @@ try {
       .catch((err) => {
         console.error("[STARTUP] naver-imap-scheduler failed to start:", err);
         captureError(err, { tags: { context: "startup:naver-imap-scheduler" } });
+      });
+  }
+
+  // Start GitHub notifications polling scheduler (5min interval per connected user)
+  if (!BG_DISABLED) {
+    import("./github-scheduler.js")
+      .then(({ startGitHubScheduler }) => {
+        startGitHubScheduler();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] github-scheduler failed to start:", err);
+        captureError(err, { tags: { context: "startup:github-scheduler" } });
       });
   }
 

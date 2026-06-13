@@ -30,6 +30,13 @@ model User {
   naverImapPasswordCipher   String?
   naverImapHost             String?
   naverImapConnectedAt      DateTime?
+  // GitHub as a second attention source (BYO personal access token, like
+  // the Naver app-password above — OAuth/App registration intentionally
+  // skipped so self-hosters need no approval). The cipher is the encrypted
+  // PAT; lastPolledAt is the Notifications API `since` cursor.
+  githubTokenCipher         String?
+  githubConnectedAt         DateTime?
+  githubLastPolledAt        DateTime?
   // Telegram delivery (self-hoster BYO bot via BotFather).
   // telegramChatId is the bound chat for outbound PUSH-tier interrupts —
   // unique so a chat can only ever belong to one account. telegramLinkCode
