@@ -8,17 +8,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const emailFindMany = vi.hoisted(() => vi.fn());
 const attentionFindMany = vi.hoisted(() => vi.fn());
+const notifFindFirst = vi.hoisted(() => vi.fn(async () => null));
+const notifCreate = vi.hoisted(() => vi.fn(async () => ({ id: "n1", createdAt: new Date() })));
 const judgeEmail = vi.hoisted(() => vi.fn());
 const upsert = vi.hoisted(() => vi.fn(async () => {}));
 const buildJudgeContext = vi.hoisted(() =>
   vi.fn(async () => ({ corrections: [], senderPrior: null })),
 );
 const captureError = vi.hoisted(() => vi.fn());
+const sendPushNotification = vi.hoisted(() => vi.fn(async () => ({})));
+const pushNotification = vi.hoisted(() => vi.fn());
+const findOpenEmailAttentionItemId = vi.hoisted(() => vi.fn(async () => null));
 
 vi.mock("../db.js", () => {
   const prisma = {
     emailMessage: { findMany: emailFindMany },
     attentionItem: { findMany: attentionFindMany },
+    notification: { findFirst: notifFindFirst, create: notifCreate },
   };
   return { prisma, db: prisma };
 });
@@ -26,24 +32,46 @@ vi.mock("../poc-judge.js", () => ({ judgeEmail }));
 vi.mock("../judge-context.js", () => ({ buildJudgeContext }));
 vi.mock("../attention-mirror.js", () => ({ upsertAttentionForEmailJudgement: upsert }));
 vi.mock("../sentry.js", () => ({ captureError }));
+// Dynamically imported by the PUSH-tier push path.
+vi.mock("../push.js", () => ({ sendPushNotification }));
+vi.mock("../websocket.js", () => ({ pushNotification }));
+vi.mock("../attention-override.js", () => ({ findOpenEmailAttentionItemId }));
 
-import { backfillEmailAttentionItems } from "../email-sync.js";
-
-function email(id: string, receivedAt: Date) {
-  return { id, from: `s-${id}@x.com`, subject: id, snippet: null, labels: [], receivedAt };
-}
+import { backfillEmailAttentionItems, judgeAndMirrorEmail } from "../email-sync.js";
 
 const T0 = new Date("2026-06-14T00:00:00Z");
+
+function email(id: string, receivedAt: Date) {
+  return {
+    id,
+    gmailId: `g-${id}`,
+    from: `s-${id}@x.com`,
+    subject: id,
+    snippet: null,
+    labels: [] as string[],
+    receivedAt,
+  };
+}
 const recent = (id: string, minsAgo: number) =>
   email(id, new Date(T0.getTime() - minsAgo * 60_000));
 
 beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(T0);
   emailFindMany.mockReset();
   attentionFindMany.mockReset();
+  notifFindFirst.mockReset();
+  notifFindFirst.mockResolvedValue(null);
+  notifCreate.mockClear();
+  notifCreate.mockResolvedValue({ id: "n1", createdAt: T0 });
   judgeEmail.mockReset();
   judgeEmail.mockResolvedValue({ tier: "QUEUE", reason: "r", features: {}, source: "llm" });
   upsert.mockClear();
   captureError.mockClear();
+  sendPushNotification.mockClear();
+  pushNotification.mockClear();
+  findOpenEmailAttentionItemId.mockReset();
+  findOpenEmailAttentionItemId.mockResolvedValue(null);
 });
 
 const judgedSubjects = () => judgeEmail.mock.calls.map((c) => c[0].subject);
@@ -103,5 +131,55 @@ describe("backfillEmailAttentionItems", () => {
     expect(n).toBe(2);
     expect(judgeEmail).toHaveBeenCalledTimes(3);
     expect(captureError).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("judgeAndMirrorEmail — PUSH tier drives a real push", () => {
+  const pushTier = () =>
+    judgeEmail.mockResolvedValue({
+      tier: "PUSH",
+      reason: "moderator feedback",
+      features: { confidence: 0.9, senderTrust: 0.6, reversibility: 0.9, urgency: 0.7 },
+      source: "llm",
+    });
+
+  it("sends a push when the judge tiers a recent email PUSH (the core fix)", async () => {
+    pushTier();
+    const tier = await judgeAndMirrorEmail("u1", recent("hn", 5));
+    expect(tier).toBe("PUSH");
+    expect(sendPushNotification).toHaveBeenCalledTimes(1);
+    expect(sendPushNotification.mock.calls[0][2]).toBe("email_urgent");
+    expect(pushNotification).toHaveBeenCalledTimes(1); // in-app bell toast
+    // Bell row carries the [gmailId] dedup marker.
+    expect(notifCreate.mock.calls[0][0].data.message).toContain("[g-hn]");
+  });
+
+  it("does NOT push a QUEUE/SILENT tier", async () => {
+    judgeEmail.mockResolvedValue({ tier: "QUEUE", reason: "r", features: {}, source: "llm" });
+    await judgeAndMirrorEmail("u1", recent("q", 5));
+    expect(sendPushNotification).not.toHaveBeenCalled();
+  });
+
+  it("does NOT push a backfilled OLD email, even if tiered PUSH (no stale interrupt)", async () => {
+    pushTier();
+    await judgeAndMirrorEmail("u1", recent("old", 8 * 60)); // 8h ago, past the 6h window
+    expect(sendPushNotification).not.toHaveBeenCalled();
+    expect(notifCreate).not.toHaveBeenCalled();
+  });
+
+  it("dedups — skips the push when a notification for this gmailId already exists", async () => {
+    pushTier();
+    notifFindFirst.mockResolvedValue({ id: "existing" });
+    await judgeAndMirrorEmail("u1", recent("dup", 5));
+    expect(sendPushNotification).not.toHaveBeenCalled();
+    expect(notifCreate).not.toHaveBeenCalled();
+  });
+
+  it("never lets a push failure break classification (returns the tier regardless)", async () => {
+    pushTier();
+    sendPushNotification.mockRejectedValueOnce(new Error("push provider down"));
+    const tier = await judgeAndMirrorEmail("u1", recent("err", 5));
+    expect(tier).toBe("PUSH");
+    expect(captureError).toHaveBeenCalled();
   });
 });

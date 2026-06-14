@@ -366,6 +366,7 @@ async function persistGmailEmail(
   // safety net that re-judges any email left without one.
   judgeAndMirrorEmail(userId, {
     id: createdEmail.id,
+    gmailId: email.gmailId,
     from: email.from,
     subject: email.subject,
     snippet: email.snippet,
@@ -390,6 +391,7 @@ async function persistGmailEmail(
 
 interface JudgeableEmailRow {
   id: string;
+  gmailId: string;
   from: string;
   subject: string;
   snippet: string | null;
@@ -423,7 +425,103 @@ export async function judgeAndMirrorEmail(
     judgeContext,
   );
   await upsertAttentionForEmailJudgement({ userId, ...email }, judgement);
+
+  // The whole point of the firewall: a PUSH tier should actually interrupt
+  // you. Until now nothing did — email pushes fired only off the separate
+  // keyword `classifyPriority === URGENT` heuristic, so the smart judge could
+  // (correctly) tier an email PUSH and the notification never went out. Wire
+  // the judge's PUSH decision to a real push. Best-effort: never block or
+  // fail classification on the notification.
+  if (judgement.tier === "PUSH") {
+    await pushForFirewallEmail(userId, email).catch((err) =>
+      captureError(err, {
+        tags: { scope: "firewall-push" },
+        extra: { userId, emailId: email.id },
+      }),
+    );
+  }
   return judgement.tier;
+}
+
+// A push for a PUSH-tier email only fires for genuinely recent mail. The
+// backfill sweep re-judges emails that arrived while the dyno slept; tiering
+// a days-old email in the firewall is right, but firing a stale "urgent" push
+// for it is not.
+const FIREWALL_PUSH_RECENCY_MS = 6 * 60 * 60 * 1000;
+const PUSH_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+// Shared notification title with the urgent-priority sweep
+// (automation-scheduler.ts) so the two dedup against each other: whichever
+// fires first writes "Urgent email" + "[gmailId]", and the other skips. An
+// email that is both keyword-URGENT and judge-PUSH gets exactly one push.
+const FIREWALL_PUSH_TITLE = "Urgent email";
+
+function senderDisplayName(from: string): string {
+  const angle = from.indexOf("<");
+  const name = angle > 0 ? from.slice(0, angle).trim().replace(/^"|"$/g, "") : from.trim();
+  return name || from;
+}
+
+/**
+ * Send a push for an email the judge tiered PUSH. Recency-guarded (never push
+ * backfilled old mail) and deduped (shared marker with the urgent-priority
+ * sweep so an email never gets two pushes). sendPushNotification applies the
+ * quiet-hours / rate-limit / Telegram gates, so we don't re-check them here.
+ */
+async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): Promise<void> {
+  if (Date.now() - email.receivedAt.getTime() > FIREWALL_PUSH_RECENCY_MS) return;
+
+  const already = await prisma.notification.findFirst({
+    where: {
+      userId,
+      type: "email",
+      title: FIREWALL_PUSH_TITLE,
+      message: { contains: `[${email.gmailId}]` },
+      createdAt: { gte: new Date(Date.now() - PUSH_DEDUP_WINDOW_MS) },
+    },
+    select: { id: true },
+  });
+  if (already) return;
+
+  const sender = senderDisplayName(email.from);
+  const body = `${sender}: ${email.subject || "(no subject)"}`.slice(0, 200);
+
+  // Bell row carries the [gmailId] dedup marker (read back by both this path
+  // and the urgent-priority sweep).
+  const notification = await prisma.notification.create({
+    data: {
+      userId,
+      type: "email",
+      title: FIREWALL_PUSH_TITLE,
+      message: `${body} [${email.gmailId}]`,
+    },
+  });
+
+  const [{ pushNotification }, { sendPushNotification }, { findOpenEmailAttentionItemId }] =
+    await Promise.all([
+      import("./websocket.js"),
+      import("./push.js"),
+      import("./attention-override.js"),
+    ]);
+
+  pushNotification(userId, {
+    id: notification.id,
+    type: "email",
+    title: FIREWALL_PUSH_TITLE,
+    message: body,
+    createdAt: notification.createdAt.toISOString(),
+  });
+
+  const attentionItemId = await findOpenEmailAttentionItemId(userId, email.id);
+  await sendPushNotification(
+    userId,
+    {
+      title: `Klorn — ${sender}`,
+      body: email.subject || "(no subject)",
+      url: "/inbox/firewall",
+      attentionItemId: attentionItemId ?? undefined,
+    },
+    "email_urgent",
+  );
 }
 
 const BACKFILL_LOOKBACK_DAYS = 14;
@@ -447,7 +545,15 @@ export async function backfillEmailAttentionItems(userId: string): Promise<numbe
   const cutoff = new Date(Date.now() - BACKFILL_LOOKBACK_MS);
   const recent = (await prisma.emailMessage.findMany({
     where: { userId, receivedAt: { gte: cutoff } },
-    select: { id: true, from: true, subject: true, snippet: true, labels: true, receivedAt: true },
+    select: {
+      id: true,
+      gmailId: true,
+      from: true,
+      subject: true,
+      snippet: true,
+      labels: true,
+      receivedAt: true,
+    },
     orderBy: { receivedAt: "desc" },
     take: BACKFILL_SCAN_LIMIT,
   })) as JudgeableEmailRow[];
