@@ -5,6 +5,7 @@ import { Suspense, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { useConfirm } from "../../components/confirm-dialog";
 import { FeedbackPolicyPanel } from "../../components/feedback-policy-panel";
+import { GitHubSection } from "../../components/github-section";
 import { GoogleConnectRedirect } from "../../components/google-connect-redirect";
 import { NaverImapSection } from "../../components/naver-imap-section";
 import { OAuthErrorBanner } from "../../components/oauth-error-banner";
@@ -1528,6 +1529,9 @@ export default function SettingsPage() {
 
           {/* Telegram channel */}
           <TelegramSection />
+
+          {/* GitHub notifications source */}
+          <GitHubSection />
         </section>
 
         {/* Naver Mail (IMAP) */}
