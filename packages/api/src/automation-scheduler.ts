@@ -23,6 +23,7 @@ import { prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
 import { syncRecentCandidateIntakes } from "./email-candidate-intake.js";
 import {
+  backfillEmailAttentionItems,
   checkAutoReplyRules,
   generateSmartReply,
   reconcileEmails,
@@ -542,6 +543,19 @@ async function runAutomations() {
               }
               await syncRecentCandidateIntakes(config.userId, Math.max(syncResult.newCount, 10));
               await notifyCandidateEmails(config.userId);
+
+              // Backfill: re-judge recently-synced emails that never got an
+              // AttentionItem (the inline judge is fire-and-forget; a transient
+              // failure or a dyno killed mid-flight strands the email out of
+              // the firewall). Runs every sync cycle regardless of newCount so
+              // mail that arrived while the instance slept gets tiered on wake.
+              // Bounded per call; no-op once caught up.
+              const backfilled = await backfillEmailAttentionItems(config.userId);
+              if (backfilled > 0) {
+                console.log(
+                  `[EMAIL-BACKFILL] re-judged ${backfilled} stranded email(s) for ${config.userId}`,
+                );
+              }
 
               // LOW-priority mail is a quarantine signal, not a destructive
               // action. Keep the local/Gmail records intact so the user can audit

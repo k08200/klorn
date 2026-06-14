@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { useToast } from "../../../components/toast";
 import { TrustDot, type TrustScoreData } from "../../../components/trust-badge";
@@ -9,6 +9,9 @@ import { apiFetch } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
 
 type Tier = "SILENT" | "QUEUE" | "PUSH" | "AUTO";
+
+// How often the firewall view re-pulls while the tab is focused.
+const FIREWALL_REFRESH_MS = 45_000;
 
 interface EmailContext {
   emailDbId: string;
@@ -112,6 +115,27 @@ function FirewallView() {
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // Auto-refresh so newly-classified mail appears without a manual reload.
+  // The mail page already refetches (react-query); this page hand-rolls its
+  // fetch, so it stayed stale after a sync. Poll while visible + refetch on
+  // focus, but never while an optimistic override is mid-flight (that local
+  // state would get clobbered by a server response that predates the move).
+  const overridingRef = useRef(overriding);
+  overridingRef.current = overriding;
+  useEffect(() => {
+    const refresh = () => {
+      if (overridingRef.current) return;
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      load();
+    };
+    const intervalId = window.setInterval(refresh, FIREWALL_REFRESH_MS);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refresh);
+    };
   }, [load]);
 
   const override = async (item: FirewallItem, newTier: Tier) => {
