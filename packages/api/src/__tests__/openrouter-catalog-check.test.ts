@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { JUDGE_MODEL, VISION_MODEL } from "../openai.js";
 import {
   classifyCatalogDrift,
+  classifyFingerprintDrift,
   dependedModels,
   dependedModelsExpiringSoon,
   diffChainAgainstCatalog,
   parseCatalogExpirations,
+  parseCatalogFingerprints,
   parseCatalogIds,
 } from "../openrouter-catalog-check.js";
 
@@ -154,6 +156,91 @@ describe("classifyCatalogDrift", () => {
       recovered: ["a/x", "b/y"],
       unchanged: [],
     });
+  });
+});
+
+describe("parseCatalogFingerprints", () => {
+  it("fingerprints the identity-bearing fields (created/context_length/pricing)", () => {
+    const body = {
+      data: [
+        {
+          id: "openai/gpt-5.2-chat",
+          name: "GPT-5.2 Chat",
+          created: 1735000000,
+          context_length: 200000,
+          pricing: { prompt: "0.0000005", completion: "0.0000015" },
+        },
+      ],
+    };
+    const fps = parseCatalogFingerprints(body);
+    expect(fps.has("openai/gpt-5.2-chat")).toBe(true);
+  });
+
+  it("ignores a cosmetic display-name change (no false repoint)", () => {
+    const before = parseCatalogFingerprints({
+      data: [{ id: "a/x", name: "Model X", created: 1, context_length: 8000, pricing: { prompt: "1" } }],
+    });
+    const renamedLabel = parseCatalogFingerprints({
+      data: [{ id: "a/x", name: "Model X (new label)", created: 1, context_length: 8000, pricing: { prompt: "1" } }],
+    });
+    expect(renamedLabel.get("a/x")).toEqual(before.get("a/x"));
+  });
+
+  it("changes the fingerprint when created/context_length/pricing move (a re-point)", () => {
+    const before = parseCatalogFingerprints({
+      data: [{ id: "a/x", created: 1, context_length: 8000, pricing: { prompt: "1", completion: "2" } }],
+    });
+    const repointedCreated = parseCatalogFingerprints({
+      data: [{ id: "a/x", created: 999, context_length: 8000, pricing: { prompt: "1", completion: "2" } }],
+    });
+    const repointedContext = parseCatalogFingerprints({
+      data: [{ id: "a/x", created: 1, context_length: 32000, pricing: { prompt: "1", completion: "2" } }],
+    });
+    const repointedPricing = parseCatalogFingerprints({
+      data: [{ id: "a/x", created: 1, context_length: 8000, pricing: { prompt: "5", completion: "2" } }],
+    });
+    expect(repointedCreated.get("a/x")).not.toEqual(before.get("a/x"));
+    expect(repointedContext.get("a/x")).not.toEqual(before.get("a/x"));
+    expect(repointedPricing.get("a/x")).not.toEqual(before.get("a/x"));
+  });
+
+  it("returns an empty map for malformed bodies and skips entries without a string id", () => {
+    expect(parseCatalogFingerprints(null)).toEqual(new Map());
+    expect(parseCatalogFingerprints({ data: "nope" })).toEqual(new Map());
+    expect(parseCatalogFingerprints({ data: [{ noId: true }, 42, null] })).toEqual(new Map());
+  });
+});
+
+describe("classifyFingerprintDrift", () => {
+  it("reports nothing on the first run (no baseline to diff against)", () => {
+    const current = new Map([["a/x", "fp1"]]);
+    expect(classifyFingerprintDrift(null, current, ["a/x"])).toEqual([]);
+  });
+
+  it("flags a depended model whose fingerprint changed while still listed", () => {
+    const previous = new Map([["a/x", "fp1"]]);
+    const current = new Map([["a/x", "fp2"]]);
+    expect(classifyFingerprintDrift(previous, current, ["a/x"])).toEqual([
+      { model: "a/x", before: "fp1", after: "fp2" },
+    ]);
+  });
+
+  it("stays quiet when the fingerprint is unchanged", () => {
+    const previous = new Map([["a/x", "fp1"]]);
+    const current = new Map([["a/x", "fp1"]]);
+    expect(classifyFingerprintDrift(previous, current, ["a/x"])).toEqual([]);
+  });
+
+  it("ignores a model absent from either snapshot (that is the presence diff's job)", () => {
+    const previous = new Map([["a/x", "fp1"]]);
+    const current = new Map<string, string>(); // a/x vanished — a retirement, not a repoint
+    expect(classifyFingerprintDrift(previous, current, ["a/x"])).toEqual([]);
+  });
+
+  it("ignores fingerprint changes on models we do not depend on", () => {
+    const previous = new Map([["not/depended", "fp1"]]);
+    const current = new Map([["not/depended", "fp2"]]);
+    expect(classifyFingerprintDrift(previous, current, ["a/x"])).toEqual([]);
   });
 });
 
