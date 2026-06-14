@@ -95,9 +95,15 @@ export const EMAIL_CLASSIFY_BATCH_SIZE = intEnv("EMAIL_CLASSIFY_BATCH_SIZE", 15)
 
 // ── Scheduler ─────────────────────────────────────────────────────────
 export const SCHEDULER_CHECK_INTERVAL_MS = intEnv("SCHEDULER_CHECK_INTERVAL_MS", 60_000);
+// Email sync cadence. Dropped from 3min to 1min so a fresh email is
+// classified + (if PUSH-tier) notified within ~1 minute. The scheduler tick
+// is 60s, so 60_000 means email sync runs on essentially every tick — the
+// practical floor for the poll path. For sub-second delivery, configure Gmail
+// Pub/Sub (GMAIL_PUBSUB_TOPIC); the poll is the fallback. Env-overridable for
+// self-hosters who want to trade latency for Gmail API quota.
 export const SCHEDULER_EMAIL_SYNC_INTERVAL_MS = intEnv(
   "SCHEDULER_EMAIL_SYNC_INTERVAL_MS",
-  3 * 60 * 1000,
+  60 * 1000,
 );
 export const SCHEDULER_CALENDAR_SYNC_INTERVAL_MS = intEnv(
   "SCHEDULER_CALENDAR_SYNC_INTERVAL_MS",
