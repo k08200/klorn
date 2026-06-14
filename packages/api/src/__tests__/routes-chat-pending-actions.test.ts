@@ -87,12 +87,40 @@ vi.mock("../db.js", () => {
     }),
     findFirst: vi.fn(async () => null),
   };
+  // In-memory ActionOutbox — the approve path now routes through the
+  // transactional outbox (T6). One row per pendingActionId; updateMany is the
+  // CAS claim (QUEUED→IN_PROGRESS), update writes the terminal state.
+  let outboxRow: Record<string, unknown> | null = null;
+  const actionOutbox = {
+    create: vi.fn(async (args: { data: Record<string, unknown> }) => {
+      outboxRow = { ...args.data, id: "ob-1", attempts: 0, updatedAt: new Date() };
+      return { ...outboxRow };
+    }),
+    findUnique: vi.fn(async () => (outboxRow ? { ...outboxRow } : null)),
+    findMany: vi.fn(async () => []),
+    updateMany: vi.fn(
+      async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        if (!outboxRow) return { count: 0 };
+        if (args.where.status && outboxRow.status !== args.where.status) return { count: 0 };
+        outboxRow = { ...outboxRow, ...args.data };
+        return { count: 1 };
+      },
+    ),
+    update: vi.fn(async (args: { data: Record<string, unknown> }) => {
+      outboxRow = { ...(outboxRow ?? {}), ...args.data };
+      return { ...outboxRow };
+    }),
+  };
   const prisma = {
     pendingAction,
+    actionOutbox,
     message: { create: vi.fn(async () => ({ id: "m-new" })) },
     conversation: { findUnique: vi.fn(async () => null), update: vi.fn(async () => ({})) },
     automationConfig: { findUnique: vi.fn(async () => null), upsert: vi.fn(async () => ({})) },
     attentionItem: { updateMany: vi.fn(async () => ({ count: 0 })) },
+    // The approve route claims the PA and enqueues in one transaction; the
+    // mock runs the callback against the same prisma object (no real txn).
+    $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
   };
   return { prisma, db: prisma };
 });
@@ -247,8 +275,8 @@ describe("POST /api/chat/pending-actions/:actionId/approve — execution idempot
     await app.close();
   });
 
-  it("marks the action FAILED when the tool throws, without retrying", async () => {
-    executeToolCallSpy.mockRejectedValueOnce(new Error("gmail down"));
+  it("dead-letters a permanent tool error (500 FAILED, no retry)", async () => {
+    executeToolCallSpy.mockRejectedValueOnce(new Error("missing required field: to"));
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -258,6 +286,24 @@ describe("POST /api/chat/pending-actions/:actionId/approve — execution idempot
 
     expect(res.statusCode).toBe(500);
     expect(row.status).toBe("FAILED");
+    expect(executeToolCallSpy).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it("queues a transient tool failure for retry instead of failing (200, stays EXECUTED)", async () => {
+    // T6 behavior change: a transient blip no longer drops the action to
+    // FAILED — the row stays claimed and the worker retries it.
+    executeToolCallSpy.mockRejectedValueOnce(new Error("503 upstream unavailable"));
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/chat/pending-actions/pa-1/approve",
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true, queued: true });
+    expect(row.status).toBe("EXECUTED"); // claimed, not FAILED
     expect(executeToolCallSpy).toHaveBeenCalledTimes(1);
     await app.close();
   });

@@ -9,6 +9,7 @@
  * Runs every 60 seconds, checks all users with active automation configs.
  */
 
+import { drainActionOutbox } from "./action-outbox.js";
 import { findOpenEmailAttentionItemId } from "./attention-override.js";
 import { createDailyBriefingDelivery } from "./briefing.js";
 import {
@@ -290,6 +291,20 @@ async function runAutomations() {
   }
 
   try {
+    // Drain the action-execution outbox first: retry transient failures from
+    // the inline approve fast-path and reclaim rows orphaned by a crash.
+    // Cheap (one indexed query for due rows) and runs under the scheduler
+    // lock, so no duplicate execution across dynos. A no-op when empty.
+    drainActionOutbox()
+      .then(({ completed, retried, dead, reclaimed }) => {
+        if (completed + retried + dead + reclaimed > 0) {
+          console.log(
+            `[OUTBOX] drain: ${completed} completed, ${retried} retried, ${dead} dead, ${reclaimed} reclaimed`,
+          );
+        }
+      })
+      .catch((err) => console.warn("[OUTBOX] drain errored:", err));
+
     // Gmail watch renewal runs once per hour regardless of configs.
     // It is a no-op when GMAIL_PUBSUB_TOPIC is unset or no watches are due.
     if (Date.now() - lastWatchRenewalAt >= WATCH_RENEWAL_INTERVAL_MS) {
