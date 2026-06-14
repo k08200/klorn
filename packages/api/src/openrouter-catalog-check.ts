@@ -16,6 +16,15 @@
  * Deliberately minimal: detection only, no alias/auto-remap layer. The chain
  * already keeps the agent alive through a retirement; this just turns
  * "mystery 404s in the logs" into "named alert the same day the SKU vanished."
+ *
+ * It also covers the inverse of a retirement — a silent *re-point*, where the
+ * id keeps resolving (no 404, presence diff stays green) but OpenRouter has
+ * swapped a different model underneath it during a migration. The presence
+ * diff structurally cannot see this; the per-id fingerprint diff
+ * (created/context_length/pricing) can. Detection only here too: re-routing
+ * away from a model on a metadata change alone would swap a healthy model on
+ * an unproven signal (e.g. a pricing tweak), so this warns and leaves the
+ * routing decision to the operator / the behavioral canary.
  */
 
 import { AGENT_MODEL, JUDGE_MODEL, MODEL, VISION_MODEL } from "./openai.js";
@@ -70,6 +79,77 @@ export function parseCatalogExpirations(body: unknown): Map<string, string> {
     if (typeof id === "string" && typeof exp === "string" && exp.length > 0) {
       out.set(id, exp);
     }
+  }
+  return out;
+}
+
+/**
+ * Build a stable fingerprint from the identity-bearing fields of one catalog
+ * entry — the fields a silent in-place re-point tends to move even when the id
+ * string is reused: `created` (a different underlying model usually carries a
+ * different creation timestamp), `context_length`, and `pricing`. The display
+ * `name` is deliberately excluded: a cosmetic label edit is not a re-point and
+ * must not raise a false alarm. Missing fields collapse to null so a partial
+ * entry still produces a comparable, deterministic value.
+ */
+function fingerprintEntry(entry: Record<string, unknown>): string {
+  const pricing = entry.pricing;
+  const pricingObj =
+    pricing !== null && typeof pricing === "object" ? (pricing as Record<string, unknown>) : {};
+  return JSON.stringify({
+    created: entry.created ?? null,
+    contextLength: entry.context_length ?? null,
+    prompt: pricingObj.prompt ?? null,
+    completion: pricingObj.completion ?? null,
+  });
+}
+
+/**
+ * Extract id -> fingerprint for every catalog entry. Pairing two snapshots of
+ * this map (see classifyFingerprintDrift) surfaces "same id, different model
+ * underneath" — the silent re-point the presence diff is blind to because the
+ * id never 404s.
+ */
+export function parseCatalogFingerprints(body: unknown): Map<string, string> {
+  const out = new Map<string, string>();
+  if (body === null || typeof body !== "object") return out;
+  const data = (body as { data?: unknown }).data;
+  if (!Array.isArray(data)) return out;
+  for (const entry of data) {
+    if (entry === null || typeof entry !== "object") continue;
+    const id = (entry as { id?: unknown }).id;
+    if (typeof id !== "string") continue;
+    out.set(id, fingerprintEntry(entry as Record<string, unknown>));
+  }
+  return out;
+}
+
+/** A depended-on model whose catalog fingerprint changed between two checks. */
+export interface RepointedModel {
+  model: string;
+  before: string;
+  after: string;
+}
+
+/**
+ * Depended-on models present in BOTH snapshots whose fingerprint changed — the
+ * signature of a silent in-place re-point. Returns nothing when there is no
+ * baseline (first run) and ignores any model missing from either snapshot:
+ * appearance/disappearance is the presence diff's job (classifyCatalogDrift),
+ * not this one. Detection only — the caller warns, it never re-routes.
+ */
+export function classifyFingerprintDrift(
+  previous: ReadonlyMap<string, string> | null,
+  current: ReadonlyMap<string, string>,
+  depended: ReadonlyArray<string>,
+): RepointedModel[] {
+  if (previous === null) return [];
+  const out: RepointedModel[] = [];
+  for (const model of new Set(depended)) {
+    const before = previous.get(model);
+    const after = current.get(model);
+    if (before === undefined || after === undefined) continue;
+    if (before !== after) out.push({ model, before, after });
   }
   return out;
 }
@@ -173,9 +253,17 @@ export function classifyCatalogDrift(
  */
 let previousMissing: Set<string> | null = null;
 
-/** Test-only: reset the in-memory drift baseline. */
+/**
+ * Last run's depended-on fingerprints, kept in memory to detect re-points.
+ * Same lifecycle as previousMissing: null until the first valid catalog, only
+ * advanced on a successful fetch, scoped to depended-on ids to bound memory.
+ */
+let previousFingerprints: Map<string, string> | null = null;
+
+/** Test-only: reset the in-memory drift baselines. */
 export function __resetCatalogDriftState(): void {
   previousMissing = null;
+  previousFingerprints = null;
 }
 
 /**
@@ -203,11 +291,33 @@ export async function runOpenRouterCatalogCheck(now: Date = new Date()): Promise
     // (openrouter-catalog-cache.ts). Only ever caches a non-empty catalog.
     setCachedCatalogIds(catalogIds);
 
-    const missing = diffChainAgainstCatalog(dependedModels(), catalogIds);
+    const depended = dependedModels();
+    const missing = diffChainAgainstCatalog(depended, catalogIds);
     const { newlyMissing, recovered, unchanged } = classifyCatalogDrift(previousMissing, missing);
-    // Only advance the baseline on a valid catalog — the early returns above
-    // keep `previousMissing` intact when the fetch failed or came back empty.
+
+    // Silent re-point: an id that still resolves (so the presence diff stays
+    // green) but whose fingerprint moved — OpenRouter swapped a different model
+    // under the same name. Scoped to depended-on ids and diffed against the
+    // previous run. Computed and baselined here, adjacent to previousMissing, so
+    // both baselines advance on the same tick and can never diverge (a throw in
+    // a later captureError must not leave one ahead of the other). The alert
+    // itself fires further down, after the missing/expiring warnings.
+    const dependedFingerprints = new Map<string, string>();
+    const allFingerprints = parseCatalogFingerprints(body);
+    for (const model of depended) {
+      const fp = allFingerprints.get(model);
+      if (fp !== undefined) dependedFingerprints.set(model, fp);
+    }
+    const repointed = classifyFingerprintDrift(
+      previousFingerprints,
+      dependedFingerprints,
+      depended,
+    );
+
+    // Only advance the baselines on a valid catalog — the early returns above
+    // keep them intact when the fetch failed or came back empty.
     previousMissing = new Set(missing);
+    previousFingerprints = dependedFingerprints;
 
     if (newlyMissing.length > 0) {
       const message = `OpenRouter catalog no longer lists: ${newlyMissing.join(", ")} — retired or renamed upstream. The fallback chain will absorb it, but update the matching env (OPENROUTER_FALLBACK_CHAIN / AGENT_MODEL / JUDGE_MODEL / VISION_MODEL) to stop burning a failed call per cycle.`;
@@ -230,7 +340,7 @@ export async function runOpenRouterCatalogCheck(now: Date = new Date()): Promise
         console.log(`[CATALOG-CHECK] Still missing (already alerted): ${unchanged.join(", ")}`);
       } else {
         console.log(
-          `[CATALOG-CHECK] All ${dependedModels().length} depended-on models present in OpenRouter catalog`,
+          `[CATALOG-CHECK] All ${depended.length} depended-on models present in OpenRouter catalog`,
         );
       }
     }
@@ -238,11 +348,7 @@ export async function runOpenRouterCatalogCheck(now: Date = new Date()): Promise
     // Pre-delisting signal: a depended-on model still listed but carrying a
     // sunset date inside the warning window. This is the lead time the
     // presence diff can't give — it only fires once the id is gone.
-    const expiring = dependedModelsExpiringSoon(
-      parseCatalogExpirations(body),
-      dependedModels(),
-      now,
-    );
+    const expiring = dependedModelsExpiringSoon(parseCatalogExpirations(body), depended, now);
     if (expiring.length > 0) {
       const detail = expiring
         .map(
@@ -255,6 +361,18 @@ export async function runOpenRouterCatalogCheck(now: Date = new Date()): Promise
       captureError(new Error(message), {
         tags: { scope: "openrouter.catalog_check", signal: "expiring" },
         extra: { expiring },
+      });
+    }
+
+    // Re-point alert (detection computed and baselined above, next to the
+    // presence diff). Fires after the missing/expiring warnings.
+    if (repointed.length > 0) {
+      const detail = repointed.map((r) => r.model).join(", ");
+      const message = `OpenRouter re-pointed (renamed in place) while the id still resolves: ${detail}. No 404 fired — the SKU is still listed but its catalog fingerprint (created/context_length/pricing) changed, so you may be hitting a different model under the same name. The weekly judge canary covers JUDGE_MODEL; AGENT_MODEL/CHAT/VISION have no behavioral baseline, so verify those by hand before trusting the output.`;
+      console.warn(`[CATALOG-CHECK] ${message}`);
+      captureError(new Error(message), {
+        tags: { scope: "openrouter.catalog_check", drift: "repointed" },
+        extra: { repointed },
       });
     }
     return missing;
