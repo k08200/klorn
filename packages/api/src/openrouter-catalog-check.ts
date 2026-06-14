@@ -18,7 +18,7 @@
  * "mystery 404s in the logs" into "named alert the same day the SKU vanished."
  */
 
-import { AGENT_MODEL, MODEL } from "./openai.js";
+import { AGENT_MODEL, JUDGE_MODEL, MODEL, VISION_MODEL } from "./openai.js";
 import { OPENROUTER_FALLBACK_CHAIN } from "./openrouter-fallback-chain.js";
 import { captureError } from "./sentry.js";
 
@@ -57,14 +57,60 @@ export function diffChainAgainstCatalog(
 }
 
 /** All OpenRouter model ids this deployment depends on. */
-function dependedModels(): string[] {
+export function dependedModels(): string[] {
   const models = new Set<string>(OPENROUTER_FALLBACK_CHAIN);
-  // CHAT_MODEL / AGENT_MODEL are OpenRouter-first; only vendor-prefixed ids
+  // CHAT/AGENT/JUDGE/VISION are OpenRouter-first; only vendor-prefixed ids
   // exist in the catalog (bare "gemini-2.5-flash" is a Gemini-direct route).
-  for (const m of [MODEL, AGENT_MODEL]) {
+  // JUDGE_MODEL especially must be watched: it's the firewall's paid tier
+  // judge, and its silent retirement is the highest-consequence drift we
+  // have — the keyword fallback structurally cannot emit PUSH.
+  for (const m of [MODEL, AGENT_MODEL, JUDGE_MODEL, VISION_MODEL]) {
     if (m.includes("/")) models.add(m);
   }
   return [...models];
+}
+
+/** A change in the depended-on model set between two catalog checks. */
+export interface CatalogDrift {
+  /** Models missing now that were present (or unknown) on the previous run. */
+  newlyMissing: string[];
+  /** Models that were missing on the previous run and are present again now. */
+  recovered: string[];
+  /** Models still missing, unchanged since the previous run (noise to suppress). */
+  unchanged: string[];
+}
+
+/**
+ * Diff the current missing-models set against the previous run's. This turns a
+ * standing "X is missing" snapshot into transition events — the difference
+ * between "alert every day until someone fixes the env" (archaeology) and
+ * "alert the day the SKU vanished, and again the day it comes back" (a log
+ * line). `previous === null` means no prior run, so everything missing now is
+ * reported as newly missing.
+ */
+export function classifyCatalogDrift(
+  previous: ReadonlySet<string> | null,
+  current: ReadonlyArray<string>,
+): CatalogDrift {
+  const currentSet = new Set(current);
+  const newlyMissing = previous ? current.filter((m) => !previous.has(m)) : [...current];
+  const unchanged = previous ? current.filter((m) => previous.has(m)) : [];
+  const recovered = previous ? [...previous].filter((m) => !currentSet.has(m)) : [];
+  return { newlyMissing, recovered, unchanged };
+}
+
+/**
+ * Last run's missing set, kept in memory to detect transitions. Null until the
+ * first run with a valid catalog (a failed/empty fetch leaves it untouched so a
+ * fetch error never masquerades as "everything recovered"). In-memory only: a
+ * process restart re-emits one alert for any still-missing model, which is
+ * acceptable noise versus the cost of a persistent snapshot table.
+ */
+let previousMissing: Set<string> | null = null;
+
+/** Test-only: reset the in-memory drift baseline. */
+export function __resetCatalogDriftState(): void {
+  previousMissing = null;
 }
 
 /**
@@ -89,17 +135,35 @@ export async function runOpenRouterCatalogCheck(): Promise<string[]> {
     }
 
     const missing = diffChainAgainstCatalog(dependedModels(), catalogIds);
-    if (missing.length > 0) {
-      const message = `OpenRouter catalog no longer lists: ${missing.join(", ")} — retired or renamed upstream. The fallback chain will absorb it, but update OPENROUTER_FALLBACK_CHAIN / AGENT_MODEL to stop burning a failed call per cycle.`;
+    const { newlyMissing, recovered, unchanged } = classifyCatalogDrift(previousMissing, missing);
+    // Only advance the baseline on a valid catalog — the early returns above
+    // keep `previousMissing` intact when the fetch failed or came back empty.
+    previousMissing = new Set(missing);
+
+    if (newlyMissing.length > 0) {
+      const message = `OpenRouter catalog no longer lists: ${newlyMissing.join(", ")} — retired or renamed upstream. The fallback chain will absorb it, but update the matching env (OPENROUTER_FALLBACK_CHAIN / AGENT_MODEL / JUDGE_MODEL / VISION_MODEL) to stop burning a failed call per cycle.`;
       console.warn(`[CATALOG-CHECK] ${message}`);
       captureError(new Error(message), {
-        tags: { scope: "openrouter.catalog_check" },
-        extra: { missing },
+        tags: { scope: "openrouter.catalog_check", drift: "retired" },
+        extra: { newlyMissing, stillMissing: unchanged },
       });
-    } else {
-      console.log(
-        `[CATALOG-CHECK] All ${dependedModels().length} depended-on models present in OpenRouter catalog`,
-      );
+    }
+    if (recovered.length > 0) {
+      console.log(`[CATALOG-CHECK] Back in catalog: ${recovered.join(", ")} — drift resolved.`);
+      captureError(new Error(`OpenRouter catalog lists again: ${recovered.join(", ")}`), {
+        tags: { scope: "openrouter.catalog_check", drift: "recovered" },
+        extra: { recovered },
+      });
+    }
+    if (newlyMissing.length === 0 && recovered.length === 0) {
+      if (unchanged.length > 0) {
+        // Standing breakage already alerted on its retirement day — stay quiet.
+        console.log(`[CATALOG-CHECK] Still missing (already alerted): ${unchanged.join(", ")}`);
+      } else {
+        console.log(
+          `[CATALOG-CHECK] All ${dependedModels().length} depended-on models present in OpenRouter catalog`,
+        );
+      }
     }
     return missing;
   } catch (err) {
