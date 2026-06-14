@@ -24,6 +24,14 @@ import { captureError } from "./sentry.js";
 
 const CATALOG_URL = "https://openrouter.ai/api/v1/models";
 const FETCH_TIMEOUT_MS = 15_000;
+const MS_PER_DAY = 86_400_000;
+/**
+ * How far ahead of a model's `expiration_date` to start warning. The diff
+ * (disappeared) fires at delisting, which can lag the actual retirement;
+ * the catalog also publishes a sunset date *while the model is still listed
+ * and served*. This window turns that pre-delisting signal into lead time.
+ */
+const EXPIRY_WARN_WINDOW_DAYS = 14;
 
 /** Extract the set of model ids from the /api/v1/models response body. */
 export function parseCatalogIds(body: unknown): Set<string> {
@@ -41,6 +49,62 @@ export function parseCatalogIds(body: unknown): Set<string> {
     }
   }
   return ids;
+}
+
+/**
+ * Extract id -> `expiration_date` for every catalog entry that carries a
+ * non-null sunset date. OpenRouter publishes this on models scheduled for
+ * retirement while they are still listed and served, so it is an earlier
+ * signal than the presence diff (which only fires once the id is delisted).
+ */
+export function parseCatalogExpirations(body: unknown): Map<string, string> {
+  const out = new Map<string, string>();
+  if (body === null || typeof body !== "object") return out;
+  const data = (body as { data?: unknown }).data;
+  if (!Array.isArray(data)) return out;
+  for (const entry of data) {
+    if (entry === null || typeof entry !== "object") continue;
+    const id = (entry as { id?: unknown }).id;
+    const exp = (entry as { expiration_date?: unknown }).expiration_date;
+    if (typeof id === "string" && typeof exp === "string" && exp.length > 0) {
+      out.set(id, exp);
+    }
+  }
+  return out;
+}
+
+/** A depended-on model with a published sunset date. */
+export interface ExpiringModel {
+  model: string;
+  expirationDate: string;
+  daysLeft: number;
+}
+
+/**
+ * Depended-on models whose published `expiration_date` falls within
+ * `windowDays` of `now` (including already-past dates — expired-but-still-
+ * listed is the loudest case). Entries with an unparseable date are skipped,
+ * not guessed. Sorted soonest-first.
+ */
+export function dependedModelsExpiringSoon(
+  expirations: ReadonlyMap<string, string>,
+  depended: ReadonlyArray<string>,
+  now: Date,
+  windowDays: number = EXPIRY_WARN_WINDOW_DAYS,
+): ExpiringModel[] {
+  const nowMs = now.getTime();
+  const out: ExpiringModel[] = [];
+  for (const model of new Set(depended)) {
+    const raw = expirations.get(model);
+    if (raw === undefined) continue;
+    const expMs = new Date(raw).getTime();
+    if (Number.isNaN(expMs)) continue;
+    const daysLeft = Math.floor((expMs - nowMs) / MS_PER_DAY);
+    if (daysLeft <= windowDays) {
+      out.push({ model, expirationDate: raw, daysLeft });
+    }
+  }
+  return out.sort((a, b) => a.daysLeft - b.daysLeft);
 }
 
 /**
@@ -118,7 +182,7 @@ export function __resetCatalogDriftState(): void {
  * Never throws — a failed check is logged and retried on the next scheduled
  * run. Returns the missing models for observability/testing.
  */
-export async function runOpenRouterCatalogCheck(): Promise<string[]> {
+export async function runOpenRouterCatalogCheck(now: Date = new Date()): Promise<string[]> {
   try {
     const res = await fetch(CATALOG_URL, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -128,7 +192,8 @@ export async function runOpenRouterCatalogCheck(): Promise<string[]> {
       console.warn(`[CATALOG-CHECK] OpenRouter /models returned ${res.status}; skipping check`);
       return [];
     }
-    const catalogIds = parseCatalogIds(await res.json());
+    const body = await res.json();
+    const catalogIds = parseCatalogIds(body);
     if (catalogIds.size === 0) {
       console.warn("[CATALOG-CHECK] OpenRouter catalog empty/unparseable; skipping check");
       return [];
@@ -164,6 +229,29 @@ export async function runOpenRouterCatalogCheck(): Promise<string[]> {
           `[CATALOG-CHECK] All ${dependedModels().length} depended-on models present in OpenRouter catalog`,
         );
       }
+    }
+
+    // Pre-delisting signal: a depended-on model still listed but carrying a
+    // sunset date inside the warning window. This is the lead time the
+    // presence diff can't give — it only fires once the id is gone.
+    const expiring = dependedModelsExpiringSoon(
+      parseCatalogExpirations(body),
+      dependedModels(),
+      now,
+    );
+    if (expiring.length > 0) {
+      const detail = expiring
+        .map(
+          (e) =>
+            `${e.model} (${e.daysLeft <= 0 ? "expired" : `${e.daysLeft}d`}, ${e.expirationDate})`,
+        )
+        .join(", ");
+      const message = `OpenRouter has published a sunset date for: ${detail}. Still listed and served for now — migrate the matching env (AGENT_MODEL / JUDGE_MODEL / VISION_MODEL / OPENROUTER_FALLBACK_CHAIN) before the date, not after the 404.`;
+      console.warn(`[CATALOG-CHECK] ${message}`);
+      captureError(new Error(message), {
+        tags: { scope: "openrouter.catalog_check", signal: "expiring" },
+        extra: { expiring },
+      });
     }
     return missing;
   } catch (err) {

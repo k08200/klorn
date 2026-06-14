@@ -3,7 +3,9 @@ import { JUDGE_MODEL, VISION_MODEL } from "../openai.js";
 import {
   classifyCatalogDrift,
   dependedModels,
+  dependedModelsExpiringSoon,
   diffChainAgainstCatalog,
+  parseCatalogExpirations,
   parseCatalogIds,
 } from "../openrouter-catalog-check.js";
 
@@ -39,6 +41,73 @@ describe("dependedModels", () => {
   it("watches the vision model so a multimodal SKU retirement is caught", () => {
     expect(VISION_MODEL).toContain("/");
     expect(dependedModels()).toContain(VISION_MODEL);
+  });
+});
+
+describe("parseCatalogExpirations", () => {
+  it("collects id -> expiration_date only for entries with a non-null sunset date", () => {
+    const body = {
+      data: [
+        { id: "z-ai/glm-4.5", expiration_date: "2026-06-19" },
+        { id: "google/gemini-2.5-flash", expiration_date: null },
+        { id: "openai/gpt-5.2-chat", expiration_date: "2026-08-10" },
+        { id: "no-date/model" },
+      ],
+    };
+    expect(parseCatalogExpirations(body)).toEqual(
+      new Map([
+        ["z-ai/glm-4.5", "2026-06-19"],
+        ["openai/gpt-5.2-chat", "2026-08-10"],
+      ]),
+    );
+  });
+
+  it("returns an empty map for malformed bodies instead of throwing", () => {
+    expect(parseCatalogExpirations(null)).toEqual(new Map());
+    expect(parseCatalogExpirations({ data: "nope" })).toEqual(new Map());
+    expect(parseCatalogExpirations({ data: [{ id: 42, expiration_date: "x" }] })).toEqual(
+      new Map(),
+    );
+  });
+});
+
+describe("dependedModelsExpiringSoon", () => {
+  const now = new Date("2026-06-14T00:00:00Z");
+
+  it("flags a depended model whose sunset date is inside the window", () => {
+    const expirations = new Map([["z-ai/glm-4.5", "2026-06-19"]]);
+    expect(dependedModelsExpiringSoon(expirations, ["z-ai/glm-4.5"], now, 14)).toEqual([
+      { model: "z-ai/glm-4.5", expirationDate: "2026-06-19", daysLeft: 5 },
+    ]);
+  });
+
+  it("ignores a sunset date beyond the window", () => {
+    const expirations = new Map([["openai/gpt-5.2-chat", "2026-08-10"]]);
+    expect(dependedModelsExpiringSoon(expirations, ["openai/gpt-5.2-chat"], now, 14)).toEqual([]);
+  });
+
+  it("includes an already-expired-but-still-listed model (negative daysLeft)", () => {
+    const expirations = new Map([["gone/soon", "2026-06-10"]]);
+    expect(dependedModelsExpiringSoon(expirations, ["gone/soon"], now, 14)).toEqual([
+      { model: "gone/soon", expirationDate: "2026-06-10", daysLeft: -4 },
+    ]);
+  });
+
+  it("ignores models we don't depend on, and skips unparseable dates", () => {
+    const expirations = new Map([
+      ["not/depended", "2026-06-15"],
+      ["bad/date", "not-a-date"],
+    ]);
+    expect(dependedModelsExpiringSoon(expirations, ["bad/date"], now, 14)).toEqual([]);
+  });
+
+  it("sorts soonest-first", () => {
+    const expirations = new Map([
+      ["a/x", "2026-06-20"],
+      ["b/y", "2026-06-16"],
+    ]);
+    const result = dependedModelsExpiringSoon(expirations, ["a/x", "b/y"], now, 14);
+    expect(result.map((r) => r.model)).toEqual(["b/y", "a/x"]);
   });
 });
 
