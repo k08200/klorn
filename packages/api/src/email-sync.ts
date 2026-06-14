@@ -23,7 +23,7 @@ import {
 import { getAuthedClient, isGoogleAuthError, markGoogleTokenForReconnect } from "./gmail.js";
 import { buildJudgeContext } from "./judge-context.js";
 import { createCompletion, MODEL, openai } from "./openai.js";
-import { judgeEmail } from "./poc-judge.js";
+import { judgeEmail, type PocTier } from "./poc-judge.js";
 import { captureError } from "./sentry.js";
 import { wrapUntrusted } from "./untrusted.js";
 
@@ -359,42 +359,24 @@ async function persistGmailEmail(
   }
 
   // POC firewall: classify the email into SILENT/QUEUE/PUSH/AUTO and mirror
-  // it to an AttentionItem so the firewall route surfaces it next to other
-  // tier-grouped items. Fire-and-forget — sync should never block on the
-  // LLM call, and an upsert failure just leaves the email out of the queue
-  // until the next sync (or a manual override) reclassifies it.
-  // buildJudgeContext mines past manual overrides (few-shot + sender
-  // short-circuit) and never throws — worst case is an empty context.
-  buildJudgeContext(userId, { from: email.from, excludeEmailId: createdEmail.id })
-    .then((judgeContext) =>
-      judgeEmail(
-        {
-          from: email.from,
-          subject: email.subject,
-          snippet: email.snippet,
-          labels: email.labels,
-        },
-        userId,
-        judgeContext,
-      ),
-    )
-    .then(async (judgement) => {
-      await upsertAttentionForEmailJudgement(
-        {
-          id: createdEmail.id,
-          userId,
-          from: email.from,
-          subject: email.subject,
-          snippet: email.snippet,
-          labels: email.labels,
-          receivedAt: email.receivedAt,
-        },
-        judgement,
-      );
+  // it to an AttentionItem so the firewall route surfaces it. Fire-and-forget
+  // so sync never blocks on the LLM. If this rejects (or the process dies
+  // mid-flight) the email is persisted but has no AttentionItem — the
+  // backfill sweep (backfillEmailAttentionItems, run by the scheduler) is the
+  // safety net that re-judges any email left without one.
+  judgeAndMirrorEmail(userId, {
+    id: createdEmail.id,
+    from: email.from,
+    subject: email.subject,
+    snippet: email.snippet,
+    labels: email.labels,
+    receivedAt: email.receivedAt,
+  })
+    .then((tier) => {
       // Actionable tiers (PUSH/QUEUE) trigger an immediate agent run so the
-      // user sees a draft proposal in the decision queue without waiting for
-      // the 5-minute cron. Debounced inside the trigger to bound LLM cost.
-      scheduleAgentForActionableEmail(userId, judgement.tier);
+      // user sees a draft proposal without waiting for the cron. Debounced
+      // inside the trigger to bound LLM cost.
+      scheduleAgentForActionableEmail(userId, tier);
     })
     .catch((err) => {
       captureError(err, {
@@ -404,6 +386,98 @@ async function persistGmailEmail(
     });
 
   return { emailId: createdEmail.id, isNew: true };
+}
+
+interface JudgeableEmailRow {
+  id: string;
+  from: string;
+  subject: string;
+  snippet: string | null;
+  labels: string[];
+  receivedAt: Date;
+}
+
+/**
+ * Classify one stored email into a tier and mirror it to an AttentionItem.
+ * Shared by the inline sync path and the backfill sweep. buildJudgeContext
+ * never throws and judgeEmail falls back to keyword features when the LLM is
+ * down, so the only way this produces no AttentionItem is the upsert itself
+ * throwing — in which case the next backfill pass retries it.
+ */
+export async function judgeAndMirrorEmail(
+  userId: string,
+  email: JudgeableEmailRow,
+): Promise<PocTier> {
+  const judgeContext = await buildJudgeContext(userId, {
+    from: email.from,
+    excludeEmailId: email.id,
+  });
+  const judgement = await judgeEmail(
+    {
+      from: email.from,
+      subject: email.subject,
+      snippet: email.snippet,
+      labels: email.labels,
+    },
+    userId,
+    judgeContext,
+  );
+  await upsertAttentionForEmailJudgement({ userId, ...email }, judgement);
+  return judgement.tier;
+}
+
+const BACKFILL_LOOKBACK_DAYS = 14;
+const BACKFILL_LOOKBACK_MS = BACKFILL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+const BACKFILL_SCAN_LIMIT = 200;
+const BACKFILL_BATCH = 10;
+
+/**
+ * Re-judge recently-synced emails that have no AttentionItem.
+ *
+ * The inline judge (above) is fire-and-forget: a transient LLM/DB failure, or
+ * a dyno killed mid-flight (free-tier sleep), strands the email — it shows in
+ * the mail view but never appears in the firewall tiers, and can't even be
+ * re-tiered (no row → no override target). This sweep is the durable safety
+ * net. Bounded per call (BACKFILL_BATCH) so a large backlog (e.g. mail that
+ * arrived while the instance slept) drains over a few scheduler ticks instead
+ * of bursting the paid judge model. A no-op once caught up. Returns the count
+ * re-judged.
+ */
+export async function backfillEmailAttentionItems(userId: string): Promise<number> {
+  const cutoff = new Date(Date.now() - BACKFILL_LOOKBACK_MS);
+  const recent = (await prisma.emailMessage.findMany({
+    where: { userId, receivedAt: { gte: cutoff } },
+    select: { id: true, from: true, subject: true, snippet: true, labels: true, receivedAt: true },
+    orderBy: { receivedAt: "desc" },
+    take: BACKFILL_SCAN_LIMIT,
+  })) as JudgeableEmailRow[];
+  if (recent.length === 0) return 0;
+
+  const judged = (await prisma.attentionItem.findMany({
+    where: { userId, source: "EMAIL", sourceId: { in: recent.map((e) => e.id) } },
+    select: { sourceId: true },
+  })) as Array<{ sourceId: string }>;
+  const judgedIds = new Set(judged.map((a) => a.sourceId));
+
+  // Oldest-first within the batch so a backlog drains in arrival order.
+  const unjudged = recent
+    .filter((e) => !judgedIds.has(e.id))
+    .reverse()
+    .slice(0, BACKFILL_BATCH);
+
+  let done = 0;
+  for (const email of unjudged) {
+    try {
+      await judgeAndMirrorEmail(userId, email);
+      done++;
+    } catch (err) {
+      captureError(err, {
+        tags: { scope: "email-backfill" },
+        extra: { userId, emailId: email.id },
+      });
+    }
+  }
+  return done;
 }
 
 export async function syncEmailByGmailId(
