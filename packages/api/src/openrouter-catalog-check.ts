@@ -308,7 +308,11 @@ export async function runOpenRouterCatalogCheck(now: Date = new Date()): Promise
       const fp = allFingerprints.get(model);
       if (fp !== undefined) dependedFingerprints.set(model, fp);
     }
-    const repointed = classifyFingerprintDrift(previousFingerprints, dependedFingerprints, depended);
+    const repointed = classifyFingerprintDrift(
+      previousFingerprints,
+      dependedFingerprints,
+      depended,
+    );
 
     // Only advance the baselines on a valid catalog — the early returns above
     // keep them intact when the fetch failed or came back empty.

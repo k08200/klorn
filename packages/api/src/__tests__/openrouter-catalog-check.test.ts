@@ -178,26 +178,49 @@ describe("parseCatalogFingerprints", () => {
 
   it("ignores a cosmetic display-name change (no false repoint)", () => {
     const before = parseCatalogFingerprints({
-      data: [{ id: "a/x", name: "Model X", created: 1, context_length: 8000, pricing: { prompt: "1" } }],
+      data: [
+        { id: "a/x", name: "Model X", created: 1, context_length: 8000, pricing: { prompt: "1" } },
+      ],
     });
     const renamedLabel = parseCatalogFingerprints({
-      data: [{ id: "a/x", name: "Model X (new label)", created: 1, context_length: 8000, pricing: { prompt: "1" } }],
+      data: [
+        {
+          id: "a/x",
+          name: "Model X (new label)",
+          created: 1,
+          context_length: 8000,
+          pricing: { prompt: "1" },
+        },
+      ],
     });
     expect(renamedLabel.get("a/x")).toEqual(before.get("a/x"));
   });
 
   it("changes the fingerprint when created/context_length/pricing move (a re-point)", () => {
     const before = parseCatalogFingerprints({
-      data: [{ id: "a/x", created: 1, context_length: 8000, pricing: { prompt: "1", completion: "2" } }],
+      data: [
+        { id: "a/x", created: 1, context_length: 8000, pricing: { prompt: "1", completion: "2" } },
+      ],
     });
     const repointedCreated = parseCatalogFingerprints({
-      data: [{ id: "a/x", created: 999, context_length: 8000, pricing: { prompt: "1", completion: "2" } }],
+      data: [
+        {
+          id: "a/x",
+          created: 999,
+          context_length: 8000,
+          pricing: { prompt: "1", completion: "2" },
+        },
+      ],
     });
     const repointedContext = parseCatalogFingerprints({
-      data: [{ id: "a/x", created: 1, context_length: 32000, pricing: { prompt: "1", completion: "2" } }],
+      data: [
+        { id: "a/x", created: 1, context_length: 32000, pricing: { prompt: "1", completion: "2" } },
+      ],
     });
     const repointedPricing = parseCatalogFingerprints({
-      data: [{ id: "a/x", created: 1, context_length: 8000, pricing: { prompt: "5", completion: "2" } }],
+      data: [
+        { id: "a/x", created: 1, context_length: 8000, pricing: { prompt: "5", completion: "2" } },
+      ],
     });
     expect(repointedCreated.get("a/x")).not.toEqual(before.get("a/x"));
     expect(repointedContext.get("a/x")).not.toEqual(before.get("a/x"));
