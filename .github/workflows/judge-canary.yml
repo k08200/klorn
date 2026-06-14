@@ -1,0 +1,91 @@
+name: Judge Behavior Canary
+
+# Silent model-swap detector for the 4-tier judge.
+#
+# The PR-gated eval (eval.yml) catches accuracy regressions caused by OUR
+# code — it only runs when poc-judge.ts / tiers.ts / the eval set change.
+# It cannot catch a *silent in-place swap*: the provider keeps the same SKU
+# id (JUDGE_MODEL, openai.ts) but changes the model's behavior underneath.
+# No code changes, so no PR, so the gate never re-runs, and accuracy quietly
+# erodes until a user notices a missed PUSH. The catalog diff (daily,
+# openrouter-catalog-check.ts) can't see this either — the id is still
+# listed, metadata still fresh.
+#
+# The only thing that catches "same name, different model" is running
+# behavior. This workflow does exactly that on a schedule: it pushes the
+# committed 50-email golden set through the REAL live JUDGE_MODEL once a
+# week and fails when any floor breaks (overall ≥80%, PUSH recall ≥90%,
+# SILENT precision ≥90% — see eval-floors.ts). The floor IS the behavioral
+# baseline; the locked ground truth sits at the floor, so any genuine drop
+# trips it.
+#
+# A red run here with no corresponding code change means the world moved,
+# not us — JUDGE_MODEL drifted upstream. GitHub emails the repo admins on a
+# failed scheduled run; that is the alert channel. Remediation: pin
+# JUDGE_MODEL to a known-good snapshot id, or move it to a stabler model.
+
+on:
+  # Manual trigger so the canary can be fired on demand (e.g. right after a
+  # suspected upstream change) without waiting for the weekly slot.
+  workflow_dispatch:
+  schedule:
+    # Mondays 08:00 UTC — offset from security.yml (09:00) and dogfood
+    # (00:03). Weekly is the right cadence: a behavioral swap is far rarer
+    # than a hard retirement (covered daily by the catalog check), and each
+    # run spends ~50 paid JUDGE_MODEL calls.
+    - cron: "0 8 * * 1"
+
+concurrency:
+  group: judge-canary-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  canary:
+    name: Live JUDGE_MODEL accuracy (overall ≥80%, PUSH recall ≥90%, SILENT precision ≥90%)
+    runs-on: ubuntu-latest
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # poc-accuracy never queries the DB, but the Prisma client is
+      # constructed at import time and needs a syntactically valid URL.
+      DATABASE_URL: "postgresql://eval:eval@localhost:5432/eval"
+    steps:
+      - name: Check for provider key
+        id: key
+        run: |
+          if [ -n "$OPENROUTER_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No provider key in this context — the behavior canary cannot run. Set OPENROUTER_API_KEY or GEMINI_API_KEY so silent model drift can be detected."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.key.outputs.present == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.present == 'true'
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+        if: steps.key.outputs.present == 'true'
+
+      - name: Install dependencies
+        if: steps.key.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma types
+        if: steps.key.outputs.present == 'true'
+        run: cd packages/api && npx prisma generate
+
+      - name: Run live judge accuracy canary
+        if: steps.key.outputs.present == 'true'
+        # Same gate as eval.yml, but against the LIVE model on a timer rather
+        # than gated on a code diff. poc-accuracy exits 2 below any floor.
+        run: cd packages/api && npx tsx scripts/poc-accuracy.ts --in=eval/judge-eval-set.json --concurrency=2 --delay=500
+
+      - name: Explain a scheduled failure
+        if: failure() && github.event_name == 'schedule'
+        run: |
+          echo "::error::Judge canary failed on a scheduled run with no code change. This is the silent-swap signal: JUDGE_MODEL (openai.ts) likely drifted upstream — same SKU id, changed behavior. Pin it to a known-good snapshot id or move to a stabler model. See .github/workflows/judge-canary.yml header."
