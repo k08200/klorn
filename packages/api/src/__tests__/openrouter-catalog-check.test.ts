@@ -65,7 +65,9 @@ describe("parseCatalogExpirations", () => {
   it("returns an empty map for malformed bodies instead of throwing", () => {
     expect(parseCatalogExpirations(null)).toEqual(new Map());
     expect(parseCatalogExpirations({ data: "nope" })).toEqual(new Map());
-    expect(parseCatalogExpirations({ data: [{ id: 42, expiration_date: "x" }] })).toEqual(new Map());
+    expect(parseCatalogExpirations({ data: [{ id: 42, expiration_date: "x" }] })).toEqual(
+      new Map(),
+    );
   });
 });
 

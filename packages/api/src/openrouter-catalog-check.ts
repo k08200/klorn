@@ -234,10 +234,17 @@ export async function runOpenRouterCatalogCheck(now: Date = new Date()): Promise
     // Pre-delisting signal: a depended-on model still listed but carrying a
     // sunset date inside the warning window. This is the lead time the
     // presence diff can't give — it only fires once the id is gone.
-    const expiring = dependedModelsExpiringSoon(parseCatalogExpirations(body), dependedModels(), now);
+    const expiring = dependedModelsExpiringSoon(
+      parseCatalogExpirations(body),
+      dependedModels(),
+      now,
+    );
     if (expiring.length > 0) {
       const detail = expiring
-        .map((e) => `${e.model} (${e.daysLeft <= 0 ? "expired" : `${e.daysLeft}d`}, ${e.expirationDate})`)
+        .map(
+          (e) =>
+            `${e.model} (${e.daysLeft <= 0 ? "expired" : `${e.daysLeft}d`}, ${e.expirationDate})`,
+        )
         .join(", ");
       const message = `OpenRouter has published a sunset date for: ${detail}. Still listed and served for now — migrate the matching env (AGENT_MODEL / JUDGE_MODEL / VISION_MODEL / OPENROUTER_FALLBACK_CHAIN) before the date, not after the 404.`;
       console.warn(`[CATALOG-CHECK] ${message}`);
