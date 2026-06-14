@@ -19,6 +19,7 @@
  */
 
 import { AGENT_MODEL, JUDGE_MODEL, MODEL, VISION_MODEL } from "./openai.js";
+import { setCachedCatalogIds } from "./openrouter-catalog-cache.js";
 import { OPENROUTER_FALLBACK_CHAIN } from "./openrouter-fallback-chain.js";
 import { captureError } from "./sentry.js";
 
@@ -198,6 +199,9 @@ export async function runOpenRouterCatalogCheck(now: Date = new Date()): Promise
       console.warn("[CATALOG-CHECK] OpenRouter catalog empty/unparseable; skipping check");
       return [];
     }
+    // Retain the snapshot so the dispatch path can pre-flight against it
+    // (openrouter-catalog-cache.ts). Only ever caches a non-empty catalog.
+    setCachedCatalogIds(catalogIds);
 
     const missing = diffChainAgainstCatalog(dependedModels(), catalogIds);
     const { newlyMissing, recovered, unchanged } = classifyCatalogDrift(previousMissing, missing);

@@ -16,6 +16,7 @@ import {
   markCreditExhausted,
   markKeyLimited,
 } from "./model-fallback.js";
+import { isModelKnownAbsent } from "./openrouter-catalog-cache.js";
 import { OPENROUTER_FALLBACK_CHAIN, walkFallbackChain } from "./openrouter-fallback-chain.js";
 import {
   getProvider,
@@ -287,6 +288,21 @@ export async function createCompletion(
       i === 0 && provider.name === "openrouter"
         ? params.model
         : provider.resolveModel(params.model);
+
+    // Pre-flight lease check: if the last good catalog snapshot already shows
+    // this OpenRouter model is gone, skip the doomed dispatch — it would only
+    // eat a 404 — and walk the fallback chain now. Fail-open: a cold/empty
+    // cache means "unknown", so we dispatch normally and let the reactive
+    // isModelUnavailableError branch below handle it. This is the same
+    // recovery, just one wasted round-trip earlier, for the whole window
+    // between a retirement and the env being updated.
+    if (provider.name === "openrouter" && isModelKnownAbsent(model)) {
+      const result = await walkFallbackChain(OPENROUTER_FALLBACK_CHAIN, model, (m) =>
+        call(provider, m),
+      );
+      if (result !== null) return result;
+      continue;
+    }
 
     try {
       return await call(provider, model);
