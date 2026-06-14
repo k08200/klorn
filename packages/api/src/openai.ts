@@ -48,6 +48,12 @@ export const AGENT_MODEL = process.env.AGENT_MODEL || MODEL;
 // month at dogfood volume on a paid model. Self-hosters without paid
 // credit: set JUDGE_MODEL to a :free or local model (see .env.example).
 export const JUDGE_MODEL = process.env.JUDGE_MODEL || "google/gemini-2.5-flash";
+// Reply-draft model. Defaults to the same reliable (paid) model as the judge
+// rather than the :free CHAT_MODEL: "Draft reply" is a user-initiated,
+// quality-sensitive action, and a :free daily-quota lockout turned it into a
+// flat "Could not draft a reply" in prod. Env-overridable; self-hosters
+// without paid credit can point it at a :free or local model.
+export const DRAFT_MODEL = process.env.DRAFT_MODEL || JUDGE_MODEL;
 // Vision requires a multimodal model — Gemma (the chat default) is text-only,
 // so we keep VISION_MODEL on its own track. Default ends in `:free` so a
 // deploy that forgets to set the env doesn't silently route to OpenRouter's

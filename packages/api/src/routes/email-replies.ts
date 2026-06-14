@@ -14,7 +14,8 @@ import { buildAttachmentCandidateProfile, listEmailAttachments } from "../email-
 import { updateCandidateIntake } from "../email-candidate-intake.js";
 import { createEmailDraft, type GmailDraftAttachment, getAuthedClient } from "../gmail.js";
 import { getUserLlmCredentials } from "../llm-credentials.js";
-import { createCompletion, MODEL } from "../openai.js";
+import { createCompletion, DRAFT_MODEL } from "../openai.js";
+import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { buildVoicePromptHint } from "../voice-profile-extractor.js";
 import { parseJsonArray, safeAttachmentFilename } from "./email.js";
@@ -118,7 +119,7 @@ Evidence files: ${
 
   const response = await createCompletion(
     {
-      model: MODEL,
+      model: DRAFT_MODEL,
       temperature: 0.25,
       messages: [
         {
@@ -177,16 +178,32 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       const actionItems = parseJsonArray(dbEmail.actionItems);
       const attachments = await listEmailAttachments([dbEmail.id]);
       const candidateProfile = buildAttachmentCandidateProfile(attachments);
-      const body = await generateReplyDraft({
-        userId: uid,
-        from: dbEmail.from,
-        subject: dbEmail.subject,
-        body: dbEmail.body,
-        summary: dbEmail.summary,
-        actionItems,
-        candidateProfile,
-        intent,
-      });
+
+      // The draft is one LLM call. Without this catch a provider outage / quota
+      // lockout surfaced as a bare 500 and a generic "Could not draft a reply"
+      // with nothing in the logs — the failure was invisible. Capture the real
+      // cause and return a 503 the client can show as "temporarily unavailable".
+      let body: string;
+      try {
+        body = await generateReplyDraft({
+          userId: uid,
+          from: dbEmail.from,
+          subject: dbEmail.subject,
+          body: dbEmail.body,
+          summary: dbEmail.summary,
+          actionItems,
+          candidateProfile,
+          intent,
+        });
+      } catch (err) {
+        captureError(err, {
+          tags: { scope: "reply-draft" },
+          extra: { userId: uid, emailId: dbEmail.id, model: DRAFT_MODEL },
+        });
+        return reply
+          .code(503)
+          .send({ error: "Reply drafting is temporarily unavailable. Please try again shortly." });
+      }
 
       return {
         to: extractReplyAddress(dbEmail.from),
