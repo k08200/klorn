@@ -10,6 +10,7 @@
  */
 
 import type { FastifyInstance } from "fastify";
+import { claimAndRunOutboxRow, enqueueAction, type OutboxRow } from "../action-outbox.js";
 import { resolveActionTarget } from "../action-target.js";
 import {
   type ActionReceipt,
@@ -21,8 +22,6 @@ import { upsertAttentionForPendingAction } from "../attention-mirror.js";
 import { getUserId } from "../auth.js";
 import { db, prisma } from "../db.js";
 import { recipientFromToolArgs, recordFeedback } from "../feedback.js";
-import { executeToolCall } from "../tool-executor.js";
-import { pushNotification } from "../websocket.js";
 
 /**
  * Mint an ActionReceipt for the about-to-execute floor action. The receipt
@@ -216,131 +215,105 @@ export async function chatRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: `Action already ${action.status.toLowerCase()}` });
       }
 
-      // Atomic status claim — prevents race condition with concurrent approve/reject
-      // Uses updateMany with status condition so only one request can claim
-      const claimed = await db.pendingAction.updateMany({
-        where: { id: actionId, status: "PENDING" },
-        data: { status: "EXECUTED", updatedAt: new Date() },
+      // toolArgs is JSONB post-#332 (already parsed), but legacy rows can
+      // still be JSON strings.
+      const toolArgs =
+        typeof action.toolArgs === "string" ? JSON.parse(action.toolArgs) : (action.toolArgs ?? {});
+      // Floor: mint the receipt from the bytes the user just approved. It is
+      // persisted on both the PendingAction and the outbox row so a replay
+      // (worker retry) verifies the same payloadHash — the floor survives
+      // deferral. NULL for non-floor actions.
+      const receipt = mintReceiptForToolArgs({
+        toolName: action.toolName,
+        toolArgs,
+        approvedBy: userId,
+        inputHash: "",
       });
-      if (claimed.count === 0) {
-        return reply.code(409).send({ error: "Action already processed by another request" });
-      }
-      await upsertAttentionForPendingAction({ ...action, status: "EXECUTED" });
 
-      // Execute the tool — if it fails, rollback to FAILED
-      try {
-        // toolArgs is JSONB post-#332 (already parsed), but legacy
-        // rows can still be JSON strings.
-        const toolArgs =
-          typeof action.toolArgs === "string"
-            ? JSON.parse(action.toolArgs)
-            : (action.toolArgs ?? {});
-        // Floor: mint and persist the receipt before we hand off to the
-        // tool executor. Persisting first means even if the executor
-        // crashes after sending, the audit row exists.
-        const receipt = mintReceiptForToolArgs({
+      // Transactional outbox: claim the PendingAction AND write the execution
+      // intent in ONE transaction, so "user approved" and "this must run"
+      // commit atomically. A crash after this point can't drop the action —
+      // the worker picks the QUEUED row up. The CAS (PENDING→EXECUTED) still
+      // prevents concurrent double-approve.
+      const claimed = await prisma.$transaction(async (tx) => {
+        const claim = await (
+          tx.pendingAction as unknown as {
+            updateMany: (a: unknown) => Promise<{ count: number }>;
+          }
+        ).updateMany({
+          where: { id: actionId, status: "PENDING" },
+          data: { status: "EXECUTED", updatedAt: new Date() },
+        });
+        if (claim.count === 0) return false;
+        await enqueueAction(tx as unknown as Parameters<typeof enqueueAction>[0], {
+          pendingActionId: actionId,
+          userId,
+          conversationId: action.conversationId,
           toolName: action.toolName,
           toolArgs,
-          approvedBy: userId,
-          inputHash: "",
+          actionReceipt: receipt,
         });
         if (receipt) {
-          await db.pendingAction.update({
+          await (
+            tx.pendingAction as unknown as { update: (a: unknown) => Promise<unknown> }
+          ).update({
             where: { id: actionId },
             data: { actionReceipt: receipt as unknown as object },
           });
         }
-        const toolResult = await executeToolCall(userId, action.toolName, toolArgs, receipt);
-
-        await db.pendingAction.update({
-          where: { id: actionId },
-          data: { result: toolResult },
-        });
-
-        // Add a follow-up message in the conversation
-        await db.message.create({
-          data: {
-            conversationId: action.conversationId,
-            role: "ASSISTANT",
-            content: `${action.toolName.replace(/_/g, " ")} completed.`,
-            metadata: { source: "agent", actionResult: true },
-          },
-        });
-
-        // Push notification about execution
-        pushNotification(userId, {
-          id: "action-executed",
-          type: "system",
-          title: "conversations-updated",
-          message: "",
-          createdAt: new Date().toISOString(),
-        });
-
-        // Learn from approval for pattern detection
-        import("../pattern-learner.js")
-          .then(({ learnFromApproval }) => learnFromApproval(userId, action.toolName, toolArgs))
-          .catch(() => {});
-
-        // Append to the structured feedback ledger — Step 8.1 substrate.
-        await recordFeedback({
-          userId,
-          source: "PENDING_ACTION",
-          sourceId: actionId,
-          signal: "APPROVED",
-          toolName: action.toolName,
-          recipient: recipientFromToolArgs(action.toolArgs),
-          threadId: action.conversationId,
-        });
-
-        // Auto-allow this tool type for future actions if requested
-        const { autoAllow } = (request.body as { autoAllow?: boolean }) || {};
-        if (autoAllow && action.toolName) {
-          const config = await prisma.automationConfig.findUnique({
-            where: { userId },
-          });
-          const existing: string[] =
-            (config as unknown as { alwaysAllowedTools?: string[] })?.alwaysAllowedTools || [];
-          if (!existing.includes(action.toolName)) {
-            await prisma.automationConfig.upsert({
-              where: { userId },
-              update: { alwaysAllowedTools: [...existing, action.toolName] },
-              create: { userId, alwaysAllowedTools: [action.toolName] },
-            });
-          }
-        }
-
-        return { success: true, result: toolResult, autoAllowed: !!autoAllow };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Execution failed";
-
-        await db.pendingAction.update({
-          where: { id: actionId },
-          data: { status: "FAILED", result: message },
-        });
-        await upsertAttentionForPendingAction({ ...action, status: "FAILED" });
-
-        await db.message.create({
-          data: {
-            conversationId: action.conversationId,
-            role: "ASSISTANT",
-            content: `Execution failed: ${message}`,
-            metadata: { source: "agent", actionFailed: true },
-          },
-        });
-
-        await recordFeedback({
-          userId,
-          source: "PENDING_ACTION",
-          sourceId: actionId,
-          signal: "FAILED",
-          toolName: action.toolName,
-          recipient: recipientFromToolArgs(action.toolArgs),
-          threadId: action.conversationId,
-          evidence: message,
-        });
-
-        return reply.code(500).send({ error: message });
+        return true;
+      });
+      if (!claimed) {
+        return reply.code(409).send({ error: "Action already processed by another request" });
       }
+
+      // Decision side-effect: surface the item as EXECUTED (claimed) in the
+      // queue immediately. The APPROVED feedback signal is recorded at
+      // execution completion (onOutboxCompleted), not here, so it stays
+      // mutually exclusive with the FAILED signal on a dead-letter.
+      await upsertAttentionForPendingAction({ ...action, status: "EXECUTED" });
+
+      const { autoAllow } = (request.body as { autoAllow?: boolean }) || {};
+      if (autoAllow && action.toolName) {
+        const config = await prisma.automationConfig.findUnique({ where: { userId } });
+        const existing: string[] =
+          (config as unknown as { alwaysAllowedTools?: string[] })?.alwaysAllowedTools || [];
+        if (!existing.includes(action.toolName)) {
+          await prisma.automationConfig.upsert({
+            where: { userId },
+            update: { alwaysAllowedTools: [...existing, action.toolName] },
+            create: { userId, alwaysAllowedTools: [action.toolName] },
+          });
+        }
+      }
+
+      // Inline fast-path: attempt execution synchronously so the common case
+      // (tool works first try) returns the result immediately, preserving the
+      // existing UX. claimAndRunOutboxRow does its own CAS claim, so it can't
+      // race the background worker. On transient failure the row stays QUEUED
+      // and the worker retries with backoff (the durable path); the completion
+      // message + push then arrive over the websocket the client already
+      // listens on. Permanent failures dead-letter and surface as before.
+      const outboxRow = (await db.actionOutbox.findUnique({
+        where: { pendingActionId: actionId },
+      })) as OutboxRow | null;
+      if (!outboxRow) {
+        // Should never happen — just enqueued in the committed txn.
+        return { success: true, queued: true, autoAllowed: !!autoAllow };
+      }
+      const outcome = await claimAndRunOutboxRow({
+        ...outboxRow,
+        conversationId: action.conversationId,
+      });
+
+      if (outcome.kind === "completed") {
+        return { success: true, result: outcome.result, autoAllowed: !!autoAllow };
+      }
+      if (outcome.kind === "dead") {
+        return reply.code(500).send({ error: outcome.error });
+      }
+      // retry | lost — execution is durably queued; the worker will finish it.
+      return { success: true, queued: true, autoAllowed: !!autoAllow };
     },
   );
 

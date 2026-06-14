@@ -59,6 +59,7 @@ model User {
   pushDeliveryLogs          PushDeliveryLog[]
   pushRingEvents            PushRingEvent[]
   phoneEscalations          PhoneEscalation[]
+  actionOutbox              ActionOutbox[]
   calibrationSnapshots      CalibrationSnapshot[]
   memories                  Memory[]
   skills                    Skill[]
@@ -559,6 +560,61 @@ enum ActionStatus {
   REJECTED
   EXECUTED
   FAILED
+}
+
+// Transactional outbox for action execution (T6). When a PendingAction is
+// approved, its execution intent is written here in the SAME transaction as
+// the status claim, so "the user approved this" and "this must run" commit
+// atomically — a crash between them can't drop the action. A deterministic
+// worker (drainActionOutbox) then executes each row by REPLAYING the stored
+// toolArgs + receipt: the LLM is never in the retry loop. Transient failures
+// retry with backoff; permanent failures (validation, receipt mismatch) go
+// straight to DEAD. This is the prerequisite for safe autonomous (AUTO)
+// execution — see action-outbox.ts.
+model ActionOutbox {
+  id              String       @id @default(uuid())
+  // One outbox row per PendingAction. UNIQUE makes enqueue idempotent: a
+  // double-approve (or a retried request) collapses to one row, never two
+  // executions.
+  pendingActionId String       @unique
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Snapshot of the source conversation so the worker can post the
+  // completion/failure chat message without a PendingAction round-trip (and
+  // even if the PA row is later gone). Nullable for safety.
+  conversationId  String?
+  toolName        String
+  // Snapshot of the bytes to replay — copied from PendingAction.toolArgs at
+  // enqueue time so a later edit of the source row can't change what runs.
+  toolArgs        Json
+  // ActionReceipt for floor actions (send_email/...), copied from the PA.
+  // The worker passes it to executeToolCall, which verifies payloadHash and
+  // refuses on mismatch — replaying never weakens the deterministic floor.
+  actionReceipt   Json?
+  // Deterministic idempotency key (sha256 of action identity). Stored for
+  // tools that can dedupe and as the audit anchor across retries.
+  idempotencyKey  String       @unique
+  status          OutboxStatus @default(QUEUED)
+  attempts        Int          @default(0)
+  maxAttempts     Int          @default(5)
+  // When the row becomes eligible for the next drain attempt (backoff).
+  nextAttemptAt   DateTime     @default(now())
+  lastError       String?
+  result          String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  completedAt     DateTime?
+
+  // Drain query is WHERE status=QUEUED AND nextAttemptAt<=now ORDER BY nextAttemptAt.
+  @@index([status, nextAttemptAt])
+  @@index([userId])
+}
+
+enum OutboxStatus {
+  QUEUED // eligible for execution at/after nextAttemptAt
+  IN_PROGRESS // claimed by a worker for this attempt
+  COMPLETED // executed successfully (terminal)
+  DEAD // permanent failure or maxAttempts exhausted (terminal; dead-letter)
 }
 
 // ─── Email System ──────────────────────────────────────────────────────────
