@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { diffChainAgainstCatalog, parseCatalogIds } from "../openrouter-catalog-check.js";
+import { JUDGE_MODEL, VISION_MODEL } from "../openai.js";
+import {
+  classifyCatalogDrift,
+  dependedModels,
+  diffChainAgainstCatalog,
+  parseCatalogIds,
+} from "../openrouter-catalog-check.js";
 
 describe("parseCatalogIds", () => {
   it("extracts model ids from the OpenRouter /models response shape", () => {
@@ -19,6 +25,66 @@ describe("parseCatalogIds", () => {
     expect(parseCatalogIds({})).toEqual(new Set());
     expect(parseCatalogIds({ data: "not-an-array" })).toEqual(new Set());
     expect(parseCatalogIds({ data: [{ noId: true }, 42, null] })).toEqual(new Set());
+  });
+});
+
+describe("dependedModels", () => {
+  it("watches the firewall's tier-judge model (its silent retirement kills PUSH)", () => {
+    // JUDGE_MODEL defaults to a vendor-prefixed OpenRouter id, so the daily
+    // catalog check must cover it — it's the highest-consequence drift.
+    expect(JUDGE_MODEL).toContain("/");
+    expect(dependedModels()).toContain(JUDGE_MODEL);
+  });
+
+  it("watches the vision model so a multimodal SKU retirement is caught", () => {
+    expect(VISION_MODEL).toContain("/");
+    expect(dependedModels()).toContain(VISION_MODEL);
+  });
+});
+
+describe("classifyCatalogDrift", () => {
+  it("reports everything as newly missing when there is no prior run", () => {
+    expect(classifyCatalogDrift(null, ["a/x", "b/y"])).toEqual({
+      newlyMissing: ["a/x", "b/y"],
+      recovered: [],
+      unchanged: [],
+    });
+  });
+
+  it("flags only the model that vanished since the previous run", () => {
+    const previous = new Set(["a/x"]);
+    expect(classifyCatalogDrift(previous, ["a/x", "b/y"])).toEqual({
+      newlyMissing: ["b/y"],
+      recovered: [],
+      unchanged: ["a/x"],
+    });
+  });
+
+  it("flags a model that returned to the catalog as recovered", () => {
+    const previous = new Set(["a/x", "b/y"]);
+    expect(classifyCatalogDrift(previous, ["a/x"])).toEqual({
+      newlyMissing: [],
+      recovered: ["b/y"],
+      unchanged: ["a/x"],
+    });
+  });
+
+  it("suppresses repeat noise: a standing breakage is unchanged, not newly missing", () => {
+    const previous = new Set(["a/x"]);
+    expect(classifyCatalogDrift(previous, ["a/x"])).toEqual({
+      newlyMissing: [],
+      recovered: [],
+      unchanged: ["a/x"],
+    });
+  });
+
+  it("reports a full recovery when nothing is missing now", () => {
+    const previous = new Set(["a/x", "b/y"]);
+    expect(classifyCatalogDrift(previous, [])).toEqual({
+      newlyMissing: [],
+      recovered: ["a/x", "b/y"],
+      unchanged: [],
+    });
   });
 });
 
