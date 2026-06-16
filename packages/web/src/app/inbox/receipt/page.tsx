@@ -115,12 +115,12 @@ function ReceiptView() {
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-6 md:py-10">
       {/* Header */}
-      <header className="mb-6 overflow-hidden rounded-lg border border-teal-300/15 bg-stone-950/65 shadow-2xl shadow-black/20">
-        <div className="h-1 bg-gradient-to-r from-teal-300 via-stone-500 to-amber-300" />
+      <header className="mb-6 overflow-hidden rounded-lg border border-stone-800/70 bg-stone-950/65 shadow-2xl shadow-black/20">
+        <div className="h-1 bg-gradient-to-r from-amber-300 via-amber-200/40 to-transparent" />
         <div className="p-5 md:p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-300">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
                 Attention receipt
               </p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-50">
@@ -150,12 +150,12 @@ function ReceiptView() {
             <SummaryMetric
               label="Silenced"
               value={receipt.summary.savedFromInbox}
-              color="text-teal-300"
+              color="text-stone-300"
             />
             <SummaryMetric
               label="Pushed"
               value={receipt.summary.totalInterrupted}
-              color="text-amber-300"
+              color="text-rose-300"
             />
             <SummaryMetric
               label="Auto-handled"
