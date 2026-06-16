@@ -31,6 +31,7 @@ import { decryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
 import type { ClassifiableEmail } from "./email-classifier.js";
 import { fetchGitHubNotifications } from "./github-client.js";
+import { pushForFirewallGitHubNotification } from "./github-push.js";
 import { judgeEmail } from "./poc-judge.js";
 
 /** A GitHub notification thread, normalized from the Notifications API. */
@@ -127,6 +128,13 @@ export async function ingestGitHubNotifications(
         updatedAt: n.updatedAt,
       };
       await upsertAttentionForGitHubNotification(like, judgement as EmailJudgementLike);
+      // A judge=PUSH GitHub thread must actually interrupt — not just appear in
+      // the firewall. Best-effort: a push failure never drops the mirror.
+      if ((judgement as EmailJudgementLike).tier === "PUSH") {
+        await pushForFirewallGitHubNotification(like).catch((err) =>
+          console.warn(`[GITHUB] push failed for thread ${n.id}:`, err),
+        );
+      }
       surfaced++;
     } catch (err) {
       console.warn(`[GITHUB] ingest failed for thread ${n.id}:`, err);

@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const judgeEmailMock = vi.hoisted(() => vi.fn());
 const upsertGitHubMock = vi.hoisted(() => vi.fn());
+const pushGitHubMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../poc-judge.js", () => ({
   judgeEmail: judgeEmailMock,
@@ -22,6 +23,10 @@ vi.mock("../poc-judge.js", () => ({
 
 vi.mock("../attention-mirror.js", () => ({
   upsertAttentionForGitHubNotification: upsertGitHubMock,
+}));
+
+vi.mock("../github-push.js", () => ({
+  pushForFirewallGitHubNotification: pushGitHubMock,
 }));
 
 import {
@@ -100,6 +105,7 @@ describe("ingestGitHubNotifications", () => {
   beforeEach(() => {
     judgeEmailMock.mockReset();
     upsertGitHubMock.mockReset();
+    pushGitHubMock.mockReset();
     judgeEmailMock.mockResolvedValue({
       tier: "QUEUE",
       reason: "PR review",
@@ -107,6 +113,7 @@ describe("ingestGitHubNotifications", () => {
       source: "llm",
     });
     upsertGitHubMock.mockResolvedValue(undefined);
+    pushGitHubMock.mockResolvedValue(undefined);
   });
 
   it("judges and mirrors each notification, returning the count surfaced", async () => {
@@ -123,6 +130,33 @@ describe("ingestGitHubNotifications", () => {
     expect(firstNotif.id).toBe("t1");
     expect(firstNotif.userId).toBe("u1");
     expect(firstJudgement.tier).toBe("QUEUE");
+    // Non-PUSH tiers surface silently in the firewall — no interrupt.
+    expect(pushGitHubMock).not.toHaveBeenCalled();
+  });
+
+  it("sends a push only for a judge=PUSH notification", async () => {
+    judgeEmailMock.mockReset().mockResolvedValue({
+      tier: "PUSH",
+      reason: "you were mentioned",
+      features: { confidence: 0.9, senderTrust: 0.5, reversibility: 0.5, urgency: 0.85 },
+      source: "llm",
+    });
+    await ingestGitHubNotifications("u1", [notif({ id: "ping", reason: "mention" })]);
+    expect(pushGitHubMock).toHaveBeenCalledTimes(1);
+    expect(pushGitHubMock.mock.calls[0][0]).toMatchObject({ id: "ping", userId: "u1" });
+  });
+
+  it("a push failure does not drop the mirror or the surfaced count", async () => {
+    judgeEmailMock.mockReset().mockResolvedValue({
+      tier: "PUSH",
+      reason: "review requested",
+      features: { confidence: 0.9, senderTrust: 0.5, reversibility: 0.5, urgency: 0.8 },
+      source: "llm",
+    });
+    pushGitHubMock.mockRejectedValueOnce(new Error("push blew up"));
+    const n = await ingestGitHubNotifications("u1", [notif({ id: "t1" })]);
+    expect(n).toBe(1);
+    expect(upsertGitHubMock).toHaveBeenCalledTimes(1);
   });
 
   it("isolates a single judge failure — one bad notification can't drop the rest", async () => {
