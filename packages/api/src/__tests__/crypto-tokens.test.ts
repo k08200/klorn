@@ -19,9 +19,12 @@ describe("crypto-tokens", () => {
     expect(decryptToken(b)).toBe(plain);
   });
 
-  it("passes through legacy plaintext values without a v1: prefix", () => {
+  it("refuses to use a non-v1 (plaintext) token instead of silently passing it through", () => {
+    // Cutoff: a plaintext OAuth token in the DB must never be trusted as-is.
+    // Callers treat a decrypt throw as "rotate/reconnect", so failing loud here
+    // is the safe behaviour — the old silent passthrough hid the gap.
     const legacy = "already-stored-plaintext-token";
-    expect(decryptToken(legacy)).toBe(legacy);
+    expect(() => decryptToken(legacy)).toThrow(/non-v1/);
   });
 
   it("rejects tampered ciphertext via the GCM auth tag", () => {

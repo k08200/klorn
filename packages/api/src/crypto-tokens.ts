@@ -35,8 +35,13 @@ export function encryptToken(plaintext: string): string {
 export function decryptToken(value: string): string {
   if (!value) return value;
   if (!value.startsWith(`${VERSION}:`)) {
-    // Legacy plaintext — pass through so existing tokens keep working until they rotate
-    return value;
+    // Cutoff: refuse to trust a non-v1 (plaintext or unknown-scheme) token.
+    // Silent passthrough meant a plaintext OAuth token in the DB was used as-is
+    // whenever it slipped in (or TOKEN_ENCRYPTION_KEY was unset). Callers already
+    // treat a decrypt throw as "rotate/reconnect" (see invalidateGoogleToken),
+    // so failing loud is the safe, visible behaviour. Legacy plaintext rows must
+    // be cleared/re-encrypted by migration before this ships.
+    throw new Error("Refusing to use a non-v1 token (plaintext or unknown scheme)");
   }
   const parts = value.split(":");
   if (parts.length !== 4) {
@@ -56,6 +61,11 @@ export function encryptOptional(value: string | null | undefined): string | null
   return encryptToken(value);
 }
 
+/**
+ * Returns null for empty/missing input. For a present value it delegates to
+ * `decryptToken`, so it THROWS (does not return null) on a non-v1 token — the
+ * cutoff applies here too; we never silently trust plaintext.
+ */
 export function decryptOptional(value: string | null | undefined): string | null {
   if (!value) return null;
   return decryptToken(value);
