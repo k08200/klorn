@@ -405,10 +405,7 @@ export async function createVisionCompletion(
   let lastError: unknown;
   for (const provider of ordered) {
     if (isProviderUnavailable(provider.quotaKey)) continue;
-    const model =
-      provider.name === "gemini"
-        ? provider.resolveModel(visionModel)
-        : provider.resolveModel(visionModel);
+    const model = provider.resolveModel(visionModel);
     try {
       const result = (await provider.call(
         { ...params, stream: false },

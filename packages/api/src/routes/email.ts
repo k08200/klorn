@@ -22,27 +22,16 @@ import {
   syncCandidateIntakeForEmail,
   syncRecentCandidateIntakes,
 } from "../email-candidate-intake.js";
-import { evaluateUserCorrectionFixtures } from "../email-classification-eval.js";
-import { listUserFeedbackFixtures } from "../email-feedback-fixtures.js";
+import type { FeedbackRecord } from "../email-label-feedback.js";
 import {
-  FeedbackError,
-  type FeedbackRecord,
-  getFeedback,
-  recordFeedback,
-} from "../email-label-feedback.js";
-import {
-  checkAutoReplyRules,
-  generateSmartReply,
   getEmailThreads,
   reconcileEmails,
   summarizeUnsummarizedEmails,
   syncEmails,
 } from "../email-sync.js";
-import { sendEmail, toggleReadGmail } from "../gmail.js";
-import { senderEmail, senderName } from "../notification-format.js";
-import { sendPushNotification } from "../push.js";
+import { toggleReadGmail } from "../gmail.js";
+import { senderEmail } from "../notification-format.js";
 import { getTrustScore, getTrustScoresBulk, type TrustScoreResult } from "../trust-score.js";
-import { pushNotification } from "../websocket.js";
 import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
 import { registerEmailBulkRoutes } from "./email-bulk.js";
 import { registerEmailCandidatesRoutes } from "./email-candidates.js";
@@ -179,7 +168,7 @@ const DEMO_EMAILS = [
 ];
 
 /** Parse email From header */
-function parseFromHeader(from: string): { name: string; email: string } | null {
+function _parseFromHeader(from: string): { name: string; email: string } | null {
   if (!from) return null;
   const match = from.match(/^(.+?)\s*<([^>]+)>$/);
   if (match) {
@@ -242,27 +231,6 @@ export const REPLY_CHOICE_BY_SIGNAL: Partial<Record<FeedbackSignal, ReplyNeededC
   SNOOZED: "later",
   DISMISSED: "done",
 };
-
-/** Auto-add senders as contacts */
-async function autoAddContacts(userId: string, emails: { from: string }[]): Promise<void> {
-  const seen = new Set<string>();
-  for (const email of emails) {
-    const parsed = parseFromHeader(email.from);
-    if (!parsed || SKIP_PATTERNS.some((p) => p.test(parsed.email))) continue;
-    if (seen.has(parsed.email)) continue;
-    seen.add(parsed.email);
-
-    const existing = await prisma.contact.findFirst({ where: { userId, email: parsed.email } });
-    if (existing) continue;
-    try {
-      await prisma.contact.create({
-        data: { userId, name: parsed.name, email: parsed.email, tags: "auto-added" },
-      });
-    } catch {
-      /* race condition */
-    }
-  }
-}
 
 export function serializeFeedback(row: FeedbackRecord) {
   return {
@@ -1149,70 +1117,4 @@ export async function emailRoutes(app: FastifyInstance) {
 
     return { success: true, tasks: created, source: { emailId: email.id, subject: email.subject } };
   });
-}
-
-// ─── Internal Helpers ─────────────────────────────────────────────────────
-
-async function checkAndExecuteAutoReply(
-  userId: string,
-  email: { from: string; subject: string; body?: string | null; category?: string | null },
-): Promise<void> {
-  const matched = await checkAutoReplyRules(userId, email);
-  if (!matched) return;
-
-  if (matched.actionType === "AUTO_REPLY" || matched.actionType === "DRAFT_REPLY") {
-    const replyBody = await generateSmartReply(
-      matched.actionValue,
-      {
-        from: email.from,
-        subject: email.subject,
-        body: email.body || "",
-      },
-      userId,
-    );
-
-    if (matched.actionType === "AUTO_REPLY") {
-      // Extract email address from From header
-      const parsed = parseFromHeader(email.from);
-      if (parsed) {
-        await sendEmail(userId, parsed.email, `Re: ${email.subject}`, replyBody);
-
-        // Notify user about auto-reply
-        await prisma.notification.create({
-          data: {
-            userId,
-            type: "email",
-            title: "Auto-reply sent",
-            message: `"${matched.ruleName}" sent an auto-reply to ${parsed.email}.`,
-          },
-        });
-        pushNotification(userId, {
-          type: "email",
-          title: "Auto-reply sent",
-          message: `Auto-replied to ${parsed.email}.`,
-        });
-      }
-    } else {
-      // DRAFT_REPLY — just notify, user reviews
-      await prisma.notification.create({
-        data: {
-          userId,
-          type: "email",
-          title: "Reply draft created",
-          message: `"${matched.ruleName}" created a reply draft for ${email.from}.`,
-        },
-      });
-      pushNotification(userId, {
-        type: "email",
-        title: "Reply draft created",
-        message: `Reply draft ready for ${email.from}.`,
-      });
-    }
-  } else if (matched.actionType === "NOTIFY") {
-    sendPushNotification(userId, {
-      title: "New mail alert",
-      body: `${senderName(email.from)} — "${(email.subject || "Untitled").slice(0, 60)}"`,
-      url: "/briefing",
-    });
-  }
 }
