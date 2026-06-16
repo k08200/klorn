@@ -45,6 +45,7 @@ import {
   localMinuteOfDay,
   normalizeTimeZone,
 } from "./time-zone.js";
+import { buildUrgentDedupMessage, parseNotifiedGmailIds } from "./urgent-dedup.js";
 import { pushNotification } from "./websocket.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -662,13 +663,8 @@ async function runAutomations() {
                   },
                   select: { message: true },
                 });
-                const notifiedGmailIds = new Set(
-                  recentUrgentNotifs
-                    .map((n) => {
-                      const match = n.message.match(/\[([^\]]+)\]$/);
-                      return match ? match[1] : null;
-                    })
-                    .filter(Boolean),
+                const notifiedGmailIds = parseNotifiedGmailIds(
+                  recentUrgentNotifs.map((n) => n.message),
                 );
 
                 // Only notify for urgent emails we haven't notified about yet
@@ -676,10 +672,14 @@ async function runAutomations() {
 
                 if (newUrgent.length > 0) {
                   // User-visible body: who + what, no internal IDs.
-                  // DB message keeps the [gmailId] suffix because the dedup
-                  // regex above (notifiedGmailIds) reads it back from message.
+                  // DB message keeps a trailing [id1,id2,…] marker for EVERY
+                  // notified email so the dedup read above records all of them
+                  // (not just the first) and they aren't re-notified next tick.
                   const userBody = formatUrgentEmailBody(newUrgent);
-                  const dbMessage = `${userBody} [${newUrgent[0].gmailId}]`;
+                  const dbMessage = buildUrgentDedupMessage(
+                    userBody,
+                    newUrgent.map((e) => e.gmailId),
+                  );
 
                   const notification = await prisma.notification.create({
                     data: {
