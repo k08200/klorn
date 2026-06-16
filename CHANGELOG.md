@@ -23,8 +23,9 @@ calendar time.
   classification: up to 5 few-shot examples (same-sender → same-domain →
   recency) injected into the judge prompt, plus a sender prior that skips
   the LLM for stable senders (≥2 identical overrides in 60 days, or ≥3
-  unanimous recent classifications for QUEUE/SILENT). Urgent-looking
+  unanimous recent classifications for QUEUE). Urgent-looking
   content always routes back to the LLM unless the prior itself is PUSH.
+  A prior never resolves to SILENT without the LLM — see Fixed below.
 - **Quiet hours enforcement.** Extracted into `quiet-hours.ts` with its own
   `quiet_hours` skip reason (previously conflated with category opt-outs),
   midnight-crossing windows and timezones tested.
@@ -67,6 +68,15 @@ calendar time.
   suite is offline again (PR #500).
 - `getProviderChain()` registered the env API key twice under separate
   quota keys, duplicating attempts and bypassing cooldowns (PR #500).
+- **A learned sender prior could mute a sender with no LLM look.** A prior
+  (≥2 overrides, or ≥3 unanimous history) that resolved to SILENT
+  short-circuited the judge and produced no AttentionItem — so a stale or
+  wrong prior muted real mail invisibly, and the user never saw the message
+  to correct the prior (a silent one-way door, structurally invisible
+  over-suppression). SILENT is now excluded from both prior allowlists: a
+  would-be-SILENT sender falls through to the LLM on every email (which can
+  still decide SILENT, with full content and urgency in view). The
+  deterministic marketing fast-path remains the only no-LLM route to SILENT.
 
 ## [0.3.0] — 2026-06-09
 
