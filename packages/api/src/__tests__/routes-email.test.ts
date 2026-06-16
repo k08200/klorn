@@ -606,3 +606,41 @@ describe("email routes (demo mode)", () => {
     await app.close();
   });
 });
+
+describe("emailSearchOr — search query builder", () => {
+  function collectKeys(node: unknown, keys: Set<string>) {
+    if (Array.isArray(node)) {
+      for (const item of node) collectKeys(item, keys);
+    } else if (node && typeof node === "object") {
+      for (const [k, v] of Object.entries(node)) {
+        keys.add(k);
+        collectKeys(v, keys);
+      }
+    }
+  }
+
+  it("searches the scalar text columns and attachment text columns", async () => {
+    const { emailSearchOr } = await import("../routes/email.js");
+    const keys = new Set<string>();
+    collectKeys(emailSearchOr("invoice"), keys);
+    for (const col of ["subject", "from", "snippet", "body", "summary", "attachments"]) {
+      expect(keys.has(col)).toBe(true);
+    }
+    for (const col of ["filename", "contentText"]) {
+      expect(keys.has(col)).toBe(true);
+    }
+  });
+
+  it("never filters the JSONB extractedFields column (a String filter there 500s the query)", async () => {
+    const { emailSearchOr } = await import("../routes/email.js");
+    const keys = new Set<string>();
+    collectKeys(emailSearchOr("anything"), keys);
+    expect(keys.has("extractedFields")).toBe(false);
+  });
+
+  it("threads the search term into a case-insensitive contains filter", async () => {
+    const { emailSearchOr } = await import("../routes/email.js");
+    const [subjectCond] = emailSearchOr("Q3 report");
+    expect(subjectCond).toEqual({ subject: { contains: "Q3 report", mode: "insensitive" } });
+  });
+});

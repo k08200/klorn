@@ -487,6 +487,35 @@ export function replyNeededSourceId(emailId: string): string {
   return `email:${emailId}:reply_needed`;
 }
 
+/**
+ * OR conditions for a free-text inbox search.
+ *
+ * Typed as `Prisma.EmailMessageWhereInput[]` ON PURPOSE: the inbox route builds
+ * its `where` as `Record<string, any>`, which let an invalid filter ship — a
+ * String `contains`/`mode` filter on the JSONB `extractedFields` column, which
+ * is not a valid Prisma Json filter and made the whole search query throw a
+ * validation error (every `?search=` request 500'd). Keeping this builder typed
+ * means the compiler now rejects any such filter at build time. Attachment text
+ * is already searchable via filename / summary / contentText.
+ */
+export function emailSearchOr(search: string): Prisma.EmailMessageWhereInput[] {
+  const ci = { contains: search, mode: "insensitive" as const };
+  return [
+    { subject: ci },
+    { from: ci },
+    { snippet: ci },
+    { body: ci },
+    { summary: ci },
+    {
+      attachments: {
+        some: {
+          OR: [{ filename: ci }, { summary: ci }, { contentText: ci }],
+        },
+      },
+    },
+  ];
+}
+
 export function serializeReplyFeedback(row: {
   id: string;
   signal: string;
@@ -645,25 +674,7 @@ export async function emailRoutes(app: FastifyInstance) {
     }
     if (category) where.category = category;
     if (search) {
-      where.OR = [
-        { subject: { contains: search, mode: "insensitive" } },
-        { from: { contains: search, mode: "insensitive" } },
-        { snippet: { contains: search, mode: "insensitive" } },
-        { body: { contains: search, mode: "insensitive" } },
-        { summary: { contains: search, mode: "insensitive" } },
-        {
-          attachments: {
-            some: {
-              OR: [
-                { filename: { contains: search, mode: "insensitive" } },
-                { summary: { contains: search, mode: "insensitive" } },
-                { contentText: { contains: search, mode: "insensitive" } },
-                { extractedFields: { contains: search, mode: "insensitive" } },
-              ],
-            },
-          },
-        },
-      ];
+      where.OR = emailSearchOr(search);
     }
 
     const [emails, total, unreadCount] = await Promise.all([
