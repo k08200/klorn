@@ -153,6 +153,100 @@ body {
   animation: eve-drift 18s linear infinite;
 }
 
+/* ── Spatial triage (firewall view) ─────────────────
+   Depth + glow language for the 4-tier board. The hierarchy is meant to
+   be felt before it is read: PUSH sits on an elevated, glowing plane;
+   QUEUE is mid; SILENT recedes and desaturates. */
+
+/* Per-tier ambient glow on the column panel. The negative spread keeps the
+   glow tight to the panel instead of bleeding across the whole board. */
+.tier-plane-push {
+  box-shadow:
+    0 0 60px -22px rgba(255, 107, 74, 0.55),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+}
+.tier-plane-queue {
+  box-shadow:
+    0 0 48px -26px rgba(216, 164, 93, 0.42),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.035);
+}
+.tier-plane-silent {
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.02);
+}
+.tier-plane-auto {
+  box-shadow:
+    0 0 40px -26px rgba(52, 211, 153, 0.35),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.03);
+}
+
+/* Translucent glass surface used by every panel + card on the board. */
+.glass {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Tactile lift: cards rise toward the cursor and cast a real shadow. */
+.lift {
+  transition:
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    opacity 0.18s ease;
+  will-change: transform;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px -14px rgba(0, 0, 0, 0.75);
+}
+
+/* Flight-in: plays when a card mounts — on initial load (staggered) and,
+   crucially, when an override moves a card into a different column, so the
+   move reads as the card arriving rather than blinking into place. */
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-card-in {
+  animation: card-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* The count chip pulses when its tier's total changes after an override. */
+@keyframes count-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.animate-count-pop {
+  animation: count-pop 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Respect reduced-motion: keep the depth, drop the movement. These rules
+   share specificity with the definitions above and are declared after them,
+   so source order alone lets them win — no !important needed. */
+@media (prefers-reduced-motion: reduce) {
+  .lift,
+  .animate-card-in,
+  .animate-count-pop {
+    animation: none;
+    transition: none;
+  }
+  .lift:hover {
+    transform: none;
+  }
+}
+
 /* ── Scrollbar ──────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
