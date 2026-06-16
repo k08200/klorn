@@ -2,6 +2,19 @@ import { inflateRawSync } from "node:zlib";
 
 const MAX_EXTRACTABLE_BYTES = 8_000_000;
 
+/**
+ * Raw-inflate with a hard output cap. A crafted deflate stream (a few KB that
+ * expands to gigabytes — a "zip bomb") would otherwise allocate unbounded and
+ * OOM-kill the process; the only prior guard checked the COMPRESSED input size,
+ * which a bomb passes trivially. maxOutputLength makes Node throw a RangeError
+ * once output exceeds the extraction budget; every caller runs inside a
+ * try/catch that falls back to metadata, so a bomb degrades to "unreadable"
+ * instead of taking the dyno down. Text extraction never needs >8MB anyway.
+ */
+export function inflateRawCapped(input: Buffer): Buffer {
+  return inflateRawSync(input, { maxOutputLength: MAX_EXTRACTABLE_BYTES });
+}
+
 export interface ExtractedAttachmentContent {
   text: string | null;
   status: "readable" | "metadata" | "unsupported";
@@ -279,7 +292,7 @@ function extractInflatedTextChunks(buffer: Buffer): string[] {
   const maxOffset = Math.min(buffer.length - 16, 1_000_000);
   for (let offset = 0; offset < maxOffset; offset += 64) {
     try {
-      const inflated = inflateRawSync(buffer.subarray(offset));
+      const inflated = inflateRawCapped(buffer.subarray(offset));
       if (inflated.length < 16) continue;
       chunks.push(...extractUtf16TextChunks(inflated), ...extractAsciiKoreanTextChunks(inflated));
       if (chunks.length >= 80) break;
@@ -348,7 +361,7 @@ function readZipEntries(buffer: Buffer): Map<string, Buffer> {
     const compressed = buffer.subarray(dataStart, dataEnd);
     if (!filename.endsWith("/")) {
       if (method === 0) entries.set(filename, Buffer.from(compressed));
-      if (method === 8) entries.set(filename, inflateRawSync(compressed));
+      if (method === 8) entries.set(filename, inflateRawCapped(compressed));
     }
 
     offset = dataEnd;
@@ -419,7 +432,7 @@ function readZipEntryFromLocalHeader(
 
   const compressed = buffer.subarray(dataStart, dataEnd);
   if (method === 0) return Buffer.from(compressed);
-  if (method === 8) return inflateRawSync(compressed);
+  if (method === 8) return inflateRawCapped(compressed);
   return null;
 }
 

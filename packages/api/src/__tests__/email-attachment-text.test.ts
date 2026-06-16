@@ -1,6 +1,28 @@
 import { deflateRawSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { extractAttachmentContent, isReadableEmailAttachment } from "../email-attachment-text.js";
+import {
+  extractAttachmentContent,
+  inflateRawCapped,
+  isReadableEmailAttachment,
+} from "../email-attachment-text.js";
+
+describe("inflateRawCapped — decompression-bomb guard", () => {
+  it("inflates a normal stream back to the original", () => {
+    const original = Buffer.from("hello klorn ".repeat(50));
+    expect(inflateRawCapped(deflateRawSync(original)).equals(original)).toBe(true);
+  });
+
+  it("inflates a payload just under the 8MB budget", () => {
+    const under = Buffer.alloc(7_000_000, 0x41);
+    expect(inflateRawCapped(deflateRawSync(under)).length).toBe(7_000_000);
+  });
+
+  it("throws instead of allocating gigabytes for a zip bomb over the budget", () => {
+    // ~9MB of zeros compresses to a few KB but would inflate past the cap.
+    const bomb = deflateRawSync(Buffer.alloc(9_000_000, 0));
+    expect(() => inflateRawCapped(bomb)).toThrow();
+  });
+});
 
 describe("email attachment text extraction", () => {
   it("extracts plain text attachments", () => {
