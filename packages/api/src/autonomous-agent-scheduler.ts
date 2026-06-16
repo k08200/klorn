@@ -46,7 +46,10 @@ async function expireStalePendingActions() {
     })) as ExpiringRow[];
     const expired = await db.pendingAction.updateMany({
       where: { status: "PENDING", createdAt: { lt: cutoff } },
-      data: { status: "REJECTED", result: "자동 만료 (24시간 초과)" },
+      data: {
+        status: "REJECTED",
+        result: `Auto-expired after ${PENDING_ACTION_TTL_MS / (60 * 60 * 1000)}h`,
+      },
     });
     if (expired.count > 0) {
       console.log(`[AGENT] Expired ${expired.count} stale pending action(s)`);

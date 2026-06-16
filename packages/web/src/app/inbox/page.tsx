@@ -169,12 +169,12 @@ function CommandCenterView() {
         method: "POST",
         body: JSON.stringify({ snoozeUntil }),
       });
+      // Drop the snoozed row from the current view in BOTH filters. The reject
+      // handler's copy-pasted "set status REJECTED" branch mislabeled a snoozed
+      // action as "Rejected" in the all-actions view until the next refetch.
       queryClient.setQueryData<PendingActionItem[]>(
         [...queryKeys.inbox.pending(), filter] as unknown as readonly unknown[],
-        (prev) =>
-          filter === "pending"
-            ? (prev ?? []).filter((a) => a.id !== actionId)
-            : (prev ?? []).map((a) => (a.id === actionId ? { ...a, status: "REJECTED" } : a)),
+        (prev) => (prev ?? []).filter((a) => a.id !== actionId),
       );
       toast(`Snoozed for ${hours}h — will resurface automatically.`, "success");
     } catch (err) {

@@ -384,6 +384,14 @@ export async function createVisionCompletion(
     );
   }
 
+  // Per-user RPM + daily-call gate, same as createCompletion. Vision/OCR was
+  // skipping this entirely, so attachment analysis bypassed the per-user rate
+  // limit and daily-call bucket. Charge it against the background bucket (it's
+  // a worker-triggered batch) so it can never starve foreground chat.
+  if (options.userId) {
+    checkAndRecordUserCall(options.userId, { priority: options.priority ?? "background" });
+  }
+
   // Daily-cost gate: vision/OCR calls bill the same ledgers as chat. Without
   // this, a runaway attachment-analysis batch can blow past the cap.
   await enforceCostGates(params.model, options.userId);
