@@ -455,8 +455,16 @@ function priorFeatures(tier: PocTier): PocFeatures {
   }
 }
 
-const OVERRIDE_PRIOR_TIERS: ReadonlySet<PocTier> = new Set(["PUSH", "QUEUE", "SILENT"]);
-const HISTORY_PRIOR_TIERS: ReadonlySet<PocTier> = new Set(["QUEUE", "SILENT"]);
+// A learned sender prior may bypass the LLM to PUSH (overrides only) or QUEUE,
+// but NEVER to SILENT. SILENT is deliberately excluded from both allowlists:
+// a stale or wrong prior must not be able to fully mute a sender with no LLM
+// look — that is a silent one-way door (the user never sees a suppressed mail,
+// so they never override it to correct the prior). A would-be-SILENT sender
+// instead falls through to the LLM on every email (which can still decide
+// SILENT, but with full content + urgency in view). The deterministic
+// marketing fast-path in judgeEmail() is the only path to a no-LLM SILENT.
+const OVERRIDE_PRIOR_TIERS: ReadonlySet<PocTier> = new Set(["PUSH", "QUEUE"]);
+const HISTORY_PRIOR_TIERS: ReadonlySet<PocTier> = new Set(["QUEUE"]);
 
 /**
  * Whether a sender prior is allowed to bypass the LLM for THIS email.
