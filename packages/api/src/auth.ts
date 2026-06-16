@@ -51,6 +51,38 @@ export function verifyToken(token: string): JwtPayload {
   return jwt.verify(token, EFFECTIVE_SECRET) as JwtPayload;
 }
 
+/**
+ * True when a token was minted before the user's sessions were globally
+ * invalidated. A password reset stamps `User.sessionsInvalidatedAt`; the JWT
+ * `iat` claim (whole seconds, set by jwt.sign) is compared against that instant.
+ *
+ * This closes the reset-password bypass: reset wipes the Device table, dropping
+ * the user to zero devices, which tripped the "no devices = legacy session,
+ * allow through" branch in isDeviceSessionValid and re-accepted every
+ * still-unexpired stolen JWT. The epoch check rejects those tokens regardless
+ * of device rows. A `<` (strict) compare in whole seconds means a token minted
+ * in the same second as the reset survives — a sub-second window that favors
+ * not logging out the legitimate user, who re-logs in with a fresh `iat`.
+ */
+export function isTokenRevokedByEpoch(
+  payload: JwtPayload,
+  sessionsInvalidatedAt: Date | null | undefined,
+): boolean {
+  if (!sessionsInvalidatedAt) return false;
+  const iat = (payload as { iat?: number }).iat;
+  if (typeof iat !== "number") return false;
+  return iat < Math.floor(sessionsInvalidatedAt.getTime() / 1000);
+}
+
+/** Load the user's session epoch and decide whether this token is revoked. */
+async function sessionRevokedForToken(payload: JwtPayload): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: payload.userId },
+    select: { sessionsInvalidatedAt: true },
+  });
+  return isTokenRevokedByEpoch(payload, user?.sessionsInvalidatedAt);
+}
+
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10);
 }
@@ -89,9 +121,13 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
   const rawToken = auth.slice(7);
   try {
     const payload = verifyToken(rawToken);
-    // Verify device session is still active (not kicked by another login)
-    const valid = await isDeviceSessionValid(rawToken);
-    if (!valid) {
+    // Verify the session is still active: device not kicked by another login,
+    // AND the token was not issued before a global revocation (password reset).
+    const [deviceValid, revoked] = await Promise.all([
+      isDeviceSessionValid(rawToken),
+      sessionRevokedForToken(payload),
+    ]);
+    if (!deviceValid || revoked) {
       return reply
         .code(401)
         .send({ error: "Session expired. Please log in again.", code: "DEVICE_KICKED" });
@@ -110,8 +146,19 @@ export async function requireAdmin(request: FastifyRequest, reply: FastifyReply)
     return reply.code(401).send({ error: "Authentication required" });
   }
   try {
-    const payload = verifyToken(auth.slice(7));
-    const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+    const rawToken = auth.slice(7);
+    const payload = verifyToken(rawToken);
+    const [user, deviceValid] = await Promise.all([
+      prisma.user.findUnique({ where: { id: payload.userId } }),
+      isDeviceSessionValid(rawToken),
+    ]);
+    // Admin tokens get the same session-revocation guarantees as requireAuth:
+    // a kicked device or a token predating a password reset must lose access.
+    if (!deviceValid || isTokenRevokedByEpoch(payload, user?.sessionsInvalidatedAt)) {
+      return reply
+        .code(401)
+        .send({ error: "Session expired. Please log in again.", code: "DEVICE_KICKED" });
+    }
     if (!user || (user.role !== "ADMIN" && !isAdminEmail(user.email))) {
       return reply.code(403).send({ error: "Admin access required" });
     }

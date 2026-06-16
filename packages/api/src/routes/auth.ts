@@ -950,6 +950,10 @@ export function authRoutes(app: FastifyInstance) {
           passwordHash: await hashPassword(newPassword),
           resetToken: null,
           resetTokenExp: null,
+          // Stamp the session-revocation epoch atomically with the password
+          // change. Any JWT issued before now is rejected at the auth gate
+          // (auth.ts isTokenRevokedByEpoch), independently of the Device table.
+          sessionsInvalidatedAt: new Date(),
         },
       });
 
@@ -957,7 +961,9 @@ export function authRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: "Invalid or expired reset token" });
       }
 
-      // Revoke all device sessions so any stolen token is invalidated immediately.
+      // Drop the device rows too (so the per-device list reflects the wipe).
+      // The epoch above is the real revocation; this keeps the Device table
+      // consistent rather than relying on it to invalidate stolen tokens.
       await prisma.device.deleteMany({ where: { userId: user.id } });
 
       return reply.send({ success: true });

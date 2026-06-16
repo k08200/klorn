@@ -47,6 +47,7 @@ type StoredUser = {
   emailVerified?: boolean;
   resetToken?: string | null;
   resetTokenExp?: Date | null;
+  sessionsInvalidatedAt?: Date | null;
   betaProGrantedAt?: Date | null;
 };
 const userStore = new Map<string, StoredUser>();
@@ -963,6 +964,10 @@ describe("POST /api/auth/reset-password", () => {
 
     // resetToken should be cleared
     expect(userStore.get("user-1")?.resetToken).toBeNull();
+
+    // Session-revocation epoch must be stamped so every JWT issued before the
+    // reset is rejected at the auth gate (closes the device-wipe bypass).
+    expect(userStore.get("user-1")?.sessionsInvalidatedAt).toBeInstanceOf(Date);
 
     // Login with new password should work
     const login = await app.inject({

@@ -51,6 +51,12 @@ model User {
   verifyTokenExp            DateTime?
   resetToken                String?
   resetTokenExp             DateTime?
+  // Global session-revocation epoch. Stamped on password reset; any JWT whose
+  // `iat` predates this instant is rejected at the auth gate, independently of
+  // the Device table. Closes the reset bypass where wiping all devices dropped
+  // the user to zero devices and the "no devices = legacy, allow" branch
+  // resurrected every still-unexpired stolen token.
+  sessionsInvalidatedAt     DateTime?
   betaProGrantedAt          DateTime?
   conversations             Conversation[]
   tokens                    UserToken[]
