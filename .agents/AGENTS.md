@@ -24,11 +24,15 @@ reviewer/build/test skill. Use the TS surfaces below.
 ## Situation → use this
 
 ### Writing / changing code
+- **Before building a feature / changing behavior** → `/brainstorming` first
+  (refine intent + requirements before any code).
 - **Any TS/JS change** → review with the `typescript-reviewer` agent (proactively, before PR).
 - **General correctness pass** → `code-reviewer` agent.
 - **Reliability / error handling** (Sentry, fallbacks, fire-and-forget, swallowed errors)
   → `silent-failure-hunter` agent. This is the core engine concern — run it on any
   change to `email-sync`, `proactive-actions`, `automation-scheduler`, routes.
+- **Any bug / test failure / unexpected behavior** → `/systematic-debugging`
+  (root-cause before patching) — pair with `silent-failure-hunter` for the reliability angle.
 - **Build or `tsc` fails** → `build-error-resolver` agent (minimal diff, no architecture edits).
 - **Understand an existing feature / trace a path** → `code-explorer` or `Explore` agent.
 - **Design a new feature across packages** → `code-architect` agent.
@@ -71,8 +75,10 @@ reviewer/build/test skill. Use the TS surfaces below.
 1. Make the change → run the relevant reviewer agent above.
 2. **Reproduce CI locally before pushing**: `biome check`, `tsc --noEmit` (api+core),
    `vitest run`, `pnpm -r build`. Gate with `/verify` or `/quality-gate`.
-3. PR/CI/merge helpers: `github-ops`, `/code-review`, `/ship`.
-4. **Dogfood the live app** when behavior changes: `browse` / `gstack`, `/e2e`,
+3. **Before claiming done / committing** → `/verification-before-completion`
+   (run the commands, confirm the output — evidence before assertions; no "should pass").
+4. PR/CI/merge helpers: `github-ops`, `/code-review`, `/ship`.
+5. **Dogfood the live app** when behavior changes: `browse` / `gstack`, `/e2e`,
    `/design-review`.
 
 ### Long / multi-session work
