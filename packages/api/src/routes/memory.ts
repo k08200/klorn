@@ -1,3 +1,4 @@
+import type { MemoryType } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { db } from "../db.js";
@@ -41,11 +42,11 @@ export async function memoryRoutes(app: FastifyInstance) {
     };
 
     const memory = await db.memory.upsert({
-      where: { userId_type_key: { userId, type, key } },
+      where: { userId_type_key: { userId, type: type as MemoryType, key } },
       update: { content, source, confidence: confidence ?? 1.0, updatedAt: new Date() },
       create: {
         userId,
-        type,
+        type: type as MemoryType,
         key,
         content,
         source,
@@ -70,7 +71,7 @@ export async function memoryRoutes(app: FastifyInstance) {
   // GET /api/memories/stats — Memory usage stats
   app.get("/stats", rateLimitConfig, async (request) => {
     const userId = getUserId(request);
-    const counts: { type: string; _count: number }[] = await db.memory.groupBy({
+    const counts = await db.memory.groupBy({
       by: ["type"],
       where: { userId },
       _count: true,

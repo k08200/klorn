@@ -11,6 +11,7 @@
  * Runs periodically (every 6 hours) or on-demand after proposal feedback.
  */
 
+import type { MemoryType } from "@prisma/client";
 import { PATTERN_ANALYSIS_HOURS as CFG_PATTERN_HOURS, PATTERN_MIN_OCCURRENCES } from "./config.js";
 import { db, prisma } from "./db.js";
 import { runFeedbackAdaptationForAllUsers } from "./feedback-adaptor.js";
@@ -468,7 +469,7 @@ export async function updateConfidence(
 ): Promise<void> {
   try {
     const memory = await db.memory.findFirst({
-      where: { userId, type: memoryType, key: memoryKey },
+      where: { userId, type: memoryType as MemoryType, key: memoryKey },
     });
 
     if (!memory) return;

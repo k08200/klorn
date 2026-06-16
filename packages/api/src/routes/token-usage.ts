@@ -88,11 +88,7 @@ export async function tokenUsageRoutes(app: FastifyInstance) {
   app.get("/conversations", rateLimitConfig, async (request) => {
     const userId = getUserId(request);
 
-    const usages: {
-      conversationId: string | null;
-      _sum: { totalTokens: number | null; estimatedCost: number | null };
-      _count: number;
-    }[] = await db.tokenUsage.groupBy({
+    const usages = await db.tokenUsage.groupBy({
       by: ["conversationId"],
       where: { userId, conversationId: { not: null } },
       _sum: { totalTokens: true, estimatedCost: true },
