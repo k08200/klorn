@@ -590,7 +590,7 @@ function EmailDetailView() {
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:py-10">
       <Link
         href="/email"
-        className="mb-4 inline-flex items-center gap-1 rounded-full border border-stone-700/45 bg-stone-950/35 px-3 py-1.5 text-xs text-stone-400 transition hover:border-orange-500/35 hover:text-stone-100"
+        className="mb-4 inline-flex items-center gap-1 rounded-full border border-stone-700/45 bg-stone-950/35 px-3 py-1.5 text-xs text-stone-400 transition hover:border-amber-300/40 hover:text-stone-100"
       >
         <svg
           aria-hidden="true"
@@ -723,7 +723,7 @@ function EmailDetailView() {
           )}
 
           <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
-            <EveAnalysis
+            <KlornAnalysis
               email={email}
               onPriorityChange={(priority) =>
                 setEmail((prev) => (prev ? { ...prev, priority } : prev))
@@ -1335,7 +1335,7 @@ function ReplyDraftBox({
   );
 }
 
-function EveAnalysis({
+function KlornAnalysis({
   email,
   onPriorityChange,
 }: {
@@ -1356,8 +1356,8 @@ function EveAnalysis({
   }
 
   return (
-    <section className="relative overflow-hidden rounded-lg border border-orange-500/20 bg-orange-500/5 p-4">
-      <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-[#a8a29e] via-accent to-[#a8a29e]" />
+    <section className="relative overflow-hidden rounded-lg border border-amber-300/20 bg-amber-300/5 p-4">
+      <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-transparent via-accent to-transparent" />
       <div className="pl-2">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-accent">
