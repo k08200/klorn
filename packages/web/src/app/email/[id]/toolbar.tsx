@@ -32,7 +32,7 @@ export function UndoActionBanner({
 }) {
   const actionLabel = notice.action === "archive" ? "archived" : "moved to trash";
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-[#2A1510] px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-amber-950/30 px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="font-medium">Email {actionLabel}.</p>
         {notice.subject && (
@@ -156,7 +156,7 @@ export function EmailReminderQuickActions({
             type="button"
             onClick={() => onCreate(option)}
             disabled={disabled || busyKey !== null}
-            className="min-h-9 rounded-md border border-white/10 bg-black/20 px-3 text-xs text-stone-300 transition hover:border-[#7DD3FC]/35 hover:text-stone-100 disabled:cursor-not-allowed disabled:opacity-45"
+            className="min-h-9 rounded-md border border-white/10 bg-black/20 px-3 text-xs text-stone-300 transition hover:border-[#a8a29e]/35 hover:text-stone-100 disabled:cursor-not-allowed disabled:opacity-45"
           >
             {busyKey === option.key ? "Setting..." : option.label}
           </button>

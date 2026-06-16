@@ -603,7 +603,7 @@ function EmailView() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
-      <header className="mb-5 rounded-lg border border-white/10 bg-[#11161A] p-5 shadow-xl shadow-black/10 md:p-6">
+      <header className="mb-5 rounded-lg border border-white/10 bg-stone-900/40 p-5 shadow-xl shadow-black/10 md:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
@@ -621,7 +621,7 @@ function EmailView() {
             type="button"
             onClick={syncNow}
             disabled={syncing}
-            className="min-h-11 w-fit rounded-md border border-white/10 bg-[#090B10] px-3 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:bg-white/5 hover:text-stone-100 disabled:opacity-50"
+            className="min-h-11 w-fit rounded-md border border-white/10 bg-stone-950/60 px-3 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:bg-white/5 hover:text-stone-100 disabled:opacity-50"
           >
             {syncing ? "Syncing..." : "Sync now"}
           </button>
@@ -629,12 +629,12 @@ function EmailView() {
             type="button"
             onClick={reanalyzeAttachments}
             disabled={reanalyzing}
-            className="min-h-11 w-fit rounded-md border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 px-3 text-xs font-medium text-sky-100 transition hover:bg-[#7DD3FC]/15 disabled:opacity-50"
+            className="min-h-11 w-fit rounded-md border border-[#a8a29e]/25 bg-[#a8a29e]/10 px-3 text-xs font-medium text-sky-100 transition hover:bg-[#a8a29e]/15 disabled:opacity-50"
           >
             {reanalyzing ? "Analyzing..." : "Reanalyze attachments"}
           </button>
         </div>
-        <div className="mt-5 grid grid-cols-4 overflow-hidden rounded-md border border-white/10 bg-[#090B10]">
+        <div className="mt-5 grid grid-cols-4 overflow-hidden rounded-md border border-white/10 bg-stone-950/60">
           <SignalStat label="Unread" value={unreadCount} />
           <SignalStat label="Urgent" value={urgentCount} />
           <SignalStat label="Replies" value={replyCount} />
@@ -667,7 +667,7 @@ function EmailView() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search sender, body, attachment text, extracted fields"
-          className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#090B10] px-3 text-sm text-stone-200 outline-none transition placeholder:text-stone-600 focus:border-accent/45"
+          className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-stone-950/60 px-3 text-sm text-stone-200 outline-none transition placeholder:text-stone-600 focus:border-accent/45"
         />
         <button
           type="submit"
@@ -682,7 +682,7 @@ function EmailView() {
               setSearch("");
               setAppliedSearch("");
             }}
-            className="h-10 rounded-lg border border-white/10 bg-[#11161A] px-3 text-xs text-stone-400 transition hover:bg-white/5"
+            className="h-10 rounded-lg border border-white/10 bg-stone-900/40 px-3 text-xs text-stone-400 transition hover:bg-white/5"
           >
             Clear
           </button>
@@ -700,7 +700,7 @@ function EmailView() {
             className={`rounded-lg border p-3 text-left transition ${
               filter === queue.key
                 ? "border-accent/45 bg-accent/10"
-                : "border-white/10 bg-[#11161A] hover:border-white/20 hover:bg-white/5"
+                : "border-white/10 bg-stone-900/40 hover:border-white/20 hover:bg-white/5"
             }`}
           >
             <span className="block text-sm font-medium text-stone-100">{queue.title}</span>
@@ -733,7 +733,7 @@ function EmailView() {
       )}
 
       {!loading && !error && filter !== "threads" && emails.length === 0 && (
-        <div className="mt-4 rounded-lg border border-white/10 bg-[#11161A] p-6 text-center">
+        <div className="mt-4 rounded-lg border border-white/10 bg-stone-900/40 p-6 text-center">
           <p className="text-sm text-stone-300">
             {filter === "all"
               ? "No mail signals yet."
@@ -814,7 +814,7 @@ function EmailView() {
       )}
 
       {!loading && filter === "threads" && threads.length === 0 && !error && (
-        <div className="mt-4 rounded-lg border border-white/10 bg-[#11161A] p-6 text-center">
+        <div className="mt-4 rounded-lg border border-white/10 bg-stone-900/40 p-6 text-center">
           <p className="text-sm text-stone-300">No threads match this filter.</p>
         </div>
       )}
@@ -873,7 +873,7 @@ function UndoActionBanner({
 }) {
   const actionLabel = notice.action === "archive" ? "archived" : "moved to trash";
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-[#2A1510] px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-amber-950/30 px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="font-medium">Email {actionLabel}.</p>
         {notice.subject && (
@@ -921,7 +921,7 @@ function BulkUndoActionBanner({
     .map((email) => email.subject)
     .join(", ");
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-[#2A1510] px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-amber-950/30 px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="font-medium">
           {count} {count === 1 ? "email" : "emails"} archived.
@@ -968,12 +968,12 @@ function BulkActionBar({
   onToggleAll: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-white/10 bg-[#0C1116] px-3 py-2 md:flex-row md:items-center md:justify-between">
+    <div className="flex flex-col gap-2 rounded-lg border border-white/10 bg-stone-950/70 px-3 py-2 md:flex-row md:items-center md:justify-between">
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={onToggleAll}
-          className="h-8 rounded-md border border-white/10 bg-[#11161A] px-2.5 text-xs font-medium text-stone-300 transition hover:bg-white/5"
+          className="h-8 rounded-md border border-white/10 bg-stone-900/40 px-2.5 text-xs font-medium text-stone-300 transition hover:bg-white/5"
         >
           {allVisibleSelected ? "Clear page" : "Select page"}
         </button>
@@ -1034,7 +1034,7 @@ function BulkButton({
       className={`h-8 rounded-md border px-2.5 text-xs font-medium transition disabled:opacity-50 ${
         danger
           ? "border-red-500/25 bg-red-500/10 text-red-200 hover:bg-red-500/15"
-          : "border-white/10 bg-[#11161A] text-stone-300 hover:bg-white/5"
+          : "border-white/10 bg-stone-900/40 text-stone-300 hover:bg-white/5"
       }`}
     >
       {children}
@@ -1065,8 +1065,8 @@ function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filt
             onClick={() => onChange(f.key)}
             className={`min-h-[32px] shrink-0 rounded-full px-3 py-1.5 text-xs transition ${
               active
-                ? "bg-accent text-[#190B07]"
-                : "border border-white/10 bg-[#11161A] text-stone-400 hover:bg-white/6 hover:text-stone-200"
+                ? "bg-accent text-stone-950"
+                : "border border-white/10 bg-stone-900/40 text-stone-400 hover:bg-white/6 hover:text-stone-200"
             }`}
           >
             {f.label}
@@ -1167,10 +1167,10 @@ function EmailRowItem({
         className={`mt-4 h-5 w-5 rounded border transition ${
           selected
             ? "border-accent bg-accent shadow-[inset_0_0_0_4px_#0C1116]"
-            : "border-white/15 bg-[#11161A] hover:border-white/30"
+            : "border-white/15 bg-stone-900/40 hover:border-white/30"
         }`}
       />
-      <div className="overflow-hidden rounded-lg border border-white/10 bg-[#11161A] transition hover:border-white/20">
+      <div className="overflow-hidden rounded-lg border border-white/10 bg-stone-900/40 transition hover:border-white/20">
         <Link
           href={`/email/${email.id}?${detailParams.toString()}`}
           className="block transition hover:bg-white/5 active:bg-white/10"
@@ -1236,7 +1236,7 @@ function EmailRowReminderActions({
             type="button"
             onClick={() => onCreateReminder(email, option)}
             disabled={busyKey !== null}
-            className="min-h-8 rounded-md border border-white/10 bg-black/15 px-2.5 text-[11px] text-stone-400 transition hover:border-[#7DD3FC]/35 hover:text-stone-100 disabled:cursor-not-allowed disabled:opacity-45"
+            className="min-h-8 rounded-md border border-white/10 bg-black/15 px-2.5 text-[11px] text-stone-400 transition hover:border-[#a8a29e]/35 hover:text-stone-100 disabled:cursor-not-allowed disabled:opacity-45"
           >
             {busyKey === key ? "Setting..." : option.label}
           </button>
@@ -1253,7 +1253,7 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
       {email.needsReply && <ReplyNeededBadge />}
       {(email.attachmentCandidateCount ?? 0) > 0 && <CandidateBadge />}
       {(email.attachmentCount ?? 0) > 0 && (
-        <span className="shrink-0 rounded border border-[#7DD3FC]/30 bg-[#7DD3FC]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#7DD3FC]">
+        <span className="shrink-0 rounded border border-[#a8a29e]/30 bg-[#a8a29e]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#a8a29e]">
           Files {email.attachmentCount}
         </span>
       )}
@@ -1278,7 +1278,7 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
     <li>
       <Link
         href={`/email/${thread.lastMessage.id}?markRead=false`}
-        className="block rounded-lg border border-white/10 bg-[#11161A] transition hover:border-white/20 hover:bg-white/5 active:bg-white/10"
+        className="block rounded-lg border border-white/10 bg-stone-900/40 transition hover:border-white/20 hover:bg-white/5 active:bg-white/10"
       >
         <div className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-start">
           <div className="min-w-0">
