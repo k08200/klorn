@@ -195,7 +195,7 @@ function CommandCenterView() {
       <div className="mb-6 flex items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
-            Klorn · Command Center
+            Klorn · Decision queue
           </p>
           <h1 className="mt-1 text-xl font-semibold tracking-tight text-stone-50">
             {pendingCount > 0
@@ -216,7 +216,7 @@ function CommandCenterView() {
           </button>
           <Link
             href="/inbox/receipt"
-            className="hidden text-xs text-teal-400 hover:text-teal-300 transition sm:block"
+            className="hidden text-xs text-amber-300 hover:text-amber-200 transition sm:block"
           >
             Today's receipt →
           </Link>
