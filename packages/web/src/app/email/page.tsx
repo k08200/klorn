@@ -177,57 +177,41 @@ const FILTERS: { key: Filter; label: string; query: string }[] = [
   { key: "automated", label: "Automated", query: "category=automated" },
 ];
 
+// Domain triage tiles. Counts were intentionally removed: the old
+// `count(emails)` only matched the rows already loaded into the infinite
+// list, so "Current signals N" understated the true total and shrank/grew as
+// the user scrolled. An accurate per-domain total needs a server endpoint;
+// until then these are honest navigation tiles, not metrics.
 const WORK_QUEUES: Array<{
   key: Filter;
   title: string;
   description: string;
-  count: (emails: EmailRow[]) => number;
 }> = [
   {
     key: "finance",
     title: "Finance docs",
     description: "Billing, invoices, failed payments, contract amounts",
-    count: (emails) =>
-      emails.filter((email) =>
-        `${email.category ?? ""} ${email.subject} ${email.summary ?? ""} ${email.snippet ?? ""}`
-          .toLowerCase()
-          .match(/billing|invoice|payment|receipt/),
-      ).length,
   },
   {
     key: "legal",
     title: "Legal review",
     description: "Contracts, compliance, signatures, risk",
-    count: (emails) =>
-      emails.filter((email) =>
-        `${email.subject} ${email.summary ?? ""} ${email.snippet ?? ""}`.match(
-          /contract|legal|signature|compliance/i,
-        ),
-      ).length,
   },
   {
     key: "sales",
     title: "Revenue and customers",
     description: "Customer replies, renewals, pricing, meeting follow-up",
-    count: (emails) =>
-      emails.filter((email) =>
-        `${email.category ?? ""} ${email.subject} ${email.summary ?? ""}`.match(
-          /business|customer|sales|renewal|pricing|proposal/i,
-        ),
-      ).length,
   },
   {
     key: "support",
     title: "Support issues",
     description: "Bugs, incidents, complaints, escalations",
-    count: (emails) =>
-      emails.filter((email) =>
-        `${email.subject} ${email.summary ?? ""} ${email.snippet ?? ""}`.match(
-          /bug|issue|error|support|blocked|complaint/i,
-        ),
-      ).length,
   },
 ];
+
+// Domain filters surfaced as WORK_QUEUES cards below — kept out of the pill
+// row so the two navigation models stop duplicating each other.
+const DOMAIN_FILTER_KEYS: Filter[] = ["finance", "legal", "sales", "support"];
 
 export default function EmailPage() {
   return (
@@ -703,12 +687,14 @@ function EmailView() {
                 : "border-white/10 bg-stone-900/40 hover:border-white/20 hover:bg-white/5"
             }`}
           >
-            <span className="block text-sm font-medium text-stone-100">{queue.title}</span>
+            <span className="flex items-center justify-between gap-2 text-sm font-medium text-stone-100">
+              {queue.title}
+              <span className="text-accent-light" aria-hidden="true">
+                →
+              </span>
+            </span>
             <span className="mt-1 block text-[11px] leading-4 text-stone-500">
               {queue.description}
-            </span>
-            <span className="mt-2 block text-xs text-accent-light">
-              Current signals {queue.count(emails)}
             </span>
           </button>
         ))}
@@ -1056,7 +1042,7 @@ function SignalStat({ label, value }: { label: string; value: number }) {
 function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filter) => void }) {
   return (
     <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 scrollbar-hide">
-      {FILTERS.map((f) => {
+      {FILTERS.filter((f) => !DOMAIN_FILTER_KEYS.includes(f.key)).map((f) => {
         const active = f.key === current;
         return (
           <button
