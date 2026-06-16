@@ -6,6 +6,10 @@ import { useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { EveSignalField } from "../../components/brand-visuals";
 import { Markdown } from "../../components/markdown";
+import Button from "../../components/ui/button";
+import EmptyState from "../../components/ui/empty-state";
+import LoadingState from "../../components/ui/loading-state";
+import PageHeader from "../../components/ui/page-header";
 import { apiFetch } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { queryKeys } from "../../lib/query-keys";
@@ -218,134 +222,137 @@ function BriefingView() {
   const topActions = content ? extractTopActions(content) : [];
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
-      <header className="mb-6 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
-        <div className="h-1 bg-gradient-to-r from-amber-300 via-teal-300 to-stone-600" />
-        <div className="grid gap-5 p-5 md:p-6 lg:grid-cols-[1fr_300px] lg:items-stretch">
-          <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-              Klorn · Briefing
-            </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              Today's decision brief
-            </h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-              Mail and calendar items that need a call, sorted into approve, hold, and next steps.
-              {formattedTime && <span className="ml-2 text-stone-400">Today {formattedTime}</span>}
-            </p>
-          </div>
-          <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
-            <EveSignalField className="absolute inset-0 border-0" />
-            <button
-              type="button"
+    <div className="min-h-full px-4 pb-28 pt-6 md:py-10">
+      <div className="mx-auto max-w-3xl animate-fade-in">
+        <PageHeader
+          eyebrow="Klorn · Briefing"
+          title="Today's decision brief"
+          description="Mail and calendar items that need a call, sorted into approve, hold, and next steps."
+          actions={
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={regenerate}
+              loading={generating}
               disabled={generating}
-              className="absolute right-3 top-3 inline-flex min-h-11 items-center rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
             >
               {generating ? "Generating..." : content ? "Regenerate" : "Generate now"}
-            </button>
+            </Button>
+          }
+        />
+
+        <section className="glass relative mb-4 overflow-hidden rounded-2xl border border-stone-800/70 bg-stone-950/40 p-5">
+          <div className="grid gap-5 lg:grid-cols-[1fr_280px] lg:items-center">
+            <div className="grid grid-cols-3 gap-2">
+              <BriefStat label="Actions" value={topActions.length} />
+              <BriefStat label="Feedback" value={Object.keys(feedback).length} />
+              <BriefStat label="Status" value={content ? "Ready" : "Empty"} />
+            </div>
+            <div className="relative min-h-32 overflow-hidden rounded-xl border border-stone-800/70 bg-black/20">
+              <EveSignalField className="absolute inset-0 border-0" />
+              {formattedTime && (
+                <span className="absolute bottom-3 left-3 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-500">
+                  Today {formattedTime}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-2 lg:col-span-2">
-            <BriefStat label="Actions" value={topActions.length} />
-            <BriefStat label="Feedback" value={Object.keys(feedback).length} />
-            <BriefStat label="Status" value={content ? "Ready" : "Empty"} />
+        </section>
+
+        <TodayActionsCard />
+
+        {status && <BriefingDeliveryStatus status={status} />}
+        {statusError && (
+          <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-200">
+            {statusError}
           </div>
-        </div>
-      </header>
+        )}
 
-      <TodayActionsCard />
+        {loading && <LoadingState rows={4} label="Loading briefing" />}
 
-      {status && <BriefingDeliveryStatus status={status} />}
-      {statusError && (
-        <div className="mb-4 rounded-lg border border-amber-900/50 bg-amber-950/20 px-4 py-3 text-sm text-amber-200">
-          {statusError}
-        </div>
-      )}
+        {(error || briefingLoadError) && (
+          <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 px-4 py-3 text-sm text-rose-300">
+            {error ?? briefingLoadError}
+          </div>
+        )}
 
-      {loading && <p className="text-sm text-stone-500">Loading...</p>}
-
-      {(error || briefingLoadError) && (
-        <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
-          {error ?? briefingLoadError}
-        </div>
-      )}
-
-      {!loading && !error && !briefingLoadError && !content && (
-        <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-6 text-center">
-          <p className="mb-3 text-sm text-stone-300">No briefing for today yet.</p>
-          <p className="mx-auto mb-4 max-w-md text-xs leading-5 text-amber-100/85">
-            {t("briefing.learningMode")}
-          </p>
-          <p className="mb-4 text-xs text-stone-500">
-            Change the automatic briefing time in{" "}
-            <Link href="/settings" className="text-amber-300 hover:underline">
-              Settings
-            </Link>
-            .
-          </p>
-          <button
-            type="button"
-            onClick={regenerate}
-            disabled={generating}
-            className="rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
-          >
-            {generating ? "Generating..." : "Generate now"}
-          </button>
-        </div>
-      )}
-
-      {content && (
-        <div className="space-y-4">
-          <article className="relative overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/35 p-5 pl-6 md:p-6 md:pl-7">
-            <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-amber-300 via-teal-300 to-stone-700" />
-            <Markdown content={content} />
-          </article>
-
-          {noteId && topActions.length > 0 && (
-            <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
-              <div className="mb-3">
-                <h2 className="text-sm font-semibold text-stone-100">Top 3 feedback</h2>
-                <p className="mt-1 text-xs text-stone-500">
-                  Mark whether today's surfaced items were actually useful.
+        {!loading && !error && !briefingLoadError && !content && (
+          <EmptyState
+            title="No briefing for today yet"
+            description={t("briefing.learningMode")}
+            action={
+              <div className="flex flex-col items-center gap-3">
+                <Button onClick={regenerate} loading={generating} disabled={generating}>
+                  {generating ? "Generating..." : "Generate now"}
+                </Button>
+                <p className="text-xs text-stone-500">
+                  Change the automatic briefing time in{" "}
+                  <Link href="/settings" className="text-amber-300 hover:underline">
+                    Settings
+                  </Link>
+                  .
                 </p>
               </div>
-              <div className="space-y-3">
-                {topActions.map((action) => (
-                  <div
-                    key={action.rank}
-                    className="rounded-lg border border-stone-700/45 bg-black/20 p-3"
-                  >
-                    <p className="text-sm text-stone-300">
-                      <span className="text-stone-500">{action.rank}.</span> {action.label}
-                    </p>
-                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                      {FEEDBACK_OPTIONS.map((option) => {
-                        const selected = feedback[action.rank] === option.choice;
-                        return (
-                          <button
-                            key={option.choice}
-                            type="button"
-                            onClick={() => submitFeedback(action, option.choice)}
-                            aria-pressed={selected}
-                            disabled={savingRank === action.rank}
-                            className={`h-8 rounded-lg border px-2 text-xs transition disabled:opacity-50 ${
-                              selected
-                                ? "border-amber-300 bg-amber-500/10 text-amber-100"
-                                : "border-stone-700 text-stone-400 hover:bg-stone-800"
-                            }`}
-                          >
-                            {savingRank === action.rank && !selected ? "Saving" : option.label}
-                          </button>
-                        );
-                      })}
+            }
+          />
+        )}
+
+        {content && (
+          <div className="space-y-4 animate-slide-up">
+            <article className="glass relative overflow-hidden rounded-2xl border border-stone-800/70 bg-stone-950/40 p-5 pl-6 md:pl-7">
+              <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-amber-300 via-amber-300/40 to-stone-700" />
+              <Markdown content={content} />
+            </article>
+
+            {noteId && topActions.length > 0 && (
+              <section className="glass rounded-2xl border border-stone-800/70 bg-stone-950/40 p-5">
+                <div className="mb-4">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-stone-500">
+                    Top 3 feedback
+                  </p>
+                  <p className="mt-1.5 text-sm text-stone-400">
+                    Mark whether today's surfaced items were actually useful.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  {topActions.map((action) => (
+                    <div
+                      key={action.rank}
+                      className="rounded-xl border border-stone-800/70 bg-black/20 p-3.5"
+                    >
+                      <p className="text-sm text-stone-200">
+                        <span className="font-mono text-xs text-stone-500">{action.rank}.</span>{" "}
+                        {action.label}
+                      </p>
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {FEEDBACK_OPTIONS.map((option) => {
+                          const selected = feedback[action.rank] === option.choice;
+                          return (
+                            <button
+                              key={option.choice}
+                              type="button"
+                              onClick={() => submitFeedback(action, option.choice)}
+                              aria-pressed={selected}
+                              disabled={savingRank === action.rank}
+                              className={`h-9 rounded-xl border px-2 text-xs font-medium transition disabled:opacity-50 ${
+                                selected
+                                  ? "border-amber-300/60 bg-amber-500/10 text-amber-100"
+                                  : "border-stone-700 text-stone-400 hover:border-stone-600 hover:bg-stone-800/60"
+                              }`}
+                            >
+                              {savingRank === action.rank && !selected ? "Saving" : option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
-      )}
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -369,9 +376,11 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
   const guidance = deliveryGuidance(status);
 
   return (
-    <section className="mb-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+    <section className="glass mb-4 rounded-2xl border border-stone-800/70 bg-stone-950/40 p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-stone-100">Briefing delivery</h2>
+        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-stone-500">
+          Briefing delivery
+        </p>
         <Link href="/settings" className="text-xs text-amber-300 hover:underline">
           Settings
         </Link>
@@ -395,12 +404,12 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
         <DeliveryFact label="Push" value={push.label} tone={push.tone} />
       </div>
       {guidance && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] leading-5 text-amber-100/90">
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] leading-5 text-amber-100/90">
           <span>{guidance.message}</span>
           {guidance.action && (
             <Link
               href={guidance.action.href}
-              className="rounded-md border border-amber-300/40 px-2 py-0.5 text-amber-200 transition hover:bg-amber-300/10"
+              className="rounded-lg border border-amber-300/40 px-2 py-0.5 text-amber-200 transition hover:bg-amber-300/10"
             >
               {guidance.action.label}
             </Link>
@@ -492,8 +501,8 @@ function DeliveryFact({
     muted: "border-stone-800 bg-black/15 text-stone-400",
   }[tone];
   return (
-    <div className={`rounded-lg border px-3 py-2 ${toneClass}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-60">{label}</p>
+    <div className={`rounded-xl border px-3 py-2 ${toneClass}`}>
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] opacity-70">{label}</p>
       <p className="mt-1 truncate text-xs font-medium">{value}</p>
     </div>
   );
@@ -537,11 +546,9 @@ function pushReasonLabel(reason: string): string {
 
 function BriefStat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-lg border border-stone-700/45 bg-black/15 px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
-        {label}
-      </p>
-      <p className="mt-1 truncate text-lg font-semibold text-stone-100">{value}</p>
+    <div className="rounded-xl border border-stone-800/70 bg-black/15 px-3 py-2.5">
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-stone-500">{label}</p>
+      <p className="mt-1.5 truncate text-xl font-semibold tracking-tight text-stone-100">{value}</p>
     </div>
   );
 }

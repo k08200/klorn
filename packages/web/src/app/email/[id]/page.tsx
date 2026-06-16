@@ -587,10 +587,10 @@ function EmailDetailView() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:py-10">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-28 pt-6 md:py-10">
       <Link
         href="/email"
-        className="mb-4 inline-flex items-center gap-1 rounded-full border border-stone-700/45 bg-stone-950/35 px-3 py-1.5 text-xs text-stone-400 transition hover:border-orange-500/35 hover:text-stone-100"
+        className="lift mb-5 inline-flex items-center gap-1.5 rounded-xl border border-stone-800/70 bg-stone-950/40 px-3 py-1.5 text-xs text-stone-400 transition hover:border-stone-700 hover:text-stone-100"
       >
         <svg
           aria-hidden="true"
@@ -618,18 +618,20 @@ function EmailDetailView() {
         />
       )}
 
-      {loading && <p className="text-sm text-stone-500">Loading...</p>}
+      {loading && (
+        <p className="animate-fade-in text-sm text-stone-500">Loading...</p>
+      )}
 
       {error && (
-        <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+        <div className="animate-fade-in rounded-xl border border-rose-500/30 bg-rose-500/[0.07] px-4 py-3 text-sm text-rose-200">
           {error}
         </div>
       )}
 
       {email && (
-        <article>
-          <header className="mb-5 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
-            <div className="h-1 bg-gradient-to-r from-[#7DD3FC] via-accent to-stone-600" />
+        <article className="animate-slide-up">
+          <header className="glass mb-5 overflow-hidden rounded-2xl border border-stone-800/70 bg-stone-950/40">
+            <div className="h-1 bg-gradient-to-r from-amber-300/70 via-amber-400/40 to-stone-700" />
             <div className="p-5 md:p-6">
               <EmailActionToolbar
                 busyAction={actionBusy}
@@ -648,24 +650,24 @@ function EmailDetailView() {
               />
               <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
                 <div>
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent/80">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-300/80">
                     Signal detail
                   </p>
-                  <h1 className="break-words text-xl font-semibold leading-snug tracking-tight text-stone-50 md:text-2xl">
+                  <h1 className="break-words text-2xl font-semibold leading-snug tracking-tight text-stone-50">
                     {email.subject || "No subject"}
                   </h1>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
-                    <span className="max-w-full truncate">{email.from}</span>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-500">
+                    <span className="max-w-full truncate normal-case">{email.from}</span>
                     {email.trust && <TrustBadgeChip trust={email.trust} />}
-                    <span className="text-stone-600">·</span>
+                    <span className="text-stone-700">·</span>
                     <time className="shrink-0 tabular-nums">{formatFull(email.date)}</time>
-                    <span className="text-stone-600">·</span>
+                    <span className="text-stone-700">·</span>
                     <span>{email.isRead ? "Read" : "Kept unread"}</span>
                   </div>
                 </div>
-                <EveSignalField className="min-h-40 rounded-lg" />
+                <EveSignalField className="min-h-40 rounded-xl" />
               </div>
-              <div className="mt-5 grid grid-cols-3 gap-2">
+              <div className="mt-5 grid grid-cols-3 gap-2.5">
                 <DetailStat label="Priority" value={PRIORITY_LABELS[email.priority]} />
                 <DetailStat label="Reply" value={email.needsReply ? "Needed" : "No signal"} />
                 <DetailStat
@@ -731,20 +733,20 @@ function EmailDetailView() {
             />
 
             {email.body ? (
-              <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
-                <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-stone-500">
+              <section className="glass rounded-2xl border border-stone-800/70 bg-stone-950/40 p-5">
+                <h2 className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-500">
                   Body
                 </h2>
-                <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-stone-200">
+                <pre className="whitespace-pre-wrap break-words font-sans text-[15px] leading-7 text-stone-200">
                   {email.body}
                 </pre>
               </section>
             ) : email.snippet ? (
-              <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
-                <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-stone-500">
+              <section className="glass rounded-2xl border border-stone-800/70 bg-stone-950/40 p-5">
+                <h2 className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-500">
                   Preview
                 </h2>
-                <p className="text-sm text-stone-300">{email.snippet}</p>
+                <p className="text-[15px] leading-7 text-stone-300">{email.snippet}</p>
               </section>
             ) : null}
           </div>
@@ -767,20 +769,20 @@ function CandidateProfileCard({
 }) {
   const status = intake?.status ?? candidatePipelineToIntakeStatus(profile.pipelineStatus);
   return (
-    <section className="mt-5 rounded-xl border border-orange-500/20 bg-orange-500/5 p-4">
+    <section className="glass mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/[0.04] p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-accent-light">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-300/80">
           Candidate card
         </h2>
         <span className="text-[11px] text-stone-500">
           Confidence {Math.round(profile.confidence * 100)}%
         </span>
       </div>
-      <div className="mb-3 rounded-lg border border-orange-500/15 bg-black/15 px-3 py-2">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-accent-light/70">
+      <div className="mb-3 rounded-xl border border-amber-300/15 bg-stone-950/40 px-3 py-2">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-amber-300/70">
           Pipeline
         </p>
-        <p className="mt-1 text-xs font-medium text-accent-dim">
+        <p className="mt-1 text-xs font-medium text-amber-200">
           {candidatePipelineLabel(profile.pipelineStatus)}
         </p>
         <p className="mt-1 text-[11px] leading-5 text-stone-400">{profile.nextAction}</p>
@@ -792,10 +794,10 @@ function CandidateProfileCard({
             type="button"
             onClick={() => onUpdate({ status: option.status })}
             disabled={updating || status === option.status}
-            className={`rounded border px-2 py-1 text-[11px] transition disabled:cursor-default ${
+            className={`rounded-xl border px-2.5 py-1 text-[11px] transition disabled:cursor-default ${
               status === option.status
-                ? "border-accent-light/40 bg-accent-light/15 text-accent-dim"
-                : "border-stone-700/60 bg-black/15 text-stone-400 hover:border-accent/30 hover:text-accent-muted"
+                ? "border-amber-300/40 bg-amber-300/15 text-amber-100"
+                : "border-stone-800/70 bg-stone-950/40 text-stone-400 hover:border-amber-300/30 hover:text-amber-200"
             }`}
           >
             {option.label}
@@ -816,7 +818,7 @@ function CandidateProfileCard({
           {profile.skills.map((skill) => (
             <span
               key={skill}
-              className="rounded border border-orange-500/25 bg-accent/10 px-2 py-1 text-[11px] text-accent-muted"
+              className="rounded-xl border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-[11px] text-amber-200"
             >
               {skill}
             </span>
@@ -826,19 +828,19 @@ function CandidateProfileCard({
       {profile.links.length > 0 && (
         <div className="mt-3 space-y-1">
           {profile.links.map((link) => (
-            <p key={link} className="break-all text-[11px] text-[#7DD3FC]">
+            <p key={link} className="break-all text-[11px] text-amber-200/90">
               {link}
             </p>
           ))}
         </div>
       )}
       {profile.missingFields.length > 0 && (
-        <p className="mt-3 text-[11px] text-accent/80">
+        <p className="mt-3 text-[11px] text-amber-300/80">
           Needs follow-up: {profile.missingFields.map(candidateMissingLabel).join(", ")}
         </p>
       )}
       {profile.manualReviewFiles.length > 0 && (
-        <div className="mt-3 rounded-lg border border-rose-400/25 bg-rose-400/10 px-3 py-2">
+        <div className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2">
           <p className="text-[11px] font-medium text-rose-200">Source review needed</p>
           <ul className="mt-1 space-y-1">
             {profile.manualReviewFiles.map((file) => (
@@ -857,7 +859,7 @@ function CandidateProfileCard({
           defaultValue={intake?.notes ?? ""}
           rows={2}
           onBlur={(e) => onUpdate({ notes: e.target.value || null })}
-          className="w-full rounded-lg border border-orange-500/15 bg-black/15 px-3 py-2 text-xs leading-5 text-stone-300 outline-none transition focus:border-accent/35"
+          className="w-full rounded-xl border border-amber-300/15 bg-stone-950/40 px-3 py-2 text-xs leading-5 text-stone-300 outline-none transition focus:border-amber-300/40"
           placeholder="Review note"
         />
       </label>
@@ -892,11 +894,13 @@ function ThreadContextPanel({
   currentEmailId: string;
 }) {
   return (
-    <section className="mb-5 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+    <section className="glass mb-5 rounded-2xl border border-stone-800/70 bg-stone-950/40 p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-stone-100">Thread context</h2>
-          <p className="mt-1 text-xs text-stone-500">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-300/80">
+            Thread context
+          </p>
+          <p className="mt-1.5 text-xs text-stone-500">
             Review {thread.messageCount} earlier messages to understand the reply context.
           </p>
         </div>
@@ -907,15 +911,17 @@ function ThreadContextPanel({
           return (
             <li
               key={message.id}
-              className={`rounded-lg border px-3 py-2 ${
-                current ? "border-accent/30 bg-accent/10" : "border-stone-800/70 bg-black/15"
+              className={`lift rounded-xl border px-3 py-2.5 ${
+                current
+                  ? "border-amber-300/30 bg-amber-300/10"
+                  : "border-stone-800/70 bg-stone-950/40 hover:border-stone-700"
               }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="min-w-0 truncate text-xs font-medium text-stone-200">
                   {senderName(message.from)}
                 </p>
-                <time className="shrink-0 text-[10px] tabular-nums text-stone-600">
+                <time className="shrink-0 font-mono text-[10px] tabular-nums text-stone-600">
                   {formatFull(message.date)}
                 </time>
               </div>
@@ -923,7 +929,7 @@ function ThreadContextPanel({
                 {message.summary || message.snippet || message.subject || "No summary"}
               </p>
               {message.actionItems.length > 0 && (
-                <p className="mt-1 text-[10px] text-accent-light">
+                <p className="mt-1 text-[10px] text-amber-300/80">
                   {message.actionItems.length} tasks
                 </p>
               )}
@@ -1151,13 +1157,13 @@ function ReplyDraftBox({
   const quickIntents = buildQuickReplyIntents(candidateProfile, mode);
 
   return (
-    <section className="mt-5 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+    <section className="glass mt-5 rounded-2xl border border-stone-800/70 bg-stone-950/40 p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-stone-300">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-300/80">
             Reply draft
-          </h2>
-          <p className="mt-1 text-xs text-stone-500">
+          </p>
+          <p className="mt-1.5 text-xs text-stone-500">
             Klorn drafts it. You approve before anything is sent.
           </p>
         </div>
@@ -1165,7 +1171,7 @@ function ReplyDraftBox({
           type="button"
           onClick={onGenerate}
           disabled={drafting}
-          className="rounded-lg border border-orange-500/30 px-3 py-1.5 text-xs text-accent-muted transition hover:bg-orange-500/10 disabled:opacity-50"
+          className="rounded-xl border border-amber-300/30 px-3 py-1.5 text-xs text-amber-200 transition hover:bg-amber-300/10 disabled:opacity-50"
         >
           {drafting ? "Drafting..." : draft ? "Regenerate" : "Draft reply"}
         </button>
@@ -1174,7 +1180,7 @@ function ReplyDraftBox({
         value={intent}
         onChange={(e) => onIntentChange(e.target.value)}
         placeholder="Example: confirm the profile was reviewed and ask for next audition availability"
-        className="mb-3 w-full rounded-lg border border-stone-700/60 bg-black/20 px-3 py-2 text-xs text-stone-300 placeholder-stone-600 outline-none transition focus:border-orange-500/40"
+        className="mb-3 w-full rounded-xl border border-stone-800/70 bg-stone-950/40 px-3 py-2 text-xs text-stone-300 placeholder-stone-600 outline-none transition focus:border-amber-300/40"
       />
       <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
         {WORK_MODE_OPTIONS.map((option) => (
@@ -1182,10 +1188,10 @@ function ReplyDraftBox({
             key={option.value}
             type="button"
             onClick={() => setMode(option.value)}
-            className={`h-8 shrink-0 rounded-full border px-3 text-[11px] transition ${
+            className={`h-8 shrink-0 rounded-xl border px-3 text-[11px] transition ${
               mode === option.value
-                ? "border-accent/45 bg-accent/15 text-accent-muted"
-                : "border-stone-700/60 bg-black/15 text-stone-400 hover:border-stone-600"
+                ? "border-amber-300/45 bg-amber-300/15 text-amber-200"
+                : "border-stone-800/70 bg-stone-950/40 text-stone-400 hover:border-stone-700"
             }`}
           >
             {option.label}
@@ -1199,7 +1205,7 @@ function ReplyDraftBox({
               key={item.label}
               type="button"
               onClick={() => onIntentChange(item.intent)}
-              className="rounded-full border border-stone-700/60 bg-black/15 px-3 py-1.5 text-[11px] text-stone-300 transition hover:border-[#7DD3FC]/35 hover:bg-[#7DD3FC]/10 hover:text-sky-100"
+              className="rounded-xl border border-stone-800/70 bg-stone-950/40 px-3 py-1.5 text-[11px] text-stone-300 transition hover:border-amber-300/35 hover:bg-amber-300/10 hover:text-amber-100"
             >
               {item.label}
             </button>
@@ -1216,7 +1222,7 @@ function ReplyDraftBox({
               <input
                 value={draft.to}
                 onChange={(e) => onDraftChange({ ...draft, to: e.target.value })}
-                className="w-full rounded border border-stone-700/60 bg-black/20 px-2 py-1.5 text-stone-300 outline-none focus:border-orange-500/40"
+                className="w-full rounded-xl border border-stone-800/70 bg-stone-950/40 px-2.5 py-1.5 text-stone-300 outline-none focus:border-amber-300/40"
               />
             </label>
             <label className="block">

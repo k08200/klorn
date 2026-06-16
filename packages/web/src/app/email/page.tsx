@@ -602,39 +602,42 @@ function EmailView() {
   const attachmentCount = emails.filter((email) => (email.attachmentCount ?? 0) > 0).length;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
-      <header className="mb-5 rounded-lg border border-white/10 bg-[#11161A] p-5 shadow-xl shadow-black/10 md:p-6">
+    <div className="min-h-full px-4 pb-28 pt-6 md:py-10">
+      <div className="mx-auto max-w-6xl animate-fade-in">
+      <header className="glass mb-5 rounded-2xl border border-stone-800/70 bg-stone-950/40 p-5 md:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-300/80">
               Klorn · Mail
             </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-50 sm:text-[2rem]">
               Mail that needs a reply
             </h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
               Sorted by urgency and reply-needed signal.
-              {source === "demo" && <span className="ml-2 text-accent">Demo data</span>}
+              {source === "demo" && <span className="ml-2 text-amber-300">Demo data</span>}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={syncNow}
-            disabled={syncing}
-            className="min-h-11 w-fit rounded-md border border-white/10 bg-[#090B10] px-3 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:bg-white/5 hover:text-stone-100 disabled:opacity-50"
-          >
-            {syncing ? "Syncing..." : "Sync now"}
-          </button>
-          <button
-            type="button"
-            onClick={reanalyzeAttachments}
-            disabled={reanalyzing}
-            className="min-h-11 w-fit rounded-md border border-[#7DD3FC]/25 bg-[#7DD3FC]/10 px-3 text-xs font-medium text-sky-100 transition hover:bg-[#7DD3FC]/15 disabled:opacity-50"
-          >
-            {reanalyzing ? "Analyzing..." : "Reanalyze attachments"}
-          </button>
+          <div className="flex flex-wrap gap-2 lg:shrink-0">
+            <button
+              type="button"
+              onClick={syncNow}
+              disabled={syncing}
+              className="lift min-h-11 w-fit rounded-xl border border-stone-800 bg-stone-950/40 px-3 text-xs font-medium text-stone-300 transition hover:border-stone-700 hover:text-stone-100 disabled:opacity-50"
+            >
+              {syncing ? "Syncing..." : "Sync now"}
+            </button>
+            <button
+              type="button"
+              onClick={reanalyzeAttachments}
+              disabled={reanalyzing}
+              className="lift min-h-11 w-fit rounded-xl border border-stone-800 bg-stone-950/40 px-3 text-xs font-medium text-stone-300 transition hover:border-amber-300/40 hover:text-amber-200 disabled:opacity-50"
+            >
+              {reanalyzing ? "Analyzing..." : "Reanalyze attachments"}
+            </button>
+          </div>
         </div>
-        <div className="mt-5 grid grid-cols-4 overflow-hidden rounded-md border border-white/10 bg-[#090B10]">
+        <div className="mt-5 grid grid-cols-4 overflow-hidden rounded-xl border border-stone-800/70 bg-stone-950/30">
           <SignalStat label="Unread" value={unreadCount} />
           <SignalStat label="Urgent" value={urgentCount} />
           <SignalStat label="Replies" value={replyCount} />
@@ -667,11 +670,11 @@ function EmailView() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search sender, body, attachment text, extracted fields"
-          className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#090B10] px-3 text-sm text-stone-200 outline-none transition placeholder:text-stone-600 focus:border-accent/45"
+          className="h-10 min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-950/40 px-3 text-sm text-stone-200 outline-none transition placeholder:text-stone-600 focus:border-amber-300/45"
         />
         <button
           type="submit"
-          className="h-10 rounded-lg bg-accent px-4 text-sm font-medium text-stone-950 transition hover:bg-accent-muted"
+          className="h-10 rounded-xl bg-amber-400 px-4 text-sm font-medium text-stone-950 transition hover:bg-amber-300"
         >
           Search
         </button>
@@ -682,7 +685,7 @@ function EmailView() {
               setSearch("");
               setAppliedSearch("");
             }}
-            className="h-10 rounded-lg border border-white/10 bg-[#11161A] px-3 text-xs text-stone-400 transition hover:bg-white/5"
+            className="h-10 rounded-xl border border-stone-800 bg-stone-950/40 px-3 text-xs text-stone-400 transition hover:border-stone-700 hover:text-stone-200"
           >
             Clear
           </button>
@@ -697,17 +700,17 @@ function EmailView() {
             key={queue.key}
             type="button"
             onClick={() => setFilter(queue.key)}
-            className={`rounded-lg border p-3 text-left transition ${
+            className={`lift glass rounded-2xl border p-4 text-left transition ${
               filter === queue.key
-                ? "border-accent/45 bg-accent/10"
-                : "border-white/10 bg-[#11161A] hover:border-white/20 hover:bg-white/5"
+                ? "border-amber-300/45 bg-amber-300/10"
+                : "border-stone-800/70 bg-stone-950/40 hover:border-stone-700"
             }`}
           >
             <span className="block text-sm font-medium text-stone-100">{queue.title}</span>
             <span className="mt-1 block text-[11px] leading-4 text-stone-500">
               {queue.description}
             </span>
-            <span className="mt-2 block text-xs text-accent-light">
+            <span className="mt-2 block font-mono text-[10px] uppercase tracking-[0.16em] text-amber-300/80">
               Current signals {queue.count(emails)}
             </span>
           </button>
@@ -717,23 +720,23 @@ function EmailView() {
       {candidateCount > 0 && (
         <Link
           href="/email/candidates"
-          className="mt-3 flex items-center justify-between rounded-lg border border-orange-500/20 bg-orange-500/5 px-4 py-3 text-sm text-accent-muted transition hover:bg-orange-500/10"
+          className="lift glass mt-3 flex items-center justify-between rounded-2xl border border-amber-300/25 bg-amber-300/[0.06] px-4 py-3 text-sm text-amber-200 transition hover:border-amber-300/40"
         >
           <span>Review {candidateCount} candidate signals in the intake queue.</span>
-          <span className="text-xs">Open</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.16em]">Open</span>
         </Link>
       )}
 
       {loading && <p className="px-1 py-3 text-sm text-stone-500">Loading...</p>}
 
       {error && (
-        <div className="mt-3 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+        <div className="glass mt-3 rounded-2xl border border-rose-500/40 bg-rose-950/30 px-4 py-3 text-sm text-rose-300">
           {error}
         </div>
       )}
 
       {!loading && !error && filter !== "threads" && emails.length === 0 && (
-        <div className="mt-4 rounded-lg border border-white/10 bg-[#11161A] p-6 text-center">
+        <div className="glass animate-slide-up mt-4 rounded-2xl border border-stone-800/70 bg-stone-950/40 p-8 text-center">
           <p className="text-sm text-stone-300">
             {filter === "all"
               ? "No mail signals yet."
@@ -751,7 +754,7 @@ function EmailView() {
               <button
                 type="button"
                 onClick={() => setFilter("all")}
-                className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100"
+                className="lift inline-flex min-h-11 items-center rounded-xl border border-stone-800 px-4 text-xs font-medium text-stone-300 transition hover:border-amber-300/40 hover:text-amber-200"
               >
                 Show all signals
               </button>
@@ -759,7 +762,7 @@ function EmailView() {
                 type="button"
                 onClick={syncNow}
                 disabled={syncing}
-                className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100 disabled:opacity-50"
+                className="lift inline-flex min-h-11 items-center rounded-xl border border-stone-800 px-4 text-xs font-medium text-stone-300 transition hover:border-stone-700 hover:text-stone-100 disabled:opacity-50"
               >
                 {syncing ? "Syncing..." : "Sync now"}
               </button>
@@ -769,7 +772,7 @@ function EmailView() {
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               <Link
                 href="/settings"
-                className="inline-flex min-h-11 items-center rounded-md bg-accent-light px-4 text-xs font-medium text-stone-950 transition hover:bg-accent-muted"
+                className="lift inline-flex min-h-11 items-center rounded-xl bg-amber-400 px-4 text-xs font-medium text-stone-950 transition hover:bg-amber-300"
               >
                 Connect Google
               </Link>
@@ -777,7 +780,7 @@ function EmailView() {
                 type="button"
                 onClick={syncNow}
                 disabled={syncing}
-                className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100 disabled:opacity-50"
+                className="lift inline-flex min-h-11 items-center rounded-xl border border-stone-800 px-4 text-xs font-medium text-stone-300 transition hover:border-stone-700 hover:text-stone-100 disabled:opacity-50"
               >
                 {syncing ? "Syncing..." : "Sync now"}
               </button>
@@ -814,7 +817,7 @@ function EmailView() {
       )}
 
       {!loading && filter === "threads" && threads.length === 0 && !error && (
-        <div className="mt-4 rounded-lg border border-white/10 bg-[#11161A] p-6 text-center">
+        <div className="glass animate-slide-up mt-4 rounded-2xl border border-stone-800/70 bg-stone-950/40 p-8 text-center">
           <p className="text-sm text-stone-300">No threads match this filter.</p>
         </div>
       )}
@@ -836,6 +839,7 @@ function EmailView() {
           onLoadMore={() => listQuery.fetchNextPage()}
         />
       )}
+      </div>
     </div>
   );
 }
@@ -873,7 +877,7 @@ function UndoActionBanner({
 }) {
   const actionLabel = notice.action === "archive" ? "archived" : "moved to trash";
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-[#2A1510] px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div className="glass animate-slide-up mb-4 flex flex-col gap-3 rounded-2xl border border-amber-300/30 bg-amber-300/[0.06] px-4 py-3 text-sm text-stone-200 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="font-medium">Email {actionLabel}.</p>
         {notice.subject && (
@@ -885,7 +889,7 @@ function UndoActionBanner({
           type="button"
           onClick={onUndo}
           disabled={busy}
-          className="min-h-10 rounded-md bg-accent-light px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent-muted disabled:opacity-50"
+          className="min-h-10 rounded-xl bg-amber-400 px-3 text-xs font-semibold text-stone-950 transition hover:bg-amber-300 disabled:opacity-50"
         >
           {busy ? "Restoring..." : "Undo"}
         </button>
@@ -893,7 +897,7 @@ function UndoActionBanner({
           type="button"
           onClick={onDismiss}
           disabled={busy}
-          className="min-h-10 rounded-md border border-white/10 px-3 text-xs text-stone-300 transition hover:bg-white/5 disabled:opacity-50"
+          className="min-h-10 rounded-xl border border-stone-800 px-3 text-xs text-stone-300 transition hover:border-stone-700 hover:text-stone-100 disabled:opacity-50"
         >
           Dismiss {countdown > 0 && `(${countdown}s)`}
         </button>
@@ -921,7 +925,7 @@ function BulkUndoActionBanner({
     .map((email) => email.subject)
     .join(", ");
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-[#2A1510] px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div className="glass animate-slide-up mb-4 flex flex-col gap-3 rounded-2xl border border-amber-300/30 bg-amber-300/[0.06] px-4 py-3 text-sm text-stone-200 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="font-medium">
           {count} {count === 1 ? "email" : "emails"} archived.
@@ -933,7 +937,7 @@ function BulkUndoActionBanner({
           type="button"
           onClick={onUndo}
           disabled={busy}
-          className="min-h-10 rounded-md bg-accent-light px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent-muted disabled:opacity-50"
+          className="min-h-10 rounded-xl bg-amber-400 px-3 text-xs font-semibold text-stone-950 transition hover:bg-amber-300 disabled:opacity-50"
         >
           {busy ? "Restoring..." : "Undo all"}
         </button>
@@ -941,7 +945,7 @@ function BulkUndoActionBanner({
           type="button"
           onClick={onDismiss}
           disabled={busy}
-          className="min-h-10 rounded-md border border-white/10 px-3 text-xs text-stone-300 transition hover:bg-white/5 disabled:opacity-50"
+          className="min-h-10 rounded-xl border border-stone-800 px-3 text-xs text-stone-300 transition hover:border-stone-700 hover:text-stone-100 disabled:opacity-50"
         >
           Dismiss {countdown > 0 && `(${countdown}s)`}
         </button>
@@ -968,16 +972,16 @@ function BulkActionBar({
   onToggleAll: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-white/10 bg-[#0C1116] px-3 py-2 md:flex-row md:items-center md:justify-between">
+    <div className="glass flex flex-col gap-2 rounded-2xl border border-stone-800/70 bg-stone-950/40 px-3 py-2 md:flex-row md:items-center md:justify-between">
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={onToggleAll}
-          className="h-8 rounded-md border border-white/10 bg-[#11161A] px-2.5 text-xs font-medium text-stone-300 transition hover:bg-white/5"
+          className="h-8 rounded-xl border border-stone-800 bg-stone-950/40 px-2.5 text-xs font-medium text-stone-300 transition hover:border-stone-700 hover:text-stone-100"
         >
           {allVisibleSelected ? "Clear page" : "Select page"}
         </button>
-        <span className="text-xs text-stone-500">
+        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-stone-500">
           {selectedCount > 0 ? `${selectedCount} selected` : `${totalVisible} on this page`}
         </span>
       </div>
@@ -1005,7 +1009,7 @@ function BulkActionBar({
             type="button"
             onClick={onClear}
             disabled={busy}
-            className="h-8 rounded-md px-2.5 text-xs text-stone-500 transition hover:bg-white/5 disabled:opacity-50"
+            className="h-8 rounded-xl px-2.5 text-xs text-stone-500 transition hover:text-stone-300 disabled:opacity-50"
           >
             Cancel
           </button>
@@ -1031,10 +1035,10 @@ function BulkButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`h-8 rounded-md border px-2.5 text-xs font-medium transition disabled:opacity-50 ${
+      className={`h-8 rounded-xl border px-2.5 text-xs font-medium transition disabled:opacity-50 ${
         danger
-          ? "border-red-500/25 bg-red-500/10 text-red-200 hover:bg-red-500/15"
-          : "border-white/10 bg-[#11161A] text-stone-300 hover:bg-white/5"
+          ? "border-rose-500/30 bg-rose-500/10 text-rose-200 hover:border-rose-400/50"
+          : "border-stone-800 bg-stone-950/40 text-stone-300 hover:border-stone-700 hover:text-stone-100"
       }`}
     >
       {children}

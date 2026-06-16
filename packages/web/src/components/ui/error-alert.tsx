@@ -29,7 +29,7 @@ export default function ErrorAlert({
     <div
       role="alert"
       className={[
-        "rounded-lg border border-red-900/60 bg-red-950/30 text-red-200",
+        "rounded-xl border border-red-900/60 bg-red-950/30 text-red-200",
         variant === "block" ? "px-5 py-4" : "px-4 py-3 text-sm",
         className ?? "",
       ]

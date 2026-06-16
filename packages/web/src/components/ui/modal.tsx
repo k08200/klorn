@@ -80,7 +80,7 @@ export default function Modal({ open, onClose, title, children, footer, size = "
     >
       <div
         ref={dialogRef}
-        className={`w-full ${sizes[size]} bg-stone-950 border border-stone-800 rounded-2xl shadow-2xl shadow-black/40`}
+        className={`glass animate-slide-up w-full ${sizes[size]} rounded-2xl border border-stone-800/70 bg-stone-950/80 shadow-2xl shadow-black/50`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-700/45">

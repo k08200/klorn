@@ -21,8 +21,8 @@ export default function Card({
 }: CardProps) {
   return (
     <div
-      className={`bg-stone-950/35 border border-stone-700/45 rounded-xl ${paddings[padding]} ${
-        hover ? "hover:border-stone-700 hover:bg-stone-950 transition-colors cursor-pointer" : ""
+      className={`glass rounded-2xl border border-stone-800/70 bg-stone-950/40 ${paddings[padding]} ${
+        hover ? "lift cursor-pointer hover:border-stone-700" : ""
       } ${className}`}
       {...props}
     >

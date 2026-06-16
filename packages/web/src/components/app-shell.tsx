@@ -66,6 +66,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex h-dvh overflow-hidden bg-[#0f1115] text-stone-100">
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
       <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Ambient atmosphere — a faint warm glow from the top edge so the
+            content area reads as a lit surface, not a flat black void. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{
+            background:
+              "radial-gradient(110% 55% at 50% -8%, rgba(255,107,74,0.06), transparent 60%)",
+          }}
+        />
         {/* Mobile header — pt-safe respects iPhone notch in PWA */}
         <div className="relative z-10 md:hidden flex items-center gap-3 px-4 h-12 pt-safe border-b border-stone-800 bg-[#111318]/95 backdrop-blur-xl shrink-0 box-content">
           <button

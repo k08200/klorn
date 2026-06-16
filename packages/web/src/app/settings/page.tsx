@@ -779,99 +779,104 @@ export default function SettingsPage() {
       <Suspense>
         <GoogleConnectRedirect />
       </Suspense>
-      <main className="mx-auto max-w-4xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
-        <header className="mb-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-sm shadow-black/20">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">
-            Control panel
-          </p>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-stone-50 md:text-3xl">
-            Klorn execution boundaries and access
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-400">
-            Tune profile, notifications, execution mode, and data access in one compact place.
-          </p>
-        </header>
+      <main className="min-h-full px-4 pb-28 pt-6 md:py-10">
+        <div className="mx-auto max-w-3xl space-y-6">
+          <header className="animate-fade-in">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-300/80">
+              Control panel
+            </p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-50 sm:text-[2rem]">
+              Klorn execution boundaries and access
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
+              Tune profile, notifications, execution mode, and data access in one compact place.
+            </p>
+          </header>
 
-        {/* Profile */}
-        <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Operator profile</h2>
-          <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-5 space-y-4">
-            <div>
-              <label htmlFor="profile-name" className="block text-sm text-stone-400 mb-1">
-                Display name
-              </label>
-              <input
-                id="profile-name"
-                type="text"
-                value={profile.name}
-                onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
-                placeholder="Name"
-                className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition placeholder-stone-500"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Profile */}
+          <section>
+            <h2 className="mb-3 font-mono text-[11px] uppercase tracking-[0.18em] text-stone-400">
+              Operator profile
+            </h2>
+            <div className="glass space-y-4 rounded-2xl border border-stone-800/70 bg-stone-950/40 p-5">
               <div>
-                <label htmlFor="profile-lang" className="block text-sm text-stone-400 mb-1">
-                  Response language
+                <label htmlFor="profile-name" className="mb-1 block text-sm text-stone-400">
+                  Display name
                 </label>
-                <select
-                  id="profile-lang"
-                  value={profile.language}
-                  onChange={(e) =>
-                    setProfile((p) => ({
-                      ...p,
-                      language: e.target.value as UserProfile["language"],
-                    }))
-                  }
-                  className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition"
-                >
-                  <option value="auto">Auto-detect</option>
-                  <option value="en">English</option>
-                  <option value="ko">Korean</option>
-                </select>
+                <input
+                  id="profile-name"
+                  type="text"
+                  value={profile.name}
+                  onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="Name"
+                  className="w-full rounded-xl border border-stone-800 bg-stone-900/70 px-4 py-2.5 text-sm transition placeholder-stone-500 focus:border-amber-300 focus:outline-none"
+                />
               </div>
-              <div>
-                <label htmlFor="profile-tz" className="block text-sm text-stone-400 mb-1">
-                  Time zone
-                </label>
-                <select
-                  id="profile-tz"
-                  value={profile.timezone}
-                  onChange={(e) => setProfile((p) => ({ ...p, timezone: e.target.value }))}
-                  className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition"
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="profile-lang" className="mb-1 block text-sm text-stone-400">
+                    Response language
+                  </label>
+                  <select
+                    id="profile-lang"
+                    value={profile.language}
+                    onChange={(e) =>
+                      setProfile((p) => ({
+                        ...p,
+                        language: e.target.value as UserProfile["language"],
+                      }))
+                    }
+                    className="w-full rounded-xl border border-stone-800 bg-stone-900/70 px-4 py-2.5 text-sm transition focus:border-amber-300 focus:outline-none"
+                  >
+                    <option value="auto">Auto-detect</option>
+                    <option value="en">English</option>
+                    <option value="ko">Korean</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="profile-tz" className="mb-1 block text-sm text-stone-400">
+                    Time zone
+                  </label>
+                  <select
+                    id="profile-tz"
+                    value={profile.timezone}
+                    onChange={(e) => setProfile((p) => ({ ...p, timezone: e.target.value }))}
+                    className="w-full rounded-xl border border-stone-800 bg-stone-900/70 px-4 py-2.5 text-sm transition focus:border-amber-300 focus:outline-none"
+                  >
+                    {TIMEZONES.map((tz) => (
+                      <option key={tz} value={tz}>
+                        {tz.replace(/_/g, " ")}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={saveProfile}
+                  className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+                    profileSaved
+                      ? "bg-emerald-500 text-stone-950"
+                      : "bg-amber-300 text-stone-950 hover:bg-amber-200"
+                  }`}
                 >
-                  {TIMEZONES.map((tz) => (
-                    <option key={tz} value={tz}>
-                      {tz.replace(/_/g, " ")}
-                    </option>
-                  ))}
-                </select>
+                  {profileSaved ? "Saved" : "Save profile"}
+                </button>
               </div>
             </div>
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={saveProfile}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                  profileSaved
-                    ? "bg-emerald-500 text-stone-950"
-                    : "bg-amber-300 hover:bg-amber-200 text-stone-950"
-                }`}
-              >
-                {profileSaved ? "Saved" : "Save profile"}
-              </button>
-            </div>
-          </div>
-        </section>
+          </section>
 
         {/* Security */}
-        <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Access security</h2>
-          <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-5 space-y-4">
+        <section>
+          <h2 className="mb-3 font-mono text-[11px] uppercase tracking-[0.18em] text-stone-400">
+            Access security
+          </h2>
+          <div className="glass space-y-4 rounded-2xl border border-stone-800/70 bg-stone-950/40 p-5">
             {hasPassword ? (
               <>
                 <div>
-                  <label htmlFor="current-pw" className="block text-sm text-stone-400 mb-1">
+                  <label htmlFor="current-pw" className="mb-1 block text-sm text-stone-400">
                     Current password
                   </label>
                   <input
@@ -880,11 +885,11 @@ export default function SettingsPage() {
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="Current password"
-                    className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition placeholder-stone-500"
+                    className="w-full rounded-xl border border-stone-800 bg-stone-900/70 px-4 py-2.5 text-sm transition placeholder-stone-500 focus:border-amber-300 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label htmlFor="new-pw" className="block text-sm text-stone-400 mb-1">
+                  <label htmlFor="new-pw" className="mb-1 block text-sm text-stone-400">
                     New password
                   </label>
                   <input
@@ -894,7 +899,7 @@ export default function SettingsPage() {
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="At least 6 characters"
                     minLength={6}
-                    className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition placeholder-stone-500"
+                    className="w-full rounded-xl border border-stone-800 bg-stone-900/70 px-4 py-2.5 text-sm transition placeholder-stone-500 focus:border-amber-300 focus:outline-none"
                   />
                 </div>
                 <div className="flex justify-end">
@@ -902,7 +907,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={changePassword}
                     disabled={passwordLoading || !currentPassword || !newPassword}
-                    className="bg-amber-300 hover:bg-amber-200 disabled:bg-stone-700 disabled:text-stone-500 text-stone-950 px-4 py-2 rounded-lg text-sm font-medium transition"
+                    className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-200 disabled:bg-stone-800 disabled:text-stone-500"
                   >
                     {passwordLoading ? "Changing..." : "Change password"}
                   </button>
@@ -918,7 +923,7 @@ export default function SettingsPage() {
                   </span>
                 </p>
                 <div>
-                  <label htmlFor="set-pw" className="block text-sm text-stone-400 mb-1">
+                  <label htmlFor="set-pw" className="mb-1 block text-sm text-stone-400">
                     New password
                   </label>
                   <input
@@ -928,7 +933,7 @@ export default function SettingsPage() {
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="At least 6 characters"
                     minLength={6}
-                    className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition placeholder-stone-500"
+                    className="w-full rounded-xl border border-stone-800 bg-stone-900/70 px-4 py-2.5 text-sm transition placeholder-stone-500 focus:border-amber-300 focus:outline-none"
                   />
                 </div>
                 <div className="flex justify-end">
@@ -936,7 +941,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={setPasswordForOAuth}
                     disabled={passwordLoading || !newPassword}
-                    className="bg-amber-300 hover:bg-amber-200 disabled:bg-stone-700 disabled:text-stone-500 text-stone-950 px-4 py-2 rounded-lg text-sm font-medium transition"
+                    className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-200 disabled:bg-stone-800 disabled:text-stone-500"
                   >
                     {passwordLoading ? "Saving..." : "Set password"}
                   </button>
@@ -947,9 +952,11 @@ export default function SettingsPage() {
         </section>
 
         {/* Notifications */}
-        <section className="mb-8">
-          <h2 className="text-sm font-semibold text-stone-300 mb-3">Signal rhythm</h2>
-          <div className="mb-4 bg-stone-950/35 border border-stone-700/45 rounded-xl p-4 space-y-4">
+        <section>
+          <h2 className="mb-3 font-mono text-[11px] uppercase tracking-[0.18em] text-stone-400">
+            Signal rhythm
+          </h2>
+          <div className="glass mb-4 space-y-4 rounded-2xl border border-stone-800/70 bg-stone-950/40 p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="font-medium">Morning briefing</h3>
@@ -977,7 +984,7 @@ export default function SettingsPage() {
                 />
               </button>
             </div>
-            <div className="flex items-center gap-3 border-t border-stone-800 pt-3">
+            <div className="flex items-center gap-3 border-t border-stone-800/70 pt-3">
               <label htmlFor="briefing-time" className="text-sm font-medium text-stone-200">
                 Delivery time
               </label>
@@ -987,12 +994,12 @@ export default function SettingsPage() {
                 value={briefingTime}
                 disabled={!dailyBriefingEnabled}
                 onChange={(e) => updateBriefingTime(e.target.value)}
-                className="min-h-11 rounded border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-200 disabled:opacity-50"
+                className="min-h-11 rounded-xl border border-stone-800 bg-stone-900/70 px-3 py-2 text-sm text-stone-200 disabled:opacity-50"
               />
               <span className="text-xs text-stone-500">Default is 06:00.</span>
             </div>
           </div>
-          <div className="bg-stone-950/35 border border-stone-700/45 rounded-xl p-4 flex items-center justify-between">
+          <div className="glass flex items-center justify-between rounded-2xl border border-stone-800/70 bg-stone-950/40 p-5">
             <div>
               <h3 className="font-medium">Push notifications</h3>
               <p className="text-sm text-stone-400">

@@ -14,16 +14,16 @@ interface TabsProps {
 
 export default function Tabs({ tabs, active, onChange }: TabsProps) {
   return (
-    <div className="flex gap-1 p-1 bg-stone-950/60 border border-stone-800/60 rounded-lg w-fit">
+    <div className="glass flex w-fit gap-1 rounded-xl border border-stone-800/60 bg-stone-950/50 p-1">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           type="button"
           onClick={() => onChange(tab.id)}
-          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
             active === tab.id
-              ? "bg-stone-900 text-white shadow-sm"
-              : "text-stone-400 hover:text-stone-200 hover:bg-stone-900/50"
+              ? "bg-stone-800/80 text-stone-50 shadow-sm"
+              : "text-stone-400 hover:bg-stone-900/50 hover:text-stone-200"
           }`}
         >
           {tab.label}

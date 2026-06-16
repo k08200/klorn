@@ -101,7 +101,7 @@ export default function Sidebar({
     : "";
 
   const sidebarContent = (
-    <div className="relative flex h-full flex-col overflow-hidden border-r border-stone-800 bg-[#111318] pt-safe pb-safe">
+    <div className="glass relative flex h-full flex-col overflow-hidden border-r border-stone-800/80 bg-gradient-to-b from-[#13151c] to-[#0e1014] pt-safe pb-safe">
       {/* Header */}
       <div className="relative flex items-center justify-between px-3 py-3">
         <Link
@@ -129,21 +129,35 @@ export default function Sidebar({
       {/* Workspace nav */}
       <div className="relative border-t border-stone-800 px-2 py-2">
         <div className="space-y-0.5">
-          {NAV_ITEMS.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onMobileClose}
-              className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition ${
-                pathname.startsWith(item.href)
-                  ? "bg-stone-800 text-stone-100"
-                  : "text-stone-500 hover:bg-stone-800/70 hover:text-stone-300"
-              }`}
-            >
-              <NavIcon type={item.icon} size={14} />
-              <span className="flex-1">{item.label}</span>
-            </Link>
-          ))}
+          {NAV_ITEMS.map((item) => {
+            const active = pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onMobileClose}
+                className={`group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition ${
+                  active
+                    ? "bg-stone-800/70 text-stone-50"
+                    : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300"
+                }`}
+              >
+                {active && (
+                  <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-amber-300" />
+                )}
+                <span
+                  className={
+                    active
+                      ? "text-amber-300"
+                      : "text-stone-500 transition group-hover:text-stone-300"
+                  }
+                >
+                  <NavIcon type={item.icon} size={14} />
+                </span>
+                <span className="flex-1">{item.label}</span>
+              </Link>
+            );
+          })}
           {user?.role === "ADMIN" && (
             <Link
               href="/admin"
