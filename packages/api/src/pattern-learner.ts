@@ -26,6 +26,11 @@ const AGENT_NOTIFICATION_PREFIX = "[Klorn]";
 const EVE_AGENT_NOTIFICATION_PREFIX = "[Eve]";
 const LEGACY_AGENT_NOTIFICATION_PREFIX = "[EV" + "E]";
 
+// Day labels for learned-pattern descriptions. English per the English-only UI
+// policy — these strings surface in the settings "learned patterns" panel and
+// in the agent's context. Index 0 = Sunday (Date.getDay()).
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 // ─── Types ──────────────────────────────────────────────────────────────
 
 interface TimeSlot {
@@ -223,9 +228,8 @@ async function analyzeTemporalPatterns(userId: string): Promise<LearnedPattern[]
   const peakSlots = sorted.slice(0, 3).filter((s) => s.count >= MIN_OCCURRENCES);
 
   if (peakSlots.length > 0) {
-    const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
     const description = peakSlots
-      .map((s) => `${dayNames[s.dayOfWeek]}요일 ${s.hour}시 (${s.count}회)`)
+      .map((s) => `${DAY_NAMES[s.dayOfWeek]} ${s.hour}:00 (${s.count}x)`)
       .join(", ");
 
     patterns.push({
@@ -251,10 +255,9 @@ async function analyzeTemporalPatterns(userId: string): Promise<LearnedPattern[]
 
     const topDay = [...taskDays.entries()].sort((a, b) => b[1] - a[1])[0];
     if (topDay && topDay[1] >= MIN_OCCURRENCES) {
-      const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
       patterns.push({
         type: "temporal",
-        description: `User creates most tasks on ${dayNames[topDay[0]]}요일 (${topDay[1]} times this week)`,
+        description: `User creates most tasks on ${DAY_NAMES[topDay[0]]} (${topDay[1]} times this week)`,
         confidence: Math.min(1.0, topDay[1] / 7),
         evidence: topDay[1],
       });
