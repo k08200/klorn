@@ -301,7 +301,18 @@ export default function SettingsPage() {
     });
     if (!ok) return;
     try {
-      await fetch(`${API_BASE}/api/auth/google`, { method: "DELETE", headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/auth/google`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      // fetch only rejects on network failure, not on 4xx/5xx — without this
+      // guard a failed disconnect still flipped the UI to "disconnected" and
+      // toasted success while the server kept the Google grant.
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: "Request failed." }));
+        toast(body.error || "Could not disconnect Google.", "error");
+        return;
+      }
       setGoogleConnected(false);
       setGmailPushEnabled(false);
       setGmailPushExpiresAt(null);
@@ -690,13 +701,24 @@ export default function SettingsPage() {
   };
 
   const generateBriefing = async () => {
-    const res = await fetch(`${API_BASE}/api/briefing/generate`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({}),
-    });
-    const data = await res.json();
-    toast(data.briefing || "Briefing generated. Review it on the briefing screen.", "success");
+    try {
+      const res = await fetch(`${API_BASE}/api/briefing/generate`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({}),
+      });
+      // Without these guards a 5xx (or a Render dyno HTML body) either threw an
+      // unhandled rejection or fell through to a fake "success" toast.
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: "Request failed." }));
+        toast(body.error || "Could not generate briefing.", "error");
+        return;
+      }
+      const data = await res.json();
+      toast(data.briefing || "Briefing generated. Review it on the briefing screen.", "success");
+    } catch {
+      toast("Could not generate briefing.", "error");
+    }
   };
 
   const clearAllData = async () => {
@@ -709,7 +731,17 @@ export default function SettingsPage() {
     });
     if (!ok) return;
     try {
-      await fetch(`${API_BASE}/api/user/me/data`, { method: "DELETE", headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/user/me/data`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      // Don't falsely tell the user their data was deleted (and wipe local
+      // profile state) when the server-side delete actually failed.
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: "Request failed." }));
+        toast(body.error || "Could not delete workspace data.", "error");
+        return;
+      }
       localStorage.removeItem(PROFILE_KEY);
       localStorage.removeItem(PINNED_CHATS_KEY);
       toast("Workspace data deleted.", "info");
@@ -721,6 +753,13 @@ export default function SettingsPage() {
   const exportData = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/user/me/export`, { headers: authHeaders() });
+      // Without this guard a 500's error JSON gets written into the downloaded
+      // export file and the user is told the export succeeded.
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: "Request failed." }));
+        toast(body.error || "Data export failed.", "error");
+        return;
+      }
       const data = await res.json();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);

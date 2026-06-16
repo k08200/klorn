@@ -34,7 +34,12 @@ export async function verifyGoogleOidcToken(token: string): Promise<GoogleOidcCl
       audience: process.env.GMAIL_PUSH_OIDC_AUDIENCE,
     });
     return (ticket.getPayload() as GoogleOidcClaims | undefined) ?? null;
-  } catch {
+  } catch (err) {
+    // Distinguish "forged token" from a misconfigured audience / cert-fetch
+    // failure / clock skew — all of which surface here as a verification error.
+    // Without this log, every push silently 401s with no server-side signal.
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[GOOGLE-OIDC] Token verification failed: ${msg}`);
     return null;
   }
 }

@@ -26,6 +26,7 @@ import { prisma } from "../db.js";
 import { syncEmails } from "../email-sync.js";
 import { registerGmailWatch, stopGmailWatch } from "../gmail.js";
 import { verifyGoogleOidcToken } from "../google-oidc.js";
+import { captureError } from "../sentry.js";
 import { timingSafeEqualStr } from "../timing-safe-equal.js";
 
 function extractBearerToken(req: FastifyRequest): string | null {
@@ -135,9 +136,16 @@ export async function gmailPushRoutes(app: FastifyInstance) {
     }
 
     // Fire-and-forget the sync so we return fast and Pub/Sub does not time out.
-    // Errors are swallowed here; the 1-minute polling fallback will catch up.
+    // The 1-minute polling fallback will catch up, so this is non-fatal — but a
+    // consistently failing sync (DB down, quota, expired auth) must still reach
+    // error tracking, not just dyno logs. console.warn keeps a signal when
+    // Sentry is not configured; captureError preserves the stack + context.
     syncEmails(user.id, 30).catch((err) => {
       console.warn(`[GMAIL-PUSH] sync failed for ${user.id}: ${String(err)}`);
+      captureError(err, {
+        tags: { scope: "gmail-push.sync" },
+        extra: { userId: user.id },
+      });
     });
 
     return reply.code(204).send();
