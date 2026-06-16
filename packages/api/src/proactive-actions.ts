@@ -445,7 +445,15 @@ async function notify(
     createdAt: notification.createdAt.toISOString(),
   });
 
-  sendPushNotification(userId, { title, body: message.slice(0, 200), url }, categoryForType(type));
+  // Unawaited (best-effort) but guarded — an unhandled rejection from the push
+  // internals would otherwise crash the single dyno.
+  sendPushNotification(
+    userId,
+    { title, body: message.slice(0, 200), url },
+    categoryForType(type),
+  ).catch((err) => {
+    console.warn(`[PROACTIVE] push failed for ${userId}:`, err);
+  });
 }
 
 function categoryForType(type: string): NotifCategory {

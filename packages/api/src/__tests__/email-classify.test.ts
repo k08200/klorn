@@ -6,6 +6,7 @@ import {
   classifyPriority,
   classifyPriorityDetailed,
   extractEmailAddress,
+  parseAiSummary,
 } from "../email-sync.js";
 
 describe("classifyPriority — heuristic gate before LLM", () => {
@@ -219,5 +220,50 @@ describe("extractEmailAddress", () => {
   });
   it("trims surrounding whitespace", () => {
     expect(extractEmailAddress("  alice@example.com  ")).toBe("alice@example.com");
+  });
+});
+
+describe("parseAiSummary", () => {
+  it("maps a well-formed JSON response", () => {
+    const result = parseAiSummary(
+      JSON.stringify({
+        summary: "Invoice due Friday",
+        category: "billing",
+        keyPoints: ["$2,450"],
+        actionItems: ["pay"],
+        sentiment: "neutral",
+        priority: "URGENT",
+      }),
+      "Subject fallback",
+    );
+    expect(result.summary).toBe("Invoice due Friday");
+    expect(result.category).toBe("billing");
+    expect(result.priority).toBe("URGENT");
+  });
+
+  it("fills defaults for a partial response", () => {
+    const result = parseAiSummary(JSON.stringify({ summary: "Hi" }), "Subject");
+    expect(result.summary).toBe("Hi");
+    expect(result.category).toBe("other");
+    expect(result.keyPoints).toEqual([]);
+    expect(result.sentiment).toBe("neutral");
+    expect(result.priority).toBe("NORMAL");
+  });
+
+  it("falls back to the subject on non-JSON output instead of throwing", () => {
+    // The :free model occasionally returns prose; this used to throw and get
+    // swallowed, leaving the email unsummarized and re-tried forever.
+    expect(() => parseAiSummary("Sorry, I cannot help with that.", "Real subject")).not.toThrow();
+    expect(parseAiSummary("not json at all", "Real subject").summary).toBe("Real subject");
+  });
+
+  it("does not throw on null / array / primitive JSON", () => {
+    expect(parseAiSummary("null", "S").summary).toBe("S");
+    expect(parseAiSummary("[1,2,3]", "S").summary).toBe("S");
+    expect(parseAiSummary("42", "S").summary).toBe("S");
+  });
+
+  it("handles the empty-object default", () => {
+    expect(parseAiSummary("{}", "S").summary).toBe("S");
   });
 });

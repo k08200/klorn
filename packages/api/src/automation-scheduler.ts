@@ -716,7 +716,16 @@ async function runAutomations() {
                       attentionItemId: attentionItemId ?? undefined,
                     },
                     "email_urgent",
-                  );
+                    // Unawaited (don't block the tick) but guarded: an
+                    // unhandled rejection from the push internals would
+                    // otherwise crash the single dyno. Matches the candidate
+                    // push path above.
+                  ).catch((err) => {
+                    console.warn(
+                      `[AUTOMATION] Urgent email push failed for ${config.userId}:`,
+                      err,
+                    );
+                  });
 
                   // Admin-only SMS escalation. Gated inside sendSms (admin +
                   // phone + daily cap). Best-effort: never throws, never

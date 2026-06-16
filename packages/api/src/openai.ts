@@ -426,10 +426,21 @@ export async function createVisionCompletion(
       return result;
     } catch (err) {
       lastError = err;
-      if (isKeyLimitError(err) || isCreditError(err) || isProviderUnavailable(provider.quotaKey)) {
-        if (isKeyLimitError(err)) markKeyLimited(provider.quotaKey, err);
-        if (isCreditError(err)) markCreditExhausted(provider.quotaKey);
+      // Budget / availability errors → fail over to the next provider.
+      if (isKeyLimitError(err)) {
+        markKeyLimited(provider.quotaKey, err);
+        continue;
       }
+      if (isCreditError(err)) {
+        markCreditExhausted(provider.quotaKey);
+        continue;
+      }
+      if (isProviderUnavailable(provider.quotaKey)) continue;
+      if (provider.name === "openai-compat" && isConnectionError(err)) continue;
+      // Non-budget error (5xx, auth, malformed request, cloud network): don't
+      // mask it behind a silent provider swap + AllProvidersExhaustedError the
+      // way this used to — surface it like createCompletion does.
+      throw err;
     }
   }
 

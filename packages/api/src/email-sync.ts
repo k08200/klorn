@@ -618,8 +618,19 @@ export async function syncEmails(
   let newCount = 0;
 
   for (const email of rawEmails) {
-    const persisted = await persistGmailEmail(userId, email, { userEmail });
-    if (persisted.isNew) newCount++;
+    try {
+      const persisted = await persistGmailEmail(userId, email, { userEmail });
+      if (persisted.isNew) newCount++;
+    } catch (err) {
+      // Isolate per-email failures: one malformed message (an unparseable Date
+      // header, or a P2002 unique race with a concurrent gmail-push sync) must
+      // not throw out of the loop and strand every email after it in the batch.
+      // (The backfill loop above already uses this pattern.)
+      captureError(err, {
+        tags: { scope: "email.sync.persist", userId },
+        extra: { gmailId: email.gmailId },
+      });
+    }
   }
 
   return { synced: rawEmails.length, newCount, source: "gmail" };
@@ -982,6 +993,35 @@ interface AISummaryResult {
 }
 
 /**
+ * Parse the model's JSON summary into an AISummaryResult, falling back to safe
+ * defaults on non-JSON / partial / non-object output instead of throwing. The
+ * :free model occasionally returns non-JSON or empty content; an unguarded
+ * JSON.parse used to throw, get swallowed by a bare `catch {}` with no log, and
+ * leave the email unsummarized — silently re-picked and retried every cycle.
+ * Now a bad response yields a usable result (subject as summary) so the loop
+ * converges, and the caller logs the failure once.
+ */
+export function parseAiSummary(content: string, fallbackSubject: string): AISummaryResult {
+  let parsed: Partial<AISummaryResult> = {};
+  try {
+    const raw = JSON.parse(content);
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      parsed = raw as Partial<AISummaryResult>;
+    }
+  } catch {
+    // Non-JSON model output — keep the defaults below.
+  }
+  return {
+    summary: parsed.summary || fallbackSubject,
+    category: parsed.category || "other",
+    keyPoints: parsed.keyPoints || [],
+    actionItems: parsed.actionItems || [],
+    sentiment: parsed.sentiment || "neutral",
+    priority: parsed.priority || "NORMAL",
+  };
+}
+
+/**
  * Summarize a batch of emails using LLM.
  * Processes unsummarized emails for a user.
  */
@@ -1040,8 +1080,14 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
         },
       });
       count++;
-    } catch {
-      // Skip failed summarization, will retry next cycle
+    } catch (err) {
+      // Skip this email and retry next cycle, but don't go fully silent: a
+      // persistent failure (e.g. the :free model is quota-locked for ~an hour)
+      // would otherwise re-fail every minute with zero signal.
+      captureError(err, {
+        tags: { scope: "email.summarize", userId },
+        extra: { emailId: email.id },
+      });
     }
   }
 
@@ -1222,16 +1268,7 @@ async function summarizeEmail(
   );
 
   const content = response.choices[0]?.message?.content || "{}";
-  const parsed = JSON.parse(content) as Partial<AISummaryResult>;
-
-  return {
-    summary: parsed.summary || subject,
-    category: parsed.category || "other",
-    keyPoints: parsed.keyPoints || [],
-    actionItems: parsed.actionItems || [],
-    sentiment: parsed.sentiment || "neutral",
-    priority: parsed.priority || "NORMAL",
-  };
+  return parseAiSummary(content, subject);
 }
 
 // ─── Thread Grouping ──────────────────────────────────────────────────────
