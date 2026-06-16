@@ -319,7 +319,7 @@ function CandidateIntakeView() {
               type="button"
               onClick={exportCsv}
               disabled={exporting}
-              className="rounded-lg border border-[#7DD3FC]/30 px-3 py-1.5 text-xs text-sky-200 transition hover:bg-[#7DD3FC]/10 disabled:opacity-50"
+              className="rounded-lg border border-[#a8a29e]/30 px-3 py-1.5 text-xs text-sky-200 transition hover:bg-[#a8a29e]/10 disabled:opacity-50"
             >
               {exporting ? "Exporting..." : "Export CSV"}
             </button>
@@ -399,7 +399,7 @@ function CandidateIntakeView() {
               onClick={() => setAttention(filter.value)}
               className={`min-h-[32px] shrink-0 rounded-full px-3 py-1.5 text-xs transition ${
                 active
-                  ? "bg-[#7DD3FC] text-stone-950"
+                  ? "bg-[#a8a29e] text-stone-950"
                   : "border border-stone-700/55 bg-stone-950/45 text-stone-400 hover:bg-stone-900/70 hover:text-stone-200"
               }`}
             >

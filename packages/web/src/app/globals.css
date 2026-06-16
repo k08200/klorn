@@ -1,10 +1,15 @@
 @import "tailwindcss";
 
 @theme {
-  --color-accent: #ff6b4a;
-  --color-accent-light: #ff8a70;
-  --color-accent-muted: #ffb09c;
-  --color-accent-dim: #ffe2d7;
+  /* Unified app accent (2026-06-16): was coral #ff6b4a, now the same gold
+     the rest of the app already used (inbox, firewall, login = Tailwind
+     amber). Only the mail surface referenced these tokens, so re-pointing
+     here converges the whole app on one primary accent in one place.
+     `brand-gold` below stays separate — it's the muted marketing gold. */
+  --color-accent: #fbbf24;
+  --color-accent-light: #fcd34d;
+  --color-accent-muted: #fde68a;
+  --color-accent-dim: #fef3c7;
 
   /* Surface tokens — extracted 2026-05-19 from inline bg-[#XXXXXX] usages
      across the landing page and app shell. Use `bg-surface-app`, etc.
