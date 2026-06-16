@@ -77,6 +77,20 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 }
 
 /** Send push notification to all subscriptions of a user */
+/**
+ * Maps a push category to the "adjudicated surface" token that
+ * notificationSuppressionReason treats as authored (skips the inbound-mail
+ * noise heuristic). Only surfaces the system has already decided to interrupt
+ * on qualify — the briefing (author-controlled body) and email_urgent (the
+ * firewall judge / URGENT classifier already tiered it PUSH). Everything else
+ * stays subject to the noise + housekeeping filters.
+ */
+export function authoredSurface(category: NotifCategory): "briefing" | "firewall" | null {
+  if (category === "daily_briefing") return "briefing";
+  if (category === "email_urgent") return "firewall";
+  return null;
+}
+
 export async function sendPushNotification(
   userId: string,
   payload: {
@@ -103,10 +117,9 @@ export async function sendPushNotification(
     title: payload.title,
     message: payload.body,
     // category is a routing/preference dimension; we co-opt it as the
-    // first-party surface hint so authored content (briefing) bypasses
-    // the noise heuristic. "daily_briefing" is the briefing path; map it
-    // to the policy's "briefing" type token.
-    notificationType: category === "daily_briefing" ? "briefing" : null,
+    // adjudicated-surface hint so content the system already decided to
+    // interrupt on bypasses the inbound-mail noise heuristic.
+    notificationType: authoredSurface(category),
   });
   if (suppression) {
     console.log(`[PUSH] Suppressed (${suppression}) for ${userId}: "${payload.title}"`);

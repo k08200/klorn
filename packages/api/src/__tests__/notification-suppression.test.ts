@@ -169,3 +169,31 @@ describe("notificationSuppressionReason — allowed", () => {
     expect(notificationSuppressionReason({ title: "", message: "" })).toBeNull();
   });
 });
+
+describe("notificationSuppressionReason — adjudicated PUSH bypasses noise", () => {
+  // A real firewall-judged PUSH whose subject collides with a noise keyword.
+  const collidingEmail = {
+    title: "Klorn — bank@acme.com",
+    message: "Confirm your wire transfer of $48,000 before 5pm",
+  };
+
+  it("suppresses a keyword-colliding subject when un-adjudicated (documents the trap)", () => {
+    expect(notificationSuppressionReason(collidingEmail)).toBe("noise");
+  });
+
+  it("does NOT suppress it once the firewall surface is declared", () => {
+    expect(
+      notificationSuppressionReason({ ...collidingEmail, notificationType: "firewall" }),
+    ).toBeNull();
+  });
+
+  it("still treats the briefing surface as authored", () => {
+    expect(
+      notificationSuppressionReason({
+        title: "Daily Briefing",
+        message: "Flash sale ends tonight — 할인 마감",
+        notificationType: "briefing",
+      }),
+    ).toBeNull();
+  });
+});

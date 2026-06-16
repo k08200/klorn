@@ -32,7 +32,25 @@ vi.mock("web-push", () => ({
   sendNotification: vi.fn(),
 }));
 
-import { shouldRetryPushError } from "../push.js";
+import { authoredSurface, shouldRetryPushError } from "../push.js";
+
+describe("authoredSurface — which push categories bypass the noise heuristic", () => {
+  it("maps the firewall-judged email push to the 'firewall' authored surface", () => {
+    // Closes the bug where a judge=PUSH email whose subject collided with a
+    // noise keyword ("confirm your…") was silently dropped at the push gate.
+    expect(authoredSurface("email_urgent")).toBe("firewall");
+  });
+
+  it("maps the daily briefing to the 'briefing' authored surface", () => {
+    expect(authoredSurface("daily_briefing")).toBe("briefing");
+  });
+
+  it("leaves all other categories subject to the noise + housekeeping filters", () => {
+    expect(authoredSurface("system")).toBeNull();
+    expect(authoredSurface("agent_proposal")).toBeNull();
+    expect(authoredSurface("email_candidate")).toBeNull();
+  });
+});
 
 describe("shouldRetryPushError", () => {
   it("retries on missing status (network error)", () => {
