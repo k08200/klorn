@@ -166,4 +166,25 @@ describe("createVisionCompletion — usage ledger threading", () => {
       usage: COMPLETION.usage,
     });
   });
+
+  it("defaults the ledger source to background (matches the per-user gate)", async () => {
+    // Vision is a worker-triggered batch: the gate charges the background
+    // bucket (priority ?? "background"), so the usage ledger must agree —
+    // otherwise the same call gates as background but bills as foreground.
+    chain.push(makeProvider("gemini", "gemini:env-vision", async () => COMPLETION));
+    const { createVisionCompletion } = await import("../openai.js");
+
+    await createVisionCompletion(PARAMS, { userId: "user-3" });
+
+    expect(recorded[0]).toMatchObject({ source: "background" });
+  });
+
+  it("honors an explicit foreground priority on the ledger", async () => {
+    chain.push(makeProvider("gemini", "gemini:env-vision", async () => COMPLETION));
+    const { createVisionCompletion } = await import("../openai.js");
+
+    await createVisionCompletion(PARAMS, { userId: "user-4", priority: "foreground" });
+
+    expect(recorded[0]).toMatchObject({ source: "foreground" });
+  });
 });
