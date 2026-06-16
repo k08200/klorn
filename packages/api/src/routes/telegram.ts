@@ -22,7 +22,6 @@
  *   from buttons — crafted callback data cannot escalate to PUSH/AUTO.
  */
 
-import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { overrideAttentionTier } from "../attention-override.js";
 import { getUserId, requireAuth } from "../auth.js";
@@ -35,6 +34,7 @@ import {
   getLinkedTelegramChatId,
   unlinkTelegram,
 } from "../telegram-link.js";
+import { timingSafeEqualStr } from "../timing-safe-equal.js";
 
 // Override buttons can only move DOWN the interrupt ladder (QUEUE/SILENT).
 // Item ids are uuids; 48 chars leaves headroom without inviting abuse.
@@ -47,13 +47,6 @@ interface TelegramChat {
 interface TelegramUpdate {
   message?: { text?: string; chat?: TelegramChat };
   callback_query?: { id?: string; data?: string; message?: { chat?: TelegramChat } };
-}
-
-function timingSafeEqualStr(a: string, b: string): boolean {
-  // Hash both sides first so length differences don't leak timing.
-  const ha = crypto.createHash("sha256").update(a).digest();
-  const hb = crypto.createHash("sha256").update(b).digest();
-  return crypto.timingSafeEqual(ha, hb);
 }
 
 function chatIdString(chat: TelegramChat | undefined): string | null {
