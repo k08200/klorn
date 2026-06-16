@@ -16,6 +16,7 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
+import { isAllowedImapHost } from "../is-allowed-imap-host.js";
 import { verifyNaverImapCredentials } from "../naver-imap.js";
 
 const DEFAULT_NAVER_IMAP_HOST = "imap.naver.com:993";
@@ -67,6 +68,14 @@ export async function naverImapRoutes(app: FastifyInstance) {
       const userId = getUserId(request);
       const { email, password, host } = request.body;
       const imapHost = (host ?? DEFAULT_NAVER_IMAP_HOST).trim();
+
+      // SSRF guard: this host is opened as a TLS connection here AND on every
+      // subsequent poll. Reject anything outside the provider allowlist before
+      // we connect, so a user can't probe internal hosts via this endpoint.
+      if (!isAllowedImapHost(imapHost)) {
+        reply.code(400);
+        return { ok: false, message: "Unsupported IMAP host. Only imap.naver.com:993 is allowed." };
+      }
 
       // Smoke-test the credentials before persisting. We don't want the
       // user to leave the settings page thinking they're connected when

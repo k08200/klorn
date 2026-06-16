@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 
 vi.mock("../email.js", () => ({ sendVerificationEmail: vi.fn(), sendPasswordResetEmail: vi.fn() }));
@@ -52,9 +52,30 @@ describe("gmail-push routes", () => {
   afterEach(() => {
     delete process.env.GMAIL_PUSH_TOKEN;
     delete process.env.GMAIL_PUSH_OIDC_EMAIL;
+    delete process.env.GMAIL_PUSH_OIDC_AUDIENCE;
   });
 
   describe("OIDC path (signature must be cryptographically verified)", () => {
+    // OIDC auth is fail-closed: the audience must be configured (otherwise the
+    // verifier would skip audience binding). Set it for the signature-path
+    // tests; the dedicated test below covers the missing-audience rejection.
+    beforeEach(() => {
+      process.env.GMAIL_PUSH_OIDC_AUDIENCE = "https://klorn.example/api/gmail/push";
+    });
+
+    it("rejects when OIDC is configured but the audience env is missing (fail-closed)", async () => {
+      delete process.env.GMAIL_PUSH_OIDC_AUDIENCE;
+      process.env.GMAIL_PUSH_OIDC_EMAIL = "pubsub@proj.iam.gserviceaccount.com";
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/gmail/push",
+        headers: { authorization: "Bearer signed-by-google" },
+        payload: { message: {} },
+      });
+      expect(res.statusCode).toBe(401);
+      await app.close();
+    });
     // A structurally valid JWT whose claims would pass every decode-only check
     // (correct iss/email/exp) but which Google never signed. Before signature
     // verification existed, this token authorized real syncs.

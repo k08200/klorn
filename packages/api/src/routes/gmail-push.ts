@@ -26,6 +26,7 @@ import { prisma } from "../db.js";
 import { syncEmails } from "../email-sync.js";
 import { registerGmailWatch, stopGmailWatch } from "../gmail.js";
 import { verifyGoogleOidcToken } from "../google-oidc.js";
+import { timingSafeEqualStr } from "../timing-safe-equal.js";
 
 function extractBearerToken(req: FastifyRequest): string | null {
   const auth = req.headers.authorization;
@@ -43,6 +44,13 @@ async function authorizePushRequest(
   const token = extractBearerToken(req);
 
   if (oidcEmail) {
+    // Fail closed: without an audience, google-auth-library skips audience
+    // binding entirely (audience: undefined), so ANY Google-signed token whose
+    // email matches would be accepted. Require the audience to be configured
+    // whenever OIDC auth is enabled, so verifyGoogleOidcToken always binds it.
+    if (!process.env.GMAIL_PUSH_OIDC_AUDIENCE) {
+      return { ok: false, reason: "OIDC audience not configured" };
+    }
     if (!token) return { ok: false, reason: "missing OIDC token" };
     // Signature, expiry, and issuer are verified against Google's certs —
     // claims from an unverified decode are attacker-controlled and must
@@ -59,7 +67,7 @@ async function authorizePushRequest(
   }
 
   if (shared) {
-    if (token && token === shared) return { ok: true };
+    if (token && timingSafeEqualStr(token, shared)) return { ok: true };
     return { ok: false, reason: "bearer token mismatch" };
   }
 
