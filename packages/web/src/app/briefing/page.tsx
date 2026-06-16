@@ -220,7 +220,7 @@ function BriefingView() {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
       <header className="mb-6 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
-        <div className="h-1 bg-gradient-to-r from-amber-300 via-teal-300 to-stone-600" />
+        <div className="h-1 bg-gradient-to-r from-amber-300 via-amber-200/40 to-transparent" />
         <div className="grid gap-5 p-5 md:p-6 lg:grid-cols-[1fr_300px] lg:items-stretch">
           <div>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
@@ -297,7 +297,7 @@ function BriefingView() {
       {content && (
         <div className="space-y-4">
           <article className="relative overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/35 p-5 pl-6 md:p-6 md:pl-7">
-            <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-amber-300 via-teal-300 to-stone-700" />
+            <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-amber-300 via-amber-200/40 to-transparent" />
             <Markdown content={content} />
           </article>
 

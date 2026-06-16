@@ -150,7 +150,7 @@ function CalendarView() {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
       <header className="mb-6 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
-        <div className="h-1 bg-gradient-to-r from-teal-300 via-amber-300 to-stone-600" />
+        <div className="h-1 bg-gradient-to-r from-amber-300 via-amber-200/40 to-transparent" />
         <div className="p-5 md:p-6">
           <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
             <div>
@@ -427,7 +427,7 @@ function EventChip({
     >
       <span
         aria-hidden="true"
-        className={`h-1.5 w-1.5 shrink-0 rounded-full ${dimmed ? "bg-stone-700" : "bg-teal-300"}`}
+        className={`h-1.5 w-1.5 shrink-0 rounded-full ${dimmed ? "bg-stone-700" : "bg-amber-300"}`}
       />
       {timeLabel && <span className="shrink-0 tabular-nums text-stone-500">{timeLabel}</span>}
       <span className="truncate">{event.title || "Untitled"}</span>
