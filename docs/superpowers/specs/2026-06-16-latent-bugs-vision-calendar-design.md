@@ -46,13 +46,15 @@ scheduler write by the user's UTC offset.
 
 The canonical timezone source is `user.timezone` passed through `normalizeTimeZone`
 (which supplies the default when the column is null) — **not** `automationConfig`.
-`init-sync` already loads the `user` row (`prisma.user.findUnique({ where: { id: userId } })`),
-so the value is available without an extra query.
+The `init-sync` handler (routes/auth.ts:1058) only has `userId` in scope; it does **not**
+load the `user` row, so the fix adds a single `select: { timezone: true }` fetch (init-sync
+is a low-frequency login-bootstrap call, so one extra query is fine).
 
 **Approach — A1 (minimal in-place fix, chosen):**
-1. In the `init-sync` handler, derive `userTimezone = normalizeTimeZone(user?.timezone)`,
-   exactly as the scheduler does (reuse the already-loaded `user` row; import
-   `normalizeTimeZone`).
+1. In the `init-sync` handler, fetch the timezone once
+   (`prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } })`)
+   and derive `userTimezone = normalizeTimeZone(userRow?.timezone)`, exactly as the
+   scheduler does (import `normalizeTimeZone` from `./time-zone.js`).
 2. Replace the two `new Date(startTime)` / `new Date(endTime)` upsert fields with the
    exact `isTimed ? parseGoogleDateTime(..., userTimezone) : new Date(...)` logic the
    scheduler uses, for both the `create` and `update` branches.
