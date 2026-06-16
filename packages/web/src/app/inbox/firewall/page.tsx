@@ -9,6 +9,7 @@ import { apiFetch } from "../../../lib/api";
 import { captureClientError } from "../../../lib/sentry";
 
 type Tier = "SILENT" | "QUEUE" | "PUSH" | "AUTO";
+type ColumnTier = "PUSH" | "QUEUE" | "SILENT";
 
 // How often the firewall view re-pulls while the tab is focused.
 const FIREWALL_REFRESH_MS = 45_000;
@@ -57,27 +58,63 @@ interface DailyReceipt {
 
 const TIER_ORDER: Tier[] = ["PUSH", "QUEUE", "SILENT"];
 
-const TIER_META: Record<Tier, { label: string; tone: string; description: string }> = {
+// Spatial-triage visual language. Depth is meant to be felt before it is
+// read: PUSH sits on a glowing, elevated plane; QUEUE is mid; SILENT
+// recedes and desaturates. The class strings below encode that ladder.
+const TIER_VISUAL: Record<
+  Tier,
+  {
+    label: string;
+    description: string;
+    plane: string; // column panel: glow + tint + border
+    card: string; // per-card border + hover accent
+    accent: string; // count + glyph color
+    dot: string; // glyph fill
+  }
+> = {
   PUSH: {
     label: "PUSH",
-    tone: "border-rose-400/40 bg-rose-500/5",
     description: "Worth interrupting you for. Push notifications fire here.",
+    plane:
+      "tier-plane-push border-rose-400/35 bg-gradient-to-b from-rose-500/[0.07] to-transparent",
+    card: "border-rose-400/15 bg-stone-950/60 hover:border-rose-400/45",
+    accent: "text-rose-300",
+    dot: "text-rose-400",
   },
   QUEUE: {
     label: "QUEUE",
-    tone: "border-amber-300/30 bg-amber-300/5",
     description: "Visible when you choose to look. No push.",
+    plane:
+      "tier-plane-queue border-amber-300/25 bg-gradient-to-b from-amber-300/[0.05] to-transparent",
+    card: "border-amber-300/10 bg-stone-950/55 hover:border-amber-300/35",
+    accent: "text-amber-300",
+    dot: "text-amber-300",
   },
   SILENT: {
     label: "SILENT",
-    tone: "border-stone-700 bg-stone-900/40",
     description: "Recorded only. Klorn decided this wasn't worth surfacing.",
+    plane: "tier-plane-silent border-stone-800/70 bg-stone-950/30 opacity-90 hover:opacity-100",
+    card: "border-stone-800/60 bg-stone-950/40 hover:border-stone-700",
+    accent: "text-stone-400",
+    dot: "text-stone-500",
   },
   AUTO: {
     label: "AUTO",
-    tone: "border-emerald-400/30 bg-emerald-500/5",
     description: "Handled without asking. Eligible for auto-execution.",
+    plane:
+      "tier-plane-auto border-emerald-400/30 bg-gradient-to-b from-emerald-500/[0.05] to-transparent",
+    card: "border-emerald-400/15 bg-stone-950/55 hover:border-emerald-400/40",
+    accent: "text-emerald-300",
+    dot: "text-emerald-400",
   },
+};
+
+// Per-target tint for the override pills, so "Move → PUSH" hints coral, etc.
+const TARGET_BUTTON: Record<Tier, string> = {
+  PUSH: "hover:border-rose-400/50 hover:text-rose-200",
+  QUEUE: "hover:border-amber-300/50 hover:text-amber-200",
+  SILENT: "hover:border-stone-600 hover:text-stone-200",
+  AUTO: "hover:border-emerald-400/50 hover:text-emerald-200",
 };
 
 const OVERRIDE_TARGETS: Tier[] = ["SILENT", "QUEUE", "PUSH"];
@@ -166,7 +203,7 @@ function FirewallView() {
       PUSH: data.tiers.PUSH,
       QUEUE: data.tiers.QUEUE,
       SILENT: data.tiers.SILENT,
-    } as Record<"PUSH" | "QUEUE" | "SILENT", FirewallItem[]>;
+    } as Record<ColumnTier, FirewallItem[]>;
   }, [data]);
 
   if (loading) {
@@ -188,14 +225,14 @@ function FirewallView() {
   return (
     <div className="min-h-full px-4 pb-28 pt-6 md:py-10">
       <div className="mx-auto max-w-6xl">
-        <header className="mb-6">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300">
+        <header className="mb-8">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-300/80">
             POC firewall view
           </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-50 sm:text-3xl">
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-50 sm:text-[2rem]">
             Today's attention firewall
           </h1>
-          <p className="mt-2 max-w-2xl text-sm text-stone-500">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
             Klorn evaluated every signal that hit your inbox today and sorted it into a tier. Move
             anything we got wrong — that override teaches the classifier.
           </p>
@@ -203,7 +240,7 @@ function FirewallView() {
 
         <DailyReceiptStrip data={data} receipt={receipt} />
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
           {(["PUSH", "QUEUE", "SILENT"] as const).map((tier) => (
             <TierColumn
               key={tier}
@@ -247,6 +284,98 @@ function moveItemBetweenTiers(
   return next;
 }
 
+// Small SVG glyph per tier — a fast pre-literacy read of "where am I looking".
+function TierGlyph({ tier, className }: { tier: Tier; className?: string }) {
+  if (tier === "PUSH") {
+    // Filled alert diamond.
+    return (
+      <svg
+        aria-hidden="true"
+        width="14"
+        height="14"
+        viewBox="0 0 16 16"
+        className={className}
+        fill="currentColor"
+      >
+        <path d="M8 1l7 7-7 7-7-7 7-7z" />
+      </svg>
+    );
+  }
+  if (tier === "QUEUE") {
+    // Stacked layers — a holding queue.
+    return (
+      <svg
+        aria-hidden="true"
+        width="14"
+        height="14"
+        viewBox="0 0 16 16"
+        className={className}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <path d="M2 5l6-3 6 3-6 3-6-3z" />
+        <path d="M2 8.5l6 3 6-3" />
+        <path d="M2 11.5l6 3 6-3" opacity="0.5" />
+      </svg>
+    );
+  }
+  if (tier === "AUTO") {
+    // Check — done without asking.
+    return (
+      <svg
+        aria-hidden="true"
+        width="14"
+        height="14"
+        viewBox="0 0 16 16"
+        className={className}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      >
+        <path d="M3 8.5l3.5 3.5L13 4.5" />
+      </svg>
+    );
+  }
+  // SILENT — hollow muted ring.
+  return (
+    <svg
+      aria-hidden="true"
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    >
+      <circle cx="8" cy="8" r="5.5" />
+    </svg>
+  );
+}
+
+// Count that pops once when its value changes (e.g. after an override).
+function CountChip({ value, className }: { value: number; className?: string }) {
+  const prev = useRef(value);
+  const [pop, setPop] = useState(false);
+  useEffect(() => {
+    if (prev.current !== value) {
+      prev.current = value;
+      setPop(true);
+      const t = window.setTimeout(() => setPop(false), 340);
+      return () => window.clearTimeout(t);
+    }
+  }, [value]);
+  return (
+    <span
+      className={`inline-block tabular-nums ${pop ? "animate-count-pop" : ""} ${className ?? ""}`}
+    >
+      {value}
+    </span>
+  );
+}
+
 function DailyReceiptStrip({
   data,
   receipt,
@@ -254,30 +383,30 @@ function DailyReceiptStrip({
   data: FirewallResponse;
   receipt: DailyReceipt | null;
 }) {
-  const counts: Array<{ label: string; value: number; tone: string }> = [
-    { label: "SILENT", value: data.summary.SILENT, tone: "text-stone-400" },
-    { label: "QUEUE", value: data.summary.QUEUE, tone: "text-amber-300" },
-    {
-      label: "PUSH",
-      value: data.summary.PUSH,
-      tone: "text-rose-300",
-    },
-    { label: "AUTO", value: data.summary.AUTO, tone: "text-emerald-300" },
-  ];
+  const counts: Tier[] = ["PUSH", "QUEUE", "SILENT", "AUTO"];
   return (
-    <section className="rounded-xl border border-stone-800 bg-stone-950/40 p-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {counts.map((c) => (
-          <div key={c.label} className="flex items-baseline gap-2">
-            <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-stone-500">
-              {c.label}
-            </span>
-            <span className={`text-xl font-semibold tabular-nums ${c.tone}`}>{c.value}</span>
-          </div>
-        ))}
+    <section className="glass rounded-2xl border border-stone-800/80 bg-stone-950/40 p-5">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-4">
+        {counts.map((tier) => {
+          const v = TIER_VISUAL[tier];
+          return (
+            <div key={tier} className="flex items-center gap-3">
+              <TierGlyph tier={tier} className={v.dot} />
+              <div className="flex flex-col">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-stone-500">
+                  {v.label}
+                </span>
+                <CountChip
+                  value={data.summary[tier]}
+                  className={`text-2xl font-semibold leading-none ${v.accent}`}
+                />
+              </div>
+            </div>
+          );
+        })}
       </div>
       {receipt?.summary?.narrative && (
-        <p className="mt-3 border-t border-stone-800 pt-3 text-xs text-stone-500">
+        <p className="mt-4 border-t border-stone-800/80 pt-4 text-xs leading-5 text-stone-500">
           {receipt.summary.narrative}
         </p>
       )}
@@ -291,33 +420,35 @@ function TierColumn({
   overrideId,
   onOverride,
 }: {
-  tier: "PUSH" | "QUEUE" | "SILENT";
+  tier: ColumnTier;
   items: FirewallItem[];
   overrideId: string | null;
   onOverride: (item: FirewallItem, newTier: Tier) => void;
 }) {
-  const meta = TIER_META[tier];
+  const v = TIER_VISUAL[tier];
   return (
-    <section className={`rounded-xl border ${meta.tone} p-3`}>
-      <header className="mb-3 flex items-baseline justify-between gap-2">
-        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-200">
-          {meta.label}
+    <section className={`glass rounded-2xl border p-4 transition-opacity ${v.plane}`}>
+      <header className="mb-1 flex items-center gap-2">
+        <TierGlyph tier={tier} className={v.dot} />
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-100">
+          {v.label}
         </h2>
-        <span className="text-xs text-stone-500">{items.length}</span>
+        <CountChip value={items.length} className={`ml-auto text-sm font-semibold ${v.accent}`} />
       </header>
-      <p className="mb-3 text-[11px] leading-5 text-stone-500">{meta.description}</p>
+      <p className="mb-4 text-[11px] leading-5 text-stone-500">{v.description}</p>
 
       {items.length === 0 ? (
-        <p className="rounded-md border border-dashed border-stone-800 px-3 py-6 text-center text-xs text-stone-600">
+        <p className="rounded-lg border border-dashed border-stone-800/70 px-3 py-8 text-center text-xs text-stone-600">
           Nothing here yet.
         </p>
       ) : (
-        <ul className="space-y-2">
-          {items.map((item) => (
+        <ul className="space-y-2.5">
+          {items.map((item, i) => (
             <FirewallCard
               key={item.id}
               item={item}
               tier={tier}
+              index={i}
               overrideId={overrideId}
               onOverride={onOverride}
             />
@@ -331,32 +462,43 @@ function TierColumn({
 function FirewallCard({
   item,
   tier,
+  index,
   overrideId,
   onOverride,
 }: {
   item: FirewallItem;
-  tier: "PUSH" | "QUEUE" | "SILENT";
+  tier: ColumnTier;
+  index: number;
   overrideId: string | null;
   onOverride: (item: FirewallItem, newTier: Tier) => void;
 }) {
+  const v = TIER_VISUAL[tier];
   // Best-effort meaningful heading: actual email subject beats the
   // tool-arg subject beats the agent's auto-title fallback.
   const subject = item.email?.subject || toolSubject(item) || item.title;
   const sender = item.email?.from || toolRecipient(item);
   const snippet = item.email?.snippet || toolBodyPreview(item);
+  const busy = overrideId === item.id;
 
   return (
-    <li className="rounded-md border border-stone-800 bg-stone-950/60 p-3 text-sm">
-      <p className="line-clamp-2 break-words text-stone-100">{subject}</p>
+    <li
+      className={`lift animate-card-in rounded-xl border p-3.5 text-sm ${v.card} ${
+        busy ? "opacity-50" : ""
+      }`}
+      // Stagger only the first screenful so a fresh load cascades in; later
+      // cards (and re-renders) appear immediately.
+      style={index < 8 ? { animationDelay: `${index * 35}ms` } : undefined}
+    >
+      <p className="line-clamp-2 break-words font-medium text-stone-100">{subject}</p>
       {sender && (
-        <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-stone-500">
+        <p className="mt-1 flex items-center gap-1.5 truncate text-[11px] text-stone-500">
           {item.email?.trust && <TrustDot trust={item.email.trust} />}
           <span className="truncate">
             {item.email?.from ? "From" : "To"}: {sender}
           </span>
         </p>
       )}
-      <div className="mt-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-stone-600">
+      <div className="mt-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-stone-600">
         <SourceBadge source={item.source} />
         {item.toolName && (
           <>
@@ -369,18 +511,20 @@ function FirewallCard({
       </div>
 
       {snippet && (
-        <details className="mt-2 rounded border border-stone-800 bg-black/30">
-          <summary className="cursor-pointer list-none px-2 py-1.5 text-[11px] text-stone-400 transition hover:text-stone-200">
-            Preview
+        <details className="group mt-2.5 rounded-lg border border-stone-800/80 bg-black/30">
+          <summary className="cursor-pointer list-none px-2.5 py-1.5 text-[11px] text-stone-400 transition hover:text-stone-200">
+            <span className="inline-block transition group-open:rotate-90">›</span> Preview
           </summary>
-          <p className="line-clamp-6 whitespace-pre-wrap border-t border-stone-800 px-2 py-2 text-[11px] leading-4 text-stone-300">
+          <p className="line-clamp-6 whitespace-pre-wrap border-t border-stone-800/80 px-2.5 py-2 text-[11px] leading-4 text-stone-300">
             {snippet}
           </p>
         </details>
       )}
 
       {item.tierReason && (
-        <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-stone-500">{item.tierReason}</p>
+        <p className="mt-2.5 line-clamp-2 border-l-2 border-stone-800 pl-2 text-[11px] leading-4 text-stone-500">
+          {item.tierReason}
+        </p>
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
@@ -388,9 +532,9 @@ function FirewallCard({
           <button
             key={target}
             type="button"
-            disabled={overrideId === item.id}
+            disabled={busy}
             onClick={() => onOverride(item, target)}
-            className="inline-flex min-h-7 items-center rounded border border-stone-700 px-2 text-[10px] font-medium uppercase tracking-wider text-stone-400 transition hover:border-amber-300/50 hover:text-amber-200 disabled:opacity-40"
+            className={`inline-flex min-h-7 items-center rounded-full border border-stone-700/80 px-2.5 text-[10px] font-medium uppercase tracking-wider text-stone-400 transition disabled:opacity-40 ${TARGET_BUTTON[target]}`}
           >
             Move → {target}
           </button>
@@ -398,7 +542,7 @@ function FirewallCard({
         {item.href && (
           <Link
             href={item.href}
-            className="ml-auto text-[11px] text-amber-300/80 transition hover:text-amber-200"
+            className={`ml-auto text-[11px] transition ${v.accent} hover:text-stone-100`}
           >
             Open email →
           </Link>
@@ -456,31 +600,35 @@ function toolBodyPreview(item: FirewallItem): string | undefined {
 }
 
 function AutoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
+  const v = TIER_VISUAL.AUTO;
   if (count === 0) {
     return (
-      <section className="mt-4 rounded-xl border border-stone-800 bg-stone-950/40 p-3 text-xs text-stone-500">
-        <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-emerald-300">
+      <section className="glass mt-4 flex items-center gap-2 rounded-2xl border border-stone-800/70 bg-stone-950/30 p-4 text-xs text-stone-500">
+        <TierGlyph tier="AUTO" className="text-stone-600" />
+        <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-stone-500">
           AUTO
-        </span>{" "}
-        — nothing handled automatically yet.
+        </span>
+        <span>— nothing handled automatically yet.</span>
       </section>
     );
   }
   return (
-    <section className="mt-4 rounded-xl border border-emerald-400/30 bg-emerald-500/5 p-3">
-      <header className="flex items-baseline justify-between gap-2">
-        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-200">
+    <section className={`glass mt-4 rounded-2xl border p-4 ${v.plane}`}>
+      <header className="flex items-center gap-2">
+        <TierGlyph tier="AUTO" className={v.dot} />
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
           AUTO
         </h2>
-        <span className="text-xs text-stone-500">{count}</span>
+        <CountChip value={count} className={`ml-auto text-sm font-semibold ${v.accent}`} />
       </header>
-      <p className="mt-1 text-[11px] leading-5 text-stone-500">
+      <p className="mt-1.5 text-[11px] leading-5 text-stone-500">
         Low-risk, pre-approved. Klorn ran these without interrupting you.
       </p>
-      <ul className="mt-2 space-y-1 text-xs text-stone-400">
+      <ul className="mt-3 space-y-1.5 text-xs text-stone-400">
         {items.slice(0, 5).map((item) => (
-          <li key={item.id} className="line-clamp-1">
-            · {item.title}
+          <li key={item.id} className="flex items-center gap-2 line-clamp-1">
+            <span className="text-emerald-400/60">·</span>
+            <span className="truncate">{item.title}</span>
           </li>
         ))}
       </ul>

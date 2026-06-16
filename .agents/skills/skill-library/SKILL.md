@@ -15,7 +15,7 @@ Two buckets:
 - **LIBRARY** — off-stack (other languages, domains, launch/marketing). Kept globally,
   invoke only by explicit search. Do **not** load by default.
 
-The authoritative situation→tool mapping lives in the repo root [`CLAUDE.md`](../../../CLAUDE.md).
+The authoritative situation→tool mapping lives in [`.agents/AGENTS.md`](../../AGENTS.md).
 This file is the quick index.
 
 ## DAILY — grouped triggers

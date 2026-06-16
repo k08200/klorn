@@ -1,3 +1,4 @@
+import type { WaitlistStatus } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { Resend } from "resend";
 import { runAllScenarios, summarizeEval } from "../agent-eval.js";
@@ -311,16 +312,17 @@ export async function adminRoutes(app: FastifyInstance) {
   // GET /api/admin/waitlist — Public waitlist entries (PENDING first)
   app.get("/waitlist", async (request) => {
     const { status } = request.query as { status?: string };
-    const where = status === "APPROVED" || status === "REJECTED" ? { status } : {};
+    const where =
+      status === "APPROVED" || status === "REJECTED" ? { status: status as WaitlistStatus } : {};
     const entries = await db.waitlist.findMany({
       where,
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
       take: 200,
     });
-    const countRows = (await db.waitlist.groupBy({
+    const countRows = await db.waitlist.groupBy({
       by: ["status"],
       _count: { status: true },
-    })) as Array<{ status: string; _count: { status: number } }>;
+    });
     const counts: Record<string, number> = {};
     for (const row of countRows) {
       counts[row.status] = row._count.status;

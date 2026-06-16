@@ -495,7 +495,6 @@ model Skill {
   updatedAt   DateTime @updatedAt
 
   @@unique([userId, key])
-  @@index([userId])
 }
 
 // Token Usage Tracking — per-conversation and per-user cost tracking
@@ -1133,7 +1132,6 @@ model ContactTrustScore {
   updatedAt      DateTime @updatedAt
 
   @@unique([userId, contactEmail])
-  @@index([userId])
 }
 
 // Public early-access waitlist. Submissions land here before the founder
@@ -1175,7 +1173,6 @@ model LlmCostLedger {
   updatedAt   DateTime @updatedAt
 
   @@unique([userId, dayKey])
-  @@index([userId, dayKey])
 }
 
 // ─── LLM usage log ─────────────────────────────────────────────────────────

@@ -405,10 +405,7 @@ export async function createVisionCompletion(
   let lastError: unknown;
   for (const provider of ordered) {
     if (isProviderUnavailable(provider.quotaKey)) continue;
-    const model =
-      provider.name === "gemini"
-        ? provider.resolveModel(visionModel)
-        : provider.resolveModel(visionModel);
+    const model = provider.resolveModel(visionModel);
     try {
       const result = (await provider.call(
         { ...params, stream: false },
@@ -419,7 +416,11 @@ export async function createVisionCompletion(
       // request, fire-and-forget.
       void recordLlmUsage({
         userId: options.userId ?? null,
-        source: options.priority ?? "foreground",
+        // Default to "background": vision is a worker-triggered batch and the
+        // per-user gate above charges it to the background bucket. The ledger
+        // must agree, or the same call gates as background but bills as
+        // foreground. (createCompletion's own default is foreground — chat.)
+        source: options.priority ?? "background",
         estimatedCostCents: estimatePrebillCents(params.model),
         provider: provider.name,
         model,

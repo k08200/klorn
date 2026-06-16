@@ -194,7 +194,7 @@ function PolicyBadge({ kind }: { kind: PolicyKind }) {
     ALLOW_AFTER_SUGGESTION: ["Allow more often", "border-accent/20 bg-accent/10 text-accent-light"],
     REQUIRE_DRAFT_REVIEW: [
       "Keep draft review",
-      "border-[#7DD3FC]/20 bg-[#7DD3FC]/10 text-[#7DD3FC]",
+      "border-[#a8a29e]/20 bg-[#a8a29e]/10 text-[#a8a29e]",
     ],
     AVOID_SUGGESTION: ["Suggest less", "border-red-400/20 bg-red-400/10 text-red-300"],
     LOWER_PRIORITY: ["Lower priority", "border-stone-700 bg-stone-800/40 text-stone-400"],

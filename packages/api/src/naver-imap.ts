@@ -240,52 +240,54 @@ export async function syncNaverImap(args: SyncArgs): Promise<SyncResult> {
               labels,
             },
           });
-          // Crude "is this new" check — for fire-and-forget judgement
-          // we re-classify every fetched email cheaply on first poll
-          // and skip already-judged ones on subsequent polls.
+          // Only judge first-seen emails. The poll re-fetches the most-recent
+          // window every cycle; re-judging an already-seen email each time
+          // wasted LLM calls AND (via the mirror) resurrected items the user
+          // had already dismissed. `wasJust` = row created in the last minute,
+          // i.e. this poll inserted it.
           const wasJust = upserted.createdAt.getTime() >= Date.now() - 60_000;
           if (wasJust) {
             result.inserted += 1;
-          }
 
-          // Classify + mirror — fire-and-forget so a slow LLM doesn't
-          // block the IMAP loop. Failures are captured to Sentry.
-          // buildJudgeContext feeds past manual overrides back in and
-          // never throws — worst case is an empty context.
-          buildJudgeContext(args.userId, { from, excludeEmailId: upserted.id })
-            .then((judgeContext) =>
-              judgeEmail(
-                {
-                  from,
-                  subject,
-                  snippet,
-                  labels,
-                },
-                args.userId,
-                judgeContext,
-              ),
-            )
-            .then((judgement) =>
-              upsertAttentionForEmailJudgement(
-                {
-                  id: upserted.id,
-                  userId: args.userId,
-                  from,
-                  subject,
-                  snippet,
-                  labels,
-                  receivedAt,
-                },
-                judgement,
-              ),
-            )
-            .catch((err) =>
-              captureError(err, {
-                tags: { scope: "naver-imap.judge" },
-                extra: { userId: args.userId, stableId },
-              }),
-            );
-          result.classified += 1;
+            // Classify + mirror — fire-and-forget so a slow LLM doesn't
+            // block the IMAP loop. Failures are captured to Sentry.
+            // buildJudgeContext feeds past manual overrides back in and
+            // never throws — worst case is an empty context.
+            buildJudgeContext(args.userId, { from, excludeEmailId: upserted.id })
+              .then((judgeContext) =>
+                judgeEmail(
+                  {
+                    from,
+                    subject,
+                    snippet,
+                    labels,
+                  },
+                  args.userId,
+                  judgeContext,
+                ),
+              )
+              .then((judgement) =>
+                upsertAttentionForEmailJudgement(
+                  {
+                    id: upserted.id,
+                    userId: args.userId,
+                    from,
+                    subject,
+                    snippet,
+                    labels,
+                    receivedAt,
+                  },
+                  judgement,
+                ),
+              )
+              .catch((err) =>
+                captureError(err, {
+                  tags: { scope: "naver-imap.judge" },
+                  extra: { userId: args.userId, stableId },
+                }),
+              );
+            result.classified += 1;
+          }
         } catch (err) {
           result.errors += 1;
           captureError(err, {

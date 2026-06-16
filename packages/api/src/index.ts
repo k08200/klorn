@@ -38,13 +38,19 @@ import { telegramRoutes } from "./routes/telegram.js";
 import { tokenUsageRoutes } from "./routes/token-usage.js";
 import { waitlistRoutes } from "./routes/waitlist.js";
 import { webhookRoutes } from "./routes/webhook.js";
-import { captureError } from "./sentry.js";
+import { captureError, initSentry } from "./sentry.js";
 import { getClientCount, initWebSocket } from "./websocket.js";
 
 type TxClient = Omit<
   PrismaClient,
   "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends"
 >;
+
+// Initialize Sentry FIRST so every captureError() across the app actually
+// reports. Without this call `initialized` stays false and every captureError
+// is a silent no-op — the entire error-observability layer was dead in prod.
+// No-op when SENTRY_DSN is unset (local dev).
+initSentry();
 
 const app = Fastify({ logger: true });
 

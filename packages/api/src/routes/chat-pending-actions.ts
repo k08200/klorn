@@ -9,6 +9,7 @@
  * PendingAction.
  */
 
+import type { ActionStatus } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { claimAndRunOutboxRow, enqueueAction, type OutboxRow } from "../action-outbox.js";
 import { resolveActionTarget } from "../action-target.js";
@@ -109,7 +110,7 @@ export async function chatRoutes(app: FastifyInstance) {
       conversation?: { id: string; title: string | null } | null;
     };
     const actions = (await db.pendingAction.findMany({
-      where: { userId, ...(statusFilter ? { status: statusFilter } : {}) },
+      where: { userId, ...(statusFilter ? { status: statusFilter as ActionStatus } : {}) },
       orderBy: { createdAt: "desc" },
       take: 100,
       include: {

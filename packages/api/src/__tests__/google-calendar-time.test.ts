@@ -16,6 +16,7 @@
 import { describe, expect, it } from "vitest";
 import {
   hasExplicitOffset,
+  mapGoogleEventTimes,
   naiveLocalToUtc,
   parseGoogleDateTime,
 } from "../google-calendar-time.js";
@@ -108,5 +109,63 @@ describe("parseGoogleDateTime", () => {
     expect(d.toISOString()).not.toBe("2026-06-03T15:00:00.000Z"); // not naive UTC
     expect(d.toISOString()).not.toBe("2026-06-03T19:00:00.000Z"); // not the -04:00 mis-shift
     expect(d.toISOString()).toBe("2026-06-03T06:00:00.000Z"); // canonical KST
+  });
+});
+
+describe("mapGoogleEventTimes (shared init-sync + scheduler mapping)", () => {
+  it("applies the user timezone to a naive timed event (not naive new Date)", () => {
+    // The init-sync bug: it used `new Date(startTime)` which on the Render UTC
+    // server stored 15:00 UTC instead of the user's 15:00 KST. The shared
+    // mapper must produce the timezone-aware instant, matching the scheduler.
+    const mapped = mapGoogleEventTimes(
+      {
+        start: { dateTime: "2026-06-03T15:00:00", timeZone: "Asia/Seoul" },
+        end: { dateTime: "2026-06-03T16:00:00", timeZone: "Asia/Seoul" },
+      },
+      "Asia/Seoul",
+    );
+    // Deterministic: the timezone-aware instant is 06:00 UTC regardless of the
+    // server's own TZ. (A naive `new Date(rawString)` would store 15:00 UTC on
+    // the Render UTC box — the exact init-sync bug.)
+    expect(mapped?.startTime.toISOString()).toBe("2026-06-03T06:00:00.000Z");
+    expect(mapped?.endTime.toISOString()).toBe("2026-06-03T07:00:00.000Z");
+    expect(mapped?.allDay).toBe(false);
+  });
+
+  it("matches parseGoogleDateTime exactly (same instant as the scheduler)", () => {
+    const mapped = mapGoogleEventTimes(
+      { start: { dateTime: "2026-06-03T15:00:00" }, end: { dateTime: "2026-06-03T16:00:00" } },
+      "Asia/Seoul",
+    );
+    expect(mapped?.startTime.toISOString()).toBe(
+      parseGoogleDateTime("2026-06-03T15:00:00", null, "Asia/Seoul").toISOString(),
+    );
+  });
+
+  it("trusts an explicit offset", () => {
+    const mapped = mapGoogleEventTimes(
+      {
+        start: { dateTime: "2026-06-03T15:00:00+09:00" },
+        end: { dateTime: "2026-06-03T16:00:00+09:00" },
+      },
+      "America/New_York",
+    );
+    expect(mapped?.startTime.toISOString()).toBe("2026-06-03T06:00:00.000Z");
+  });
+
+  it("treats a date-only event as all-day", () => {
+    const mapped = mapGoogleEventTimes(
+      { start: { date: "2026-06-03" }, end: { date: "2026-06-04" } },
+      "Asia/Seoul",
+    );
+    expect(mapped?.allDay).toBe(true);
+    expect(mapped?.startTime.toISOString()).toBe(new Date("2026-06-03").toISOString());
+  });
+
+  it("returns null when start or end is missing", () => {
+    expect(
+      mapGoogleEventTimes({ start: { dateTime: "2026-06-03T15:00:00" } }, "Asia/Seoul"),
+    ).toBeNull();
+    expect(mapGoogleEventTimes({}, "Asia/Seoul")).toBeNull();
   });
 });
