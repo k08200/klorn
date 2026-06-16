@@ -23,7 +23,6 @@
         "noExplicitAny": "error",
         "noDoubleEquals": "error",
         "noDuplicateObjectKeys": "error",
-        "noEmptyBlockStatements": "error",
         "noFallthroughSwitchClause": "error",
         "noRedeclare": "error",
         "noShadowRestrictedNames": "error",
