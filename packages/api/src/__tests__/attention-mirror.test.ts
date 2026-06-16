@@ -21,6 +21,7 @@ const {
   upsertAttentionForCalendarEvent,
   upsertAttentionForNotification,
   upsertAttentionForCommitment,
+  upsertAttentionForEmailJudgement,
   bulkResolveAttentionForPendingActions,
   deleteAttentionForPendingActions,
   deleteAttentionForCalendarEvents,
@@ -543,5 +544,41 @@ describe("deleteAttentionForPendingActions", () => {
     };
     expect(call.where.source).toBe("PENDING_ACTION");
     expect(call.where.sourceId.in).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("upsertAttentionForEmailJudgement — status preservation", () => {
+  const email = {
+    id: "email-1",
+    userId: "user-1",
+    from: "boss@acme.com",
+    subject: "Re: the deal",
+    snippet: "can you confirm",
+    labels: ["INBOX"],
+    receivedAt: new Date("2026-06-16T00:00:00Z"),
+  };
+  const judgement = {
+    tier: "QUEUE" as const,
+    reason: "reply needed",
+    features: { confidence: 0.8, senderTrust: 0.6, reversibility: 0.9, urgency: 0.4 },
+  };
+
+  it("opens a brand-new email item (create branch)", async () => {
+    await upsertAttentionForEmailJudgement(email, judgement);
+    const call = upsertSpy.mock.calls[0]?.[0] as { create: { status: string } };
+    expect(call.create.status).toBe("OPEN");
+  });
+
+  it("does NOT force status on re-judge, so a DISMISSED/RESOLVED item is not resurrected", async () => {
+    // The Naver poll re-judges the same email every cycle; forcing status:OPEN
+    // here resurrected items the user had already dismissed. The update branch
+    // must refresh tier/priority but leave the user's terminal status alone.
+    await upsertAttentionForEmailJudgement(email, judgement);
+    const call = upsertSpy.mock.calls[0]?.[0] as {
+      update: { status?: string; tier: string; priority: string };
+    };
+    expect(call.update.status).toBeUndefined();
+    // still refreshes the classification fields
+    expect(call.update.tier).toBe("QUEUE");
   });
 });

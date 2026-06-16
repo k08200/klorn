@@ -866,7 +866,10 @@ export async function upsertAttentionForEmailJudgement(
         inputHashAt,
       },
       update: {
-        status: "OPEN",
+        // Intentionally NOT setting status here. A re-judge (Naver poll,
+        // backfill sweep) must refresh the classification but preserve the
+        // user's terminal decision — forcing OPEN resurrected items the user
+        // had already DISMISSED/RESOLVED. New emails still get OPEN via create.
         priority: emailPriority(judgement),
         confidence: judgement.features?.confidence ?? 0.5,
         title: emailTitleFor(email),
