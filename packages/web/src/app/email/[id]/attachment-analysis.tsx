@@ -166,7 +166,7 @@ export function AttachmentAnalysis({
   };
 
   return (
-    <section className="mt-5 rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
+    <section className="mt-5 rounded-xl border border-stone-600/20 bg-stone-600/5 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[#a8a29e]">
           Attachment analysis
@@ -185,7 +185,7 @@ export function AttachmentAnalysis({
             type="button"
             onClick={onReanalyze}
             disabled={reanalyzing}
-            className="rounded border border-[#a8a29e]/25 bg-[#a8a29e]/10 px-2 py-1 text-[11px] text-sky-200 transition hover:bg-[#a8a29e]/15 disabled:opacity-50"
+            className="rounded border border-[#a8a29e]/25 bg-[#a8a29e]/10 px-2 py-1 text-[11px] text-stone-300 transition hover:bg-[#a8a29e]/15 disabled:opacity-50"
           >
             {reanalyzing ? "Analyzing..." : "Reanalyze"}
           </button>
@@ -203,14 +203,14 @@ export function AttachmentAnalysis({
         {attachments.map((attachment) => (
           <div
             key={attachment.id}
-            className="border-t border-sky-500/15 pt-3 first:border-t-0 first:pt-0"
+            className="border-t border-stone-600/15 pt-3 first:border-t-0 first:pt-0"
           >
             <div className="flex flex-wrap items-center gap-2">
               <span className="max-w-full truncate text-sm font-medium text-stone-100">
                 {attachment.filename}
               </span>
               {attachment.category && (
-                <span className="rounded border border-[#a8a29e]/30 bg-[#a8a29e]/10 px-1.5 py-0.5 text-[10px] text-sky-200">
+                <span className="rounded border border-[#a8a29e]/30 bg-[#a8a29e]/10 px-1.5 py-0.5 text-[10px] text-stone-300">
                   {attachmentCategoryLabel(attachment.category)}
                 </span>
               )}
@@ -226,7 +226,7 @@ export function AttachmentAnalysis({
                 type="button"
                 onClick={() => downloadAttachment(attachment)}
                 disabled={downloading === attachment.id}
-                className="rounded border border-stone-700/70 bg-stone-950/45 px-2 py-0.5 text-[10px] text-stone-400 transition hover:border-[#a8a29e]/30 hover:text-sky-200 disabled:opacity-50"
+                className="rounded border border-stone-700/70 bg-stone-950/45 px-2 py-0.5 text-[10px] text-stone-400 transition hover:border-[#a8a29e]/30 hover:text-stone-300 disabled:opacity-50"
               >
                 {downloading === attachment.id ? "Downloading" : "Download original"}
               </button>
@@ -255,7 +255,7 @@ export function AttachmentAnalysis({
                     converting ===
                     `${attachment.id}:${conversionTargets[attachment.id] ?? defaultConversionTarget(attachment)}`
                   }
-                  className="rounded bg-[#a8a29e] px-2 py-0.5 text-[10px] font-medium text-stone-950 transition hover:bg-sky-200 disabled:opacity-50"
+                  className="rounded bg-[#a8a29e] px-2 py-0.5 text-[10px] font-medium text-stone-950 transition hover:bg-stone-300 disabled:opacity-50"
                 >
                   {converting?.startsWith(`${attachment.id}:`) ? "Converting" : "Convert"}
                 </button>
@@ -471,7 +471,7 @@ function AttachmentCorrectionForm({
           <button
             type="button"
             onClick={() => setFields((prev) => [...prev, { key: "", value: "" }])}
-            className="text-[11px] text-[#a8a29e] transition hover:text-sky-200"
+            className="text-[11px] text-[#a8a29e] transition hover:text-stone-300"
           >
             Add field
           </button>

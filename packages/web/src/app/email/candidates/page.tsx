@@ -319,7 +319,7 @@ function CandidateIntakeView() {
               type="button"
               onClick={exportCsv}
               disabled={exporting}
-              className="rounded-lg border border-[#a8a29e]/30 px-3 py-1.5 text-xs text-sky-200 transition hover:bg-[#a8a29e]/10 disabled:opacity-50"
+              className="rounded-lg border border-[#a8a29e]/30 px-3 py-1.5 text-xs text-stone-300 transition hover:bg-[#a8a29e]/10 disabled:opacity-50"
             >
               {exporting ? "Exporting..." : "Export CSV"}
             </button>

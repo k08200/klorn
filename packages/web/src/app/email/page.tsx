@@ -613,7 +613,7 @@ function EmailView() {
             type="button"
             onClick={reanalyzeAttachments}
             disabled={reanalyzing}
-            className="min-h-11 w-fit rounded-md border border-[#a8a29e]/25 bg-[#a8a29e]/10 px-3 text-xs font-medium text-sky-100 transition hover:bg-[#a8a29e]/15 disabled:opacity-50"
+            className="min-h-11 w-fit rounded-md border border-[#a8a29e]/25 bg-[#a8a29e]/10 px-3 text-xs font-medium text-stone-200 transition hover:bg-[#a8a29e]/15 disabled:opacity-50"
           >
             {reanalyzing ? "Analyzing..." : "Reanalyze attachments"}
           </button>

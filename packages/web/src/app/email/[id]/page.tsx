@@ -1199,7 +1199,7 @@ function ReplyDraftBox({
               key={item.label}
               type="button"
               onClick={() => onIntentChange(item.intent)}
-              className="rounded-full border border-stone-700/60 bg-black/15 px-3 py-1.5 text-[11px] text-stone-300 transition hover:border-[#a8a29e]/35 hover:bg-[#a8a29e]/10 hover:text-sky-100"
+              className="rounded-full border border-stone-700/60 bg-black/15 px-3 py-1.5 text-[11px] text-stone-300 transition hover:border-[#a8a29e]/35 hover:bg-[#a8a29e]/10 hover:text-stone-200"
             >
               {item.label}
             </button>
@@ -1267,7 +1267,7 @@ function ReplyDraftBox({
                         : attachments.map((attachment) => attachment.id),
                     )
                   }
-                  className="text-[11px] text-[#a8a29e] transition hover:text-sky-200"
+                  className="text-[11px] text-[#a8a29e] transition hover:text-stone-300"
                 >
                   {selectedCount === attachments.length ? "Clear all" : "Select all"}
                 </button>
@@ -1311,7 +1311,7 @@ function ReplyDraftBox({
                 type="button"
                 onClick={onSaveGmailDraft}
                 disabled={savingGmailDraft || !draft.to || !draft.subject || !draft.body}
-                className="rounded-lg border border-[#a8a29e]/30 px-3 py-1.5 text-xs font-medium text-sky-200 transition hover:bg-[#a8a29e]/10 disabled:opacity-50"
+                className="rounded-lg border border-[#a8a29e]/30 px-3 py-1.5 text-xs font-medium text-stone-300 transition hover:bg-[#a8a29e]/10 disabled:opacity-50"
               >
                 {savingGmailDraft
                   ? "Saving..."
