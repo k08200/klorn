@@ -112,3 +112,36 @@ export function parseGoogleDateTime(
   // throwing and dropping the whole sync.
   return new Date(dateTime);
 }
+
+/** Minimal structural slice of a Google Calendar event's time fields. */
+export interface GoogleEventTimeInput {
+  start?: { dateTime?: string | null; date?: string | null; timeZone?: string | null } | null;
+  end?: { dateTime?: string | null; date?: string | null; timeZone?: string | null } | null;
+}
+
+/**
+ * Map a Google Calendar event's start/end into stored `Date` instants + an
+ * `allDay` flag, applying the user's timezone to naive timed values exactly as
+ * the automation scheduler does. Returns null when start or end is missing.
+ *
+ * Shared so first-login init-sync and the 60s scheduler agree on the instant —
+ * a timed event must not land at a different UTC moment depending on which path
+ * wrote it. (Sub-project D will route the scheduler through this too.)
+ */
+export function mapGoogleEventTimes(
+  item: GoogleEventTimeInput,
+  userTimezone: string,
+): { startTime: Date; endTime: Date; allDay: boolean } | null {
+  const startRaw = item.start?.dateTime || item.start?.date || "";
+  const endRaw = item.end?.dateTime || item.end?.date || "";
+  if (!startRaw || !endRaw) return null;
+
+  const isTimed = Boolean(item.start?.dateTime);
+  const startTime = isTimed
+    ? parseGoogleDateTime(startRaw, item.start?.timeZone ?? null, userTimezone)
+    : new Date(startRaw);
+  const endTime = isTimed
+    ? parseGoogleDateTime(endRaw, item.end?.timeZone ?? null, userTimezone)
+    : new Date(endRaw);
+  return { startTime, endTime, allDay: !isTimed };
+}
