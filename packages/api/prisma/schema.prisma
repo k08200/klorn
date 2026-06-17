@@ -289,7 +289,11 @@ model AutomationConfig {
   briefingTime         String   @default("06:00")
   timezone             String   @default("Asia/Seoul")
   downloadAutoOrganize Boolean  @default(false)
-  autonomousAgent      Boolean  @default(true)
+  // OFF by default: a new install is a pure 4-tier firewall (classify-only),
+  // matching the README doctrine ("not a suggestion engine"). The proactive
+  // agent loop is opt-in. Existing rows keep their value — this only changes
+  // the default for newly-created configs.
+  autonomousAgent      Boolean  @default(false)
   agentMode            String   @default("SUGGEST") // "SHADOW" | "SUGGEST" | "AUTO"
   agentIntervalMin     Int      @default(5)
   alwaysAllowedTools   String[] @default([]) // MEDIUM-risk tools the user has pre-approved for AUTO mode

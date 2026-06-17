@@ -66,6 +66,12 @@ export const ALWAYS_TOOLS = [
   TIME_TOOL,
 ];
 
+// The full tool surface. NOTE: importing this does NOT grant the agent these
+// tools. The autonomous agent only receives mutating tools when the user has
+// explicitly opted into AUTO mode (see autonomous-agent.ts — SUGGEST, the
+// default, hands the model read-only tools and propose_action only). The three
+// irreversible actions (send_email / permanent_delete / forward_external) sit
+// behind the ActionReceipt deterministic floor regardless of mode.
 export const ALL_TOOLS = [...ALWAYS_TOOLS, ...GOOGLE_TOOLS];
 
 /**

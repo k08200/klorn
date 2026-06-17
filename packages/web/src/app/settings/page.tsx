@@ -396,7 +396,7 @@ export default function SettingsPage() {
       .then((d) => {
         setProactiveActionsEnabled(d.proactiveActions ?? false);
         setPhoneEscalationEnabled(d.phoneEscalationEnabled ?? false);
-        setAgentEnabled(d.autonomousAgent ?? true);
+        setAgentEnabled(d.autonomousAgent ?? false);
         setAgentMode(normalizeAgentMode(d.agentMode));
         setAgentModeOptions(normalizeAgentModeOptions(d.agentModes));
         setAgentInterval(d.agentIntervalMin ?? 5);

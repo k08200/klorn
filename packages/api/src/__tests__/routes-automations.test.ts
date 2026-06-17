@@ -108,6 +108,24 @@ describe("PATCH /api/automations alwaysAllowedTools validation", () => {
     await app.close();
   });
 
+  it("defaults autonomousAgent to false when the stored config omits it", async () => {
+    // A legacy/partial config row with no explicit agent setting must serialize
+    // as OFF — the firewall doctrine default is classify-only, no proactive
+    // agent loop. Guards against the field silently reading back as enabled.
+    findUniqueSpy.mockResolvedValueOnce({
+      userId: "test-user-id",
+      agentMode: "SUGGEST",
+      // autonomousAgent intentionally absent (undefined)
+    });
+
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/automations" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().autonomousAgent).toBe(false);
+    await app.close();
+  });
+
   it("normalizes unknown agent modes to SUGGEST", async () => {
     const app = await buildApp();
     const res = await app.inject({
