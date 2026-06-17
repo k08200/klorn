@@ -21,6 +21,7 @@ import { getToolRisk } from "./agent-logic.js";
 import { AUTOPILOT_LEVEL, type AutopilotLevel } from "./agent-mode.js";
 import { computeAttentionInputHash } from "./attention-input-hash.js";
 import { prisma } from "./db.js";
+import { recordEmailDecision } from "./decision-label.js";
 import { getSuppressionSet, isSuppressed } from "./feedback-adaptor.js";
 import type { PocJudgement } from "./poc-judge.js";
 import type { Tier } from "./tiers.js";
@@ -887,6 +888,21 @@ export async function upsertAttentionForEmailJudgement(
     });
   } catch (err) {
     console.warn("[attention-mirror] upsert failed for Email", email.id, err);
+  }
+
+  // Append the immutable decision label (best-effort, never throws). Records
+  // the tier we SHOWED + the features behind it so per-user PUSH recall and
+  // over-suppression can be measured later — AttentionItem.tier gets clobbered
+  // by a manual override, this row does not. See decision-label.ts.
+  if (judgement.features) {
+    await recordEmailDecision({
+      userId: email.userId,
+      sourceId: email.id,
+      shownTier: judgement.tier,
+      features: judgement.features,
+      sender: email.from,
+      decidedBy: judgement.source ?? null,
+    });
   }
 }
 
