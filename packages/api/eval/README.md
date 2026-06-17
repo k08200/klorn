@@ -51,3 +51,35 @@ The original POC measurement still works unchanged:
 DATABASE_URL=... OPENROUTER_API_KEY=... npx tsx scripts/poc-accuracy.ts \
   --in=../../poc-ground-truth.json
 ```
+
+## Planned: repoint the canary at real mail
+
+Today `judge-canary.yml` runs the **synthetic** set, so a green canary proves
+"the model didn't silently drift", NOT "the thesis holds on real mail". The
+launch GO/NO-GO bar (POC.md) is ≥80% on the founder's real 50 — and that
+number has never been the thing CI measures.
+
+The repoint is one line once the data exists:
+
+```diff
+- run: ... poc-accuracy.ts --in=eval/judge-eval-set.json ...
++ run: ... poc-accuracy.ts --in=eval/real-eval-set.json ...
+```
+
+**The blocker is the data, not the wiring** — and it is deliberately a manual,
+human-reviewed step, not automation:
+
+1. `eval/real-eval-set.json` must be a PII-scrubbed extract of the private
+   `poc-ground-truth.json` (same schema), scrubbed per the "Adding cases" rules
+   above: fictional sender/domain, no real names or addresses, structural
+   signal preserved.
+2. Because this repo is **public**, every row must be eyeballed by the founder
+   before commit. An auto-scrubber must not commit real mail to a public repo —
+   one missed address is an irreversible leak. There is intentionally no script
+   here that does this for you.
+3. Once committed and reviewed, flip the `--in=` above. Then "green canary" and
+   "thesis proven on real mail" become the **same auditable event** — the whole
+   point of the gate.
+
+Keep the deterministic floor + safety invariants identical; only the data set
+changes.
