@@ -77,6 +77,19 @@ calendar time.
   would-be-SILENT sender falls through to the LLM on every email (which can
   still decide SILENT, with full content and urgency in view). The
   deterministic marketing fast-path remains the only no-LLM route to SILENT.
+- **Scope-budget CI gate never failed.** The `check` helper set `fail=1`
+  inside a `check | tee` pipeline, so it ran in a subshell and the flag
+  never reached the job shell — the gate always exited 0 (green) even when a
+  surface was over budget, so the anti-relapse lock was never actually
+  enforcing. `check` now returns non-zero and an `emit` wrapper sets `fail`
+  in the current shell (no pipe), so an over-budget surface turns the job red
+  as intended (all three axes still report).
+- **Proactive agent loop gated on explicit opt-in.** The scheduler skipped
+  only on a strictly `false` flag (`=== false`, opt-out); it now runs only
+  when the flag is explicitly `true` (`!== true`), matching the classify-only
+  default — an absent/null flag means OFF. Runtime behavior is unchanged today
+  (the column is a non-nullable Boolean) but the gate stays correct if the
+  flag is ever missing.
 
 ## [0.3.0] — 2026-06-09
 
