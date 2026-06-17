@@ -251,7 +251,7 @@ function TrustBadge({
     },
     mostly_reliable: {
       shortLabel: "Usually reliable",
-      className: "text-teal-300 bg-teal-400/10 border-teal-400/20",
+      className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
     },
     unreliable: {
       shortLabel: "Often late",

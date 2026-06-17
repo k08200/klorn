@@ -41,7 +41,6 @@ import {
 import { type AgentMode, getAgentModePolicy } from "./agent-mode.js";
 import {
   AGENT_NOTIFICATION_PREFIX,
-  EVE_AGENT_NOTIFICATION_PREFIX,
   findRecentSimilarProposal,
   hasRecentNotification,
   hasRepliedToEmail,

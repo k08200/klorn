@@ -36,7 +36,6 @@ import { captureError } from "./sentry.js";
 import { executeSkill, listUserSkills, SKILL_TOOLS } from "./skill-executor.js";
 import { planHasFeature, TOOL_FEATURE_MAP } from "./stripe.js";
 import { capToolResult } from "./tool-result-budget.js";
-import { wrapUntrusted } from "./untrusted.js";
 import {
   calculate,
   convertCurrency,

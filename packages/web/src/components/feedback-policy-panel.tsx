@@ -51,8 +51,8 @@ const KIND_COPY: Record<
   },
   REQUIRE_DRAFT_REVIEW: {
     label: "Keep review",
-    tone: "border-[#7DD3FC]/30 bg-[#7DD3FC]/10 text-sky-200",
-    dot: "bg-[#7DD3FC]",
+    tone: "border-[#a8a29e]/30 bg-[#a8a29e]/10 text-stone-300",
+    dot: "bg-[#a8a29e]",
     summary: "Review drafts before running",
   },
   AVOID_SUGGESTION: {

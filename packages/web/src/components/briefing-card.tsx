@@ -176,7 +176,7 @@ function pushMeta(
     case "received":
       return { label: "Received", className: "text-emerald-300", dotClassName: "bg-emerald-400" };
     case "accepted":
-      return { label: "Sent", className: "text-sky-300", dotClassName: "bg-sky-400" };
+      return { label: "Sent", className: "text-stone-300", dotClassName: "bg-stone-400" };
     case "failed":
       return { label: "Failed", className: "text-red-300", dotClassName: "bg-red-400" };
     case "skipped":

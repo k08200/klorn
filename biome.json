@@ -81,16 +81,6 @@
   },
   "overrides": [
     {
-      "includes": ["packages/api/src/db.ts"],
-      "linter": {
-        "rules": {
-          "suspicious": {
-            "noExplicitAny": "off"
-          }
-        }
-      }
-    },
-    {
       "includes": ["packages/api/src/scripts/**"],
       "linter": {
         "rules": {

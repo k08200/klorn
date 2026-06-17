@@ -23,6 +23,7 @@ import {
   isGoogleAuthError,
   markGoogleTokenForReconnect,
 } from "../gmail.js";
+import { mapGoogleEventTimes } from "../google-calendar-time.js";
 import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
 
 const authHeaderSchema = {
@@ -1090,6 +1091,14 @@ export function authRoutes(app: FastifyInstance) {
       const now = new Date();
       const later = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
+      // Parse event times against the user's timezone, exactly as the 60s
+      // scheduler does — otherwise first-login writes land at a different UTC
+      // instant than every subsequent scheduler write (off by the UTC offset).
+      const userRow = (await prisma.user.findUnique({ where: { id: userId } })) as {
+        timezone?: string | null;
+      } | null;
+      const userTimezone = normalizeTimeZone(userRow?.timezone);
+
       const response = await calendar.events.list({
         calendarId: "primary",
         timeMin: now.toISOString(),
@@ -1097,15 +1106,18 @@ export function authRoutes(app: FastifyInstance) {
         singleEvents: true,
         orderBy: "startTime",
         maxResults: 100,
+        // Ask Google to canonicalize against the user's zone; mapGoogleEventTimes
+        // below still defends against any stray naive strings.
+        timeZone: userTimezone,
       });
 
       for (const item of response.data.items || []) {
         const googleId = item.id || "";
         if (!googleId) continue;
 
-        const startTime = item.start?.dateTime || item.start?.date || "";
-        const endTime = item.end?.dateTime || item.end?.date || "";
-        if (!startTime || !endTime) continue;
+        const times = mapGoogleEventTimes(item, userTimezone);
+        if (!times) continue;
+        const { startTime, endTime, allDay } = times;
 
         let meetingLink: string | null = null;
         if (item.conferenceData?.entryPoints) {
@@ -1120,21 +1132,21 @@ export function authRoutes(app: FastifyInstance) {
             userId,
             title: item.summary || "Untitled",
             description: item.description || null,
-            startTime: new Date(startTime),
-            endTime: new Date(endTime),
+            startTime,
+            endTime,
             location: item.location || null,
             meetingLink,
-            allDay: !item.start?.dateTime,
+            allDay,
             googleId,
           },
           update: {
             title: item.summary || "Untitled",
             description: item.description || null,
-            startTime: new Date(startTime),
-            endTime: new Date(endTime),
+            startTime,
+            endTime,
             location: item.location || null,
             meetingLink,
-            allDay: !item.start?.dateTime,
+            allDay,
           },
         });
         results.calendar++;

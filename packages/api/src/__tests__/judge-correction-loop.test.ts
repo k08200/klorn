@@ -59,6 +59,24 @@ describe("sender-prior short-circuit", () => {
     expect(createCompletionMock).not.toHaveBeenCalled();
   });
 
+  it("never short-circuits a SILENT prior — a stale prior cannot mute a sender without the LLM", async () => {
+    createCompletionMock.mockRejectedValue(new Error("provider down"));
+    const result = await judgeEmail(
+      PLAIN_EMAIL, // non-urgent
+      undefined,
+      ctx({ senderPrior: { tier: "SILENT", count: 5, kind: "history" } }),
+    );
+    // SILENT is excluded from both prior allowlists, so even a strong,
+    // non-urgent SILENT prior falls through to the LLM (here keyword fallback)
+    // rather than short-circuiting (source "sender-prior") and muting the
+    // sender with no LLM look — a silent one-way door the user can never see to
+    // correct. The fallback may still land on SILENT; what matters is that it
+    // went through the LLM path, not the blind prior bypass.
+    expect(result.source).not.toBe("sender-prior");
+    expect(result.source).toBe("keyword-fallback");
+    expect(createCompletionMock).toHaveBeenCalled();
+  });
+
   it("sends urgent-looking mail to the LLM even when the prior says SILENT", async () => {
     createCompletionMock.mockRejectedValue(new Error("provider down"));
     const result = await judgeEmail(
@@ -66,8 +84,8 @@ describe("sender-prior short-circuit", () => {
       undefined,
       ctx({ senderPrior: { tier: "SILENT", count: 5, kind: "history" } }),
     );
-    // Urgency guard bypassed the short-circuit; LLM was attempted (and fell
-    // back to keywords since it's down).
+    // Same outcome as the non-urgent case above (SILENT never short-circuits);
+    // the LLM was attempted and fell back to keywords since it's down.
     expect(result.source).toBe("keyword-fallback");
     expect(createCompletionMock).toHaveBeenCalled();
   });

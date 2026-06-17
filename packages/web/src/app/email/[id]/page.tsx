@@ -590,7 +590,7 @@ function EmailDetailView() {
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:py-10">
       <Link
         href="/email"
-        className="mb-4 inline-flex items-center gap-1 rounded-full border border-stone-700/45 bg-stone-950/35 px-3 py-1.5 text-xs text-stone-400 transition hover:border-orange-500/35 hover:text-stone-100"
+        className="mb-4 inline-flex items-center gap-1 rounded-full border border-stone-700/45 bg-stone-950/35 px-3 py-1.5 text-xs text-stone-400 transition hover:border-amber-300/40 hover:text-stone-100"
       >
         <svg
           aria-hidden="true"
@@ -629,7 +629,7 @@ function EmailDetailView() {
       {email && (
         <article>
           <header className="mb-5 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
-            <div className="h-1 bg-gradient-to-r from-[#7DD3FC] via-accent to-stone-600" />
+            <div className="h-1 bg-gradient-to-r from-[#a8a29e] via-accent to-stone-600" />
             <div className="p-5 md:p-6">
               <EmailActionToolbar
                 busyAction={actionBusy}
@@ -723,7 +723,7 @@ function EmailDetailView() {
           )}
 
           <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
-            <EveAnalysis
+            <KlornAnalysis
               email={email}
               onPriorityChange={(priority) =>
                 setEmail((prev) => (prev ? { ...prev, priority } : prev))
@@ -826,7 +826,7 @@ function CandidateProfileCard({
       {profile.links.length > 0 && (
         <div className="mt-3 space-y-1">
           {profile.links.map((link) => (
-            <p key={link} className="break-all text-[11px] text-[#7DD3FC]">
+            <p key={link} className="break-all text-[11px] text-[#a8a29e]">
               {link}
             </p>
           ))}
@@ -1199,7 +1199,7 @@ function ReplyDraftBox({
               key={item.label}
               type="button"
               onClick={() => onIntentChange(item.intent)}
-              className="rounded-full border border-stone-700/60 bg-black/15 px-3 py-1.5 text-[11px] text-stone-300 transition hover:border-[#7DD3FC]/35 hover:bg-[#7DD3FC]/10 hover:text-sky-100"
+              className="rounded-full border border-stone-700/60 bg-black/15 px-3 py-1.5 text-[11px] text-stone-300 transition hover:border-[#a8a29e]/35 hover:bg-[#a8a29e]/10 hover:text-stone-200"
             >
               {item.label}
             </button>
@@ -1267,7 +1267,7 @@ function ReplyDraftBox({
                         : attachments.map((attachment) => attachment.id),
                     )
                   }
-                  className="text-[11px] text-[#7DD3FC] transition hover:text-sky-200"
+                  className="text-[11px] text-[#a8a29e] transition hover:text-stone-300"
                 >
                   {selectedCount === attachments.length ? "Clear all" : "Select all"}
                 </button>
@@ -1276,13 +1276,13 @@ function ReplyDraftBox({
                 {attachments.map((attachment) => (
                   <label
                     key={attachment.id}
-                    className="flex min-w-0 cursor-pointer items-center gap-2 rounded border border-stone-800/70 bg-stone-950/35 px-2 py-1.5 transition hover:border-[#7DD3FC]/25"
+                    className="flex min-w-0 cursor-pointer items-center gap-2 rounded border border-stone-800/70 bg-stone-950/35 px-2 py-1.5 transition hover:border-[#a8a29e]/25"
                   >
                     <input
                       type="checkbox"
                       checked={selectedAttachmentIds.includes(attachment.id)}
                       onChange={() => toggleAttachment(attachment.id)}
-                      className="h-3.5 w-3.5 rounded border-stone-600 bg-stone-900 text-[#7DD3FC] focus:ring-[#7DD3FC] focus:ring-offset-stone-950"
+                      className="h-3.5 w-3.5 rounded border-stone-600 bg-stone-900 text-[#a8a29e] focus:ring-[#a8a29e] focus:ring-offset-stone-950"
                     />
                     <span className="min-w-0 flex-1 truncate text-[11px] text-stone-400">
                       {attachment.filename}
@@ -1311,7 +1311,7 @@ function ReplyDraftBox({
                 type="button"
                 onClick={onSaveGmailDraft}
                 disabled={savingGmailDraft || !draft.to || !draft.subject || !draft.body}
-                className="rounded-lg border border-[#7DD3FC]/30 px-3 py-1.5 text-xs font-medium text-sky-200 transition hover:bg-[#7DD3FC]/10 disabled:opacity-50"
+                className="rounded-lg border border-[#a8a29e]/30 px-3 py-1.5 text-xs font-medium text-stone-300 transition hover:bg-[#a8a29e]/10 disabled:opacity-50"
               >
                 {savingGmailDraft
                   ? "Saving..."
@@ -1335,7 +1335,7 @@ function ReplyDraftBox({
   );
 }
 
-function EveAnalysis({
+function KlornAnalysis({
   email,
   onPriorityChange,
 }: {
@@ -1356,8 +1356,8 @@ function EveAnalysis({
   }
 
   return (
-    <section className="relative overflow-hidden rounded-lg border border-orange-500/20 bg-orange-500/5 p-4">
-      <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-[#7DD3FC] via-accent to-[#7DD3FC]" />
+    <section className="relative overflow-hidden rounded-lg border border-amber-300/20 bg-amber-300/5 p-4">
+      <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-transparent via-accent to-transparent" />
       <div className="pl-2">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-accent">
