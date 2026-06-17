@@ -52,20 +52,33 @@ jobs:
           models=$(grep -c "^model " packages/api/prisma/schema.prisma | tr -d ' ')
 
           fail=0
+          # Returns non-zero (does NOT set fail) when over budget, so the caller
+          # owns the flag. Setting fail inside a `check | tee` pipeline would be
+          # lost — the pipe runs check in a subshell, so the assignment never
+          # reaches this shell and the gate would always pass green.
           check() {
             local label="$1" actual="$2" max="$3"
             if [ "$actual" -gt "$max" ]; then
               echo "::error::$label = $actual (budget $max) — OVER by $((actual - max))"
-              fail=1
-            else
-              echo "$label = $actual (budget $max) — OK"
+              return 1
             fi
+            echo "$label = $actual (budget $max) — OK"
+          }
+
+          # Run check in THIS shell (capture, no pipe) so its exit status sets
+          # `fail` here; tee the captured line to the summary separately. The
+          # `|| rc=1` also stops `set -e` from aborting on the first over axis.
+          emit() {
+            local out rc=0
+            out=$(check "$1" "$2" "$3") || rc=1
+            printf '%s\n' "$out" | tee -a "$GITHUB_STEP_SUMMARY"
+            [ "$rc" -eq 0 ] || fail=1
           }
 
           echo "## Scope budget (POC.md Day-14 lock)" >> "$GITHUB_STEP_SUMMARY"
-          check "Web pages"     "$pages"  "$MAX_PAGES"  | tee -a "$GITHUB_STEP_SUMMARY"
-          check "API routes"    "$routes" "$MAX_ROUTES" | tee -a "$GITHUB_STEP_SUMMARY"
-          check "Prisma models" "$models" "$MAX_MODELS" | tee -a "$GITHUB_STEP_SUMMARY"
+          emit "Web pages"     "$pages"  "$MAX_PAGES"
+          emit "API routes"    "$routes" "$MAX_ROUTES"
+          emit "Prisma models" "$models" "$MAX_MODELS"
 
           if [ "$fail" -ne 0 ]; then
             echo ""

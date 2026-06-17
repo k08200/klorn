@@ -122,7 +122,11 @@ async function runAutonomousAgent() {
     let idleSkipped = 0;
     for (const config of configs) {
       const cfg = config as unknown as Record<string, unknown>;
-      if (cfg.autonomousAgent === false) continue;
+      // Opt-in: run the proactive loop only when explicitly enabled. The column
+      // is a non-nullable Boolean today (so this equals `=== false`), but `!==
+      // true` keeps the gate correct if the field is ever absent/null — a
+      // missing flag must mean OFF, matching the classify-only default.
+      if (cfg.autonomousAgent !== true) continue;
 
       // Plan-based gating: autonomous agent requires PRO+ plan
       const userPlan = userPlanMap.get(config.userId) || "FREE";
