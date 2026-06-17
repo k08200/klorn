@@ -85,6 +85,7 @@ model User {
   attentionItems            AttentionItem[]
   commitments               Commitment[]
   feedbackEvents            FeedbackEvent[]
+  decisionLabels            DecisionLabel[]
   emailLabelFeedback        EmailLabelFeedback[]
   playbookActivations       ActivatedPlaybook[]
   workContextSnapshots      WorkContextSnapshot[]
@@ -865,6 +866,56 @@ model AttentionItem {
   @@unique([source, sourceId])
   @@index([userId, status, surfacedAt])
   @@index([userId, tier, surfacedAt])
+}
+
+// Decision ledger: the tier the firewall SHOWED the user for each classified
+// item (one row per source item), plus the user's eventual outcome.
+//
+// AttentionItem.tier is overwritten in place on a manual override
+// (attention-override.ts), so the original shown tier is destroyed and
+// {shownTier, features, sender} can't be reconstructed after the fact. This
+// table records that decision immutably at judgement time, so per-user recall
+// and over-suppression can be measured from real traffic later. It is the
+// free complement to a held-out human audit — a drift tripwire, NOT itself
+// the launch gate (the gate is PUSH recall + an over-suppression ceiling,
+// which need the audit's whole-inbox denominator). While a row is still open a
+// re-judge refreshes its shownTier/features (the live decision the user would
+// see); once the outcome is stamped the row is frozen so the label always
+// matches what the user actually saw when they acted.
+model DecisionLabel {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Mirrors the AttentionItem this decision produced (source=EMAIL today).
+  source   AttentionSource
+  sourceId String
+
+  // The tier the firewall showed at judgement time. Immutable — never
+  // overwritten, unlike AttentionItem.tier.
+  shownTier String // "SILENT" | "QUEUE" | "PUSH" | "AUTO"
+  // The 4 poc-judge features at decision time (confidence/senderTrust/
+  // reversibility/urgency) so per-feature analysis can run later.
+  features  Json
+  // Sender identity, for per-sender recall grouping.
+  sender    String?
+  // Which path decided this: "fast-path" | "sender-prior" | "llm" |
+  // "keyword-fallback" — so prior-bypass decisions stay separable (the
+  // SILENT-prior over-suppression class is exactly the prior-bypass rows).
+  decidedBy String?
+
+  // Stamped once when the user acts. For an override, "OVERRIDE:<tier>";
+  // otherwise a terminal status. Null until then.
+  outcome   String?
+  outcomeAt DateTime?
+
+  judgedAt DateTime @default(now())
+
+  // One ledger row per surfaced decision per source row. A re-judge updates
+  // the same row's shownTier/features in place (the decision changed), but
+  // the outcome, once stamped, is the user's ground truth.
+  @@unique([source, sourceId])
+  @@index([userId, shownTier, judgedAt])
 }
 
 enum AttentionSource {
