@@ -8,6 +8,7 @@
  */
 
 import { prisma } from "./db.js";
+import { stampDecisionOutcome } from "./decision-label.js";
 import { manualOverrideReason, type Tier } from "./tiers.js";
 
 export type AttentionOverrideResult = { ok: true; tier: Tier } | { ok: false; reason: "not_found" };
@@ -21,11 +22,13 @@ export async function overrideAttentionTier(
   // Ownership check before mutating
   const existing = await (
     prisma.attentionItem as unknown as {
-      findFirst: (args: unknown) => Promise<{ id: string } | null>;
+      findFirst: (
+        args: unknown,
+      ) => Promise<{ id: string; source: string; sourceId: string } | null>;
     }
   ).findFirst({
     where: { id: itemId, userId },
-    select: { id: true },
+    select: { id: true, source: true, sourceId: true },
   });
 
   if (!existing) return { ok: false, reason: "not_found" };
@@ -43,6 +46,11 @@ export async function overrideAttentionTier(
       tierReason: manualOverrideReason(tier),
     },
   });
+
+  // Stamp the decision ledger with the user's correction before the in-place
+  // tier overwrite above erases the shown tier from AttentionItem. Best-effort;
+  // only EMAIL-source decisions have a ledger row today (no-op otherwise).
+  await stampDecisionOutcome(existing.source as "EMAIL", existing.sourceId, `OVERRIDE:${tier}`);
 
   return { ok: true, tier };
 }

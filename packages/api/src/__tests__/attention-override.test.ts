@@ -3,12 +3,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../db.js", () => {
   const prisma = {
     attentionItem: {
-      findFirst: vi.fn(async () => ({ id: "item-1" })),
+      findFirst: vi.fn(async () => ({ id: "item-1", source: "EMAIL", sourceId: "email-1" })),
       update: vi.fn(async () => ({})),
+    },
+    decisionLabel: {
+      updateMany: vi.fn(async () => ({ count: 1 })),
     },
   };
   return { prisma, db: prisma };
 });
+
+vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { findOpenEmailAttentionItemId, overrideAttentionTier } from "../attention-override.js";
 import { prisma } from "../db.js";
@@ -18,10 +23,14 @@ type AttentionItemMock = {
   update: ReturnType<typeof vi.fn>;
 };
 const attentionItem = (prisma as unknown as { attentionItem: AttentionItemMock }).attentionItem;
+const decisionLabel = (
+  prisma as unknown as { decisionLabel: { updateMany: ReturnType<typeof vi.fn> } }
+).decisionLabel;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  attentionItem.findFirst.mockResolvedValue({ id: "item-1" });
+  attentionItem.findFirst.mockResolvedValue({ id: "item-1", source: "EMAIL", sourceId: "email-1" });
+  decisionLabel.updateMany.mockResolvedValue({ count: 1 });
 });
 
 describe("overrideAttentionTier", () => {
@@ -38,8 +47,16 @@ describe("overrideAttentionTier", () => {
     await overrideAttentionTier("user-1", "item-1", "SILENT");
     expect(attentionItem.findFirst).toHaveBeenCalledWith({
       where: { id: "item-1", userId: "user-1" },
-      select: { id: true },
+      select: { id: true, source: true, sourceId: true },
     });
+  });
+
+  it("stamps the decision ledger with the user's correction (OVERRIDE:<tier>)", async () => {
+    await overrideAttentionTier("user-1", "item-1", "PUSH");
+    expect(decisionLabel.updateMany).toHaveBeenCalledTimes(1);
+    const args = decisionLabel.updateMany.mock.calls[0][0];
+    expect(args.where).toEqual({ source: "EMAIL", sourceId: "email-1", outcome: null });
+    expect(args.data.outcome).toBe("OVERRIDE:PUSH");
   });
 
   it("returns not_found for items the user does not own", async () => {
