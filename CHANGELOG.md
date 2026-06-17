@@ -12,6 +12,16 @@ calendar time.
 
 ## [Unreleased]
 
+### Added — Calibration measurement
+- **Decision-label ledger.** Every email classification now records the tier
+  the firewall *showed* you plus the features behind it, in a `DecisionLabel`
+  table that survives the in-place tier overwrite a manual override performs.
+  An override stamps the row with your correction. This is the raw material
+  for measuring per-user PUSH recall and over-suppression from real traffic —
+  the drift-tripwire complement to a held-out human audit, not the launch gate
+  itself. Best-effort: it never fails a classification, and never silently
+  swallows an error either.
+
 ### Added — Engine sprint (PR #500)
 - **Judge eval gate.** Synthetic, PII-free 50-email eval set
   (`packages/api/eval/`) with two enforcement layers: a deterministic CI
