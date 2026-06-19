@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "calibration": "tsx scripts/calibration.ts",
+    "decision-metrics": "tsx scripts/decision-metrics.ts",
     "eval:judge": "tsx scripts/poc-accuracy.ts --in=eval/judge-eval-set.json --concurrency=1 --delay=4500"
   },
   "dependencies": {
