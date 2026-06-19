@@ -29,6 +29,8 @@ calendar time.
   appended to the daily calibration snapshot, turning the ledger into a per-day
   drift series surfaced on `/admin/calibration`. The admin read is bounded to a
   trailing window (default 90d) so it stays index-served as the table grows.
+  A CLI (`pnpm --filter @klorn/api decision-metrics`) reads the same numbers
+  straight from the DB — no running server or admin token — for dogfooding.
 
 ### Added — Engine sprint (PR #500)
 - **Judge eval gate.** Synthetic, PII-free 50-email eval set
