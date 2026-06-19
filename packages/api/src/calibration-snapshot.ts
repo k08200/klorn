@@ -37,6 +37,7 @@ import {
 // branch so the daily snapshot path never loads the LLM provider stack.
 import type { CorrectionEvalPayload } from "./correction-eval.js";
 import { prisma } from "./db.js";
+import { type DecisionDailySummary, getDecisionDailySummary } from "./decision-metrics.js";
 import { captureError } from "./sentry.js";
 import { isManualOverrideReason } from "./tiers.js";
 
@@ -75,6 +76,13 @@ export interface CalibrationSnapshotPayload {
    * Merged in on Sundays; preserved by the daily upsert in between.
    */
   correctionEval?: CorrectionEvalPayload;
+  /**
+   * Bounded PUSH recall / SILENT over-suppression from the immutable
+   * DecisionLabel ledger (decision-metrics.ts). Unlike the AttentionItem-
+   * derived KPIs above, shownTier here survives the in-place override, so this
+   * is the honest drift series. Undefined if the ledger read failed (best-effort).
+   */
+  decisionMetrics?: DecisionDailySummary;
 }
 
 /** Snapshot row — AttentionRow plus the fields the new KPIs need. */
@@ -208,6 +216,16 @@ export async function snapshotUserCalibration(
     windowDays: WINDOW_DAYS,
     now,
   });
+
+  // Attach the ledger-derived drift series. Best-effort: a failed read must
+  // not sink the existing KPI snapshot, but it must leave a signal (console +
+  // captureError), never a silent swallow. (CLAUDE.md reliability rule.)
+  try {
+    payload.decisionMetrics = await getDecisionDailySummary(userId, windowStart, now);
+  } catch (err) {
+    console.warn(`[calibration] decision-metrics read failed for ${userId}`, err);
+    captureError(err, { tags: { area: "calibration", op: "decision-metrics" }, extra: { userId } });
+  }
 
   const dayKey = now.toISOString().slice(0, 10);
   // A same-day re-run must not wipe a correction eval merged earlier today
