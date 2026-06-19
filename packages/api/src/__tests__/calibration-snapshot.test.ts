@@ -16,6 +16,7 @@ const snapshotFindUnique = vi.hoisted(() => vi.fn());
 const snapshotUpdate = vi.hoisted(() => vi.fn());
 const captureErrorMock = vi.hoisted(() => vi.fn());
 const runCorrectionEvalMock = vi.hoisted(() => vi.fn());
+const decisionLabelFindMany = vi.hoisted(() => vi.fn());
 
 vi.mock("../db.js", () => ({
   prisma: {
@@ -26,6 +27,7 @@ vi.mock("../db.js", () => ({
       findUnique: snapshotFindUnique,
       update: snapshotUpdate,
     },
+    decisionLabel: { findMany: decisionLabelFindMany },
   },
   db: {},
 }));
@@ -89,9 +91,11 @@ beforeEach(() => {
   snapshotUpdate.mockReset();
   captureErrorMock.mockReset();
   runCorrectionEvalMock.mockReset();
+  decisionLabelFindMany.mockReset();
   snapshotUpsert.mockResolvedValue({});
   snapshotFindUnique.mockResolvedValue(null);
   snapshotUpdate.mockResolvedValue({});
+  decisionLabelFindMany.mockResolvedValue([]);
   runCorrectionEvalMock.mockResolvedValue(null);
   feedbackFindMany.mockResolvedValue([]);
 });
@@ -184,6 +188,35 @@ describe("snapshotUserCalibration", () => {
     await snapshotUserCalibration("u1", NOW);
     const gtes = attentionFindMany.mock.calls.map((c) => c[0].where.createdAt.gte.getTime()).sort();
     expect(gtes).toEqual([DAYS(14).getTime(), DAYS(7).getTime()].sort());
+  });
+
+  it("attaches the ledger drift series from the immutable shownTier", async () => {
+    attentionFindMany.mockResolvedValue([]);
+    decisionLabelFindMany.mockResolvedValue([
+      { shownTier: "PUSH", outcome: null, decidedBy: "llm" },
+      { shownTier: "QUEUE", outcome: "OVERRIDE:PUSH", decidedBy: "llm" },
+      { shownTier: "SILENT", outcome: "OVERRIDE:QUEUE", decidedBy: "sender-prior" },
+    ]);
+    await snapshotUserCalibration("u1", NOW);
+    const dm = snapshotUpsert.mock.calls[0][0].create.payload.decisionMetrics;
+    expect(dm).toEqual({
+      total: 3,
+      acted: 2,
+      recallUpperBound: 0.5, // 1 kept / (1 kept + 1 escalated)
+      overSuppressionRate: 1, // 1 SILENT rescued / 1 SILENT shown
+      overrideRate: 2 / 3,
+      pushShown: 1,
+      silentShown: 1,
+    });
+  });
+
+  it("isolates a ledger read failure — KPI snapshot still upserts, signal logged", async () => {
+    attentionFindMany.mockResolvedValue([]);
+    decisionLabelFindMany.mockRejectedValue(new Error("ledger read failed"));
+    await snapshotUserCalibration("u1", NOW);
+    expect(snapshotUpsert).toHaveBeenCalledTimes(1);
+    expect(snapshotUpsert.mock.calls[0][0].create.payload.decisionMetrics).toBeUndefined();
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
   });
 });
 

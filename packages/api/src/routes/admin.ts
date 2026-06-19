@@ -5,6 +5,7 @@ import { runAllScenarios, summarizeEval } from "../agent-eval.js";
 import { requireAdmin } from "../auth.js";
 import type { CalibrationSnapshotPayload } from "../calibration-snapshot.js";
 import { db, prisma } from "../db.js";
+import { getDecisionMetrics } from "../decision-metrics.js";
 import { sendBetaInviteEmail } from "../email.js";
 import { getUsageSummary } from "../llm-usage.js";
 import { clearFallbackState, getProviderCooldownInfo } from "../model-fallback.js";
@@ -26,6 +27,8 @@ function calibrationSeriesEntry(row: { dayKey: string; payload: unknown }) {
     driftDeltaMax: p?.driftSignal?.deltaMax ?? null,
     // Weekly counterfactual accuracy on real overrides (Sundays only).
     correctionEval: p?.correctionEval ?? null,
+    // Ledger-derived drift series: bounded PUSH recall + SILENT over-suppression.
+    decisionMetrics: p?.decisionMetrics ?? null,
   };
 }
 
@@ -494,6 +497,19 @@ export async function adminRoutes(app: FastifyInstance) {
       overview.push({ userId: row.userId, ...calibrationSeriesEntry(row) });
     }
     return { overview };
+  });
+
+  // GET /api/admin/decision-metrics — the read path over the DecisionLabel
+  // ledger. PUSH recall (upper bound) + SILENT over-suppression (lower bound)
+  // from real overrides; null outcomes are never counted as agreement.
+  // Optional ?userId= narrows to one inbox (the dogfood account).
+  app.get("/decision-metrics", async (request) => {
+    const { userId, days } = request.query as { userId?: string; days?: string };
+    const sinceDays = days ? Number(days) : undefined;
+    return getDecisionMetrics({
+      ...(userId ? { userId } : {}),
+      ...(sinceDays !== undefined && Number.isFinite(sinceDays) ? { sinceDays } : {}),
+    });
   });
 
   // GET /api/admin/eval — Run agent decision-logic eval scenarios
