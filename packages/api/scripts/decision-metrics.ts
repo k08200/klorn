@@ -12,7 +12,7 @@
  *
  * Usage:
  *   DATABASE_URL=... pnpm --filter @klorn/api decision-metrics -- \
- *     [--user=k0820086@gmail.com] \
+ *     [--user=admin@example.com] \
  *     [--days=90] \
  *     [--out=./decision-metrics-result.json]
  *

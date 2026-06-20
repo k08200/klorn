@@ -19,7 +19,7 @@ export async function webSearch(
 
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; Eve-Bot/1.0)",
+      "User-Agent": "Mozilla/5.0 (compatible; Klorn-Bot/1.0)",
     },
   });
 
