@@ -161,6 +161,26 @@ describe("executeToolCall — floor enforcement for send_email", () => {
   });
 });
 
+describe("executeToolCall — central floor guard covers every FLOOR_ACTION", () => {
+  // The doctrine names three floor actions. send_email is the only one wired
+  // as a callable tool today, but the guard must fail closed for the other
+  // two as well — so adding their tool case later cannot ship a path that
+  // side-steps the receipt. Without the central guard these names fall through
+  // to the default branch and return {error: "Unknown function"} instead of
+  // refusing, which is the silent bypass the floor exists to prevent.
+  it("refuses delete_permanent without a receipt (fail-closed before the switch)", async () => {
+    await expect(
+      executeToolCall(userId, "delete_permanent", { gmailId: "msg-1" }),
+    ).rejects.toBeInstanceOf(FloorReceiptRequiredError);
+  });
+
+  it("refuses forward_external without a receipt", async () => {
+    await expect(
+      executeToolCall(userId, "forward_external", { gmailId: "msg-1", to: "x@y.com" }),
+    ).rejects.toBeInstanceOf(FloorReceiptRequiredError);
+  });
+});
+
 describe("executeToolCall — non-floor tools ignore receipt requirements", () => {
   it("schema version is wired through the receipt — sanity check", () => {
     // If this fails, the receipt format has drifted and existing pending
