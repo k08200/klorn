@@ -7,7 +7,7 @@
 [![Version](https://img.shields.io/badge/version-v0.3.0-blue.svg)](CHANGELOG.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
-Most AI assistants surface more — another card, another badge, another "AI thinks you should…" Klorn ships the opposite: a **single classification output** (`SILENT` / `QUEUE` / `PUSH` / `AUTO`) bound to the exact bytes that produced it. No suggestion surface. No autonomous send. No 60-tool agentic spread.
+Most AI assistants surface more — another card, another badge, another "AI thinks you should…" Klorn ships the opposite: a **single classification output** (`SILENT` / `QUEUE` / `PUSH` / `AUTO`) bound to the exact bytes that produced it. No suggestion surface. No autonomous send by default. No 60-tool agentic spread.
 
 **Read the [doctrine](docs/doctrine/deterministic-floor.md) before the code.** That's the actual product.
 
@@ -152,7 +152,29 @@ PORT=8000
 falls back to insecure defaults with a warning. Set them if you want
 the same dev cookies/tokens across restarts.
 
-For Google integration also set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI`.
+#### Google OAuth (Gmail + Calendar)
+
+To sync mail you bring your own OAuth client — no Google verification or CASA
+needed for self-host, you stay the app's owner and sole user.
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → create (or pick) a project.
+2. **APIs & Services → Library** → enable **Gmail API** and **Google Calendar API**.
+3. **OAuth consent screen** → User type **External** → fill the basics → under
+   **Test users**, add the Google account you'll log in with. (Unverified apps only
+   work for accounts on the test-user list — that's the 100-slot cap, and it's why
+   self-host has no verification step: it's *your* account on *your* client.)
+4. **Scopes**: add `gmail.modify` and `calendar` (Klorn reads mail and writes tier
+   labels; see [`docs/google-oauth-verification/scope-justification.md`](docs/google-oauth-verification/scope-justification.md)).
+5. **Credentials → Create credentials → OAuth client ID → Web application.** Set the
+   **Authorized redirect URI** to `http://localhost:8000/api/auth/google/callback`
+   (match your API port and `GOOGLE_REDIRECT_URI`).
+6. Copy the client ID and secret into `packages/api/.env`:
+
+```bash
+GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="..."
+GOOGLE_REDIRECT_URI="http://localhost:8000/api/auth/google/callback"
+```
 
 ### Local LLM (keep your email on your machine)
 
