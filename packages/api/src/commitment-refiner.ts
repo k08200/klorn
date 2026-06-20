@@ -8,6 +8,7 @@
 
 import type { CommitmentKind, CommitmentOwner, CommitmentSource } from "@prisma/client";
 import type { CommitmentCandidate } from "./commitment-extractor.js";
+import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, MODEL } from "./openai.js";
 import { captureError } from "./sentry.js";
 import { wrapUntrusted } from "./untrusted.js";
@@ -170,7 +171,7 @@ Rules:
   );
 
   const raw = response.choices[0]?.message?.content || "{}";
-  return parseRefinement(JSON.parse(raw) as RawRefinement);
+  return parseRefinement(parseLlmJson<RawRefinement>(raw));
 }
 
 export async function maybeRefineCommitmentCandidateWithLlm(

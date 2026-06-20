@@ -8,6 +8,7 @@
 
 import { prisma } from "./db.js";
 import { classifyNeedsReplyFromSignals } from "./email-priority.js";
+import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, MODEL, openai } from "./openai.js";
 import { resolveUserEmail } from "./resolve-user-email.js";
 import { captureError } from "./sentry.js";
@@ -36,7 +37,7 @@ interface AISummaryResult {
 export function parseAiSummary(content: string, fallbackSubject: string): AISummaryResult {
   let parsed: Partial<AISummaryResult> = {};
   try {
-    const raw = JSON.parse(content);
+    const raw = parseLlmJson(content);
     if (raw && typeof raw === "object" && !Array.isArray(raw)) {
       parsed = raw as Partial<AISummaryResult>;
     }

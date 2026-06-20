@@ -110,6 +110,22 @@ calendar time.
   default — an absent/null flag means OFF. Runtime behavior is unchanged today
   (the column is a non-nullable Boolean) but the gate stays correct if the
   flag is ever missing.
+- **Fallback models silently degraded the firewall to keyword-only.** The
+  judge and batch classifier ask for bare JSON, but OpenRouter `:free`
+  fallback models (e.g. `llama-3.3-70b:free`) ignore the `response_format`
+  hint and wrap their output in a Markdown code fence, so `JSON.parse` threw
+  and every fallback-served email dropped to the keyword floor — burying
+  urgent PUSH mail in QUEUE whenever the paid model was rate-limited or
+  retired. A shared `parseLlmJson` helper now strips the fence before parsing,
+  applied across all eight LLM-output parse sites (judge, classifier, summary,
+  attachments, commitment path/refiner, voice profile, meeting notes).
+- **The deterministic action floor only enforced `send_email`.** The doctrine
+  reserves an ActionReceipt for three irreversible actions (send_email /
+  delete_permanent / forward_external), but only `send_email` was guarded,
+  case-by-case. A central fail-closed guard now refuses any floor action
+  without a verified receipt before the tool switch runs, so a future
+  irreversible tool cannot ship a receipt-less path. The refusal also logs a
+  console signal (not just Sentry) so it stays visible in CI and local dev.
 
 ## [0.3.0] — 2026-06-09
 

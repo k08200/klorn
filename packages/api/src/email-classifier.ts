@@ -9,6 +9,7 @@
  * never silently stops classifying.
  */
 
+import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, JUDGE_MODEL } from "./openai.js";
 import { captureError } from "./sentry.js";
 
@@ -230,7 +231,8 @@ async function classifyBatchWithLlm(
     const raw = response.choices[0]?.message?.content;
     if (!raw) return null;
 
-    const parsed = JSON.parse(raw) as LlmResponse;
+    // Tolerate a markdown fence from :free fallback models (see llm-json.ts).
+    const parsed = parseLlmJson<LlmResponse>(raw);
     if (!Array.isArray(parsed.labels)) return null;
 
     const byIndex = new Map(parsed.labels.map((l) => [l.index, l]));

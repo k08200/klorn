@@ -15,6 +15,10 @@ CLAUDE.md
 .claude/
 .gstack/
 
+# Internal strategy / council discussion notes — contain prioritization
+# notes and personal email addresses. Never commit to this public repo.
+.discussions/
+
 # PoC measurement artifacts — contain real personal email addresses and
 # snippet text from the founder's inbox. Never commit to this public repo.
 poc-*.json

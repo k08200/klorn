@@ -8,6 +8,7 @@ import {
   type ActionReceipt,
   ActionReceiptMismatchError,
   ActionReceiptSchemaError,
+  isFloorAction,
   sendEmailPayloadHash,
   verifyReceipt,
 } from "./attention-floor.js";
@@ -69,9 +70,11 @@ export const ALWAYS_TOOLS = [
 // The full tool surface. NOTE: importing this does NOT grant the agent these
 // tools. The autonomous agent only receives mutating tools when the user has
 // explicitly opted into AUTO mode (see autonomous-agent.ts — SUGGEST, the
-// default, hands the model read-only tools and propose_action only). The three
-// irreversible actions (send_email / permanent_delete / forward_external) sit
-// behind the ActionReceipt deterministic floor regardless of mode.
+// default, hands the model read-only tools and propose_action only). The
+// FLOOR_ACTIONS (send_email / delete_permanent / forward_external) are refused
+// without a verified ActionReceipt by the central guard in executeToolCall,
+// regardless of mode. Of those, only send_email is wired as a callable tool
+// today; the guard keeps the other two fail-closed until their cases land.
 export const ALL_TOOLS = [...ALWAYS_TOOLS, ...GOOGLE_TOOLS];
 
 /**
@@ -150,6 +153,15 @@ async function executeToolCallInternal(
   receipt: ActionReceipt | null,
 ): Promise<string> {
   try {
+    // Central floor guard — fail closed for every FLOOR_ACTION before the
+    // switch runs. send_email re-verifies the payloadHash in its own case;
+    // the other floor actions (delete_permanent / forward_external) are not
+    // wired as tool cases yet, so this is what stops them from falling
+    // through to the default branch and "succeeding" with no receipt. A
+    // future case for them cannot ship a receipt-less side-effect path.
+    if (isFloorAction(functionName) && !receipt) {
+      throw new FloorReceiptRequiredError(functionName);
+    }
     switch (functionName) {
       case "list_emails":
         return JSON.stringify(await listEmails(userId, safeInt(args.max_results, 10, 100)));
@@ -381,6 +393,10 @@ async function executeToolCallInternal(
       err instanceof ActionReceiptMismatchError ||
       err instanceof ActionReceiptSchemaError
     ) {
+      // Floor refusal is a security event — log a console signal too, since
+      // captureError is a no-op without a Sentry DSN (CI, local dev) and a
+      // refused irreversible action must never be invisible.
+      console.warn(`[FLOOR] refused "${functionName}": ${err.message}`);
       captureError(err, {
         tags: { area: "tool_executor", tool: functionName, scope: "floor_refusal" },
         extra: { userId, argKeys: Object.keys(args) },

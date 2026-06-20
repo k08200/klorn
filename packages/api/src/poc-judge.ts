@@ -16,6 +16,7 @@
  */
 
 import type { ClassifiableEmail } from "./email-classifier.js";
+import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, JUDGE_MODEL } from "./openai.js";
 import { captureError } from "./sentry.js";
 import { TIERS, type Tier } from "./tiers.js";
@@ -325,7 +326,10 @@ async function extractFeaturesWithLlm(
       const raw = response.choices[0]?.message?.content;
       if (!raw) throw new Error("empty completion content");
 
-      const parsed = JSON.parse(raw) as LlmFeatureResponse;
+      // Tolerate a markdown fence: :free fallback models wrap JSON in ```json
+      // even though the prompt forbids it, which otherwise drops every
+      // fallback-served email to the keyword floor.
+      const parsed = parseLlmJson<LlmFeatureResponse>(raw);
 
       const features: PocFeatures = {
         confidence: CLAMP(Number(parsed.confidence ?? 0)),
