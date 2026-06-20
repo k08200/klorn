@@ -31,7 +31,7 @@ import {
 } from "../attention-floor.js";
 
 const approvedAt = new Date("2026-06-04T09:00:00Z");
-const approvedBy = "k0820086@gmail.com";
+const approvedBy = "approver@example.com";
 const inputHash = "a".repeat(64);
 
 describe("FLOOR_ACTIONS list discipline", () => {

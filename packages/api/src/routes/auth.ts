@@ -222,8 +222,8 @@ export function authRoutes(app: FastifyInstance) {
 
       // Beta gate: when BETA_GATE_ENABLED=true, registration is restricted to
       // waitlist entries that an admin has approved. APPROVED registrants are
-      // auto-granted PRO so yongrean doesn't have to run prod SQL after every
-      // signup.
+      // auto-granted PRO for approved beta testers (avoids manual SQL per
+      // signup).
       const betaGateEnabled = process.env.BETA_GATE_ENABLED === "true";
       const waitlistEntry = betaGateEnabled
         ? await prisma.waitlist.findUnique({

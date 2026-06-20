@@ -29,7 +29,7 @@
  * Usage:
  *
  *   DATABASE_URL=... pnpm --filter @klorn/api calibration -- \
- *     --user=k0820086@gmail.com \
+ *     --user=admin@example.com \
  *     --window-days=7 \
  *     [--ground-truth=./poc-ground-truth.json] \
  *     [--out=./calibration-result.json]

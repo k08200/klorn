@@ -8,7 +8,7 @@
  *
  * Usage:
  *   DATABASE_URL=... npx tsx scripts/poc-label-emails.ts \
- *     --user-email=k0820086@gmail.com \
+ *     --user-email=admin@example.com \
  *     --count=50 \
  *     --out=./poc-ground-truth.json
  *
@@ -34,7 +34,7 @@ function parseArgs(argv: string[]): CliArgs {
 
   const userEmail = map.get("user-email");
   if (!userEmail) {
-    throw new Error("--user-email=<address> is required (e.g. --user-email=k0820086@gmail.com)");
+    throw new Error("--user-email=<address> is required (e.g. --user-email=admin@example.com)");
   }
 
   const count = Number(map.get("count") ?? "50");

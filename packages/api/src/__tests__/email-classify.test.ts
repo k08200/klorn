@@ -176,12 +176,12 @@ describe("classifyNeedsReplyFromSignals — canonical reply-needed gate", () => 
   it("never flags mail sent by the inbox owner to themselves as reply needed", () => {
     expect(
       classifyNeedsReplyFromSignals({
-        from: "Yongrean Kim <k0820086@gmail.com>",
+        from: "Test User <test@example.com>",
         subject: "내나난",
         category: "conversation",
         actionItems: ["fix this later"],
         priority: "URGENT",
-        userEmail: "k0820086@gmail.com",
+        userEmail: "test@example.com",
       }),
     ).toMatchObject({ needsReply: false, reason: "self_sent" });
   });
@@ -189,11 +189,11 @@ describe("classifyNeedsReplyFromSignals — canonical reply-needed gate", () => 
   it("self-sent check is case insensitive and tolerates surrounding whitespace", () => {
     expect(
       classifyNeedsReplyFromSignals({
-        from: "  <K0820086@Gmail.com>  ",
+        from: "  <Test@Example.com>  ",
         subject: "todo for tomorrow",
         category: "conversation",
         priority: "NORMAL",
-        userEmail: "k0820086@gmail.com",
+        userEmail: "test@example.com",
       }),
     ).toMatchObject({ needsReply: false, reason: "self_sent" });
   });
@@ -201,7 +201,7 @@ describe("classifyNeedsReplyFromSignals — canonical reply-needed gate", () => 
   it("does not short-circuit when the userEmail is missing", () => {
     expect(
       classifyNeedsReplyFromSignals({
-        from: "Yongrean Kim <k0820086@gmail.com>",
+        from: "Test User <test@example.com>",
         subject: "Can you confirm?",
         category: "conversation",
         actionItems: ["confirm"],
@@ -213,7 +213,7 @@ describe("classifyNeedsReplyFromSignals — canonical reply-needed gate", () => 
 
 describe("extractEmailAddress", () => {
   it("pulls the angle-bracketed address from a From header", () => {
-    expect(extractEmailAddress("Yongrean Kim <k0820086@gmail.com>")).toBe("k0820086@gmail.com");
+    expect(extractEmailAddress("Test User <test@example.com>")).toBe("test@example.com");
   });
   it("returns the lowercased bare address when no name is present", () => {
     expect(extractEmailAddress("FOO@BAR.com")).toBe("foo@bar.com");
