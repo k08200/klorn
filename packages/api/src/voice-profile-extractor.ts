@@ -18,6 +18,7 @@
 import { google } from "googleapis";
 import { decryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
+import { parseLlmJson } from "./llm-json.js";
 import { remember } from "./memory.js";
 import { createCompletion, MODEL } from "./openai.js";
 
@@ -227,14 +228,8 @@ Return exactly this JSON shape:
       { credentials: await getUserCredentials(userId), userId, priority: "background" },
     );
 
-    const raw = res.choices[0]?.message?.content?.trim() || "";
-    const clean = raw.startsWith("```")
-      ? raw
-          .replace(/```json?\n?/, "")
-          .replace(/```$/, "")
-          .trim()
-      : raw;
-    const parsed = JSON.parse(clean) as VoiceProfile;
+    const raw = res.choices[0]?.message?.content || "";
+    const parsed = parseLlmJson<VoiceProfile>(raw);
 
     return {
       ...parsed,

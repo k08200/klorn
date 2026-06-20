@@ -10,6 +10,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { decryptOptional, decryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
+import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, MODEL } from "./openai.js";
 
 const exec = promisify(execFile);
@@ -211,7 +212,7 @@ Keep it concise and actionable. Respond in the same language as the notes.`,
     decisions?: string[];
   };
   try {
-    parsed = JSON.parse(content);
+    parsed = parseLlmJson<typeof parsed>(content);
   } catch {
     parsed = { keyPoints: [content], actionItems: [], decisions: [] };
   }

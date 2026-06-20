@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { prisma } from "./db.js";
 import { getUserLlmCredentials } from "./llm-credentials.js";
+import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, MODEL } from "./openai.js";
 import { wrapUntrusted } from "./untrusted.js";
 
@@ -680,7 +681,7 @@ ${wrapUntrusted(text, "attachment:text")}`,
     { credentials, userId: input.userId, priority: "background" },
   );
   const content = response.choices[0]?.message?.content || "{}";
-  const parsed = JSON.parse(content) as Partial<AttachmentAnalysis>;
+  const parsed = parseLlmJson<Partial<AttachmentAnalysis>>(content);
   return {
     summary:
       parsed.summary || heuristicAttachmentAnalysis(input.filename, input.mimeType, text).summary,

@@ -12,6 +12,7 @@
  */
 
 import { prisma } from "./db.js";
+import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, MODEL } from "./openai.js";
 
 export interface PathStep {
@@ -266,11 +267,7 @@ Return ONLY a JSON array. Example:
 
 function parseSteps(raw: string, now: Date, dueAt: Date): PathStep[] {
   try {
-    const json = raw
-      .replace(/^```json\s*/i, "")
-      .replace(/```\s*$/, "")
-      .trim();
-    const arr = JSON.parse(json);
+    const arr = parseLlmJson<unknown>(raw);
     if (!Array.isArray(arr)) return fallbackSteps(now, dueAt);
 
     return arr
