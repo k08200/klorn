@@ -16,20 +16,16 @@
  *    persisted, logged, or attached to Sentry. Email content is never logged.
  */
 
-import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { judgeEmail } from "../poc-judge.js";
 import type { ProviderCredentials } from "../providers/index.js";
 import { TIERS } from "../tiers.js";
 
-// Scope provider cooldown state to the KEY, not the IP. A BYOK playground sees
-// a different key per visitor; an IP-scoped cooldown means one person's bad key
-// (a 401 gets marked as a provider lockout) blocks every later request from the
-// same IP — including a corrected key — for hours. Hashing the key isolates
-// cooldowns per credential: a fixed key gets a fresh bucket and works at once,
-// while a genuinely rate-limited key still backs off. Bounded by distinct keys.
-function keyScope(apiKey: string): string {
-  return `playground:${createHash("sha256").update(apiKey).digest("hex").slice(0, 16)}`;
+// Strip CR/LF/control chars from any user-supplied value before it reaches a
+// log line, so a crafted model/source field can't forge or split log entries.
+function sanitizeForLog(value: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping control chars is the point
+  return value.replace(/[\x00-\x1F\x7F]/g, " ").slice(0, 200);
 }
 
 const classifyBodySchema = {
@@ -106,13 +102,15 @@ export function playgroundRoutes(app: FastifyInstance) {
 
       // Build credentials from the request body and pass straight through to
       // the classifier. No userId → the per-user cost ledger is bypassed; the
-      // global cost gate is skipped (playgroundOnly). quotaScope is keyed on the
-      // credential so a bad key never poisons the next request's cooldown.
+      // global cost gate AND the cross-request cooldown are skipped entirely
+      // (playgroundOnly), so the quotaScope is just a constant label here — it
+      // never participates in cooldown bucketing, so there is nothing to key on
+      // the credential (and nothing to hash).
       const credentials: ProviderCredentials = {
         openRouterApiKey: provider === "openrouter" ? body.apiKey : null,
         geminiApiKey: provider === "gemini" ? body.apiKey : null,
         openAiApiKey: provider === "openai" ? body.apiKey : null,
-        quotaScope: keyScope(body.apiKey),
+        quotaScope: "playground",
         // Fail closed: never fall through to the server's env keys.
         playgroundOnly: true,
       };
@@ -164,8 +162,9 @@ export function playgroundRoutes(app: FastifyInstance) {
       } catch (err) {
         // Log WHY (message only) but NEVER the body or the key. captureError
         // is intentionally not called with any request context here. Scrub any
-        // key-shaped token in case a provider SDK embedded it in the message.
-        const message = scrubKeys(err instanceof Error ? err.message : String(err));
+        // key-shaped token AND strip control chars (the message can carry a
+        // user-supplied model id) so it can't forge log entries.
+        const message = sanitizeForLog(scrubKeys(err instanceof Error ? err.message : String(err)));
         console.warn(`[PLAYGROUND] classify failed: ${message}`);
         return reply.code(502).send({
           error: "Classification failed. Check your API key and model, then retry.",
@@ -185,10 +184,13 @@ export function playgroundRoutes(app: FastifyInstance) {
       // The disagreement signal — the only override-like data the playground
       // can produce. Structured-logged (no DB migration yet); persisting to a
       // table is a fast-follow. Email content is reduced to a length so no PII
-      // lands in the log pipeline.
+      // lands in the log pipeline. predicted/correct are enum-validated; model
+      // and source are free strings, so strip control chars to block log forging.
+      const fbModel = sanitizeForLog(body.model ?? "?");
+      const fbSource = sanitizeForLog(body.source ?? "?");
       console.log(
         `[PLAYGROUND_FEEDBACK] predicted=${body.predictedTier} correct=${body.correctTier} ` +
-          `model=${body.model ?? "?"} source=${body.source ?? "?"} subjectLen=${body.subject?.length ?? 0}`,
+          `model=${fbModel} source=${fbSource} subjectLen=${body.subject?.length ?? 0}`,
       );
       return reply.code(200).send({ ok: true });
     },

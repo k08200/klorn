@@ -203,7 +203,7 @@ describe("POST /api/playground/classify", () => {
     await app.close();
   });
 
-  it("scopes the provider cooldown to the key hash, not the IP", async () => {
+  it("uses a constant quotaScope that never embeds the key (cooldowns are bypassed)", async () => {
     judgeEmail.mockResolvedValue({
       tier: "QUEUE",
       reason: "x",
@@ -217,9 +217,8 @@ describe("POST /api/playground/classify", () => {
       payload: { from: "a@b.com", subject: "hi", apiKey: SECRET_KEY, provider: "openrouter" },
     });
     const credentials = judgeEmail.mock.calls[0][3];
-    expect(credentials.quotaScope).toMatch(/^playground:[0-9a-f]{16}$/);
+    expect(credentials.quotaScope).toBe("playground");
     expect(credentials.quotaScope).not.toContain(SECRET_KEY);
-    expect(credentials.quotaScope).not.toContain("127.0.0.1");
     await app.close();
   });
 
@@ -278,6 +277,29 @@ describe("POST /api/playground/feedback", () => {
     expect(logged).toContain("correct=PUSH");
     // The raw subject text must not be echoed into logs.
     expect(logged).not.toContain("Sensitive subject line");
+    await app.close();
+  });
+
+  it("strips control chars from model/source so a crafted value can't forge a log line", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/playground/feedback",
+      payload: {
+        predictedTier: "QUEUE",
+        correctTier: "PUSH",
+        model: "evil\n[PLAYGROUND_FEEDBACK] predicted=FORGED correct=FORGED",
+        source: "x\r\ninjected",
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const logged = allLoggedText();
+    // The injected CR/LF must be neutralized: exactly one feedback line, and the
+    // logged value carries no raw control characters that could split a record.
+    const lines = logged.split("\n").filter((l) => l.includes("[PLAYGROUND_FEEDBACK]"));
+    expect(lines).toHaveLength(1);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: asserting control chars are gone
+    expect(lines[0]).not.toMatch(/[\x00-\x1F\x7F]/);
     await app.close();
   });
 
