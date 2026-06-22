@@ -352,6 +352,14 @@ export default function LandingPage() {
                 <Icon type="arrow" className="h-4 w-4" />
               </Link>
               <Link
+                href="/playground"
+                aria-label="Try the classifier without signing up"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-md border border-stone-700 px-6 text-sm font-semibold text-stone-200 transition hover:border-stone-500 hover:text-white"
+              >
+                Try the live demo
+                <Icon type="arrow" className="h-4 w-4" />
+              </Link>
+              <Link
                 href="/login"
                 className="inline-flex items-center justify-center gap-1 px-1 text-sm text-stone-400 underline decoration-stone-700 underline-offset-4 transition hover:text-stone-200 hover:decoration-stone-400"
               >
