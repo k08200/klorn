@@ -32,6 +32,21 @@ export function initSentry(): void {
         delete event.request.headers.authorization;
         delete event.request.headers.cookie;
       }
+      // Scrub request bodies — a captured error during a POST can otherwise
+      // ship submitted credentials (playground apiKey, login password, OAuth
+      // token) to Sentry. Redact known fields; drop a raw-string body whole.
+      if (event.request?.data) {
+        const data = event.request.data;
+        if (typeof data === "object" && data !== null) {
+          for (const field of ["apiKey", "password", "token", "openRouterApiKey", "geminiApiKey"]) {
+            if (field in (data as Record<string, unknown>)) {
+              (data as Record<string, unknown>)[field] = "[REDACTED]";
+            }
+          }
+        } else {
+          event.request.data = undefined;
+        }
+      }
       return event;
     },
   });

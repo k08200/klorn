@@ -115,7 +115,17 @@ export const DAILY_COST_CAP_MESSAGE =
  * cheap calls can't sneak under either cap. Throws DailyCostCapExceededError
  * when either gate is closed.
  */
-async function enforceCostGates(model: string, userId?: string): Promise<void> {
+async function enforceCostGates(
+  model: string,
+  userId?: string,
+  playgroundOnly?: boolean,
+): Promise<void> {
+  // Playground calls run entirely on the visitor's own key (no server provider
+  // in the chain), so they incur zero server cost. They must NOT be gated by
+  // or recorded against the shared global ceiling — otherwise unauthenticated
+  // traffic could trip the cap and lock out real users.
+  if (playgroundOnly) return;
+
   const { checkCostGate, recordCostUsage, checkGlobalCostGate, recordGlobalCostUsage } =
     await import("./cost-guard.js");
   // Single source of truth for the pre-bill arithmetic lives in llm-usage.ts
@@ -222,7 +232,7 @@ export async function createCompletion(
   // Daily-cost gate: enforce BEFORE the call so we don't burn budget twice
   // when a runaway loop has already crossed the cap. Covers the global
   // ceiling (always) and the per-user cap (when a userId is present).
-  await enforceCostGates(params.model, options.userId);
+  await enforceCostGates(params.model, options.userId, options.credentials?.playgroundOnly);
 
   // Ground-truth usage ledger context, frozen before the failover loop so
   // every retry records the same caller identity + the same pre-bill
@@ -282,10 +292,17 @@ export async function createCompletion(
     return result;
   };
 
+  // Playground calls run a single visitor-key chain with nothing to fail over
+  // to, so the cross-request cooldown machinery only masks the real provider
+  // error (a 401 surfaces as "all providers unavailable") and blocks the
+  // visitor's retries for an hour. Skip the cooldown check (don't honor a stale
+  // lockout) and, in the catch below, surface the raw error without marking one.
+  const playgroundOnly = options.credentials?.playgroundOnly === true;
+
   let lastError: unknown;
   for (let i = 0; i < chain.length; i++) {
     const provider = chain[i];
-    if (isProviderUnavailable(provider.quotaKey)) continue;
+    if (!playgroundOnly && isProviderUnavailable(provider.quotaKey)) continue;
 
     // First-choice model for this provider:
     // - OpenRouter: caller's model
@@ -314,6 +331,11 @@ export async function createCompletion(
       return await call(provider, model);
     } catch (err) {
       lastError = err;
+
+      // Playground: surface the raw provider error immediately (so the visitor
+      // sees "401 User not found" / "404 model not found"), and mutate no
+      // cooldown state — a single BYOK key must never lock itself out.
+      if (playgroundOnly) throw err;
 
       // 402: same provider, swap to :free model, retry once
       if (provider.name === "openrouter" && isCreditError(err) && !isFreeModel(model)) {
@@ -394,7 +416,7 @@ export async function createVisionCompletion(
 
   // Daily-cost gate: vision/OCR calls bill the same ledgers as chat. Without
   // this, a runaway attachment-analysis batch can blow past the cap.
-  await enforceCostGates(params.model, options.userId);
+  await enforceCostGates(params.model, options.userId, options.credentials?.playgroundOnly);
 
   const ordered = [
     ...chain.filter((provider) => provider.name === "gemini"),

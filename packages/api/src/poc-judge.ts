@@ -18,6 +18,7 @@
 import type { ClassifiableEmail } from "./email-classifier.js";
 import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, JUDGE_MODEL } from "./openai.js";
+import type { ProviderCredentials } from "./providers/index.js";
 import { captureError } from "./sentry.js";
 import { TIERS, type Tier } from "./tiers.js";
 
@@ -304,12 +305,15 @@ async function extractFeaturesWithLlm(
   userId?: string,
   corrections: CorrectionExample[] = [],
   senderFacts: SenderFacts | null = null,
+  credentials?: ProviderCredentials,
+  modelOverride?: string,
+  onError?: (message: string) => void,
 ): Promise<{ features: PocFeatures; reason: string } | null> {
   for (let attempt = 1; attempt <= JUDGE_LLM_ATTEMPTS; attempt++) {
     try {
       const response = await createCompletion(
         {
-          model: JUDGE_MODEL,
+          model: modelOverride || JUDGE_MODEL,
           messages: [
             {
               role: "system",
@@ -319,8 +323,19 @@ async function extractFeaturesWithLlm(
             { role: "user", content: buildJudgePrompt(email, corrections, senderFacts) },
           ],
           response_format: { type: "json_object" },
+          // The output is a fixed ~50-token JSON object. Capping max_tokens
+          // keeps it well above what the scorer needs while shrinking
+          // OpenRouter's up-front credit RESERVATION (price × max_tokens) from
+          // the model's full output window to a few hundred tokens — otherwise
+          // a key with a small balance or a per-key credit limit gets a
+          // spurious "402 Insufficient credits" even though the real call costs
+          // a fraction of a cent. 1024 leaves headroom for reasoning models.
+          max_tokens: 1024,
         },
-        userId ? { userId, priority: "background" as const } : {},
+        {
+          ...(userId ? { userId, priority: "background" as const } : {}),
+          ...(credentials ? { credentials } : {}),
+        },
       );
 
       const raw = response.choices[0]?.message?.content;
@@ -348,6 +363,10 @@ async function extractFeaturesWithLlm(
       );
       if (attempt === JUDGE_LLM_ATTEMPTS) {
         captureError(err, { tags: { scope: "poc-judge.llm" } });
+        // Hand the final failure reason back to the caller (e.g. the
+        // playground surfaces it so a visitor sees "401 User not found"
+        // instead of a generic, undebuggable fallback).
+        onError?.(message);
       }
     }
   }
@@ -506,6 +525,9 @@ export async function judgeEmail(
   email: ClassifiableEmail,
   userId?: string,
   context: JudgeContext = EMPTY_JUDGE_CONTEXT,
+  credentials?: ProviderCredentials,
+  modelOverride?: string,
+  onLlmError?: (message: string) => void,
 ): Promise<PocJudgement> {
   // Fast-path: only the patterns we are certain the founder treats as SILENT.
   //   - Gmail's CATEGORY_PROMOTIONS label (calibrated, ad-targeted mail)
@@ -542,7 +564,15 @@ export async function judgeEmail(
   }
 
   const senderFacts = context.senderFacts ?? null;
-  const llm = await extractFeaturesWithLlm(email, userId, context.corrections, senderFacts);
+  const llm = await extractFeaturesWithLlm(
+    email,
+    userId,
+    context.corrections,
+    senderFacts,
+    credentials,
+    modelOverride,
+    onLlmError,
+  );
   if (llm) {
     if (senderFacts) {
       // Measurement hook for a future deterministic senderTrust override:

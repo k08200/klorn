@@ -12,6 +12,29 @@ calendar time.
 
 ## [Unreleased]
 
+### Added — Public playground
+- **Login-free BYOK playground (`/playground`).** A public page that runs the
+  real 4-tier classifier (`judgeEmail`) on a single pasted email using the
+  visitor's own OpenRouter / OpenAI / Gemini key. It removes the OAuth wall for
+  the *experience* step; it is a top-of-funnel demo, not a measure of per-user
+  recall (the visitor self-selects the input, so it cannot test what the
+  firewall would miss). Backed by a stateless `POST /api/playground/classify`
+  (+ `/feedback`): strict schema, per-IP rate limit, no auth. The visitor key
+  is used for one call and is never persisted, logged, or sent to Sentry.
+- **`playgroundOnly` provider guard.** The playground chain contains the
+  visitor key *only* — never the server's env keys — so a bad key fails closed
+  instead of falling through to Klorn's quota (a zero-auth billing-theft path).
+  It also skips the global cost gate and the cross-request cooldown, disables
+  SDK retry so a 429 fails fast, and caps the judge's `max_tokens` so
+  OpenRouter's up-front credit reservation can't trigger a spurious 402.
+- **Direct OpenAI provider.** A visitor's `sk-…` key now routes to
+  `api.openai.com` (previously only OpenRouter/Gemini were reachable).
+
+### Hardening
+- Sentry `beforeSend` now scrubs request bodies (`apiKey`/`password`/`token`),
+  and the API runs with `trustProxy` so per-IP rate limits resolve the real
+  client IP behind the load balancer.
+
 ### Added — Calibration measurement
 - **Decision-label ledger.** Every email classification now records the tier
   the firewall *showed* you plus the features behind it, in a `DecisionLabel`
