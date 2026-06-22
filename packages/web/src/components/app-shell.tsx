@@ -15,6 +15,7 @@ const NO_SIDEBAR_ROUTES = [
   "/privacy",
   "/terms",
   "/early-access",
+  "/playground",
 ];
 
 const APP_SHELL_ROUTES = [

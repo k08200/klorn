@@ -31,6 +31,7 @@ import { opsRoutes } from "./routes/ops.js";
 import { patternRoutes } from "./routes/patterns.js";
 import { phoneRoutes } from "./routes/phone.js";
 import { playbookRoutes } from "./routes/playbooks.js";
+import { playgroundRoutes } from "./routes/playground.js";
 import { receiptRoutes } from "./routes/receipt.js";
 import { skillRoutes } from "./routes/skills.js";
 import { smsRoutes } from "./routes/sms.js";
@@ -52,7 +53,22 @@ type TxClient = Omit<
 // No-op when SENTRY_DSN is unset (local dev).
 initSentry();
 
-const app = Fastify({ logger: true });
+const app = Fastify({
+  // trustProxy: resolve the real client IP from X-Forwarded-For. The platform
+  // (Render) sits behind a load balancer, so without this every request's
+  // `request.ip` is the LB's internal IP — which collapses all per-IP rate
+  // limits (incl. the public /api/playground limit) into one shared bucket.
+  trustProxy: true,
+  logger: {
+    // Defense-in-depth: even though Fastify's default serializer doesn't log
+    // bodies, redact key-bearing fields so a future serializer change or a
+    // rawBody dump can never leak a credential into the log drain.
+    redact: {
+      paths: ["req.body.apiKey", "req.body.password", "req.body.token", "req.rawBody"],
+      censor: "[REDACTED]",
+    },
+  },
+});
 
 // Attach per-request performance tracking (p50/p95/p99 per route)
 attachPerfMonitor(app);
@@ -136,6 +152,7 @@ await app.register(emailRoutes, { prefix: "/api/email" });
 await app.register(gmailPushRoutes, { prefix: "/api/gmail" });
 await app.register(automationRoutes, { prefix: "/api/automations" });
 await app.register(waitlistRoutes, { prefix: "/api/waitlist" });
+await app.register(playgroundRoutes, { prefix: "/api/playground" });
 await app.register(adminRoutes, { prefix: "/api/admin" });
 await app.register(memoryRoutes, { prefix: "/api/memories" });
 await app.register(naverImapRoutes, { prefix: "/api/naver-imap" });

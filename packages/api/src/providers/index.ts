@@ -27,7 +27,7 @@ import {
   createCompletionStreaming as geminiStreaming,
 } from "./gemini-native.js";
 
-export type ProviderName = "openai-compat" | "openrouter" | "gemini";
+export type ProviderName = "openai-compat" | "openrouter" | "gemini" | "openai";
 
 type ChatParams = ChatCompletionCreateParamsNonStreaming | ChatCompletionCreateParamsStreaming;
 type ChatResult =
@@ -53,12 +53,30 @@ export interface Provider {
 export interface ProviderCredentials {
   openRouterApiKey?: string | null;
   geminiApiKey?: string | null;
+  /** Direct OpenAI key (sk-…/sk-proj-…) → api.openai.com. Playground BYOK. */
+  openAiApiKey?: string | null;
   quotaScope?: string | null;
+  /**
+   * When true, the provider chain contains ONLY the explicitly supplied
+   * visitor keys — never the server's env-level OpenRouter/Gemini/compat
+   * providers. This is the billing-theft guard for the public playground: a
+   * visitor with a bad or exhausted key must fail closed, not silently fall
+   * through to the server's own quota.
+   */
+  playgroundOnly?: boolean;
 }
 
-function buildOpenRouter(apiKey = process.env.OPENROUTER_API_KEY, scope = "env"): Provider | null {
+function buildOpenRouter(
+  apiKey = process.env.OPENROUTER_API_KEY,
+  scope = "env",
+  maxRetries?: number,
+): Provider | null {
   if (!apiKey) return null;
-  const client = new OpenAISDK({ apiKey, baseURL: "https://openrouter.ai/api/v1" });
+  const client = new OpenAISDK({
+    apiKey,
+    baseURL: "https://openrouter.ai/api/v1",
+    ...(maxRetries !== undefined ? { maxRetries } : {}),
+  });
   return {
     name: "openrouter",
     quotaKey: `openrouter:${scope}`,
@@ -66,6 +84,35 @@ function buildOpenRouter(apiKey = process.env.OPENROUTER_API_KEY, scope = "env")
     defaultModel: process.env.FALLBACK_MODEL || "google/gemma-4-31b-it:free",
     supportsTools: true,
     resolveModel: (m) => m,
+    call: async (params, model) => {
+      const create = client.chat.completions.create.bind(client.chat.completions) as (
+        ...args: unknown[]
+      ) => Promise<ChatResult>;
+      return await create({ ...params, model });
+    },
+  };
+}
+
+/**
+ * Direct OpenAI provider — a visitor's own OpenAI key (sk-… / sk-proj-…)
+ * against api.openai.com. Used only by the playground BYOK path; there is no
+ * env-level OpenAI provider (the server routes through OpenRouter). Strips an
+ * "openai/" prefix so an OpenRouter-style id (openai/gpt-4o-mini) still works.
+ */
+function buildOpenAI(apiKey: string, scope: string, maxRetries?: number): Provider | null {
+  if (!apiKey) return null;
+  const client = new OpenAISDK({
+    apiKey,
+    baseURL: "https://api.openai.com/v1",
+    ...(maxRetries !== undefined ? { maxRetries } : {}),
+  });
+  return {
+    name: "openai",
+    quotaKey: `openai:${scope}`,
+    client,
+    defaultModel: "gpt-4o-mini",
+    supportsTools: true,
+    resolveModel: (m) => m.replace(/^openai\//, ""),
     call: async (params, model) => {
       const create = client.chat.completions.create.bind(client.chat.completions) as (
         ...args: unknown[]
@@ -150,6 +197,9 @@ const providers: Record<ProviderName, Provider | null> = {
   "openai-compat": buildOpenAICompat(),
   openrouter: buildOpenRouter(process.env.OPENROUTER_API_KEY),
   gemini: buildGemini(process.env.GEMINI_API_KEY),
+  // No env-level direct OpenAI provider — the server routes through OpenRouter.
+  // Direct OpenAI is a playground BYOK-only path (per-request key).
+  openai: null,
 };
 
 if (!providers.openrouter && !providers.gemini && !providers["openai-compat"]) {
@@ -223,14 +273,36 @@ export function getProviderChain(credentials: ProviderCredentials = {}): Provide
   const userScope = credentials.quotaScope ? `user:${credentials.quotaScope}` : "user";
   const compatLast = process.env.OPENAI_COMPAT_PRIORITY === "last";
   const compat = providers["openai-compat"];
+
+  // Playground BYOK calls disable the OpenAI SDK's built-in retry: a visitor's
+  // 429/5xx must fail FAST with the raw reason, not burn 10-20s on exponential
+  // backoff (then double it via the judge's own retry) before surfacing.
+  const visitorRetries = credentials.playgroundOnly ? 0 : undefined;
+  const visitorProviders = [
+    credentials.openRouterApiKey
+      ? buildOpenRouter(credentials.openRouterApiKey, userScope, visitorRetries)
+      : null,
+    credentials.geminiApiKey ? buildGemini(credentials.geminiApiKey, userScope) : null,
+    credentials.openAiApiKey
+      ? buildOpenAI(credentials.openAiApiKey, userScope, visitorRetries)
+      : null,
+  ];
+
+  // playgroundOnly fails closed: a public visitor's request must NEVER reach
+  // the server's env keys or local compat model. Without this guard a bad
+  // visitor key falls through to providers.openrouter (env) and spends Klorn's
+  // money — a zero-auth billing-theft vector.
+  if (credentials.playgroundOnly) {
+    return visitorProviders.filter((p): p is Provider => p !== null);
+  }
+
   // User-credential providers are built ONLY from explicitly supplied keys.
   // Passing undefined through would hit the builders' env-default params and
   // register the env key a second time under a `user` quotaKey — duplicate
   // tries and a cooldown bypass for the same underlying key.
   const chain = [
     ...(compatLast ? [] : [compat]),
-    credentials.openRouterApiKey ? buildOpenRouter(credentials.openRouterApiKey, userScope) : null,
-    credentials.geminiApiKey ? buildGemini(credentials.geminiApiKey, userScope) : null,
+    ...visitorProviders,
     providers.openrouter,
     providers.gemini,
     ...(compatLast ? [compat] : []),
