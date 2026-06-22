@@ -42,7 +42,16 @@ export interface EmailDecision {
   decidedBy?: string | null;
 }
 
-type AttentionSourceName =
+/**
+ * A decision for any firewall source. EMAIL is the common case; GITHUB (and
+ * any future inbound channel) records through the same ledger so per-channel
+ * PUSH recall / over-suppression is measurable — not email-only.
+ */
+export interface DecisionInput extends EmailDecision {
+  source: AttentionSourceName;
+}
+
+export type AttentionSourceName =
   | "EMAIL"
   | "PENDING_ACTION"
   | "TASK"
@@ -59,13 +68,15 @@ function logRecorderError(op: string, sourceId: string, err: unknown): void {
 }
 
 /**
- * Record (or refresh) the shown decision for an email. One row per
- * (EMAIL, sourceId): a re-judge while the row is still OPEN refreshes the
+ * Record (or refresh) the shown decision for any firewall source. One row per
+ * (source, sourceId): a re-judge while the row is still OPEN refreshes the
  * shown tier/features; once an outcome is stamped the row is frozen so the
  * label always matches what the user actually saw when they acted.
  */
-export async function recordEmailDecision(decision: EmailDecision): Promise<void> {
-  const where = { source_sourceId: { source: "EMAIL" as const, sourceId: decision.sourceId } };
+export async function recordDecision(decision: DecisionInput): Promise<void> {
+  const where = {
+    source_sourceId: { source: decision.source, sourceId: decision.sourceId },
+  };
   try {
     const existing = await prisma.decisionLabel.findUnique({
       where,
@@ -87,7 +98,7 @@ export async function recordEmailDecision(decision: EmailDecision): Promise<void
       where,
       create: {
         userId: decision.userId,
-        source: "EMAIL",
+        source: decision.source,
         sourceId: decision.sourceId,
         ...fields,
       },
@@ -96,6 +107,11 @@ export async function recordEmailDecision(decision: EmailDecision): Promise<void
   } catch (err) {
     logRecorderError("record", decision.sourceId, err);
   }
+}
+
+/** Back-compat wrapper for the email firewall path (source = EMAIL). */
+export async function recordEmailDecision(decision: EmailDecision): Promise<void> {
+  await recordDecision({ ...decision, source: "EMAIL" });
 }
 
 /**

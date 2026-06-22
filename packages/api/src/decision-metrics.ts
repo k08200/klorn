@@ -24,6 +24,7 @@
  */
 
 import { prisma } from "./db.js";
+import type { AttentionSourceName } from "./decision-label.js";
 import { TIERS, type Tier } from "./tiers.js";
 
 /** One ledger row, narrowed to the fields the metrics need. */
@@ -253,22 +254,23 @@ export async function getDecisionDailySummary(
   userId: string,
   since: Date,
   until: Date,
+  source: AttentionSourceName = "EMAIL",
 ): Promise<DecisionDailySummary> {
   const rows = (await prisma.decisionLabel.findMany({
-    where: { userId, source: "EMAIL", judgedAt: { gte: since, lt: until } },
+    where: { userId, source, judgedAt: { gte: since, lt: until } },
     select: { shownTier: true, outcome: true, decidedBy: true },
   })) as DecisionRow[];
   return dailySummaryOf(summarizeDecisions(rows));
 }
 
 /**
- * Read the EMAIL-source ledger and compute metrics, optionally for one user.
- * Read-only; safe to call from an admin route. Bounded to a trailing window
- * (default 90d, capped 365d) so the query stays index-served and can't scan an
- * unbounded table as the ledger grows.
+ * Read one source's ledger (default EMAIL) and compute metrics, optionally for
+ * one user. Read-only; safe to call from an admin route. Bounded to a trailing
+ * window (default 90d, capped 365d) so the query stays index-served and can't
+ * scan an unbounded table as the ledger grows.
  */
 export async function getDecisionMetrics(
-  opts: { userId?: string; sinceDays?: number } = {},
+  opts: { userId?: string; sinceDays?: number; source?: AttentionSourceName } = {},
 ): Promise<DecisionMetricsReport> {
   const windowDays = Math.min(
     MAX_WINDOW_DAYS,
@@ -277,7 +279,7 @@ export async function getDecisionMetrics(
   const since = new Date(Date.now() - windowDays * DAY_MS);
   const rows = (await prisma.decisionLabel.findMany({
     where: {
-      source: "EMAIL",
+      source: opts.source ?? "EMAIL",
       judgedAt: { gte: since },
       ...(opts.userId ? { userId: opts.userId } : {}),
     },

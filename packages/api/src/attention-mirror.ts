@@ -21,7 +21,7 @@ import { getToolRisk } from "./agent-logic.js";
 import { AUTOPILOT_LEVEL, type AutopilotLevel } from "./agent-mode.js";
 import { computeAttentionInputHash } from "./attention-input-hash.js";
 import { prisma } from "./db.js";
-import { recordEmailDecision } from "./decision-label.js";
+import { recordDecision, recordEmailDecision } from "./decision-label.js";
 import { getSuppressionSet, isSuppressed } from "./feedback-adaptor.js";
 import type { PocJudgement } from "./poc-judge.js";
 import type { Tier } from "./tiers.js";
@@ -986,6 +986,21 @@ export async function upsertAttentionForGitHubNotification(
     });
   } catch (err) {
     console.warn("[attention-mirror] upsert failed for GitHub", n.id, err);
+  }
+
+  // Mirror the email path: append the immutable decision label so GitHub
+  // firewall accuracy (PUSH recall / over-suppression) is measurable from real
+  // overrides too, not email-only. Best-effort — never throws into the path.
+  if (judgement.features) {
+    await recordDecision({
+      userId: n.userId,
+      source: "GITHUB",
+      sourceId: n.id,
+      shownTier: judgement.tier,
+      features: judgement.features,
+      sender: n.repo,
+      decidedBy: judgement.source ?? null,
+    });
   }
 }
 
