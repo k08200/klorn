@@ -504,11 +504,21 @@ export async function adminRoutes(app: FastifyInstance) {
   // from real overrides; null outcomes are never counted as agreement.
   // Optional ?userId= narrows to one inbox (the dogfood account).
   app.get("/decision-metrics", async (request) => {
-    const { userId, days } = request.query as { userId?: string; days?: string };
+    const { userId, days, source } = request.query as {
+      userId?: string;
+      days?: string;
+      source?: string;
+    };
     const sinceDays = days ? Number(days) : undefined;
+    // EMAIL and GITHUB are the only inbound channels that carry a firewall
+    // decision; default to EMAIL and ignore anything else so a stray query
+    // param can't read an unrelated source. ?source=GITHUB reads the GitHub
+    // firewall accuracy (the no-OAuth dogfood channel).
+    const channel = source === "GITHUB" ? "GITHUB" : "EMAIL";
     return getDecisionMetrics({
       ...(userId ? { userId } : {}),
       ...(sinceDays !== undefined && Number.isFinite(sinceDays) ? { sinceDays } : {}),
+      source: channel,
     });
   });
 

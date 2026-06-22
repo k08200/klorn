@@ -21,7 +21,7 @@ vi.mock("../db.js", () => {
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { prisma } from "../db.js";
-import { recordEmailDecision, stampDecisionOutcome } from "../decision-label.js";
+import { recordDecision, recordEmailDecision, stampDecisionOutcome } from "../decision-label.js";
 import { captureError } from "../sentry.js";
 
 type DecisionLabelMock = {
@@ -87,6 +87,42 @@ describe("recordEmailDecision", () => {
     decisionLabel.upsert.mockRejectedValue(new Error("db down"));
     await expect(recordEmailDecision(DECISION)).resolves.toBeUndefined();
     expect(captureError).toHaveBeenCalled();
+  });
+});
+
+describe("recordDecision (source-aware)", () => {
+  it("records a GITHUB ledger row keyed on (GITHUB, sourceId)", async () => {
+    await recordDecision({
+      userId: "user-1",
+      source: "GITHUB",
+      sourceId: "gh-thread-1",
+      shownTier: "PUSH",
+      features: FEATURES,
+      sender: "acme/repo",
+      decidedBy: "llm",
+    });
+
+    expect(decisionLabel.upsert).toHaveBeenCalledTimes(1);
+    const args = decisionLabel.upsert.mock.calls[0][0];
+    expect(args.where).toEqual({ source_sourceId: { source: "GITHUB", sourceId: "gh-thread-1" } });
+    expect(args.create).toMatchObject({
+      source: "GITHUB",
+      sourceId: "gh-thread-1",
+      shownTier: "PUSH",
+      sender: "acme/repo",
+    });
+  });
+
+  it("freezes a GITHUB row once the user has acted (outcome present)", async () => {
+    decisionLabel.findUnique.mockResolvedValue({ outcome: "OVERRIDE:QUEUE" });
+    await recordDecision({
+      userId: "user-1",
+      source: "GITHUB",
+      sourceId: "gh-thread-1",
+      shownTier: "SILENT",
+      features: FEATURES,
+    });
+    expect(decisionLabel.upsert).not.toHaveBeenCalled();
   });
 });
 
