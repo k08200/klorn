@@ -382,6 +382,14 @@ try {
   const httpServer = app.server;
   initWebSocket(httpServer);
 
+  // Load approved ontology overrides into the effective-threshold cache so the
+  // classifier reads them. Best-effort (refreshOverrideCache logs + captures and
+  // falls back to base thresholds on failure). Independent of BG_DISABLED — it
+  // only reads, and overrides affect on-demand classification too.
+  import("./ontology-overrides.js")
+    .then(({ refreshOverrideCache }) => refreshOverrideCache())
+    .catch((err) => console.warn("[STARTUP] ontology override cache load failed:", err));
+
   // Emergency kill switch for ALL background LLM-driven loops. Set
   // BACKGROUND_AGENTS_DISABLED=true on Render when prod is bleeding to
   // upstream provider billing — the HTTP server still answers requests,

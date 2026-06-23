@@ -12,7 +12,7 @@
  */
 
 import type { DecisionMetrics } from "./decision-metrics.js";
-import { CLAMP, TIER_THRESHOLDS } from "./tier-policy.js";
+import { CLAMP, type ThresholdConfig, TIER_THRESHOLDS } from "./tier-policy.js";
 
 /** PUSH recall below this (the CI eval-gate floor) means the firewall is missing
  * interrupts — propose lowering the PUSH confidence gate. */
@@ -53,7 +53,13 @@ export interface ProposalCandidate {
 }
 
 export interface ProposalOpts {
-  thresholds?: typeof TIER_THRESHOLDS;
+  /**
+   * The thresholds to propose against. Defaults to the git base const, but the
+   * recompute path passes the live *effective* thresholds (getEffectiveThresholds)
+   * so that once an override is approved, currentValue reflects what the
+   * classifier actually runs on — not the stale base value.
+   */
+  thresholds?: ThresholdConfig;
   windowDays?: number;
   minSample?: number;
   maxStep?: number;

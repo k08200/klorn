@@ -22,6 +22,7 @@ export * from "./tier-policy.js";
 
 import { ESCALATION_CONFIDENCE_FLOOR, escalationModel } from "./judge-dial.js";
 import { KEYWORD_SCORES } from "./keyword-policy.js";
+import { getEffectiveThresholds, overriddenKnobs } from "./ontology-overrides.js";
 import { PRIOR_SHORTCIRCUIT_TIERS, SENDER_PRIOR_POLICY } from "./sender-policy.js";
 import { TIER_THRESHOLDS } from "./tier-policy.js";
 import { TIERS } from "./tiers.js";
@@ -30,15 +31,35 @@ import { TIERS } from "./tiers.js";
  * A JSON-serializable snapshot of the whole deterministic core. Sets are
  * rendered as arrays; the live escalation model reflects current env.
  *
- * Every policy object is shallow-copied so the snapshot is a detached read: a
- * consumer that mutates the returned object cannot corrupt the live module
- * constants the classifier runs on. (`as const` is compile-time only — it does
- * not freeze the objects at runtime.)
+ * Every nested policy object is deep-copied so the snapshot is a fully detached
+ * read: a consumer that mutates the returned object (the inspector receives it
+ * as `unknown` over IPC and could) cannot corrupt the live module constants the
+ * classifier runs on. (`as const` is compile-time only — it does not freeze the
+ * objects at runtime, so a shallow `{ ...TIER_THRESHOLDS }` would still share
+ * the nested push/silent/auto references.)
  */
 export function describePolicy() {
+  const effective = getEffectiveThresholds();
   return {
     tiers: [...TIERS],
-    relation: { thresholds: { ...TIER_THRESHOLDS } },
+    relation: {
+      // `thresholds` is the git-const base; `effective` is what the classifier
+      // actually runs on right now (base + approved overrides); `overriddenKnobs`
+      // names the diff. With no approvals these are identical.
+      thresholds: {
+        lowConfidenceFloor: TIER_THRESHOLDS.lowConfidenceFloor,
+        push: { ...TIER_THRESHOLDS.push },
+        silent: { ...TIER_THRESHOLDS.silent },
+        auto: { ...TIER_THRESHOLDS.auto },
+      },
+      effective: {
+        lowConfidenceFloor: effective.lowConfidenceFloor,
+        push: { ...effective.push },
+        silent: { ...effective.silent },
+        auto: { ...effective.auto },
+      },
+      overriddenKnobs: overriddenKnobs(),
+    },
     entity: {
       priorThresholds: { ...SENDER_PRIOR_POLICY },
       shortCircuitTiers: {
@@ -46,7 +67,14 @@ export function describePolicy() {
         history: [...PRIOR_SHORTCIRCUIT_TIERS.history],
       },
     },
-    pattern: { keywordScores: { ...KEYWORD_SCORES } },
+    pattern: {
+      keywordScores: {
+        senderTrust: { ...KEYWORD_SCORES.senderTrust },
+        urgency: { ...KEYWORD_SCORES.urgency },
+        reversibility: { ...KEYWORD_SCORES.reversibility },
+        confidence: { ...KEYWORD_SCORES.confidence },
+      },
+    },
     dial: {
       escalationConfidenceFloor: ESCALATION_CONFIDENCE_FLOOR,
       // null when the dial is off (JUDGE_ESCALATION_MODEL unset).

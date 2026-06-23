@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { useToast } from "../../../components/toast";
 import { apiFetch } from "../../../lib/api";
+import { useAuth } from "../../../lib/auth";
 
 interface ProposalEvidence {
   metric: string;
@@ -33,6 +34,7 @@ interface Ontology {
   pattern: { keywordScores: Record<string, unknown> };
   dial: { escalationConfidenceFloor: number; escalationModel: string | null };
   proposals: Proposal[];
+  applied: Proposal[];
 }
 
 export default function AdminOntologyPage() {
@@ -45,6 +47,7 @@ export default function AdminOntologyPage() {
 
 function OntologyPageInner() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [data, setData] = useState<Ontology | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -80,18 +83,31 @@ function OntologyPageInner() {
     }
   };
 
-  const dismiss = async (id: string) => {
+  const act = async (id: string, action: "approve" | "dismiss" | "revert", done: string) => {
     setBusy(true);
     try {
-      await apiFetch(`/api/admin/ontology/proposals/${id}/dismiss`, { method: "POST" });
-      toast("Dismissed.", "success");
+      await apiFetch(`/api/admin/ontology/proposals/${id}/${action}`, { method: "POST" });
+      toast(done, "success");
       await load();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Dismiss failed.", "error");
+      toast(err instanceof Error ? err.message : `${action} failed.`, "error");
     } finally {
       setBusy(false);
     }
   };
+  const approve = (id: string) => act(id, "approve", "Approved — now live.");
+  const dismiss = (id: string) => act(id, "dismiss", "Dismissed.");
+  const revert = (id: string) => act(id, "revert", "Reverted to base.");
+
+  // The API enforces requireAdmin on every endpoint here, but gate the UI shell
+  // too so a logged-in non-admin never sees the admin chrome (matches admin/page.tsx).
+  if (user?.role !== "ADMIN") {
+    return (
+      <div className="flex h-full items-center justify-center text-stone-500">
+        Admin access required.
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-dvh bg-[#10100d] px-4 pb-28 pt-6 text-stone-50 sm:px-6 md:py-10">
@@ -123,8 +139,13 @@ function OntologyPageInner() {
               proposals={data.proposals}
               busy={busy}
               onRecompute={recompute}
+              onApprove={approve}
               onDismiss={dismiss}
             />
+
+            {data.applied.length > 0 && (
+              <Applied applied={data.applied} busy={busy} onRevert={revert} />
+            )}
 
             <Section title="Tiers">
               <div className="flex flex-wrap gap-2">
@@ -178,11 +199,13 @@ function Proposals({
   proposals,
   busy,
   onRecompute,
+  onApprove,
   onDismiss,
 }: {
   proposals: Proposal[];
   busy: boolean;
   onRecompute: () => void;
+  onApprove: (id: string) => void;
   onDismiss: (id: string) => void;
 }) {
   return (
@@ -226,18 +249,73 @@ function Proposals({
                   {p.evidence.sampleSize}, {p.evidence.windowDays}d)
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => onDismiss(p.id)}
-                disabled={busy}
-                className="shrink-0 self-start rounded-lg border border-stone-700 px-3 py-1.5 text-sm text-stone-300 transition hover:border-stone-500 disabled:opacity-60 md:self-auto"
-              >
-                Dismiss
-              </button>
+              <div className="flex shrink-0 gap-2 self-start md:self-auto">
+                <button
+                  type="button"
+                  onClick={() => onApprove(p.id)}
+                  disabled={busy}
+                  className="rounded-lg bg-amber-300 px-3 py-1.5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:opacity-60"
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDismiss(p.id)}
+                  disabled={busy}
+                  className="rounded-lg border border-stone-700 px-3 py-1.5 text-sm text-stone-300 transition hover:border-stone-500 disabled:opacity-60"
+                >
+                  Dismiss
+                </button>
+              </div>
             </li>
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+function Applied({
+  applied,
+  busy,
+  onRevert,
+}: {
+  applied: Proposal[];
+  busy: boolean;
+  onRevert: (id: string) => void;
+}) {
+  return (
+    <section className="mb-4 rounded-2xl border border-emerald-500/35 bg-emerald-500/[0.06] p-4 md:p-5">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-emerald-200">
+        Live overrides
+      </h2>
+      <p className="mb-3 text-xs text-emerald-100/70">
+        Approved threshold changes the classifier is reading right now. Revert restores the git
+        default.
+      </p>
+      <ul className="space-y-2">
+        {applied.map((p) => (
+          <li
+            key={p.id}
+            className="flex flex-col gap-2 rounded-xl border border-emerald-500/25 bg-stone-950/30 p-3 md:flex-row md:items-center md:justify-between"
+          >
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-mono text-stone-200">{p.knob}</span>
+              <span className="font-variant-numeric tabular-nums text-stone-100">
+                {p.currentValue} → {p.proposedValue}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => onRevert(p.id)}
+              disabled={busy}
+              className="shrink-0 self-start rounded-lg border border-stone-700 px-3 py-1.5 text-sm text-stone-300 transition hover:border-stone-500 disabled:opacity-60 md:self-auto"
+            >
+              Revert
+            </button>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

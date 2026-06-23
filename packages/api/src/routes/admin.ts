@@ -10,7 +10,12 @@ import { sendBetaInviteEmail } from "../email.js";
 import { getUsageSummary } from "../llm-usage.js";
 import { clearFallbackState, getProviderCooldownInfo } from "../model-fallback.js";
 import { describePolicy } from "../ontology.js";
-import { listOpenProposals, recomputeOntologyProposals } from "../ontology-proposals-store.js";
+import { refreshOverrideCache } from "../ontology-overrides.js";
+import {
+  listAppliedProposals,
+  listOpenProposals,
+  recomputeOntologyProposals,
+} from "../ontology-proposals-store.js";
 import { MODEL } from "../openai.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { getProviderChain } from "../providers/index.js";
@@ -531,7 +536,8 @@ export async function adminRoutes(app: FastifyInstance) {
   // live). This is the surface a second app or the desktop shell queries to
   // inspect the same brain the firewall uses.
   app.get("/ontology", async () => {
-    return { ...describePolicy(), proposals: await listOpenProposals() };
+    const [proposals, applied] = await Promise.all([listOpenProposals(), listAppliedProposals()]);
+    return { ...describePolicy(), proposals, applied };
   });
 
   // POST /api/admin/ontology/proposals/recompute — regenerate write-side
@@ -562,6 +568,36 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!existing) return reply.code(404).send({ error: "Proposal not found" });
     await prisma.ontologyProposal.update({ where: { id }, data: { status: "DISMISSED" } });
     return reply.code(204).send();
+  });
+
+  // POST /api/admin/ontology/proposals/:id/approve — approve a proposal so the
+  // classifier reads it live (status APPLIED), then refresh the effective cache.
+  app.post("/ontology/proposals/:id/approve", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const existing = await prisma.ontologyProposal.findUnique({ where: { id } });
+    if (!existing) return reply.code(404).send({ error: "Proposal not found" });
+    if (existing.status !== "OPEN") {
+      return reply.code(409).send({ error: `Cannot approve a ${existing.status} proposal` });
+    }
+    await prisma.ontologyProposal.update({ where: { id }, data: { status: "APPLIED" } });
+    // cacheRefreshed=false means the DB says APPLIED but the live cache didn't
+    // update (transient failure) — it will catch up on next restart/refresh.
+    const cacheRefreshed = await refreshOverrideCache();
+    return { status: "APPLIED", cacheRefreshed };
+  });
+
+  // POST /api/admin/ontology/proposals/:id/revert — revert an approved override
+  // (status DISMISSED) and refresh the cache so the classifier drops it.
+  app.post("/ontology/proposals/:id/revert", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const existing = await prisma.ontologyProposal.findUnique({ where: { id } });
+    if (!existing) return reply.code(404).send({ error: "Proposal not found" });
+    if (existing.status !== "APPLIED") {
+      return reply.code(409).send({ error: `Cannot revert a ${existing.status} proposal` });
+    }
+    await prisma.ontologyProposal.update({ where: { id }, data: { status: "DISMISSED" } });
+    const cacheRefreshed = await refreshOverrideCache();
+    return { status: "DISMISSED", cacheRefreshed };
   });
 
   // GET /api/admin/eval — Run agent decision-logic eval scenarios

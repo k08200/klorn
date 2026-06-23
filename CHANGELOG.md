@@ -12,6 +12,21 @@ calendar time.
 
 ## [Unreleased]
 
+### Added — Ontology approval gate (live overrides)
+- **Approved threshold proposals now drive the classifier (opt-in, per-knob).**
+  The write-side's next rung: an admin can APPROVE a proposal so the firewall
+  reads it live, instead of only editing the `const` in a PR. `tierFromFeatures`
+  became a pure function taking a `ThresholdConfig`; a startup-loaded
+  effective-threshold cache (`ontology-overrides.ts`) merges APPLIED proposals
+  over the git base, re-clamped and ordering-checked so a bad/stale row can never
+  break classification. The eval harness and unit tests never refresh the cache,
+  so effective == base there — the CI eval gate is unaffected; with zero
+  approvals, prod == base too. New `POST /api/admin/ontology/proposals/:id/approve`
+  and `/revert` (with status guards + a `cacheRefreshed` signal); the web
+  `/admin/ontology` page gained Approve / Revert and a "Live overrides" section.
+  Still human-gated — no auto-apply. See
+  `docs/superpowers/specs/2026-06-23-ontology-approval-gate-design.md`.
+
 ### Added — Web admin ontology view
 - **`/admin/ontology` web page.** Renders the shared ontology snapshot (tiers,
   relation thresholds, sender priors, keyword scores, model dial) and the open
