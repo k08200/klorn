@@ -12,6 +12,15 @@ calendar time.
 
 ## [Unreleased]
 
+### Added — Web admin ontology view
+- **`/admin/ontology` web page.** Renders the shared ontology snapshot (tiers,
+  relation thresholds, sender priors, keyword scores, model dial) and the open
+  write-side proposals ("current → proposed" with evidence) in the browser, not
+  only the desktop Brain Inspector. Adds Recompute and per-proposal Dismiss
+  actions so the founder can drive the proposal loop from the web. Read-only over
+  the policy itself — proposals are still applied by a code PR. AuthGuard + the
+  API's `requireAdmin` gate.
+
 ### Added — Ontology write-side (proposals)
 - **Override signal now produces advisory threshold-change proposals.** The
   shared ontology was read-only; this adds the write side. A new
