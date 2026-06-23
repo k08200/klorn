@@ -6,6 +6,7 @@ import {
   hashPassword,
   registerDevice,
   removeDeviceSession,
+  requireAuth,
   signToken,
   verifyToken,
 } from "../auth.js";
@@ -330,7 +331,7 @@ export function authRoutes(app: FastifyInstance) {
   );
 
   // GET /api/auth/me — Get current user
-  app.get("/me", async (request, reply) => {
+  app.get("/me", { preHandler: requireAuth }, async (request, reply) => {
     const auth = request.headers.authorization;
     if (!auth?.startsWith("Bearer ")) {
       return reply.code(401).send({ error: "Not authenticated" });
@@ -365,30 +366,37 @@ export function authRoutes(app: FastifyInstance) {
   });
 
   // PATCH /api/auth/me — Update profile
-  app.patch("/me", { schema: { body: updateProfileBodySchema } }, async (request, reply) => {
-    const userId = getUserId(request);
-    if (isDemoUser(userId)) {
-      return reply.code(403).send({ error: "Demo user cannot update profile" });
-    }
+  app.patch(
+    "/me",
+    { preHandler: requireAuth, schema: { body: updateProfileBodySchema } },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      if (isDemoUser(userId)) {
+        return reply.code(403).send({ error: "Demo user cannot update profile" });
+      }
 
-    const { name } = request.body as { name?: string };
-    if (name !== undefined && !hasMeaningfulText(name)) {
-      return reply.code(400).send({ error: "Name cannot be empty" });
-    }
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: { ...(name !== undefined && { name: name.trim() }) },
-    });
+      const { name } = request.body as { name?: string };
+      if (name !== undefined && !hasMeaningfulText(name)) {
+        return reply.code(400).send({ error: "Name cannot be empty" });
+      }
+      const user = await prisma.user.update({
+        where: { id: userId },
+        data: { ...(name !== undefined && { name: name.trim() }) },
+      });
 
-    return reply.send({
-      user: { id: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role },
-    });
-  });
+      return reply.send({
+        user: { id: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role },
+      });
+    },
+  );
 
   // POST /api/auth/change-password — Change password
   app.post(
     "/change-password",
-    { schema: { headers: authHeaderSchema, body: changePasswordBodySchema } },
+    {
+      preHandler: requireAuth,
+      schema: { headers: authHeaderSchema, body: changePasswordBodySchema },
+    },
     async (request, reply) => {
       const userId = getUserId(request);
       if (isDemoUser(userId)) {
@@ -451,7 +459,10 @@ export function authRoutes(app: FastifyInstance) {
   // POST /api/auth/set-password — Set password for OAuth users who don't have one
   app.post(
     "/set-password",
-    { schema: { headers: authHeaderSchema, body: setPasswordBodySchema } },
+    {
+      preHandler: requireAuth,
+      schema: { headers: authHeaderSchema, body: setPasswordBodySchema },
+    },
     async (request, reply) => {
       const userId = getUserId(request);
       if (isDemoUser(userId)) {
@@ -492,7 +503,7 @@ export function authRoutes(app: FastifyInstance) {
   );
 
   // GET /api/auth/has-password — Check if user has a password set
-  app.get("/has-password", async (request, reply) => {
+  app.get("/has-password", { preHandler: requireAuth }, async (request, reply) => {
     const userId = getUserId(request);
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -588,7 +599,7 @@ export function authRoutes(app: FastifyInstance) {
   // the user's session JWT out of URLs, browser history, server logs, and
   // Referer. This replaces the older GET /api/auth/google?token=… flow,
   // which was removed in PR #410.
-  app.post("/google/start", async (request, reply) => {
+  app.post("/google/start", { preHandler: requireAuth }, async (request, reply) => {
     const userId = getUserId(request);
     if (isDemoUser(userId)) {
       return reply.code(403).send({ error: "Authentication required to connect Google" });
@@ -865,7 +876,7 @@ export function authRoutes(app: FastifyInstance) {
   });
 
   // DELETE /api/auth/google — Disconnect Google account
-  app.delete("/google", async (request, reply) => {
+  app.delete("/google", { preHandler: requireAuth }, async (request, reply) => {
     const userId = getUserId(request);
     await prisma.userToken.deleteMany({
       where: { userId, provider: "google" },
@@ -874,7 +885,7 @@ export function authRoutes(app: FastifyInstance) {
   });
 
   // GET /api/auth/google/status — Check if Gmail is connected and token is valid
-  app.get("/google/status", async (request, reply) => {
+  app.get("/google/status", { preHandler: requireAuth }, async (request, reply) => {
     const userId = getUserId(request);
     return reply.send(await getGoogleConnectionStatus(userId));
   });
@@ -1031,7 +1042,10 @@ export function authRoutes(app: FastifyInstance) {
   // POST /api/auth/resend-verification — Resend verification email
   app.post(
     "/resend-verification",
-    { config: { rateLimit: { max: 3, timeWindow: "15 minutes" } } },
+    {
+      preHandler: requireAuth,
+      config: { rateLimit: { max: 3, timeWindow: "15 minutes" } },
+    },
     async (request, reply) => {
       const userId = getUserId(request);
       if (isDemoUser(userId)) {
@@ -1056,7 +1070,7 @@ export function authRoutes(app: FastifyInstance) {
   );
 
   // POST /api/auth/init-sync — Trigger initial sync after login (calendar + email contacts)
-  app.post("/init-sync", async (request) => {
+  app.post("/init-sync", { preHandler: requireAuth }, async (request) => {
     const userId = getUserId(request);
     if (isDemoUser(userId)) {
       return { synced: false, reason: "demo-user" };

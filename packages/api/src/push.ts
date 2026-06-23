@@ -81,13 +81,15 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
  * Maps a push category to the "adjudicated surface" token that
  * notificationSuppressionReason treats as authored (skips the inbound-mail
  * noise heuristic). Only surfaces the system has already decided to interrupt
- * on qualify — the briefing (author-controlled body) and email_urgent (the
- * firewall judge / URGENT classifier already tiered it PUSH). Everything else
- * stays subject to the noise + housekeeping filters.
+ * on qualify — the briefing (author-controlled body), email_urgent (the
+ * firewall judge / URGENT classifier already tiered it PUSH), and github_urgent
+ * (the firewall judge tiered a GitHub thread PUSH). Everything else stays
+ * subject to the noise + housekeeping filters.
  */
 export function authoredSurface(category: NotifCategory): "briefing" | "firewall" | null {
   if (category === "daily_briefing") return "briefing";
   if (category === "email_urgent") return "firewall";
+  if (category === "github_urgent") return "firewall";
   return null;
 }
 

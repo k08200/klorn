@@ -973,7 +973,12 @@ export async function upsertAttentionForGitHubNotification(
         tierReason: judgement.reason,
       },
       update: {
-        status: "OPEN",
+        // Intentionally NOT setting status here. The GitHub poller re-fetches
+        // and re-judges any thread with new activity after the cursor, so
+        // forcing OPEN resurrected items the user had already DISMISSED/RESOLVED
+        // the next time the PR/issue got a comment. Mirror the EMAIL path: a
+        // re-judge refreshes tier/priority but preserves the user's terminal
+        // decision. New threads still get OPEN via create.
         type,
         priority: emailPriority(judgement),
         confidence: judgement.features?.confidence ?? 0.5,
