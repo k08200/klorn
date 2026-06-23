@@ -12,6 +12,7 @@
  */
 
 import { contextBridge } from "electron";
+import { KLORN_AUTH_TOKEN_KEY } from "./constants.js";
 
 const API_ARG_PREFIX = "--klorn-api-url=";
 const apiBase =
@@ -28,9 +29,19 @@ const klorn = {
    * renderer will surface as an uncaught error.
    */
   getOntology: async (): Promise<unknown> => {
-    const res = await fetch(`${apiBase}/api/admin/ontology`, {
-      credentials: "include",
-    });
+    // /api/admin/ontology is requireAdmin and reads only the Authorization
+    // header — there is no cookie session, so forward the web app's JWT as
+    // Bearer. Read at call time (the token appears only after login). A missing
+    // token sends an unauthenticated request, which surfaces a clear 401.
+    const headers: Record<string, string> = {};
+    let token: string | null = null;
+    try {
+      token = window.localStorage.getItem(KLORN_AUTH_TOKEN_KEY);
+    } catch {
+      // localStorage unavailable in this context — fall through to a 401.
+    }
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${apiBase}/api/admin/ontology`, { headers });
     if (!res.ok) {
       throw new Error(`ontology fetch failed: ${res.status} ${res.statusText}`);
     }

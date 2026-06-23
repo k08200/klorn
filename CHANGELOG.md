@@ -38,6 +38,19 @@ calendar time.
   web app, with a read-only `window.klorn.getOntology()` bridge — the first
   non-API consumer of the shared ontology. Sandboxed renderer, http(s)-only
   navigation allowlist, env-injected API base.
+- **Brain Inspector window (Cmd/Ctrl+B).** The first native surface that draws
+  the shared brain instead of the web app: a read-only panel rendering the live
+  ontology snapshot (tiers, relation thresholds, sender priors, keyword scores,
+  model dial). The inspector has no access to the web app's `localStorage`, so it
+  fetches over IPC — the main process reads the JWT from the signed-in window and
+  performs the authenticated request itself; only the non-sensitive ontology JSON
+  crosses into the inspector renderer, never the token. CSP-locked page; the
+  render logic is a pure, unit-tested function.
+- **Fixed the ontology bridge auth.** `window.klorn.getOntology()` sent
+  `credentials: "include"` (a cookie), but the API has no cookie session and
+  `/api/admin/ontology` is `requireAdmin` — so the bridge always 401'd. It now
+  reads the web app's JWT from `localStorage` and forwards it as
+  `Authorization: Bearer`, matching how the web app authenticates.
 
 ### Security
 - **Removed the unauthenticated `GET /api/health/email` diagnostic.** It sent a
