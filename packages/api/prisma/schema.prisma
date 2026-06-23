@@ -918,6 +918,30 @@ model DecisionLabel {
   @@index([userId, shownTier, judgedAt])
 }
 
+// Ontology write-side v0 — a proposed adjustment to a deterministic-core
+// threshold, derived from the override ledger (decision-metrics). ADVISORY: the
+// classifier never reads this table; it keeps running the git `const`s. A human
+// applies an approved proposal via a code PR (git = audit + revert). Global
+// (the policy is global today), so no userId. See
+// docs/superpowers/specs/2026-06-23-ontology-write-side-design.md.
+model OntologyProposal {
+  id            String   @id @default(uuid())
+  knob          String // dotted path, e.g. "tier.push.confidence"
+  currentValue  Float // the live const value at proposal time
+  proposedValue Float
+  direction     String // "RAISE" | "LOWER"
+  evidence      Json // { metric, value, target, sampleSize, windowDays }
+  status        String   @default("OPEN") // OPEN | APPLIED | DISMISSED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // The writer keeps at most one OPEN proposal per knob (find-OPEN-then-update);
+  // a plain unique on (knob,status) can't express that without colliding on
+  // repeated terminal rows, so dedup lives in code. Index supports the lookup.
+  @@index([knob, status])
+  @@index([status])
+}
+
 enum AttentionSource {
   PENDING_ACTION
   TASK

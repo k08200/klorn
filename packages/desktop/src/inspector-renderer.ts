@@ -46,6 +46,18 @@ function section(title: string, body: string): string {
   return `<section><h2>${esc(title)}</h2>${body}</section>`;
 }
 
+/** Render write-side proposals as "knob: current → proposed" rows with evidence. */
+function renderProposals(proposals: readonly unknown[]): string {
+  const rows = proposals.filter(isObject).map((p) => {
+    const arrow = `${esc(p.currentValue)} → ${esc(p.proposedValue)}`;
+    const ev = isObject(p.evidence)
+      ? ` <span class="muted">(${esc(p.evidence.metric)}=${esc(p.evidence.value)})</span>`
+      : "";
+    return `<div class="row"><span class="key">${esc(p.knob)} <span class="dir">${esc(p.direction)}</span></span><span class="val">${arrow}${ev}</span></div>`;
+  });
+  return rows.join("");
+}
+
 /**
  * Build the inspector HTML body from an ontology snapshot. Defensive: the
  * snapshot is `unknown` (it crosses an IPC boundary), so each section degrades
@@ -97,6 +109,12 @@ export function renderOntology(snapshot: unknown): string {
       escalationModel: model == null ? "off (JUDGE_ESCALATION_MODEL unset)" : model,
     });
     parts.push(section("Model dial", dialBody));
+  }
+
+  // Write-side: advisory threshold-change proposals from the override signal.
+  // Read-only here — applied by a human via a code PR, never live.
+  if (Array.isArray(snapshot.proposals) && snapshot.proposals.length > 0) {
+    parts.push(section("Proposals (advisory)", renderProposals(snapshot.proposals)));
   }
 
   return parts.length > 0 ? parts.join("") : `<p class="empty">Ontology snapshot was empty.</p>`;
