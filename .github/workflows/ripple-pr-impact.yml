@@ -1,0 +1,38 @@
+name: Ripple PR Impact
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  impact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Analyze PR impact (Ripple engine, self-contained)
+        run: node .github/ripple-pr-impact.mjs > impact.md
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO_NAME: ${{ github.event.repository.name }}
+      - name: Upsert PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('impact.md', 'utf8').trim();
+            if (!body) return;
+            const tag = '<!-- ripple-impact -->';
+            const full = `${tag}\n${body}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.find((c) => c.body && c.body.includes(tag));
+            if (existing) await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: full });
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body: full });
