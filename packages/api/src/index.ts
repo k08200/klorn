@@ -375,20 +375,30 @@ try {
     baseDelayMs: 500,
   });
 
+  // Load approved ontology overrides into the effective-threshold cache BEFORE
+  // we accept requests, so no email is classified on base thresholds in the
+  // window between listen and cache load. Best-effort: refreshOverrideCache logs
+  // + captures and returns false on failure (classifier falls back to base) —
+  // surface that here too. Independent of BG_DISABLED — it only reads, and
+  // overrides affect on-demand classification too.
+  try {
+    const { refreshOverrideCache } = await import("./ontology-overrides.js");
+    const ok = await refreshOverrideCache();
+    if (!ok) {
+      console.warn(
+        "[STARTUP] ontology override cache loaded with errors — classifier on base thresholds",
+      );
+    }
+  } catch (err) {
+    console.warn("[STARTUP] ontology override cache load failed:", err);
+  }
+
   const port = Number(process.env.PORT) || 3001;
   await app.listen({ port, host: "0.0.0.0" });
 
   // Attach WebSocket server to the underlying HTTP server
   const httpServer = app.server;
   initWebSocket(httpServer);
-
-  // Load approved ontology overrides into the effective-threshold cache so the
-  // classifier reads them. Best-effort (refreshOverrideCache logs + captures and
-  // falls back to base thresholds on failure). Independent of BG_DISABLED — it
-  // only reads, and overrides affect on-demand classification too.
-  import("./ontology-overrides.js")
-    .then(({ refreshOverrideCache }) => refreshOverrideCache())
-    .catch((err) => console.warn("[STARTUP] ontology override cache load failed:", err));
 
   // Emergency kill switch for ALL background LLM-driven loops. Set
   // BACKGROUND_AGENTS_DISABLED=true on Render when prod is bleeding to

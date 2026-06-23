@@ -25,6 +25,19 @@ vi.mock("../gmail.js", () => ({
   getOAuth2Client: vi.fn(),
 }));
 
+// The approve/revert routes flip a proposal's status then refresh the live
+// override cache. Mock the cache so we can assert it's called and drive the
+// cacheRefreshed=false path; the read fns keep ontology.js's import happy.
+const refreshOverrideCacheSpy = vi.fn(async () => true);
+vi.mock("../ontology-overrides.js", () => ({
+  refreshOverrideCache: (...args: unknown[]) => refreshOverrideCacheSpy(...args),
+  getEffectiveThresholds: vi.fn(() => ({})),
+  overriddenKnobs: vi.fn(() => []),
+}));
+
+type StoredProposal = { id: string; status: string; knob: string; proposedValue: number };
+const proposalById = new Map<string, StoredProposal>();
+
 vi.mock("../db.js", () => {
   const prisma = {
     user: {
@@ -115,6 +128,20 @@ vi.mock("../db.js", () => {
     },
     calibrationSnapshot: {
       findMany: vi.fn(async () => []),
+    },
+    ontologyProposal: {
+      findUnique: vi.fn(
+        async ({ where }: { where: { id: string } }) => proposalById.get(where.id) ?? null,
+      ),
+      update: vi.fn(
+        async ({ where, data }: { where: { id: string }; data: { status: string } }) => {
+          const entry = proposalById.get(where.id);
+          if (!entry) throw new Error("OntologyProposal not found");
+          const updated = { ...entry, status: data.status };
+          proposalById.set(where.id, updated);
+          return updated;
+        },
+      ),
     },
   };
   return { prisma, db: prisma };
@@ -464,5 +491,79 @@ describe("GET /api/admin/calibration", () => {
     const u1 = body.overview.find((o: { userId: string }) => o.userId === "user-1");
     expect(u1.dayKey).toBe("2026-06-13");
     expect(u1.totalItems).toBe(40);
+  });
+});
+
+describe("admin ontology approval gate", () => {
+  beforeEach(() => {
+    proposalById.clear();
+    refreshOverrideCacheSpy.mockClear();
+    refreshOverrideCacheSpy.mockResolvedValue(true);
+  });
+
+  const seed = (id: string, status: string) =>
+    proposalById.set(id, { id, status, knob: "tier.push.confidence", proposedValue: 0.65 });
+
+  const post = async (url: string, token = ADMIN_TOKEN) => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    await app.close();
+    return res;
+  };
+
+  it("approves an OPEN proposal → APPLIED + live cache refresh", async () => {
+    seed("p1", "OPEN");
+    const res = await post("/api/admin/ontology/proposals/p1/approve");
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ status: "APPLIED", cacheRefreshed: true });
+    expect(proposalById.get("p1")?.status).toBe("APPLIED");
+    expect(refreshOverrideCacheSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces cacheRefreshed=false when the live cache refresh fails", async () => {
+    seed("p1", "OPEN");
+    refreshOverrideCacheSpy.mockResolvedValueOnce(false);
+    const res = await post("/api/admin/ontology/proposals/p1/approve");
+    expect(res.statusCode).toBe(200);
+    expect(res.json().cacheRefreshed).toBe(false);
+  });
+
+  it("blocks double-approve of a non-OPEN proposal with 409", async () => {
+    seed("p1", "APPLIED");
+    const res = await post("/api/admin/ontology/proposals/p1/approve");
+    expect(res.statusCode).toBe(409);
+    expect(refreshOverrideCacheSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 approving a missing proposal", async () => {
+    const res = await post("/api/admin/ontology/proposals/nope/approve");
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("reverts an APPLIED proposal → DISMISSED + cache refresh", async () => {
+    seed("p1", "APPLIED");
+    const res = await post("/api/admin/ontology/proposals/p1/revert");
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ status: "DISMISSED" });
+    expect(proposalById.get("p1")?.status).toBe("DISMISSED");
+    expect(refreshOverrideCacheSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks reverting a non-APPLIED proposal with 409", async () => {
+    seed("p1", "OPEN");
+    const res = await post("/api/admin/ontology/proposals/p1/revert");
+    expect(res.statusCode).toBe(409);
+    expect(refreshOverrideCacheSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-admin from the approval gate with 403", async () => {
+    seed("p1", "OPEN");
+    const res = await post("/api/admin/ontology/proposals/p1/approve", USER_TOKEN);
+    expect(res.statusCode).toBe(403);
+    expect(proposalById.get("p1")?.status).toBe("OPEN");
   });
 });
