@@ -26,7 +26,13 @@ interface Proposal {
 
 interface Ontology {
   tiers: string[];
-  relation: { thresholds: Record<string, unknown> };
+  relation: {
+    thresholds: Record<string, unknown>;
+    // What the classifier actually runs on right now (base + approved overrides);
+    // `overriddenKnobs` names the diff. Identical to `thresholds` with no approvals.
+    effective: Record<string, unknown>;
+    overriddenKnobs: string[];
+  };
   entity: {
     priorThresholds: Record<string, unknown>;
     shortCircuitTiers: Record<string, unknown>;
@@ -86,8 +92,18 @@ function OntologyPageInner() {
   const act = async (id: string, action: "approve" | "dismiss" | "revert", done: string) => {
     setBusy(true);
     try {
-      await apiFetch(`/api/admin/ontology/proposals/${id}/${action}`, { method: "POST" });
-      toast(done, "success");
+      const res = await apiFetch<{ cacheRefreshed?: boolean } | null>(
+        `/api/admin/ontology/proposals/${id}/${action}`,
+        { method: "POST" },
+      );
+      // approve/revert change the DB then refresh the live cache; if the cache
+      // refresh failed the DB says applied but the classifier is NOT yet on the
+      // new value — don't report a clean success.
+      if (res?.cacheRefreshed === false) {
+        toast("Saved, but the live cache didn't refresh — effective after the next restart.", "error");
+      } else {
+        toast(done, "success");
+      }
       await load();
     } catch (err) {
       toast(err instanceof Error ? err.message : `${action} failed.`, "error");
@@ -121,9 +137,9 @@ function OntologyPageInner() {
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-400">
             The deterministic core — tier rule, sender priors, keyword patterns, model dial — read
-            live, plus advisory threshold proposals derived from your override signal. Proposals are
-            never applied automatically; you apply an approved one by editing the policy constant in
-            a code change.
+            live, plus threshold proposals derived from your override signal. Proposals are advisory
+            until you act: <span className="text-stone-200">Approve applies the change to the live
+            classifier immediately</span> (no code change); Revert restores the git-default constant.
           </p>
         </header>
 
@@ -161,7 +177,23 @@ function OntologyPageInner() {
             </Section>
 
             <Section title="Relation — tier thresholds">
-              <KeyVals record={data.relation.thresholds} />
+              {data.relation.overriddenKnobs.length > 0 ? (
+                <>
+                  <h3 className="mb-1 text-xs uppercase tracking-wide text-stone-500">
+                    Effective (live){" "}
+                    <span className="text-amber-300">
+                      · overridden: {data.relation.overriddenKnobs.join(", ")}
+                    </span>
+                  </h3>
+                  <KeyVals record={data.relation.effective} />
+                  <h3 className="mb-1 mt-3 text-xs uppercase tracking-wide text-stone-500">
+                    Git base
+                  </h3>
+                  <KeyVals record={data.relation.thresholds} />
+                </>
+              ) : (
+                <KeyVals record={data.relation.thresholds} />
+              )}
             </Section>
 
             <Section title="Entity — sender knowledge">
