@@ -279,43 +279,43 @@ model CalendarEvent {
 }
 
 model AutomationConfig {
-  id                   String   @id @default(uuid())
-  userId               String   @unique
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  meetingAutoJoin      Boolean  @default(true)
-  meetingAutoSummarize Boolean  @default(true)
-  emailAutoClassify    Boolean  @default(true)
-  reminderAutoCheck    Boolean  @default(true)
-  dailyBriefing        Boolean  @default(true)
-  briefingTime         String   @default("06:00")
-  timezone             String   @default("Asia/Seoul")
-  downloadAutoOrganize Boolean  @default(false)
+  id                     String   @id @default(uuid())
+  userId                 String   @unique
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meetingAutoJoin        Boolean  @default(true)
+  meetingAutoSummarize   Boolean  @default(true)
+  emailAutoClassify      Boolean  @default(true)
+  reminderAutoCheck      Boolean  @default(true)
+  dailyBriefing          Boolean  @default(true)
+  briefingTime           String   @default("06:00")
+  timezone               String   @default("Asia/Seoul")
+  downloadAutoOrganize   Boolean  @default(false)
   // OFF by default: a new install is a pure 4-tier firewall (classify-only),
   // matching the README doctrine ("not a suggestion engine"). The proactive
   // agent loop is opt-in. Existing rows keep their value — this only changes
   // the default for newly-created configs.
-  autonomousAgent      Boolean  @default(false)
-  agentMode            String   @default("SUGGEST") // "SHADOW" | "SUGGEST" | "AUTO"
-  agentIntervalMin     Int      @default(5)
-  alwaysAllowedTools   String[] @default([]) // MEDIUM-risk tools the user has pre-approved for AUTO mode
+  autonomousAgent        Boolean  @default(false)
+  agentMode              String   @default("SUGGEST") // "SHADOW" | "SUGGEST" | "AUTO"
+  agentIntervalMin       Int      @default(5)
+  alwaysAllowedTools     String[] @default([]) // MEDIUM-risk tools the user has pre-approved for AUTO mode
   // Gmail read-state opt-in: when true, Eve marks the original email as read
   // after AUTO-replying to it. Default off so Gmail's "unread" remains a user signal.
-  autoMarkReadEnabled  Boolean  @default(false)
+  autoMarkReadEnabled    Boolean  @default(false)
   // Notification preferences — granular opt-out by category
-  notifyEmailUrgent    Boolean  @default(true) // urgent email alerts
-  notifyMeeting        Boolean  @default(true) // meeting reminders
-  notifyTaskDue        Boolean  @default(true) // task due soon/overdue
-  notifyAgentProposal  Boolean  @default(true) // autonomous agent proposals
-  notifyDailyBriefing  Boolean  @default(true) // daily briefing notification
-  notifyEmailCandidate Boolean  @default(true) // candidate/profile attachment intake alerts
-  quietHoursStart      String? // "22:00" — suppress push during this window
-  quietHoursEnd        String? // "08:00"
+  notifyEmailUrgent      Boolean  @default(true) // urgent email alerts
+  notifyMeeting          Boolean  @default(true) // meeting reminders
+  notifyTaskDue          Boolean  @default(true) // task due soon/overdue
+  notifyAgentProposal    Boolean  @default(true) // autonomous agent proposals
+  notifyDailyBriefing    Boolean  @default(true) // daily briefing notification
+  notifyEmailCandidate   Boolean  @default(true) // candidate/profile attachment intake alerts
+  quietHoursStart        String? // "22:00" — suppress push during this window
+  quietHoursEnd          String? // "08:00"
   // Phone escalation v0 opt-in. Default false: a phone call is the most
   // intrusive delivery channel Klorn has — nobody gets dialed without
   // explicitly flipping this on (and PHONE_ESCALATION_ENABLED=true globally).
-  phoneEscalationEnabled Boolean @default(false)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  phoneEscalationEnabled Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 }
 
 model AgentLog {
@@ -538,22 +538,22 @@ model ConversationSummary {
 // Pending Action — Eve's proposals awaiting user approval
 // Agent creates these when it wants to take action on behalf of the user
 model PendingAction {
-  id             String        @id @default(uuid())
-  conversationId String
-  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  messageId      String        @unique
-  message        Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  userId         String
-  status         ActionStatus  @default(PENDING)
-  toolName       String // e.g. "create_reminder", "update_task"
+  id              String        @id @default(uuid())
+  conversationId  String
+  conversation    Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  messageId       String        @unique
+  message         Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId          String
+  status          ActionStatus  @default(PENDING)
+  toolName        String // e.g. "create_reminder", "update_task"
   // JSONB after migration 20260519060000. Always an object payload; the
   // exact shape depends on toolName (tool-executor.ts dispatches on it).
-  toolArgs       Json
-  reasoning      String? // Why Eve suggests this action
+  toolArgs        Json
+  reasoning       String? // Why Eve suggests this action
   // Result payload from executeToolCall. Free-form string (tool's
   // return value) — leaving as text keeps the column open for any tool
   // that returns a non-JSON message.
-  result         String?
+  result          String?
   // Reject-with-feedback (HITL): the user's stated "why" captured at
   // reject time (≤500 chars, trimmed). NULL for rejections without a
   // reason and for legacy rows. Surfaced back into agent prompts via
@@ -563,10 +563,10 @@ model PendingAction {
   // actions (see attention-floor.ts). NULL for non-floor actions and for
   // legacy rows pre-#481. tool-executor verifies this against the
   // about-to-execute payload bytes and refuses on mismatch.
-  actionReceipt  Json?
-  notification   Notification?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  actionReceipt   Json?
+  notification    Notification?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@index([userId, status])
   @@index([conversationId])
@@ -638,9 +638,9 @@ enum OutboxStatus {
 // Persisted copy of Gmail messages for local search, AI summarization, and threading
 
 model EmailMessage {
-  id                   String        @id @default(uuid())
+  id                   String            @id @default(uuid())
   userId               String
-  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   gmailId              String // Gmail message ID
   threadId             String? // Gmail thread ID for conversation grouping
   from                 String
@@ -651,9 +651,9 @@ model EmailMessage {
   body                 String? // Full plain-text body
   htmlBody             String? // Full HTML body (for rich rendering)
   labels               String[] // Gmail labels: ["INBOX", "UNREAD", "IMPORTANT"]
-  isRead               Boolean       @default(false)
-  isStarred            Boolean       @default(false)
-  priority             EmailPriority @default(NORMAL)
+  isRead               Boolean           @default(false)
+  isStarred            Boolean           @default(false)
+  priority             EmailPriority     @default(NORMAL)
   category             String? // AI classification: billing, meeting, engineering, conversation, automated, other
   summary              String? // AI-generated one-line summary
   // JSONB after migration 20260519040000. Always a `string[]` payload
@@ -661,14 +661,14 @@ model EmailMessage {
   // has not summarized the email yet.
   keyPoints            Json?
   actionItems          Json?
-  needsReply           Boolean       @default(false)
+  needsReply           Boolean           @default(false)
   needsReplyReason     String?
-  needsReplyConfidence Float         @default(0.0)
+  needsReplyConfidence Float             @default(0.0)
   sentiment            String? // positive | negative | neutral
   receivedAt           DateTime // Original email date
-  syncedAt             DateTime      @default(now()) // When we synced from Gmail
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
+  syncedAt             DateTime          @default(now()) // When we synced from Gmail
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
   attachments          EmailAttachment[]
   candidateIntakes     CandidateIntake[]
 
@@ -925,21 +925,30 @@ model DecisionLabel {
 // (the policy is global today), so no userId. See
 // docs/superpowers/specs/2026-06-23-ontology-write-side-design.md.
 model OntologyProposal {
-  id            String   @id @default(uuid())
+  id            String         @id @default(uuid())
   knob          String // dotted path, e.g. "tier.push.confidence"
   currentValue  Float // the live const value at proposal time
   proposedValue Float
   direction     String // "RAISE" | "LOWER"
   evidence      Json // { metric, value, target, sampleSize, windowDays }
-  status        String   @default("OPEN") // OPEN | APPLIED | DISMISSED
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  // Enum (not raw String): status is load-bearing — APPLIED drives the live
+  // classifier (ontology-overrides.ts), so a typo must fail at compile time.
+  status        ProposalStatus @default(OPEN)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   // The writer keeps at most one OPEN proposal per knob (find-OPEN-then-update);
   // a plain unique on (knob,status) can't express that without colliding on
   // repeated terminal rows, so dedup lives in code. Index supports the lookup.
   @@index([knob, status])
   @@index([status])
+}
+
+// OPEN = advisory; APPLIED = the classifier reads it live; DISMISSED = terminal.
+enum ProposalStatus {
+  OPEN
+  APPLIED
+  DISMISSED
 }
 
 enum AttentionSource {
@@ -1196,11 +1205,11 @@ model FeedbackPolicyPreference {
 // Confidence rating: "reliable" ≥80% on-time, "mostly_reliable" ≥50%, "unreliable" <50%.
 // Requires ≥3 tracked commitments before issuing a badge.
 model ContactTrustScore {
-  id           String   @id @default(uuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contactEmail String   // counterparty email, lowercased
-  displayName  String?
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contactEmail   String // counterparty email, lowercased
+  displayName    String?
   // raw counters — never computed on the fly so queries are O(1)
   totalCount     Int      @default(0)
   onTimeCount    Int      @default(0)
@@ -1241,15 +1250,15 @@ enum WaitlistStatus {
 // calls succeed. Free models add 0 — they still appear so we can see
 // "how active was this user today" even when the cost is zero.
 model LlmCostLedger {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  dayKey      String   // "YYYY-MM-DD" in UTC, stable for fast upsert
-  cents       Int      @default(0) // accumulated USD cents
-  callCount   Int      @default(0)
-  lastModel   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayKey    String // "YYYY-MM-DD" in UTC, stable for fast upsert
+  cents     Int      @default(0) // accumulated USD cents
+  callCount Int      @default(0)
+  lastModel String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([userId, dayKey])
 }
