@@ -143,6 +143,9 @@ export async function ingestGitHubNotifications(
       surfaced++;
     } catch (err) {
       console.warn(`[GITHUB] ingest failed for thread ${n.id}:`, err);
+      // Sentry too: a dropped PUSH-tier thread is a missed interrupt, and a
+      // systematic ingest regression must alert in prod (matches the push path).
+      captureError(err, { tags: { scope: "github.ingest" }, extra: { threadId: n.id } });
     }
   }
   return surfaced;

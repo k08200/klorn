@@ -263,8 +263,12 @@ export function authRoutes(app: FastifyInstance) {
       // Send verification email (non-blocking)
       sendVerificationEmail(normalizedEmail, verifyToken).catch(() => {});
 
-      // Auto-create AutomationConfig with defaults
-      prisma.automationConfig.create({ data: { userId: user.id } }).catch(() => {});
+      // Auto-create AutomationConfig with defaults. Fire-and-forget, but never
+      // silent: without this row the scheduler never picks the user up, so a
+      // failed create must leave a trace (login init-sync also self-heals it).
+      prisma.automationConfig
+        .create({ data: { userId: user.id } })
+        .catch((err) => console.warn(`[AUTH] automationConfig create failed for ${user.id}`, err));
 
       const token = signToken({ userId: user.id, email: user.email });
 

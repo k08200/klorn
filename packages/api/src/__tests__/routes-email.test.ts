@@ -154,6 +154,34 @@ describe("email routes (demo mode)", () => {
     await app.close();
   });
 
+  it("force-sync returns immediately and runs reconcile in the background", async () => {
+    const emailSync = await import("../email-sync.js");
+    const app = await buildApp();
+    vi.mocked(emailSync.reconcileEmails).mockClear();
+    // A reconcile that never resolves. The route attaches its .catch
+    // synchronously, so this produces no unhandled rejection; and if /sync still
+    // awaited reconcile, this request would hang until the 60s test timeout.
+    // It must not — the response depends only on syncEmails.
+    vi.mocked(emailSync.reconcileEmails).mockReturnValueOnce(new Promise<never>(() => {}));
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/sync",
+      headers: auth(),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ synced: 0, newCount: 0, source: "gmail" });
+    // Reconcile output is no longer part of the sync response contract.
+    expect(body).not.toHaveProperty("removed");
+    expect(body).not.toHaveProperty("updated");
+    // ...but reconcile is still kicked off (fire-and-forget cleanup).
+    expect(emailSync.reconcileEmails).toHaveBeenCalledWith("user-1");
+    await app.close();
+  });
+
   it("returns demo stats summary", async () => {
     const app = await buildApp();
     const res = await app.inject({

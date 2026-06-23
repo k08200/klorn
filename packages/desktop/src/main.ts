@@ -123,7 +123,9 @@ function buildMenu(): void {
         { label: "Brain Inspector", accelerator: "CmdOrCtrl+B", click: () => openInspector() },
         { type: "separator" },
         { role: "reload" },
-        { role: "toggleDevTools" },
+        // DevTools only in dev: a packaged build must not expose the renderer's
+        // localStorage (which holds the klorn-token JWT) to an end user.
+        ...(app.isPackaged ? [] : [{ role: "toggleDevTools" as const }]),
         { type: "separator" },
         { role: "resetZoom" },
         { role: "zoomIn" },

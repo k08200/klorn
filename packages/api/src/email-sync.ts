@@ -8,13 +8,24 @@
  * 4. Incremental sync (only fetch new emails)
  */
 
-import { google } from "googleapis";
+import { type gmail_v1, google } from "googleapis";
 import { prisma } from "./db.js";
 import { persistGmailEmail } from "./email-firewall.js";
-import { getAuthedClient, isGoogleAuthError, markGoogleTokenForReconnect } from "./gmail.js";
+import {
+  getAuthedClient,
+  isGoogleAuthError,
+  isGoogleNotFoundError,
+  markGoogleTokenForReconnect,
+} from "./gmail.js";
 import { fetchGmailEmailById, fetchGmailEmails } from "./gmail-fetch.js";
 import { resolveUserEmail } from "./resolve-user-email.js";
+import { Semaphore } from "./semaphore.js";
 import { captureError } from "./sentry.js";
+
+// Reconcile refreshes read/star status with one messages.get per stored email.
+// Bound concurrency so a few-hundred-email mailbox doesn't serialize hundreds of
+// round-trips. Same quota headroom as the fetch path (Gmail 250 units/s).
+const RECONCILE_CONCURRENCY = 8;
 
 // extractEmailAddress lives in ./email-address.js; re-export preserved here for
 // back-compat (judge-context and tests import it via ./email-sync.js).
@@ -152,14 +163,27 @@ export async function reconcileEmails(
     console.log(`[EMAIL-SYNC] Reconciled: removed ${removed} stale emails for user ${userId}`);
   }
 
-  // For remaining emails still in INBOX, batch-update read status
-  let updated = 0;
+  // Refresh read/star status for emails still in INBOX (bounded concurrency).
   const remainingGmailIds = dbEmails.filter((e) => inboxIds.has(e.gmailId)).map((e) => e.gmailId);
+  const updated = await refreshReadStatus(gmail, userId, remainingGmailIds);
 
-  // Check read status for remaining emails (batch of 50)
-  for (let i = 0; i < remainingGmailIds.length; i += 50) {
-    const batch = remainingGmailIds.slice(i, i + 50);
-    for (const gmailId of batch) {
+  return { removed, updated };
+}
+
+/**
+ * Refresh read/star/labels for each given Gmail id via a minimal messages.get,
+ * with bounded concurrency. Returns the count of rows actually updated. A
+ * message deleted between the list and the get is skipped silently — that is an
+ * expected race, not a failure.
+ */
+async function refreshReadStatus(
+  gmail: gmail_v1.Gmail,
+  userId: string,
+  gmailIds: string[],
+): Promise<number> {
+  const sem = new Semaphore(RECONCILE_CONCURRENCY);
+  const results = await sem.all<number>(
+    gmailIds.map((gmailId) => async () => {
       try {
         const detail = await gmail.users.messages.get({
           userId: "me",
@@ -167,19 +191,30 @@ export async function reconcileEmails(
           format: "minimal",
         });
         const labelIds = detail.data.labelIds || [];
-        const isRead = !labelIds.includes("UNREAD");
-        const isStarred = labelIds.includes("STARRED");
-
         const result = await prisma.emailMessage.updateMany({
           where: { userId, gmailId },
-          data: { isRead, isStarred, labels: labelIds },
+          data: {
+            isRead: !labelIds.includes("UNREAD"),
+            isStarred: labelIds.includes("STARRED"),
+            labels: labelIds,
+          },
         });
-        if (result.count > 0) updated++;
-      } catch {
-        // Message might have been deleted between list and get — skip
+        return result.count > 0 ? 1 : 0;
+      } catch (err) {
+        // Deleted between list and get — expected race, skip silently.
+        if (isGoogleNotFoundError(err)) return 0;
+        // Anything else (transient 429/5xx under parallelism, a DB hiccup): skip
+        // this one message so a single failure doesn't sink the whole reconcile,
+        // but leave a signal — a bare swallow here would hide a quota or
+        // connectivity problem behind an under-counted `updated`.
+        console.warn(`[EMAIL-SYNC] refreshReadStatus skipped ${gmailId} for user ${userId}:`, err);
+        captureError(err, {
+          tags: { scope: "email.sync.reconcile.readstatus" },
+          extra: { userId, gmailId },
+        });
+        return 0;
       }
-    }
-  }
-
-  return { removed, updated };
+    }),
+  );
+  return results.reduce((sum, n) => sum + n, 0);
 }

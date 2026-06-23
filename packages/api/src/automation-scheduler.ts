@@ -618,8 +618,19 @@ async function runAutomations() {
                         });
                       }
                     }
-                  } catch {
-                    // Auto-reply failed — non-critical
+                  } catch (err) {
+                    // Auto-reply touches an outbound send — a silent failure
+                    // here means a configured rule fired nothing with no trace,
+                    // and the next tick silently retries. console first:
+                    // captureError is a no-op without a Sentry DSN.
+                    console.warn(
+                      `[AUTOMATION] auto-reply failed for ${email.gmailId} (user ${config.userId})`,
+                      err,
+                    );
+                    captureError(err, {
+                      tags: { scope: "automation.auto-reply" },
+                      extra: { userId: config.userId, gmailId: email.gmailId },
+                    });
                   }
                 }
               }
