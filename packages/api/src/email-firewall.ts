@@ -222,7 +222,18 @@ function senderDisplayName(from: string): string {
  * quiet-hours / rate-limit / Telegram gates, so we don't re-check them here.
  */
 async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): Promise<void> {
-  if (Date.now() - email.receivedAt.getTime() > FIREWALL_PUSH_RECENCY_MS) return;
+  const ageMs = Date.now() - email.receivedAt.getTime();
+  if (ageMs > FIREWALL_PUSH_RECENCY_MS) {
+    // Suppressing a stale PUSH is intentional (dyno slept, or a late manual sync
+    // / backfill surfaced old mail), but it must not be silent: this is the
+    // first thing to check when a PUSH-tier email fired no alarm. push.ts logs
+    // every other suppression reason; this early return is the one blind spot.
+    console.log(
+      `[PUSH] Firewall PUSH suppressed (stale: ${Math.round(ageMs / 3_600_000)}h old) ` +
+        `for email ${email.gmailId} user ${userId}`,
+    );
+    return;
+  }
 
   const already = await prisma.notification.findFirst({
     where: {
@@ -234,7 +245,13 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
     },
     select: { id: true },
   });
-  if (already) return;
+  if (already) {
+    console.log(
+      `[PUSH] Firewall PUSH deduped (already notified within ${PUSH_DEDUP_WINDOW_MS / 86_400_000}d) ` +
+        `for email ${email.gmailId} user ${userId}`,
+    );
+    return;
+  }
 
   const sender = senderDisplayName(email.from);
   const body = `${sender}: ${email.subject || "(no subject)"}`.slice(0, 200);
