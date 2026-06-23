@@ -132,6 +132,17 @@ calendar time.
   (500-char max); skipping the reason keeps the old behavior.
 
 ### Fixed
+- **Notifications only appeared after a manual refresh on laptop resume.**
+  WebSocket notification delivery is best-effort and lives only in server
+  memory (`broadcastToUser`), so anything pushed while a tab was suspended
+  (laptop closed) or the socket was down never reached the client — it only
+  landed in the DB and stayed invisible until the user refreshed. The bell
+  now reconciles against `GET /api/notifications` whenever the tab is
+  reactivated (`focus` / `online` / `visibilitychange→visible`) or the
+  realtime socket reconnects (`connected` false→true), throttled to 1s to
+  collapse the focus + visibilitychange burst. The bell-flash was also
+  extracted into `triggerFlash()` with timer cleanup so an in-flight flash
+  can't fire onto a remounted instance.
 - **Cost gate charged 0¢ per call** (PR #500). The pre-bill estimated
   `estimateModelCostUsd(model, 0, 0)`, which is token-linear and therefore
   always zero — daily caps never accumulated for paid models. Pre-bill now

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "../lib/api";
 import {
@@ -62,9 +62,39 @@ export default function NotificationBell({ userId }: { userId: string }) {
   const bellRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const seenIdsRef = useRef<Set<string>>(new Set());
+  // True once the first list load has completed. Lets reconcile() tell a real
+  // resume (flash on new items) apart from the initial paint (everything is
+  // "new" then, but the user is already looking).
+  const initializedRef = useRef(false);
+  // Timestamp of the last reconcile fetch — collapses the focus +
+  // visibilitychange burst that fires together when a tab is reactivated.
+  const lastSyncRef = useRef(0);
+  // Pending bell-flash timer. Tracked so a re-flash clears the prior timeout
+  // and unmount clears it outright — otherwise a stale timer can fire
+  // setFlash(false) onto a later mount and cancel its flash.
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const { toast } = useToast();
   const { connected, on, connectedClients } = useWebSocket(userId);
+
+  // Briefly animate the bell. Clears any in-flight timer first so overlapping
+  // flashes don't leave a dangling timeout that cancels a later one.
+  const triggerFlash = useCallback(() => {
+    setFlash(true);
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => {
+      setFlash(false);
+      flashTimerRef.current = null;
+    }, 2000);
+  }, []);
+
+  // Clear the flash timer on unmount so it can't fire onto a remounted instance.
+  useEffect(
+    () => () => {
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    },
+    [],
+  );
 
   // Compute fixed position for dropdown based on bell button location.
   // On mobile we ignore the bell's x and span the viewport with an inset gutter;
@@ -135,8 +165,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
           return [{ ...notif, isRead: false }, ...prev];
         });
 
-        setFlash(true);
-        setTimeout(() => setFlash(false), 2000);
+        triggerFlash();
 
         if (
           typeof window !== "undefined" &&
@@ -156,24 +185,79 @@ export default function NotificationBell({ userId }: { userId: string }) {
       }
     });
     return unsub;
-  }, [on]);
+  }, [on, triggerFlash]);
 
-  const fetchNotifications = () => {
-    apiFetch<{ notifications: Notification[] }>("/api/notifications?limit=30")
-      .then((d) => {
-        const notifs = d.notifications || [];
-        // Seed seen IDs so fetched notifications don't trigger desktop alerts
-        for (const n of notifs) seenIdsRef.current.add(n.id);
-        setNotifications(notifs);
-      })
-      .catch(() => {});
-  };
+  // Pull the authoritative notification list from the server (source of truth).
+  // WebSocket delivery is best-effort and lives only in server memory, so any
+  // notification broadcast while this tab was suspended (laptop closed) or the
+  // socket was down never reaches this client — it only lands in the DB.
+  // Re-pulling here is what makes those notifications appear without a manual
+  // refresh. flashOnNew animates the bell when the pull surfaces items we
+  // hadn't recorded yet, so a resume is visibly signalled.
+  const fetchNotifications = useCallback(
+    (opts?: { flashOnNew?: boolean }) => {
+      apiFetch<{ notifications: Notification[] }>("/api/notifications?limit=30")
+        .then((d) => {
+          const notifs = d.notifications || [];
+          // Anything not yet in seenIds arrived while we were away. On the first
+          // load every id is unseen, so the initializedRef guard suppresses the
+          // flash for that paint only.
+          const hasNew = notifs.some((n) => !seenIdsRef.current.has(n.id));
+          // Seed seen IDs so fetched notifications don't re-trigger desktop alerts
+          for (const n of notifs) seenIdsRef.current.add(n.id);
+          setNotifications(notifs);
+          if (opts?.flashOnNew && initializedRef.current && hasNew) {
+            triggerFlash();
+          }
+          initializedRef.current = true;
+        })
+        .catch(() => {});
+    },
+    [triggerFlash],
+  );
+
+  // Re-sync with the server whenever the tab is reactivated, the network
+  // returns, or the realtime socket reconnects. The 1s guard collapses the
+  // focus + visibilitychange pair that fire together on reactivation. This is
+  // the fix for "I had to refresh to see notifications after reopening my
+  // laptop": resume now reconciles automatically instead of waiting on (or
+  // missing) the 60s background poll.
+  const reconcile = useCallback(() => {
+    const now = Date.now();
+    if (now - lastSyncRef.current < 1_000) return;
+    lastSyncRef.current = now;
+    fetchNotifications({ flashOnNew: true });
+  }, [fetchNotifications]);
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 60_000);
+    const interval = setInterval(() => fetchNotifications(), 60_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchNotifications]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") reconcile();
+    };
+    window.addEventListener("focus", reconcile);
+    window.addEventListener("online", reconcile);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", reconcile);
+      window.removeEventListener("online", reconcile);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [reconcile]);
+
+  // A socket (re)connection means broadcasts may have been missed while it was
+  // down — pull the gap. `connected` flips false→true on first connect and on
+  // every reconnect. The 1s throttle only collapses the mount + first-connect
+  // burst at startup; a reconnect that lands seconds after a resume legitimately
+  // fetches again, which is what we want (it may surface items that arrived in
+  // between).
+  useEffect(() => {
+    if (connected) reconcile();
+  }, [connected, reconcile]);
 
   const [actionLoading, setActionLoading] = useState(false);
   // Per-notification approve/reject loading state so buttons on other rows stay interactive
