@@ -45,6 +45,15 @@ calendar time.
   spam vector). Its purpose (verifying delivery) is long done.
 - `naver-imap` classify failure now logs to console before `captureError` (was
   silent when Sentry is off).
+- **Closed a session-revocation bypass on routes gated only by `getUserId()`.**
+  `getUserId()` verifies the JWT signature but skips the device-kick and
+  password-reset-epoch checks that `requireAuth` enforces, so a stolen token
+  revoked by a password reset still had access on those routes. Added
+  `requireAuth` to the email plugin (file-level, covering its sub-routes), the
+  chat pending-actions plugin, and the 10 private `auth.ts` routes (`/me`,
+  password change/set, has-password, Google connect/disconnect/status,
+  resend-verification, init-sync). `/logout` stays ungated so a revoked token
+  can still be cleaned up; public login/OAuth/registration routes are unchanged.
 
 ### Added — Public playground
 - **Login-free BYOK playground (`/playground`).** A public page that runs the
@@ -132,6 +141,20 @@ calendar time.
   (500-char max); skipping the reason keeps the old behavior.
 
 ### Fixed
+- **GitHub firewall PUSH was silently vetoed by the inbound-mail noise filter.**
+  GitHub pushes were sent with category `system`, which `authoredSurface()`
+  maps to `null`, so a judge=PUSH thread whose title held a collision word
+  (`verify`, `deal`, `confirm your`) was dropped as "noise" and never
+  interrupted the user. A new `github_urgent` category maps to the `firewall`
+  surface (like `email_urgent`), bypassing the noise heuristic while still
+  honoring quiet hours, the rate limit, and category gating. A failed push now
+  reports to Sentry instead of `console.warn` only.
+- **Dismissed/resolved GitHub firewall items resurrected on re-poll.** The
+  GitHub `AttentionItem` upsert forced `status: "OPEN"` on every update, so a
+  thread the user had DISMISSED/RESOLVED reappeared the next time the poller
+  re-ingested it with new activity. The update path no longer touches `status`
+  (kept only on create), mirroring the email path's terminal-decision
+  preservation.
 - **Notifications only appeared after a manual refresh on laptop resume.**
   WebSocket notification delivery is best-effort and lives only in server
   memory (`broadcastToUser`), so anything pushed while a tab was suspended
