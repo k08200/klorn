@@ -19,15 +19,14 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db.js";
 import { captureError } from "./sentry.js";
+import type { TierFeatures } from "./tier-policy.js";
 import type { Tier } from "./tiers.js";
 
-/** poc-judge's 4 features at decision time. */
-export interface DecisionFeatures {
-  confidence: number;
-  senderTrust: number;
-  reversibility: number;
-  urgency: number;
-}
+/**
+ * The 4 features captured at decision time. Aliases the canonical schema in
+ * tier-policy.ts so the ledger's stored vector can't drift from the scorer's.
+ */
+export type DecisionFeatures = TierFeatures;
 
 export interface EmailDecision {
   userId: string;

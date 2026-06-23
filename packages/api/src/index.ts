@@ -204,50 +204,6 @@ app.get("/api/health", async () => {
   };
 });
 
-// Public email diagnostic — sends a real test email to the configured admin
-// only. Returns Resend response or error so we can diagnose delivery failures
-// without admin auth. Remove once delivery is verified working.
-app.get("/api/health/email", async () => {
-  const { Resend } = await import("resend");
-  const hasApiKey = !!process.env.RESEND_API_KEY;
-  const fromEmail = process.env.FROM_EMAIL || "EVE <onboarding@resend.dev>";
-  const adminEmails = (process.env.ADMIN_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const alertTo = process.env.WAITLIST_ALERT_EMAIL || adminEmails[0] || null;
-
-  if (!hasApiKey) {
-    return { ok: false, reason: "RESEND_API_KEY not set", fromEmail, alertTo };
-  }
-  if (!alertTo) {
-    return { ok: false, reason: "ADMIN_EMAILS and WAITLIST_ALERT_EMAIL both unset", fromEmail };
-  }
-
-  const resendClient = new Resend(process.env.RESEND_API_KEY);
-  try {
-    const result = await resendClient.emails.send({
-      from: fromEmail,
-      to: alertTo,
-      subject: "[EVE] Email config test",
-      html: "<p>Email delivery is working.</p>",
-    });
-    return {
-      ok: true,
-      fromEmail,
-      alertTo,
-      resendId:
-        (result as { data?: { id?: string }; id?: string }).data?.id ??
-        (result as { id?: string }).id ??
-        null,
-      raw: result,
-    };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, reason: msg, fromEmail, alertTo };
-  }
-});
-
 // User data management — "me" routes require authentication
 app.get("/api/user/me/export", { preHandler: requireAuth }, async (request) => {
   const userId = getUserId(request);

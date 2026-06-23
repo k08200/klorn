@@ -9,6 +9,7 @@ import { getDecisionMetrics } from "../decision-metrics.js";
 import { sendBetaInviteEmail } from "../email.js";
 import { getUsageSummary } from "../llm-usage.js";
 import { clearFallbackState, getProviderCooldownInfo } from "../model-fallback.js";
+import { describePolicy } from "../ontology.js";
 import { MODEL } from "../openai.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { getProviderChain } from "../providers/index.js";
@@ -520,6 +521,14 @@ export async function adminRoutes(app: FastifyInstance) {
       ...(sinceDays !== undefined && Number.isFinite(sinceDays) ? { sinceDays } : {}),
       source: channel,
     });
+  });
+
+  // GET /api/admin/ontology — the read side of the shared deterministic core.
+  // A JSON snapshot of every policy the classifier runs on (tier rule, sender
+  // priors, keyword patterns, model dial). This is the surface a second app or
+  // the desktop shell queries to inspect the same brain the firewall uses.
+  app.get("/ontology", async () => {
+    return describePolicy();
   });
 
   // GET /api/admin/eval — Run agent decision-logic eval scenarios

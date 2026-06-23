@@ -16,11 +16,31 @@
  */
 
 import type { ClassifiableEmail } from "./email-classifier.js";
+import { resolveEscalation } from "./judge-dial.js";
+import { keywordFeatures, looksUrgent, MARKETING_SUBJECT_RE } from "./keyword-policy.js";
 import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, JUDGE_MODEL } from "./openai.js";
 import type { ProviderCredentials } from "./providers/index.js";
+import {
+  type CorrectionExample,
+  PRIOR_SHORTCIRCUIT_TIERS,
+  SENDER_PRIOR_POLICY,
+  type SenderFacts,
+  type SenderPrior,
+} from "./sender-policy.js";
 import { captureError } from "./sentry.js";
+import { CLAMP, type TierFeatures, tierFromFeatures } from "./tier-policy.js";
 import { TIERS, type Tier } from "./tiers.js";
+
+// The deterministic keyword/marketing patterns live in keyword-policy.ts.
+// looksUrgent is re-exported as it was previously part of this module's API.
+export { looksUrgent } from "./keyword-policy.js";
+export type { CorrectionExample, SenderFacts, SenderPrior } from "./sender-policy.js";
+// The deterministic core now lives in two policy modules — the single sources
+// of truth. Re-exported here so existing importers keep working unchanged:
+//   - tier-policy.ts: the feature→tier rule and its thresholds
+//   - sender-policy.ts: the sender-knowledge schema and prior thresholds
+export { tierFromFeatures } from "./tier-policy.js";
 
 // PocTier is the canonical 4-tier vocabulary — re-exported from tiers.ts so
 // the judge, calibration, mirror, and API can never drift apart again.
@@ -29,20 +49,11 @@ export type PocTier = Tier;
 export const POC_TIERS: ReadonlyArray<PocTier> = TIERS;
 
 /**
- * Four features that drive the tier decision. All values are 0.0–1.0 floats
- * so the rule (tierFromFeatures) can be reviewed, tuned, and overridden by
- * a human without re-running the LLM.
+ * Four features that drive the tier decision. Canonical schema lives in
+ * tier-policy.ts (`TierFeatures`) so the scorer, the rule, and the decision
+ * ledger can't fork; `PocFeatures` is kept as the judge-local name.
  */
-export interface PocFeatures {
-  /** Model's own confidence that its other three scores are right. */
-  confidence: number;
-  /** 1.0 = sender is a known, important human; 0.0 = unknown / promotional. */
-  senderTrust: number;
-  /** 1.0 = if AUTO is wrong it's trivial to undo; 0.0 = irreversible (e.g. a sent reply). */
-  reversibility: number;
-  /** 1.0 = needs attention within hours; 0.0 = informational, no clock. */
-  urgency: number;
-}
+export type PocFeatures = TierFeatures;
 
 export interface PocJudgement {
   tier: PocTier;
@@ -53,58 +64,9 @@ export interface PocJudgement {
   source: "fast-path" | "sender-prior" | "llm" | "keyword-fallback";
 }
 
-/**
- * One past manual tier correction, rendered into the judge prompt as a
- * few-shot example. Mined from AttentionItem rows whose tierReason carries
- * MANUAL_OVERRIDE_PREFIX (see judge-context.ts). The judge stays pure —
- * callers fetch these and pass them in.
- */
-export interface CorrectionExample {
-  from: string;
-  subject: string;
-  tier: PocTier;
-}
-
-/**
- * A stable per-sender tier pattern strong enough to skip the LLM entirely.
- *  - "override": the user manually corrected this sender ≥2 times to the
- *    same tier — the strongest possible signal (any tier except AUTO).
- *  - "history": ≥3 consecutive past classifications agreed on QUEUE/SILENT.
- *    Never PUSH (urgency is content-dependent) and never AUTO (floors are
- *    the LLM's job).
- * Thresholds are enforced where the prior is constructed (judge-context.ts);
- * judgeEmail re-checks only the tier allowlist and the urgency guard.
- */
-export interface SenderPrior {
-  tier: PocTier;
-  count: number;
-  kind: "override" | "history";
-}
-
-/**
- * Deterministic, DB-derived facts about the sender, rendered into the judge
- * prompt as evidence for the senderTrust score. The LLM still scores — facts
- * ground it instead of letting it guess trust from surface cues alone
- * (engine review 2026-06-12: trust-score.ts was computed but never consumed
- * by classification). Assembled in judge-context.ts; the judge stays pure.
- */
-export interface SenderFacts {
-  /** Recent tier counts for this sender's mail, e.g. { QUEUE: 6, SILENT: 3 }. */
-  tierHistory: Partial<Record<PocTier, number>>;
-  /** How many of those classifications were manual user corrections. */
-  manualOverrides: number;
-  /**
-   * Interaction-graph node from the top-contacts cache. null means "not a
-   * cached top contact", NOT "stranger" — never render absence as a fact.
-   */
-  interaction: {
-    emailCount: number;
-    lastEmailDaysAgo: number | null;
-    upcomingMeetings: number;
-  } | null;
-  /** Commitment track record (only when the trust badge is load-bearing). */
-  commitments: { onTime: number; total: number } | null;
-}
+// CorrectionExample, SenderPrior, and SenderFacts are the sender-knowledge
+// schema — defined in sender-policy.ts and re-exported above so the entity
+// ontology has one home.
 
 export interface JudgeContext {
   corrections: CorrectionExample[];
@@ -118,70 +80,6 @@ export const EMPTY_JUDGE_CONTEXT: JudgeContext = {
   senderFacts: null,
 };
 
-const CLAMP = (n: number): number => Math.max(0, Math.min(1, n));
-
-/**
- * Deterministic 4-feature → 4-tier mapping.
- *
- * Re-tuned 2026-05-28 after first 50-email accuracy run. The original rule
- * defaulted to SILENT and produced 50% accuracy because the founder's
- * mental model is the opposite: QUEUE is the default ("things I'll look
- * at on my own schedule"), and SILENT is narrow ("clear marketing/promo
- * I never want to see").
- *
- * Order matters — earlier branches dominate.
- */
-export function tierFromFeatures(features: PocFeatures): {
-  tier: PocTier;
-  reason: string;
-} {
-  const f: PocFeatures = {
-    confidence: CLAMP(features.confidence),
-    senderTrust: CLAMP(features.senderTrust),
-    reversibility: CLAMP(features.reversibility),
-    urgency: CLAMP(features.urgency),
-  };
-
-  // 1. Very low confidence → QUEUE.
-  //    Hiding uncertain mail behind a wrong tier is the worst failure mode.
-  if (f.confidence < 0.5) {
-    return { tier: "QUEUE", reason: "Low classification confidence — queued for review" };
-  }
-
-  // 2. Urgent + sure → wake the user.
-  if (f.urgency >= 0.7 && f.confidence >= 0.7) {
-    return { tier: "PUSH", reason: "Urgent and confident" };
-  }
-
-  // 3. Clear promotional / marketing signal → SILENT.
-  //    Very narrow: only when the sender is anonymous-ish AND there is no
-  //    time signal AND any wrong action would be trivially reversible. This
-  //    matches the founder's SILENT bucket (LinkedIn invites, 광고, view-in-browser).
-  //    System notifications (Vercel deploy, account confirmations, own-product
-  //    signups) do NOT match because they carry context worth a manual glance.
-  if (f.senderTrust < 0.2 && f.urgency < 0.2 && f.reversibility > 0.9) {
-    return { tier: "SILENT", reason: "Promotional / marketing — no human attention needed" };
-  }
-
-  // 4. Trivially reversible + very sure + not urgent + trusted → AUTO.
-  //    Floors stay high so we never auto-handle a destructive action or a
-  //    misclassification. The senderTrust floor was added 2026-06-12 after
-  //    the first flash eval: precise models score routine system notices
-  //    (invoices, bills, deploy alerts) conf=1.0/rev=1.0 and auto-claimed
-  //    them — mail from a sender with no trust signal must never be
-  //    auto-handled. Per POC.md OUT scope, AUTO is *classified only*
-  //    during the POC; actual execution stays disabled.
-  if (f.reversibility >= 0.85 && f.confidence >= 0.85 && f.urgency < 0.5 && f.senderTrust >= 0.5) {
-    return { tier: "AUTO", reason: "Reversible, confident, not urgent" };
-  }
-
-  // 5. Default → QUEUE.
-  //    Everything that isn't clearly marketing, urgent, or auto-handleable
-  //    belongs in the manual review queue. The founder's mental model treats
-  //    "I'll look at this on my own pace" as the dominant bucket.
-  return { tier: "QUEUE", reason: "Visible in queue for manual review" };
-}
-
 interface LlmFeatureResponse {
   confidence?: number;
   senderTrust?: number;
@@ -190,7 +88,9 @@ interface LlmFeatureResponse {
   reason?: string;
 }
 
-const MAX_FEW_SHOT_EXAMPLES = 5;
+// Read from the single source so the few-shot cap can't drift from the pool
+// cap that judge-context.ts applies (both gate the same correction examples).
+const MAX_FEW_SHOT_EXAMPLES = SENDER_PRIOR_POLICY.maxFewShot;
 
 /**
  * Render past manual corrections as a ground-truth block. The model scores
@@ -374,90 +274,67 @@ async function extractFeaturesWithLlm(
 }
 
 /**
- * Coarse keyword-only feature scorer for when the LLM is unavailable.
+ * Extract features with the dial: score on the cheap model first, then
+ * escalate to a stronger model only when the cheap model is in its blind spot
+ * (low confidence) — the "frontier only on the blind spot" rung. Off by default
+ * (JUDGE_ESCALATION_MODEL unset → resolveEscalation returns null → one call,
+ * byte-identical to before). The escalation log is the measurement instrument:
+ * cheap-vs-strong confidence on exactly the ambiguous emails.
  *
- * Re-tuned 2026-05-28 to separate two automated-sender signals that the
- * founder treats differently:
- *  - "marketing"   = newsletter / digest / promo / "광고" → SILENT bucket
- *  - "notification"= no-reply / notifications@ / updates.* → still QUEUE
- *
- * The old `isAutomated` mashed both together and forced everything into
- * the SILENT branch.
+ * Cost note: with the dial ON, a low-confidence email costs up to
+ * JUDGE_LLM_ATTEMPTS cheap + JUDGE_LLM_ATTEMPTS strong calls (4 today). Only the
+ * low-confidence tail escalates, so the average stays near a single call.
  */
-function keywordFeatures(email: ClassifiableEmail): PocFeatures {
-  const from = (email.from || "").toLowerCase();
-  const subject = (email.subject || "").toLowerCase();
-  const snippet = (email.snippet || "").toLowerCase();
-  const hay = `${subject} ${snippet}`;
-  const fromAndSubject = `${from} ${subject}`;
+async function extractWithDial(
+  email: ClassifiableEmail,
+  userId: string | undefined,
+  corrections: CorrectionExample[],
+  senderFacts: SenderFacts | null,
+  credentials: ProviderCredentials | undefined,
+  modelOverride: string | undefined,
+  onError?: (message: string) => void,
+): Promise<{ features: PocFeatures; reason: string } | null> {
+  const cheap = await extractFeaturesWithLlm(
+    email,
+    userId,
+    corrections,
+    senderFacts,
+    credentials,
+    modelOverride,
+    onError,
+  );
+  if (!cheap) return null;
 
-  // Narrow marketing signal — the patterns the founder permanently silences.
-  const isMarketing =
-    /newsletter|digest|marketing|promo|\[광고\]|\[알림\]|\(광고\)|unsubscribe|수신거부/.test(
-      fromAndSubject,
-    );
-  // Broader system-notification signal — these the founder still wants in QUEUE.
-  const isSystemNotification =
-    /no[-_]?reply@|noreply@|donotreply@|notifications?@|@updates\.|@email\.|@notifications\./.test(
-      from,
-    );
-  const isInvestor = /investor|vc|capital|ventures|partner@|fund/.test(from);
-  const isUrgentWord = URGENT_WORDS_RE.test(hay);
-  const isMeeting = /meeting|invite|calendar|zoom|reschedule|미팅|일정/.test(hay);
-  const isQuestion = /\?|could you|can you|would you|please/.test(hay);
+  const escalateTo = resolveEscalation({
+    confidence: cheap.features.confidence,
+    callerPinnedModel: modelOverride !== undefined,
+    // The model the cheap call actually used, so the dedup guard compares
+    // against reality even if a caller pins a model equal to JUDGE_MODEL.
+    baseModel: modelOverride ?? JUDGE_MODEL,
+  });
+  if (!escalateTo) return cheap;
 
-  // senderTrust calibrated against the founder's 50-email ground truth:
-  //   marketing       → 0.05 (clear SILENT signal — passes the trust<0.2 floor)
-  //   system notice   → 0.4  (QUEUE — visible but not interrupting)
-  //   investor        → 0.85
-  //   default         → 0.45 (queue-by-default per tierFromFeatures rule 5)
-  let senderTrust = 0.45;
-  if (isMarketing) senderTrust = 0.05;
-  else if (isSystemNotification) senderTrust = 0.4;
-  else if (isInvestor) senderTrust = 0.85;
+  const strong = await extractFeaturesWithLlm(
+    email,
+    userId,
+    corrections,
+    senderFacts,
+    credentials,
+    escalateTo,
+    onError,
+  );
+  // A failed escalation must never lose the cheap result we already have —
+  // but log it, or a frontier-model outage silently degrades every ambiguous
+  // email to the cheap (blind-spot) score with no trace. (CLAUDE.md rule.)
+  if (!strong) {
+    console.warn(`[JUDGE] dial-escalation to ${escalateTo} failed — retaining cheap result`);
+    return cheap;
+  }
 
-  // Marketing gets 0.1/0.95 (not the 0.2/0.9 defaults) because the SILENT
-  // branch in tierFromFeatures requires urgency < 0.2 AND reversibility > 0.9
-  // — strict inequalities. With the old defaults a clear newsletter sat
-  // exactly ON both boundaries, so the keyword fallback could never SILENT
-  // marketing mail when the LLM was down (caught by eval/judge-eval-set.json).
-  let urgency = 0.2;
-  if (isUrgentWord) urgency = 0.85;
-  else if (isMeeting) urgency = 0.55;
-  else if (isMarketing) urgency = 0.1;
-
-  // Replies to a human are hard to undo; archives are trivial.
-  let reversibility = 0.9;
-  if (isQuestion || isInvestor) reversibility = 0.3;
-  else if (isMarketing) reversibility = 0.95;
-
-  // Higher confidence when a pattern matched; lower otherwise so the rule
-  // defaults to QUEUE for unfamiliar cases.
-  const confidence = isMarketing || isSystemNotification || isInvestor ? 0.7 : 0.55;
-
-  return { confidence, senderTrust, reversibility, urgency };
-}
-
-/**
- * Patterns that the founder has confirmed they always want silenced.
- * Re-tuned 2026-05-28: previously fast-path fired on any fastClassify
- * "automated" result, which over-claimed Vercel notifications / own-product
- * waitlist signups / Google account confirms as SILENT.
- */
-const MARKETING_SUBJECT_RE =
-  /unsubscribe|view (this email )?in (your )?browser|\[광고\]|\[알림\]|\(광고\)|수신거부|무료\s*체험|할인\s*쿠폰/i;
-
-/**
- * Time-pressure vocabulary shared by the keyword fallback and the
- * sender-prior urgency guard. Case-insensitive on purpose — callers pass
- * raw subject/snippet.
- */
-const URGENT_WORDS_RE = /urgent|asap|긴급|중요|action required|today|tomorrow|deadline|due/i;
-
-/** Cheap content check: does this email carry any time-pressure signal? */
-export function looksUrgent(email: ClassifiableEmail): boolean {
-  const hay = `${email.subject || ""} ${email.snippet || ""}`;
-  return URGENT_WORDS_RE.test(hay);
+  console.log(
+    `[JUDGE] dial-escalation: conf ${cheap.features.confidence.toFixed(2)}→${strong.features.confidence.toFixed(2)} via ${escalateTo}`,
+  );
+  return strong;
 }
 
 /**
@@ -478,29 +355,18 @@ function priorFeatures(tier: PocTier): PocFeatures {
   }
 }
 
-// A learned sender prior may bypass the LLM to PUSH (overrides only) or QUEUE,
-// but NEVER to SILENT. SILENT is deliberately excluded from both allowlists:
-// a stale or wrong prior must not be able to fully mute a sender with no LLM
-// look — that is a silent one-way door (the user never sees a suppressed mail,
-// so they never override it to correct the prior). A would-be-SILENT sender
-// instead falls through to the LLM on every email (which can still decide
-// SILENT, but with full content + urgency in view). The deterministic
-// marketing fast-path in judgeEmail() is the only path to a no-LLM SILENT.
-const OVERRIDE_PRIOR_TIERS: ReadonlySet<PocTier> = new Set(["PUSH", "QUEUE"]);
-const HISTORY_PRIOR_TIERS: ReadonlySet<PocTier> = new Set(["QUEUE"]);
-
 /**
  * Whether a sender prior is allowed to bypass the LLM for THIS email.
  *
  * Guards (in addition to the construction thresholds in judge-context.ts):
- *  - tier allowlist per prior kind (see SenderPrior docs)
+ *  - tier allowlist per prior kind (PRIOR_SHORTCIRCUIT_TIERS in sender-policy.ts)
  *  - urgency guard: a sender we normally QUEUE/SILENT can still send a
  *    time-critical email. Any urgency vocabulary in the content sends the
  *    email to the LLM instead. A PUSH override prior skips the guard —
  *    urgent content and "always interrupt" agree.
  */
 function canShortCircuit(prior: SenderPrior, email: ClassifiableEmail): boolean {
-  const allowed = prior.kind === "override" ? OVERRIDE_PRIOR_TIERS : HISTORY_PRIOR_TIERS;
+  const allowed = PRIOR_SHORTCIRCUIT_TIERS[prior.kind];
   if (!allowed.has(prior.tier)) return false;
   if (prior.tier !== "PUSH" && looksUrgent(email)) return false;
   return true;
@@ -564,7 +430,7 @@ export async function judgeEmail(
   }
 
   const senderFacts = context.senderFacts ?? null;
-  const llm = await extractFeaturesWithLlm(
+  const llm = await extractWithDial(
     email,
     userId,
     context.corrections,
