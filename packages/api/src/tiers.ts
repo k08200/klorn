@@ -24,7 +24,7 @@ const TIER_SET: ReadonlySet<string> = new Set(TIERS);
  *  - "CALL" (retired tier) → "PUSH" (its actual delivery behaviour)
  *  - null / unknown        → "QUEUE" (visible default; lazy-backfill rows)
  */
-export function normalizeTier(value: string | null | undefined): Tier {
+export function normalizeTier(value: string | null | undefined, _strict = false): Tier {
   if (value === "CALL") return "PUSH";
   if (value && TIER_SET.has(value)) return value as Tier;
   return "QUEUE";
