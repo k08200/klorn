@@ -20,24 +20,28 @@
 import { db } from "./db.js";
 import { extractEmailAddress } from "./email-address.js";
 import { getCachedInteractionNode } from "./interaction-graph.js";
+import { EMPTY_JUDGE_CONTEXT, type JudgeContext } from "./poc-judge.js";
 import {
   type CorrectionExample,
-  EMPTY_JUDGE_CONTEXT,
-  type JudgeContext,
+  SENDER_PRIOR_POLICY,
   type SenderFacts,
   type SenderPrior,
-} from "./poc-judge.js";
+} from "./sender-policy.js";
 import { captureError } from "./sentry.js";
 import { isManualOverrideReason, isTier, MANUAL_OVERRIDE_PREFIX } from "./tiers.js";
 import { getTrustScore } from "./trust-score.js";
 
-const CORRECTION_POOL_SIZE = 50;
-const MAX_FEW_SHOT = 5;
-const OVERRIDE_PRIOR_MIN = 2;
-const HISTORY_PRIOR_MIN = 3;
-const OVERRIDE_PRIOR_MAX_AGE_DAYS = 60;
-const HISTORY_PRIOR_MAX_AGE_DAYS = 30;
-const SENDER_HISTORY_SAMPLE = 10;
+// Sender-prior thresholds live in sender-policy.ts (the single source). Aliased
+// locally for readability where they're used.
+const {
+  correctionPoolSize: CORRECTION_POOL_SIZE,
+  maxFewShot: MAX_FEW_SHOT,
+  overrideMin: OVERRIDE_PRIOR_MIN,
+  historyMin: HISTORY_PRIOR_MIN,
+  overrideMaxAgeDays: OVERRIDE_PRIOR_MAX_AGE_DAYS,
+  historyMaxAgeDays: HISTORY_PRIOR_MAX_AGE_DAYS,
+  historySample: SENDER_HISTORY_SAMPLE,
+} = SENDER_PRIOR_POLICY;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface JudgeContextInput {

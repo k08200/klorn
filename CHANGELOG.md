@@ -12,6 +12,40 @@ calendar time.
 
 ## [Unreleased]
 
+### Changed — Deterministic core extraction
+- **Firewall decision logic split into single-source policy modules.** The tier
+  rule, sender-knowledge schema/thresholds, and no-LLM keyword patterns were
+  extracted out of `poc-judge.ts` (which held them as inline magic numbers) into
+  `tier-policy.ts` (relation), `sender-policy.ts` (entity), and
+  `keyword-policy.ts` (pattern). `poc-judge.ts` keeps only LLM orchestration and
+  re-exports the moved symbols for back-compat. Behavior is identical — every
+  threshold, inequality, regex, and score is unchanged.
+- **`ontology.ts` shared surface + `GET /api/admin/ontology`.** A barrel over
+  the four policy modules plus `describePolicy()`, a detached JSON-serializable
+  snapshot of the whole deterministic core — the read side of a shared ontology
+  a second surface can query.
+
+### Added — Model dial
+- **Confidence-based judge escalation (`judge-dial.ts`).** Off by default. When
+  `JUDGE_ESCALATION_MODEL` is set, the judge scores on the cheap `JUDGE_MODEL`
+  first and re-judges with the stronger model only when the cheap model reports
+  low confidence (< 0.5) — "frontier only on the blind spot". A failed
+  escalation retains and logs the cheap result; caller-pinned models
+  (playground/eval) never escalate.
+
+### Added — Desktop shell
+- **`@klorn/desktop` Electron shell.** A thin native window wrapping the Klorn
+  web app, with a read-only `window.klorn.getOntology()` bridge — the first
+  non-API consumer of the shared ontology. Sandboxed renderer, http(s)-only
+  navigation allowlist, env-injected API base.
+
+### Security
+- **Removed the unauthenticated `GET /api/health/email` diagnostic.** It sent a
+  real email to the admin on every request with no auth (Resend quota / inbox
+  spam vector). Its purpose (verifying delivery) is long done.
+- `naver-imap` classify failure now logs to console before `captureError` (was
+  silent when Sentry is off).
+
 ### Added — Public playground
 - **Login-free BYOK playground (`/playground`).** A public page that runs the
   real 4-tier classifier (`judgeEmail`) on a single pasted email using the

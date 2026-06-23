@@ -280,12 +280,16 @@ export async function syncNaverImap(args: SyncArgs): Promise<SyncResult> {
                   judgement,
                 ),
               )
-              .catch((err) =>
+              .catch((err) => {
+                // console first: captureError is a no-op without a Sentry DSN,
+                // which would make this fire-and-forget failure silent in
+                // dev/self-host and drop the email from triage with no trace.
+                console.warn(`[naver-imap] classify+mirror failed for ${stableId}`, err);
                 captureError(err, {
                   tags: { scope: "naver-imap.judge" },
                   extra: { userId: args.userId, stableId },
-                }),
-              );
+                });
+              });
             result.classified += 1;
           }
         } catch (err) {
