@@ -24,6 +24,18 @@ calendar time.
   enum and converts the column in place (existing values are all valid members).
   Audited every other schema enum — this was the only one missing its migration.
 
+### Added — Firewall logs why a PUSH-tier email fired no notification
+- **`pushForFirewallEmail` now logs its two silent early returns.** A PUSH-tier
+  email can be correctly suppressed before any push is attempted — it's older
+  than the 6h recency window (dyno slept, or a late manual sync / backfill
+  surfaced old mail), or it deduped against an existing notification. Both
+  returned with zero log output, so "a PUSH email fired no alarm" left no signal
+  to check. `push.ts` already logs every downstream suppression reason
+  (missing VAPID, no subscriptions, rate-limit); these two upstream returns were
+  the last blind spot. Now each emits a `[PUSH] Firewall PUSH suppressed/deduped`
+  line, making the missing-alarm case diagnosable from prod logs without a repro.
+  Logging only — no behavior change.
+
 ### Changed — OntologyProposal.status is a Prisma enum
 - **`status` moved from raw `String` to a `ProposalStatus` enum
   (OPEN/APPLIED/DISMISSED).** Status became load-bearing with the approval gate —
