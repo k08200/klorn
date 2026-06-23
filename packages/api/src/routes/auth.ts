@@ -370,24 +370,25 @@ export function authRoutes(app: FastifyInstance) {
     "/me",
     { preHandler: requireAuth, schema: { body: updateProfileBodySchema } },
     async (request, reply) => {
-    const userId = getUserId(request);
-    if (isDemoUser(userId)) {
-      return reply.code(403).send({ error: "Demo user cannot update profile" });
-    }
+      const userId = getUserId(request);
+      if (isDemoUser(userId)) {
+        return reply.code(403).send({ error: "Demo user cannot update profile" });
+      }
 
-    const { name } = request.body as { name?: string };
-    if (name !== undefined && !hasMeaningfulText(name)) {
-      return reply.code(400).send({ error: "Name cannot be empty" });
-    }
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: { ...(name !== undefined && { name: name.trim() }) },
-    });
+      const { name } = request.body as { name?: string };
+      if (name !== undefined && !hasMeaningfulText(name)) {
+        return reply.code(400).send({ error: "Name cannot be empty" });
+      }
+      const user = await prisma.user.update({
+        where: { id: userId },
+        data: { ...(name !== undefined && { name: name.trim() }) },
+      });
 
-    return reply.send({
-      user: { id: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role },
-    });
-  });
+      return reply.send({
+        user: { id: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role },
+      });
+    },
+  );
 
   // POST /api/auth/change-password — Change password
   app.post(
