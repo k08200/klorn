@@ -820,6 +820,13 @@ async function runAutomations() {
       import("./calibration-snapshot.js")
         .then(({ runDailyCalibrationSnapshots }) => runDailyCalibrationSnapshots())
         .catch((err) => console.warn("[AUTOMATION] Calibration snapshot failed:", err));
+      // --- Daily: ontology write-side proposals ---
+      // Turn the same override ledger into advisory threshold-change proposals
+      // (the read/write ontology's write side). Best-effort: never throws, never
+      // mutates the classifier — proposals are applied by a human via a code PR.
+      import("./ontology-proposals-store.js")
+        .then(({ recomputeOntologyProposalsSafe }) => recomputeOntologyProposalsSafe())
+        .catch((err) => console.warn("[AUTOMATION] Ontology proposal recompute failed:", err));
     }
 
     // --- Every tick: Resurrect snoozed AttentionItems whose snooze has expired ---

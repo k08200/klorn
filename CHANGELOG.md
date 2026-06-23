@@ -12,6 +12,21 @@ calendar time.
 
 ## [Unreleased]
 
+### Added — Ontology write-side (proposals)
+- **Override signal now produces advisory threshold-change proposals.** The
+  shared ontology was read-only; this adds the write side. A new
+  `OntologyProposal` table + `ontology-proposals.ts` turn the aggregate override
+  metrics (PUSH `recallUpperBound`, SILENT `overSuppressionRate`) into *proposed*
+  adjustments to `tier.push.confidence` / `tier.silent.reversibility`, bounded
+  (min-sample floor, max step, `[0,1]` clamp, never crossing the adjacent tier).
+  **Proposal-only by design:** the classifier never reads the table — it keeps
+  running the git `const`s — so an approved proposal is applied by a human via a
+  code PR (git = audit + revert). Surfaced read-only via `GET /api/admin/ontology`
+  (now returns `proposals`) and in the desktop Brain Inspector ("current →
+  proposed"). Recomputed daily by the calibration job and on demand via
+  `POST /api/admin/ontology/proposals/recompute`; manual `…/:id/dismiss`. See
+  `docs/superpowers/specs/2026-06-23-ontology-write-side-design.md`.
+
 ### Changed — Deterministic core extraction
 - **Firewall decision logic split into single-source policy modules.** The tier
   rule, sender-knowledge schema/thresholds, and no-LLM keyword patterns were

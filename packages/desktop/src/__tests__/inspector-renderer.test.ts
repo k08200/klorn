@@ -54,6 +54,48 @@ describe("renderOntology", () => {
     expect(html).toContain("&lt;script&gt;evil");
   });
 
+  it("renders write-side proposals as current → proposed with evidence", () => {
+    const html = renderOntology({
+      ...SNAPSHOT,
+      proposals: [
+        {
+          knob: "tier.push.confidence",
+          currentValue: 0.7,
+          proposedValue: 0.65,
+          direction: "LOWER",
+          evidence: { metric: "push.recallUpperBound", value: 0.5 },
+        },
+      ],
+    });
+    expect(html).toContain("Proposals (advisory)");
+    expect(html).toContain("tier.push.confidence");
+    expect(html).toContain("0.7 → 0.65");
+    expect(html).toContain("LOWER");
+    expect(html).toContain("push.recallUpperBound");
+  });
+
+  it("omits the proposals section when there are none", () => {
+    const html = renderOntology({ ...SNAPSHOT, proposals: [] });
+    expect(html).not.toContain("Proposals (advisory)");
+  });
+
+  it("escapes proposal values so a malicious knob can't inject markup", () => {
+    const html = renderOntology({
+      ...SNAPSHOT,
+      proposals: [
+        {
+          knob: "<script>evil</script>",
+          currentValue: 0.7,
+          proposedValue: 0.65,
+          direction: "LOWER",
+          evidence: { metric: "x", value: 1 },
+        },
+      ],
+    });
+    expect(html).not.toContain("<script>evil");
+    expect(html).toContain("&lt;script&gt;evil");
+  });
+
   it("degrades to a placeholder for a non-object snapshot", () => {
     expect(renderOntology(null)).toContain("No ontology data");
     expect(renderOntology("nope")).toContain("No ontology data");

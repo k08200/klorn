@@ -10,6 +10,7 @@ import { sendBetaInviteEmail } from "../email.js";
 import { getUsageSummary } from "../llm-usage.js";
 import { clearFallbackState, getProviderCooldownInfo } from "../model-fallback.js";
 import { describePolicy } from "../ontology.js";
+import { listOpenProposals, recomputeOntologyProposals } from "../ontology-proposals-store.js";
 import { MODEL } from "../openai.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { getProviderChain } from "../providers/index.js";
@@ -525,10 +526,42 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // GET /api/admin/ontology — the read side of the shared deterministic core.
   // A JSON snapshot of every policy the classifier runs on (tier rule, sender
-  // priors, keyword patterns, model dial). This is the surface a second app or
-  // the desktop shell queries to inspect the same brain the firewall uses.
+  // priors, keyword patterns, model dial), plus open write-side proposals (the
+  // threshold changes the override signal suggests — advisory, never applied
+  // live). This is the surface a second app or the desktop shell queries to
+  // inspect the same brain the firewall uses.
   app.get("/ontology", async () => {
-    return describePolicy();
+    return { ...describePolicy(), proposals: await listOpenProposals() };
+  });
+
+  // POST /api/admin/ontology/proposals/recompute — regenerate write-side
+  // proposals from the override ledger on demand (the daily calibration job
+  // also does this). Returns the active candidates + write counts.
+  app.post("/ontology/proposals/recompute", async (request, reply) => {
+    const body = (request.body ?? {}) as { sinceDays?: unknown };
+    const raw = body.sinceDays;
+    // Validate before it reaches getDecisionMetrics: a non-finite value would
+    // become Date(NaN) in the ledger query and throw a 500. undefined is fine
+    // (the reader applies its own default window).
+    let sinceDays: number | undefined;
+    if (raw !== undefined) {
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 1 || n > 365) {
+        return reply.code(400).send({ error: "sinceDays must be an integer between 1 and 365" });
+      }
+      sinceDays = n;
+    }
+    return recomputeOntologyProposals({ sinceDays });
+  });
+
+  // POST /api/admin/ontology/proposals/:id/dismiss — manually dismiss a proposal
+  // (advisory; does not change classifier behavior).
+  app.post("/ontology/proposals/:id/dismiss", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const existing = await prisma.ontologyProposal.findUnique({ where: { id } });
+    if (!existing) return reply.code(404).send({ error: "Proposal not found" });
+    await prisma.ontologyProposal.update({ where: { id }, data: { status: "DISMISSED" } });
+    return reply.code(204).send();
   });
 
   // GET /api/admin/eval — Run agent decision-logic eval scenarios
