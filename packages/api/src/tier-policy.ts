@@ -84,6 +84,7 @@ export const CLAMP = (n: number): number => Math.max(0, Math.min(1, n));
 export function tierFromFeatures(
   features: TierFeatures,
   thresholds: ThresholdConfig = TIER_THRESHOLDS,
+  _trace = false,
 ): {
   tier: Tier;
   reason: string;
