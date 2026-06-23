@@ -53,6 +53,12 @@ calendar time.
   `Authorization: Bearer`, matching how the web app authenticates.
 
 ### Security
+- **Upgraded `@klorn/desktop` Electron 33 → 42.4.1.** Electron 33.2.1 carried
+  four HIGH advisories (three renderer use-after-free + a command-line-switch
+  injection), and the 33 line is past Electron's support window (only the latest
+  three majors get security fixes). 42.4.1 clears all four and puts the shell on
+  a supported branch. The shell uses only stable Electron APIs, so no code
+  changes were needed (tsc/build/tests pass against the 42 types).
 - **Removed the unauthenticated `GET /api/health/email` diagnostic.** It sent a
   real email to the admin on every request with no auth (Resend quota / inbox
   spam vector). Its purpose (verifying delivery) is long done.
