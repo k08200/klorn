@@ -130,7 +130,9 @@ vi.mock("../db.js", () => {
       findMany: vi.fn(async () => []),
     },
     ontologyProposal: {
-      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => proposalById.get(where.id) ?? null),
+      findUnique: vi.fn(
+        async ({ where }: { where: { id: string } }) => proposalById.get(where.id) ?? null,
+      ),
       update: vi.fn(
         async ({ where, data }: { where: { id: string }; data: { status: string } }) => {
           const entry = proposalById.get(where.id);
@@ -504,7 +506,11 @@ describe("admin ontology approval gate", () => {
 
   const post = async (url: string, token = ADMIN_TOKEN) => {
     const app = await buildApp();
-    const res = await app.inject({ method: "POST", url, headers: { authorization: `Bearer ${token}` } });
+    const res = await app.inject({
+      method: "POST",
+      url,
+      headers: { authorization: `Bearer ${token}` },
+    });
     await app.close();
     return res;
   };

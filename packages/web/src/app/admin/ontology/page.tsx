@@ -100,7 +100,10 @@ function OntologyPageInner() {
       // refresh failed the DB says applied but the classifier is NOT yet on the
       // new value — don't report a clean success.
       if (res?.cacheRefreshed === false) {
-        toast("Saved, but the live cache didn't refresh — effective after the next restart.", "error");
+        toast(
+          "Saved, but the live cache didn't refresh — effective after the next restart.",
+          "error",
+        );
       } else {
         toast(done, "success");
       }
@@ -138,8 +141,11 @@ function OntologyPageInner() {
           <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-400">
             The deterministic core — tier rule, sender priors, keyword patterns, model dial — read
             live, plus threshold proposals derived from your override signal. Proposals are advisory
-            until you act: <span className="text-stone-200">Approve applies the change to the live
-            classifier immediately</span> (no code change); Revert restores the git-default constant.
+            until you act:{" "}
+            <span className="text-stone-200">
+              Approve applies the change to the live classifier immediately
+            </span>{" "}
+            (no code change); Revert restores the git-default constant.
           </p>
         </header>
 
