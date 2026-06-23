@@ -24,6 +24,11 @@ function validatedUrl(value: string, fallback: string): string {
 const WEB_DEFAULT = "http://localhost:8001";
 const API_DEFAULT = "http://localhost:3001";
 
+// Re-exported so main-process callers can keep importing it from config; the
+// definition lives in constants.ts (no side effects) so the sandboxed preload
+// can share it without running this module's process.env reads.
+export { KLORN_AUTH_TOKEN_KEY } from "./constants.js";
+
 /** The Klorn web app the shell renders. */
 export const KLORN_WEB_URL = validatedUrl(
   process.env.KLORN_DESKTOP_URL ?? WEB_DEFAULT,
