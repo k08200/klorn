@@ -12,6 +12,18 @@ calendar time.
 
 ## [Unreleased]
 
+### Fixed — Outbox drain crashed: missing OutboxStatus enum type
+- **The transactional action outbox never drained.** `ActionOutbox.status` was
+  declared as the `OutboxStatus` enum in the schema, but the original
+  `20260612200000_action_outbox` migration created the column as `TEXT` and no
+  migration ever created the enum type. The generated Prisma client casts the
+  column to `"OutboxStatus"`, so every `drainActionOutbox` query failed with
+  `type "public.OutboxStatus" does not exist` — queued actions were stranded.
+  (`prisma migrate status` reported "up to date" because it only diffs the
+  migration log, not schema-vs-DB drift.) Added the migration that creates the
+  enum and converts the column in place (existing values are all valid members).
+  Audited every other schema enum — this was the only one missing its migration.
+
 ### Changed — OntologyProposal.status is a Prisma enum
 - **`status` moved from raw `String` to a `ProposalStatus` enum
   (OPEN/APPLIED/DISMISSED).** Status became load-bearing with the approval gate —
