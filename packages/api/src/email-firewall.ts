@@ -136,11 +136,10 @@ export async function persistGmailEmail(
     .catch((err) => {
       // console first: captureError is a no-op without a Sentry DSN, so in
       // dev/self-host a classify+mirror failure would drop this email from the
-      // firewall (the user silently misses it) with no trace.
-      console.warn(
-        `[FIREWALL] classify+mirror failed for email ${email.gmailId} (user ${userId})`,
-        err,
-      );
+      // firewall (the user silently misses it) with no trace. Static message +
+      // the error only — the ids live in the Sentry `extra` below, never
+      // interpolated into the log sink (log-injection / format-string safe).
+      console.warn("[FIREWALL] classify+mirror failed (ids in Sentry extra)", err);
       captureError(err, {
         tags: { scope: "poc-judge.email_sync" },
         extra: { userId, emailId: createdEmail.id, gmailId: email.gmailId },
@@ -357,7 +356,8 @@ export async function backfillEmailAttentionItems(userId: string): Promise<numbe
     } catch (err) {
       // console first: captureError is silent without a Sentry DSN, and a
       // backfill that fails every email would otherwise look like a no-op.
-      console.warn(`[FIREWALL] backfill judge+mirror failed for email ${email.id}`, err);
+      // Static message + error only; the id lives in the Sentry `extra`.
+      console.warn("[FIREWALL] backfill judge+mirror failed (id in Sentry extra)", err);
       captureError(err, {
         tags: { scope: "email-backfill" },
         extra: { userId, emailId: email.id },
