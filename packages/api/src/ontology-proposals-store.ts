@@ -10,6 +10,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db.js";
 import { getDecisionMetrics } from "./decision-metrics.js";
+import { getEffectiveThresholds } from "./ontology-overrides.js";
 import {
   type ProposalCandidate,
   proposeThresholdAdjustments,
@@ -108,7 +109,13 @@ export async function recomputeOntologyProposals(
 ): Promise<{ candidates: ProposalCandidate[]; result: PersistResult }> {
   const report = await getDecisionMetrics({ sinceDays: opts.sinceDays });
   const signals = signalsFromMetrics(report.overall);
-  const candidates = proposeThresholdAdjustments(signals, { windowDays: report.windowDays });
+  // Propose against the LIVE effective thresholds, not the git base const: once
+  // an override is approved, currentValue must reflect what the classifier
+  // actually runs on, or the proposal re-suggests an already-applied change.
+  const candidates = proposeThresholdAdjustments(signals, {
+    thresholds: getEffectiveThresholds(),
+    windowDays: report.windowDays,
+  });
   const result = await persistProposals(candidates, prismaProposalStore);
   return { candidates, result };
 }
@@ -132,6 +139,14 @@ export async function recomputeOntologyProposalsSafe(
 export async function listOpenProposals() {
   return prisma.ontologyProposal.findMany({
     where: { status: "OPEN" },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
+/** APPLIED proposals = the live overrides the classifier is reading (for Revert). */
+export async function listAppliedProposals() {
+  return prisma.ontologyProposal.findMany({
+    where: { status: "APPLIED" },
     orderBy: { updatedAt: "desc" },
   });
 }

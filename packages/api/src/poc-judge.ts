@@ -19,6 +19,7 @@ import type { ClassifiableEmail } from "./email-classifier.js";
 import { resolveEscalation } from "./judge-dial.js";
 import { keywordFeatures, looksUrgent, MARKETING_SUBJECT_RE } from "./keyword-policy.js";
 import { parseLlmJson } from "./llm-json.js";
+import { getEffectiveThresholds } from "./ontology-overrides.js";
 import { createCompletion, JUDGE_MODEL } from "./openai.js";
 import type { ProviderCredentials } from "./providers/index.js";
 import {
@@ -452,7 +453,7 @@ export async function judgeEmail(
         `[JUDGE] sender-facts grounded: llmTrust=${llm.features.senderTrust.toFixed(2)} history=${history} overrides=${senderFacts.manualOverrides} interaction=${senderFacts.interaction ? "yes" : "no"} commitments=${senderFacts.commitments ? `${senderFacts.commitments.onTime}/${senderFacts.commitments.total}` : "none"}`,
       );
     }
-    const { tier, reason: ruleReason } = tierFromFeatures(llm.features);
+    const { tier, reason: ruleReason } = tierFromFeatures(llm.features, getEffectiveThresholds());
     return {
       tier,
       reason: llm.reason || ruleReason,
@@ -462,7 +463,7 @@ export async function judgeEmail(
   }
 
   const features = keywordFeatures(email);
-  const { tier, reason } = tierFromFeatures(features);
+  const { tier, reason } = tierFromFeatures(features, getEffectiveThresholds());
   return { tier, reason, features, source: "keyword-fallback" };
 }
 

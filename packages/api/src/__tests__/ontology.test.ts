@@ -5,6 +5,7 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
+import { KEYWORD_SCORES } from "../keyword-policy.js";
 import { describePolicy } from "../ontology.js";
 import { PRIOR_SHORTCIRCUIT_TIERS, SENDER_PRIOR_POLICY } from "../sender-policy.js";
 import { TIER_THRESHOLDS } from "../tier-policy.js";
@@ -33,6 +34,15 @@ describe("describePolicy", () => {
     (snap.relation.thresholds as { lowConfidenceFloor: number }).lowConfidenceFloor = 0.99;
     // The live constant is unchanged — a consumer can't corrupt classification.
     expect(TIER_THRESHOLDS.lowConfidenceFloor).toBe(0.5);
+  });
+
+  it("detaches NESTED policy objects too (deep, not shallow, copy)", () => {
+    const snap = describePolicy();
+    // Mutating a nested field would corrupt the const under a shallow spread.
+    (snap.relation.thresholds.push as { confidence: number }).confidence = 0.01;
+    (snap.pattern.keywordScores.senderTrust as { marketing: number }).marketing = 0.99;
+    expect(TIER_THRESHOLDS.push.confidence).toBe(0.7);
+    expect(KEYWORD_SCORES.senderTrust.marketing).toBe(0.05);
   });
 
   it("renders prior short-circuit Sets as arrays", () => {

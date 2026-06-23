@@ -31,6 +31,7 @@ import {
 } from "../email-sync.js";
 import { toggleReadGmail } from "../gmail.js";
 import { senderEmail } from "../notification-format.js";
+import { captureError } from "../sentry.js";
 import { getTrustScore, getTrustScoresBulk, type TrustScoreResult } from "../trust-score.js";
 import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
 import { registerEmailBulkRoutes } from "./email-bulk.js";
@@ -908,7 +909,9 @@ export async function emailRoutes(app: FastifyInstance) {
     if (dbEmail) {
       // Mark-as-read is explicit. Many users rely on unread as a work queue.
       if (markRead === "true" && !dbEmail.isRead) {
-        toggleReadGmail(uid, dbEmail.gmailId, true).catch(() => {});
+        toggleReadGmail(uid, dbEmail.gmailId, true).catch((err) =>
+          console.warn(`[EMAIL] toggleReadGmail failed for ${dbEmail.gmailId}`, err),
+        );
         await prisma.emailMessage.update({ where: { id: dbEmail.id }, data: { isRead: true } });
       }
       const actionItems = parseJsonArray(dbEmail.actionItems);
@@ -986,20 +989,34 @@ export async function emailRoutes(app: FastifyInstance) {
     try {
       const result = await syncEmails(uid, maxResults || 30, query);
 
-      // Reconcile: remove deleted/archived emails from DB (blocking — wait for cleanup)
-      const reconcileResult = await reconcileEmails(uid);
+      // Reconcile (remove archived/deleted, refresh read-status) makes one Gmail
+      // call per stored email, which used to block this response by tens of
+      // seconds on a large mailbox. New mail is already persisted by syncEmails
+      // above, so the user sees it immediately; reconcile converges in the
+      // background and on the next scheduler tick. Fire-and-forget, but never
+      // swallowed — log a signal so a broken reconcile is visible.
+      reconcileEmails(uid).catch((err) => {
+        console.error(`[EMAIL-SYNC] Background reconcile failed for user ${uid}:`, err);
+        captureError(err, { tags: { scope: "email.sync.reconcile" }, extra: { userId: uid } });
+      });
 
-      // Trigger AI summarization (non-blocking)
-      summarizeUnsummarizedEmails(uid, result.newCount).catch(() => {});
+      // Trigger AI summarization (non-blocking, but never silent — the manual
+      // /sync path must match the scheduler's console+Sentry discipline).
+      summarizeUnsummarizedEmails(uid, result.newCount).catch((err) => {
+        console.warn(`[EMAIL-SYNC] background summarize failed for user ${uid}`, err);
+        captureError(err, { tags: { scope: "email.sync.summarize" }, extra: { userId: uid } });
+      });
       analyzePendingEmailAttachments(uid, Math.max(10, result.newCount * 3))
         .then(() => syncRecentCandidateIntakes(uid, Math.max(10, result.newCount)))
-        .catch(() => {});
+        .catch((err) => {
+          console.warn(
+            `[EMAIL-SYNC] background attachment/intake analysis failed for user ${uid}`,
+            err,
+          );
+          captureError(err, { tags: { scope: "email.sync.attachments" }, extra: { userId: uid } });
+        });
 
-      return {
-        ...result,
-        removed: reconcileResult.removed,
-        updated: reconcileResult.updated,
-      };
+      return result;
     } catch (err) {
       return { error: err instanceof Error ? err.message : "Sync failed" };
     }

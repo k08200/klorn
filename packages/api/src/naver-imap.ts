@@ -294,6 +294,10 @@ export async function syncNaverImap(args: SyncArgs): Promise<SyncResult> {
           }
         } catch (err) {
           result.errors += 1;
+          // console first: captureError is a no-op without a Sentry DSN, so in
+          // dev/self-host an upsert failure would drop this email from triage
+          // with no trace (matches the classify path's signal 10 lines above).
+          console.warn(`[naver-imap] upsert failed for ${stableId}`, err);
           captureError(err, {
             tags: { scope: "naver-imap.upsert" },
             extra: { userId: args.userId, stableId },

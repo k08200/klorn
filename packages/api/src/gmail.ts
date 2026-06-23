@@ -145,6 +145,18 @@ export function isGoogleAuthError(err: unknown): boolean {
   );
 }
 
+/**
+ * A 404/410 from the Gmail API for a single message: it was deleted, trashed,
+ * or expunged between a `messages.list` and the follow-up `messages.get`. This
+ * is an expected race during sync/reconcile — skip that message, don't treat it
+ * as a failure or abort the surrounding batch.
+ */
+export function isGoogleNotFoundError(err: unknown): boolean {
+  const gaxiosErr = err as { response?: { status?: number }; code?: string | number };
+  const status = gaxiosErr.response?.status ?? gaxiosErr.code;
+  return status === 404 || status === 410;
+}
+
 export async function markGoogleTokenForReconnect(
   userId: string,
   reason: GoogleConnectionStatus["reason"] = "provider_auth_failed",

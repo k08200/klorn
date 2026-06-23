@@ -56,6 +56,19 @@ export const TIER_THRESHOLDS = {
   auto: { reversibility: 0.85, confidence: 0.85, urgency: 0.5, senderTrust: 0.5 },
 } as const;
 
+/**
+ * Mutable structural shape of {@link TIER_THRESHOLDS}. The runtime
+ * effective-threshold config (base const merged with approved overrides, see
+ * ontology-overrides.ts) has this shape but not the literal `as const` types, so
+ * `tierFromFeatures` takes a `ThresholdConfig` rather than `typeof TIER_THRESHOLDS`.
+ */
+export interface ThresholdConfig {
+  lowConfidenceFloor: number;
+  push: { urgency: number; confidence: number };
+  silent: { senderTrust: number; urgency: number; reversibility: number };
+  auto: { reversibility: number; confidence: number; urgency: number; senderTrust: number };
+}
+
 /** Clamp a feature score into the valid 0.0–1.0 range. Shared by the judge. */
 export const CLAMP = (n: number): number => Math.max(0, Math.min(1, n));
 
@@ -68,7 +81,10 @@ export const CLAMP = (n: number): number => Math.max(0, Math.min(1, n));
  *
  * Order matters — earlier branches dominate.
  */
-export function tierFromFeatures(features: TierFeatures): {
+export function tierFromFeatures(
+  features: TierFeatures,
+  thresholds: ThresholdConfig = TIER_THRESHOLDS,
+): {
   tier: Tier;
   reason: string;
 } {
@@ -78,7 +94,7 @@ export function tierFromFeatures(features: TierFeatures): {
     reversibility: CLAMP(features.reversibility),
     urgency: CLAMP(features.urgency),
   };
-  const t = TIER_THRESHOLDS;
+  const t = thresholds;
 
   // 1. Very low confidence → QUEUE.
   //    Hiding uncertain mail behind a wrong tier is the worst failure mode.

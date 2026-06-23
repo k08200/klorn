@@ -8,7 +8,20 @@
 import { type gmail_v1, google } from "googleapis";
 import { extractAttachmentContent, isReadableEmailAttachment } from "./email-attachment-text.js";
 import type { RawEmailAttachment } from "./email-attachments.js";
-import { getAuthedClient, isGoogleAuthError, markGoogleTokenForReconnect } from "./gmail.js";
+import {
+  getAuthedClient,
+  isGoogleAuthError,
+  isGoogleNotFoundError,
+  markGoogleTokenForReconnect,
+} from "./gmail.js";
+import { Semaphore } from "./semaphore.js";
+import { captureError } from "./sentry.js";
+
+// Gmail has no batch endpoint for messages.get, so each message is a separate
+// round-trip. Fetching them serially makes a 30-message sync take 30× the
+// per-call latency; bound concurrency instead. 8 keeps well under Gmail's
+// per-user quota (250 units/s; messages.get = 5 units → 50/s ceiling).
+const GMAIL_FETCH_CONCURRENCY = 8;
 
 export interface GmailRawEmail {
   gmailId: string;
@@ -189,23 +202,42 @@ export async function fetchGmailEmails(
 
   try {
     const res = await gmail.users.messages.list(listParams);
-    const messages = res.data.messages || [];
+    const ids = (res.data.messages || [])
+      .map((msg) => msg.id)
+      .filter((id): id is string => Boolean(id));
 
-    const emails: GmailRawEmail[] = [];
-
-    for (const msg of messages) {
-      if (!msg.id) continue;
-
-      const detail = await gmail.users.messages.get({
-        userId: "me",
-        id: msg.id,
-        format: "full",
-      });
-
-      emails.push(await parseGmailMessageDetail(gmail, msg.id, detail.data));
-    }
-
-    return emails;
+    // Fetch + parse each message with bounded concurrency. Semaphore.all
+    // preserves input order, so the surviving array stays in list (newest-first)
+    // order exactly as the old serial loop produced it.
+    const sem = new Semaphore(GMAIL_FETCH_CONCURRENCY);
+    const fetched = await sem.all<GmailRawEmail | null>(
+      ids.map((id) => async () => {
+        try {
+          const detail = await gmail.users.messages.get({
+            userId: "me",
+            id,
+            format: "full",
+          });
+          return await parseGmailMessageDetail(gmail, id, detail.data);
+        } catch (err) {
+          // Deleted between list and get — expected race, skip silently.
+          if (isGoogleNotFoundError(err)) return null;
+          // Auth failure must abort the whole batch so the caller can flag a
+          // reconnect (handled by the outer catch below).
+          if (isGoogleAuthError(err)) throw err;
+          // Anything else (transient 429/5xx, a single unparseable message):
+          // drop just this one rather than sinking the whole batch — it stays
+          // in the inbox and is retried next sync. Never silent.
+          console.warn(`[GMAIL-FETCH] Skipped message ${id} for user ${userId}:`, err);
+          captureError(err, {
+            tags: { scope: "gmail.fetch.message" },
+            extra: { userId, gmailId: id },
+          });
+          return null;
+        }
+      }),
+    );
+    return fetched.filter((e): e is GmailRawEmail => e !== null);
   } catch (err) {
     if (isGoogleAuthError(err)) {
       await markGoogleTokenForReconnect(userId);

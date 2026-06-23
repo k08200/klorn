@@ -381,7 +381,7 @@ export async function chatRoutes(app: FastifyInstance) {
         .then(({ learnFromRejection }) =>
           learnFromRejection(userId, action.toolName, action.reasoning || "", trimmedReason || ""),
         )
-        .catch(() => {});
+        .catch((err) => console.warn(`[PENDING-ACTION] learnFromRejection failed`, err));
 
       await recordFeedback({
         userId,
@@ -407,7 +407,7 @@ export async function chatRoutes(app: FastifyInstance) {
               "user",
             ),
           )
-          .catch(() => {});
+          .catch((err) => console.warn(`[PENDING-ACTION] never-suggest remember failed`, err));
       }
 
       return { success: true, neverSuggested: !!neverSuggest };
@@ -460,7 +460,9 @@ export async function chatRoutes(app: FastifyInstance) {
             evidence: `Snoozed until ${snoozeDate.toISOString()}`,
           }),
         )
-        .catch(() => {});
+        // recordFeedback trains the suppression policy — a silent failure here
+        // quietly corrupts the calibration signal, so log a trace.
+        .catch((err) => console.warn(`[PENDING-ACTION] snooze recordFeedback failed`, err));
 
       return { success: true, snoozedUntil: snoozeDate.toISOString() };
     },
