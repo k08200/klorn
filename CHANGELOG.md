@@ -12,6 +12,14 @@ calendar time.
 
 ## [Unreleased]
 
+### Changed — OntologyProposal.status is a Prisma enum
+- **`status` moved from raw `String` to a `ProposalStatus` enum
+  (OPEN/APPLIED/DISMISSED).** Status became load-bearing with the approval gate —
+  `APPLIED` drives the live classifier — so a typo must fail at compile time (and
+  a bad value at the DB) instead of silently mis-applying or skipping an override.
+  No code changes (the existing string literals match the enum); migration casts
+  in place.
+
 ### Added — Ontology approval gate (live overrides)
 - **Approved threshold proposals now drive the classifier (opt-in, per-knob).**
   The write-side's next rung: an admin can APPROVE a proposal so the firewall
