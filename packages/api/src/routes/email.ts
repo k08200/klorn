@@ -1009,7 +1009,10 @@ export async function emailRoutes(app: FastifyInstance) {
       analyzePendingEmailAttachments(uid, Math.max(10, result.newCount * 3))
         .then(() => syncRecentCandidateIntakes(uid, Math.max(10, result.newCount)))
         .catch((err) => {
-          console.warn(`[EMAIL-SYNC] background attachment/intake analysis failed for user ${uid}`, err);
+          console.warn(
+            `[EMAIL-SYNC] background attachment/intake analysis failed for user ${uid}`,
+            err,
+          );
           captureError(err, { tags: { scope: "email.sync.attachments" }, extra: { userId: uid } });
         });
 
