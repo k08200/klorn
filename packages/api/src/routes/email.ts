@@ -512,6 +512,15 @@ export function safeAttachmentFilename(filename: string): string {
 }
 
 export async function emailRoutes(app: FastifyInstance) {
+  // Every email route is private user mail. Gate the whole plugin (including
+  // the sub-route groups registered below, which share this encapsulation
+  // context) so revoked/kicked tokens are rejected — bare getUserId() only
+  // verifies the JWT signature and skips the device-kick + password-reset
+  // epoch checks that requireAuth enforces. Registered before the routes so it
+  // applies to all of them. (Sub-files keep their own per-route requireAuth for
+  // standalone test registration; the double-run is idempotent.)
+  app.addHook("preHandler", requireAuth);
+
   // Sub-route groups live in sibling files and register against the same
   // FastifyInstance + prefix so client paths stay byte-identical.
   await registerEmailRulesRoutes(app);

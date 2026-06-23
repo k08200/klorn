@@ -160,6 +160,10 @@ vi.mock("../db.js", () => {
       create: vi.fn(async () => ({ id: "device-1" })),
       findMany: vi.fn(async () => []),
       findFirst: vi.fn(async () => ({ id: "device-1" })),
+      // requireAuth → isDeviceSessionValid() looks the token's device up by
+      // tokenHash. Return a valid device so authed routes (now gated by
+      // requireAuth, not bare getUserId) see an active session in tests.
+      findUnique: vi.fn(async () => ({ id: "device-1" })),
       deleteMany: vi.fn(async () => ({ count: 0 })),
       update: vi.fn(async () => ({})),
       count: vi.fn(async () => 1),

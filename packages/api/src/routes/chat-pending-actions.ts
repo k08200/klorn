@@ -20,7 +20,7 @@ import {
   sendEmailPayloadHash,
 } from "../attention-floor.js";
 import { upsertAttentionForPendingAction } from "../attention-mirror.js";
-import { getUserId } from "../auth.js";
+import { getUserId, requireAuth } from "../auth.js";
 import { db, prisma } from "../db.js";
 import { recipientFromToolArgs, recordFeedback } from "../feedback.js";
 
@@ -91,6 +91,11 @@ function hasMeaningfulText(value: string | undefined): value is string {
 }
 
 export async function chatRoutes(app: FastifyInstance) {
+  // Every route here is per-user (pending actions, run/dismiss). Gate the whole
+  // plugin so revoked/kicked tokens are rejected — bare getUserId() skips the
+  // device-kick + password-reset epoch checks that requireAuth enforces.
+  app.addHook("preHandler", requireAuth);
+
   // GET /api/chat/pending-actions — All pending actions for the current user across conversations.
   // Powers the mobile inbox so users can see & act on every "needs your attention" item in one place.
   app.get("/pending-actions", async (request) => {

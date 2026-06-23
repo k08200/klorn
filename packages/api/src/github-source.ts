@@ -33,6 +33,7 @@ import type { ClassifiableEmail } from "./email-classifier.js";
 import { fetchGitHubNotifications } from "./github-client.js";
 import { pushForFirewallGitHubNotification } from "./github-push.js";
 import { judgeEmail } from "./poc-judge.js";
+import { captureError } from "./sentry.js";
 
 /** A GitHub notification thread, normalized from the Notifications API. */
 export interface GitHubNotification {
@@ -131,9 +132,13 @@ export async function ingestGitHubNotifications(
       // A judge=PUSH GitHub thread must actually interrupt — not just appear in
       // the firewall. Best-effort: a push failure never drops the mirror.
       if ((judgement as EmailJudgementLike).tier === "PUSH") {
-        await pushForFirewallGitHubNotification(like).catch((err) =>
-          console.warn(`[GITHUB] push failed for thread ${n.id}:`, err),
-        );
+        await pushForFirewallGitHubNotification(like).catch((err) => {
+          // A failed PUSH means the user silently missed a judge-adjudicated
+          // interrupt — signal both to the console and Sentry (captureError
+          // alone is silent when Sentry is off).
+          console.warn(`[GITHUB] push failed for thread ${n.id}:`, err);
+          captureError(err, { tags: { scope: "github.push" }, extra: { threadId: n.id } });
+        });
       }
       surfaced++;
     } catch (err) {

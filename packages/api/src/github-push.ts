@@ -67,11 +67,14 @@ export async function pushForFirewallGitHubNotification(n: GitHubNotificationLik
     createdAt: notification.createdAt.toISOString(),
   });
 
-  // category "system": not category-filterable (no GitHub-specific pref), but
-  // still respects quiet hours and the rate limit.
+  // category "github_urgent": not category-filterable (no GitHub-specific pref)
+  // and still respects quiet hours + the rate limit, but authoredSurface() maps
+  // it to "firewall" so the judge=PUSH thread bypasses the inbound-mail noise
+  // heuristic (which would otherwise silently veto titles containing collision
+  // words like "verify"/"deal"/"confirm your"), matching the email path.
   await sendPushNotification(
     n.userId,
     { title: `GitHub — ${n.repo}`, body: n.subjectTitle, url: "/inbox/firewall" },
-    "system",
+    "github_urgent",
   );
 }
