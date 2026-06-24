@@ -103,4 +103,39 @@ describe("trueUpCostLedgers", () => {
     expect(recordCostUsage).not.toHaveBeenCalled();
     expect(recordGlobalCostUsage).not.toHaveBeenCalled();
   });
+
+  it("charges NOTHING when the call was served on the user's own (BYOK) key", async () => {
+    // BYOK: the user paid their own provider, so Klorn's per-user cap and the
+    // shared global ceiling stay untouched even on a paid model with large
+    // usage — that is the contract behind "add your own key in Settings".
+    await trueUpCostLedgers({
+      userId: "u1",
+      model: PAID_MODEL,
+      prebilledCents: 0,
+      usage: { prompt_tokens: 1_000_000, completion_tokens: 50_000 },
+      servedByUserKey: true,
+    });
+    expect(recordCostUsage).not.toHaveBeenCalled();
+    expect(recordGlobalCostUsage).not.toHaveBeenCalled();
+  });
+
+  it("charges the FULL actual cost on an env fallthrough (the BYOK key failed)", async () => {
+    // The user's key errored and the call fell through to Klorn's env provider,
+    // so Klorn DID pay. The gate skipped the pre-bill (prebilledCents: 0), so
+    // the full actual cost is charged here — not a delta against a pre-bill
+    // that never happened. This is what closes the "junk key dodges the cap"
+    // hole: env spend always lands on the ledgers.
+    await trueUpCostLedgers({
+      userId: "u1",
+      model: PAID_MODEL,
+      prebilledCents: 0,
+      usage: { prompt_tokens: 1_000_000, completion_tokens: 50_000 },
+      servedByUserKey: false,
+    });
+    expect(recordCostUsage).toHaveBeenCalledTimes(1);
+    const [userId, charged] = recordCostUsage.mock.calls[0];
+    expect(userId).toBe("u1");
+    expect(charged).toBeGreaterThan(0);
+    expect(recordGlobalCostUsage).toHaveBeenCalledWith(charged);
+  });
 });

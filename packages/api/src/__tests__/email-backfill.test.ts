@@ -19,12 +19,19 @@ const captureError = vi.hoisted(() => vi.fn());
 const sendPushNotification = vi.hoisted(() => vi.fn(async () => ({})));
 const pushNotification = vi.hoisted(() => vi.fn());
 const findOpenEmailAttentionItemId = vi.hoisted(() => vi.fn(async () => null));
+// Hoisted so the BYOK resolve-once invariant is assertable: this is the lookup
+// getUserLlmCredentials performs, and the whole point of the batch pattern is
+// that it fires once per sweep, not once per email.
+const userFindUnique = vi.hoisted(() => vi.fn(async () => null));
 
 vi.mock("../db.js", () => {
   const prisma = {
     emailMessage: { findMany: emailFindMany },
     attentionItem: { findMany: attentionFindMany },
     notification: { findFirst: notifFindFirst, create: notifCreate },
+    // judgeAndMirrorEmail resolves the user's BYOK credentials; a keyless user
+    // (null) yields {} and the call falls through to the shared env key.
+    user: { findUnique: userFindUnique },
   };
   return { prisma, db: prisma };
 });
@@ -72,6 +79,8 @@ beforeEach(() => {
   pushNotification.mockClear();
   findOpenEmailAttentionItemId.mockReset();
   findOpenEmailAttentionItemId.mockResolvedValue(null);
+  userFindUnique.mockReset();
+  userFindUnique.mockResolvedValue(null); // keyless user → {} → shared-env path
 });
 
 const judgedSubjects = () => judgeEmail.mock.calls.map((c) => c[0].subject);
@@ -109,6 +118,24 @@ describe("backfillEmailAttentionItems", () => {
     const n = await backfillEmailAttentionItems("u1");
     expect(n).toBe(10); // BACKFILL_BATCH
     expect(judgeEmail).toHaveBeenCalledTimes(10);
+  });
+
+  it("resolves the user's BYOK credentials once for the whole sweep, not per email", async () => {
+    // The invariant the resolve-once pattern exists to guarantee: a backlog of
+    // N emails for one user costs ONE credential lookup, not N. The sweep
+    // resolves before the loop and threads the result into every
+    // judgeAndMirrorEmail, whose `credentials ?? resolve` then short-circuits.
+    emailFindMany.mockResolvedValue([recent("a", 1), recent("b", 2), recent("c", 3)]);
+    attentionFindMany.mockResolvedValue([]);
+
+    await backfillEmailAttentionItems("u1");
+
+    expect(judgeEmail).toHaveBeenCalledTimes(3);
+    expect(userFindUnique).toHaveBeenCalledTimes(1); // resolve-once, not 3
+    // keyless user → {} → every judge call carries the shared-env credentials
+    for (const call of judgeEmail.mock.calls) {
+      expect(call[3]).toEqual({});
+    }
   });
 
   it("drains oldest-first (arrival order), not newest-first", async () => {
@@ -181,5 +208,17 @@ describe("judgeAndMirrorEmail — PUSH tier drives a real push", () => {
     const tier = await judgeAndMirrorEmail("u1", recent("err", 5));
     expect(tier).toBe("PUSH");
     expect(captureError).toHaveBeenCalled();
+  });
+
+  it("self-resolves BYOK credentials when the caller passes none (inline path)", async () => {
+    // The single-email entry point (no `credentials` arg) must resolve them
+    // itself via `credentials ?? await getUserLlmCredentials(userId)`, so an
+    // inline judge bills the user's own key too — not just the batch callers.
+    judgeEmail.mockResolvedValue({ tier: "QUEUE", reason: "r", features: {}, source: "llm" });
+
+    await judgeAndMirrorEmail("u1", recent("solo", 5));
+
+    expect(userFindUnique).toHaveBeenCalledTimes(1); // self-resolve fired
+    expect(judgeEmail.mock.calls[0][3]).toEqual({}); // keyless → shared-env creds reach the judge
   });
 });

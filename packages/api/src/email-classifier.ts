@@ -11,6 +11,7 @@
 
 import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, JUDGE_MODEL } from "./openai.js";
+import type { ProviderCredentials } from "./providers/index.js";
 import { captureError } from "./sentry.js";
 
 export type EmailPriority = "high" | "medium" | "low";
@@ -207,6 +208,7 @@ ${lines.join("\n")}`;
 async function classifyBatchWithLlm(
   emails: ClassifiableEmail[],
   userId?: string,
+  credentials?: ProviderCredentials,
 ): Promise<ClassifiedLabel[] | null> {
   try {
     const response = await createCompletion(
@@ -225,7 +227,10 @@ async function classifyBatchWithLlm(
         ],
         response_format: { type: "json_object" },
       },
-      userId ? { userId, priority: "background" as const } : {},
+      {
+        ...(userId ? { userId, priority: "background" as const } : {}),
+        ...(credentials ? { credentials } : {}),
+      },
     );
 
     const raw = response.choices[0]?.message?.content;
@@ -246,6 +251,10 @@ async function classifyBatchWithLlm(
       };
     });
   } catch (err) {
+    // Fall back to the keyword path, but leave a signal: a misconfigured BYOK
+    // key (401) or a quota-locked model would otherwise silently degrade every
+    // batch with no trace (captureError is a no-op without a Sentry DSN).
+    console.warn("[CLASSIFIER] LLM batch failed — falling back to keyword path", err);
     captureError(err, { tags: { scope: "email-classifier.llm" } });
     return null;
   }
@@ -281,6 +290,7 @@ function keywordFallback(email: ClassifiableEmail): ClassifiedLabel {
 export async function classifyEmailBatch(
   emails: ClassifiableEmail[],
   userId?: string,
+  credentials?: ProviderCredentials,
 ): Promise<ClassifiedLabel[]> {
   if (emails.length === 0) return [];
 
@@ -289,7 +299,7 @@ export async function classifyEmailBatch(
 
   if (llmIndexes.length > 0) {
     const llmInputs = llmIndexes.map((i) => emails[i]);
-    const llmResults = await classifyBatchWithLlm(llmInputs, userId);
+    const llmResults = await classifyBatchWithLlm(llmInputs, userId, credentials);
 
     llmIndexes.forEach((inboxIdx, batchIdx) => {
       results[inboxIdx] = llmResults?.[batchIdx] ?? keywordFallback(emails[inboxIdx]);

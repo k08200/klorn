@@ -29,6 +29,25 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      # LLM model pins — make prod explicit instead of relying on the in-code
+      # defaults (which intentionally stay :free for self-hosters without paid
+      # credit). Prod runs on a funded OpenRouter key, so every user-facing
+      # surface is unified on the reliable paid flash model; per-user load is
+      # billed to each user's own key when set (BYOK), and the per-user cost cap
+      # (DAILY_COST_CAP_CENTS) backstops the shared key. FALLBACK_MODEL stays
+      # :free on purpose — it is the $0 degradation net that only activates when
+      # paid credit is exhausted (402), so the service degrades instead of
+      # hard-failing. Model names are public, not secrets — pinned in-repo.
+      - key: CHAT_MODEL
+        value: "google/gemini-2.5-flash"
+      - key: AGENT_MODEL
+        value: "google/gemini-2.5-flash"
+      - key: JUDGE_MODEL
+        value: "google/gemini-2.5-flash"
+      - key: VISION_MODEL
+        value: "google/gemini-2.5-flash"
+      - key: FALLBACK_MODEL
+        value: "google/gemma-4-31b-it:free"
       - key: FRONTEND_URL
         sync: false
       - key: WEB_URL

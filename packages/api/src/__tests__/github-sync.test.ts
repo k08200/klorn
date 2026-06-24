@@ -18,7 +18,12 @@ vi.mock("../db.js", () => ({
   db: {},
 }));
 vi.mock("../github-client.js", () => ({ fetchGitHubNotifications: fetchNotifsMock }));
-vi.mock("../crypto-tokens.js", () => ({ decryptToken: decryptMock }));
+vi.mock("../crypto-tokens.js", () => ({
+  decryptToken: decryptMock,
+  // getUserLlmCredentials (BYOK resolution) decrypts the optional per-user
+  // provider keys; absent keys decrypt to null → keyless, shared-env path.
+  decryptOptional: (v: string | null | undefined) => (v ? decryptMock(v) : null),
+}));
 vi.mock("../poc-judge.js", () => ({
   judgeEmail: judgeEmailMock,
   EMPTY_JUDGE_CONTEXT: { corrections: [], senderPrior: null, senderFacts: null },
