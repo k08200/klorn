@@ -1,14 +1,20 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
-import {
-  type GraphEdge,
-  type GraphNode,
-  RelationshipGraph,
-} from "../../components/relationship-graph";
+import type { GraphEdge, GraphNode } from "../../components/relationship-graph";
 import { useToast } from "../../components/toast";
 import { apiFetch } from "../../lib/api";
+
+// 3d-force-graph touches WebGL/window — load it client-only.
+const ForceGraph3DView = dynamic(
+  () => import("../../components/force-graph-3d").then((m) => m.ForceGraph3DView),
+  {
+    ssr: false,
+    loading: () => <p className="text-sm text-stone-500">Loading 3D graph…</p>,
+  },
+);
 
 type Mode = "relationships" | "decisions";
 
@@ -147,7 +153,7 @@ function GraphPageInner() {
             No graph data.
           </p>
         ) : (
-          <RelationshipGraph nodes={data.nodes} edges={data.edges} />
+          <ForceGraph3DView nodes={data.nodes} edges={data.edges} />
         )}
       </div>
     </main>

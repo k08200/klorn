@@ -194,8 +194,6 @@ export async function firewallRoutes(app: FastifyInstance) {
       };
     }
 
-    const graph = await getInteractionGraph(userId);
-
     const domainOf = (email: string): string => {
       const at = email.lastIndexOf("@");
       return at >= 0 ? email.slice(at + 1).toLowerCase() : "";
@@ -214,38 +212,66 @@ export async function firewallRoutes(app: FastifyInstance) {
       "protonmail.com",
     ]);
 
+    // The interaction-graph ranks only the TOP contacts. To densify the view we
+    // build a node for EVERY sender in recent stored mail, then overlay the
+    // interaction-graph score/tags on the ones it ranked.
+    const [interaction, recent, self] = await Promise.all([
+      getInteractionGraph(userId),
+      prisma.emailMessage.findMany({
+        where: { userId },
+        select: { from: true },
+        orderBy: { receivedAt: "desc" },
+        take: 4000,
+      }),
+      prisma.user.findUnique({ where: { id: userId }, select: { email: true } }),
+    ]);
+    const igByEmail = new Map(interaction.nodes.map((n) => [n.email.toLowerCase(), n]));
+    const selfEmail = self?.email?.toLowerCase() ?? "";
+
+    const senders = new Map<string, { email: string; name: string | null; count: number }>();
+    for (const { from } of recent) {
+      const email = senderEmail(from).toLowerCase();
+      if (!email || email === selfEmail) continue;
+      const m = from.match(/^\s*"?([^"<]+?)"?\s*</);
+      const name = m ? m[1].trim() : null;
+      const cur = senders.get(email) ?? { email, name, count: 0 };
+      cur.count += 1;
+      if (!cur.name && name) cur.name = name;
+      senders.set(email, cur);
+    }
+    // Cap by frequency so a big mailbox stays renderable.
+    const MAX_CONTACTS = 150;
+    const top = [...senders.values()].sort((a, b) => b.count - a.count).slice(0, MAX_CONTACTS);
+
     const nodes = [
       { id: "__you__", label: "You", kind: "self", score: 100, group: "", tags: [] as string[] },
-      ...graph.nodes.map((n) => ({
-        id: n.email.toLowerCase(),
-        label: n.name || n.email,
-        kind: "contact" as const,
-        score: n.score,
-        group: domainOf(n.email),
-        tags: n.tags,
-        emailCount: n.emailCount,
-        lastEmailDaysAgo: n.lastEmailDaysAgo,
-        upcomingMeetings: n.upcomingMeetings,
-      })),
+      ...top.map((s) => {
+        const ig = igByEmail.get(s.email);
+        return {
+          id: s.email,
+          label: s.name || s.email,
+          kind: "contact" as const,
+          // Size by interaction score when ranked, else by email volume.
+          score: ig?.score ?? Math.min(70, 8 + s.count * 2),
+          group: domainOf(s.email),
+          tags: ig?.tags ?? [],
+          emailCount: s.count,
+        };
+      }),
     ];
 
     const edges: Array<{ source: string; target: string; kind: string; weight: number }> = [];
-    for (const n of graph.nodes) {
-      edges.push({
-        source: "__you__",
-        target: n.email.toLowerCase(),
-        kind: "interaction",
-        weight: n.score,
-      });
+    for (const s of top) {
+      edges.push({ source: "__you__", target: s.email, kind: "interaction", weight: s.count });
     }
     // Chain members of each real-company domain so they cluster, without an
     // O(n^2) clique that would hairball a large company.
     const byDomain = new Map<string, string[]>();
-    for (const n of graph.nodes) {
-      const d = domainOf(n.email);
+    for (const s of top) {
+      const d = domainOf(s.email);
       if (!d || FREEMAIL.has(d)) continue;
       const arr = byDomain.get(d) ?? [];
-      arr.push(n.email.toLowerCase());
+      arr.push(s.email);
       byDomain.set(d, arr);
     }
     for (const members of byDomain.values()) {
@@ -254,7 +280,7 @@ export async function firewallRoutes(app: FastifyInstance) {
       }
     }
 
-    return { nodes, edges, builtAt: graph.builtAt };
+    return { nodes, edges, builtAt: interaction.builtAt };
   });
 
   app.get("/", async (request): Promise<FirewallResponse> => {
