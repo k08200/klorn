@@ -20,9 +20,11 @@ import { checkAttentionInputHash } from "../attention-input-hash.js";
 import { overrideAttentionTier } from "../attention-override.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
+import { getDecisionMetrics } from "../decision-metrics.js";
 import { ensureFreshGmailWatch } from "../gmail.js";
 import { getInteractionGraph } from "../interaction-graph.js";
 import { senderEmail } from "../notification-format.js";
+import { describePolicy } from "../ontology.js";
 import { captureError } from "../sentry.js";
 import { manualOverrideReason, normalizeTier, TIERS, type Tier } from "../tiers.js";
 import { getTrustScoresBulk } from "../trust-score.js";
@@ -122,14 +124,76 @@ function extractEmailId(
 export async function firewallRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
 
-  // GET /api/inbox/firewall/graph — the relationship graph the firewall reasons
-  // over, as nodes/edges for a force-directed view. Read-only over data we
-  // already have (interaction-graph): NO new graph engine. Nodes = you + your
-  // ranked contacts; edges = you→contact (interaction) plus contact↔contact when
-  // they share a non-freemail domain (a company cluster). The decision/ontology
-  // graph is a separate mode to add later, not mixed in here.
+  // GET /api/inbox/firewall/graph?mode=relationships|decisions — nodes/edges for
+  // a force-directed view. Read-only over data we already have: NO new graph
+  // engine. Two modes:
+  //   - relationships (default): you + your ranked contacts (interaction-graph),
+  //     clustered by company domain.
+  //   - decisions: the classifier "brain" — the 4 features gating the 4 tiers
+  //     (the tierFromFeatures rule), with your override signal (decision-metrics)
+  //     overlaid on each tier. Always populated (it's the policy structure), so
+  //     it renders even on a thin account.
   app.get("/graph", async (request) => {
     const userId = getUserId(request);
+    const mode =
+      (request.query as { mode?: string }).mode === "decisions" ? "decisions" : "relationships";
+
+    if (mode === "decisions") {
+      const policy = describePolicy();
+      const m = (await getDecisionMetrics({ userId })).overall;
+      // Which features gate each tier, straight from tierFromFeatures' branches.
+      const GATES: Record<string, string[]> = {
+        PUSH: ["confidence", "urgency"],
+        SILENT: ["senderTrust", "urgency", "reversibility"],
+        AUTO: ["confidence", "senderTrust", "reversibility", "urgency"],
+        QUEUE: ["confidence"],
+      };
+      const tierNote: Record<string, string> = {
+        PUSH:
+          m.push.shown > 0
+            ? `shown ${m.push.shown}${m.push.recallUpperBound != null ? ` · recall ≤${m.push.recallUpperBound.toFixed(2)}` : ""}`
+            : "",
+        SILENT:
+          m.silent.shown > 0
+            ? `shown ${m.silent.shown}${m.silent.overSuppressionRate != null ? ` · over-suppress ${m.silent.overSuppressionRate.toFixed(2)}` : ""}`
+            : "",
+        QUEUE: "",
+        AUTO: "",
+      };
+      const FEATURES = ["confidence", "senderTrust", "reversibility", "urgency"];
+      const nodes = [
+        ...FEATURES.map((f) => ({
+          id: `feat:${f}`,
+          label: f,
+          kind: "feature" as const,
+          score: 30,
+          group: "feature",
+          tags: [] as string[],
+        })),
+        ...policy.tiers.map((t) => ({
+          id: `tier:${t}`,
+          label: tierNote[t] ? `${t} — ${tierNote[t]}` : t,
+          kind: "tier" as const,
+          score: 70,
+          group: "tier",
+          tags: [t],
+        })),
+      ];
+      const edges: Array<{ source: string; target: string; kind: string; weight: number }> = [];
+      for (const [tier, feats] of Object.entries(GATES)) {
+        for (const f of feats) {
+          edges.push({ source: `feat:${f}`, target: `tier:${tier}`, kind: "gate", weight: 1 });
+        }
+      }
+      return {
+        mode,
+        nodes,
+        edges,
+        overrideRate: m.overrideRate,
+        overriddenKnobs: policy.relation.overriddenKnobs,
+      };
+    }
+
     const graph = await getInteractionGraph(userId);
 
     const domainOf = (email: string): string => {

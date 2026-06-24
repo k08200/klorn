@@ -24,9 +24,19 @@ const W = 1000;
 const H = 680;
 const ITERATIONS = 300;
 
-/** Tag → node colour. Default blue matches the canonical force-graph look. */
+/** The 4 tiers, coloured consistently with the firewall UI. */
+const TIER_COLORS: Record<string, string> = {
+  PUSH: "#f87171",
+  QUEUE: "#60a5fa",
+  SILENT: "#9ca3af",
+  AUTO: "#34d399",
+};
+
+/** Node colour. Relationships mode keys off tags; decisions mode off kind. */
 function colorFor(n: GraphNode): string {
   if (n.kind === "self") return "#fbbf24"; // you
+  if (n.kind === "feature") return "#a78bfa"; // a scored input feature (violet)
+  if (n.kind === "tier") return TIER_COLORS[n.tags[0] ?? ""] ?? "#a78bfa"; // a tier
   if (n.tags.includes("overdue_reply")) return "#f87171"; // waiting on a reply
   if (n.tags.includes("meeting_soon")) return "#f59e0b"; // meeting coming up
   if (n.tags.includes("frequent")) return "#34d399"; // high-frequency contact
@@ -35,6 +45,8 @@ function colorFor(n: GraphNode): string {
 
 function radiusFor(n: GraphNode): number {
   if (n.kind === "self") return 17;
+  if (n.kind === "tier") return 15;
+  if (n.kind === "feature") return 11;
   return 5 + Math.sqrt(Math.max(0, n.score)) * 1.4;
 }
 
@@ -191,9 +203,9 @@ export function RelationshipGraph({ nodes, edges }: { nodes: GraphNode[]; edges:
               y={p.y - r - 3}
               textAnchor="middle"
               className="fill-stone-300"
-              style={{ fontSize: n.kind === "self" ? 13 : 10 }}
+              style={{ fontSize: n.kind === "self" || n.kind === "tier" ? 12 : 10 }}
             >
-              {n.label.length > 28 ? `${n.label.slice(0, 27)}…` : n.label}
+              {n.label.length > 42 ? `${n.label.slice(0, 41)}…` : n.label}
             </text>
           </g>
         );
