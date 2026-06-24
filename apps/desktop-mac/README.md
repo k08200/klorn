@@ -25,8 +25,25 @@ Sign in with **Sign in with Google**: the OS browser handles OAuth (the
 server's desktop nonce-poll flow), one consent also connects Gmail/Calendar, and
 the app stores the JWT in the **Keychain**. The decision queue loads on return.
 
-> A signed, distributable `.app` needs full Xcode (`open Package.swift`); this
-> repo's Command Line Tools toolchain builds and runs via `swift` directly.
+## Notifications & the .app bundle
+
+The app polls the queue every 60s and posts an **OS notification for each new
+PUSH item** — the firewall's whole promise (interrupt only for what's new and
+loud). The first load is a silent baseline, so an existing inbox doesn't spam you.
+
+OS notifications need a bundle identifier, which an unbundled `swift run` lacks
+(they're skipped cleanly there — the app still works). Package a real, double-
+clickable `Klorn.app` to get them:
+
+```bash
+scripts/make-app.sh                 # release build → Klorn.app, prod API baked in
+open Klorn.app                      # or double-click in Finder
+```
+
+The prod API URL is written into `Info.plist` (`KlornAPIURL`), so a plain
+double-click points at prod; `KLORN_API_URL` still overrides it. The bundle is
+ad-hoc signed so macOS shows the notification-permission prompt. (A *distributable*
+signed/notarized `.app` still needs full Xcode + a Developer ID.)
 
 ## Tests
 

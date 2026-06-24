@@ -116,6 +116,25 @@ func runSelfChecks() async -> Bool {
         DesktopTokenResponse.self, from: Data(#"{"status":"pending"}"#.utf8))
     check("DesktopToken pending", pendTok?.status == "pending" && pendTok?.token == nil)
 
+    print("Notifications:")
+    func push(_ id: String) -> FirewallItem {
+        FirewallItem(id: id, source: "email", sourceId: id, type: "email", title: id,
+                     tier: .push, tierReason: nil, priority: 0, surfacedAt: "",
+                     email: nil, href: nil, hashStale: nil)
+    }
+    let base0 = planPushNotifications(seen: [], baselineEstablished: false,
+                                      pushItems: [push("a"), push("b")])
+    check("first load = silent baseline", base0.toNotify.isEmpty && base0.seen == ["a", "b"])
+
+    let next = planPushNotifications(seen: ["a", "b"], baselineEstablished: true,
+                                     pushItems: [push("a"), push("b"), push("c")])
+    check("notifies only the new PUSH item",
+          next.toNotify.map(\.id) == ["c"] && next.seen == ["a", "b", "c"])
+
+    let none = planPushNotifications(seen: ["a", "b"], baselineEstablished: true,
+                                     pushItems: [push("a"), push("b")])
+    check("no new PUSH = no notifications", none.toNotify.isEmpty)
+
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0
 }

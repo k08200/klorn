@@ -18,6 +18,14 @@ final class AppModel {
     private(set) var loadError: String?
     private(set) var isLoadingQueue = false
 
+    /// Refresh cadence so new PUSH mail surfaces a notification even with the
+    /// window closed (also keeps the free-tier API warm).
+    static let pollIntervalSeconds: Double = 60
+    private var seenPush: Set<String> = []
+    private var baselineEstablished = false
+    private var didRequestNotifyAuth = false
+    private var pollTask: Task<Void, Never>?
+
     private let api: APIClient
 
     init(api: APIClient = APIClient()) {
@@ -43,6 +51,10 @@ final class AppModel {
     }
 
     func signOut() {
+        stopPolling()
+        seenPush = []
+        baselineEstablished = false
+        didRequestNotifyAuth = false
         KeychainStore.clear()
         queue = nil
         loadError = nil
@@ -55,11 +67,52 @@ final class AppModel {
         do {
             queue = try await api.get("/api/inbox/firewall", as: FirewallResponse.self)
             loadError = nil
+            reconcilePush()
+            ensureActive()
         } catch APIError.unauthorized {
             signOut()  // token expired/invalid — drop to sign-in
         } catch {
             loadError = Self.describe(error)
         }
+    }
+
+    /// Fire OS notifications for PUSH items new since the last load (the first
+    /// load is a silent baseline).
+    private func reconcilePush() {
+        guard let queue else { return }
+        let plan = planPushNotifications(
+            seen: seenPush,
+            baselineEstablished: baselineEstablished,
+            pushItems: queue.items(for: .push))
+        for item in plan.toNotify { PushNotifier.post(item) }
+        seenPush = plan.seen
+        baselineEstablished = true
+    }
+
+    /// Once signed in: request notification permission (once) and start the
+    /// background refresh loop. Idempotent.
+    private func ensureActive() {
+        guard phase == .signedIn else { return }
+        if !didRequestNotifyAuth {
+            didRequestNotifyAuth = true
+            Task { await PushNotifier.requestAuthorization() }
+        }
+        if pollTask == nil { startPolling() }
+    }
+
+    private func startPolling() {
+        pollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(AppModel.pollIntervalSeconds))
+                if Task.isCancelled { break }
+                await self?.loadQueue()
+            }
+        }
+    }
+
+    private func stopPolling() {
+        pollTask?.cancel()
+        pollTask = nil
     }
 
     private static func message(_ reason: SignInFailure) -> String {
