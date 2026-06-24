@@ -1,19 +1,56 @@
 import { decryptOptional } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
 import type { ProviderCredentials } from "./providers/index.js";
+import { captureError } from "./sentry.js";
 
 type UserWithKeys = {
   openRouterApiKey?: string | null;
   geminiApiKey?: string | null;
 };
 
+/**
+ * Decrypt one stored BYOK key, degrading to null (→ shared env key) if the
+ * stored ciphertext is corrupt or pre-v1. A bad key must NOT take down
+ * classification for the user: decryptToken throws deterministically on a
+ * malformed value, so without this guard every email for that user would fail
+ * at the credential step forever. We log + capture so the rot is visible (a
+ * no-op captureError without a Sentry DSN is why the console line comes first),
+ * then fall through to the env key — the same "degrade, don't die" posture
+ * gmail.ts takes on a bad Google token.
+ */
+function safeDecrypt(value: string | null | undefined, label: string, userId: string): string | null {
+  try {
+    return decryptOptional(value);
+  } catch (err) {
+    console.warn(`[BYOK] ${label} decrypt failed — falling back to the shared env key`, err);
+    captureError(err, { tags: { scope: "byok.decrypt" }, extra: { userId, key: label } });
+    return null;
+  }
+}
+
+/**
+ * Resolve a user's bring-your-own-key provider credentials. TOTAL by design —
+ * this is awaited on the firewall hot path and inside batch loops (backfill,
+ * summarize, naver, github), so a throw here would abort a whole sweep, not
+ * just one email. On any failure (DB blip or corrupt stored key) it logs a
+ * signal and returns the shared-env fallback ({} / null keys) instead of
+ * throwing. A keyless user resolves to null keys, which getProviderChain
+ * routes to the shared env provider unchanged.
+ */
 export async function getUserLlmCredentials(userId: string): Promise<ProviderCredentials> {
-  const user = (await prisma.user.findUnique({ where: { id: userId } })) as UserWithKeys | null;
+  let user: UserWithKeys | null;
+  try {
+    user = (await prisma.user.findUnique({ where: { id: userId } })) as UserWithKeys | null;
+  } catch (err) {
+    console.warn("[BYOK] user lookup failed — falling back to the shared env key", err);
+    captureError(err, { tags: { scope: "byok.lookup" }, extra: { userId } });
+    return {};
+  }
   if (!user) return {};
 
   return {
-    openRouterApiKey: decryptOptional(user.openRouterApiKey),
-    geminiApiKey: decryptOptional(user.geminiApiKey),
+    openRouterApiKey: safeDecrypt(user.openRouterApiKey, "openRouterApiKey", userId),
+    geminiApiKey: safeDecrypt(user.geminiApiKey, "geminiApiKey", userId),
     quotaScope: userId,
   };
 }
