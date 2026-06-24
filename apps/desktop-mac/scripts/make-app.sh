@@ -42,10 +42,26 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>KlornAPIURL</key><string>${API_URL}</string>
 </dict>
 </plist>
 PLIST
+
+# Dock/Finder icon: build AppIcon.icns from the source PNG (the glossy K).
+ICON_SRC="Resources/AppIcon.png"
+if [ -f "$ICON_SRC" ] && command -v iconutil >/dev/null 2>&1; then
+  echo "▸ Generating AppIcon.icns…"
+  ICONSET="$(mktemp -d)/AppIcon.iconset"
+  mkdir -p "$ICONSET" "$APP/Contents/Resources"
+  for sz in 16 32 128 256 512; do
+    sips -s format png -z "$sz" "$sz" "$ICON_SRC" --out "$ICONSET/icon_${sz}x${sz}.png" >/dev/null 2>&1
+    sips -s format png -z "$((sz * 2))" "$((sz * 2))" "$ICON_SRC" --out "$ICONSET/icon_${sz}x${sz}@2x.png" >/dev/null 2>&1
+  done
+  iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
+else
+  echo "▸ Resources/AppIcon.png missing — bundle ships without an icon"
+fi
 
 # Ad-hoc sign so macOS will surface the notification-permission prompt.
 if codesign --force --deep --sign - "$APP" >/dev/null 2>&1; then
