@@ -21,6 +21,7 @@ import { overrideAttentionTier } from "../attention-override.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { ensureFreshGmailWatch } from "../gmail.js";
+import { getInteractionGraph } from "../interaction-graph.js";
 import { senderEmail } from "../notification-format.js";
 import { captureError } from "../sentry.js";
 import { manualOverrideReason, normalizeTier, TIERS, type Tier } from "../tiers.js";
@@ -120,6 +121,77 @@ function extractEmailId(
 
 export async function firewallRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
+
+  // GET /api/inbox/firewall/graph — the relationship graph the firewall reasons
+  // over, as nodes/edges for a force-directed view. Read-only over data we
+  // already have (interaction-graph): NO new graph engine. Nodes = you + your
+  // ranked contacts; edges = you→contact (interaction) plus contact↔contact when
+  // they share a non-freemail domain (a company cluster). The decision/ontology
+  // graph is a separate mode to add later, not mixed in here.
+  app.get("/graph", async (request) => {
+    const userId = getUserId(request);
+    const graph = await getInteractionGraph(userId);
+
+    const domainOf = (email: string): string => {
+      const at = email.lastIndexOf("@");
+      return at >= 0 ? email.slice(at + 1).toLowerCase() : "";
+    };
+    // Freemail domains are NOT a company — clustering on them would fuse every
+    // unrelated personal contact into one false blob.
+    const FREEMAIL = new Set([
+      "gmail.com",
+      "outlook.com",
+      "hotmail.com",
+      "yahoo.com",
+      "icloud.com",
+      "me.com",
+      "naver.com",
+      "proton.me",
+      "protonmail.com",
+    ]);
+
+    const nodes = [
+      { id: "__you__", label: "You", kind: "self", score: 100, group: "", tags: [] as string[] },
+      ...graph.nodes.map((n) => ({
+        id: n.email.toLowerCase(),
+        label: n.name || n.email,
+        kind: "contact" as const,
+        score: n.score,
+        group: domainOf(n.email),
+        tags: n.tags,
+        emailCount: n.emailCount,
+        lastEmailDaysAgo: n.lastEmailDaysAgo,
+        upcomingMeetings: n.upcomingMeetings,
+      })),
+    ];
+
+    const edges: Array<{ source: string; target: string; kind: string; weight: number }> = [];
+    for (const n of graph.nodes) {
+      edges.push({
+        source: "__you__",
+        target: n.email.toLowerCase(),
+        kind: "interaction",
+        weight: n.score,
+      });
+    }
+    // Chain members of each real-company domain so they cluster, without an
+    // O(n^2) clique that would hairball a large company.
+    const byDomain = new Map<string, string[]>();
+    for (const n of graph.nodes) {
+      const d = domainOf(n.email);
+      if (!d || FREEMAIL.has(d)) continue;
+      const arr = byDomain.get(d) ?? [];
+      arr.push(n.email.toLowerCase());
+      byDomain.set(d, arr);
+    }
+    for (const members of byDomain.values()) {
+      for (let i = 1; i < members.length; i++) {
+        edges.push({ source: members[i - 1], target: members[i], kind: "org", weight: 1 });
+      }
+    }
+
+    return { nodes, edges, builtAt: graph.builtAt };
+  });
 
   app.get("/", async (request): Promise<FirewallResponse> => {
     const userId = getUserId(request);
