@@ -13,7 +13,24 @@
  * with a low-trust sender and no urgency.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Keep this file hermetic — it asserts only the non-LLM paths (fast-path +
+// keyword fallback). Without this mock, judgeEmail() calls the real provider
+// whenever a key leaks in from .env, so the "falls through to QUEUE" assertions
+// flake (a live model scores a deploy-fail notice PUSH, not QUEUE). Forcing
+// createCompletion to throw makes the LLM path deterministically unavailable →
+// keyword fallback, exactly what these tests claim to exercise.
+vi.mock("../openai.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../openai.js")>();
+  return {
+    ...actual,
+    createCompletion: vi.fn(async () => {
+      throw new Error("LLM disabled in poc-judge unit tests (keyword fallback expected)");
+    }),
+  };
+});
+
 import { judgeEmail, tierFromFeatures } from "../poc-judge.js";
 
 describe("tierFromFeatures", () => {
