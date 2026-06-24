@@ -17,8 +17,8 @@ The app talks to the Klorn API. Point it at local dev or prod:
 # against local dev (api on :3001 — the default)
 swift run KlornMac
 
-# against prod
-KLORN_API_URL=https://app.klorn.ai swift run KlornMac
+# against prod (the API host — NOT app.klorn.ai, which only serves the web UI)
+KLORN_API_URL=https://klorn-api.onrender.com swift run KlornMac
 ```
 
 Sign in with **Sign in with Google**: the OS browser handles OAuth (the
