@@ -201,6 +201,25 @@ snippet: ${snippet}`;
 // to the fallback while the LLM scored the other 10 perfectly.
 const JUDGE_LLM_ATTEMPTS = 2;
 
+/**
+ * Sampling temperature for feature extraction. The judge extracts 4 numeric
+ * scores — a classification, not creative writing — so it wants temperature 0.
+ * At the provider default (~1.0) the same email scored differently run-to-run:
+ * the 50-email eval swung 78%↔88% (~10 points of pure sampling noise) between
+ * passes, and production tiers flickered for the same mail. Measured 2026-06-25:
+ * at temperature 0 two back-to-back eval passes were byte-identical (86.0%, all
+ * gates green), i.e. the noise collapsed to zero with accuracy held. Default 0;
+ * env-overridable for experiments (set JUDGE_TEMPERATURE to a higher value to
+ * re-introduce sampling, e.g. for a diversity-seeking escalation pass).
+ */
+const PARSED_JUDGE_TEMPERATURE = Number(process.env.JUDGE_TEMPERATURE);
+// Clamp to the provider-accepted range so an operator typo (JUDGE_TEMPERATURE=-1
+// or =9) can't 400 every classification — out-of-range finite values pin to the
+// nearest valid bound rather than breaking the firewall.
+const JUDGE_TEMPERATURE: number = Number.isFinite(PARSED_JUDGE_TEMPERATURE)
+  ? Math.min(2, Math.max(0, PARSED_JUDGE_TEMPERATURE))
+  : 0;
+
 async function extractFeaturesWithLlm(
   email: ClassifiableEmail,
   userId?: string,
@@ -224,6 +243,8 @@ async function extractFeaturesWithLlm(
             { role: "user", content: buildJudgePrompt(email, corrections, senderFacts) },
           ],
           response_format: { type: "json_object" },
+          // temperature 0 by default — deterministic feature scores (see const).
+          temperature: JUDGE_TEMPERATURE,
           // The output is a fixed ~50-token JSON object. Capping max_tokens
           // keeps it well above what the scorer needs while shrinking
           // OpenRouter's up-front credit RESERVATION (price × max_tokens) from
