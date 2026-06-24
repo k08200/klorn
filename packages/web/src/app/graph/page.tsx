@@ -89,7 +89,7 @@ function GraphPageInner() {
   const contactCount = data ? data.nodes.filter((n) => n.kind === "contact").length : 0;
 
   return (
-    <main className="min-h-dvh bg-[#10100d] px-4 pb-28 pt-6 text-stone-50 sm:px-6 md:py-10">
+    <main className="h-full overflow-y-auto bg-[#10100d] px-4 pb-28 pt-6 text-stone-50 sm:px-6 md:py-10">
       <div className="mx-auto max-w-5xl">
         <div className="mb-4 inline-flex rounded-xl border border-stone-700/45 bg-stone-950/40 p-1">
           {(["relationships", "decisions"] as Mode[]).map((mKey) => (

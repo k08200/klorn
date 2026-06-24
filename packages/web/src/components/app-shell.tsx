@@ -24,6 +24,7 @@ const APP_SHELL_ROUTES = [
   "/briefing",
   "/calendar",
   "/email",
+  "/graph",
   "/inbox",
   "/settings",
 ];
@@ -34,6 +35,7 @@ function isAppShellRoute(pathname: string): boolean {
 
 function currentSectionLabel(pathname: string): string {
   if (pathname === "/inbox" || pathname.startsWith("/inbox/")) return "Decision queue";
+  if (pathname === "/graph" || pathname.startsWith("/graph/")) return "Graph";
   if (pathname === "/email" || pathname.startsWith("/email/")) return "Mail";
   if (pathname === "/calendar" || pathname.startsWith("/calendar/")) return "Calendar";
   if (pathname === "/briefing" || pathname.startsWith("/briefing/")) return "Briefing";

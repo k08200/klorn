@@ -8,6 +8,7 @@ import NotificationBell from "./notification-bell";
 
 const NAV_ITEMS = [
   { href: "/inbox", label: "Decision queue", icon: "check" },
+  { href: "/graph", label: "Graph", icon: "graph" },
   { href: "/email", label: "Mail", icon: "mail" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/briefing", label: "Briefing", icon: "bell" },
@@ -54,6 +55,17 @@ function NavIcon({ type, size = 16 }: { type: string; size?: number }) {
         <svg aria-hidden="true" {...props}>
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+      );
+    case "graph":
+      return (
+        <svg aria-hidden="true" {...props}>
+          <circle cx="5" cy="6" r="2" />
+          <circle cx="19" cy="6" r="2" />
+          <circle cx="12" cy="18" r="2" />
+          <line x1="6.7" y1="7.3" x2="10.5" y2="16.4" />
+          <line x1="17.3" y1="7.3" x2="13.5" y2="16.4" />
+          <line x1="7" y1="6" x2="17" y2="6" />
         </svg>
       );
     case "settings":
