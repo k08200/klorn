@@ -48,6 +48,14 @@ export interface Provider {
   client: OpenAI | null;
   /** True if this provider reliably supports OpenAI-style function calling */
   supportsTools: boolean;
+  /**
+   * True when this provider was built from a user-supplied (BYOK) key rather
+   * than the server's env key. A call served here spends the USER's provider
+   * credit, not Klorn's — the cost ledgers must charge it $0 (see
+   * trueUpCostLedgers / enforceCostGates). Absent/false ⇒ a shared env
+   * provider, billed normally.
+   */
+  ownedByUser?: boolean;
 }
 
 export interface ProviderCredentials {
@@ -278,6 +286,8 @@ export function getProviderChain(credentials: ProviderCredentials = {}): Provide
   // 429/5xx must fail FAST with the raw reason, not burn 10-20s on exponential
   // backoff (then double it via the judge's own retry) before surfacing.
   const visitorRetries = credentials.playgroundOnly ? 0 : undefined;
+  // Tagged ownedByUser so the cost ledgers can tell a call served on the
+  // user's OWN key (Klorn spends $0) from an env-key fallthrough (Klorn pays).
   const visitorProviders = [
     credentials.openRouterApiKey
       ? buildOpenRouter(credentials.openRouterApiKey, userScope, visitorRetries)
@@ -286,7 +296,7 @@ export function getProviderChain(credentials: ProviderCredentials = {}): Provide
     credentials.openAiApiKey
       ? buildOpenAI(credentials.openAiApiKey, userScope, visitorRetries)
       : null,
-  ];
+  ].map((p): Provider | null => (p ? { ...p, ownedByUser: true } : null));
 
   // playgroundOnly fails closed: a public visitor's request must NEVER reach
   // the server's env keys or local compat model. Without this guard a bad

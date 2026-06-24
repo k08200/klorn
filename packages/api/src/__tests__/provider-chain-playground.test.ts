@@ -48,4 +48,17 @@ describe("getProviderChain with playgroundOnly", () => {
     expect(chain.map((p) => p.name)).toContain("openai-compat");
     expect(chain.some((p) => p.quotaKey === "openrouter:env")).toBe(true);
   });
+
+  it("tags ONLY the user-key provider as ownedByUser — env fallthroughs stay billable", async () => {
+    const { getProviderChain } = await import("../providers/index.js");
+    const chain = getProviderChain({ openRouterApiKey: "visitor-key", quotaScope: "user-123" });
+    // The user's own provider is tagged so the cost ledgers charge it $0; every
+    // env fallthrough provider must stay untagged so Klorn's real spend on a
+    // BYOK-key failure is still billed (the cost-hole guard).
+    const userProvider = chain.find((p) => p.quotaKey === "openrouter:user:user-123");
+    expect(userProvider?.ownedByUser).toBe(true);
+    for (const p of chain.filter((p) => p.quotaKey !== "openrouter:user:user-123")) {
+      expect(p.ownedByUser).not.toBe(true);
+    }
+  });
 });

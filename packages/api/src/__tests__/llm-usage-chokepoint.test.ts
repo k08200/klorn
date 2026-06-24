@@ -17,6 +17,7 @@ interface FakeProvider {
   client: null;
   resolveModel: (m: string) => string;
   call: FakeCall;
+  ownedByUser?: boolean;
 }
 
 // Mutable chain the mocked registry hands back to openai.ts
@@ -29,12 +30,14 @@ vi.mock("../providers/index.js", () => ({
 
 // Spy on the ledger — the real module is unit-tested separately.
 const recorded: Array<Record<string, unknown>> = [];
+// Hoisted so we can assert the servedByUserKey flag createCompletion forwards.
+const trueUpSpy = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock("../llm-usage.js", () => ({
   recordLlmUsage: vi.fn(async (input: Record<string, unknown>) => {
     recorded.push(input);
   }),
   estimatePrebillCents: vi.fn(() => 0),
-  trueUpCostLedgers: vi.fn(async () => {}),
+  trueUpCostLedgers: trueUpSpy,
 }));
 
 // openai.ts pulls cost-guard (which pulls db.js) in via enforceCostGates.
@@ -79,6 +82,7 @@ const PARAMS: ChatCompletionCreateParamsNonStreaming = {
 beforeEach(async () => {
   chain.length = 0;
   recorded.length = 0;
+  trueUpSpy.mockClear();
   const { clearFallbackState } = await import("../model-fallback.js");
   clearFallbackState();
 });
@@ -148,6 +152,40 @@ describe("createCompletion — usage ledger threading", () => {
 
     await expect(createCompletion(PARAMS)).rejects.toBeInstanceOf(AllProvidersExhaustedError);
     expect(recorded).toHaveLength(0);
+  });
+
+  it("flags servedByUserKey on the true-up when the user's OWN key served the call", async () => {
+    // BYOK happy path: the served provider is user-owned, so the true-up is
+    // told to charge Klorn's ledgers nothing.
+    const userProvider = makeProvider("openrouter", "openrouter:user:u9", async () => COMPLETION);
+    userProvider.ownedByUser = true;
+    chain.push(userProvider);
+    const { createCompletion } = await import("../openai.js");
+
+    await createCompletion(PARAMS, { userId: "u9" });
+
+    expect(trueUpSpy).toHaveBeenCalledTimes(1);
+    expect(trueUpSpy.mock.calls[0]?.[0]).toMatchObject({ servedByUserKey: true });
+  });
+
+  it("does NOT flag servedByUserKey when the call fell through to an env provider", async () => {
+    // BYOK key hits its own rate limit (429) → fails over to Klorn's env
+    // provider → Klorn paid → the true-up must bill it (servedByUserKey false).
+    // This is the cost-hole guard, end to end: a failed user key can't make
+    // env spend invisible. Only the SUCCESSFUL provider reaches the true-up.
+    chain.push(
+      makeProvider("openrouter", "openrouter:user:u9", async () => {
+        throw { status: 429, message: "Key limit exceeded" };
+      }),
+      makeProvider("gemini", "gemini:env", async () => COMPLETION),
+    );
+    chain[0].ownedByUser = true; // the user key (which rate-limits and fails over)
+    const { createCompletion } = await import("../openai.js");
+
+    await createCompletion(PARAMS, { userId: "u9" });
+
+    expect(trueUpSpy).toHaveBeenCalledTimes(1);
+    expect(trueUpSpy.mock.calls[0]?.[0]).toMatchObject({ servedByUserKey: false });
   });
 });
 

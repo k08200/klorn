@@ -119,6 +119,7 @@ async function enforceCostGates(
   model: string,
   userId?: string,
   playgroundOnly?: boolean,
+  userKeyAvailable?: boolean,
 ): Promise<void> {
   // Playground calls run entirely on the visitor's own key (no server provider
   // in the chain), so they incur zero server cost. They must NOT be gated by
@@ -132,9 +133,18 @@ async function enforceCostGates(
   // (nominal-token floor; the post-call true-up settles against actuals).
   const estCents = estimatePrebillCents(model);
 
-  const globalGate = checkGlobalCostGate();
-  if (!globalGate.allowed) {
-    throw new DailyCostCapExceededError(DAILY_COST_CAP_MESSAGE);
+  // BYOK: a signed-in user with their OWN provider key spends their credit, not
+  // Klorn's, so the shared global ceiling neither gates nor bills them — that
+  // is the whole point of BYOK as an escape hatch when the shared budget is
+  // exhausted. We still CHECK their per-user cap (a broken key that forces an
+  // env fallthrough must not dodge the cap forever) but do NOT pre-bill it: the
+  // post-call true-up charges $0 when their key served and the real cost only
+  // on a genuine env fallthrough (where servedByUserKey is false).
+  if (!userKeyAvailable) {
+    const globalGate = checkGlobalCostGate();
+    if (!globalGate.allowed) {
+      throw new DailyCostCapExceededError(DAILY_COST_CAP_MESSAGE);
+    }
   }
 
   if (userId) {
@@ -142,9 +152,27 @@ async function enforceCostGates(
     if (!gate.allowed) {
       throw new DailyCostCapExceededError(DAILY_COST_CAP_MESSAGE);
     }
-    void recordCostUsage(userId, estCents, model);
+    if (!userKeyAvailable) void recordCostUsage(userId, estCents, model);
   }
-  recordGlobalCostUsage(estCents);
+
+  if (!userKeyAvailable) recordGlobalCostUsage(estCents);
+}
+
+/**
+ * True when the resolved provider chain contains a provider built from the
+ * user's OWN (BYOK) key. Such a call is EXPECTED to run on the user's credit,
+ * so the shared cost ledgers skip the pre-bill (the true-up settles the real
+ * outcome per served provider). Playground is handled separately and excluded.
+ */
+function hasUserOwnedProvider(chain: Provider[], playgroundOnly: boolean): boolean {
+  // Membership, not position: a user key anywhere in the chain skips the
+  // pre-bill. If an env provider serves first instead (only the local compat
+  // provider can precede the user key, and it's $0), the per-served-provider
+  // true-up still bills it correctly via servedByUserKey. The one edge to know:
+  // a self-host operator who points OPENAI_COMPAT_BASE_URL at a PAID endpoint
+  // would have the global pre-bill skipped for BYOK users — acceptable because
+  // the true-up settles the real cost post-call.
+  return !playgroundOnly && chain.some((p) => p.ownedByUser === true);
 }
 
 const PROVIDERS_EXHAUSTED_BASE =
@@ -221,6 +249,12 @@ export async function createCompletion(
     );
   }
 
+  const playgroundOnly = options.credentials?.playgroundOnly === true;
+  // BYOK: when the chain leads with the user's own key, the cost ledgers skip
+  // the pre-bill (true-up settles $0 on a user-key hit, real cost on env
+  // fallthrough) — see enforceCostGates / trueUpCostLedgers.
+  const userKeyAvailable = hasUserOwnedProvider(chain, playgroundOnly);
+
   // Per-user RPM + daily-cap gate: trip before the call so a runaway loop
   // doesn't burn upstream provider quota. Charged against the foreground
   // bucket by default; background workers pass `priority: "background"` so
@@ -232,17 +266,21 @@ export async function createCompletion(
   // Daily-cost gate: enforce BEFORE the call so we don't burn budget twice
   // when a runaway loop has already crossed the cap. Covers the global
   // ceiling (always) and the per-user cap (when a userId is present).
-  await enforceCostGates(params.model, options.userId, options.credentials?.playgroundOnly);
+  await enforceCostGates(params.model, options.userId, playgroundOnly, userKeyAvailable);
 
   // Ground-truth usage ledger context, frozen before the failover loop so
   // every retry records the same caller identity + the same pre-bill
   // estimate the gate charged (computed from the REQUESTED model, exactly
-  // like enforceCostGates).
+  // like enforceCostGates). A BYOK call pre-bills 0 (the gate skipped it), so
+  // the true-up charges the full actual cost only on an env fallthrough.
   const isStreaming = params.stream === true;
   const usageContext = {
     userId: options.userId ?? null,
     source: options.priority ?? "foreground",
-    estimatedCostCents: estimatePrebillCents(params.model),
+    // 0 for BYOK (gate skipped the pre-bill) and for playground (visitor-paid,
+    // gate exits early) — both spend no Klorn budget, so the usage log must not
+    // show a cost they never incurred.
+    estimatedCostCents: userKeyAvailable || playgroundOnly ? 0 : estimatePrebillCents(params.model),
   } as const;
 
   /**
@@ -282,12 +320,15 @@ export async function createCompletion(
     });
     // Settle the cost ledgers against actual token counts (positive delta
     // only). Uses the model that actually served the request — failover may
-    // have swapped it since the pre-bill.
+    // have swapped it since the pre-bill. servedByUserKey charges $0 when the
+    // user's own (BYOK) key served; a fallthrough to an env provider has it
+    // false and is billed the real cost.
     void trueUpCostLedgers({
       userId: usageContext.userId,
       model,
       prebilledCents: usageContext.estimatedCostCents,
       usage,
+      servedByUserKey: provider.ownedByUser === true,
     });
     return result;
   };
@@ -297,7 +338,7 @@ export async function createCompletion(
   // error (a 401 surfaces as "all providers unavailable") and blocks the
   // visitor's retries for an hour. Skip the cooldown check (don't honor a stale
   // lockout) and, in the catch below, surface the raw error without marking one.
-  const playgroundOnly = options.credentials?.playgroundOnly === true;
+  // (playgroundOnly is computed up top, alongside userKeyAvailable.)
 
   let lastError: unknown;
   for (let i = 0; i < chain.length; i++) {
@@ -406,6 +447,11 @@ export async function createVisionCompletion(
     );
   }
 
+  const playgroundOnly = options.credentials?.playgroundOnly === true;
+  // BYOK: same metering as createCompletion — skip the pre-bill when the user's
+  // own key leads the chain; the true-up settles per served provider.
+  const userKeyAvailable = hasUserOwnedProvider(chain, playgroundOnly);
+
   // Per-user RPM + daily-call gate, same as createCompletion. Vision/OCR was
   // skipping this entirely, so attachment analysis bypassed the per-user rate
   // limit and daily-call bucket. Charge it against the background bucket (it's
@@ -416,7 +462,7 @@ export async function createVisionCompletion(
 
   // Daily-cost gate: vision/OCR calls bill the same ledgers as chat. Without
   // this, a runaway attachment-analysis batch can blow past the cap.
-  await enforceCostGates(params.model, options.userId, options.credentials?.playgroundOnly);
+  await enforceCostGates(params.model, options.userId, playgroundOnly, userKeyAvailable);
 
   const ordered = [
     ...chain.filter((provider) => provider.name === "gemini"),
@@ -443,7 +489,10 @@ export async function createVisionCompletion(
         // must agree, or the same call gates as background but bills as
         // foreground. (createCompletion's own default is foreground — chat.)
         source: options.priority ?? "background",
-        estimatedCostCents: estimatePrebillCents(params.model),
+        // Mirror the gate: BYOK and playground both spend no Klorn budget, so
+        // the usage log must show 0 — otherwise analytics overcounts cost Klorn
+        // never paid.
+        estimatedCostCents: userKeyAvailable || playgroundOnly ? 0 : estimatePrebillCents(params.model),
         provider: provider.name,
         model,
         usage: result.usage ?? null,
@@ -451,8 +500,11 @@ export async function createVisionCompletion(
       void trueUpCostLedgers({
         userId: options.userId ?? null,
         model,
-        prebilledCents: estimatePrebillCents(params.model),
+        // Pre-bill is 0 for a BYOK call (the gate skipped it), so the env
+        // fallthrough is charged its full actual cost; a user-key hit charges $0.
+        prebilledCents: userKeyAvailable ? 0 : estimatePrebillCents(params.model),
         usage: result.usage ?? null,
+        servedByUserKey: provider.ownedByUser === true,
       });
       return result;
     } catch (err) {
