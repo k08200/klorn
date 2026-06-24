@@ -16,7 +16,9 @@ import { analyzePendingEmailAttachments, upsertEmailAttachments } from "./email-
 import { classifyNeedsReplyFromSignals, classifyPriority } from "./email-priority.js";
 import type { GmailRawEmail } from "./gmail-fetch.js";
 import { buildJudgeContext } from "./judge-context.js";
+import { getUserLlmCredentials } from "./llm-credentials.js";
 import { judgeEmail, type PocTier } from "./poc-judge.js";
+import type { ProviderCredentials } from "./providers/index.js";
 import { resolveUserEmail } from "./resolve-user-email.js";
 import { captureError } from "./sentry.js";
 
@@ -169,7 +171,16 @@ interface JudgeableEmailRow {
 export async function judgeAndMirrorEmail(
   userId: string,
   email: JudgeableEmailRow,
+  credentials?: ProviderCredentials,
 ): Promise<PocTier> {
+  // BYOK: route this user's classify call to their own provider key when they
+  // have set one (billing.ts), so per-user load never lands on the shared env
+  // key. A user without a key resolves to {quotaScope, no keys}, which
+  // getProviderChain falls through to the shared env provider exactly as
+  // before — so this is a no-op for keyless users. Callers that judge many
+  // emails for one user (the backfill sweep) pass `credentials` so the lookup
+  // happens once, not per email.
+  const llmCredentials = credentials ?? (await getUserLlmCredentials(userId));
   const judgeContext = await buildJudgeContext(userId, {
     from: email.from,
     excludeEmailId: email.id,
@@ -183,6 +194,7 @@ export async function judgeAndMirrorEmail(
     },
     userId,
     judgeContext,
+    llmCredentials,
   );
   await upsertAttentionForEmailJudgement({ userId, ...email }, judgement);
 
@@ -353,10 +365,15 @@ export async function backfillEmailAttentionItems(userId: string): Promise<numbe
     .reverse()
     .slice(0, BACKFILL_BATCH);
 
+  // Resolve the user's BYOK credentials once for the whole sweep — a backlog
+  // can be hundreds of emails for the same user, so fetching per email would
+  // be a needless query per row.
+  const llmCredentials = await getUserLlmCredentials(userId);
+
   let done = 0;
   for (const email of unjudged) {
     try {
-      await judgeAndMirrorEmail(userId, email);
+      await judgeAndMirrorEmail(userId, email, llmCredentials);
       done++;
     } catch (err) {
       // console first: captureError is silent without a Sentry DSN, and a

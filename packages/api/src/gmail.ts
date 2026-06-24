@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import { decryptOptional, decryptToken, encryptOptional, encryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
+import { getUserLlmCredentials } from "./llm-credentials.js";
 import { captureError } from "./sentry.js";
 import { wrapUntrusted } from "./untrusted.js";
 
@@ -869,6 +870,8 @@ export async function classifyEmails(userId: string, maxResults = 10) {
   if ("error" in result) return result;
 
   const { classifyEmailBatch, sortByPriority } = await import("./email-classifier.js");
+  // BYOK: this user's classify-tool run bills their own key when set.
+  const credentials = await getUserLlmCredentials(userId);
   const labels = await classifyEmailBatch(
     result.emails.map((e) => ({
       id: e.id,
@@ -878,6 +881,7 @@ export async function classifyEmails(userId: string, maxResults = 10) {
       labels: e.labels,
     })),
     userId,
+    credentials,
   );
 
   const classified = result.emails.map((email, i) => ({
