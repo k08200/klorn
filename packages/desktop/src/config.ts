@@ -61,3 +61,25 @@ export function isSafeExternalUrl(target: string): boolean {
     return false;
   }
 }
+
+/**
+ * Does this navigation target the API's Google login *start* endpoint? The web
+ * app's "Sign in with Google" button points here, which is cross-origin to the
+ * shell — so instead of kicking a half-flow out to the OS browser (where the
+ * JWT would land in the browser, not the shell), the shell intercepts it and
+ * runs the native browser-bounce + nonce-poll flow (see desktop-login.ts).
+ *
+ * Matches only the bare start path; the `?source=desktop&nonce=` URL the native
+ * flow itself opens is deliberately excluded so interception can't recurse.
+ */
+export function isGoogleLoginStart(target: string): boolean {
+  try {
+    const url = new URL(target);
+    if (!SAFE_PROTOCOLS.has(url.protocol)) return false;
+    if (url.origin !== new URL(KLORN_API_URL).origin) return false;
+    if (url.pathname !== "/api/auth/google/login") return false;
+    return url.searchParams.get("source")?.toLowerCase() !== "desktop";
+  } catch {
+    return false;
+  }
+}

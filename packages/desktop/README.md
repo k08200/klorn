@@ -32,6 +32,43 @@ KLORN_API_URL=https://api.klorn.ai \
   pnpm --filter @klorn/desktop start
 ```
 
+## Sign in with Google (native)
+
+A browser window cannot complete Google OAuth *inside* the shell — the shell
+hardens itself by routing every cross-origin navigation to the OS browser, so an
+in-window consent screen would bounce out and the JWT would land in the browser,
+not here. Instead the shell drives the server's browser-bounce + nonce-poll flow
+(the same pattern the GitHub CLI uses):
+
+1. **Account → Sign in with Google** (or the web app's own sign-in button, which
+   the shell intercepts) calls `GET /api/auth/desktop-nonce` for a one-time nonce.
+2. The shell opens `/api/auth/google/login?source=desktop&nonce=…` in the OS
+   browser; you consent there. The callback saves your **Gmail + Calendar**
+   tokens and parks a freshly minted JWT under the nonce.
+3. The shell polls `GET /api/auth/desktop-token/:nonce`, injects the JWT into the
+   window's `localStorage`, and reloads — signed in **and already connected**.
+
+One consent grants login and Gmail/Calendar together, so there is no second
+in-window OAuth and **no localhost redirect URI to register** — the flow uses the
+API's own (already-registered) `GOOGLE_REDIRECT_URI`. Point the shell at prod and
+it works with zero Google Cloud changes:
+
+```bash
+KLORN_DESKTOP_URL=https://app.klorn.ai \
+KLORN_API_URL=https://app.klorn.ai \
+  pnpm --filter @klorn/desktop start
+```
+
+Keep `KLORN_API_URL` on the **same origin** as the registered
+`GOOGLE_REDIRECT_URI` (`app.klorn.ai`): the nonce is parked in the API process'
+memory, so the login-start, callback, and poll must all reach the same instance.
+(Running local? The consent hits the local API's redirect URI, so local *does*
+need `http://localhost:3001/api/auth/google/callback` registered in Google Cloud
+— prod does not.)
+
+The orchestration lives in `src/desktop-login.ts` (Electron-free and
+unit-tested); `src/main.ts` supplies the real browser, fetch, and token sink.
+
 ## The ontology bridge
 
 `preload.ts` exposes a read-only `window.klorn`:
@@ -69,8 +106,9 @@ window first, or the inspector shows a "not signed in" message.
 
 | File | Role |
 |------|------|
-| `src/main.ts` | Electron main process — windows, menu, external-link routing, ontology IPC |
-| `src/preload.ts` | `window.klorn` bridge for the web app window (read-only) |
+| `src/main.ts` | Electron main process — windows, menu, external-link routing, sign-in + ontology IPC |
+| `src/desktop-login.ts` | native Google sign-in orchestration (Electron-free, unit-tested) |
+| `src/preload.ts` | `window.klorn` bridge for the web app window (read-only + `signInWithGoogle`) |
 | `src/inspector-preload.ts` | `window.klornInspector` IPC bridge for the inspector window |
 | `src/inspector-renderer.ts` | renders the ontology snapshot into the inspector (pure + unit-tested) |
 | `src/inspector.html` | inspector window shell (CSP-locked, dark theme) |

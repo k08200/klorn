@@ -11,7 +11,7 @@
  * arrives from the main process via additionalArguments (see main.ts).
  */
 
-import { contextBridge } from "electron";
+import { contextBridge, ipcRenderer } from "electron";
 import { KLORN_AUTH_TOKEN_KEY } from "./constants.js";
 
 const API_ARG_PREFIX = "--klorn-api-url=";
@@ -47,6 +47,16 @@ const klorn = {
     }
     return res.json();
   },
+
+  /**
+   * Start native Google sign-in. Opens the system browser for consent; on
+   * completion the main process signs this window in and reloads it. One consent
+   * also grants Gmail/Calendar, so the account lands already connected.
+   *
+   * Fire-and-forget: resolves once the flow has been kicked off — the window
+   * reload, not this promise, signals success.
+   */
+  signInWithGoogle: (): Promise<void> => ipcRenderer.invoke("klorn:google-login"),
 } as const;
 
 export type KlornBridge = typeof klorn;
