@@ -251,6 +251,10 @@ async function classifyBatchWithLlm(
       };
     });
   } catch (err) {
+    // Fall back to the keyword path, but leave a signal: a misconfigured BYOK
+    // key (401) or a quota-locked model would otherwise silently degrade every
+    // batch with no trace (captureError is a no-op without a Sentry DSN).
+    console.warn("[CLASSIFIER] LLM batch failed — falling back to keyword path", err);
     captureError(err, { tags: { scope: "email-classifier.llm" } });
     return null;
   }

@@ -122,8 +122,11 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
       count++;
     } catch (err) {
       // Skip this email and retry next cycle, but don't go fully silent: a
-      // persistent failure (e.g. the :free model is quota-locked for ~an hour)
-      // would otherwise re-fail every minute with zero signal.
+      // persistent failure (e.g. the :free model is quota-locked for ~an hour,
+      // or a misconfigured BYOK key 401s every call) would otherwise re-fail
+      // every minute with zero signal. console first — captureError is a no-op
+      // without a Sentry DSN (self-host / dev).
+      console.warn("[SUMMARIZE] per-email summarize failed (id in Sentry extra)", err);
       captureError(err, {
         tags: { scope: "email.summarize", userId },
         extra: { emailId: email.id },
