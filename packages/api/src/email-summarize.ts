@@ -8,8 +8,10 @@
 
 import { prisma } from "./db.js";
 import { classifyNeedsReplyFromSignals } from "./email-priority.js";
+import { getUserLlmCredentials } from "./llm-credentials.js";
 import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, MODEL, openai } from "./openai.js";
+import type { ProviderCredentials } from "./providers/index.js";
 import { resolveUserEmail } from "./resolve-user-email.js";
 import { captureError } from "./sentry.js";
 import { wrapUntrusted } from "./untrusted.js";
@@ -70,6 +72,10 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
   if (unsummarized.length === 0) return 0;
 
   const userEmail = await resolveUserEmail(userId);
+  // BYOK: resolve once for the whole batch (up to `limit` emails for one user)
+  // so each summary bills the user's own key when set, falling back to the
+  // shared env key for keyless users — see judgeAndMirrorEmail for the rationale.
+  const credentials = await getUserLlmCredentials(userId);
   let count = 0;
 
   for (const email of unsummarized) {
@@ -79,6 +85,7 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
         email.subject,
         email.body || email.snippet || "",
         userId,
+        credentials,
       );
       // Don't let AI upgrade LOW emails (ads/promotions) to ANY higher priority.
       // The rule-based classifier already tagged this as LOW based on strong signals
@@ -280,6 +287,7 @@ async function summarizeEmail(
   subject: string,
   body: string,
   userId?: string,
+  credentials?: ProviderCredentials,
 ): Promise<AISummaryResult> {
   // Truncate very long bodies
   const truncatedBody = body.length > 3000 ? body.slice(0, 3000) + "\n...(truncated)" : body;
@@ -297,7 +305,10 @@ async function summarizeEmail(
         },
       ],
     },
-    userId ? { userId, priority: "background" as const } : {},
+    {
+      ...(userId ? { userId, priority: "background" as const } : {}),
+      ...(credentials ? { credentials } : {}),
+    },
   );
 
   const content = response.choices[0]?.message?.content || "{}";

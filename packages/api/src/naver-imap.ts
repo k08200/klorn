@@ -27,6 +27,7 @@ import { upsertAttentionForEmailJudgement } from "./attention-mirror.js";
 import { decryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
 import { buildJudgeContext } from "./judge-context.js";
+import { getUserLlmCredentials } from "./llm-credentials.js";
 import { judgeEmail } from "./poc-judge.js";
 import { captureError } from "./sentry.js";
 
@@ -154,6 +155,11 @@ export async function syncNaverImap(args: SyncArgs): Promise<SyncResult> {
 
   const result: SyncResult = { fetched: 0, inserted: 0, classified: 0, errors: 0 };
 
+  // BYOK: resolve once for the whole poll so every judged email bills this
+  // user's own provider key when set (keyless users fall through to the shared
+  // env key, unchanged) — see judgeAndMirrorEmail for the rationale.
+  const llmCredentials = await getUserLlmCredentials(args.userId);
+
   const client = new ImapFlow({
     host,
     port,
@@ -264,6 +270,7 @@ export async function syncNaverImap(args: SyncArgs): Promise<SyncResult> {
                   },
                   args.userId,
                   judgeContext,
+                  llmCredentials,
                 ),
               )
               .then((judgement) =>

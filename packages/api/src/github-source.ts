@@ -32,6 +32,7 @@ import { prisma } from "./db.js";
 import type { ClassifiableEmail } from "./email-classifier.js";
 import { fetchGitHubNotifications } from "./github-client.js";
 import { pushForFirewallGitHubNotification } from "./github-push.js";
+import { getUserLlmCredentials } from "./llm-credentials.js";
 import { judgeEmail } from "./poc-judge.js";
 import { captureError } from "./sentry.js";
 
@@ -113,11 +114,21 @@ export async function ingestGitHubNotifications(
   userId: string,
   notifications: GitHubNotification[],
 ): Promise<number> {
+  // BYOK: resolve once for the batch so each notification's judge call bills
+  // this user's own key when set (keyless users fall through to the shared env
+  // key, unchanged) — see judgeAndMirrorEmail for the rationale.
+  const credentials = await getUserLlmCredentials(userId);
+
   let surfaced = 0;
   for (const n of notifications) {
     if (!n.subjectTitle?.trim()) continue;
     try {
-      const judgement = await judgeEmail(githubNotificationToClassifiable(n), userId);
+      const judgement = await judgeEmail(
+        githubNotificationToClassifiable(n),
+        userId,
+        undefined,
+        credentials,
+      );
       const like: GitHubNotificationLike = {
         id: n.id,
         userId,
