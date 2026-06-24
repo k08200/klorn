@@ -7,8 +7,9 @@ import { useAuth } from "../lib/auth";
 
 // Pages that stay reachable while Google is unconnected. /onboarding is the
 // gate itself; /settings is where the user manages the connection; any path
-// under /auth or /login is the sign-in flow.
-const GOOGLE_OPTIONAL_PREFIXES = ["/onboarding", "/settings", "/login", "/auth"];
+// under /auth or /login is the sign-in flow; /admin is operator tooling that
+// reads server-side state, not the signed-in user's own Gmail/Calendar.
+const GOOGLE_OPTIONAL_PREFIXES = ["/onboarding", "/settings", "/login", "/auth", "/admin"];
 
 function isGoogleOptional(pathname: string): boolean {
   return GOOGLE_OPTIONAL_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));

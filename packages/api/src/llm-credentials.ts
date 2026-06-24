@@ -18,7 +18,11 @@ type UserWithKeys = {
  * then fall through to the env key — the same "degrade, don't die" posture
  * gmail.ts takes on a bad Google token.
  */
-function safeDecrypt(value: string | null | undefined, label: string, userId: string): string | null {
+function safeDecrypt(
+  value: string | null | undefined,
+  label: string,
+  userId: string,
+): string | null {
   try {
     return decryptOptional(value);
   } catch (err) {
@@ -40,7 +44,14 @@ function safeDecrypt(value: string | null | undefined, label: string, userId: st
 export async function getUserLlmCredentials(userId: string): Promise<ProviderCredentials> {
   let user: UserWithKeys | null;
   try {
-    user = (await prisma.user.findUnique({ where: { id: userId } })) as UserWithKeys | null;
+    // select only the two BYOK columns — this runs on the firewall hot path, so
+    // don't pull the whole row (tokens, hashes) per lookup; the narrow select
+    // also makes the type precise (no cast) and would fail to compile if either
+    // column were ever removed.
+    user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { openRouterApiKey: true, geminiApiKey: true },
+    });
   } catch (err) {
     console.warn("[BYOK] user lookup failed — falling back to the shared env key", err);
     captureError(err, { tags: { scope: "byok.lookup" }, extra: { userId } });

@@ -155,11 +155,6 @@ export async function syncNaverImap(args: SyncArgs): Promise<SyncResult> {
 
   const result: SyncResult = { fetched: 0, inserted: 0, classified: 0, errors: 0 };
 
-  // BYOK: resolve once for the whole poll so every judged email bills this
-  // user's own provider key when set (keyless users fall through to the shared
-  // env key, unchanged) — see judgeAndMirrorEmail for the rationale.
-  const llmCredentials = await getUserLlmCredentials(args.userId);
-
   const client = new ImapFlow({
     host,
     port,
@@ -171,6 +166,10 @@ export async function syncNaverImap(args: SyncArgs): Promise<SyncResult> {
 
   try {
     await client.connect();
+    // BYOK: resolve once for the whole poll so every judged email bills this
+    // user's own key when set (keyless users fall through to the shared env
+    // key). Inside the try so a lookup failure is counted, not left uncaught.
+    const llmCredentials = await getUserLlmCredentials(args.userId);
     const lock = await client.getMailboxLock("INBOX");
     try {
       const status = await client.status("INBOX", { messages: true });
@@ -317,6 +316,11 @@ export async function syncNaverImap(args: SyncArgs): Promise<SyncResult> {
     await client.logout();
   } catch (err) {
     result.errors += 1;
+    // console first — captureError is a no-op without a Sentry DSN.
+    console.warn(
+      `[NAVER-IMAP] sync failed for ${args.userId}:`,
+      err instanceof Error ? err.message : String(err),
+    );
     captureError(err, {
       tags: { scope: "naver-imap.sync" },
       extra: { userId: args.userId },

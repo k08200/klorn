@@ -90,10 +90,18 @@ describe("BYOK threading — classifyEmailBatch", () => {
 
 describe("BYOK threading — judgeEmail", () => {
   it("forwards the user's credentials to createCompletion", async () => {
-    // Content shape is irrelevant to this assertion: the call carries the
-    // credentials before the response is ever parsed. Return bare JSON so the
-    // call resolves without throwing.
-    mockLlmReturns("{}");
+    // Return a well-formed feature object so the LLM path completes through
+    // tierFromFeatures (not the keyword fallback) — that way the assertion that
+    // createCompletion received the credentials reflects the real scoring path.
+    mockLlmReturns(
+      JSON.stringify({
+        confidence: 0.8,
+        senderTrust: 0.6,
+        reversibility: 0.7,
+        urgency: 0.3,
+        reason: "test",
+      }),
+    );
 
     await judgeEmail(HUMAN_EMAIL, "user-123", undefined, USER_KEY);
 
@@ -102,7 +110,15 @@ describe("BYOK threading — judgeEmail", () => {
   });
 
   it("omits credentials when none are supplied (unchanged shared-env path)", async () => {
-    mockLlmReturns("{}");
+    mockLlmReturns(
+      JSON.stringify({
+        confidence: 0.8,
+        senderTrust: 0.6,
+        reversibility: 0.7,
+        urgency: 0.3,
+        reason: "test",
+      }),
+    );
 
     await judgeEmail(HUMAN_EMAIL, "user-123");
 

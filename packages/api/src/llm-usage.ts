@@ -95,6 +95,12 @@ export function estimatePrebillCents(model: string): number {
  * a protective cap, so when the pre-bill overshot we deliberately keep the
  * conservative (higher) figure rather than refunding.
  *
+ * BYOK: when `servedByUserKey` is set, the call ran on the user's OWN provider
+ * key — Klorn spent nothing, so neither the per-user cap nor the shared global
+ * ceiling is charged. The gate already skipped the pre-bill for these (so
+ * `prebilledCents` is 0); a genuine env-key fallthrough has servedByUserKey
+ * false and is charged the full actual cost here.
+ *
  * Never throws; failures are captured and swallowed (same contract as
  * recordLlmUsage).
  */
@@ -103,8 +109,11 @@ export async function trueUpCostLedgers(input: {
   model: string;
   prebilledCents: number;
   usage: ProviderUsage | null | undefined;
+  servedByUserKey?: boolean;
 }): Promise<void> {
   try {
+    // Served on the user's own key → Klorn's ledgers stay untouched.
+    if (input.servedByUserKey) return;
     const promptTokens = input.usage?.prompt_tokens ?? null;
     const completionTokens = input.usage?.completion_tokens ?? null;
     if (promptTokens == null && completionTokens == null) return;
@@ -121,6 +130,10 @@ export async function trueUpCostLedgers(input: {
     }
     recordGlobalCostUsage(deltaCents);
   } catch (err) {
+    // Fire-and-forget settlement: a failure here silently drops a real charge
+    // (env-fallthrough cost that should land on the cap/ceiling), so signal it
+    // — captureError alone is invisible without a Sentry DSN.
+    console.warn("[llm-usage] cost true-up failed (model in Sentry extra)", err);
     captureError(err, {
       tags: { component: "llm-usage" },
       extra: { model: input.model, phase: "true-up" },
@@ -164,6 +177,9 @@ export async function recordLlmUsage(input: RecordLlmUsageInput): Promise<void> 
       },
     });
   } catch (err) {
+    // Ground-truth usage ledger write failed — signal before the silent
+    // captureError so a broken ledger is visible without a Sentry DSN.
+    console.warn("[llm-usage] usage-ledger write failed (provider/model in Sentry extra)", err);
     captureError(err, {
       tags: { component: "llm-usage" },
       extra: { provider: input.provider, model: input.model, source: input.source },

@@ -36,6 +36,9 @@ async function tickOnce(): Promise<void> {
         );
       }
     } catch (err) {
+      // Terminal handler for the per-user Naver sync — console first so a
+      // failure is visible without a Sentry DSN (self-host / dev).
+      console.warn(`[naver-imap-scheduler] sync failed for user ${user.id}:`, err);
       captureError(err, {
         tags: { scope: "naver-imap-scheduler" },
         extra: { userId: user.id },
