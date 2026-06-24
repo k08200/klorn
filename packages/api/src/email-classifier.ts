@@ -254,7 +254,12 @@ async function classifyBatchWithLlm(
     // Fall back to the keyword path, but leave a signal: a misconfigured BYOK
     // key (401) or a quota-locked model would otherwise silently degrade every
     // batch with no trace (captureError is a no-op without a Sentry DSN).
-    console.warn("[CLASSIFIER] LLM batch failed — falling back to keyword path", err);
+    // Message only — a full provider error object can echo request content
+    // (email subject/snippet) into logs; the full error goes to Sentry.
+    console.warn(
+      "[CLASSIFIER] LLM batch failed — falling back to keyword path:",
+      err instanceof Error ? err.message : String(err),
+    );
     captureError(err, { tags: { scope: "email-classifier.llm" } });
     return null;
   }

@@ -29,6 +29,7 @@ import {
   checkAndRecordUserCall,
   UserRateLimitedError,
 } from "./quota-limiter.js";
+import { captureError } from "./sentry.js";
 
 export { UserRateLimitedError };
 
@@ -173,6 +174,23 @@ function hasUserOwnedProvider(chain: Provider[], playgroundOnly: boolean): boole
   // would have the global pre-bill skipped for BYOK users — acceptable because
   // the true-up settles the real cost post-call.
   return !playgroundOnly && chain.some((p) => p.ownedByUser === true);
+}
+
+/**
+ * A user-owned (BYOK) provider just hit its limit and we're about to fall back
+ * to the shared env key. Make that LOUD: otherwise the user's key silently
+ * stops serving and Klorn's budget is spent with no signal — the user keeps
+ * thinking their key works. (Policy: degrade, don't die — but never silently.)
+ */
+function signalUserKeyFailover(provider: Provider, err: unknown, userId?: string): void {
+  if (provider.ownedByUser !== true) return;
+  console.warn(
+    `[BYOK] user key (${provider.quotaKey}) hit its limit — falling back to the shared env key; the user's own key is no longer serving requests`,
+  );
+  captureError(err, {
+    tags: { scope: "byok.user_key_failover" },
+    extra: { userId: userId ?? null, quotaKey: provider.quotaKey },
+  });
 }
 
 const PROVIDERS_EXHAUSTED_BASE =
@@ -388,6 +406,7 @@ export async function createCompletion(
           lastError = err2;
           if (isKeyLimitError(err2)) {
             markKeyLimited(provider.quotaKey, err2);
+            signalUserKeyFailover(provider, err2, options.userId);
             continue; // → next provider
           }
           throw err2;
@@ -399,6 +418,7 @@ export async function createCompletion(
       // quota window (RPM=5min, daily=until UTC midnight, ambiguous=1h).
       if (isKeyLimitError(err)) {
         markKeyLimited(provider.quotaKey, err);
+        signalUserKeyFailover(provider, err, options.userId);
         continue;
       }
 
@@ -503,7 +523,7 @@ export async function createVisionCompletion(
         model,
         // Pre-bill is 0 for a BYOK call (the gate skipped it), so the env
         // fallthrough is charged its full actual cost; a user-key hit charges $0.
-        prebilledCents: userKeyAvailable ? 0 : estimatePrebillCents(params.model),
+        prebilledCents: userKeyAvailable || playgroundOnly ? 0 : estimatePrebillCents(params.model),
         usage: result.usage ?? null,
         servedByUserKey: provider.ownedByUser === true,
       });
@@ -513,6 +533,7 @@ export async function createVisionCompletion(
       // Budget / availability errors → fail over to the next provider.
       if (isKeyLimitError(err)) {
         markKeyLimited(provider.quotaKey, err);
+        signalUserKeyFailover(provider, err, options.userId);
         continue;
       }
       if (isCreditError(err)) {

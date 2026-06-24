@@ -154,57 +154,74 @@ export async function billingRoutes(app: FastifyInstance) {
   // PATCH /api/billing/models — Bring-your-own-key updates. The chat/agent
   // model is no longer user-selectable; passing chatModel/agentModel is
   // accepted but ignored to preserve old client compatibility.
-  app.patch("/models", async (request, reply) => {
-    const userId = getUserId(request);
-    const { openRouterApiKey, geminiApiKey, clearOpenRouterApiKey, clearGeminiApiKey } =
-      request.body as {
-        openRouterApiKey?: string | null;
-        geminiApiKey?: string | null;
-        clearOpenRouterApiKey?: boolean;
-        clearGeminiApiKey?: boolean;
+  app.patch(
+    "/models",
+    {
+      // Bound + shape the body: a BYOK key is short, so cap it (an unbounded
+      // string would bloat the row and get re-read+decrypted on every hot-path
+      // call). additionalProperties:false rejects anything unexpected.
+      schema: {
+        body: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            openRouterApiKey: { type: ["string", "null"], maxLength: 512 },
+            geminiApiKey: { type: ["string", "null"], maxLength: 512 },
+            clearOpenRouterApiKey: { type: "boolean" },
+            clearGeminiApiKey: { type: "boolean" },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const { openRouterApiKey, geminiApiKey, clearOpenRouterApiKey, clearGeminiApiKey } =
+        request.body as {
+          openRouterApiKey?: string | null;
+          geminiApiKey?: string | null;
+          clearOpenRouterApiKey?: boolean;
+          clearGeminiApiKey?: boolean;
+        };
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) return reply.code(404).send({ error: "User not found" });
+
+      const updateData: { openRouterApiKey?: string | null; geminiApiKey?: string | null } = {};
+
+      if (typeof openRouterApiKey === "string") {
+        const trimmed = openRouterApiKey.trim();
+        updateData.openRouterApiKey = trimmed ? encryptOptional(trimmed) : null;
+      } else if (clearOpenRouterApiKey) {
+        updateData.openRouterApiKey = null;
+      }
+
+      if (typeof geminiApiKey === "string") {
+        const trimmed = geminiApiKey.trim();
+        updateData.geminiApiKey = trimmed ? encryptOptional(trimmed) : null;
+      } else if (clearGeminiApiKey) {
+        updateData.geminiApiKey = null;
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return reply.code(400).send({ error: "No key setting specified" });
+      }
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { ...updateData, updatedAt: new Date() },
+      });
+
+      return {
+        success: true,
+        hasOpenRouterApiKey:
+          updateData.openRouterApiKey !== undefined
+            ? !!updateData.openRouterApiKey
+            : !!(user as unknown as { openRouterApiKey?: string | null }).openRouterApiKey,
+        hasGeminiApiKey:
+          updateData.geminiApiKey !== undefined
+            ? !!updateData.geminiApiKey
+            : !!(user as unknown as { geminiApiKey?: string | null }).geminiApiKey,
       };
-
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return reply.code(404).send({ error: "User not found" });
-
-    const updateData: Record<string, string | null> = {};
-
-    if (typeof openRouterApiKey === "string") {
-      const trimmed = openRouterApiKey.trim();
-      updateData.openRouterApiKey = trimmed ? encryptOptional(trimmed) : null;
-    } else if (clearOpenRouterApiKey) {
-      updateData.openRouterApiKey = null;
-    }
-
-    if (typeof geminiApiKey === "string") {
-      const trimmed = geminiApiKey.trim();
-      updateData.geminiApiKey = trimmed ? encryptOptional(trimmed) : null;
-    } else if (clearGeminiApiKey) {
-      updateData.geminiApiKey = null;
-    }
-
-    if (Object.keys(updateData).length === 0) {
-      return reply.code(400).send({ error: "No key setting specified" });
-    }
-
-    await prisma.$executeRawUnsafe(
-      `UPDATE "User" SET ${Object.keys(updateData)
-        .map((k, i) => `"${k}" = $${i + 2}`)
-        .join(", ")}, "updatedAt" = NOW() WHERE "id" = $1`,
-      userId,
-      ...Object.values(updateData),
-    );
-
-    return {
-      success: true,
-      hasOpenRouterApiKey:
-        updateData.openRouterApiKey !== undefined
-          ? !!updateData.openRouterApiKey
-          : !!(user as unknown as { openRouterApiKey?: string | null }).openRouterApiKey,
-      hasGeminiApiKey:
-        updateData.geminiApiKey !== undefined
-          ? !!updateData.geminiApiKey
-          : !!(user as unknown as { geminiApiKey?: string | null }).geminiApiKey,
-    };
-  });
+    },
+  );
 }
