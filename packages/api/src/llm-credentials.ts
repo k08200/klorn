@@ -18,7 +18,11 @@ type UserWithKeys = {
  * then fall through to the env key — the same "degrade, don't die" posture
  * gmail.ts takes on a bad Google token.
  */
-function safeDecrypt(value: string | null | undefined, label: string, userId: string): string | null {
+function safeDecrypt(
+  value: string | null | undefined,
+  label: string,
+  userId: string,
+): string | null {
   try {
     return decryptOptional(value);
   } catch (err) {

@@ -492,7 +492,8 @@ export async function createVisionCompletion(
         // Mirror the gate: BYOK and playground both spend no Klorn budget, so
         // the usage log must show 0 — otherwise analytics overcounts cost Klorn
         // never paid.
-        estimatedCostCents: userKeyAvailable || playgroundOnly ? 0 : estimatePrebillCents(params.model),
+        estimatedCostCents:
+          userKeyAvailable || playgroundOnly ? 0 : estimatePrebillCents(params.model),
         provider: provider.name,
         model,
         usage: result.usage ?? null,
