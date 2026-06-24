@@ -34,4 +34,15 @@ describe("urgent-email dedup marker", () => {
   it("returns an empty set for messages with no marker", () => {
     expect(parseNotifiedGmailIds(["no brackets here", ""])).toEqual(new Set());
   });
+
+  it("exposes each id as a bare substring of a multi-id marker (firewall dedup relies on this)", () => {
+    // The firewall dedups with a bare `contains: gmailId` (not `[gmailId]`),
+    // because the sweep writes a batch as one `[id1,id2,…]` marker. A bracketed
+    // `[id2]` search would miss the middle of a batch and fire a second push.
+    const marker = buildUrgentDedupMessage("3 urgent emails", ["aaa", "bbb", "ccc"]);
+    for (const id of ["aaa", "bbb", "ccc"]) {
+      expect(marker.includes(id)).toBe(true); // bare match finds every id
+    }
+    expect(marker.includes("[bbb]")).toBe(false); // bracketed match would NOT
+  });
 });
