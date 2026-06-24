@@ -246,6 +246,14 @@ for (const f of changed) {
   if (r.affected.length > 0 && r.severity !== "info") results.push({ file: f, ...r });
 }
 var ICON = { high: "\u26A0\uFE0F", low: "\u{1F7E1}", info: "\u2139\uFE0F" };
+// Neutralize markdown-control chars in PR-author-controlled strings (file paths,
+// symbols, diff lines, source text) before they enter the bot comment: a stray
+// backtick would close an inline-code span or the ```diff fence and let a
+// crafted source line inject arbitrary markdown. Strip CR/LF so a value can't
+// forge extra comment lines either.
+function mdSafe(s) {
+  return String(s ?? "").replace(/`/g, "'").replace(/[\r\n]+/g, " ");
+}
 var md = "## \u{1F30A} Ripple \u2014 \uC774 PR\uC758 \uBCC0\uACBD \uC601\uD5A5\n\n";
 if (results.length === 0) {
   md += "\uC774 PR \uC758 \uBCC0\uACBD\uC774 \uB2E4\uB978 \uCF54\uB4DC\uC758 \uACC4\uC57D(\uC2DC\uADF8\uB2C8\uCC98\xB7\uC2A4\uD0A4\uB9C8\xB7\uB77C\uC6B0\uD2B8)\uC744 \uAE68\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \u2705\n";
@@ -254,14 +262,14 @@ if (results.length === 0) {
 
 `;
   for (const r of results.sort((a, b) => a.severity === "high" ? -1 : 1)) {
-    md += `### ${ICON[r.severity]} \`${r.file}\`
+    md += `### ${ICON[r.severity]} \`${mdSafe(r.file)}\`
 `;
     for (const d of r.changeDetails.slice(0, 4)) {
-      md += `- **\`${d.symbol}\`**${d.note ? ` \u2014 ${d.note}` : ""}
+      md += `- **\`${mdSafe(d.symbol)}\`**${d.note ? ` \u2014 ${mdSafe(d.note)}` : ""}
 `;
       if (d.before && d.after && d.before !== d.after) md += `  \`\`\`diff
-  - ${d.before}
-  + ${d.after}
+  - ${mdSafe(d.before)}
+  + ${mdSafe(d.after)}
   \`\`\`
 `;
     }
@@ -270,8 +278,10 @@ if (results.length === 0) {
     for (const a of r.affected.slice(0, 8)) {
       const rel = a.pathHint.startsWith(`${REPO_NAME}/`) ? a.pathHint.slice(REPO_NAME.length + 1) : a.pathHint;
       const sites = useSites(rel, r.changedSymbols);
-      const where = sites.length ? sites.map((s) => `\`${rel}:${s.line}\``).join(", ") : `\`${rel}\``;
-      md += `  - ${where}${sites[0] ? ` \u2014 \`${sites[0].text}\`` : ""}
+      const where = sites.length
+        ? sites.map((s) => `\`${mdSafe(rel)}:${s.line}\``).join(", ")
+        : `\`${mdSafe(rel)}\``;
+      md += `  - ${where}${sites[0] ? ` \u2014 \`${mdSafe(sites[0].text)}\`` : ""}
 `;
     }
     md += "\n";
