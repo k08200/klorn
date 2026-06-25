@@ -317,6 +317,11 @@ export async function syncNaverImap(args: SyncArgs): Promise<SyncResult> {
     await client.logout();
   } catch (err) {
     result.errors += 1;
+    // console first — captureError is silent without a Sentry DSN (self-host/dev).
+    console.warn(
+      `[naver-imap] sync failed for ${args.userId}:`,
+      err instanceof Error ? err.message : String(err),
+    );
     captureError(err, {
       tags: { scope: "naver-imap.sync" },
       extra: { userId: args.userId },
