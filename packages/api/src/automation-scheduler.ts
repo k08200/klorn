@@ -49,6 +49,12 @@ import { buildUrgentDedupMessage, parseNotifiedGmailIds } from "./urgent-dedup.j
 import { pushNotification } from "./websocket.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
+// Self-overlap guard: true while a tick is mid-flight. The pg advisory lock is
+// session-level and re-entrant on the same pooled connection, so it does NOT
+// stop the scheduler from overlapping ITSELF when a tick runs longer than the
+// interval — this boolean does. (dbHeartbeat + tryAcquireSchedulerLock both
+// swallow their own errors, so this is always cleared on the paths below.)
+let schedulerInFlight = false;
 
 const CHECK_INTERVAL_MS = SCHEDULER_CHECK_INTERVAL_MS;
 const WATCH_RENEWAL_INTERVAL_MS = SCHEDULER_WATCH_RENEWAL_INTERVAL_MS;
@@ -282,6 +288,10 @@ async function dbHeartbeat(): Promise<void> {
 }
 
 async function runAutomations() {
+  // Skip if this process is still running the previous tick (see schedulerInFlight).
+  if (schedulerInFlight) return;
+  schedulerInFlight = true;
+
   await dbHeartbeat();
 
   // Cross-worker mutual exclusion. If another container holds the lock,
@@ -289,6 +299,7 @@ async function runAutomations() {
   // when multiple Render dynos run in parallel.
   const acquired = await tryAcquireSchedulerLock();
   if (!acquired) {
+    schedulerInFlight = false;
     return;
   }
 
@@ -848,6 +859,7 @@ async function runAutomations() {
     console.error("[AUTOMATION] Scheduler error:", err);
   } finally {
     await releaseSchedulerLock();
+    schedulerInFlight = false;
   }
 }
 

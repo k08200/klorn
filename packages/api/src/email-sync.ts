@@ -26,6 +26,10 @@ import { captureError } from "./sentry.js";
 // Bound concurrency so a few-hundred-email mailbox doesn't serialize hundreds of
 // round-trips. Same quota headroom as the fetch path (Gmail 250 units/s).
 const RECONCILE_CONCURRENCY = 8;
+// Cap the per-tick read-status refresh (one Gmail messages.get + one updateMany
+// per row) to the most recent N emails, so the reconcile cost is bounded by N
+// rather than scaling linearly with total mailbox size every 30 min/user.
+const RECONCILE_REFRESH_CAP = 500;
 
 // extractEmailAddress lives in ./email-address.js; re-export preserved here for
 // back-compat (judge-context and tests import it via ./email-sync.js).
@@ -144,6 +148,7 @@ export async function reconcileEmails(
   const dbEmails = await prisma.emailMessage.findMany({
     where: { userId },
     select: { id: true, gmailId: true, isRead: true },
+    orderBy: { receivedAt: "desc" },
   });
 
   // Remove DB emails no longer in Gmail INBOX
@@ -164,7 +169,13 @@ export async function reconcileEmails(
   }
 
   // Refresh read/star status for emails still in INBOX (bounded concurrency).
-  const remainingGmailIds = dbEmails.filter((e) => inboxIds.has(e.gmailId)).map((e) => e.gmailId);
+  // Cap to the most recent N (dbEmails is ordered receivedAt desc) so the
+  // per-row Gmail get + updateMany cost can't scale with total mailbox size;
+  // older read-state drift is rare and the next tick re-checks the top N again.
+  const remainingGmailIds = dbEmails
+    .filter((e) => inboxIds.has(e.gmailId))
+    .map((e) => e.gmailId)
+    .slice(0, RECONCILE_REFRESH_CAP);
   const updated = await refreshReadStatus(gmail, userId, remainingGmailIds);
 
   return { removed, updated };
