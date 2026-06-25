@@ -86,6 +86,7 @@ interface LlmFeatureResponse {
   senderTrust?: number;
   reversibility?: number;
   urgency?: number;
+  requiresAction?: number;
   reason?: string;
 }
 
@@ -174,18 +175,19 @@ function buildJudgePrompt(
   const snippet = (email.snippet || "").replace(/\s+/g, " ").slice(0, 400);
   const labels = (email.labels || []).slice(0, 10).join(",");
 
-  return `You score one email on four 0.0–1.0 features. The features feed a deterministic tier rule, so be honest, not generous.
+  return `You score one email on five 0.0–1.0 features. The features feed a deterministic tier rule, so be honest, not generous.
 
 Features:
-- confidence: how sure you are that your other three scores are right (1.0 = certain, 0.5 = could go either way)
+- confidence: how sure you are that your other scores are right (1.0 = certain, 0.5 = could go either way)
 - senderTrust: is this sender a real person the recipient knows or cares about? (1.0 = clear known/important human; 0.5 = professional but unfamiliar; 0.3 = automated system/transactional notice the recipient signed up for — receipts, invoices, deploy/security/account alerts, own-product signups; these stay visible in the queue, they are NOT marketing; 0.0 = anonymous bulk marketing / promo list)
 - reversibility: if this mail were auto-handled (e.g. archived, replied) and that turned out wrong, how easy is it to recover? (1.0 = trivial undo, just unarchive; 0.5 = mildly awkward; 0.0 = irreversible action, e.g. lost an investor)
 - urgency: does this need attention within hours? (1.0 = today / time-bound; 0.5 = this week; 0.0 = informational, no clock). A scheduled date alone is NOT urgency — an invite or reminder for next week is ≤0.3, and routine security/sign-in confirmations without suspicious context are ≤0.3
+- requiresAction: does the recipient have to DO something because of this mail — pay, reply, sign, decide, fix, show up? (1.0 = a concrete task is owed: an unpaid invoice/bill, a question awaiting an answer, a failed payment or deploy to fix, a signature requested, a meeting to attend; 0.5 = unclear; 0.0 = pure FYI, the event already happened and nothing is owed — a paid receipt, a shipped/delivered notice, a "done" confirmation, a stats digest). This is NOT urgency: an unpaid bill due next month is requiresAction 1.0 but urgency 0.2.
 
 Also give a short reason (under 12 words) describing what the email is.
 
 Respond with JSON only:
-{"confidence":0.0,"senderTrust":0.0,"reversibility":0.0,"urgency":0.0,"reason":"short phrase"}${buildCorrectionsBlock(corrections)}${buildSenderFactsBlock(senderFacts)}
+{"confidence":0.0,"senderTrust":0.0,"reversibility":0.0,"urgency":0.0,"requiresAction":0.0,"reason":"short phrase"}${buildCorrectionsBlock(corrections)}${buildSenderFactsBlock(senderFacts)}
 
 Email:
 from: ${from}
@@ -273,6 +275,9 @@ async function extractFeaturesWithLlm(
         senderTrust: CLAMP(Number(parsed.senderTrust ?? 0)),
         reversibility: CLAMP(Number(parsed.reversibility ?? 0)),
         urgency: CLAMP(Number(parsed.urgency ?? 0)),
+        // EXPERIMENT 5th signal. Default 0.5 (not 0) when the model omits it so
+        // a missing score can't auto-handle by accident (AUTO needs < 0.3).
+        requiresAction: CLAMP(Number(parsed.requiresAction ?? 0.5)),
       };
       const reason = typeof parsed.reason === "string" ? parsed.reason : "";
       return { features, reason };
@@ -365,15 +370,17 @@ async function extractWithDial(
  * "repeated identical outcomes", not an LLM score.
  */
 function priorFeatures(tier: PocTier): PocFeatures {
+  // requiresAction mirrors the short-circuited tier: AUTO/SILENT = nothing owed,
+  // QUEUE/PUSH = the recipient acts. Keeps prior-served rows shaped like LLM ones.
   switch (tier) {
     case "SILENT":
-      return { confidence: 0.9, senderTrust: 0.05, reversibility: 0.95, urgency: 0.1 };
+      return { confidence: 0.9, senderTrust: 0.05, reversibility: 0.95, urgency: 0.1, requiresAction: 0.0 };
     case "PUSH":
-      return { confidence: 0.9, senderTrust: 0.9, reversibility: 0.5, urgency: 0.8 };
+      return { confidence: 0.9, senderTrust: 0.9, reversibility: 0.5, urgency: 0.8, requiresAction: 0.9 };
     case "AUTO":
-      return { confidence: 0.9, senderTrust: 0.5, reversibility: 0.9, urgency: 0.2 };
+      return { confidence: 0.9, senderTrust: 0.5, reversibility: 0.9, urgency: 0.2, requiresAction: 0.1 };
     default:
-      return { confidence: 0.9, senderTrust: 0.45, reversibility: 0.9, urgency: 0.2 };
+      return { confidence: 0.9, senderTrust: 0.45, reversibility: 0.9, urgency: 0.2, requiresAction: 0.7 };
   }
 }
 
@@ -432,7 +439,7 @@ export async function judgeEmail(
     return {
       tier: "SILENT",
       reason: "Promotional / marketing — no human attention needed",
-      features: { confidence: 0.95, senderTrust: 0.05, reversibility: 1.0, urgency: 0.0 },
+      features: { confidence: 0.95, senderTrust: 0.05, reversibility: 1.0, urgency: 0.0, requiresAction: 0.0 },
       source: "fast-path",
     };
   }

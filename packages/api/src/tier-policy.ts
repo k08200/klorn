@@ -37,6 +37,15 @@ export interface TierFeatures {
   reversibility: number;
   /** 1.0 = needs attention within hours; 0.0 = informational, no clock. */
   urgency: number;
+  /**
+   * EXPERIMENT (2026-06-25): 1.0 = the recipient must DO something (pay, reply,
+   * sign, fix); 0.0 = pure FYI, no response owed. Distinct from urgency: a bill
+   * isn't time-pressured (urgency low) but does require action. The 2026-06-12
+   * senderTrust>=0.5 AUTO floor was a blunt proxy for "is this actionable?" that
+   * also blocked low-trust receipts; requiresAction is meant to be the precise
+   * lever. Optional so existing 4-feature callers keep compiling.
+   */
+  requiresAction?: number;
 }
 
 /**
@@ -52,8 +61,10 @@ export const TIER_THRESHOLDS = {
   push: { urgency: 0.7, confidence: 0.7 },
   /** Branch 3: clear promotional — anonymous, no clock, trivially reversible. */
   silent: { senderTrust: 0.2, urgency: 0.2, reversibility: 0.9 },
-  /** Branch 4: safe to auto-handle — reversible, sure, not urgent, trusted. */
-  auto: { reversibility: 0.85, confidence: 0.85, urgency: 0.5, senderTrust: 0.5 },
+  /** Branch 4: safe to auto-handle — reversible, sure, not urgent, no action owed.
+   *  EXPERIMENT: requiresAction replaces the senderTrust>=0.5 proxy as the AUTO
+   *  gate. senderTrust kept in the shape for back-compat (threshold-sweep). */
+  auto: { reversibility: 0.85, confidence: 0.85, urgency: 0.5, senderTrust: 0.5, requiresAction: 0.3 },
 } as const;
 
 /**
@@ -66,7 +77,13 @@ export interface ThresholdConfig {
   lowConfidenceFloor: number;
   push: { urgency: number; confidence: number };
   silent: { senderTrust: number; urgency: number; reversibility: number };
-  auto: { reversibility: number; confidence: number; urgency: number; senderTrust: number };
+  auto: {
+    reversibility: number;
+    confidence: number;
+    urgency: number;
+    senderTrust: number;
+    requiresAction: number;
+  };
 }
 
 /** Clamp a feature score into the valid 0.0–1.0 range. Shared by the judge. */
@@ -94,6 +111,10 @@ export function tierFromFeatures(
     reversibility: CLAMP(features.reversibility),
     urgency: CLAMP(features.urgency),
   };
+  // EXPERIMENT: 5th signal. Missing (4-feature callers) defaults to 0.5 —
+  // "unknown actionability" — which is >= the 0.3 AUTO ceiling, so a call that
+  // doesn't score it can never be auto-handled (conservative).
+  const requiresAction = CLAMP(features.requiresAction ?? 0.5);
   const t = thresholds;
 
   // 1. Very low confidence → QUEUE.
@@ -132,9 +153,9 @@ export function tierFromFeatures(
     f.reversibility >= t.auto.reversibility &&
     f.confidence >= t.auto.confidence &&
     f.urgency < t.auto.urgency &&
-    f.senderTrust >= t.auto.senderTrust
+    requiresAction < t.auto.requiresAction
   ) {
-    return { tier: "AUTO", reason: "Reversible, confident, not urgent" };
+    return { tier: "AUTO", reason: "Reversible, confident, not urgent, no action owed" };
   }
 
   // 5. Default → QUEUE.
