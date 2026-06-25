@@ -195,7 +195,7 @@ async function main() {
   console.log(`\nOverall accuracy: ${right}/${rows.length} = ${accuracyPct}%`);
   console.log(`Elapsed: ${(elapsedMs / 1000).toFixed(1)}s`);
   console.log("\nGate checks:");
-  for (const check of floors.checks) {
+  for (const check of floors.checks.filter((c) => c.gating)) {
     const mark = check.pass ? "PASS" : "FAIL";
     console.log(
       `  [${mark}] ${check.name}: ${(check.value * 100).toFixed(1)}% (floor ${(check.floor * 100).toFixed(0)}%) — ${check.detail}`,
@@ -204,6 +204,16 @@ async function main() {
   console.log(
     passed ? "RESULT: PASS — all gates met." : "RESULT: FAIL — a gate is below its floor.",
   );
+
+  const reportOnly = floors.checks.filter((c) => !c.gating);
+  if (reportOnly.length > 0) {
+    console.log("\nReport-only (visibility for the half-tier space, not gating):");
+    for (const check of reportOnly) {
+      console.log(
+        `  [REPORT] ${check.name}: ${(check.value * 100).toFixed(1)}% (target ${(check.floor * 100).toFixed(0)}%) — ${check.detail}`,
+      );
+    }
+  }
 
   printPerTierAccuracy(rows);
   printConfusionMatrix(rows);

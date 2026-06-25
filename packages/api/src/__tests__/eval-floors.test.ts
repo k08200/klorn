@@ -100,6 +100,39 @@ describe("evaluateTierFloors", () => {
     expect(check(passing, "overall accuracy").pass).toBe(true);
   });
 
+  it("reports QUEUE and AUTO recall without gating on them", () => {
+    // AUTO fully collapses (0/4) and QUEUE misses some, but every GATING check
+    // is clean — report.pass must stay true. Report-only is visibility, not a
+    // verdict. overall = 42/50 = 0.84; predicted-SILENT stays pure.
+    const report = evaluateTierFloors(
+      pairs([
+        ["PUSH", "PUSH", 13],
+        ["SILENT", "SILENT", 12],
+        ["QUEUE", "QUEUE", 17],
+        ["QUEUE", "AUTO", 4], // QUEUE recall 17/21
+        ["AUTO", "QUEUE", 4], // AUTO recall 0/4
+      ]),
+    );
+    const queue = check(report, "QUEUE recall");
+    const auto = check(report, "AUTO recall");
+    expect(queue.gating).toBe(false);
+    expect(auto.gating).toBe(false);
+    expect(queue.value).toBeCloseTo(17 / 21);
+    expect(auto.value).toBe(0);
+    expect(auto.pass).toBe(false); // below the 0.5 target...
+    expect(report.pass).toBe(true); // ...but report-only, so the gate still passes
+  });
+
+  it("the gating set is exactly overall accuracy + PUSH recall + SILENT precision", () => {
+    const report = evaluateTierFloors(pairs([["QUEUE", "QUEUE", 50]]));
+    expect(
+      report.checks
+        .filter((c) => c.gating)
+        .map((c) => c.name)
+        .sort(),
+    ).toEqual(["PUSH recall", "SILENT precision", "overall accuracy"].sort());
+  });
+
   it("vacuous tiers pass (no PUSH support / nothing predicted SILENT), empty input fails", () => {
     const noSupport = evaluateTierFloors(pairs([["QUEUE", "QUEUE", 50]]));
     expect(check(noSupport, "PUSH recall").pass).toBe(true);
