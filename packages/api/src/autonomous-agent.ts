@@ -771,7 +771,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                     url: proposalLink,
                   },
                   "agent_proposal",
-                );
+                ).catch((err) => console.warn("[AGENT] proposal push failed", err));
               }
 
               if (dedupKey) recordDedupKey(userId, dedupKey);
@@ -898,7 +898,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                   url: notifyLink,
                 },
                 categoryForAgentNotification(args.category),
-              );
+              ).catch((err) => console.warn("[AGENT] notify push failed", err));
 
               if (dedupKey) recordDedupKey(userId, dedupKey);
 
@@ -1063,7 +1063,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                   url: riskLink,
                 },
                 "agent_proposal",
-              );
+              ).catch((err) => console.warn("[AGENT] risk push failed", err));
 
               // Notify sidebar to refresh
               pushNotification(userId, {
