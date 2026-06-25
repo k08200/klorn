@@ -537,7 +537,11 @@ export async function createVisionCompletion(
     )) as OpenAI.Chat.Completions.ChatCompletion;
     // Mirror the gate: BYOK and playground spend no Klorn budget, so the
     // pre-bill is 0 and the usage log must not show a cost Klorn never paid.
-    const prebill = userKeyAvailable || playgroundOnly ? 0 : estimatePrebillCents(params.model);
+    // Estimate against the model that ACTUALLY dispatches (`model`), not the
+    // requested `params.model`: on the `:free`→paid retry below the closure runs
+    // with the paid slug, but `params.model` is still the `:free` slug (which
+    // estimates 0) — so a paid call would record a 0 pre-bill.
+    const prebill = userKeyAvailable || playgroundOnly ? 0 : estimatePrebillCents(model);
     // Ground-truth usage ledger — record the provider+model that actually
     // served the request, fire-and-forget. Default source "background": vision
     // is a worker-triggered batch and the per-user gate above charges it to the
@@ -612,7 +616,18 @@ export async function createVisionCompletion(
           }
           if (provider.name === "openai-compat" && isConnectionError(err2)) continue;
           if (isModelUnavailableError(err2)) continue;
-          throw err2;
+          // Unknown / non-budget error on the paid retry: don't hard-fail the
+          // WHOLE vision call — a bare `throw err2` here escapes the provider
+          // for-loop and fails every image OCR even when a healthy next provider
+          // (env Gemini, separate quota) could still serve it. Mirror the rest
+          // of this loop: record it as lastError and fall through to the next
+          // provider (CLAUDE.md: signal even on non-fatal paths).
+          console.warn(
+            `[VISION] paid-slug retry failed with unknown error on ${provider.name}`,
+            err2,
+          );
+          lastError = err2;
+          continue;
         }
       }
       // A non-`:free` model reported unavailable → this provider can't serve
