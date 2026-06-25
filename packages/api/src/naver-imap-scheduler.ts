@@ -16,6 +16,7 @@ import { syncNaverImapForUser } from "./naver-imap.js";
 import { captureError } from "./sentry.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
+let firstTickTimer: ReturnType<typeof setTimeout> | null = null;
 const POLL_INTERVAL_MS = 5 * 60_000; // 5 minutes
 
 async function tickOnce(): Promise<void> {
@@ -48,10 +49,14 @@ async function tickOnce(): Promise<void> {
 }
 
 export function startNaverImapScheduler(): void {
-  if (intervalId) return;
+  // Guard the boot window too: intervalId isn't set until the first tick fires
+  // ~30s in, so a second start() call before then would schedule a duplicate
+  // first tick. Track the setTimeout handle so the double-start guard covers it.
+  if (intervalId || firstTickTimer) return;
   // First tick after 30s so the API server can finish booting before
   // we open IMAP sockets. Subsequent ticks on the regular interval.
-  setTimeout(() => {
+  firstTickTimer = setTimeout(() => {
+    firstTickTimer = null;
     tickOnce().catch((err) =>
       captureError(err, { tags: { scope: "naver-imap-scheduler.first-tick" } }),
     );
@@ -67,6 +72,10 @@ export function startNaverImapScheduler(): void {
 }
 
 export function stopNaverImapScheduler(): void {
+  if (firstTickTimer) {
+    clearTimeout(firstTickTimer);
+    firstTickTimer = null;
+  }
   if (intervalId) {
     clearInterval(intervalId);
     intervalId = null;

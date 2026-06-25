@@ -75,7 +75,13 @@ export async function findOpenEmailAttentionItemId(
       select: { id: true },
     });
     return row?.id ?? null;
-  } catch {
+  } catch (err) {
+    // Don't swallow silently — a DB error here breaks override dedup, and
+    // captureError is invisible without a Sentry DSN.
+    console.warn(
+      "[attention-override] findOpenEmailAttentionItemId failed:",
+      err instanceof Error ? err.message : String(err),
+    );
     return null;
   }
 }

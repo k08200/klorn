@@ -118,7 +118,9 @@ function GraphPageInner() {
             {mode === "relationships" ? (
               <>
                 <span>{contactCount} contacts</span>
-                {data?.builtAt && <span>· built {new Date(data.builtAt).toLocaleString()}</span>}
+                {data?.builtAt && (
+                  <span>· built {new Date(data.builtAt).toLocaleString("en-US")}</span>
+                )}
               </>
             ) : (
               <>

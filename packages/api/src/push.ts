@@ -90,6 +90,10 @@ export function authoredSurface(category: NotifCategory): "briefing" | "firewall
   if (category === "daily_briefing") return "briefing";
   if (category === "email_urgent") return "firewall";
   if (category === "github_urgent") return "firewall";
+  // email_candidate is an explicitly firewall-decided interrupt (candidate
+  // materials), not inbound noise — author it as a firewall surface like the
+  // other urgent surfaces, else the noise heuristic can suppress it.
+  if (category === "email_candidate") return "firewall";
   return null;
 }
 
