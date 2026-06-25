@@ -599,6 +599,13 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
             "error",
             `Malformed JSON from LLM for ${fnName}: ${fn.arguments?.slice(0, 100)}`,
           );
+          // Answer the tool_call even on a parse failure — an unanswered
+          // tool_call 400s the next createCompletion and kills the whole cycle.
+          messages.push({
+            role: "tool",
+            content: JSON.stringify({ error: "malformed tool arguments" }),
+            tool_call_id: toolCall.id,
+          });
           continue;
         }
 
@@ -840,6 +847,9 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                 "notify_user",
                 args.category,
               );
+              // Answer the tool_call before continuing — an unanswered tool_call
+              // 400s the next createCompletion and aborts the agent cycle.
+              messages.push({ role: "tool", content: result, tool_call_id: toolCall.id });
               continue;
             }
 
