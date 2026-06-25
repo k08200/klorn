@@ -18,6 +18,7 @@
 import { google } from "googleapis";
 import { decryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
+import { asBoundedNumber, asEnum, asStringArray, asUnitInterval } from "./llm-coerce.js";
 import { parseLlmJson } from "./llm-json.js";
 import { remember } from "./memory.js";
 import { createCompletion, MODEL } from "./openai.js";
@@ -36,6 +37,8 @@ export interface VoiceProfile {
   confidence: number; // 0.0-1.0, based on sample size
   sampledAt: string; // ISO timestamp
 }
+
+const TONES: readonly VoiceProfile["tone"][] = ["formal", "casual", "warm", "direct", "mixed"];
 
 // ─── Extract (main entry point) ───────────────────────────────────────────────
 
@@ -231,8 +234,16 @@ Return exactly this JSON shape:
     const raw = res.choices[0]?.message?.content || "";
     const parsed = parseLlmJson<VoiceProfile>(raw);
 
+    // Build the profile explicitly instead of spreading the parsed object: the
+    // spread let a hallucinated tone, a stringified confidence, or extra junk
+    // keys leak into the stored profile (and downstream prompt context).
     return {
-      ...parsed,
+      tone: asEnum(parsed.tone, TONES, "mixed"),
+      avgLengthWords: asBoundedNumber(parsed.avgLengthWords, 0, 100_000, 0),
+      closingPhrases: asStringArray(parsed.closingPhrases),
+      keyTraits: asStringArray(parsed.keyTraits),
+      exampleOpeners: asStringArray(parsed.exampleOpeners),
+      confidence: asUnitInterval(parsed.confidence),
       sampledAt: new Date().toISOString(),
     };
   } catch (err) {

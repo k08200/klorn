@@ -18,6 +18,7 @@
 import type { ClassifiableEmail } from "./email-classifier.js";
 import { resolveEscalation } from "./judge-dial.js";
 import { isClearMarketing, keywordFeatures, looksUrgent } from "./keyword-policy.js";
+import { asString, asUnitInterval, isNonFinitePresent } from "./llm-coerce.js";
 import { parseLlmJson } from "./llm-json.js";
 import { getEffectiveThresholds } from "./ontology-overrides.js";
 import { createCompletion, JUDGE_MODEL } from "./openai.js";
@@ -30,7 +31,7 @@ import {
   type SenderPrior,
 } from "./sender-policy.js";
 import { captureError } from "./sentry.js";
-import { CLAMP, type TierFeatures, tierFromFeatures } from "./tier-policy.js";
+import { type TierFeatures, tierFromFeatures } from "./tier-policy.js";
 import { TIERS, type Tier } from "./tiers.js";
 
 // The deterministic keyword/marketing patterns live in keyword-policy.ts.
@@ -268,13 +269,27 @@ async function extractFeaturesWithLlm(
       // fallback-served email to the keyword floor.
       const parsed = parseLlmJson<LlmFeatureResponse>(raw);
 
+      // Validate each feature is a finite number in [0,1]. The old
+      // CLAMP(Number(x)) turned a stringy/hallucinated feature into NaN and
+      // propagated it into the tier math; asUnitInterval collapses non-finite
+      // to 0. A present-but-non-numeric feature is a model anomaly, so trace it.
       const features: PocFeatures = {
-        confidence: CLAMP(Number(parsed.confidence ?? 0)),
-        senderTrust: CLAMP(Number(parsed.senderTrust ?? 0)),
-        reversibility: CLAMP(Number(parsed.reversibility ?? 0)),
-        urgency: CLAMP(Number(parsed.urgency ?? 0)),
+        confidence: asUnitInterval(parsed.confidence),
+        senderTrust: asUnitInterval(parsed.senderTrust),
+        reversibility: asUnitInterval(parsed.reversibility),
+        urgency: asUnitInterval(parsed.urgency),
       };
-      const reason = typeof parsed.reason === "string" ? parsed.reason : "";
+      const invalidFeatures = (
+        ["confidence", "senderTrust", "reversibility", "urgency"] as const
+      ).filter((k) => isNonFinitePresent(parsed[k]));
+      if (invalidFeatures.length > 0) {
+        const list = invalidFeatures.join(", ");
+        console.warn(`[JUDGE] non-numeric feature(s) coerced to 0: ${list}`);
+        captureError(new Error(`judge returned non-numeric feature(s): ${list}`), {
+          tags: { scope: "poc-judge.invalid-features" },
+        });
+      }
+      const reason = asString(parsed.reason);
       return { features, reason };
     } catch (err) {
       // Surface WHY in plain logs — captureError is a no-op without a

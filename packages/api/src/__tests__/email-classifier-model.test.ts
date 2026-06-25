@@ -41,7 +41,7 @@ describe("classifyEmailBatch — model routing", () => {
           message: {
             content: JSON.stringify({
               labels: [
-                { index: 0, priority: "medium", category: "client", needsReply: true, reason: "q" },
+                { index: 0, priority: "medium", category: "customer", needsReply: true, reason: "q" },
               ],
             }),
           },
@@ -53,7 +53,30 @@ describe("classifyEmailBatch — model routing", () => {
 
     expect(createCompletionMock).toHaveBeenCalledTimes(1);
     expect(createCompletionMock.mock.calls[0]?.[0]?.model).toBe("test-judge-model");
-    expect(labels[0]?.category).toBe("client");
+    expect(labels[0]?.category).toBe("customer");
+  });
+
+  it("coerces hallucinated enums / wrong-typed fields to safe defaults", async () => {
+    createCompletionMock.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              labels: [
+                { index: 0, priority: "urgent", category: "vip", needsReply: "yes", reason: 5 },
+              ],
+            }),
+          },
+        },
+      ],
+    });
+
+    const labels = await classifyEmailBatch([HUMAN_EMAIL]);
+
+    expect(labels[0]?.priority).toBe("low"); // "urgent" is not in the union
+    expect(labels[0]?.category).toBe("other"); // "vip" is not in the union
+    expect(labels[0]?.needsReply).toBe(false); // "yes" is not a boolean
+    expect(labels[0]?.reason).toBeUndefined(); // 5 is not a string
   });
 
   it("degrades to the keyword fallback when the LLM fails", async () => {

@@ -9,6 +9,7 @@
 import { prisma } from "./db.js";
 import { classifyNeedsReplyFromSignals } from "./email-priority.js";
 import { getUserLlmCredentials } from "./llm-credentials.js";
+import { asEnum, asString, asStringArray } from "./llm-coerce.js";
 import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, MODEL, openai } from "./openai.js";
 import type { ProviderCredentials } from "./providers/index.js";
@@ -26,6 +27,9 @@ interface AISummaryResult {
   sentiment: "positive" | "negative" | "neutral";
   priority: "URGENT" | "NORMAL" | "LOW";
 }
+
+const SENTIMENTS: readonly AISummaryResult["sentiment"][] = ["positive", "negative", "neutral"];
+const SUMMARY_PRIORITIES: readonly AISummaryResult["priority"][] = ["URGENT", "NORMAL", "LOW"];
 
 /**
  * Parse the model's JSON summary into an AISummaryResult, falling back to safe
@@ -47,12 +51,12 @@ export function parseAiSummary(content: string, fallbackSubject: string): AISumm
     // Non-JSON model output — keep the defaults below.
   }
   return {
-    summary: parsed.summary || fallbackSubject,
-    category: parsed.category || "other",
-    keyPoints: parsed.keyPoints || [],
-    actionItems: parsed.actionItems || [],
-    sentiment: parsed.sentiment || "neutral",
-    priority: parsed.priority || "NORMAL",
+    summary: asString(parsed.summary) || fallbackSubject,
+    category: asString(parsed.category) || "other",
+    keyPoints: asStringArray(parsed.keyPoints),
+    actionItems: asStringArray(parsed.actionItems),
+    sentiment: asEnum(parsed.sentiment, SENTIMENTS, "neutral"),
+    priority: asEnum(parsed.priority, SUMMARY_PRIORITIES, "NORMAL"),
   };
 }
 

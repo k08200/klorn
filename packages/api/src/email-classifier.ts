@@ -9,6 +9,7 @@
  * never silently stops classifying.
  */
 
+import { asEnum } from "./llm-coerce.js";
 import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, JUDGE_MODEL } from "./openai.js";
 import type { ProviderCredentials } from "./providers/index.js";
@@ -47,6 +48,17 @@ export interface ClassifiedLabel {
 }
 
 const PRIORITY_ORDER: Record<EmailPriority, number> = { high: 0, medium: 1, low: 2 };
+const PRIORITY_VALUES: readonly EmailPriority[] = ["high", "medium", "low"];
+const CATEGORY_VALUES: readonly EmailCategory[] = [
+  "investor",
+  "customer",
+  "meeting",
+  "internal",
+  "system",
+  "automated",
+  "conversation",
+  "other",
+];
 
 // Senders that *never* expect a human reply. Hardened 2026-05-19 after
 // dogfood pain "메일 부정확": missing patterns let promotional mail get
@@ -244,10 +256,13 @@ async function classifyBatchWithLlm(
     return emails.map((_, i) => {
       const l = byIndex.get(i);
       return {
-        priority: l?.priority ?? "low",
-        category: l?.category ?? "other",
-        needsReply: l?.needsReply ?? false,
-        reason: l?.reason,
+        // Whitelist the enums: a :free model can return a priority/category
+        // outside the union ("urgent", a hallucinated category), which `?? x`
+        // would pass straight through as a wrong-but-typed tier signal.
+        priority: asEnum(l?.priority, PRIORITY_VALUES, "low"),
+        category: asEnum(l?.category, CATEGORY_VALUES, "other"),
+        needsReply: typeof l?.needsReply === "boolean" ? l.needsReply : false,
+        reason: typeof l?.reason === "string" ? l.reason : undefined,
       };
     });
   } catch (err) {
