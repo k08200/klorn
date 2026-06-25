@@ -36,7 +36,7 @@ export default function AuthScreen({
     <main className="min-h-screen overflow-x-hidden bg-[#0f1115] text-stone-50">
       <nav className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-6">
         <Link href="/" className="flex items-center gap-3">
-          <img src="/brand/mark.svg?v=matte1" alt="" className="h-8 w-8" />
+          <img src="/brand/mark.svg?v=matte2" alt="" className="h-8 w-8" />
           <span className="text-sm font-semibold tracking-[0.14em] text-stone-100">Klorn</span>
         </Link>
         <div className="flex items-center gap-3 text-sm">
