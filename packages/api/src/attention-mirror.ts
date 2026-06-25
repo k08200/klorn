@@ -275,21 +275,6 @@ export async function bulkResolveAttentionForPendingActions(
   }
 }
 
-/**
- * Delete the AttentionItem(s) mirroring the given PendingAction ids. Used when
- * the source rows themselves are deleted (e.g. clearing a conversation).
- */
-export async function deleteAttentionForPendingActions(pendingActionIds: string[]): Promise<void> {
-  if (pendingActionIds.length === 0) return;
-  try {
-    await prisma.attentionItem.deleteMany({
-      where: { source: "PENDING_ACTION", sourceId: { in: pendingActionIds } },
-    });
-  } catch (err) {
-    console.warn("[attention-mirror] deleteAttentionForPendingActions failed", err);
-  }
-}
-
 // ─── Tasks ──────────────────────────────────────────────────────────────────
 // Tasks have a time-based surfacing rule: they only enter the queue once the
 // dueDate is today or already past. The producer is therefore not "every task
@@ -402,37 +387,6 @@ export async function upsertAttentionForTask(task: TaskLike, now = Date.now()): 
     });
   } catch (err) {
     console.warn("[attention-mirror] upsert failed for Task", task.id, err);
-  }
-}
-
-/**
- * Mark the AttentionItem mirroring this task as resolved. Used by callers
- * that know the task just transitioned away from an open state but don't
- * have the full task row handy.
- */
-export async function resolveAttentionForTask(taskId: string): Promise<void> {
-  try {
-    await prisma.attentionItem.updateMany({
-      where: { source: "TASK", sourceId: taskId, status: "OPEN" },
-      data: { status: "RESOLVED", resolvedAt: new Date() },
-    });
-  } catch (err) {
-    console.warn("[attention-mirror] resolveAttentionForTask failed", taskId, err);
-  }
-}
-
-/**
- * Delete AttentionItem rows mirroring the given task ids. Used when the
- * source tasks themselves are removed.
- */
-export async function deleteAttentionForTasks(taskIds: string[]): Promise<void> {
-  if (taskIds.length === 0) return;
-  try {
-    await prisma.attentionItem.deleteMany({
-      where: { source: "TASK", sourceId: { in: taskIds } },
-    });
-  } catch (err) {
-    console.warn("[attention-mirror] deleteAttentionForTasks failed", err);
   }
 }
 
@@ -642,17 +596,6 @@ export async function upsertAttentionForNotification(notif: NotificationLike): P
     });
   } catch (err) {
     console.warn("[attention-mirror] upsert failed for Notification", notif.id, err);
-  }
-}
-
-export async function deleteAttentionForNotifications(notificationIds: string[]): Promise<void> {
-  if (notificationIds.length === 0) return;
-  try {
-    await prisma.attentionItem.deleteMany({
-      where: { source: "NOTIFICATION", sourceId: { in: notificationIds } },
-    });
-  } catch (err) {
-    console.warn("[attention-mirror] deleteAttentionForNotifications failed", err);
   }
 }
 
@@ -1040,16 +983,5 @@ export async function upsertAttentionForGitHubNotification(
       sender: n.repo,
       decidedBy: judgement.source ?? null,
     });
-  }
-}
-
-export async function deleteAttentionForEmails(emailIds: string[]): Promise<void> {
-  if (emailIds.length === 0) return;
-  try {
-    await prisma.attentionItem.deleteMany({
-      where: { source: "EMAIL", sourceId: { in: emailIds } },
-    });
-  } catch (err) {
-    console.warn("[attention-mirror] deleteAttentionForEmails failed", err);
   }
 }

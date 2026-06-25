@@ -23,7 +23,6 @@ const {
   upsertAttentionForCommitment,
   upsertAttentionForEmailJudgement,
   bulkResolveAttentionForPendingActions,
-  deleteAttentionForPendingActions,
   deleteAttentionForCalendarEvents,
   deleteAttentionForCommitments,
 } = await import("../attention-mirror.js");
@@ -568,22 +567,6 @@ describe("deleteAttentionForCalendarEvents", () => {
     expect(call.where.userId).toBe("user-x");
     expect(call.where.source).toBe("CALENDAR_EVENT");
     expect(call.where.sourceId.in).toEqual(["e1", "e2"]);
-  });
-});
-
-describe("deleteAttentionForPendingActions", () => {
-  it("noops on an empty id list", async () => {
-    await deleteAttentionForPendingActions([]);
-    expect(deleteManySpy).not.toHaveBeenCalled();
-  });
-
-  it("deletes by (source, sourceId) for the given pending action ids", async () => {
-    await deleteAttentionForPendingActions(["a", "b", "c"]);
-    const call = deleteManySpy.mock.calls[0]?.[0] as {
-      where: { source: string; sourceId: { in: string[] } };
-    };
-    expect(call.where.source).toBe("PENDING_ACTION");
-    expect(call.where.sourceId.in).toEqual(["a", "b", "c"]);
   });
 });
 
