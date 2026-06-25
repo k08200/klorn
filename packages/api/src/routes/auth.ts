@@ -14,6 +14,7 @@ import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../email.js";
+import { maybeSendWelcomeEmail } from "../welcome-email.js";
 import {
   getAuthedClient,
   getAuthUrl,
@@ -260,8 +261,12 @@ export function authRoutes(app: FastifyInstance) {
         },
       });
 
-      // Send verification email (non-blocking)
-      sendVerificationEmail(normalizedEmail, verifyToken).catch(() => {});
+      // Send verification email (non-blocking). Never silent: a swallowed
+      // failure here strands the user unverified (and so never welcomed), so
+      // leave a console signal even though the request still succeeds.
+      sendVerificationEmail(normalizedEmail, verifyToken).catch((err) =>
+        console.error(`[AUTH] verification email failed for ${user.id}:`, err),
+      );
 
       // Auto-create AutomationConfig with defaults. Fire-and-forget, but never
       // silent: without this row the scheduler never picks the user up, so a
@@ -669,6 +674,7 @@ export function authRoutes(app: FastifyInstance) {
           () => prisma.user.findUnique({ where: { email: profile.email } }),
           { label: "oauth.find_user_by_email" },
         );
+        const isNewGoogleUser = !user;
         if (!user) {
           // Beta gate: when BETA_GATE_ENABLED=true, the Google sign-in path
           // can only create a new user if they have an APPROVED waitlist
@@ -766,6 +772,16 @@ export function authRoutes(app: FastifyInstance) {
             }),
           { label: "oauth.upsert_automation_config" },
         );
+
+        // First Google sign-in for this address → founder welcome (once per
+        // user, enforced inside the helper). Google profiles are pre-verified,
+        // so the address is real. Fire-and-forget so it never delays the
+        // redirect, but log on rejection — never silent.
+        if (isNewGoogleUser) {
+          void maybeSendWelcomeEmail({ id: user.id, email: user.email, name: user.name }).catch(
+            (err) => console.error(`[WELCOME] google sign-in welcome failed for ${user!.id}:`, err),
+          );
+        }
 
         const token = signToken({ userId: user.id, email: user.email });
 
@@ -1013,7 +1029,7 @@ export function authRoutes(app: FastifyInstance) {
           verifyToken: token,
           verifyTokenExp: { gte: new Date() },
         },
-        select: { id: true },
+        select: { id: true, email: true, name: true },
       });
 
       if (!user) {
@@ -1037,6 +1053,13 @@ export function authRoutes(app: FastifyInstance) {
       if (updated.count === 0) {
         return reply.code(400).send({ error: "Invalid or expired verification token" });
       }
+
+      // Email is now verified → the address is real and owned. Send the founder
+      // welcome (once per user, enforced inside the helper). Fire-and-forget so
+      // it never delays the redirect, but log on rejection — never silent.
+      void maybeSendWelcomeEmail({ id: user.id, email: user.email, name: user.name }).catch((err) =>
+        console.error(`[WELCOME] post-verify welcome failed for ${user.id}:`, err),
+      );
 
       // Validate WEB_URL to prevent open redirect — only allow http(s) origins
       const rawUrl = process.env.WEB_URL || "http://localhost:8001";
