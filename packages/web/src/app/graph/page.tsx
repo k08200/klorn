@@ -6,6 +6,7 @@ import AuthGuard from "../../components/auth-guard";
 import type { GraphEdge, GraphNode } from "../../components/relationship-graph";
 import { useToast } from "../../components/toast";
 import { apiFetch } from "../../lib/api";
+import { captureClientError } from "../../lib/sentry";
 
 // 3d-force-graph touches WebGL/window — load it client-only.
 const ForceGraph3DView = dynamic(
@@ -74,7 +75,10 @@ function GraphPageInner() {
     try {
       setData(await apiFetch<GraphData>(`/api/inbox/firewall/graph?mode=${mode}`));
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not load the graph.", "error");
+      // Don't surface the raw apiFetch error to the user — log the detail, show
+      // a fixed message.
+      captureClientError(err, { scope: "graph.load" });
+      toast("Could not load the graph.", "error");
     } finally {
       setLoading(false);
     }
