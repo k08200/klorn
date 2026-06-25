@@ -43,6 +43,12 @@ export function initSentryClient(): void {
 
 export function captureClientError(error: unknown, context?: Record<string, unknown>): void {
   const err = error instanceof Error ? error : new Error(String(error));
+  // Always emit a console signal first — Sentry is a no-op when the DSN is
+  // unset (the live default: no NEXT_PUBLIC_SENTRY_DSN), so without this every
+  // captured client error is fully invisible. Matches the repo rule "log a
+  // signal even on non-fatal paths".
+  // biome-ignore lint/suspicious/noConsole: deliberate visibility signal when Sentry is off
+  console.error("[client error]", err, context ?? "");
   ensureSentry()
     .then((Sentry) => {
       if (!Sentry) return;

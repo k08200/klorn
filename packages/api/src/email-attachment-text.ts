@@ -1,6 +1,11 @@
 import { inflateRawSync } from "node:zlib";
 
 const MAX_EXTRACTABLE_BYTES = 8_000_000;
+// Aggregate caps across a whole archive. inflateRawCapped bounds ONE stream,
+// but a multi-entry archive (docx/xlsx/pptx/hwpx are ZIPs) can still declare
+// thousands of entries that each inflate near the per-stream cap — N × 8MB =
+// gigabytes held at once → OOM. These cap the SUM across all entries per file.
+const MAX_ZIP_ENTRIES = 512;
 
 /**
  * Raw-inflate with a hard output cap. A crafted deflate stream (a few KB that
@@ -340,6 +345,7 @@ function readZipEntries(buffer: Buffer): Map<string, Buffer> {
 
   const entries = new Map<string, Buffer>();
   let offset = 0;
+  let totalBytes = 0;
 
   while (offset + 30 <= buffer.length) {
     const signature = buffer.readUInt32LE(offset);
@@ -360,8 +366,15 @@ function readZipEntries(buffer: Buffer): Map<string, Buffer> {
 
     const compressed = buffer.subarray(dataStart, dataEnd);
     if (!filename.endsWith("/")) {
-      if (method === 0) entries.set(filename, Buffer.from(compressed));
-      if (method === 8) entries.set(filename, inflateRawCapped(compressed));
+      const data =
+        method === 0 ? Buffer.from(compressed) : method === 8 ? inflateRawCapped(compressed) : null;
+      if (data) {
+        entries.set(filename, data);
+        totalBytes += data.length;
+        // Aggregate guard: stop once the whole file blows the extract budget or
+        // the entry-count cap, so a multi-entry bomb can't OOM the dyno.
+        if (totalBytes > MAX_EXTRACTABLE_BYTES || entries.size >= MAX_ZIP_ENTRIES) break;
+      }
     }
 
     offset = dataEnd;
@@ -383,6 +396,7 @@ function readCentralDirectoryZipEntries(buffer: Buffer): Map<string, Buffer> {
   );
 
   let offset = centralDirectoryOffset;
+  let totalBytes = 0;
   while (offset + 46 <= centralDirectoryEnd && buffer.readUInt32LE(offset) === 0x02014b50) {
     const method = buffer.readUInt16LE(offset + 10);
     const compressedSize = buffer.readUInt32LE(offset + 20);
@@ -401,6 +415,10 @@ function readCentralDirectoryZipEntries(buffer: Buffer): Map<string, Buffer> {
     );
     if (localData && !filename.endsWith("/")) {
       entries.set(filename, localData);
+      totalBytes += localData.length;
+      // Aggregate guard (see readZipEntries): bound the whole-file output, not
+      // just each per-stream inflate, so a many-entry bomb can't OOM the dyno.
+      if (totalBytes > MAX_EXTRACTABLE_BYTES || entries.size >= MAX_ZIP_ENTRIES) break;
     }
 
     offset = nameStart + fileNameLength + extraLength + commentLength;

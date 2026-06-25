@@ -390,6 +390,21 @@ export async function createCompletion(
             markKeyLimited(provider.quotaKey, err2);
             continue; // → next provider
           }
+          // The :free fallback model can itself be retired (404) or hit a
+          // transient connection blip. Don't hard-fail the whole request when a
+          // healthy failover provider (env Gemini, separate quota) still exists
+          // downstream — mirror the outer handler: walk the free-model chain on
+          // OpenRouter, then fall through to the next provider.
+          if (isModelUnavailableError(err2)) {
+            const result = await walkFallbackChain(OPENROUTER_FALLBACK_CHAIN, model, (m) =>
+              call(provider, m),
+            );
+            if (result !== null) return result;
+            continue;
+          }
+          if (isConnectionError(err2)) {
+            continue;
+          }
           throw err2;
         }
       }
@@ -464,9 +479,17 @@ export async function createVisionCompletion(
   // this, a runaway attachment-analysis batch can blow past the cap.
   await enforceCostGates(params.model, options.userId, playgroundOnly, userKeyAvailable);
 
+  // Vision prefers Gemini (best OCR), but a BYOK user's OWN key must keep
+  // priority — otherwise env Gemini gets hoisted ahead of the user's
+  // OpenRouter/Gemini key and vision silently bills Klorn instead of the user,
+  // defeating BYOK on this path. So: user-owned providers first, then
+  // gemini-first only AMONG the env providers (keyless users are unchanged).
+  const userOwned = chain.filter((p) => p.ownedByUser);
+  const envProviders = chain.filter((p) => !p.ownedByUser);
   const ordered = [
-    ...chain.filter((provider) => provider.name === "gemini"),
-    ...chain.filter((provider) => provider.name !== "gemini"),
+    ...userOwned,
+    ...envProviders.filter((provider) => provider.name === "gemini"),
+    ...envProviders.filter((provider) => provider.name !== "gemini"),
   ];
   const visionModel = VISION_MODEL;
 

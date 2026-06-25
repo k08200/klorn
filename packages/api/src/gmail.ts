@@ -73,12 +73,19 @@ export function getLoginAuthUrl(signedState: string) {
 /** Get Google user profile from access token */
 export async function getGoogleUserInfo(
   accessToken: string,
-): Promise<{ email: string; name: string; picture: string }> {
+): Promise<{ email: string; verified_email: boolean; name: string; picture: string }> {
   const res = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) throw new Error("Failed to fetch Google user info");
-  return res.json() as Promise<{ email: string; name: string; picture: string }>;
+  // verified_email gates account linking on the login path — an unverified
+  // Google email must NOT be trusted to resolve/link an existing account.
+  return res.json() as Promise<{
+    email: string;
+    verified_email: boolean;
+    name: string;
+    picture: string;
+  }>;
 }
 
 async function invalidateGoogleToken(

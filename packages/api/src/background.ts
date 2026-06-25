@@ -185,16 +185,25 @@ async function checkUpcomingMeetings() {
               link: meeting.meetingLink || "/briefing",
             });
 
-            // Also send browser push with meeting link
+            // Also send browser push with meeting link. AWAIT it: the call is
+            // async (DB gate/rate-limit writes), so leaving it unawaited lets a
+            // rejection escape this try/catch onto a later microtask — with no
+            // unhandledRejection handler that can crash the dyno. Pass the
+            // "meeting" category so a user with notifyMeeting=false isn't pushed
+            // (the default "system" category bypasses that opt-out).
             try {
               const { sendPushNotification } = await import("./push.js");
-              sendPushNotification(userId, {
-                title: `Meeting in ${Math.ceil(minutesUntil)} min`,
-                body: meeting.summary,
-                url: meeting.meetingLink || "/briefing",
-              });
-            } catch {
-              // Push not available
+              await sendPushNotification(
+                userId,
+                {
+                  title: `Meeting in ${Math.ceil(minutesUntil)} min`,
+                  body: meeting.summary,
+                  url: meeting.meetingLink || "/briefing",
+                },
+                "meeting",
+              );
+            } catch (err) {
+              console.warn("[BACKGROUND] meeting push failed", err);
             }
 
             console.log(
