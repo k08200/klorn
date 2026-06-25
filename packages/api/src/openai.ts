@@ -39,7 +39,15 @@ export { UserRateLimitedError };
  */
 export const openai = (getProvider("openrouter")?.client ?? null) as unknown as OpenAI;
 
-export const MODEL = process.env.CHAT_MODEL || "google/gemma-4-31b-it:free";
+// Funded deploys (NODE_ENV=production, set on Render) default the chat/agent
+// surfaces to the paid, capable model so they aren't on a free model when no
+// env override is set; self-host / dev keeps :free (open-source default).
+// Per-surface envs (CHAT_MODEL/AGENT_MODEL) still override.
+const FREE_DEFAULT = "google/gemma-4-31b-it:free";
+const PAID_DEFAULT = "google/gemini-2.5-flash";
+const SHARED_DEFAULT = process.env.NODE_ENV === "production" ? PAID_DEFAULT : FREE_DEFAULT;
+
+export const MODEL = process.env.CHAT_MODEL || SHARED_DEFAULT;
 export const AGENT_MODEL = process.env.AGENT_MODEL || MODEL;
 // Tier judge model — separate knob from chat/agent. The firewall's PUSH
 // promise dies with the judge's LLM availability: the 2026-06-12 eval run
