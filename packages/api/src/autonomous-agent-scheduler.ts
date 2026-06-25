@@ -16,6 +16,7 @@ import { AGENT_CHECK_INTERVAL_MS, AGENT_IDLE_THRESHOLD_MS } from "./config.js";
 import { db, prisma } from "./db.js";
 import { recipientFromToolArgs, recordFeedback } from "./feedback.js";
 import { openai } from "./openai.js";
+import { captureError } from "./sentry.js";
 import { planHasFeature } from "./stripe.js";
 
 const CHECK_INTERVAL_MS = AGENT_CHECK_INTERVAL_MS;
@@ -74,8 +75,13 @@ async function expireStalePendingActions() {
         ),
       );
     }
-  } catch {
-    // Non-critical
+  } catch (err) {
+    // Best-effort cleanup that never blocks the agent loop — but a swallowed
+    // failure here strands stale PENDING actions (deadlocking the loop) and
+    // loses the IGNORED feedback signal, so leave a trace. console is the
+    // signal when Sentry is off (captureError is then a no-op).
+    console.error("[AGENT] expireStalePendingActions failed:", err);
+    captureError(err, { tags: { scope: "agent.expire-pending" } });
   }
 }
 
@@ -170,6 +176,7 @@ async function runAutonomousAgent() {
         batch.map(({ userId, mode }) =>
           runAgentForUser(userId, mode).catch((err) => {
             console.error(`[AGENT] Unhandled error for ${userId}:`, err);
+            captureError(err, { tags: { scope: "agent.run", userId } });
           }),
         ),
       );
