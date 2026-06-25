@@ -66,10 +66,12 @@ function hasFlag(name: string): boolean {
 }
 
 // Fixed paths. This dev-only eval tool always runs against the committed eval
-// set and a single temp cache; they are NOT operator-configurable, so no
+// set and a project-local cache; they are NOT operator-configurable, so no
 // untrusted value ever reaches a filesystem path (no js/path-injection surface).
+// The cache lives under eval/ (gitignored) rather than the shared OS temp dir,
+// which avoids the predictable-name symlink/race risk of /tmp.
 const EVAL_SET_PATH = "eval/judge-eval-set.json";
-const FEATURE_CACHE_PATH = "/tmp/klorn-eval-features.json";
+const FEATURE_CACHE_PATH = "eval/.feature-cache.json";
 
 async function loadOrExtract(
   inPath: string,

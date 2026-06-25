@@ -26,3 +26,6 @@ poc-demo-mock-server.cjs
 .record-scenes*.mjs
 packages/api/scripts/poc-label-interactive.ts
 packages/api/scripts/diagnose-calendar-times.ts
+
+# threshold-sweep.ts feature cache (extracted scores, regenerated on demand)
+packages/api/eval/.feature-cache.json
