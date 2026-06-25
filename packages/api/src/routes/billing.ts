@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { encryptOptional } from "../crypto-tokens.js";
 import { db, prisma } from "../db.js";
+import { CURATED_MODELS, isCuratedModel } from "../model-catalog.js";
 import { clearFallbackState } from "../model-fallback.js";
 import { MODEL } from "../openai.js";
 import { getUserUsage } from "../quota-limiter.js";
@@ -129,18 +130,15 @@ export async function billingRoutes(app: FastifyInstance) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return reply.code(404).send({ error: "User not found" });
 
-    const keyFields = user as unknown as {
-      openRouterApiKey?: string | null;
-      geminiApiKey?: string | null;
-    };
-
     const usage = getUserUsage(userId);
 
     return {
       plan: user.plan,
       activeModel: MODEL,
-      hasOpenRouterApiKey: !!keyFields.openRouterApiKey,
-      hasGeminiApiKey: !!keyFields.geminiApiKey,
+      availableModels: CURATED_MODELS,
+      selectedModel: isCuratedModel(user.chatModel) ? user.chatModel : null,
+      hasOpenRouterApiKey: !!user.openRouterApiKey,
+      hasGeminiApiKey: !!user.geminiApiKey,
       usage: {
         rpmUsed: usage.rpmUsed,
         rpmCap: usage.rpmCap,
@@ -165,28 +163,49 @@ export async function billingRoutes(app: FastifyInstance) {
           type: "object",
           additionalProperties: false,
           properties: {
-            openRouterApiKey: { type: ["string", "null"], maxLength: 512 },
-            geminiApiKey: { type: ["string", "null"], maxLength: 512 },
-            clearOpenRouterApiKey: { type: "boolean" },
+            chatModel: { type: "string", maxLength: 256 },
             clearGeminiApiKey: { type: "boolean" },
+            clearOpenRouterApiKey: { type: "boolean" },
+            geminiApiKey: { type: ["string", "null"], maxLength: 512 },
+            openRouterApiKey: { type: ["string", "null"], maxLength: 512 },
           },
         },
       },
     },
     async (request, reply) => {
       const userId = getUserId(request);
-      const { openRouterApiKey, geminiApiKey, clearOpenRouterApiKey, clearGeminiApiKey } =
-        request.body as {
-          openRouterApiKey?: string | null;
-          geminiApiKey?: string | null;
-          clearOpenRouterApiKey?: boolean;
-          clearGeminiApiKey?: boolean;
-        };
+      const {
+        chatModel,
+        openRouterApiKey,
+        geminiApiKey,
+        clearOpenRouterApiKey,
+        clearGeminiApiKey,
+      } = request.body as {
+        chatModel?: string;
+        openRouterApiKey?: string | null;
+        geminiApiKey?: string | null;
+        clearOpenRouterApiKey?: boolean;
+        clearGeminiApiKey?: boolean;
+      };
 
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) return reply.code(404).send({ error: "User not found" });
 
-      const updateData: { openRouterApiKey?: string | null; geminiApiKey?: string | null } = {};
+      const updateData: {
+        chatModel?: string;
+        geminiApiKey?: string | null;
+        openRouterApiKey?: string | null;
+      } = {};
+
+      if (typeof chatModel === "string") {
+        if (!isCuratedModel(chatModel)) {
+          return reply.code(400).send({ error: "Unsupported model" });
+        }
+        if (!user.openRouterApiKey && !user.geminiApiKey) {
+          return reply.code(400).send({ error: "Add a provider key before choosing a model" });
+        }
+        updateData.chatModel = chatModel;
+      }
 
       if (typeof openRouterApiKey === "string") {
         const trimmed = openRouterApiKey.trim();
@@ -216,11 +235,9 @@ export async function billingRoutes(app: FastifyInstance) {
         hasOpenRouterApiKey:
           updateData.openRouterApiKey !== undefined
             ? !!updateData.openRouterApiKey
-            : !!(user as unknown as { openRouterApiKey?: string | null }).openRouterApiKey,
+            : !!user.openRouterApiKey,
         hasGeminiApiKey:
-          updateData.geminiApiKey !== undefined
-            ? !!updateData.geminiApiKey
-            : !!(user as unknown as { geminiApiKey?: string | null }).geminiApiKey,
+          updateData.geminiApiKey !== undefined ? !!updateData.geminiApiKey : !!user.geminiApiKey,
       };
     },
   );

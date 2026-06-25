@@ -40,7 +40,9 @@ vi.mock("../db.js", () => {
         plan: "FREE",
         role: "USER",
         stripeId: null,
+        chatModel: "google/gemini-2.5-flash",
       })),
+      update: vi.fn(async () => ({})),
     },
     message: { count: vi.fn(async () => 10) },
     device: {
@@ -130,6 +132,108 @@ describe("billing routes", () => {
       payload: { plan: "INVALID" },
     });
     expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("GET /models includes availableModels with gemini-2.5-flash and selectedModel from user", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/billing/models", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(Array.isArray(body.availableModels)).toBe(true);
+    expect(body.availableModels.map((m: { id: string }) => m.id)).toContain(
+      "google/gemini-2.5-flash",
+    );
+    expect(body.selectedModel).toBe("google/gemini-2.5-flash");
+    await app.close();
+  });
+
+  it("PATCH /models with a curated chatModel persists it when user has a key", async () => {
+    const { prisma } = await import("../db.js");
+    const findMock = prisma.user.findUnique as ReturnType<typeof vi.fn>;
+    // requireAuth → sessionRevokedForToken calls findUnique first (select: sessionsInvalidatedAt).
+    // The billing handler then calls findUnique again for the full user record.
+    // Queue two one-time responses so each call gets the right shape.
+    findMock.mockResolvedValueOnce({ sessionsInvalidatedAt: null }); // auth call
+    findMock.mockResolvedValueOnce({
+      id: "user-1",
+      email: "t@e.com",
+      plan: "FREE",
+      role: "USER",
+      stripeId: null,
+      chatModel: "google/gemini-2.5-flash",
+      openRouterApiKey: "enc:sk-or-v1-xxx",
+      geminiApiKey: null,
+    });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/billing/models",
+      headers: auth(),
+      payload: { chatModel: "anthropic/claude-sonnet-4" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(
+      (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls.some(
+        (call) => call[0]?.data?.chatModel === "anthropic/claude-sonnet-4",
+      ),
+    ).toBe(true);
+    await app.close();
+  });
+
+  it("PATCH /models with an unknown chatModel returns 400 and does not persist", async () => {
+    const { prisma } = await import("../db.js");
+    const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
+    updateMock.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/billing/models",
+      headers: auth(),
+      payload: { chatModel: "some/unknown-model" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(updateMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("PATCH /models chatModel without any provider key returns 400 and does not persist", async () => {
+    const { prisma } = await import("../db.js");
+    const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
+    updateMock.mockClear();
+    // Default mock user has no keys (openRouterApiKey/geminiApiKey absent = falsy)
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/billing/models",
+      headers: auth(),
+      payload: { chatModel: "anthropic/claude-sonnet-4" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/provider key/i);
+    expect(updateMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("GET /models returns selectedModel: null for a non-curated chatModel", async () => {
+    const { prisma } = await import("../db.js");
+    const findMock = prisma.user.findUnique as ReturnType<typeof vi.fn>;
+    // requireAuth → sessionRevokedForToken calls findUnique first; billing GET handler second.
+    findMock.mockResolvedValueOnce({ sessionsInvalidatedAt: null }); // auth call
+    findMock.mockResolvedValueOnce({
+      id: "user-1",
+      email: "t@e.com",
+      plan: "FREE",
+      role: "USER",
+      stripeId: null,
+      chatModel: "google/gemma-4-31b-it:free",
+      openRouterApiKey: null,
+      geminiApiKey: null,
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/billing/models", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().selectedModel).toBeNull();
     await app.close();
   });
 });

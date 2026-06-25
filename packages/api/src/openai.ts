@@ -39,7 +39,15 @@ export { UserRateLimitedError };
  */
 export const openai = (getProvider("openrouter")?.client ?? null) as unknown as OpenAI;
 
-export const MODEL = process.env.CHAT_MODEL || "google/gemma-4-31b-it:free";
+// Funded deploys (NODE_ENV=production, set on Render) default the chat/agent
+// surfaces to the paid, capable model so they aren't on a free model when no
+// env override is set; self-host / dev keeps :free (open-source default).
+// Per-surface envs (CHAT_MODEL/AGENT_MODEL) still override.
+const FREE_DEFAULT = "google/gemma-4-31b-it:free";
+const PAID_DEFAULT = "google/gemini-2.5-flash";
+const SHARED_DEFAULT = process.env.NODE_ENV === "production" ? PAID_DEFAULT : FREE_DEFAULT;
+
+export const MODEL = process.env.CHAT_MODEL || SHARED_DEFAULT;
 export const AGENT_MODEL = process.env.AGENT_MODEL || MODEL;
 // Tier judge model — separate knob from chat/agent. The firewall's PUSH
 // promise dies with the judge's LLM availability: the 2026-06-12 eval run
@@ -269,6 +277,12 @@ export async function createCompletion(
   // the pre-bill (true-up settles $0 on a user-key hit, real cost on env
   // fallthrough) — see enforceCostGates / trueUpCostLedgers.
   const userKeyAvailable = hasUserOwnedProvider(chain, playgroundOnly);
+
+  // BYOK users may steer the model (curated only — resolved in llm-credentials).
+  // Reassign once so the provider call + cost ledgers all use the chosen model.
+  if (options.credentials?.userModel) {
+    params = { ...params, model: options.credentials.userModel };
+  }
 
   // Per-user RPM + daily-cap gate: trip before the call so a runaway loop
   // doesn't burn upstream provider quota. Charged against the foreground
@@ -508,7 +522,7 @@ export async function createVisionCompletion(
     ...envProviders.filter((provider) => provider.name === "gemini"),
     ...envProviders.filter((provider) => provider.name !== "gemini"),
   ];
-  const visionModel = VISION_MODEL;
+  const visionModel = options.credentials?.userModel ?? VISION_MODEL;
 
   let lastError: unknown;
   for (const provider of ordered) {
