@@ -35,6 +35,11 @@ import {
 import { getAuthedClient } from "../gmail.js";
 import { getUserLlmCredentials } from "../llm-credentials.js";
 import { createVisionCompletion, VISION_MODEL } from "../openai.js";
+import {
+  isDecorativeImage,
+  isVisionAttachment,
+  MAX_VISION_ATTACHMENT_BYTES,
+} from "../vision-attachment-policy.js";
 import { parseJsonArray, parseJsonRecord, safeAttachmentFilename } from "./email.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -119,30 +124,12 @@ export function buildEmailAttachmentBrief(input: {
   return `${lines.join("\n").trim()}\n`;
 }
 
-const MAX_VISION_ATTACHMENT_BYTES = 8_000_000;
-
 interface VisualAttachmentAnalysis {
   ocrText: string;
   summary: string;
   category: string;
   keyPoints: string[];
   extractedFields: Record<string, string | number | boolean | null>;
-}
-
-function isVisionAttachment(row: {
-  filename: string;
-  mimeType: string;
-  contentText: string | null;
-  analysisStatus: string;
-}): boolean {
-  const lower = row.filename.toLowerCase();
-  return (
-    row.mimeType.startsWith("image/") ||
-    row.mimeType.includes("pdf") ||
-    /\.(jpg|jpeg|png|webp|heic|pdf)$/i.test(lower) ||
-    /OCR 분석 대기|텍스트 레이어 없음|추출 실패/.test(row.contentText ?? "") ||
-    ["UNSUPPORTED", "VISION_FAILED"].includes(row.analysisStatus)
-  );
 }
 
 function parseVisualAnalysisJson(content: string): VisualAttachmentAnalysis {
@@ -682,6 +669,29 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
     for (const row of rows) {
       if (!body.force && !isVisionAttachment(row)) {
         results.push({ attachmentId: row.id, filename: row.filename, status: "skipped" });
+        continue;
+      }
+      // Decorative chrome (logos, spacers, tracking pixels) carries no readable
+      // content — mark it analyzed-and-done with a clear summary instead of
+      // burning a vision call and surfacing a VISION_FAILED 404. `force` is the
+      // escape hatch: an explicit OCR request still runs vision on it.
+      if (!body.force && isDecorativeImage(row)) {
+        await prisma.emailAttachment.update({
+          where: { id: row.id },
+          data: {
+            analysisStatus: "ANALYZED",
+            analysisError: null,
+            summary: `${row.filename}: decorative image (logo/icon/spacer) — skipped OCR`,
+            category: "image",
+            keyPoints: [],
+            extractedFields: {},
+          },
+        });
+        results.push({
+          attachmentId: row.id,
+          filename: row.filename,
+          status: "skipped_decorative",
+        });
         continue;
       }
       if ((row.size ?? 0) > MAX_VISION_ATTACHMENT_BYTES) {

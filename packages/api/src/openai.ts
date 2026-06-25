@@ -524,44 +524,48 @@ export async function createVisionCompletion(
   ];
   const visionModel = options.credentials?.userModel ?? VISION_MODEL;
 
+  // One provider call + ledger settle. Extracted so the `:free`→paid retry
+  // below records usage for whichever model actually served, exactly like the
+  // first-choice attempt (mirrors createCompletion's `call` closure).
+  const callVisionProvider = async (
+    provider: Provider,
+    model: string,
+  ): Promise<OpenAI.Chat.Completions.ChatCompletion> => {
+    const result = (await provider.call(
+      { ...params, stream: false },
+      model,
+    )) as OpenAI.Chat.Completions.ChatCompletion;
+    // Mirror the gate: BYOK and playground spend no Klorn budget, so the
+    // pre-bill is 0 and the usage log must not show a cost Klorn never paid.
+    const prebill = userKeyAvailable || playgroundOnly ? 0 : estimatePrebillCents(params.model);
+    // Ground-truth usage ledger — record the provider+model that actually
+    // served the request, fire-and-forget. Default source "background": vision
+    // is a worker-triggered batch and the per-user gate above charges it to the
+    // background bucket; the ledger must agree.
+    void recordLlmUsage({
+      userId: options.userId ?? null,
+      source: options.priority ?? "background",
+      estimatedCostCents: prebill,
+      provider: provider.name,
+      model,
+      usage: result.usage ?? null,
+    });
+    void trueUpCostLedgers({
+      userId: options.userId ?? null,
+      model,
+      prebilledCents: prebill,
+      usage: result.usage ?? null,
+      servedByUserKey: provider.ownedByUser === true,
+    });
+    return result;
+  };
+
   let lastError: unknown;
   for (const provider of ordered) {
     if (isProviderUnavailable(provider.quotaKey)) continue;
     const model = provider.resolveModel(visionModel);
     try {
-      const result = (await provider.call(
-        { ...params, stream: false },
-        model,
-      )) as OpenAI.Chat.Completions.ChatCompletion;
-      // Ground-truth usage ledger — same contract as createCompletion's
-      // `call` helper: record the provider+model that actually served the
-      // request, fire-and-forget.
-      void recordLlmUsage({
-        userId: options.userId ?? null,
-        // Default to "background": vision is a worker-triggered batch and the
-        // per-user gate above charges it to the background bucket. The ledger
-        // must agree, or the same call gates as background but bills as
-        // foreground. (createCompletion's own default is foreground — chat.)
-        source: options.priority ?? "background",
-        // Mirror the gate: BYOK and playground both spend no Klorn budget, so
-        // the usage log must show 0 — otherwise analytics overcounts cost Klorn
-        // never paid.
-        estimatedCostCents:
-          userKeyAvailable || playgroundOnly ? 0 : estimatePrebillCents(params.model),
-        provider: provider.name,
-        model,
-        usage: result.usage ?? null,
-      });
-      void trueUpCostLedgers({
-        userId: options.userId ?? null,
-        model,
-        // Pre-bill is 0 for a BYOK or playground call (the gate skipped it), so
-        // the env fallthrough is charged its full actual cost; a user-key hit $0.
-        prebilledCents: userKeyAvailable || playgroundOnly ? 0 : estimatePrebillCents(params.model),
-        usage: result.usage ?? null,
-        servedByUserKey: provider.ownedByUser === true,
-      });
-      return result;
+      return await callVisionProvider(provider, model);
     } catch (err) {
       lastError = err;
       // Budget / availability errors → fail over to the next provider.
@@ -574,6 +578,46 @@ export async function createVisionCompletion(
         markCreditExhausted(provider.quotaKey);
         continue;
       }
+      // The default VISION_MODEL ends in `:free`, and OpenRouter now 404s that
+      // SKU ("This model is unavailable for free — use google/gemini-2.5-flash").
+      // createCompletion walks a fallback chain on this; vision was missing the
+      // branch entirely, so every image OCR hard-failed → VISION_FAILED with a
+      // raw 404. Retry ONCE on the SAME provider with the paid slug (strip
+      // `:free`). If that provider has no credit it 402s → we fall through to
+      // the next provider (env Gemini's native key, separate quota), so keyless
+      // self-hosters still degrade gracefully instead of surfacing a raw 404.
+      if (isModelUnavailableError(err) && isFreeModel(model)) {
+        const paidModel = model.replace(/:free$/, "");
+        // `openrouter/free` (and any free alias without a `:free` suffix) has no
+        // paid slug to strip to — retrying the same string would just 404 again.
+        // Skip straight to the next provider instead of wasting a round-trip.
+        if (paidModel === model) continue;
+        // Log the swap so an operator can see the firewall fell off the free
+        // vision SKU onto a paid one (CLAUDE.md: signal even on non-fatal paths).
+        console.warn(
+          `[VISION] free SKU unavailable (${model}); retrying paid slug ${paidModel} on ${provider.name}`,
+        );
+        try {
+          return await callVisionProvider(provider, paidModel);
+        } catch (err2) {
+          lastError = err2;
+          if (isKeyLimitError(err2)) {
+            markKeyLimited(provider.quotaKey, err2);
+            signalUserKeyFailover(provider, err2, options.userId);
+            continue;
+          }
+          if (isCreditError(err2)) {
+            markCreditExhausted(provider.quotaKey);
+            continue;
+          }
+          if (provider.name === "openai-compat" && isConnectionError(err2)) continue;
+          if (isModelUnavailableError(err2)) continue;
+          throw err2;
+        }
+      }
+      // A non-`:free` model reported unavailable → this provider can't serve
+      // vision; move on rather than hard-failing the whole request.
+      if (isModelUnavailableError(err)) continue;
       if (isProviderUnavailable(provider.quotaKey)) continue;
       if (provider.name === "openai-compat" && isConnectionError(err)) continue;
       // Non-budget error (5xx, auth, malformed request, cloud network): don't
