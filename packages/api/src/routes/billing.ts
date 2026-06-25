@@ -174,14 +174,19 @@ export async function billingRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = getUserId(request);
-      const { chatModel, openRouterApiKey, geminiApiKey, clearOpenRouterApiKey, clearGeminiApiKey } =
-        request.body as {
-          chatModel?: string;
-          openRouterApiKey?: string | null;
-          geminiApiKey?: string | null;
-          clearOpenRouterApiKey?: boolean;
-          clearGeminiApiKey?: boolean;
-        };
+      const {
+        chatModel,
+        openRouterApiKey,
+        geminiApiKey,
+        clearOpenRouterApiKey,
+        clearGeminiApiKey,
+      } = request.body as {
+        chatModel?: string;
+        openRouterApiKey?: string | null;
+        geminiApiKey?: string | null;
+        clearOpenRouterApiKey?: boolean;
+        clearGeminiApiKey?: boolean;
+      };
 
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) return reply.code(404).send({ error: "User not found" });
@@ -232,9 +237,7 @@ export async function billingRoutes(app: FastifyInstance) {
             ? !!updateData.openRouterApiKey
             : !!user.openRouterApiKey,
         hasGeminiApiKey:
-          updateData.geminiApiKey !== undefined
-            ? !!updateData.geminiApiKey
-            : !!user.geminiApiKey,
+          updateData.geminiApiKey !== undefined ? !!updateData.geminiApiKey : !!user.geminiApiKey,
       };
     },
   );

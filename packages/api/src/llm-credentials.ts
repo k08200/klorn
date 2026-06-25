@@ -64,6 +64,7 @@ export async function getUserLlmCredentials(userId: string): Promise<ProviderCre
   const openRouterApiKey = safeDecrypt(user.openRouterApiKey, "openRouterApiKey", userId);
   const geminiApiKey = safeDecrypt(user.geminiApiKey, "geminiApiKey", userId);
   const hasKey = Boolean(openRouterApiKey) || Boolean(geminiApiKey);
-  const userModel = hasKey && isCuratedModel(user.chatModel) ? (user.chatModel as string) : undefined;
+  const userModel =
+    hasKey && isCuratedModel(user.chatModel) ? (user.chatModel as string) : undefined;
   return { openRouterApiKey, geminiApiKey, quotaScope: userId, userModel };
 }

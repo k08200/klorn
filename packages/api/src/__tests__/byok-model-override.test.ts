@@ -41,7 +41,7 @@ vi.mock("../llm-usage.js", () => ({
   trueUpCostLedgers: vi.fn(async () => {}),
 }));
 
-import { VISION_MODEL, createCompletion, createVisionCompletion } from "../openai.js";
+import { createCompletion, createVisionCompletion, VISION_MODEL } from "../openai.js";
 
 describe("createCompletion — per-user model override", () => {
   it("uses options.credentials.userModel for the provider call when set", async () => {

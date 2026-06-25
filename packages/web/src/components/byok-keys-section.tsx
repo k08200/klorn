@@ -125,7 +125,10 @@ export function ByokKeysSection() {
     setSavingModel(true);
     setError(null);
     try {
-      await apiFetch("/api/billing/models", { method: "PATCH", body: JSON.stringify({ chatModel }) });
+      await apiFetch("/api/billing/models", {
+        method: "PATCH",
+        body: JSON.stringify({ chatModel }),
+      });
       await loadStatus();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -244,7 +247,9 @@ export function ByokKeysSection() {
                   ))}
                 </select>
                 {!anyKey && (
-                  <p className="mt-1 text-[11px] text-stone-500">Add a key above to choose a model.</p>
+                  <p className="mt-1 text-[11px] text-stone-500">
+                    Add a key above to choose a model.
+                  </p>
                 )}
               </div>
             );
