@@ -19,6 +19,13 @@ import { pushNotification } from "./websocket.js";
 // In-memory cache only used to skip redundant DB queries within same process lifetime.
 // Actual dedup is DB-based (survives server restarts).
 const notifiedIds: Set<string> = new Set();
+// Cap the in-memory dedup cache so it can't grow unbounded on a long-lived
+// dyno. The DB findFirst (12h window) is the real dedup, so clearing this only
+// costs a few extra queries until it refills.
+const MAX_NOTIFIED_IDS = 1000;
+// Self-overlap guard: skip a tick if the previous one is still running, so a
+// slow tick on its own setInterval never runs the body twice.
+let meetingCheckInFlight = false;
 
 async function addNotification(
   userId: string,
@@ -131,6 +138,9 @@ export async function clearNotifications(userId: string): Promise<void> {
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: meeting check has inherent nested logic (users → meetings → dedup → notify)
 async function checkUpcomingMeetings() {
+  if (meetingCheckInFlight) return;
+  meetingCheckInFlight = true;
+  if (notifiedIds.size > MAX_NOTIFIED_IDS) notifiedIds.clear();
   try {
     // Check all users who have Google connected AND meeting automation enabled
     const usersWithGoogle = await prisma.userToken.findMany({
@@ -217,6 +227,8 @@ async function checkUpcomingMeetings() {
     }
   } catch {
     // Meeting check is optional
+  } finally {
+    meetingCheckInFlight = false;
   }
 }
 

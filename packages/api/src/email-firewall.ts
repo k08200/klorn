@@ -253,17 +253,25 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
     return;
   }
 
+  const id = email.gmailId;
   const already = await prisma.notification.findFirst({
     where: {
       userId,
       type: "email",
       title: FIREWALL_PUSH_TITLE,
-      // Match the bare gmailId, NOT `[gmailId]`: the urgent-priority sweep
-      // (same "Urgent email" title) records a batch as a single multi-id
-      // marker `[id1,id2,…]`, so `[gmailId]` would miss it and fire a second
-      // push for the same email. gmailIds are unique hex, so a bare substring
-      // match finds the id in any `[…]` marker without false positives.
-      message: { contains: email.gmailId },
+      // Match the gmailId as a COMPLETE token inside a `[id1,id2,…]` marker
+      // (a firewall single push or an urgent-sweep batch share this title),
+      // bounded by the bracket/comma delimiters. A bare `contains` substring-
+      // matched, so a Naver IMAP id like `…:5` falsely deduped against a longer
+      // `…:53` already sitting in a marker — silently suppressing a legitimate
+      // Naver PUSH. Gmail ids are non-nesting hex, but Naver UIDs are
+      // sequential integers, so the substring nesting is real for that source.
+      OR: [
+        { message: { contains: `[${id}]` } },
+        { message: { contains: `[${id},` } },
+        { message: { contains: `,${id},` } },
+        { message: { contains: `,${id}]` } },
+      ],
       createdAt: { gte: new Date(Date.now() - PUSH_DEDUP_WINDOW_MS) },
     },
     select: { id: true },

@@ -4,7 +4,7 @@
  */
 
 import { prisma } from "./db.js";
-import { createCompletion, MODEL, openai } from "./openai.js";
+import { createCompletion, DRAFT_MODEL, openai } from "./openai.js";
 import { wrapUntrusted } from "./untrusted.js";
 
 // ─── Auto-Reply Engine ────────────────────────────────────────────────────
@@ -97,7 +97,11 @@ export async function generateSmartReply(
 
   const response = await createCompletion(
     {
-      model: MODEL,
+      // Use the deliberately-paid DRAFT_MODEL (same as the user-reviewed draft
+      // route), not the :free CHAT default — an auto-reply can be auto-sent, so
+      // a degraded empty completion falling back to the raw template is higher
+      // stakes than a reviewable draft.
+      model: DRAFT_MODEL,
       temperature: 0.3,
       messages: [
         {
