@@ -17,7 +17,7 @@
 
 import type { ClassifiableEmail } from "./email-classifier.js";
 import { resolveEscalation } from "./judge-dial.js";
-import { keywordFeatures, looksUrgent, MARKETING_SUBJECT_RE } from "./keyword-policy.js";
+import { isClearMarketing, keywordFeatures, looksUrgent } from "./keyword-policy.js";
 import { parseLlmJson } from "./llm-json.js";
 import { getEffectiveThresholds } from "./ontology-overrides.js";
 import { createCompletion, JUDGE_MODEL } from "./openai.js";
@@ -423,12 +423,7 @@ export async function judgeEmail(
   // Anything else, including no-reply / notifications@ system mail, falls
   // through to the LLM (or keyword fallback) so the rule can decide between
   // QUEUE and SILENT based on senderTrust + urgency + reversibility.
-  const labels = email.labels || [];
-  const subject = email.subject || "";
-  const isClearMarketing =
-    labels.includes("CATEGORY_PROMOTIONS") || MARKETING_SUBJECT_RE.test(subject);
-
-  if (isClearMarketing) {
+  if (isClearMarketing(email)) {
     return {
       tier: "SILENT",
       reason: "Promotional / marketing — no human attention needed",
