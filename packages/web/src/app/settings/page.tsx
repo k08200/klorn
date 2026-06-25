@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
+import { ByokKeysSection } from "../../components/byok-keys-section";
 import { useConfirm } from "../../components/confirm-dialog";
 import { FeedbackPolicyPanel } from "../../components/feedback-policy-panel";
 import { GitHubSection } from "../../components/github-section";
@@ -1576,6 +1577,11 @@ export default function SettingsPage() {
         {/* Naver Mail (IMAP) */}
         <section className="mb-8">
           <NaverImapSection />
+        </section>
+
+        {/* Bring your own LLM key */}
+        <section className="mb-8">
+          <ByokKeysSection />
         </section>
 
         {/* Manual Runs */}
