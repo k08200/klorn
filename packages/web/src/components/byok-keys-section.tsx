@@ -4,10 +4,18 @@ import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { captureClientError } from "../lib/sentry";
 
+interface CuratedModelOption {
+  id: string;
+  label: string;
+  note: string;
+}
+
 interface ModelStatus {
   activeModel: string;
   hasOpenRouterApiKey: boolean;
   hasGeminiApiKey: boolean;
+  availableModels: CuratedModelOption[];
+  selectedModel: string | null;
 }
 
 type Provider = "openRouter" | "gemini";
@@ -111,6 +119,23 @@ export function ByokKeysSection() {
     void patchModels({ [CLEAR_FIELD[p]]: true }, p);
   };
 
+  const [savingModel, setSavingModel] = useState(false);
+  const saveModel = async (chatModel: string) => {
+    if (savingModel) return;
+    setSavingModel(true);
+    setError(null);
+    try {
+      await apiFetch("/api/billing/models", { method: "PATCH", body: JSON.stringify({ chatModel }) });
+      await loadStatus();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      captureClientError(err, { scope: "byok.model" });
+      setError(msg || "Could not change the model.");
+    } finally {
+      setSavingModel(false);
+    }
+  };
+
   return (
     <section className="rounded-xl border border-stone-800 bg-stone-950/40 p-5">
       <header className="mb-3">
@@ -197,6 +222,33 @@ export function ByokKeysSection() {
               </div>
             );
           })}
+          {(() => {
+            const anyKey = !!status?.hasOpenRouterApiKey || !!status?.hasGeminiApiKey;
+            const options = status?.availableModels ?? [];
+            return (
+              <div className="rounded-md border border-stone-800 bg-stone-900/40 p-3">
+                <label htmlFor="byok-model" className="mb-1 block text-xs text-stone-400">
+                  Model
+                </label>
+                <select
+                  id="byok-model"
+                  disabled={!anyKey || savingModel}
+                  value={status?.selectedModel ?? options[0]?.id ?? ""}
+                  onChange={(e) => void saveModel(e.target.value)}
+                  className="w-full rounded-md border border-stone-700 bg-stone-900/60 px-3 py-2 text-sm text-stone-100 focus:border-amber-500/60 focus:outline-none disabled:opacity-50"
+                >
+                  {options.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label} — {m.note}
+                    </option>
+                  ))}
+                </select>
+                {!anyKey && (
+                  <p className="mt-1 text-[11px] text-stone-500">Add a key above to choose a model.</p>
+                )}
+              </div>
+            );
+          })()}
           {error && (
             <div className="rounded-md border border-red-700/40 bg-red-950/30 p-3 text-xs text-red-300">
               {error}
