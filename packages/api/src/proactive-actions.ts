@@ -27,6 +27,7 @@ import { prisma } from "./db.js";
 import { senderName } from "./notification-format.js";
 import type { NotifCategory } from "./notification-prefs.js";
 import { sendPushNotification } from "./push.js";
+import { captureError } from "./sentry.js";
 import { sendSms } from "./sms.js";
 import { pushNotification } from "./websocket.js";
 
@@ -453,6 +454,7 @@ async function notify(
     categoryForType(type),
   ).catch((err) => {
     console.warn(`[PROACTIVE] push failed for ${userId}:`, err);
+    captureError(err, { tags: { scope: "proactive.push", userId } });
   });
 }
 
@@ -480,18 +482,26 @@ function categoryForType(type: string): NotifCategory {
  * Called from automation-scheduler.ts every 60 seconds.
  */
 export async function runProactiveActions(userId: string): Promise<void> {
-  try {
-    await Promise.allSettled([
-      checkUnansweredEmails(userId),
-      checkUpcomingMeetings(userId),
-      checkOverdueTasks(userId),
-      checkWeeklyReview(userId),
-      checkEndOfDayReview(userId),
-      checkDeadlineCountdown(userId),
-      checkFollowUpSuggestions(userId),
-      checkBackToBackMeetings(userId),
-    ]);
-  } catch (err) {
-    console.error(`[PROACTIVE] Error for ${userId}:`, err);
-  }
+  // Each check is independent: one failing must not sink the others, and a
+  // rejected check must leave a signal. allSettled never rejects, so an outer
+  // try/catch can't see inner failures — inspect each settled result and
+  // surface it (console for when Sentry is off, captureError for when it's on).
+  const checks: ReadonlyArray<readonly [string, Promise<unknown>]> = [
+    ["unanswered", checkUnansweredEmails(userId)],
+    ["meetings", checkUpcomingMeetings(userId)],
+    ["overdue", checkOverdueTasks(userId)],
+    ["weekly", checkWeeklyReview(userId)],
+    ["eod", checkEndOfDayReview(userId)],
+    ["deadline", checkDeadlineCountdown(userId)],
+    ["followup", checkFollowUpSuggestions(userId)],
+    ["backToBack", checkBackToBackMeetings(userId)],
+  ];
+  const results = await Promise.allSettled(checks.map(([, p]) => p));
+  results.forEach((r, i) => {
+    if (r.status === "rejected") {
+      const label = checks[i][0];
+      console.warn(`[PROACTIVE] check.${label} failed for ${userId}:`, r.reason);
+      captureError(r.reason, { tags: { scope: `proactive.${label}`, userId } });
+    }
+  });
 }

@@ -10,6 +10,7 @@
 
 import { prisma } from "./db.js";
 import { sendPushNotification } from "./push.js";
+import { captureError } from "./sentry.js";
 import { pushNotification } from "./websocket.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -64,6 +65,10 @@ async function deliverReminder(reminder: ReminderRecord): Promise<boolean> {
     notificationId: notification.id,
   }).catch((err) => {
     console.error(`[REMINDER] Push delivery failed for ${reminder.id}:`, err);
+    captureError(err, {
+      tags: { scope: "reminder.push", userId: reminder.userId },
+      extra: { reminderId: reminder.id },
+    });
   });
 
   console.log(`[REMINDER] Delivered: "${reminder.title}" to user ${reminder.userId}`);

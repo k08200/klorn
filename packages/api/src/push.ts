@@ -176,7 +176,13 @@ export async function sendPushNotification(
   // no browser subscriptions) still gets PUSH-tier interrupts. Contained:
   // sendTelegramForPush never throws by design, and the .catch is a second
   // belt so a bug there can never fail the web-push path.
-  await sendTelegramForPush(userId, payload, category).catch(() => {});
+  await sendTelegramForPush(userId, payload, category).catch((err) => {
+    // Defense-in-depth: sendTelegramForPush is designed never to throw and
+    // logs/captures its own failures. If it ever does throw, this must not
+    // sink the web-push path below — but don't swallow it silently either,
+    // or a Telegram-only self-hoster loses every PUSH alert with no trace.
+    console.warn(`[PUSH] Telegram secondary channel threw for ${userId}:`, err);
+  });
 
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
     console.log(`[PUSH] Skipped — VAPID keys not configured`);
