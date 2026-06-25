@@ -140,10 +140,12 @@ export async function persistGmailEmail(
       // noise the user never needs to open — mark it read in Gmail so it
       // doesn't sit unread. Promotional-ONLY by product decision: QUEUE/PUSH/
       // AUTO and non-promotional SILENT keep their unread state + alerts. Gated
-      // on the SAME deterministic signal the judge's fast-path uses
-      // (isClearMarketing), so the two can never drift. Gmail-only by
+      // on the judge's TIER (must be SILENT) AND the SAME deterministic signal
+      // the judge's fast-path uses (isClearMarketing) — without the tier gate a
+      // PUSH/QUEUE email whose subject merely contains "unsubscribe" would be
+      // silently marked read while ALSO firing a notification. Gmail-only by
       // construction (this is the Gmail ingest path). Fire-and-forget.
-      if (isClearMarketing({ labels: email.labels, subject: email.subject })) {
+      if (tier === "SILENT" && isClearMarketing({ labels: email.labels, subject: email.subject })) {
         void markPromotionalEmailRead(userId, { id: createdEmail.id, gmailId: email.gmailId });
       }
     })
@@ -179,7 +181,7 @@ async function markPromotionalEmailRead(
 ): Promise<void> {
   try {
     const result = await markAsRead(userId, email.gmailId);
-    if (result && "error" in result && result.error) {
+    if ("error" in result && result.error) {
       // Gmail not connected / token expired — an expected, benign state (the
       // user simply hasn't linked Gmail). Log it but do NOT captureError: this
       // would fire on every promo email for every keyless user and bury real
@@ -190,7 +192,7 @@ async function markPromotionalEmailRead(
     console.warn("[FIREWALL] promo auto-read failed (ids in Sentry extra)", err);
     captureError(err, {
       tags: { scope: "firewall.promo_auto_read" },
-      extra: { userId, emailId: email.id },
+      extra: { userId, emailId: email.id, gmailId: email.gmailId },
     });
   }
 }

@@ -103,6 +103,28 @@ describe("persistGmailEmail — promotional auto mark-read", () => {
     expect(markAsRead).not.toHaveBeenCalled();
   });
 
+  it("does NOT mark a PUSH-tier email read even when its subject looks promotional", async () => {
+    // The auto mark-read is promotional-ONLY by product decision and gated on
+    // the judge's tier: an email the judge escalates to PUSH must keep its
+    // unread state + alert, even if its subject carries a marketing marker like
+    // "unsubscribe". Marking it read in Gmail while ALSO firing a PUSH would
+    // silently bury a notified email.
+    judgeEmail.mockResolvedValue({ tier: "PUSH", reason: "r", features: {}, source: "llm" });
+    await persistGmailEmail("u1", rawEmail({ subject: "Deals — unsubscribe anytime" }));
+    await vi.waitFor(() => expect(scheduleAgent).toHaveBeenCalled());
+    expect(markAsRead).not.toHaveBeenCalled();
+  });
+
+  it("does NOT mark a QUEUE-tier promotional-labeled email read", async () => {
+    // Same gate from the other direction: even a CATEGORY_PROMOTIONS label does
+    // not auto-read mail the judge tiered QUEUE — only SILENT promotional mail
+    // is silenced.
+    judgeEmail.mockResolvedValue({ tier: "QUEUE", reason: "r", features: {}, source: "llm" });
+    await persistGmailEmail("u1", rawEmail({ labels: ["CATEGORY_PROMOTIONS"] }));
+    await vi.waitFor(() => expect(scheduleAgent).toHaveBeenCalled());
+    expect(markAsRead).not.toHaveBeenCalled();
+  });
+
   it("logs but does NOT captureError when Gmail is not connected (benign skip, no Sentry spam)", async () => {
     // markAsRead returns { error } (not a throw) when Gmail is disconnected —
     // an expected/keyless state, so it must stay a console signal only.

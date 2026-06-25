@@ -676,6 +676,11 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
       // burning a vision call and surfacing a VISION_FAILED 404. `force` is the
       // escape hatch: an explicit OCR request still runs vision on it.
       if (!body.force && isDecorativeImage(row)) {
+        // Leave a detection trail: a misclassified content image silently skipped
+        // here would be permanently un-OCR'd with no signal. `force` re-runs it.
+        console.log(
+          `[ATTACHMENTS] decorative skip (no OCR): ${row.filename} (${row.size ?? "?"}B) attachment ${row.id}`,
+        );
         await prisma.emailAttachment.update({
           where: { id: row.id },
           data: {
