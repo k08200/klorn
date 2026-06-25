@@ -41,7 +41,7 @@ vi.mock("../llm-usage.js", () => ({
   trueUpCostLedgers: vi.fn(async () => {}),
 }));
 
-import { createCompletion } from "../openai.js";
+import { VISION_MODEL, createCompletion, createVisionCompletion } from "../openai.js";
 
 describe("createCompletion — per-user model override", () => {
   it("uses options.credentials.userModel for the provider call when set", async () => {
@@ -60,5 +60,25 @@ describe("createCompletion — per-user model override", () => {
       { userId: "u1", credentials: {} },
     );
     expect(create.mock.calls[0]?.[0]?.model).toBe("google/gemini-2.5-flash");
+  });
+});
+
+describe("createVisionCompletion — per-user model override", () => {
+  it("dispatches the user's chosen model when credentials.userModel is set", async () => {
+    create.mockClear();
+    await createVisionCompletion(
+      { model: VISION_MODEL, messages: [{ role: "user", content: "describe this" }] },
+      { userId: "u1", credentials: { userModel: "openai/gpt-4o" } },
+    );
+    expect(create.mock.calls[0]?.[0]?.model).toBe("openai/gpt-4o");
+  });
+
+  it("falls back to VISION_MODEL when no userModel is set", async () => {
+    create.mockClear();
+    await createVisionCompletion(
+      { model: VISION_MODEL, messages: [{ role: "user", content: "describe this" }] },
+      { userId: "u1", credentials: {} },
+    );
+    expect(create.mock.calls[0]?.[0]?.model).toBe(VISION_MODEL);
   });
 });

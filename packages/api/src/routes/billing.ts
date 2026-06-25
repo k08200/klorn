@@ -130,21 +130,15 @@ export async function billingRoutes(app: FastifyInstance) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return reply.code(404).send({ error: "User not found" });
 
-    const keyFields = user as unknown as {
-      openRouterApiKey?: string | null;
-      geminiApiKey?: string | null;
-    };
-
     const usage = getUserUsage(userId);
-    const userWithModel = user as unknown as { chatModel?: string | null };
 
     return {
       plan: user.plan,
       activeModel: MODEL,
       availableModels: CURATED_MODELS,
-      selectedModel: userWithModel.chatModel ?? null,
-      hasOpenRouterApiKey: !!keyFields.openRouterApiKey,
-      hasGeminiApiKey: !!keyFields.geminiApiKey,
+      selectedModel: isCuratedModel(user.chatModel) ? user.chatModel : null,
+      hasOpenRouterApiKey: !!user.openRouterApiKey,
+      hasGeminiApiKey: !!user.geminiApiKey,
       usage: {
         rpmUsed: usage.rpmUsed,
         rpmCap: usage.rpmCap,
@@ -202,6 +196,9 @@ export async function billingRoutes(app: FastifyInstance) {
         if (!isCuratedModel(chatModel)) {
           return reply.code(400).send({ error: "Unsupported model" });
         }
+        if (!user.openRouterApiKey && !user.geminiApiKey) {
+          return reply.code(400).send({ error: "Add a provider key before choosing a model" });
+        }
         updateData.chatModel = chatModel;
       }
 
@@ -233,11 +230,11 @@ export async function billingRoutes(app: FastifyInstance) {
         hasOpenRouterApiKey:
           updateData.openRouterApiKey !== undefined
             ? !!updateData.openRouterApiKey
-            : !!(user as unknown as { openRouterApiKey?: string | null }).openRouterApiKey,
+            : !!user.openRouterApiKey,
         hasGeminiApiKey:
           updateData.geminiApiKey !== undefined
             ? !!updateData.geminiApiKey
-            : !!(user as unknown as { geminiApiKey?: string | null }).geminiApiKey,
+            : !!user.geminiApiKey,
       };
     },
   );

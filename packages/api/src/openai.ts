@@ -498,12 +498,6 @@ export async function createVisionCompletion(
   // own key leads the chain; the true-up settles per served provider.
   const userKeyAvailable = hasUserOwnedProvider(chain, playgroundOnly);
 
-  // BYOK users may steer the model (curated only — resolved in llm-credentials).
-  // Reassign once so the provider call + cost ledgers all use the chosen model.
-  if (options.credentials?.userModel) {
-    params = { ...params, model: options.credentials.userModel };
-  }
-
   // Per-user RPM + daily-call gate, same as createCompletion. Vision/OCR was
   // skipping this entirely, so attachment analysis bypassed the per-user rate
   // limit and daily-call bucket. Charge it against the background bucket (it's
@@ -528,7 +522,7 @@ export async function createVisionCompletion(
     ...envProviders.filter((provider) => provider.name === "gemini"),
     ...envProviders.filter((provider) => provider.name !== "gemini"),
   ];
-  const visionModel = VISION_MODEL;
+  const visionModel = options.credentials?.userModel ?? VISION_MODEL;
 
   let lastError: unknown;
   for (const provider of ordered) {
