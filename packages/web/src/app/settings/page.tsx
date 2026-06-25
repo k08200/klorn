@@ -241,7 +241,7 @@ export default function SettingsPage() {
         method: "POST",
         body: JSON.stringify({ currentPassword, newPassword }),
       });
-      toast("Password changed.", "success");
+      toast("Password changed — please log in again on your devices.", "success");
       setCurrentPassword("");
       setNewPassword("");
     } catch (err) {

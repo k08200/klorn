@@ -446,17 +446,14 @@ export function authRoutes(app: FastifyInstance) {
           .send({ error: "Password was changed elsewhere. Please log in again." });
       }
 
-      // Revoke other device sessions; keep current request's session active.
-      const currentToken = (request.headers.authorization ?? "").slice(7);
-      const currentHash = currentToken
-        ? crypto.createHash("sha256").update(currentToken).digest("hex")
-        : null;
-      await prisma.device.deleteMany({
-        where: {
-          userId,
-          ...(currentHash ? { tokenHash: { not: currentHash } } : {}),
-        },
-      });
+      // Password change revokes ALL sessions, including the current one. The
+      // epoch stamp above already invalidates every pre-change JWT (current
+      // token included — its iat predates the new epoch), so "keep the current
+      // session" is no longer achievable without re-issuing a token; the safe,
+      // standard posture is a full revocation + fresh login on every device.
+      // Drop all device rows to match. The web's 401 handler redirects the
+      // current session to login on its next request.
+      await prisma.device.deleteMany({ where: { userId } });
 
       return reply.send({ success: true });
     },
