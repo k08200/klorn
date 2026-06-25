@@ -361,7 +361,7 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
       : "Off";
   const nextLabel = nextBriefingLabel(status.automation);
   const notification = status.notification
-    ? new Date(status.notification.createdAt).toLocaleTimeString(undefined, {
+    ? new Date(status.notification.createdAt).toLocaleTimeString("en-US", {
         hour: "2-digit",
         minute: "2-digit",
       })

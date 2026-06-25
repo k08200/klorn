@@ -75,7 +75,12 @@ export async function findOpenEmailAttentionItemId(
       select: { id: true },
     });
     return row?.id ?? null;
-  } catch {
+  } catch (err) {
+    // Leave a trace — a swallowed DB error here silently breaks override dedup.
+    console.warn(
+      "[attention-override] findOpenEmailAttentionItemId failed:",
+      err instanceof Error ? err.message : err,
+    );
     return null;
   }
 }

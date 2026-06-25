@@ -4,7 +4,7 @@
  */
 
 import { prisma } from "./db.js";
-import { createCompletion, MODEL, openai } from "./openai.js";
+import { createCompletion, DRAFT_MODEL, openai } from "./openai.js";
 import { wrapUntrusted } from "./untrusted.js";
 
 // ─── Auto-Reply Engine ────────────────────────────────────────────────────
@@ -97,7 +97,10 @@ export async function generateSmartReply(
 
   const response = await createCompletion(
     {
-      model: MODEL,
+      // Reliable (paid) draft model, not the :free CHAT_MODEL — #528 moved
+      // user-facing drafts off :free so a daily-quota lockout can't send the
+      // raw, unrendered template. Mirrors generateReplyDraft.
+      model: DRAFT_MODEL,
       temperature: 0.3,
       messages: [
         {

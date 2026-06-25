@@ -258,12 +258,16 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
       userId,
       type: "email",
       title: FIREWALL_PUSH_TITLE,
-      // Match the bare gmailId, NOT `[gmailId]`: the urgent-priority sweep
-      // (same "Urgent email" title) records a batch as a single multi-id
-      // marker `[id1,id2,…]`, so `[gmailId]` would miss it and fire a second
-      // push for the same email. gmailIds are unique hex, so a bare substring
-      // match finds the id in any `[…]` marker without false positives.
-      message: { contains: email.gmailId },
+      // Dedup against the urgent-priority sweep, which records a batch as a
+      // single multi-id marker `[id1,id2,…]`. Match the id as a WHOLE token in
+      // any position: a bare `contains` false-positives for non-hex ids (the
+      // `naver-imap:<email>:<uid>` scheme), silently suppressing real alerts.
+      OR: [
+        { message: { contains: `[${email.gmailId}]` } },
+        { message: { contains: `[${email.gmailId},` } },
+        { message: { contains: `,${email.gmailId},` } },
+        { message: { contains: `,${email.gmailId}]` } },
+      ],
       createdAt: { gte: new Date(Date.now() - PUSH_DEDUP_WINDOW_MS) },
     },
     select: { id: true },

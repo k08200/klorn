@@ -62,7 +62,6 @@ import { getFeedbackPolicyContextForPrompt } from "./policy-extraction.js";
 import { sendPushNotification } from "./push.js";
 import { captureError } from "./sentry.js";
 import { ALL_TOOLS, executeToolCall, isToolAllowedForPlan } from "./tool-executor.js";
-import { wrapUntrusted } from "./untrusted.js";
 import { pushNotification } from "./websocket.js";
 
 const MAX_TOOL_CALLS = AGENT_MAX_TOOLS_PER_LOOP;

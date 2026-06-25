@@ -45,10 +45,15 @@ describe("authoredSurface — which push categories bypass the noise heuristic",
     expect(authoredSurface("daily_briefing")).toBe("briefing");
   });
 
+  it("maps the firewall-decided email_candidate push to the 'firewall' surface", () => {
+    // It's an explicitly-decided interrupt, not raw mail — must bypass the
+    // inbound-noise heuristic so recruiting phrasing can't silently suppress it.
+    expect(authoredSurface("email_candidate")).toBe("firewall");
+  });
+
   it("leaves all other categories subject to the noise + housekeeping filters", () => {
     expect(authoredSurface("system")).toBeNull();
     expect(authoredSurface("agent_proposal")).toBeNull();
-    expect(authoredSurface("email_candidate")).toBeNull();
   });
 });
 

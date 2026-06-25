@@ -90,6 +90,10 @@ export function authoredSurface(category: NotifCategory): "briefing" | "firewall
   if (category === "daily_briefing") return "briefing";
   if (category === "email_urgent") return "firewall";
   if (category === "github_urgent") return "firewall";
+  // An explicitly-decided interrupt (the firewall surfaced a candidate), not
+  // raw mail — exempt from the inbound-noise heuristic like the urgent ones,
+  // else common recruiting phrasing silently suppresses it.
+  if (category === "email_candidate") return "firewall";
   return null;
 }
 
