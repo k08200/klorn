@@ -278,6 +278,12 @@ export async function createCompletion(
   // fallthrough) — see enforceCostGates / trueUpCostLedgers.
   const userKeyAvailable = hasUserOwnedProvider(chain, playgroundOnly);
 
+  // BYOK users may steer the model (curated only — resolved in llm-credentials).
+  // Reassign once so the provider call + cost ledgers all use the chosen model.
+  if (options.credentials?.userModel) {
+    params = { ...params, model: options.credentials.userModel };
+  }
+
   // Per-user RPM + daily-cap gate: trip before the call so a runaway loop
   // doesn't burn upstream provider quota. Charged against the foreground
   // bucket by default; background workers pass `priority: "background"` so
@@ -491,6 +497,12 @@ export async function createVisionCompletion(
   // BYOK: same metering as createCompletion — skip the pre-bill when the user's
   // own key leads the chain; the true-up settles per served provider.
   const userKeyAvailable = hasUserOwnedProvider(chain, playgroundOnly);
+
+  // BYOK users may steer the model (curated only — resolved in llm-credentials).
+  // Reassign once so the provider call + cost ledgers all use the chosen model.
+  if (options.credentials?.userModel) {
+    params = { ...params, model: options.credentials.userModel };
+  }
 
   // Per-user RPM + daily-call gate, same as createCompletion. Vision/OCR was
   // skipping this entirely, so attachment analysis bypassed the per-user rate
