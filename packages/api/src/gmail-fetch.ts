@@ -44,6 +44,16 @@ function decodeBase64Url(data: string): Buffer {
   return Buffer.from(data.replace(/-/g, "+").replace(/_/g, "/"), "base64");
 }
 
+// A present-but-RFC-violating Date header yields an Invalid Date, which Prisma
+// rejects on create — so the whole email would be dropped from the DB/inbox/
+// firewall. Fall back to now() instead, so a malformed header degrades to a
+// slightly-off timestamp rather than a silently missing message.
+function parseReceivedAt(dateStr: string | null | undefined): Date {
+  if (!dateStr) return new Date();
+  const parsed = new Date(dateStr);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
 function collectParts(part: gmail_v1.Schema$MessagePart): gmail_v1.Schema$MessagePart[] {
   const parts = [part];
   for (const child of part.parts ?? []) {
@@ -165,7 +175,7 @@ async function parseGmailMessageDetail(
     labels: labelIds,
     isRead: !labelIds.includes("UNREAD"),
     isStarred: labelIds.includes("STARRED"),
-    receivedAt: dateStr ? new Date(dateStr) : new Date(),
+    receivedAt: parseReceivedAt(dateStr),
     attachments,
   };
 }

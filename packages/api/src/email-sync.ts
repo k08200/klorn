@@ -95,6 +95,12 @@ export async function syncEmails(
       // header, or a P2002 unique race with a concurrent gmail-push sync) must
       // not throw out of the loop and strand every email after it in the batch.
       // (The backfill loop above already uses this pattern.)
+      // console first — captureError is silent without a Sentry DSN (self-host/
+      // dev), and the sibling reconcile catch follows the same console discipline.
+      console.warn(
+        "[EMAIL-SYNC] persist failed (gmailId in Sentry extra):",
+        err instanceof Error ? err.message : String(err),
+      );
       captureError(err, {
         tags: { scope: "email.sync.persist", userId },
         extra: { gmailId: email.gmailId },
