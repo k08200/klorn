@@ -650,6 +650,17 @@ export function authRoutes(app: FastifyInstance) {
 
         const profile = await getGoogleUserInfo(tokens.access_token);
 
+        // Trust this Google identity to resolve/link an account ONLY when
+        // Google itself verified the email. Without this, an OAuth token for an
+        // account whose (unverified) email equals a victim's existing
+        // password-based account would log straight in as the victim and stamp
+        // emailVerified:true — the same check the OIDC push path already
+        // enforces (gmail-push.ts). Consumer @gmail.com is always verified;
+        // this closes the Workspace/custom-domain unverified-alias vector.
+        if (profile.verified_email !== true) {
+          return reply.redirect(`${webUrl}/login?error=google_unverified`);
+        }
+
         // Find or create user by email. Wrapped with withDbRetry so a Neon
         // cold-start during sign-in (suspended compute waking up) does not
         // surface as a hard "Can't reach database server" failure to the
