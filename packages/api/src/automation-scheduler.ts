@@ -385,28 +385,35 @@ async function runAutomations() {
           if (isBriefingDue(config.briefingTime, timeZone)) {
             // DB-based dedup: check if briefing was already sent today (survives restarts)
             const alreadySent = await hasBriefingBeenSentToday(config.userId, timeZone);
+            // Skip ONLY the briefing send when already-sent or cost-capped,
+            // then fall through to the rest of this user's tick (calendar +
+            // email sync). These branches used to `continue`, skipping the whole
+            // tick for the user — one stale cycle after a restart cleared the
+            // in-memory map.
             if (alreadySent) {
               briefingSentToday.set(config.userId, today);
-              continue;
-            }
-            try {
-              console.log(`[AUTOMATION] Generating daily briefing for ${config.userId}`);
-              await createDailyBriefingDelivery(config.userId);
-              briefingSentToday.set(config.userId, today);
-              console.log(`[AUTOMATION] Briefing delivered to ${config.userId}`);
-            } catch (err) {
-              const errName = err instanceof Error ? err.name : "";
-              // Daily cost-cap hits are expected back-pressure, not bugs.
-              if (errName === "DailyCostCapExceededError") {
-                console.log(`[AUTOMATION] Briefing skipped for ${config.userId} — daily cost cap`);
+            } else {
+              try {
+                console.log(`[AUTOMATION] Generating daily briefing for ${config.userId}`);
+                await createDailyBriefingDelivery(config.userId);
                 briefingSentToday.set(config.userId, today);
-                continue;
+                console.log(`[AUTOMATION] Briefing delivered to ${config.userId}`);
+              } catch (err) {
+                const errName = err instanceof Error ? err.name : "";
+                // Daily cost-cap hits are expected back-pressure, not bugs.
+                if (errName === "DailyCostCapExceededError") {
+                  console.log(
+                    `[AUTOMATION] Briefing skipped for ${config.userId} — daily cost cap`,
+                  );
+                  briefingSentToday.set(config.userId, today);
+                } else {
+                  console.error(`[AUTOMATION] Briefing failed for ${config.userId}:`, err);
+                  captureError(err, {
+                    tags: { scope: "automation.briefing", userId: config.userId },
+                    extra: { briefingTime: config.briefingTime, timeZone },
+                  });
+                }
               }
-              console.error(`[AUTOMATION] Briefing failed for ${config.userId}:`, err);
-              captureError(err, {
-                tags: { scope: "automation.briefing", userId: config.userId },
-                extra: { briefingTime: config.briefingTime, timeZone },
-              });
             }
           }
         }
