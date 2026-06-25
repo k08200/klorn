@@ -269,7 +269,10 @@ describe("createVisionCompletion — usage ledger threading", () => {
       throw { status: 402, message: "insufficient credits" };
     });
     userOR.ownedByUser = true;
-    chain.push(userOR, makeProvider("gemini", "gemini:env-vision", async () => COMPLETION));
+    chain.push(
+      userOR,
+      makeProvider("gemini", "gemini:env-vision", async () => COMPLETION),
+    );
     const { createVisionCompletion } = await import("../openai.js");
 
     const result = await createVisionCompletion(PARAMS, { userId: "u6" });

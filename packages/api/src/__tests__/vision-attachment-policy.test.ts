@@ -10,7 +10,9 @@ import { isDecorativeImage, isVisionAttachment } from "../vision-attachment-poli
 
 describe("isDecorativeImage", () => {
   it("treats a tiny image (the 558-byte logo.png repro) as decorative", () => {
-    expect(isDecorativeImage({ filename: "logo.png", mimeType: "image/png", size: 558 })).toBe(true);
+    expect(isDecorativeImage({ filename: "logo.png", mimeType: "image/png", size: 558 })).toBe(
+      true,
+    );
   });
 
   it("treats a sub-4KB image as decorative regardless of filename", () => {
@@ -43,22 +45,28 @@ describe("isDecorativeImage", () => {
   });
 
   it("treats a known 0-byte (corrupt/empty) image as decorative", () => {
-    expect(isDecorativeImage({ filename: "photo.jpg", mimeType: "image/jpeg", size: 0 })).toBe(true);
+    expect(isDecorativeImage({ filename: "photo.jpg", mimeType: "image/jpeg", size: 0 })).toBe(
+      true,
+    );
   });
 
   it("does NOT match a path-like prefix as decorative (filenames are basenames)", () => {
     // "header" here is a directory segment, not the file's own decorative name —
     // the `/` boundary was removed so a real content image isn't skipped.
     expect(
-      isDecorativeImage({ filename: "screenshots/header.png", mimeType: "image/png", size: 90_000 }),
+      isDecorativeImage({
+        filename: "screenshots/header.png",
+        mimeType: "image/png",
+        size: 90_000,
+      }),
     ).toBe(false);
   });
 
   it("never treats a non-image attachment (PDF/doc) as decorative", () => {
     // PDFs/docs always get analyzed, even tiny ones.
-    expect(isDecorativeImage({ filename: "logo.pdf", mimeType: "application/pdf", size: 500 })).toBe(
-      false,
-    );
+    expect(
+      isDecorativeImage({ filename: "logo.pdf", mimeType: "application/pdf", size: 500 }),
+    ).toBe(false);
     expect(
       isDecorativeImage({ filename: "icon.docx", mimeType: "application/octet-stream", size: 100 }),
     ).toBe(false);

@@ -72,7 +72,12 @@ beforeEach(() => {
   markAsRead.mockReset();
   markAsRead.mockResolvedValue({ success: true });
   judgeEmail.mockReset();
-  judgeEmail.mockResolvedValue({ tier: "SILENT", reason: "promo", features: {}, source: "fast-path" });
+  judgeEmail.mockResolvedValue({
+    tier: "SILENT",
+    reason: "promo",
+    features: {},
+    source: "fast-path",
+  });
   upsert.mockClear();
   scheduleAgent.mockClear();
   captureError.mockClear();

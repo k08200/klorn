@@ -687,7 +687,11 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
             extractedFields: {},
           },
         });
-        results.push({ attachmentId: row.id, filename: row.filename, status: "skipped_decorative" });
+        results.push({
+          attachmentId: row.id,
+          filename: row.filename,
+          status: "skipped_decorative",
+        });
         continue;
       }
       if ((row.size ?? 0) > MAX_VISION_ATTACHMENT_BYTES) {
