@@ -32,6 +32,7 @@ import {
 import { toggleReadGmail } from "../gmail.js";
 import { senderEmail } from "../notification-format.js";
 import { captureError } from "../sentry.js";
+import { createTask } from "../tasks.js";
 import { getTrustScore, getTrustScoresBulk, type TrustScoreResult } from "../trust-score.js";
 import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
 import { registerEmailBulkRoutes } from "./email-bulk.js";
@@ -1130,20 +1131,29 @@ export async function emailRoutes(app: FastifyInstance) {
     if (toCreate.length === 0)
       return reply.code(400).send({ error: "No valid action item indices provided" });
 
-    const created = await Promise.all(
-      toCreate.map((item) =>
-        prisma.task.create({
-          data: {
-            userId,
-            title: String(item).slice(0, 250),
-            status: "TODO",
-            priority: "MEDIUM",
-          },
-          select: { id: true, title: true },
-        }),
-      ),
-    );
+    // Route through createTask so its dedup + 24h flood-guard run at creation
+    // (createTask also attaches the firewall AttentionItem). Sequential, not a
+    // parallel map: each item must see the previously-created ones, otherwise
+    // same-batch near-duplicates would all pass the dedup check at once.
+    const tasks: Array<{ id: string; title: string }> = [];
+    const skipped: Array<{ title: string; reason: string; existingTaskId?: string }> = [];
+    for (const item of toCreate) {
+      const title = String(item).slice(0, 250);
+      const result = await createTask(userId, title);
+      if (result.success) {
+        tasks.push({ id: result.task.id, title: result.task.title });
+      } else if (result.reason === "duplicate") {
+        skipped.push({ title, reason: result.reason, existingTaskId: result.existingTask.id });
+      } else {
+        skipped.push({ title, reason: result.reason });
+      }
+    }
 
-    return { success: true, tasks: created, source: { emailId: email.id, subject: email.subject } };
+    return {
+      success: true,
+      tasks,
+      skipped,
+      source: { emailId: email.id, subject: email.subject },
+    };
   });
 }
