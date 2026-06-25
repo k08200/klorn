@@ -28,7 +28,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { evaluateTierFloors } from "../src/eval-floors.js";
 import { judgeEmails, POC_TIERS, type PocJudgement, type PocTier } from "../src/poc-judge.js";
-import { TIER_THRESHOLDS, type ThresholdConfig, tierFromFeatures } from "../src/tier-policy.js";
+import { type ThresholdConfig, TIER_THRESHOLDS, tierFromFeatures } from "../src/tier-policy.js";
 
 interface GroundTruthItem {
   id: string;
