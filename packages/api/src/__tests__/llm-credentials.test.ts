@@ -90,4 +90,22 @@ describe("getUserLlmCredentials", () => {
       expect.objectContaining({ tags: { scope: "byok.decrypt" } }),
     );
   });
+
+  it("sets userModel when the user has a BYOK key and a curated chatModel", async () => {
+    findUnique.mockResolvedValue({ openRouterApiKey: "cipher:sk-or", geminiApiKey: null, chatModel: "openai/gpt-4o" });
+    const creds = await getUserLlmCredentials("u1");
+    expect(creds.userModel).toBe("openai/gpt-4o");
+  });
+
+  it("leaves userModel undefined when the user has no key (keyless keeps defaults)", async () => {
+    findUnique.mockResolvedValue({ openRouterApiKey: null, geminiApiKey: null, chatModel: "openai/gpt-4o" });
+    const creds = await getUserLlmCredentials("u1");
+    expect(creds.userModel).toBeUndefined();
+  });
+
+  it("leaves userModel undefined when chatModel is not curated", async () => {
+    findUnique.mockResolvedValue({ openRouterApiKey: "cipher:sk-or", geminiApiKey: null, chatModel: "google/gemma-4-31b-it:free" });
+    const creds = await getUserLlmCredentials("u1");
+    expect(creds.userModel).toBeUndefined();
+  });
 });

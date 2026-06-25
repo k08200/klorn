@@ -1,11 +1,13 @@
 import { decryptOptional } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
+import { isCuratedModel } from "./model-catalog.js";
 import type { ProviderCredentials } from "./providers/index.js";
 import { captureError } from "./sentry.js";
 
 type UserWithKeys = {
   openRouterApiKey?: string | null;
   geminiApiKey?: string | null;
+  chatModel?: string | null;
 };
 
 /**
@@ -50,7 +52,7 @@ export async function getUserLlmCredentials(userId: string): Promise<ProviderCre
     // column were ever removed.
     user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { openRouterApiKey: true, geminiApiKey: true },
+      select: { openRouterApiKey: true, geminiApiKey: true, chatModel: true },
     });
   } catch (err) {
     console.warn("[BYOK] user lookup failed — falling back to the shared env key", err);
@@ -59,9 +61,9 @@ export async function getUserLlmCredentials(userId: string): Promise<ProviderCre
   }
   if (!user) return {};
 
-  return {
-    openRouterApiKey: safeDecrypt(user.openRouterApiKey, "openRouterApiKey", userId),
-    geminiApiKey: safeDecrypt(user.geminiApiKey, "geminiApiKey", userId),
-    quotaScope: userId,
-  };
+  const openRouterApiKey = safeDecrypt(user.openRouterApiKey, "openRouterApiKey", userId);
+  const geminiApiKey = safeDecrypt(user.geminiApiKey, "geminiApiKey", userId);
+  const hasKey = Boolean(openRouterApiKey) || Boolean(geminiApiKey);
+  const userModel = hasKey && isCuratedModel(user.chatModel) ? (user.chatModel as string) : undefined;
+  return { openRouterApiKey, geminiApiKey, quotaScope: userId, userModel };
 }

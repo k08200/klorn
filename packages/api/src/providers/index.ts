@@ -72,6 +72,13 @@ export interface ProviderCredentials {
    * through to the server's own quota.
    */
   playgroundOnly?: boolean;
+  /**
+   * Per-user model override, resolved by getUserLlmCredentials: the user's
+   * chosen model ONLY when it is curated AND they have a BYOK key, else
+   * undefined. Rides with the credentials so createCompletion can apply it
+   * centrally without new threading. undefined => keep the per-surface default.
+   */
+  userModel?: string;
 }
 
 function buildOpenRouter(
