@@ -10,8 +10,8 @@ import { prisma } from "./db.js";
 import { classifyNeedsReplyFromSignals } from "./email-priority.js";
 import { getUserLlmCredentials } from "./llm-credentials.js";
 import { parseLlmJson } from "./llm-json.js";
-import { createCompletion, MODEL, openai } from "./openai.js";
-import type { ProviderCredentials } from "./providers/index.js";
+import { createCompletion, MODEL } from "./openai.js";
+import { getProviderChain, type ProviderCredentials } from "./providers/index.js";
 import { resolveUserEmail } from "./resolve-user-email.js";
 import { captureError } from "./sentry.js";
 import { wrapUntrusted } from "./untrusted.js";
@@ -61,7 +61,12 @@ export function parseAiSummary(content: string, fallbackSubject: string): AISumm
  * Processes unsummarized emails for a user.
  */
 export async function summarizeUnsummarizedEmails(userId: string, limit = 10): Promise<number> {
-  if (!openai) return 0;
+  // BYOK: resolve once for the whole batch so each summary bills the user's own
+  // key when set. Gate on the resolved provider chain (env OR the user's own
+  // key), NOT the env-only `openai` client — a user with their own key can
+  // summarize even when the shared env key is absent.
+  const credentials = await getUserLlmCredentials(userId);
+  if (getProviderChain(credentials).length === 0) return 0;
 
   const unsummarized = await prisma.emailMessage.findMany({
     where: { userId, summary: null, body: { not: null } },
@@ -72,10 +77,6 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
   if (unsummarized.length === 0) return 0;
 
   const userEmail = await resolveUserEmail(userId);
-  // BYOK: resolve once for the whole batch (up to `limit` emails for one user)
-  // so each summary bills the user's own key when set, falling back to the
-  // shared env key for keyless users — see judgeAndMirrorEmail for the rationale.
-  const credentials = await getUserLlmCredentials(userId);
   let count = 0;
 
   for (const email of unsummarized) {

@@ -56,13 +56,16 @@ export function notificationSuppressionReason(args: {
   }
 
   if (
-    /^\s*\[?(?:klorn|eve|이브)\]?\s*action complete/i.test(title) ||
-    /^\s*action complete\b/i.test(title) ||
-    /\bmark read finished\b/i.test(combined) ||
-    /\bemails? classified\b/i.test(combined) ||
-    /\bclassify_emails finished\b/i.test(combined) ||
-    /\bmail prioritized\b/i.test(title) ||
-    /\binbox priority has been refreshed\b/i.test(combined)
+    // Skip for firewall/briefing-authored surfaces — a real PUSH email whose
+    // subject collides with a tool-outcome keyword must not be vetoed here.
+    !isAuthored &&
+    (/^\s*\[?(?:klorn|eve|이브)\]?\s*action complete/i.test(title) ||
+      /^\s*action complete\b/i.test(title) ||
+      /\bmark read finished\b/i.test(combined) ||
+      /\bemails? classified\b/i.test(combined) ||
+      /\bclassify_emails finished\b/i.test(combined) ||
+      /\bmail prioritized\b/i.test(title) ||
+      /\binbox priority has been refreshed\b/i.test(combined))
   ) {
     return "housekeeping";
   }
