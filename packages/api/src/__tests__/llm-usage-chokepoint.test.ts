@@ -225,4 +225,57 @@ describe("createVisionCompletion — usage ledger threading", () => {
 
     expect(recorded[0]).toMatchObject({ source: "foreground" });
   });
+
+  it("retries the paid slug when the :free vision SKU is 404 (OpenRouter-only chain)", async () => {
+    // Real incident: VISION_MODEL defaults to google/gemini-2.5-flash:free and
+    // OpenRouter 404s that SKU ("This model is unavailable for free — use this
+    // slug instead: google/gemini-2.5-flash"). The fix strips :free and retries
+    // the paid slug on the SAME provider instead of hard-failing → VISION_FAILED.
+    const seen: string[] = [];
+    chain.push(
+      makeProvider("openrouter", "openrouter:env-vision", async (_p, model) => {
+        seen.push(model);
+        if (model.endsWith(":free")) {
+          throw new Error(
+            "404 This model is unavailable for free. The paid version is available now - use this slug instead: google/gemini-2.5-flash",
+          );
+        }
+        return COMPLETION;
+      }),
+    );
+    const { createVisionCompletion, VISION_MODEL } = await import("../openai.js");
+    // Test premise: the default vision SKU is the :free one that 404s.
+    expect(VISION_MODEL.endsWith(":free")).toBe(true);
+    const paid = VISION_MODEL.replace(/:free$/, "");
+
+    const result = await createVisionCompletion(PARAMS, { userId: "user-5" });
+
+    expect(result).toBe(COMPLETION);
+    // First the :free SKU (404), then the stripped paid slug (served).
+    expect(seen).toEqual([VISION_MODEL, paid]);
+    // Ledger records the model that actually served — the paid slug.
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ provider: "openrouter", model: paid });
+  });
+
+  it("falls through to env Gemini when a BYOK key's :free 404 → paid retry has no credit", async () => {
+    // BYOK OpenRouter key leads the chain (userOwned first). Its :free SKU 404s,
+    // the paid retry 402s (no credit) → we fail over to env Gemini's native key
+    // (separate quota) so a keyless/credit-less path still degrades gracefully.
+    const userOR = makeProvider("openrouter", "openrouter:user:u6", async (_p, model) => {
+      if (model.endsWith(":free")) {
+        throw new Error("404 This model is unavailable for free");
+      }
+      throw { status: 402, message: "insufficient credits" };
+    });
+    userOR.ownedByUser = true;
+    chain.push(userOR, makeProvider("gemini", "gemini:env-vision", async () => COMPLETION));
+    const { createVisionCompletion } = await import("../openai.js");
+
+    const result = await createVisionCompletion(PARAMS, { userId: "u6" });
+
+    expect(result).toBe(COMPLETION);
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ provider: "gemini", model: "gemini-2.5-flash" });
+  });
 });
