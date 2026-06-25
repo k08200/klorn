@@ -119,7 +119,7 @@ export async function updateCommitment(id: string, patch: CommitmentUpdate): Pro
   return commitment;
 }
 
-export async function deleteCommitment(id: string): Promise<void> {
+export async function deleteCommitment(id: string, userId: string): Promise<void> {
   await prisma.commitment.delete({ where: { id } });
-  await deleteAttentionForCommitments([id]);
+  await deleteAttentionForCommitments([id], userId);
 }

@@ -171,7 +171,7 @@ export async function calendarRoutes(app: FastifyInstance) {
     }
 
     await prisma.calendarEvent.delete({ where: { id } });
-    await deleteAttentionForCalendarEvents([id]);
+    await deleteAttentionForCalendarEvents([id], userId);
     return reply.code(204).send();
   });
 
