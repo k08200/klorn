@@ -1293,4 +1293,8 @@ model LlmUsageLog {
   createdAt          DateTime @default(now())
 
   @@index([userId, createdAt])
+  // Admin-wide usage aggregation (getUsageSummary with no userId) filters on
+  // createdAt alone; the composite index above can't serve a createdAt-only
+  // range (userId is the leading column), so it falls back to a seq-scan.
+  @@index([createdAt])
 }
