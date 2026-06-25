@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { encryptOptional } from "../crypto-tokens.js";
 import { db, prisma } from "../db.js";
+import { CURATED_MODELS, isCuratedModel } from "../model-catalog.js";
 import { clearFallbackState } from "../model-fallback.js";
 import { MODEL } from "../openai.js";
 import { getUserUsage } from "../quota-limiter.js";
@@ -135,10 +136,13 @@ export async function billingRoutes(app: FastifyInstance) {
     };
 
     const usage = getUserUsage(userId);
+    const userWithModel = user as unknown as { chatModel?: string | null };
 
     return {
       plan: user.plan,
       activeModel: MODEL,
+      availableModels: CURATED_MODELS,
+      selectedModel: userWithModel.chatModel ?? null,
       hasOpenRouterApiKey: !!keyFields.openRouterApiKey,
       hasGeminiApiKey: !!keyFields.geminiApiKey,
       usage: {
@@ -165,18 +169,20 @@ export async function billingRoutes(app: FastifyInstance) {
           type: "object",
           additionalProperties: false,
           properties: {
-            openRouterApiKey: { type: ["string", "null"], maxLength: 512 },
-            geminiApiKey: { type: ["string", "null"], maxLength: 512 },
-            clearOpenRouterApiKey: { type: "boolean" },
+            chatModel: { type: "string", maxLength: 256 },
             clearGeminiApiKey: { type: "boolean" },
+            clearOpenRouterApiKey: { type: "boolean" },
+            geminiApiKey: { type: ["string", "null"], maxLength: 512 },
+            openRouterApiKey: { type: ["string", "null"], maxLength: 512 },
           },
         },
       },
     },
     async (request, reply) => {
       const userId = getUserId(request);
-      const { openRouterApiKey, geminiApiKey, clearOpenRouterApiKey, clearGeminiApiKey } =
+      const { chatModel, openRouterApiKey, geminiApiKey, clearOpenRouterApiKey, clearGeminiApiKey } =
         request.body as {
+          chatModel?: string;
           openRouterApiKey?: string | null;
           geminiApiKey?: string | null;
           clearOpenRouterApiKey?: boolean;
@@ -186,7 +192,18 @@ export async function billingRoutes(app: FastifyInstance) {
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) return reply.code(404).send({ error: "User not found" });
 
-      const updateData: { openRouterApiKey?: string | null; geminiApiKey?: string | null } = {};
+      const updateData: {
+        chatModel?: string;
+        geminiApiKey?: string | null;
+        openRouterApiKey?: string | null;
+      } = {};
+
+      if (typeof chatModel === "string") {
+        if (!isCuratedModel(chatModel)) {
+          return reply.code(400).send({ error: "Unsupported model" });
+        }
+        updateData.chatModel = chatModel;
+      }
 
       if (typeof openRouterApiKey === "string") {
         const trimmed = openRouterApiKey.trim();
