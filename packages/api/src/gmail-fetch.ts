@@ -151,6 +151,11 @@ async function parseGmailMessageDetail(
 
   const labelIds = detail.labelIds || [];
   const dateStr = getHeader("Date");
+  // A present-but-unparseable Date: header yields an Invalid Date, which Prisma
+  // rejects — the email create would throw and the message would be silently
+  // dropped forever (never persisted, invisible to backfill). Fall back to now().
+  const parsedDate = dateStr ? new Date(dateStr) : new Date();
+  const receivedAt = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
 
   return {
     gmailId: messageId,
@@ -165,7 +170,7 @@ async function parseGmailMessageDetail(
     labels: labelIds,
     isRead: !labelIds.includes("UNREAD"),
     isStarred: labelIds.includes("STARRED"),
-    receivedAt: dateStr ? new Date(dateStr) : new Date(),
+    receivedAt,
     attachments,
   };
 }

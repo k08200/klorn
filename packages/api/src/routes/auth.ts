@@ -25,6 +25,7 @@ import {
   markGoogleTokenForReconnect,
 } from "../gmail.js";
 import { mapGoogleEventTimes } from "../google-calendar-time.js";
+import { verifyGoogleOidcToken } from "../google-oidc.js";
 import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
 
 const authHeaderSchema = {
@@ -649,6 +650,21 @@ export function authRoutes(app: FastifyInstance) {
         }
 
         const profile = await getGoogleUserInfo(tokens.access_token);
+
+        // Account-takeover guard: trust profile.email ONLY if Google asserts it
+        // is verified. getGoogleUserInfo reads the userinfo endpoint and drops
+        // verified_email, so without this a Google identity claiming an
+        // UNVERIFIED address (Workspace / custom-domain) could log into — or
+        // force-create + force-verify — a victim's password account at that
+        // address. The id_token is a signed claim; verify it and require
+        // email_verified === true and a matching email. (gmail-push.ts does the
+        // same.) A throw here is handled by the catch below per login type.
+        const idClaims = tokens.id_token ? await verifyGoogleOidcToken(tokens.id_token) : null;
+        if (!idClaims || idClaims.email_verified !== true || idClaims.email !== profile.email) {
+          throw new Error(
+            "Google could not verify this email address. Sign in with a verified Google account.",
+          );
+        }
 
         // Find or create user by email. Wrapped with withDbRetry so a Neon
         // cold-start during sign-in (suspended compute waking up) does not
