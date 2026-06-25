@@ -66,3 +66,23 @@ services:
         sync: false
       - key: BETA_AUTO_PRO_LIMIT
         sync: false
+      # Prod-critical runtime config — declared (sync:false) so a blueprint sync
+      # can never PRUNE them. Previously these lived only in the Render dashboard
+      # and got dropped on redeploy, which silently disabled Web Push (the PUSH
+      # tier went dark — set the value once in the dashboard; it now persists).
+      # Values are set in the Render dashboard, not committed here.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_EMAIL
+        value: "mailto:hello@klorn.ai"
+      # Real-time Gmail push (else the scheduler falls back to polling).
+      - key: GMAIL_PUBSUB_TOPIC
+        sync: false
+      # Free-dyno keepalive ping target (else the dyno sleeps and misses pushes).
+      - key: KEEPALIVE_URL
+        sync: false
+      # Admin allowlist for /api/diagnostics + decision-metrics (override watch).
+      - key: ADMIN_EMAILS
+        sync: false
