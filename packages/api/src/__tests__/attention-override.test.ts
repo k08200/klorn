@@ -55,7 +55,12 @@ describe("overrideAttentionTier", () => {
     await overrideAttentionTier("user-1", "item-1", "PUSH");
     expect(decisionLabel.updateMany).toHaveBeenCalledTimes(1);
     const args = decisionLabel.updateMany.mock.calls[0][0];
-    expect(args.where).toEqual({ source: "EMAIL", sourceId: "email-1", outcome: null });
+    expect(args.where).toEqual({
+      userId: "user-1",
+      source: "EMAIL",
+      sourceId: "email-1",
+      outcome: null,
+    });
     expect(args.data.outcome).toBe("OVERRIDE:PUSH");
   });
 

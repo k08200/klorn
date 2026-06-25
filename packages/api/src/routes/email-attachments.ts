@@ -432,7 +432,7 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
     });
     if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
 
-    const attachments = await listEmailAttachments([dbEmail.id]);
+    const attachments = await listEmailAttachments([dbEmail.id], uid);
     const candidateProfile = buildAttachmentCandidateProfile(attachments);
     const brief = buildEmailAttachmentBrief({
       subject: dbEmail.subject,
@@ -625,7 +625,7 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
       emailId: dbEmail.id,
       force: force !== false,
     });
-    const attachments = await listEmailAttachments([dbEmail.id]);
+    const attachments = await listEmailAttachments([dbEmail.id], uid);
     const candidateProfile = buildAttachmentCandidateProfile(attachments);
     const candidateIntake = candidateProfile
       ? await syncCandidateIntakeForEmail({ userId: uid, emailId: dbEmail.id })
@@ -736,7 +736,7 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
       }
     }
 
-    const attachments = await listEmailAttachments([dbEmail.id]);
+    const attachments = await listEmailAttachments([dbEmail.id], uid);
     const candidateProfile = buildAttachmentCandidateProfile(attachments);
     const candidateIntake = candidateProfile
       ? await syncCandidateIntakeForEmail({ userId: uid, emailId: dbEmail.id })
@@ -813,7 +813,7 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
         }),
       });
 
-      const attachments = await listEmailAttachments([row.email.id]);
+      const attachments = await listEmailAttachments([row.email.id], uid);
       const candidateProfile = buildAttachmentCandidateProfile(attachments);
       const candidateIntake = candidateProfile
         ? await syncCandidateIntakeForEmail({ userId: uid, emailId: row.email.id })

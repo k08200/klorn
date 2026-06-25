@@ -1145,7 +1145,7 @@ export function authRoutes(app: FastifyInstance) {
         if (!meetingLink && item.hangoutLink) meetingLink = item.hangoutLink;
 
         await prisma.calendarEvent.upsert({
-          where: { googleId },
+          where: { userId_googleId: { userId, googleId } },
           create: {
             userId,
             title: item.summary || "Untitled",

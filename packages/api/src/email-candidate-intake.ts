@@ -117,7 +117,7 @@ export async function syncCandidateIntakeForEmail(input: {
   userId: string;
   emailId: string;
 }): Promise<CandidateIntakeView | null> {
-  const attachments = await listEmailAttachments([input.emailId]);
+  const attachments = await listEmailAttachments([input.emailId], input.userId);
   const profile = buildAttachmentCandidateProfile(attachments);
   if (!profile) return null;
   return upsertCandidateIntakeFromProfile({ ...input, profile });
@@ -198,15 +198,18 @@ export async function upsertCandidateIntakeFromProfile(input: {
 
 export async function listCandidateIntakesByEmail(
   emailIds: string[],
+  userId: string,
 ): Promise<Record<string, CandidateIntakeView>> {
   if (emailIds.length === 0 || typeof prisma.$queryRaw !== "function") return {};
+  // userId is part of the WHERE (not just the caller's emailId set) so this can
+  // never return another user's intake rows even if a caller passes foreign ids.
   const rows = await prisma.$queryRaw<CandidateIntakeRow[]>`
     SELECT
       "id", "emailId", "status", "name", "role", "contact", "emailAddress", "phone",
       "summary", "confidence", "missingFields", "evidenceFiles", "notes",
       "lastDetectedAt", "reviewedAt", "createdAt", "updatedAt"
     FROM "CandidateIntake"
-    WHERE "emailId" = ANY(${emailIds})
+    WHERE "userId" = ${userId} AND "emailId" = ANY(${emailIds})
   `;
   return Object.fromEntries(rows.map((row) => [row.emailId, serializeCandidateIntake(row)]));
 }

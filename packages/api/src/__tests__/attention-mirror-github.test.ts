@@ -51,7 +51,7 @@ describe("upsertAttentionForGitHubNotification", () => {
     await upsertAttentionForGitHubNotification(notif(), JUDGEMENT);
     const args = upsertMock.mock.calls[0][0];
     expect(args.where).toEqual({
-      source_sourceId: { source: "GITHUB", sourceId: "thread-1" },
+      userId_source_sourceId: { userId: "u1", source: "GITHUB", sourceId: "thread-1" },
     });
     expect(args.create.source).toBe("GITHUB");
     expect(args.create.userId).toBe("u1");

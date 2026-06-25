@@ -50,7 +50,12 @@ export async function overrideAttentionTier(
   // Stamp the decision ledger with the user's correction before the in-place
   // tier overwrite above erases the shown tier from AttentionItem. Best-effort;
   // only EMAIL-source decisions have a ledger row today (no-op otherwise).
-  await stampDecisionOutcome(existing.source as "EMAIL", existing.sourceId, `OVERRIDE:${tier}`);
+  await stampDecisionOutcome(
+    userId,
+    existing.source as "EMAIL",
+    existing.sourceId,
+    `OVERRIDE:${tier}`,
+  );
 
   return { ok: true, tier };
 }

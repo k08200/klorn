@@ -145,15 +145,20 @@ function serialize(row: AttachmentRow): EmailAttachmentView {
   };
 }
 
-export async function listEmailAttachments(emailIds: string[]): Promise<EmailAttachmentView[]> {
+export async function listEmailAttachments(
+  emailIds: string[],
+  userId: string,
+): Promise<EmailAttachmentView[]> {
   if (emailIds.length === 0) return [];
   if (typeof prisma.$queryRaw !== "function") return [];
+  // userId is part of the WHERE so a caller can never read another user's
+  // attachment bytes (resume text / PII) even if it passes foreign emailIds.
   const rows = await prisma.$queryRaw<AttachmentRow[]>`
     SELECT
       "id", "emailId", "filename", "mimeType", "size", "summary",
       "contentText", "keyPoints", "extractedFields", "category", "analysisStatus", "analysisError"
     FROM "EmailAttachment"
-    WHERE "emailId" = ANY(${emailIds})
+    WHERE "userId" = ${userId} AND "emailId" = ANY(${emailIds})
     ORDER BY "createdAt" ASC
   `;
   return rows.map(serialize);
@@ -174,13 +179,14 @@ function buildTextPreview(value: string | null): string | null {
 
 export async function countEmailAttachmentsByEmail(
   emailIds: string[],
+  userId: string,
 ): Promise<Record<string, number>> {
   if (emailIds.length === 0) return {};
   if (typeof prisma.$queryRaw !== "function") return {};
   const rows = await prisma.$queryRaw<Array<{ emailId: string; count: bigint }>>`
     SELECT "emailId", COUNT(*)::bigint AS "count"
     FROM "EmailAttachment"
-    WHERE "emailId" = ANY(${emailIds})
+    WHERE "userId" = ${userId} AND "emailId" = ANY(${emailIds})
     GROUP BY "emailId"
   `;
   return Object.fromEntries(rows.map((row) => [row.emailId, Number(row.count)]));
@@ -188,6 +194,7 @@ export async function countEmailAttachmentsByEmail(
 
 export async function summarizeEmailAttachmentsByEmail(
   emailIds: string[],
+  userId: string,
 ): Promise<Record<string, EmailAttachmentSummary>> {
   if (emailIds.length === 0) return {};
   if (typeof prisma.$queryRaw !== "function") return {};
@@ -215,7 +222,7 @@ export async function summarizeEmailAttachmentsByEmail(
       COUNT(*) FILTER (WHERE "analysisStatus" = 'UNSUPPORTED')::bigint AS "unsupportedCount",
       ARRAY_REMOVE(ARRAY_AGG(DISTINCT "category"), NULL) AS "categories"
     FROM "EmailAttachment"
-    WHERE "emailId" = ANY(${emailIds})
+    WHERE "userId" = ${userId} AND "emailId" = ANY(${emailIds})
     GROUP BY "emailId"
   `;
   return Object.fromEntries(
@@ -235,8 +242,9 @@ export async function summarizeEmailAttachmentsByEmail(
 
 export async function listCandidateProfilesByEmail(
   emailIds: string[],
+  userId: string,
 ): Promise<Record<string, AttachmentCandidateProfile>> {
-  const attachments = await listEmailAttachments(emailIds);
+  const attachments = await listEmailAttachments(emailIds, userId);
   const grouped = new Map<string, EmailAttachmentView[]>();
   for (const attachment of attachments) {
     const list = grouped.get(attachment.emailId) ?? [];

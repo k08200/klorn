@@ -16,7 +16,7 @@
  * Future PRs can flip this to strict consistency if needed.
  */
 
-import type { AttentionStatus, AttentionType } from "@prisma/client";
+import type { AttentionSource, AttentionStatus, AttentionType } from "@prisma/client";
 import { getToolRisk } from "./agent-logic.js";
 import { AUTOPILOT_LEVEL, type AutopilotLevel } from "./agent-mode.js";
 import { computeAttentionInputHash } from "./attention-input-hash.js";
@@ -26,10 +26,13 @@ import { getSuppressionSet, isSuppressed } from "./feedback-adaptor.js";
 import type { PocJudgement } from "./poc-judge.js";
 import type { Tier } from "./tiers.js";
 
-// Tier fields (tier, tierReason) are added via migration. Until `prisma generate`
-// reflects the schema change, we use this typed wrapper to avoid TS errors.
+// Typed wrapper around attentionItem.upsert. The where uses the userId-scoped
+// compound unique (userId, source, sourceId) so an upsert can never collide
+// with another user's row even when a sourceId is shared (GITHUB/calendar).
 function upsertAttentionItem(args: {
-  where: { source_sourceId: { source: string; sourceId: string } };
+  where: {
+    userId_source_sourceId: { userId: string; source: AttentionSource; sourceId: string };
+  };
   create: object;
   update: object;
 }): Promise<unknown> {
@@ -191,7 +194,9 @@ export async function upsertAttentionForPendingAction(pa: PendingActionLike): Pr
 
   try {
     await upsertAttentionItem({
-      where: { source_sourceId: { source: "PENDING_ACTION", sourceId: pa.id } },
+      where: {
+        userId_source_sourceId: { userId: pa.userId, source: "PENDING_ACTION", sourceId: pa.id },
+      },
       create: {
         userId: pa.userId,
         source: "PENDING_ACTION",
@@ -354,7 +359,7 @@ export async function upsertAttentionForTask(task: TaskLike, now = Date.now()): 
 
   try {
     await upsertAttentionItem({
-      where: { source_sourceId: { source: "TASK", sourceId: task.id } },
+      where: { userId_source_sourceId: { userId: task.userId, source: "TASK", sourceId: task.id } },
       create: {
         userId: task.userId,
         source: "TASK",
@@ -487,7 +492,13 @@ export async function upsertAttentionForCalendarEvent(
 
   try {
     await upsertAttentionItem({
-      where: { source_sourceId: { source: "CALENDAR_EVENT", sourceId: event.id } },
+      where: {
+        userId_source_sourceId: {
+          userId: event.userId,
+          source: "CALENDAR_EVENT",
+          sourceId: event.id,
+        },
+      },
       create: {
         userId: event.userId,
         source: "CALENDAR_EVENT",
@@ -576,7 +587,13 @@ export async function upsertAttentionForNotification(notif: NotificationLike): P
 
   try {
     await upsertAttentionItem({
-      where: { source_sourceId: { source: "NOTIFICATION", sourceId: notif.id } },
+      where: {
+        userId_source_sourceId: {
+          userId: notif.userId,
+          source: "NOTIFICATION",
+          sourceId: notif.id,
+        },
+      },
       create: {
         userId: notif.userId,
         source: "NOTIFICATION",
@@ -705,7 +722,7 @@ export async function upsertAttentionForCommitment(
 
   try {
     await upsertAttentionItem({
-      where: { source_sourceId: { source: "COMMITMENT", sourceId: c.id } },
+      where: { userId_source_sourceId: { userId: c.userId, source: "COMMITMENT", sourceId: c.id } },
       create: {
         userId: c.userId,
         source: "COMMITMENT",
@@ -839,7 +856,9 @@ export async function upsertAttentionForEmailJudgement(
 
   try {
     await upsertAttentionItem({
-      where: { source_sourceId: { source: "EMAIL", sourceId: email.id } },
+      where: {
+        userId_source_sourceId: { userId: email.userId, source: "EMAIL", sourceId: email.id },
+      },
       create: {
         userId: email.userId,
         source: "EMAIL",
@@ -953,7 +972,7 @@ export async function upsertAttentionForGitHubNotification(
 
   try {
     await upsertAttentionItem({
-      where: { source_sourceId: { source: "GITHUB", sourceId: n.id } },
+      where: { userId_source_sourceId: { userId: n.userId, source: "GITHUB", sourceId: n.id } },
       create: {
         userId: n.userId,
         source: "GITHUB",

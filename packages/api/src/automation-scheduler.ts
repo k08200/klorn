@@ -64,6 +64,16 @@ const SCHEDULER_LOCK_KEY = 0x4a47_454d; // "JIGE" + "M" reduced; arbitrary stabl
  * Postgres session advisory lock. Try-and-skip if another worker holds it.
  * `pg_try_advisory_lock` returns true if acquired, false otherwise.
  * Release with `pg_advisory_unlock` at the end of the tick.
+ *
+ * Caveat (session lock + connection pool): the lock is held by the specific
+ * pooled connection that ran `pg_try_advisory_lock`. If a later
+ * `pg_advisory_unlock` happens to run on a DIFFERENT pooled connection it
+ * returns false and the lock leaks until that connection is recycled (Postgres
+ * frees session locks when the connection closes). Prod runs a single dyno, so
+ * the lock is effectively a no-op safety net there and a leak only ever costs a
+ * skipped tick (now logged below, never silent). A fully leak-proof design needs
+ * a dedicated single connection or a row-based lease; deferred until N>1 dynos
+ * make it worth the redesign risk.
  */
 async function tryAcquireSchedulerLock(): Promise<boolean> {
   try {
@@ -80,7 +90,18 @@ async function tryAcquireSchedulerLock(): Promise<boolean> {
 
 async function releaseSchedulerLock(): Promise<void> {
   try {
-    await prisma.$queryRawUnsafe(`SELECT pg_advisory_unlock($1)`, SCHEDULER_LOCK_KEY);
+    // `pg_advisory_unlock` returns false (NOT an error) when this connection
+    // does not hold the lock — the pooling caveat above. Surface it instead of
+    // swallowing it, so a leaked lock is visible rather than a silent stall.
+    const rows = await prisma.$queryRawUnsafe<{ unlocked: boolean }[]>(
+      `SELECT pg_advisory_unlock($1) AS unlocked`,
+      SCHEDULER_LOCK_KEY,
+    );
+    if (rows[0]?.unlocked !== true) {
+      console.warn(
+        "[AUTOMATION] advisory lock release returned false — lock was held on a different pooled connection and will self-heal on connection recycle",
+      );
+    }
   } catch (err) {
     console.warn("[AUTOMATION] advisory lock release failed:", err);
   }
@@ -188,17 +209,26 @@ async function notifyCandidateEmails(userId: string): Promise<void> {
     },
   });
 
+  // Batch the dedup lookup: one query for all candidate emails instead of a
+  // findFirst per email (N+1). The per-email create/push below stay in the loop
+  // because they are genuine per-item side effects, not a foldable query.
+  const notifiedRows = await prisma.notification.findMany({
+    where: {
+      userId,
+      type: "email",
+      OR: [{ title: "Candidate materials received" }, { title: "후보자 자료 도착" }],
+      sourceEmailId: { in: candidateEmails.map((e) => e.id) },
+    },
+    select: { sourceEmailId: true },
+  });
+  // sourceEmailId is nullable in the schema; drop nulls so the dedup Set is
+  // Set<string> and a future null row can't silently weaken the membership test.
+  const alreadyNotified = new Set(
+    notifiedRows.flatMap((n) => (n.sourceEmailId ? [n.sourceEmailId] : [])),
+  );
+
   for (const email of candidateEmails) {
-    const existing = await prisma.notification.findFirst({
-      where: {
-        userId,
-        type: "email",
-        OR: [{ title: "Candidate materials received" }, { title: "후보자 자료 도착" }],
-        sourceEmailId: email.id,
-      },
-      select: { id: true },
-    });
-    if (existing) continue;
+    if (alreadyNotified.has(email.id)) continue;
 
     const message = `${senderName(email.from)} · ${email.summary || email.subject}`;
     const notification = await prisma.notification.create({
@@ -453,7 +483,7 @@ async function runAutomations() {
                   ? parseGoogleDateTime(endTime, item.end?.timeZone ?? null, userTimezone)
                   : new Date(endTime);
                 await prisma.calendarEvent.upsert({
-                  where: { googleId },
+                  where: { userId_googleId: { userId: config.userId, googleId } },
                   create: {
                     userId: config.userId,
                     title: item.summary || "Untitled",

@@ -247,9 +247,10 @@ export async function calendarRoutes(app: FastifyInstance) {
           googleId,
         };
 
-        // Upsert by googleId
+        // Upsert by (userId, googleId) — the same Google event can live in two
+        // users' calendars, so the match must be scoped to this user.
         await prisma.calendarEvent.upsert({
-          where: { googleId },
+          where: { userId_googleId: { userId: uid, googleId } },
           create: data,
           update: {
             title: data.title,

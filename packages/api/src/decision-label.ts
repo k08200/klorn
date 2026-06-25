@@ -74,7 +74,11 @@ function logRecorderError(op: string, sourceId: string, err: unknown): void {
  */
 export async function recordDecision(decision: DecisionInput): Promise<void> {
   const where = {
-    source_sourceId: { source: decision.source, sourceId: decision.sourceId },
+    userId_source_sourceId: {
+      userId: decision.userId,
+      source: decision.source,
+      sourceId: decision.sourceId,
+    },
   };
   try {
     const existing = await prisma.decisionLabel.findUnique({
@@ -120,13 +124,16 @@ export async function recordEmailDecision(decision: EmailDecision): Promise<void
  * move, or a terminal status (e.g. "DISMISSED", "OPENED").
  */
 export async function stampDecisionOutcome(
+  userId: string,
   source: AttentionSourceName,
   sourceId: string,
   outcome: string,
 ): Promise<void> {
   try {
+    // userId is part of the filter so an outcome stamp can only ever touch the
+    // acting user's own ledger row — defense-in-depth against a shared sourceId.
     await prisma.decisionLabel.updateMany({
-      where: { source, sourceId, outcome: null },
+      where: { userId, source, sourceId, outcome: null },
       data: { outcome, outcomeAt: new Date() },
     });
   } catch (err) {

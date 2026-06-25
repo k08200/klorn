@@ -149,14 +149,16 @@ vi.mock("../db.js", () => {
           create,
           update,
         }: {
-          where: { source_sourceId: { source: string; sourceId: string } };
+          where: {
+            userId_source_sourceId: { userId: string; source: string; sourceId: string };
+          };
           create: { userId: string; status: string; type: string; priority?: number };
           update: { status: string; type: string; priority?: number };
         }) => {
+          const key = where.userId_source_sourceId;
           const idx = attentionItems.findIndex(
             (a) =>
-              a.source === where.source_sourceId.source &&
-              a.sourceId === where.source_sourceId.sourceId,
+              a.userId === key.userId && a.source === key.source && a.sourceId === key.sourceId,
           );
           if (idx >= 0) {
             attentionItems[idx] = {
@@ -170,8 +172,8 @@ vi.mock("../db.js", () => {
           const row: AttentionRow = {
             id: `ai-${attentionItems.length + 1}`,
             userId: create.userId,
-            source: where.source_sourceId.source,
-            sourceId: where.source_sourceId.sourceId,
+            source: key.source,
+            sourceId: key.sourceId,
             type: create.type,
             status: create.status,
             priority: create.priority ?? 50,
