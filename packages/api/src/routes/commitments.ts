@@ -172,7 +172,7 @@ export async function commitmentRoutes(app: FastifyInstance) {
     const existing = await getCommitment(id);
     if (!existing) return reply.code(404).send({ error: "Commitment not found" });
     if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
-    await deleteCommitmentService(id);
+    await deleteCommitmentService(id, userId);
     return reply.code(204).send();
   });
 

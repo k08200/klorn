@@ -543,11 +543,12 @@ describe("upsertAttentionForCommitment", () => {
 });
 
 describe("deleteAttentionForCommitments", () => {
-  it("deletes by source=COMMITMENT", async () => {
-    await deleteAttentionForCommitments(["c-1", "c-2"]);
+  it("deletes by (userId, source=COMMITMENT, sourceId)", async () => {
+    await deleteAttentionForCommitments(["c-1", "c-2"], "user-x");
     const call = deleteManySpy.mock.calls[0]?.[0] as {
-      where: { source: string; sourceId: { in: string[] } };
+      where: { userId: string; source: string; sourceId: { in: string[] } };
     };
+    expect(call.where.userId).toBe("user-x");
     expect(call.where.source).toBe("COMMITMENT");
     expect(call.where.sourceId.in).toEqual(["c-1", "c-2"]);
   });
@@ -559,11 +560,12 @@ describe("deleteAttentionForCalendarEvents", () => {
     expect(deleteManySpy).not.toHaveBeenCalled();
   });
 
-  it("deletes by source=CALENDAR_EVENT", async () => {
-    await deleteAttentionForCalendarEvents(["e1", "e2"]);
+  it("deletes by (userId, source=CALENDAR_EVENT, sourceId)", async () => {
+    await deleteAttentionForCalendarEvents(["e1", "e2"], "user-x");
     const call = deleteManySpy.mock.calls[0]?.[0] as {
-      where: { source: string; sourceId: { in: string[] } };
+      where: { userId: string; source: string; sourceId: { in: string[] } };
     };
+    expect(call.where.userId).toBe("user-x");
     expect(call.where.source).toBe("CALENDAR_EVENT");
     expect(call.where.sourceId.in).toEqual(["e1", "e2"]);
   });

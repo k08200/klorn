@@ -251,6 +251,11 @@ export async function bulkResolveAttentionForPendingActions(
   if (pendingActionIds.length === 0) return;
   const status = statusFor(finalStatus);
   try {
+    // Intentionally NOT userId-scoped: the only caller is the system-wide
+    // expiry sweep, which passes an authoritative cross-user set of PendingAction
+    // UUIDs. sourceId is a per-row uuid (no cross-user collision), so matching on
+    // it alone is correct here — adding a single userId would be wrong (the ids
+    // span users) and per-user batching would be needless complexity.
     await prisma.attentionItem.updateMany({
       where: {
         source: "PENDING_ACTION",
@@ -541,11 +546,17 @@ export async function upsertAttentionForCalendarEvent(
   }
 }
 
-export async function deleteAttentionForCalendarEvents(eventIds: string[]): Promise<void> {
+export async function deleteAttentionForCalendarEvents(
+  eventIds: string[],
+  userId: string,
+): Promise<void> {
   if (eventIds.length === 0) return;
   try {
+    // userId in the filter makes this delete self-scoping (defense-in-depth):
+    // it mirrors the userId-scoped upserts and can't touch another user's rows
+    // even if a future caller skips the route-layer ownership check.
     await prisma.attentionItem.deleteMany({
-      where: { source: "CALENDAR_EVENT", sourceId: { in: eventIds } },
+      where: { userId, source: "CALENDAR_EVENT", sourceId: { in: eventIds } },
     });
   } catch (err) {
     console.warn("[attention-mirror] deleteAttentionForCalendarEvents failed", err);
@@ -772,11 +783,15 @@ export async function upsertAttentionForCommitment(
   }
 }
 
-export async function deleteAttentionForCommitments(commitmentIds: string[]): Promise<void> {
+export async function deleteAttentionForCommitments(
+  commitmentIds: string[],
+  userId: string,
+): Promise<void> {
   if (commitmentIds.length === 0) return;
   try {
+    // Self-scoping by userId (defense-in-depth) — see deleteAttentionForCalendarEvents.
     await prisma.attentionItem.deleteMany({
-      where: { source: "COMMITMENT", sourceId: { in: commitmentIds } },
+      where: { userId, source: "COMMITMENT", sourceId: { in: commitmentIds } },
     });
   } catch (err) {
     console.warn("[attention-mirror] deleteAttentionForCommitments failed", err);
