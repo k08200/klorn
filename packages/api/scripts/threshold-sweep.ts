@@ -17,11 +17,12 @@
  * Usage:
  *   OPENROUTER_API_KEY=... JUDGE_MODEL=google/gemini-2.5-flash \
  *   DATABASE_URL=postgresql://eval:eval@localhost/eval \
- *   npx tsx scripts/threshold-sweep.ts --in=eval/judge-eval-set.json \
- *     --cache=/tmp/klorn-eval-features.json [--extract] [--concurrency=2] [--delay=500]
+ *   npx tsx scripts/threshold-sweep.ts [--extract] [--concurrency=2] [--delay=500]
  *
- * Features are cached after the first extraction; re-runs are free + instant
- * (deterministic) unless --extract forces a fresh LLM pass.
+ * Reads the committed eval set and a fixed temp cache (paths are not
+ * configurable — see EVAL_SET_PATH / FEATURE_CACHE_PATH). Features are cached
+ * after the first extraction; re-runs are free + instant (deterministic) unless
+ * --extract forces a fresh LLM pass.
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -63,6 +64,12 @@ function arg(name: string, fallback?: string): string | undefined {
 function hasFlag(name: string): boolean {
   return process.argv.slice(2).includes(`--${name}`);
 }
+
+// Fixed paths. This dev-only eval tool always runs against the committed eval
+// set and a single temp cache; they are NOT operator-configurable, so no
+// untrusted value ever reaches a filesystem path (no js/path-injection surface).
+const EVAL_SET_PATH = "eval/judge-eval-set.json";
+const FEATURE_CACHE_PATH = "/tmp/klorn-eval-features.json";
 
 async function loadOrExtract(
   inPath: string,
@@ -187,9 +194,7 @@ function pct(n: number): string {
 }
 
 async function main() {
-  const inPath = arg("in", "eval/judge-eval-set.json") as string;
-  const cachePath = arg("cache", "/tmp/klorn-eval-features.json") as string;
-  const rows = await loadOrExtract(inPath, cachePath, hasFlag("extract"));
+  const rows = await loadOrExtract(EVAL_SET_PATH, FEATURE_CACHE_PATH, hasFlag("extract"));
 
   const base: ThresholdConfig = TIER_THRESHOLDS;
   const withAuto = (senderTrust: number, confidence?: number): ThresholdConfig => ({
