@@ -34,6 +34,40 @@ beforeEach(() => {
   deleteManySpy.mockClear();
 });
 
+describe("multi-tenant isolation (userId-scoped upsert key)", () => {
+  // Regression guard for fix/db-multitenant-correctness: two users with the
+  // SAME sourceId must upsert under different userId-scoped keys, so neither can
+  // clobber the other's row. Also asserts where.userId == create.userId (no
+  // cross-wiring of the owner id at any call site).
+  it("scopes two users sharing one sourceId to separate keys", async () => {
+    const base = {
+      id: "pa-shared",
+      toolName: "send_email",
+      status: "PENDING" as const,
+      reasoning: "shared id",
+    };
+    await upsertAttentionForPendingAction({ ...base, userId: "user-a" });
+    await upsertAttentionForPendingAction({ ...base, userId: "user-b" });
+
+    expect(upsertSpy).toHaveBeenCalledTimes(2);
+    for (const callArgs of upsertSpy.mock.calls) {
+      const call = callArgs[0] as {
+        where: { userId_source_sourceId: { userId: string; source: string; sourceId: string } };
+        create: { userId: string };
+      };
+      // The owner in the unique key is the same one written in create — never crossed.
+      expect(call.where.userId_source_sourceId.userId).toBe(call.create.userId);
+      expect(call.where.userId_source_sourceId.sourceId).toBe("pa-shared");
+    }
+    const keys = upsertSpy.mock.calls.map(
+      (c) =>
+        (c[0] as { where: { userId_source_sourceId: { userId: string } } }).where
+          .userId_source_sourceId.userId,
+    );
+    expect(keys).toEqual(["user-a", "user-b"]);
+  });
+});
+
 describe("upsertAttentionForPendingAction", () => {
   it("creates an OPEN AttentionItem for a freshly PENDING action", async () => {
     await upsertAttentionForPendingAction({
@@ -46,11 +80,15 @@ describe("upsertAttentionForPendingAction", () => {
 
     expect(upsertSpy).toHaveBeenCalledOnce();
     const call = upsertSpy.mock.calls[0]?.[0] as {
-      where: { source_sourceId: { source: string; sourceId: string } };
+      where: { userId_source_sourceId: { userId: string; source: string; sourceId: string } };
       create: { status: string; resolvedAt: Date | null; title: string; autonomyLevel: number };
       update: { status: string; resolvedAt: Date | null; autonomyLevel: number };
     };
-    expect(call.where.source_sourceId).toEqual({ source: "PENDING_ACTION", sourceId: "pa-1" });
+    expect(call.where.userId_source_sourceId).toEqual({
+      userId: "user-1",
+      source: "PENDING_ACTION",
+      sourceId: "pa-1",
+    });
     expect(call.create.status).toBe("OPEN");
     expect(call.create.resolvedAt).toBeNull();
     expect(call.create.title).toBe("Reply needed for Sarah");

@@ -176,7 +176,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
 
       const actionItems = parseJsonArray(dbEmail.actionItems);
-      const attachments = await listEmailAttachments([dbEmail.id]);
+      const attachments = await listEmailAttachments([dbEmail.id], uid);
       const candidateProfile = buildAttachmentCandidateProfile(attachments);
 
       // The draft is one LLM call. Without this catch a provider outage / quota
@@ -252,7 +252,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         attachmentIds: Array.isArray(attachmentIds) ? attachmentIds : [],
       });
       if (includeBriefAttachment) {
-        const analyzedAttachments = await listEmailAttachments([dbEmail.id]);
+        const analyzedAttachments = await listEmailAttachments([dbEmail.id], uid);
         const candidateProfile = buildAttachmentCandidateProfile(analyzedAttachments);
         const brief = buildEmailAttachmentBrief({
           subject: dbEmail.subject,

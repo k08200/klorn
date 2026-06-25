@@ -668,9 +668,9 @@ export async function emailRoutes(app: FastifyInstance) {
 
     // Map to API format
     const emailIds = emails.map((email) => email.id);
-    const attachmentSummaries = await summarizeEmailAttachmentsByEmail(emailIds);
-    const candidateProfiles = await listCandidateProfilesByEmail(emailIds);
-    const candidateIntakes = await listCandidateIntakesByEmail(emailIds);
+    const attachmentSummaries = await summarizeEmailAttachmentsByEmail(emailIds, uid);
+    const candidateProfiles = await listCandidateProfilesByEmail(emailIds, uid);
+    const candidateIntakes = await listCandidateIntakesByEmail(emailIds, uid);
     for (const emailId of emailIds) {
       if (candidateProfiles[emailId] && !candidateIntakes[emailId]) {
         const intake = await syncCandidateIntakeForEmail({ userId: uid, emailId });
@@ -804,7 +804,10 @@ export async function emailRoutes(app: FastifyInstance) {
     if (messages.length === 0) {
       return { error: "Thread not found" };
     }
-    const attachments = await listEmailAttachments(messages.map((message) => message.id));
+    const attachments = await listEmailAttachments(
+      messages.map((message) => message.id),
+      uid,
+    );
     const attachmentsByEmail = new Map<string, typeof attachments>();
     for (const attachment of attachments) {
       const list = attachmentsByEmail.get(attachment.emailId) ?? [];
@@ -915,7 +918,7 @@ export async function emailRoutes(app: FastifyInstance) {
         await prisma.emailMessage.update({ where: { id: dbEmail.id }, data: { isRead: true } });
       }
       const actionItems = parseJsonArray(dbEmail.actionItems);
-      const attachments = await listEmailAttachments([dbEmail.id]);
+      const attachments = await listEmailAttachments([dbEmail.id], uid);
       const candidateProfile = buildAttachmentCandidateProfile(attachments);
       const candidateIntake = candidateProfile
         ? await syncCandidateIntakeForEmail({ userId: uid, emailId: dbEmail.id })

@@ -271,10 +271,14 @@ model CalendarEvent {
   meetingLink String?
   color       String?
   allDay      Boolean  @default(false)
-  googleId    String?  @unique
+  googleId    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Scope the Google event id by user: the SAME googleId can appear in two
+  // users' calendars (both attendees of one event), so a global unique would
+  // force their rows to collide and lose one user's data. (Multi-tenant fix.)
+  @@unique([userId, googleId])
   @@index([userId, startTime])
 }
 
@@ -863,7 +867,10 @@ model AttentionItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([source, sourceId])
+  // Scope uniqueness by user. sourceId is a uuid today (no cross-user
+  // collision), but GITHUB/shared-id sources could collide; a userId-scoped
+  // unique makes the multi-tenant invariant explicit and upserts safe.
+  @@unique([userId, source, sourceId])
   @@index([userId, status, surfacedAt])
   @@index([userId, tier, surfacedAt])
 }
@@ -911,10 +918,12 @@ model DecisionLabel {
 
   judgedAt DateTime @default(now())
 
-  // One ledger row per surfaced decision per source row. A re-judge updates
-  // the same row's shownTier/features in place (the decision changed), but
-  // the outcome, once stamped, is the user's ground truth.
-  @@unique([source, sourceId])
+  // One ledger row per surfaced decision per source row, scoped by user. A
+  // re-judge updates the same row's shownTier/features in place (the decision
+  // changed), but the outcome, once stamped, is the user's ground truth.
+  // userId is part of the key so an outcome stamp can never touch another
+  // user's row even if a non-uuid sourceId (e.g. GITHUB) ever collides.
+  @@unique([userId, source, sourceId])
   @@index([userId, shownTier, judgedAt])
 }
 

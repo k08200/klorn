@@ -55,7 +55,9 @@ describe("recordEmailDecision", () => {
 
     expect(decisionLabel.upsert).toHaveBeenCalledTimes(1);
     const args = decisionLabel.upsert.mock.calls[0][0];
-    expect(args.where).toEqual({ source_sourceId: { source: "EMAIL", sourceId: "email-1" } });
+    expect(args.where).toEqual({
+      userId_source_sourceId: { userId: "user-1", source: "EMAIL", sourceId: "email-1" },
+    });
     expect(args.create).toMatchObject({
       userId: "user-1",
       source: "EMAIL",
@@ -104,7 +106,9 @@ describe("recordDecision (source-aware)", () => {
 
     expect(decisionLabel.upsert).toHaveBeenCalledTimes(1);
     const args = decisionLabel.upsert.mock.calls[0][0];
-    expect(args.where).toEqual({ source_sourceId: { source: "GITHUB", sourceId: "gh-thread-1" } });
+    expect(args.where).toEqual({
+      userId_source_sourceId: { userId: "user-1", source: "GITHUB", sourceId: "gh-thread-1" },
+    });
     expect(args.create).toMatchObject({
       source: "GITHUB",
       sourceId: "gh-thread-1",
@@ -127,19 +131,27 @@ describe("recordDecision (source-aware)", () => {
 });
 
 describe("stampDecisionOutcome", () => {
-  it("stamps the outcome and outcomeAt only on a not-yet-stamped row (first action wins)", async () => {
-    await stampDecisionOutcome("EMAIL", "email-1", "OVERRIDE:PUSH");
+  it("stamps the outcome and outcomeAt only on a not-yet-stamped row (first action wins), scoped to the user", async () => {
+    await stampDecisionOutcome("user-1", "EMAIL", "email-1", "OVERRIDE:PUSH");
 
     expect(decisionLabel.updateMany).toHaveBeenCalledTimes(1);
     const args = decisionLabel.updateMany.mock.calls[0][0];
-    expect(args.where).toEqual({ source: "EMAIL", sourceId: "email-1", outcome: null });
+    // userId is part of the filter so a stamp can never touch another user's row.
+    expect(args.where).toEqual({
+      userId: "user-1",
+      source: "EMAIL",
+      sourceId: "email-1",
+      outcome: null,
+    });
     expect(args.data.outcome).toBe("OVERRIDE:PUSH");
     expect(args.data.outcomeAt).toBeInstanceOf(Date);
   });
 
   it("never throws, logs on failure", async () => {
     decisionLabel.updateMany.mockRejectedValue(new Error("db down"));
-    await expect(stampDecisionOutcome("EMAIL", "email-1", "DISMISSED")).resolves.toBeUndefined();
+    await expect(
+      stampDecisionOutcome("user-1", "EMAIL", "email-1", "DISMISSED"),
+    ).resolves.toBeUndefined();
     expect(captureError).toHaveBeenCalled();
   });
 });
