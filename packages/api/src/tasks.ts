@@ -98,13 +98,19 @@ export async function listTasks(userId: string, status?: string) {
   };
 }
 
+type TaskSummary = { id: string; title: string; status: string };
+export type CreateTaskResult =
+  | { success: true; task: TaskSummary }
+  | { success: false; reason: "too_many_open_tasks"; openTaskCount: number; message: string }
+  | { success: false; reason: "duplicate"; existingTask: TaskSummary; message: string };
+
 export async function createTask(
   userId: string,
   title: string,
   description?: string,
   priority?: string,
   dueDate?: string,
-) {
+): Promise<CreateTaskResult> {
   const recentOpen = await prisma.task.findMany({
     where: {
       userId,
@@ -148,23 +154,4 @@ export async function createTask(
   await upsertAttentionForTask(task);
 
   return { success: true, task: { id: task.id, title: task.title, status: task.status } };
-}
-
-export async function updateTask(taskId: string, updates: Record<string, unknown>) {
-  const data: Record<string, unknown> = {};
-  if (updates.title) data.title = updates.title;
-  if (updates.description !== undefined) data.description = updates.description;
-  if (updates.status) data.status = (updates.status as string).toUpperCase();
-  if (updates.priority) data.priority = (updates.priority as string).toUpperCase();
-  if (updates.due_date !== undefined) {
-    data.dueDate = updates.due_date ? new Date(updates.due_date as string) : null;
-  }
-
-  const task = await prisma.task.update({ where: { id: taskId }, data });
-  await upsertAttentionForTask(task);
-
-  return {
-    success: true,
-    task: { id: task.id, title: task.title, status: task.status, priority: task.priority },
-  };
 }

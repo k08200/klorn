@@ -70,6 +70,15 @@ vi.mock("../db.js", () => {
       findMany: vi.fn(async () => []),
     },
     contact: { findFirst: vi.fn(async () => null) },
+    task: {
+      findMany: vi.fn(async () => []),
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+        id: "task-new",
+        status: "TODO",
+        ...data,
+      })),
+    },
+    attentionItem: { upsert: vi.fn(async () => ({})) },
     user: { findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })) },
     device: {
       findUnique: vi.fn(async () => ({ id: "d1" })),
@@ -670,5 +679,71 @@ describe("emailSearchOr — search query builder", () => {
     const { emailSearchOr } = await import("../routes/email.js");
     const [subjectCond] = emailSearchOr("Q3 report");
     expect(subjectCond).toEqual({ subject: { contains: "Q3 report", mode: "insensitive" } });
+  });
+});
+
+describe("POST /api/email/:id/create-tasks — dedup via createTask", () => {
+  it("skips an action item that duplicates an existing open task (no raw create)", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.emailMessage.findFirst).mockResolvedValueOnce({
+      id: "email-1",
+      subject: "Re: Sarah",
+      actionItems: JSON.stringify(["Reply to Sarah about the deck"]),
+      receivedAt: new Date(),
+    } as never);
+    // An existing open task with a near-identical title → createTask must dedup.
+    vi.mocked(prisma.task.findMany).mockResolvedValueOnce([
+      {
+        id: "task-existing",
+        title: "Reply to Sarah about the deck",
+        status: "TODO",
+        createdAt: new Date(),
+      },
+    ] as never);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/email-1/create-tasks",
+      headers: auth(),
+      payload: { indices: [0] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.tasks).toEqual([]);
+    expect(body.skipped).toHaveLength(1);
+    expect(body.skipped[0].reason).toBe("duplicate");
+    expect(body.skipped[0].existingTaskId).toBe("task-existing");
+    // The dedup short-circuits before any insert — the bug this guards against
+    // is the old path calling prisma.task.create directly and flooding dupes.
+    expect(prisma.task.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("creates a task for a novel action item", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.emailMessage.findFirst).mockResolvedValueOnce({
+      id: "email-2",
+      subject: "New ask",
+      actionItems: JSON.stringify(["Book the venue for the offsite"]),
+      receivedAt: new Date(),
+    } as never);
+    vi.mocked(prisma.task.findMany).mockResolvedValueOnce([] as never);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/email-2/create-tasks",
+      headers: auth(),
+      payload: { indices: [0] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.tasks).toHaveLength(1);
+    expect(body.skipped).toEqual([]);
+    expect(prisma.task.create).toHaveBeenCalledTimes(1);
+    await app.close();
   });
 });
