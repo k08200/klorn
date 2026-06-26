@@ -107,32 +107,57 @@ For iOS later: also upload an APNs auth key (.p8) to Firebase + `npx cap add ios
 
 ---
 
-## iOS (build on a Mac with Xcode)
+## iOS — full guide (build on a Mac with Xcode)
 
-The `ios/` project is generated and committed, with calendar + push config
-pre-applied. **It can only be built on a Mac with Xcode** (iOS builds + signing
-require Xcode — there is no headless/sideload path like Android's APK).
-Capacitor 8 uses **Swift Package Manager** for plugins, so no CocoaPods step.
+iOS needs **no Firebase** — push goes straight to APNs. The `ios/` project is
+generated and committed with everything pre-wired that can be (Info.plist usage
+strings, `UIBackgroundModes`, and the AppDelegate APNs forwarding). **It can only
+be built on a Mac with Xcode** (signing requires it — no headless/sideload path
+like Android's APK). Capacitor 8 uses **Swift Package Manager**, so no CocoaPods.
+
+Do it in two stages.
+
+### Stage A — smoke test on iPhone (no deploy, no keys, no Apple paid account)
+
+Default config is PROBE mode: the app loads the bundled probe page and reads the
+device calendar via EventKit. Confirms the app builds + runs on your iPhone and
+the calendar plugin works — before any backend/keys.
 
 ```bash
 cd apps/mobile
 npm install
-npx cap sync ios            # resolves SPM plugins, copies web assets
-npx cap open ios            # opens Xcode
+npx cap sync ios
+npx cap open ios          # Xcode opens
 ```
+In Xcode: **App** target → **Signing & Capabilities** → set **Team** (a free
+personal Apple ID works for device testing) → connect iPhone → **Run (▶)**.
+Tap **Read device calendars**, grant access, see your iCloud/Google calendars.
 
-In Xcode: select the **App** target → **Signing & Capabilities** → set your Team
-(personal Apple ID works for device testing) → plug in the iPhone → **Run (▶)**.
+### Stage B — full app (shell + login + push)
 
-Pre-applied in `ios/App/App/Info.plist`: `NSCalendarsUsageDescription` +
-`NSCalendarsFullAccessUsageDescription` (EventKit) and `UIBackgroundModes:
-remote-notification`. **Add in Xcode** (they need signing, so can't be
-pre-committed): the **Push Notifications** and **Background Modes → Remote
-notifications** capabilities.
+1. **Deploy `packages/web`** (with the native code on this branch) to
+   `app.klorn.ai` so the shell loads a site that has the native login/push/calendar.
+2. **APNs key** (Apple Developer, paid): create an **APNs Auth Key (.p8)**, note
+   the **Key ID** + **Team ID**. Ensure the App ID is **`ai.klorn.app`** with
+   Push enabled. Set on the API (Render):
+   ```
+   APNS_KEY_P8=<.p8 contents>   APNS_KEY_ID=…   APNS_TEAM_ID=…
+   APNS_BUNDLE_ID=ai.klorn.app  APNS_PRODUCTION=false   # sandbox for Xcode debug builds
+   ```
+3. In Xcode → **Signing & Capabilities** → **+ Capability** → add **Push
+   Notifications** and **Background Modes → Remote notifications**. (The
+   AppDelegate forwarding is already in code; this step wires the entitlement,
+   which needs your signing.)
+4. Build in SHELL mode and run:
+   ```bash
+   KLORN_SHELL=1 npx cap sync ios
+   npx cap open ios   # Run (▶)
+   ```
+   Sign in (system browser), then a PUSH-tier interrupt (or the device-test
+   route) rings the iPhone.
 
-What already works on iOS via the existing web code (SHELL mode): the app shell,
-on-device calendar read (EventKit, same `calendar-probe.ts` / native modules),
-and Google sign-in via the system browser.
+What works on iOS once Stage B is done: app shell, on-device calendar (EventKit),
+Google sign-in (system browser), and native push (APNs).
 
 ### iOS push (implemented — provide an APNs key to activate)
 
