@@ -58,6 +58,10 @@ model User {
   // resurrected every still-unexpired stolen token.
   sessionsInvalidatedAt     DateTime?
   betaProGrantedAt          DateTime?
+  // Stamped the first time the founder welcome email is sent to this user, so
+  // they receive it exactly once across the email-verify and Google sign-in
+  // paths. Null = not sent yet (the atomic claim in welcome-email.ts flips it).
+  welcomeEmailSentAt        DateTime?
   conversations             Conversation[]
   tokens                    UserToken[]
   tasks                     Task[]

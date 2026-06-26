@@ -379,7 +379,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // GET /api/admin/email-config — Diagnose email delivery: checks env vars and sends a real test email
   app.get("/email-config", async () => {
     const hasApiKey = !!process.env.RESEND_API_KEY;
-    const fromEmail = process.env.FROM_EMAIL || "EVE <onboarding@resend.dev>";
+    const fromEmail = process.env.FROM_EMAIL || "Klorn <onboarding@resend.dev>";
     const adminEmails = (process.env.ADMIN_EMAILS || "")
       .split(",")
       .map((s) => s.trim())
@@ -398,7 +398,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const result = await resendClient.emails.send({
         from: fromEmail,
         to: alertTo,
-        subject: "[EVE] Email config test",
+        subject: "[Klorn] Email config test",
         html: "<p>Email delivery is working.</p>",
       });
       return { ok: true, fromEmail, alertTo, resendId: (result as { id?: string }).id ?? null };
