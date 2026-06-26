@@ -89,6 +89,10 @@ const MAX_SENDERS_PER_RUN = 50;
 export interface TraitRunSummary {
   sendersProcessed: number;
   sendersFailed: number;
+  /**
+   * Total upserts applied this run — counts create AND strengthen AND conflict
+   * writes, not only brand-new rows. (A strengthen/conflict is still a DB write.)
+   */
   traitsWritten: number;
 }
 
@@ -125,6 +129,12 @@ export async function extractSenderTraitsForUser(userId: string): Promise<TraitR
       // Signature gate: if every stored trait for this sender already carries
       // this exact evidence signature, the sender's recent mail is unchanged —
       // skip the LLM call (idempotent, cost-saving; the AutoBE staleness gate).
+      // This read is intentionally outside upsertSenderTrait's transaction: it
+      // is a cost optimization, NOT a correctness gate. Concurrency is already
+      // prevented by the automation-scheduler advisory lock that serializes
+      // this job; the per-trait upsert transaction is the row-level safety net
+      // if that lock ever leaks (a duplicate then lands last-write-wins, never
+      // corrupt). A weaker-than-it-looks gate, by design.
       const stored = await prisma.senderTrait.findMany({
         where: { userId, sender },
         select: { sourceSig: true },
