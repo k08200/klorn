@@ -238,7 +238,7 @@ export function buildSvgConversion(attachment: AttachmentForConversion): Convert
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <rect width="100%" height="100%" fill="#f8fafc"/>
   <rect x="18" y="18" width="${width - 36}" height="${height - 36}" rx="14" fill="#ffffff" stroke="#cbd5e1"/>
-  <text x="36" y="44" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" fill="#64748b">EVE converted report</text>
+  <text x="36" y="44" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" fill="#64748b">Klorn converted report</text>
   <g font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" fill="#0f172a">
   ${text}
   </g>
