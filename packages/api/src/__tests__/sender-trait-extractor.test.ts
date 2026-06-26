@@ -7,7 +7,19 @@ vi.mock("../openai.js", () => ({
 }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { extractTraitsFromEmails } from "../sender-trait-extractor.js";
+const prismaMock = vi.hoisted(() => ({
+  emailMessage: { findMany: vi.fn() },
+  user: { findMany: vi.fn(async () => []) },
+  senderTrait: {
+    findUnique: vi.fn(async () => null),
+    create: vi.fn(async () => ({})),
+    update: vi.fn(async () => ({})),
+  },
+}));
+vi.mock("../db.js", () => ({ prisma: prismaMock }));
+vi.mock("../llm-credentials.js", () => ({ getUserLlmCredentials: vi.fn(async () => undefined) }));
+
+import { extractSenderTraitsForUser, extractTraitsFromEmails } from "../sender-trait-extractor.js";
 
 const emails = [
   { from: "vc@fund.com", subject: "Investment", snippet: "we want to invest", labels: [] },
@@ -51,5 +63,38 @@ describe("extractTraitsFromEmails", () => {
     createCompletionMock.mockRejectedValueOnce(new Error("provider down"));
     const result = await extractTraitsFromEmails(emails, {});
     expect(result).toEqual([]);
+  });
+});
+
+describe("extractSenderTraitsForUser — per-sender isolation", () => {
+  beforeEach(() => {
+    prismaMock.emailMessage.findMany.mockReset();
+    prismaMock.senderTrait.findUnique.mockReset().mockResolvedValue(null);
+    prismaMock.senderTrait.create.mockReset().mockResolvedValue({});
+    prismaMock.senderTrait.update.mockReset().mockResolvedValue({});
+  });
+
+  it("isolates a failing sender — the other still persists", async () => {
+    prismaMock.emailMessage.findMany.mockResolvedValue([
+      { from: "a@x.com", subject: "s", snippet: "b", labels: [] },
+      { from: "b@x.com", subject: "s", snippet: "b", labels: [] },
+    ]);
+    // Both senders extract a valid trait...
+    createCompletionMock.mockResolvedValue({
+      choices: [
+        { message: { content: JSON.stringify({ relationship: { value: "vendor", confidence: 0.8, evidence: "b" } }) } },
+      ],
+    });
+    // ...but ONE sender's DB write throws (extractTraitsFromEmails never throws,
+    // so isolation must be exercised on the write path). Promise.allSettled keeps
+    // the other sender alive.
+    prismaMock.senderTrait.create
+      .mockRejectedValueOnce(new Error("write failed"))
+      .mockResolvedValue({});
+
+    const summary = await extractSenderTraitsForUser("user-1");
+    expect(summary.sendersProcessed).toBe(2);
+    expect(summary.sendersFailed).toBe(1);
+    expect(prismaMock.senderTrait.create).toHaveBeenCalledTimes(2); // both attempted
   });
 });
