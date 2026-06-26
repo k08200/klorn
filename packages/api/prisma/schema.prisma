@@ -58,6 +58,10 @@ model User {
   // resurrected every still-unexpired stolen token.
   sessionsInvalidatedAt     DateTime?
   betaProGrantedAt          DateTime?
+  // Stamped the first time the founder welcome email is sent to this user, so
+  // they receive it exactly once across the email-verify and Google sign-in
+  // paths. Null = not sent yet (the atomic claim in welcome-email.ts flips it).
+  welcomeEmailSentAt        DateTime?
   conversations             Conversation[]
   tokens                    UserToken[]
   tasks                     Task[]
@@ -69,6 +73,7 @@ model User {
   agentLogs                 AgentLog[]
   notifications             Notification[]
   pushSubscriptions         PushSubscription[]
+  devicePushTokens          DevicePushToken[]
   pushDeliveryLogs          PushDeliveryLog[]
   pushRingEvents            PushRingEvent[]
   phoneEscalations          PhoneEscalation[]
@@ -96,6 +101,7 @@ model User {
   contactTrustScores        ContactTrustScore[]
   llmCostLedger             LlmCostLedger[]
   llmUsageLogs              LlmUsageLog[]
+  senderTraits              SenderTrait[]
 }
 
 enum UserRole {
@@ -386,6 +392,25 @@ model PushSubscription {
   // those up via scripts/cleanup-stale-push-subs.ts.
   origin    String?
   createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Native push registration for the Capacitor mobile shell (apps/mobile).
+// Unlike PushSubscription (Web Push / VAPID, browser-owned endpoint), this is
+// an FCM registration token from the device. One backend (firebase-admin →
+// FCM) reaches both Android (FCM) and iOS (FCM → APNs via an uploaded APNs
+// key), so a single `token` + `platform` row is all we store. Tokens rotate
+// device-side, so register upserts by the unique token and prunes the stale
+// one when the same device re-registers.
+model DevicePushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String // "android" | "ios"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
 }
@@ -958,6 +983,49 @@ enum ProposalStatus {
   OPEN
   APPLIED
   DISMISSED
+}
+
+enum SenderTraitKind {
+  relationship
+  recurring_intent
+}
+
+enum SenderTraitStatus {
+  active
+  superseded
+  conflicted
+}
+
+// Extracted-from-content sender facts (Phase 3 / B2). Distinct from the
+// DB-derived SenderFacts bundle in sender-policy.ts. The judge does NOT read
+// this table in v0 — extraction is measured before any trait is injected.
+model SenderTrait {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sender        String          // sender address — same key as sender-policy.ts
+  factKind      SenderTraitKind
+  factValue     String          // validated per-kind in code (sender-trait-policy.ts)
+  confidence    Float
+  evidenceText  String
+  sourceSig     String          // attention-input-hash-style signature of the sample
+  observedCount Int             @default(1)
+
+  // Write-time contradiction capture — never a silent overwrite.
+  conflictValue    String?
+  conflictEvidence String?
+  conflictedAt     DateTime?
+
+  status SenderTraitStatus @default(active)
+
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, sender, factKind])
+  @@index([userId, sender])
+  @@index([userId, factKind, status])
 }
 
 enum AttentionSource {
