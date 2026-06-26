@@ -6,6 +6,7 @@ import { requireAdmin } from "../auth.js";
 import type { CalibrationSnapshotPayload } from "../calibration-snapshot.js";
 import { db, prisma } from "../db.js";
 import { getDecisionMetrics } from "../decision-metrics.js";
+import { getTraitMetrics } from "../sender-trait-metrics.js";
 import { sendBetaInviteEmail } from "../email.js";
 import { getUsageSummary } from "../llm-usage.js";
 import { clearFallbackState, getProviderCooldownInfo } from "../model-fallback.js";
@@ -616,5 +617,31 @@ export async function adminRoutes(app: FastifyInstance) {
       })),
       runAt: new Date().toISOString(),
     };
+  });
+
+  // GET /api/admin/sender-traits — Sender-trait measurement metrics + evidence
+  // inspector. Returns aggregate metrics (coverage, confidence distribution,
+  // conflict rate) and per-sender trait rows with evidenceText so the caller
+  // can inspect what the extractor learned and catch drift early.
+  // Optional ?userId= narrows to one user's inbox.
+  app.get("/sender-traits", async (request) => {
+    const userId = (request.query as { userId?: string }).userId;
+    const metrics = await getTraitMetrics(prisma, userId);
+    const traits = await prisma.senderTrait.findMany({
+      where: userId ? { userId } : {},
+      orderBy: [{ sender: "asc" }, { factKind: "asc" }],
+      take: 200,
+      select: {
+        sender: true,
+        factKind: true,
+        factValue: true,
+        confidence: true,
+        evidenceText: true,
+        status: true,
+        conflictValue: true,
+        observedCount: true,
+      },
+    });
+    return { metrics, traits };
   });
 }
