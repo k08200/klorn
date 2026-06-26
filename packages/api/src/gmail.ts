@@ -608,7 +608,20 @@ function buildPlainTextRawEmail(
   return Buffer.from(parts.join("\r\n")).toString("base64url");
 }
 
-export async function sendEmail(userId: string, to: string, subject: string, body: string) {
+export async function sendEmail(
+  userId: string,
+  to: string,
+  subject: string,
+  body: string,
+  attachments: GmailDraftAttachment[] = [],
+) {
+  // Single recipient only. A comma or semicolon means multiple addresses —
+  // reject it so the angle-bracket display-name trick
+  // (`a@x.com, evil@y.com <legit@z.com>`, whose addr-spec passes the check
+  // below) can't smuggle an extra recipient into the To header.
+  if (to.includes(",") || to.includes(";")) {
+    return { error: "Send to one recipient at a time (no commas or semicolons in the address)." };
+  }
   if (!looksLikeEmailAddress(to)) {
     return {
       error: `Invalid email address: "${to}". Use a full address like local@domain, not a domain such as accounts.google.com.`,
@@ -625,7 +638,7 @@ export async function sendEmail(userId: string, to: string, subject: string, bod
 
   const gmail = google.gmail({ version: "v1", auth });
 
-  const raw = buildPlainTextRawEmail(to, subject, body);
+  const raw = buildPlainTextRawEmail(to, subject, body, attachments);
 
   let res: { data: { id?: string | null } };
   try {
