@@ -14,7 +14,6 @@ import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../email.js";
-import { maybeSendWelcomeEmail } from "../welcome-email.js";
 import {
   getAuthedClient,
   getAuthUrl,
@@ -27,6 +26,7 @@ import {
 } from "../gmail.js";
 import { mapGoogleEventTimes } from "../google-calendar-time.js";
 import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
+import { maybeSendWelcomeEmail } from "../welcome-email.js";
 
 const authHeaderSchema = {
   type: "object",

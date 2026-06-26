@@ -37,8 +37,7 @@ const IN_APP_BROWSER_PATTERNS: readonly InAppBrowserPattern[] = [
  * omit to read `navigator.userAgent`. Returns null when there is no UA (SSR).
  */
 export function detectInAppBrowser(ua?: string | null): string | null {
-  const value =
-    ua ?? (typeof navigator !== "undefined" ? navigator.userAgent : "");
+  const value = ua ?? (typeof navigator !== "undefined" ? navigator.userAgent : "");
   if (!value) return null;
   for (const { label, re } of IN_APP_BROWSER_PATTERNS) {
     if (re.test(value)) return label;
