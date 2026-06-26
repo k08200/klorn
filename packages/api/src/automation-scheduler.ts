@@ -881,6 +881,18 @@ async function runAutomations() {
         });
     }
 
+    // --- Weekly: Sender Trait Extraction (Sunday only) ---
+    // Off-hot-path per-user extraction of relationship/recurring_intent facts.
+    // The judge does NOT read these in v0 — they are measured first (Phase 3/B2).
+    if (new Date().getDay() === 0) {
+      import("./sender-trait-extractor.js")
+        .then(({ extractSenderTraitsForAllUsers }) => extractSenderTraitsForAllUsers())
+        .catch((err) => {
+          console.error("[AUTOMATION] Sender trait extraction failed:", err);
+          captureError(err, { tags: { scope: "automation.sender-traits" } });
+        });
+    }
+
     // --- Daily: OpenRouter catalog check ---
     // Proactively verify every model the fallback chain depends on still
     // exists upstream, so a retired/renamed :free SKU surfaces as a named
