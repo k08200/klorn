@@ -12,6 +12,10 @@
   },
   "dependencies": {
     "3d-force-graph": "^1.80.0",
+    "@capacitor/browser": "^8.0.3",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/push-notifications": "^8.1.1",
+    "@ebarooni/capacitor-calendar": "^8.2.0",
     "@sentry/browser": "^10.48.0",
     "@tanstack/react-query": "^5.100.11",
     "next": "^15.5.16",

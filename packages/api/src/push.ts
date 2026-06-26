@@ -15,12 +15,14 @@ import { prisma } from "./db.js";
 import { isSafePushEndpoint } from "./is-safe-push-endpoint.js";
 import { notificationSuppressionReason } from "./notification-policy.js";
 import { evaluateNotificationGate, type NotifCategory } from "./notification-prefs.js";
+import { sendApnsPush } from "./push-apns.js";
 import {
   createPushDeliveryAttempt,
   createSkippedPushDelivery,
   markPushAccepted,
   markPushFailed,
 } from "./push-delivery.js";
+import { sendDevicePush } from "./push-device.js";
 import { isAllowedPushOrigin } from "./push-origin-allowlist.js";
 import { recordPushAttempt } from "./push-rate-limit.js";
 import { sendTelegramForPush } from "./telegram-notify.js";
@@ -182,6 +184,18 @@ export async function sendPushNotification(
     // sink the web-push path below — but don't swallow it silently either,
     // or a Telegram-only self-hoster loses every PUSH alert with no trace.
     console.warn(`[PUSH] Telegram secondary channel threw for ${userId}:`, err);
+  });
+
+  // Native mobile channels (Capacitor shell): FCM for Android, APNs for iOS.
+  // Best-effort and in ADDITION to web push, running after the shared gates
+  // above so they inherit the same suppression/quiet-hours/rate-limit decisions.
+  // Contained like Telegram: a device-channel fault must never sink web push.
+  // Each is a no-op (logged skip) when its credentials/tokens are absent.
+  await sendDevicePush(userId, payload, category).catch((err) => {
+    console.warn(`[PUSH] FCM device channel threw for ${userId}:`, err);
+  });
+  await sendApnsPush(userId, payload, category).catch((err) => {
+    console.warn(`[PUSH] APNs device channel threw for ${userId}:`, err);
   });
 
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {

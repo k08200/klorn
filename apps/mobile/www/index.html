@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+    />
+    <title>Klorn — Samsung Calendar Probe</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 20px;
+        background: #10100d;
+        color: #e7e2d6;
+        font-family: system-ui, -apple-system, sans-serif;
+        line-height: 1.5;
+      }
+      h1 {
+        color: #d8a45d;
+        font-size: 20px;
+        margin: 0 0 4px;
+      }
+      p.sub {
+        color: #8a8678;
+        font-size: 13px;
+        margin: 0 0 16px;
+      }
+      button {
+        width: 100%;
+        padding: 14px;
+        font-size: 16px;
+        font-weight: 600;
+        color: #10100d;
+        background: #d8a45d;
+        border: 0;
+        border-radius: 10px;
+        margin-bottom: 16px;
+      }
+      button:active {
+        opacity: 0.8;
+      }
+      #status {
+        font-size: 14px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        background: #1c1b16;
+        border: 1px solid #2c2a22;
+      }
+      .ok {
+        color: #7fd88f;
+      }
+      .err {
+        color: #f08a7a;
+      }
+      .count {
+        color: #d8a45d;
+        font-weight: 700;
+      }
+      .cal {
+        background: #1c1b16;
+        border: 1px solid #2c2a22;
+        border-radius: 10px;
+        padding: 12px;
+        margin-bottom: 10px;
+      }
+      .cal.samsung {
+        border-color: #d8a45d;
+        box-shadow: 0 0 0 1px #d8a45d44;
+      }
+      .cal .title {
+        font-weight: 700;
+        font-size: 15px;
+        margin-bottom: 6px;
+      }
+      .cal .badge {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        color: #10100d;
+        background: #d8a45d;
+        border-radius: 5px;
+        padding: 1px 6px;
+        margin-left: 6px;
+      }
+      pre {
+        margin: 0;
+        font-size: 12px;
+        color: #b6b1a3;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Samsung Calendar Probe</h1>
+    <p class="sub">
+      Confirms whether Samsung Calendar (and Google) surface via the standard
+      Android calendar provider — the gate for Klorn's on-device calendar.
+    </p>
+    <button id="run">Read device calendars</button>
+    <div id="status">Tap the button (or it runs automatically) to read calendars.</div>
+    <div id="list"></div>
+
+    <script>
+      const statusEl = document.getElementById("status");
+      const listEl = document.getElementById("list");
+
+      function setStatus(html, cls) {
+        statusEl.innerHTML = html;
+        statusEl.className = cls || "";
+      }
+
+      // Heuristic: does this calendar look like it belongs to a Samsung account?
+      function looksSamsung(cal) {
+        const blob = JSON.stringify(cal).toLowerCase();
+        return (
+          blob.includes("samsung") ||
+          blob.includes("com.osp.app.signin") || // Samsung account type
+          blob.includes("vnd.sec.") || // Samsung phone/local providers
+          blob.includes("sec.android")
+        );
+      }
+
+      async function run() {
+        listEl.innerHTML = "";
+        const Cap = window.Capacitor;
+        if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) {
+          setStatus(
+            "Not running inside the native app. Build & run on a real Galaxy: <code>npx cap run android</code>.",
+            "err",
+          );
+          return;
+        }
+        const Calendar = Cap.Plugins && Cap.Plugins.CapacitorCalendar;
+        if (!Calendar) {
+          setStatus("CapacitorCalendar plugin not found — did `cap sync` run?", "err");
+          return;
+        }
+
+        try {
+          setStatus("Requesting calendar read permission…");
+          const perm = await Calendar.requestReadOnlyCalendarAccess();
+          if (perm.result !== "granted") {
+            setStatus(`Permission not granted: <b>${perm.result}</b>`, "err");
+            return;
+          }
+
+          setStatus("Reading calendars…");
+          const { result: calendars } = await Calendar.listCalendars();
+          const samsung = calendars.filter(looksSamsung);
+
+          setStatus(
+            `<span class="count">${calendars.length}</span> calendar(s) found · ` +
+              (samsung.length
+                ? `<span class="ok">${samsung.length} look Samsung ✓</span>`
+                : `<span class="err">none look Samsung</span>`),
+            "ok",
+          );
+
+          for (const cal of calendars) {
+            const div = document.createElement("div");
+            const isSamsung = looksSamsung(cal);
+            div.className = "cal" + (isSamsung ? " samsung" : "");
+            const title = cal.title || cal.name || cal.id || "(untitled)";
+            div.innerHTML =
+              `<div class="title">${escapeHtml(String(title))}` +
+              (isSamsung ? `<span class="badge">SAMSUNG?</span>` : "") +
+              `</div><pre>${escapeHtml(JSON.stringify(cal, null, 2))}</pre>`;
+            listEl.appendChild(div);
+          }
+        } catch (err) {
+          setStatus("Failed: " + escapeHtml(String(err && err.message ? err.message : err)), "err");
+          console.error("[CALENDAR-PROBE]", err);
+        }
+      }
+
+      function escapeHtml(s) {
+        return s.replace(
+          /[&<>"']/g,
+          (c) =>
+            ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+        );
+      }
+
+      document.getElementById("run").addEventListener("click", run);
+      // Auto-run once the Capacitor bridge is ready.
+      document.addEventListener("DOMContentLoaded", () => setTimeout(run, 400));
+    </script>
+  </body>
+</html>
