@@ -6,6 +6,10 @@ import { captureError } from "./sentry.js";
 import type { CandidateTrait } from "./sender-trait-policy.js";
 import { TRAIT_KINDS, validateTraitValue } from "./sender-trait-policy.js";
 import type { TraitSourceEmail } from "./sender-trait-signature.js";
+import { prisma } from "./db.js";
+import { getUserLlmCredentials } from "./llm-credentials.js";
+import { computeTraitSourceSig } from "./sender-trait-signature.js";
+import { upsertSenderTrait } from "./sender-trait-store.js";
 
 interface RawTrait {
   value?: unknown;
@@ -76,5 +80,80 @@ export async function extractTraitsFromEmails(
     console.warn("[TRAITS] extraction failed — skipping sender:", err instanceof Error ? err.message : String(err));
     captureError(err, { tags: { scope: "sender-traits.extract" } });
     return [];
+  }
+}
+
+const SAMPLE_PER_SENDER = 8;
+const MAX_SENDERS_PER_RUN = 50;
+
+export interface TraitRunSummary {
+  sendersProcessed: number;
+  sendersFailed: number;
+  traitsWritten: number;
+}
+
+/** Group a user's recent emails by sender and extract traits per sender. */
+export async function extractSenderTraitsForUser(userId: string): Promise<TraitRunSummary> {
+  const credentials = await getUserLlmCredentials(userId);
+  const recent = await prisma.emailMessage.findMany({
+    where: { userId, body: { not: null } },
+    orderBy: { receivedAt: "desc" },
+    take: SAMPLE_PER_SENDER * MAX_SENDERS_PER_RUN,
+    select: { from: true, subject: true, snippet: true, labels: true },
+  });
+
+  const bySender = new Map<string, typeof recent>();
+  for (const e of recent) {
+    const list = bySender.get(e.from) ?? [];
+    if (list.length < SAMPLE_PER_SENDER) list.push(e);
+    bySender.set(e.from, list);
+  }
+
+  const senders = [...bySender.entries()].slice(0, MAX_SENDERS_PER_RUN);
+  const results = await Promise.allSettled(
+    senders.map(async ([sender, sampleRaw]) => {
+      const sample = sampleRaw.map((e) => ({
+        from: e.from,
+        subject: e.subject ?? "",
+        snippet: e.snippet ?? "",
+        labels: e.labels ?? [],
+      }));
+      const sourceSig = computeTraitSourceSig(sample);
+      const candidates = await extractTraitsFromEmails(sample, {
+        userId,
+        ...(credentials ? { credentials } : {}),
+      });
+      let written = 0;
+      for (const candidate of candidates) {
+        await upsertSenderTrait({ userId, sender, candidate, sourceSig });
+        written++;
+      }
+      return written;
+    }),
+  );
+
+  let traitsWritten = 0;
+  let sendersFailed = 0;
+  results.forEach((r) => {
+    if (r.status === "fulfilled") traitsWritten += r.value;
+    else {
+      sendersFailed++;
+      console.warn("[TRAITS] sender failed for", userId, ":", r.reason);
+      captureError(r.reason, { tags: { scope: "sender-traits.sender", userId } });
+    }
+  });
+  return { sendersProcessed: senders.length, sendersFailed, traitsWritten };
+}
+
+/** Batch entry point for the scheduler — every user with mail. */
+export async function extractSenderTraitsForAllUsers(): Promise<void> {
+  const users = await prisma.user.findMany({ select: { id: true } });
+  for (const u of users) {
+    try {
+      await extractSenderTraitsForUser(u.id);
+    } catch (err) {
+      console.error("[TRAITS] batch failed for user", u.id, err);
+      captureError(err, { tags: { scope: "sender-traits.batch", userId: u.id } });
+    }
   }
 }
