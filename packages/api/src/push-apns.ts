@@ -76,6 +76,15 @@ function sendOne(
   body: string,
 ): Promise<ApnsResult> {
   return new Promise((resolve) => {
+    // Idempotent settle so the promise can NEVER hang: whichever of end/error/
+    // close fires first wins. (A timeout calls req.destroy → 'error'; a bare
+    // 'close' with no end/error still resolves here.)
+    let settled = false;
+    const done = (r: ApnsResult) => {
+      if (settled) return;
+      settled = true;
+      resolve(r);
+    };
     const req = client.request({
       ":method": "POST",
       ":path": `/3/device/${deviceToken}`,
@@ -83,9 +92,14 @@ function sendOne(
       "apns-topic": APNS_BUNDLE_ID,
       "apns-push-type": "alert",
       "apns-priority": "10",
+      // Give APNs a 24h retry window if the device is offline (default 0 = drop
+      // immediately). This is an urgency product — don't silently lose it.
+      "apns-expiration": String(Math.floor(Date.now() / 1000) + 86400),
       "content-type": "application/json",
     });
-    req.setTimeout(APNS_REQUEST_TIMEOUT_MS, () => req.close());
+    // destroy(err) (not close()) so the timeout fires the 'error' handler and
+    // resolves the promise instead of leaving it pending.
+    req.setTimeout(APNS_REQUEST_TIMEOUT_MS, () => req.destroy(new Error("APNS request timeout")));
 
     let status = 0;
     let respBody = "";
@@ -97,10 +111,12 @@ function sendOne(
     });
     req.on("error", (err) => {
       console.error("[PUSH-APNS] request error:", err);
-      resolve({ ok: false, prune: false });
+      done({ ok: false, prune: false });
     });
+    // Safety net: stream closed without end/error (e.g. RST) must still resolve.
+    req.on("close", () => done({ ok: false, prune: false }));
     req.on("end", () => {
-      if (status === 200) return resolve({ ok: true, prune: false });
+      if (status === 200) return done({ ok: true, prune: false });
       let reason = "";
       try {
         reason = (JSON.parse(respBody) as { reason?: string }).reason ?? "";
@@ -109,7 +125,7 @@ function sendOne(
       }
       const prune = status === 410 || DEAD_TOKEN_REASONS.has(reason);
       console.error(`[PUSH-APNS] send failed status=${status} reason=${reason || "unknown"}`);
-      resolve({ ok: false, prune });
+      done({ ok: false, prune });
     });
     req.end(body);
   });

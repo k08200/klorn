@@ -191,12 +191,16 @@ export async function sendPushNotification(
   // above so they inherit the same suppression/quiet-hours/rate-limit decisions.
   // Contained like Telegram: a device-channel fault must never sink web push.
   // Each is a no-op (logged skip) when its credentials/tokens are absent.
-  await sendDevicePush(userId, payload, category).catch((err) => {
-    console.warn(`[PUSH] FCM device channel threw for ${userId}:`, err);
-  });
-  await sendApnsPush(userId, payload, category).catch((err) => {
-    console.warn(`[PUSH] APNs device channel threw for ${userId}:`, err);
-  });
+  // FCM (Android) and APNs (iOS) are independent — run in parallel so one
+  // channel's network latency never stacks on the other's on the hot path.
+  await Promise.all([
+    sendDevicePush(userId, payload, category).catch((err) => {
+      console.warn(`[PUSH] FCM device channel threw for ${userId}:`, err);
+    }),
+    sendApnsPush(userId, payload, category).catch((err) => {
+      console.warn(`[PUSH] APNs device channel threw for ${userId}:`, err);
+    }),
+  ]);
 
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
     console.log(`[PUSH] Skipped — VAPID keys not configured`);

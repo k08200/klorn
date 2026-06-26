@@ -33,9 +33,11 @@ export async function startNativeGoogleLogin(): Promise<void> {
     window.location.href = "/inbox";
   } finally {
     // Close the system browser on EVERY path (success, timeout, 404/410) so the
-    // user is never left on a hung custom tab. Auto-closed on some platforms; a
-    // failed close is harmless.
-    await Browser.close().catch(() => {});
+    // user is never left on a hung custom tab. Auto-closed on some platforms, so
+    // a failed close is harmless — but log a signal rather than swallow silently.
+    await Browser.close().catch((err) => {
+      console.warn("[AUTH] Browser.close() failed (harmless):", err);
+    });
   }
 }
 

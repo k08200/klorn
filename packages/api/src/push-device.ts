@@ -27,10 +27,12 @@ import { captureError } from "./sentry.js";
 const FIREBASE_SERVICE_ACCOUNT = process.env.FIREBASE_SERVICE_ACCOUNT || "";
 
 // FCM error codes that mean the token is dead and should be pruned, not retried.
+// Deliberately NOT including "messaging/invalid-argument": FCM returns it for a
+// bad PAYLOAD too, not just a bad token, so a payload bug would mass-delete every
+// valid token. Unknown failures are logged + kept (see the else branch below).
 const DEAD_TOKEN_CODES = new Set([
   "messaging/registration-token-not-registered",
   "messaging/invalid-registration-token",
-  "messaging/invalid-argument",
 ]);
 
 export interface DevicePushPayload {
