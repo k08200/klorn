@@ -44,13 +44,18 @@ export function summarizeTraits(rows: TraitRow[], activeSenderCount: number): Tr
   };
 }
 
-/** Read traits + active-sender count for a user (or all users) and summarize. */
+/** Read traits + the distinct-sender universe for a user (or all) and summarize. */
 export async function getTraitMetrics(prisma: typeof import("./db.js").prisma, userId?: string) {
   const where = userId ? { userId } : {};
-  const rows = await prisma.senderTrait.findMany({
-    where,
-    select: { sender: true, factKind: true, status: true, confidence: true },
-  });
-  const activeSenders = new Set(rows.map((r) => r.sender)).size;
-  return summarizeTraits(rows as TraitRow[], Math.max(activeSenders, 1));
+  const [rows, senderGroups] = await Promise.all([
+    prisma.senderTrait.findMany({
+      where,
+      select: { sender: true, factKind: true, status: true, confidence: true },
+    }),
+    // Coverage denominator = distinct senders the user has actually received
+    // mail from, NOT the trait rows themselves (that would force coverage to a
+    // meaningless 1.0). groupBy returns one row per distinct `from`.
+    prisma.emailMessage.groupBy({ by: ["from"], where }),
+  ]);
+  return summarizeTraits(rows as TraitRow[], Math.max(senderGroups.length, 1));
 }

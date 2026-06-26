@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeTraits, type TraitRow } from "../sender-trait-metrics.js";
+import { getTraitMetrics, summarizeTraits, type TraitRow } from "../sender-trait-metrics.js";
 
 const rows: TraitRow[] = [
   { sender: "a@x.com", factKind: "relationship", status: "active", confidence: 0.9 },
@@ -32,5 +32,26 @@ describe("summarizeTraits", () => {
     const m = summarizeTraits([], 0);
     expect(m.coverage).toBe(0);
     expect(m.conflictRate).toBe(0);
+  });
+});
+
+describe("getTraitMetrics", () => {
+  it("uses distinct EmailMessage senders as the coverage denominator", async () => {
+    const fakePrisma = {
+      senderTrait: {
+        findMany: async () => [
+          { sender: "a@x.com", factKind: "relationship", status: "active", confidence: 0.9 },
+        ],
+      },
+      emailMessage: {
+        // 3 distinct senders seen, only 1 profiled → coverage 1/3, not a
+        // meaningless 1.0 from a self-referential denominator.
+        groupBy: async () => [{ from: "a@x.com" }, { from: "b@x.com" }, { from: "c@x.com" }],
+      },
+    } as unknown as Parameters<typeof getTraitMetrics>[0];
+
+    const m = await getTraitMetrics(fakePrisma, "user-1");
+    expect(m.sendersWithTrait).toBe(1);
+    expect(m.coverage).toBeCloseTo(1 / 3);
   });
 });
