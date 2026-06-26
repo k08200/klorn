@@ -102,6 +102,9 @@ export async function extractSenderTraitsForUser(userId: string): Promise<TraitR
     select: { from: true, subject: true, snippet: true, labels: true },
   });
 
+  // NOTE (v0): we fetch the recent N emails globally then group by sender, so a
+  // very high-volume sender can crowd out senders whose last mail falls outside
+  // that window. Per-sender sampling is a future refinement.
   const bySender = new Map<string, typeof recent>();
   for (const e of recent) {
     const list = bySender.get(e.from) ?? [];
@@ -119,6 +122,16 @@ export async function extractSenderTraitsForUser(userId: string): Promise<TraitR
         labels: e.labels ?? [],
       }));
       const sourceSig = computeTraitSourceSig(sample);
+      // Signature gate: if every stored trait for this sender already carries
+      // this exact evidence signature, the sender's recent mail is unchanged —
+      // skip the LLM call (idempotent, cost-saving; the AutoBE staleness gate).
+      const stored = await prisma.senderTrait.findMany({
+        where: { userId, sender },
+        select: { sourceSig: true },
+      });
+      if (stored.length > 0 && stored.every((t) => t.sourceSig === sourceSig)) {
+        return 0;
+      }
       const candidates = await extractTraitsFromEmails(sample, {
         userId,
         ...(credentials ? { credentials } : {}),
