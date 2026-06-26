@@ -12,9 +12,17 @@ import { isNativePlatform } from "./capacitor";
 export async function probeDeviceCalendars(): Promise<void> {
   if (!isNativePlatform()) return;
   try {
-    const { CapacitorCalendar } = await import("@ebarooni/capacitor-calendar");
+    const { CapacitorCalendar, CalendarPermissionScope } = await import(
+      "@ebarooni/capacitor-calendar"
+    );
 
-    const perm = await CapacitorCalendar.requestReadOnlyCalendarAccess();
+    // Cross-platform read access: requestReadOnlyCalendarAccess is Android-only
+    // (iOS has no read-only — reading requires full access). requestPermission
+    // with the readCalendar scope maps to full access on iOS and READ_CALENDAR
+    // on Android.
+    const perm = await CapacitorCalendar.requestPermission({
+      scope: CalendarPermissionScope.READ_CALENDAR,
+    });
     if (perm.result !== "granted") {
       console.warn(`[CALENDAR-PROBE] Read access not granted (${perm.result})`);
       return;

@@ -147,7 +147,10 @@
 
         try {
           setStatus("Requesting calendar read permission…");
-          const perm = await Calendar.requestReadOnlyCalendarAccess();
+          // Cross-platform: requestReadOnlyCalendarAccess is Android-only (iOS has
+          // no read-only — reading needs full access). requestPermission with the
+          // readCalendar scope maps to full access on iOS and READ_CALENDAR on Android.
+          const perm = await Calendar.requestPermission({ scope: "readCalendar" });
           if (perm.result !== "granted") {
             setStatus(`Permission not granted: <b>${perm.result}</b>`, "err");
             return;
