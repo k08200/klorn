@@ -189,111 +189,132 @@ function CommandCenterView() {
   const introLine = buildIntroLine(pendingCount);
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 md:py-8">
-      <OnboardingHint />
-      {/* Minimal page header */}
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
-            Klorn · Decision queue
-          </p>
-          <h1 className="mt-1 text-xl font-semibold tracking-tight text-stone-50">
-            {pendingCount > 0
-              ? `${pendingCount} decision${pendingCount !== 1 ? "s" : ""} waiting`
-              : commitments.length > 0
-                ? `${commitments.length} commitment${commitments.length !== 1 ? "s" : ""} tracked`
-                : "All clear"}
-          </h1>
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <button
-            type="button"
-            onClick={() => load(filter)}
-            disabled={loading}
-            className="h-8 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
-          >
-            {loading ? "..." : "Refresh"}
-          </button>
-          <Link
-            href="/inbox/receipt"
-            className="hidden text-xs text-amber-300 hover:text-amber-200 transition sm:block"
-          >
-            Today's receipt →
-          </Link>
-        </div>
+    <>
+      {/* MOBILE — purpose-built native screen (desktop layout untouched below) */}
+      <div className="px-4 pb-8 pt-3 md:hidden">
+        <OnboardingHint />
+        <MobileDecisionQueue
+          actions={actions}
+          commitments={commitments}
+          pendingCount={pendingCount}
+          filter={filter}
+          setFilter={setFilter}
+          loading={loading}
+          onRefresh={() => load(filter)}
+          actionLoading={actionLoading}
+          onApprove={handleApprove}
+          onReject={(id) => setRejectTargetId(id)}
+          onSnooze={(id) => handleSnooze(id, 1)}
+        />
       </div>
 
-      {error && (
-        <div className="mb-4 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
-          {error}
+      {/* DESKTOP — unchanged */}
+      <div className="mx-auto hidden w-full max-w-6xl px-4 py-6 md:block md:py-8">
+        <OnboardingHint />
+        {/* Minimal page header */}
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
+              Klorn · Decision queue
+            </p>
+            <h1 className="mt-1 text-xl font-semibold tracking-tight text-stone-50">
+              {pendingCount > 0
+                ? `${pendingCount} decision${pendingCount !== 1 ? "s" : ""} waiting`
+                : commitments.length > 0
+                  ? `${commitments.length} commitment${commitments.length !== 1 ? "s" : ""} tracked`
+                  : "All clear"}
+            </h1>
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => load(filter)}
+              disabled={loading}
+              className="h-8 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
+            >
+              {loading ? "..." : "Refresh"}
+            </button>
+            <Link
+              href="/inbox/receipt"
+              className="hidden text-xs text-amber-300 hover:text-amber-200 transition sm:block"
+            >
+              Today's receipt →
+            </Link>
+          </div>
         </div>
-      )}
 
-      {/* 2-column Stadium grid — narrow right rail keeps focus on the hero. */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
-        {/* ── LEFT: Stadium hero ── */}
-        <div className="min-w-0 space-y-6">
-          {/* E-voice intro — only when decisions exist */}
-          {introLine && <p className="text-[15px] leading-relaxed text-stone-300">{introLine}</p>}
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
 
-          {/* Approval Queue — the only main-page content */}
-          <section aria-label="Approval queue">
-            {actions.length > 0 && (
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  {pendingCount > 0 && (
-                    <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
-                      {pendingCount} pending
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 rounded-lg border border-stone-800 bg-stone-950/80 p-1">
-                  <FilterTab
-                    active={filter === "pending"}
-                    label={`Pending${pendingCount ? ` (${pendingCount})` : ""}`}
-                    onClick={() => setFilter("pending")}
-                  />
-                  <FilterTab
-                    active={filter === "all"}
-                    label="All"
-                    onClick={() => setFilter("all")}
-                  />
-                </div>
-              </div>
-            )}
+        {/* 2-column Stadium grid — narrow right rail keeps focus on the hero. */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
+          {/* ── LEFT: Stadium hero ── */}
+          <div className="min-w-0 space-y-6">
+            {/* E-voice intro — only when decisions exist */}
+            {introLine && <p className="text-[15px] leading-relaxed text-stone-300">{introLine}</p>}
 
-            {loading && actions.length === 0 && (
-              <div className="space-y-2 rounded-xl border border-stone-800 bg-stone-900/30 p-4">
-                <div className="h-20 animate-pulse rounded-lg bg-stone-800/60" />
-                <div className="h-20 animate-pulse rounded-lg bg-stone-800/40" />
-              </div>
-            )}
-
-            {!loading && actions.length === 0 && (
-              <HonestEmptyState commitmentCount={commitments.length} />
-            )}
-
-            {actions.length > 0 && (
-              <ul className="space-y-3">
-                {actions.map((action) => (
-                  <li key={action.id}>
-                    <ActionCard
-                      action={action}
-                      loading={actionLoading[action.id] ?? null}
-                      onApprove={() => handleApprove(action.id)}
-                      onReject={() => setRejectTargetId(action.id)}
-                      onSnooze={() => handleSnooze(action.id, 1)}
+            {/* Approval Queue — the only main-page content */}
+            <section aria-label="Approval queue">
+              {actions.length > 0 && (
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    {pendingCount > 0 && (
+                      <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
+                        {pendingCount} pending
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 rounded-lg border border-stone-800 bg-stone-950/80 p-1">
+                    <FilterTab
+                      active={filter === "pending"}
+                      label={`Pending${pendingCount ? ` (${pendingCount})` : ""}`}
+                      onClick={() => setFilter("pending")}
                     />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
+                    <FilterTab
+                      active={filter === "all"}
+                      label="All"
+                      onClick={() => setFilter("all")}
+                    />
+                  </div>
+                </div>
+              )}
 
-        <div className="space-y-4">
-          <ReplyNeededPanel />
-          <QuickLinksPanel />
+              {loading && actions.length === 0 && (
+                <div className="space-y-2 rounded-xl border border-stone-800 bg-stone-900/30 p-4">
+                  <div className="h-20 animate-pulse rounded-lg bg-stone-800/60" />
+                  <div className="h-20 animate-pulse rounded-lg bg-stone-800/40" />
+                </div>
+              )}
+
+              {!loading && actions.length === 0 && (
+                <HonestEmptyState commitmentCount={commitments.length} />
+              )}
+
+              {actions.length > 0 && (
+                <ul className="space-y-3">
+                  {actions.map((action) => (
+                    <li key={action.id}>
+                      <ActionCard
+                        action={action}
+                        loading={actionLoading[action.id] ?? null}
+                        onApprove={() => handleApprove(action.id)}
+                        onReject={() => setRejectTargetId(action.id)}
+                        onSnooze={() => handleSnooze(action.id, 1)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+
+          <div className="space-y-4">
+            <ReplyNeededPanel />
+            <QuickLinksPanel />
+          </div>
         </div>
       </div>
 
@@ -306,7 +327,7 @@ function CommandCenterView() {
           if (id) void handleReject(id, reason);
         }}
       />
-    </div>
+    </>
   );
 }
 
@@ -892,4 +913,268 @@ function buildEmailPreview(
     subject: pick("subject") || "No subject",
     body: pick("body") || pick("message"),
   };
+}
+
+// ─── Mobile native screen ──────────────────────────────────────────────────
+//
+// A purpose-built phone layout, not the desktop dashboard with chrome hidden.
+// Rendered only below md; the desktop two-column layout above is untouched.
+// iOS-style large title, segmented control, soft full-width cards.
+
+function MobileDecisionQueue({
+  actions,
+  commitments,
+  pendingCount,
+  filter,
+  setFilter,
+  loading,
+  onRefresh,
+  actionLoading,
+  onApprove,
+  onReject,
+  onSnooze,
+}: {
+  actions: PendingActionItem[];
+  commitments: CommitmentItem[];
+  pendingCount: number;
+  filter: StatusFilter;
+  setFilter: (f: StatusFilter) => void;
+  loading: boolean;
+  onRefresh: () => void;
+  actionLoading: Record<string, "approve" | "reject" | "snooze" | null>;
+  onApprove: (id: string) => void;
+  onReject: (id: string) => void;
+  onSnooze: (id: string) => void;
+}) {
+  const title = pendingCount > 0 ? "Decisions" : commitments.length > 0 ? "Tracking" : "All clear";
+  const subtitle =
+    pendingCount > 0
+      ? `${pendingCount} waiting for you`
+      : commitments.length > 0
+        ? `${commitments.length} commitment${commitments.length !== 1 ? "s" : ""} in the background`
+        : "Nothing needs you right now";
+
+  return (
+    <div>
+      <header className="mb-5 flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-[28px] font-bold leading-none tracking-tight text-stone-50">
+            {title}
+          </h1>
+          <p className="mt-1.5 text-sm text-stone-400">{subtitle}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          aria-label="Refresh"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-900/70 text-stone-300 transition active:bg-stone-800 disabled:opacity-50"
+        >
+          <svg
+            aria-hidden="true"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={loading ? "animate-spin" : ""}
+          >
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <polyline points="21 3 21 9 15 9" />
+          </svg>
+        </button>
+      </header>
+
+      {actions.length > 0 && (
+        <div className="mb-4 flex gap-1 rounded-xl bg-stone-900/70 p-1">
+          <MobileSeg
+            active={filter === "pending"}
+            label={`Pending${pendingCount ? ` · ${pendingCount}` : ""}`}
+            onClick={() => setFilter("pending")}
+          />
+          <MobileSeg active={filter === "all"} label="All" onClick={() => setFilter("all")} />
+        </div>
+      )}
+
+      {loading && actions.length === 0 && (
+        <div className="space-y-3">
+          <div className="h-28 animate-pulse rounded-2xl bg-stone-900/50" />
+          <div className="h-28 animate-pulse rounded-2xl bg-stone-900/40" />
+        </div>
+      )}
+
+      {!loading && actions.length === 0 && <MobileEmpty commitmentCount={commitments.length} />}
+
+      {actions.length > 0 && (
+        <ul className="space-y-3">
+          {actions.map((action) => (
+            <li key={action.id}>
+              <MobileActionCard
+                action={action}
+                loading={actionLoading[action.id] ?? null}
+                onApprove={() => onApprove(action.id)}
+                onReject={() => onReject(action.id)}
+                onSnooze={() => onSnooze(action.id)}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-7">
+        <ReplyNeededPanel />
+      </div>
+    </div>
+  );
+}
+
+function MobileSeg({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex-1 rounded-lg py-2 text-[13px] font-medium transition ${
+        active ? "bg-stone-700 text-white shadow-sm" : "text-stone-400 active:text-stone-200"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function MobileEmpty({ commitmentCount }: { commitmentCount: number }) {
+  return (
+    <div className="rounded-2xl bg-stone-900/40 px-6 py-12 text-center">
+      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-stone-800/70">
+        <svg
+          aria-hidden="true"
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="text-emerald-300"
+        >
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      </div>
+      <p className="text-base font-medium text-stone-200">Nothing to decide</p>
+      <p className="mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed text-stone-500">
+        {commitmentCount > 0
+          ? `Klorn is watching your mail and calendar. ${commitmentCount} tracked in the background.`
+          : "Klorn is watching your mail and calendar. New decisions land here."}
+      </p>
+    </div>
+  );
+}
+
+function MobileActionCard({
+  action,
+  loading,
+  onApprove,
+  onReject,
+  onSnooze,
+}: {
+  action: PendingActionItem;
+  loading: "approve" | "reject" | "snooze" | null;
+  onApprove: () => void;
+  onReject: () => void;
+  onSnooze: () => void;
+}) {
+  // Same derivation as the desktop ActionCard, kept local so the desktop card
+  // is never affected by mobile-only changes.
+  const toolName = action.toolName || "prepared_action";
+  const toolArgs = action.toolArgs || "{}";
+  const emailPreview = toolName === "send_email" ? buildEmailPreview(toolArgs) : null;
+  const toolPreview = buildPreview(toolName, toolArgs, action.targetLabel);
+  const reasoning = splitReasoning(action.reasoning);
+  const isPending = action.status === "PENDING";
+  const risk = riskForTool(toolName);
+  const heroSubject =
+    emailPreview?.subject ||
+    action.conversationTitle ||
+    toolPreview ||
+    (toolName === "prepared_action" ? "Decision pending" : toolName.replace(/_/g, " "));
+  const context = reasoning.judgment || reasoning.situation || action.reasoning;
+
+  return (
+    <article className="overflow-hidden rounded-2xl bg-stone-900/50">
+      <div className="flex items-center justify-between gap-2 px-4 pt-3.5">
+        <RiskBadge risk={risk} />
+        <span className="text-[11px] text-stone-500">{formatRelative(action.createdAt)}</span>
+      </div>
+      <div className="px-4 pt-2.5">
+        <h3 className="break-words text-[17px] font-semibold leading-snug tracking-tight text-stone-50">
+          {heroSubject}
+        </h3>
+        {context && (
+          <p className="mt-1.5 line-clamp-3 text-[13px] leading-relaxed text-stone-400">
+            {context}
+          </p>
+        )}
+      </div>
+      {isPending ? (
+        <div className="mt-3.5 space-y-2 px-4 pb-4">
+          <button
+            type="button"
+            onClick={onApprove}
+            disabled={!!loading}
+            className="flex min-h-12 w-full items-center justify-center rounded-xl bg-amber-400 text-[15px] font-semibold text-stone-950 transition active:bg-amber-300 disabled:opacity-50"
+          >
+            {loading === "approve" ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-stone-950/30 border-t-stone-950" />
+            ) : (
+              "Act now"
+            )}
+          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onReject}
+              disabled={!!loading}
+              className="flex min-h-11 flex-1 items-center justify-center rounded-xl border border-stone-700 text-sm font-medium text-stone-300 transition active:bg-stone-800 disabled:opacity-50"
+            >
+              {loading === "reject" ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-stone-400/30 border-t-stone-200" />
+              ) : (
+                "Skip"
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={onSnooze}
+              disabled={!!loading}
+              className="flex min-h-11 flex-1 items-center justify-center rounded-xl border border-stone-800 text-sm text-stone-400 transition active:bg-stone-800/60 disabled:opacity-50"
+            >
+              {loading === "snooze" ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-stone-500/30 border-t-stone-400" />
+              ) : (
+                "Snooze 1h"
+              )}
+            </button>
+          </div>
+        </div>
+      ) : (
+        action.result && (
+          <div className="mt-2 px-4 pb-4">
+            <p className="truncate text-[11px] text-stone-500">{action.result}</p>
+          </div>
+        )
+      )}
+    </article>
+  );
 }
