@@ -240,7 +240,13 @@ async function classifyBatchWithLlm(
     const parsed = parseLlmJson<LlmResponse>(raw);
     if (!Array.isArray(parsed.labels)) return null;
 
-    const byIndex = new Map(parsed.labels.map((l) => [l.index, l]));
+    // Coerce the index to a number: a :free model can return "index":"0" (a
+    // string), and a string key never matches the numeric `byIndex.get(i)`
+    // below — every email would silently fall through to {low, other}. A NaN
+    // key simply won't match (same outcome as a missing label today).
+    const byIndex = new Map(
+      parsed.labels.map((l) => [Number((l as { index?: unknown }).index), l]),
+    );
     return emails.map((_, i) => {
       const l = byIndex.get(i);
       return {
