@@ -557,6 +557,22 @@ function safeAsciiFilename(filename: string): string {
   return fallback || "attachment";
 }
 
+/**
+ * Reduce a client-supplied attachment Content-Type to a clean RFC 2045
+ * type/subtype token. `mimeType` is the only attachment value that reaches a
+ * MIME header without sanitization; busboy already strips CR/LF (sub-part
+ * headers are line-delimited), but this drops parameters, quotes, and any
+ * non-token characters so a malformed upload type can't shape the header we
+ * emit. Falls back to a safe default when the value isn't a valid type/subtype.
+ */
+export function safeMimeType(raw: string): string {
+  const token = safeHeaderValue(raw).split(";")[0].trim().toLowerCase();
+  const cleaned = token.replace(/[^a-z0-9!#$&^_.+/-]/g, "");
+  return /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/.test(cleaned)
+    ? cleaned
+    : "application/octet-stream";
+}
+
 function buildPlainTextRawEmail(
   to: string,
   subject: string,
@@ -596,7 +612,7 @@ function buildPlainTextRawEmail(
     const asciiFilename = safeAsciiFilename(filename);
     parts.push(
       `--${boundary}`,
-      `Content-Type: ${attachment.mimeType || "application/octet-stream"}; name="${asciiFilename}"`,
+      `Content-Type: ${safeMimeType(attachment.mimeType)}; name="${asciiFilename}"`,
       "Content-Transfer-Encoding: base64",
       `Content-Disposition: attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
       "",

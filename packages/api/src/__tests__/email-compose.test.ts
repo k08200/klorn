@@ -211,4 +211,137 @@ describe("POST /api/email/compose", () => {
     expect(sendEmailMock).not.toHaveBeenCalled();
     await app.close();
   });
+
+  it("rejects a single attachment over the per-file size limit with 413", async () => {
+    const app = await buildApp();
+    // 26 MB > the 25 MB per-file cap → @fastify/multipart throws on toBuffer().
+    const big = Buffer.alloc(26 * 1024 * 1024, 0x61);
+    const { payload, headers } = multipart([
+      { name: "to", value: "alice@example.com" },
+      { name: "subject", value: "Big file" },
+      { name: "body", value: "Body" },
+      { name: "files", filename: "big.bin", contentType: "application/octet-stream", content: big },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/compose",
+      headers: { ...auth(), ...headers },
+      payload,
+    });
+    expect(res.statusCode).toBe(413);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("rejects attachments whose combined size exceeds the cap with 413", async () => {
+    const app = await buildApp();
+    // Two 13 MB files each pass the per-file cap but sum to 26 MB > 25 MB total.
+    const chunk = () => Buffer.alloc(13 * 1024 * 1024, 0x62);
+    const { payload, headers } = multipart([
+      { name: "to", value: "alice@example.com" },
+      { name: "subject", value: "Combined too big" },
+      { name: "body", value: "Body" },
+      {
+        name: "files",
+        filename: "a.bin",
+        contentType: "application/octet-stream",
+        content: chunk(),
+      },
+      {
+        name: "files",
+        filename: "b.bin",
+        contentType: "application/octet-stream",
+        content: chunk(),
+      },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/compose",
+      headers: { ...auth(), ...headers },
+      payload,
+    });
+    expect(res.statusCode).toBe(413);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("returns 502 when sendEmail throws (transient Gmail failure)", async () => {
+    sendEmailMock.mockRejectedValue(new Error("Gmail 503"));
+    const app = await buildApp();
+    const { payload, headers } = multipart([
+      { name: "to", value: "alice@example.com" },
+      { name: "subject", value: "Boom" },
+      { name: "body", value: "Body" },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/compose",
+      headers: { ...auth(), ...headers },
+      payload,
+    });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ error: expect.stringContaining("Gmail") });
+    await app.close();
+  });
+});
+
+describe("POST /api/email/send", () => {
+  beforeEach(() => {
+    sendEmailMock.mockReset();
+    sendEmailMock.mockResolvedValue({ success: true, messageId: "msg-1" });
+  });
+
+  const jsonHeaders = () => ({ ...auth(), "content-type": "application/json" });
+
+  it("rejects unauthenticated requests with 401", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/send",
+      headers: { "content-type": "application/json" },
+      payload: JSON.stringify({ to: "a@b.com", subject: "Hi", body: "Hello" }),
+    });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("returns 400 (not 200) when a required field is missing", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/send",
+      headers: jsonHeaders(),
+      payload: JSON.stringify({ to: "a@b.com", subject: "Hi" }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("returns 400 (not 200) when sendEmail reports a soft error", async () => {
+    sendEmailMock.mockResolvedValue({ error: "Gmail not connected." });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/send",
+      headers: jsonHeaders(),
+      payload: JSON.stringify({ to: "a@b.com", subject: "Hi", body: "Hello" }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: "Gmail not connected." });
+    await app.close();
+  });
+
+  it("returns the result on a successful send", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/send",
+      headers: jsonHeaders(),
+      payload: JSON.stringify({ to: "a@b.com", subject: "Hi", body: "Hello" }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true, messageId: "msg-1" });
+    await app.close();
+  });
 });
