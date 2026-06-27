@@ -357,6 +357,10 @@ const ONBOARDING_STORAGE_KEY = "klorn.inbox.onboarding.v1.dismissed";
 
 function OnboardingHint() {
   const [dismissed, setDismissed] = useState<boolean | null>(null);
+  // On phones the full 4-step tour eats the whole first fold, burying the
+  // decision queue. Collapse it to a single title line by default on mobile
+  // (expandable on tap); desktop always shows the full list.
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     try {
@@ -378,13 +382,15 @@ function OnboardingHint() {
   if (dismissed !== false) return null;
 
   return (
-    <div className="mb-5 rounded-xl border border-amber-300/30 bg-amber-300/5 p-4 text-sm">
+    <div className="mb-4 rounded-xl border border-amber-300/30 bg-amber-300/5 p-3 text-sm md:mb-5 md:p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1.5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300">
             New here? 30-second tour
           </p>
-          <ul className="space-y-1 text-[13px] leading-5 text-stone-300">
+          <ul
+            className={`${expanded ? "block" : "hidden"} space-y-1 text-[13px] leading-5 text-stone-300 md:block`}
+          >
             <li>
               1. <span className="text-stone-100">This page</span> — agent decisions waiting on your
               approval.
@@ -412,13 +418,22 @@ function OnboardingHint() {
             </li>
           </ul>
         </div>
-        <button
-          type="button"
-          onClick={dismiss}
-          className="shrink-0 rounded-md border border-stone-700 px-2.5 py-1 text-[11px] text-stone-400 transition hover:border-stone-500 hover:text-stone-200"
-        >
-          Dismiss
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="rounded-md border border-stone-700 px-2.5 py-1 text-[11px] text-stone-400 transition hover:border-stone-500 hover:text-stone-200 md:hidden"
+          >
+            {expanded ? "Hide" : "Show"}
+          </button>
+          <button
+            type="button"
+            onClick={dismiss}
+            className="rounded-md border border-stone-700 px-2.5 py-1 text-[11px] text-stone-400 transition hover:border-stone-500 hover:text-stone-200"
+          >
+            Dismiss
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -478,7 +493,7 @@ function ReplyNeededPanel() {
               <p className="mt-0.5 truncate text-[11px] text-stone-500">{formatFrom(email.from)}</p>
               {email.needsReplyReason && (
                 <p className="mt-1 line-clamp-1 text-[11px] text-stone-400">
-                  {email.needsReplyReason}
+                  {humanizeReplyReason(email.needsReplyReason)}
                 </p>
               )}
             </Link>
@@ -498,6 +513,21 @@ function formatFrom(from: string): string {
   const match = from.match(/^([^<]+)\s*</);
   if (match) return match[1].trim();
   return from;
+}
+
+// The backend's needsReplyReason is a snake_case enum (e.g. "action_items_present").
+// Never show the raw code to the user — map known ones and humanize the rest.
+function humanizeReplyReason(reason: string): string {
+  const map: Record<string, string> = {
+    action_items_present: "Has action items",
+    question_asked: "Asks a question",
+    direct_request: "Direct request",
+    deadline_mentioned: "Mentions a deadline",
+    awaiting_response: "Awaiting your response",
+    meeting_request: "Meeting request",
+    follow_up_needed: "Needs follow-up",
+  };
+  return map[reason] ?? reason.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
 // ─── Quick links panel ─────────────────────────────────────────────────────
