@@ -2,6 +2,9 @@
 
 import { useEffect } from "react";
 import { authHeaders, getStoredAuthToken } from "../lib/api";
+import { probeDeviceCalendars } from "../lib/native/calendar-probe";
+import { isNativePlatform } from "../lib/native/capacitor";
+import { registerNativePush } from "../lib/native/native-push";
 import {
   fetchVapidKey,
   getOrCreatePushSubscription,
@@ -13,6 +16,16 @@ import {
 export default function PushRegister() {
   useEffect(() => {
     if (!getStoredAuthToken()) return;
+
+    // Native shell: register for FCM/APNs (native push), not Web Push — iOS
+    // WKWebView has no usable Web Push and on Android a web subscription would
+    // just be a redundant channel. Also run the Phase 0 Samsung calendar probe.
+    if (isNativePlatform()) {
+      void registerNativePush();
+      void probeDeviceCalendars();
+      return;
+    }
+
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
     if (Notification.permission === "denied") return;
     registerPush();
