@@ -1005,13 +1005,13 @@ model SenderTrait {
   factKind      SenderTraitKind
   factValue     String          // validated per-kind in code (sender-trait-policy.ts)
   confidence    Float
-  evidenceText  String
+  evidenceText  String          @db.VarChar(300) // capped; extractor truncates to 200
   sourceSig     String          // attention-input-hash-style signature of the sample
   observedCount Int             @default(1)
 
   // Write-time contradiction capture — never a silent overwrite.
   conflictValue    String?
-  conflictEvidence String?
+  conflictEvidence String? @db.VarChar(300)
   conflictedAt     DateTime?
 
   status SenderTraitStatus @default(active)

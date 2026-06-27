@@ -67,7 +67,9 @@ export async function extractTraitsFromEmails(
       const entry = parsed[kind];
       if (!entry) continue;
       const value = validateTraitValue(kind, entry.value);
-      const evidenceText = asString(entry.evidence);
+      // Cap at 200 chars: evidence is a short verbatim quote, the DB column is
+      // VARCHAR(300), and an unbounded model quote would otherwise overflow it.
+      const evidenceText = asString(entry.evidence).slice(0, 200);
       if (value === null || evidenceText === "") continue;
       out.push({
         factKind: kind,

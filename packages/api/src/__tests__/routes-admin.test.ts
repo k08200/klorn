@@ -143,6 +143,30 @@ vi.mock("../db.js", () => {
         },
       ),
     },
+    // Two findMany shapes hit senderTrait: the metrics query (no take, no
+    // evidenceText select) and the evidence-inspector query (take:200, selects
+    // evidenceText). The inspector mock returns one row so we can assert it is
+    // ONLY reached when an explicit userId is provided.
+    senderTrait: {
+      findMany: vi.fn(
+        async ({ take, select }: { take?: number; select?: Record<string, boolean> }) =>
+          take === 200 || select?.evidenceText
+            ? [
+                {
+                  sender: "vc@fund.com",
+                  factKind: "relationship",
+                  factValue: "investor",
+                  confidence: 0.9,
+                  evidenceText: "we want to invest",
+                  status: "active",
+                  conflictValue: null,
+                  observedCount: 2,
+                },
+              ]
+            : [],
+      ),
+    },
+    emailMessage: { groupBy: vi.fn(async () => []) },
   };
   return { prisma, db: prisma };
 });
@@ -565,5 +589,77 @@ describe("admin ontology approval gate", () => {
     const res = await post("/api/admin/ontology/proposals/p1/approve", USER_TOKEN);
     expect(res.statusCode).toBe(403);
     expect(proposalById.get("p1")?.status).toBe("OPEN");
+  });
+});
+
+describe("GET /api/admin/sender-traits — cross-user evidence gate", () => {
+  beforeEach(async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.senderTrait.findMany).mockClear();
+  });
+
+  // The verbatim-evidence findMany is the inspector query (take:200 + selects
+  // evidenceText). Distinguish it from the metrics findMany, which selects no
+  // evidence and uses no take.
+  const evidenceCalls = (calls: unknown[][]) =>
+    calls.filter(([arg]) => {
+      const a = arg as { take?: number; select?: Record<string, boolean> } | undefined;
+      return a?.take === 200 || Boolean(a?.select?.evidenceText);
+    });
+
+  it("returns metrics but NO evidence rows when userId is absent", async () => {
+    const { prisma } = await import("../db.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/sender-traits",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toHaveProperty("metrics");
+    expect(body.traits).toEqual([]);
+    // The verbatim-evidence query must never run for a cross-user request.
+    expect(evidenceCalls(vi.mocked(prisma.senderTrait.findMany).mock.calls)).toHaveLength(0);
+    await app.close();
+  });
+
+  // Real userIds are UUIDs (schema @default(uuid())); the format guard accepts
+  // hex + hyphens, so use a UUID-shaped id here rather than the "user-1" fixture.
+  const TRAIT_USER_ID = "0a1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9";
+
+  it("returns that user's evidence rows when an explicit userId is given", async () => {
+    const { prisma } = await import("../db.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/admin/sender-traits?userId=${TRAIT_USER_ID}`,
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.traits).toHaveLength(1);
+    expect(body.traits[0].evidenceText).toBe("we want to invest");
+    const calls = evidenceCalls(vi.mocked(prisma.senderTrait.findMany).mock.calls);
+    expect(calls).toHaveLength(1);
+    expect((calls[0][0] as { where: { userId: string } }).where).toEqual({
+      userId: TRAIT_USER_ID,
+    });
+    await app.close();
+  });
+
+  it("rejects a malformed userId with 400", async () => {
+    const { prisma } = await import("../db.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/sender-traits?userId=" + encodeURIComponent("'; DROP TABLE"),
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/invalid userid/i);
+    // A rejected request must touch neither metrics nor evidence queries.
+    expect(vi.mocked(prisma.senderTrait.findMany)).not.toHaveBeenCalled();
+    await app.close();
   });
 });

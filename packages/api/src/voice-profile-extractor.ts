@@ -18,7 +18,7 @@
 import { google } from "googleapis";
 import { decryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
-import { asBoundedNumber, asEnum, asStringArray, asUnitInterval } from "./llm-coerce.js";
+import { asBoundedNumber, asEnum, asString, asStringArray, asUnitInterval } from "./llm-coerce.js";
 import { parseLlmJson } from "./llm-json.js";
 import { remember } from "./memory.js";
 import { createCompletion, MODEL } from "./openai.js";
@@ -39,6 +39,32 @@ export interface VoiceProfile {
 }
 
 const TONES: readonly VoiceProfile["tone"][] = ["formal", "casual", "warm", "direct", "mixed"];
+
+/**
+ * Coerce any object — a freshly parsed LLM response OR a stored row read back —
+ * into a contract-safe VoiceProfile. Building each field through the coerce
+ * helpers (rather than spreading/casting) stops a hallucinated tone, a
+ * stringified number, or junk keys from leaking into the stored profile and
+ * downstream prompt context. Returns null when `raw` is not an object at all.
+ *
+ * `sampledAt` is preserved if the input carries a valid ISO string (read-back
+ * of a stored row); otherwise a fresh timestamp is stamped (write path, where
+ * the LLM never returns sampledAt).
+ */
+export function coerceVoiceProfile(raw: unknown): VoiceProfile | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  const sampledAt = asString(r.sampledAt);
+  return {
+    tone: asEnum(r.tone, TONES, "mixed"),
+    avgLengthWords: asBoundedNumber(r.avgLengthWords, 0, 100_000, 0),
+    closingPhrases: asStringArray(r.closingPhrases),
+    keyTraits: asStringArray(r.keyTraits),
+    exampleOpeners: asStringArray(r.exampleOpeners),
+    confidence: asUnitInterval(r.confidence),
+    sampledAt: sampledAt || new Date().toISOString(),
+  };
+}
 
 // ─── Extract (main entry point) ───────────────────────────────────────────────
 
@@ -85,7 +111,9 @@ export async function getVoiceProfile(userId: string): Promise<VoiceProfile | nu
       where: { userId_type_key: { userId, type: "CONTEXT", key: VOICE_PROFILE_KEY } },
     });
     if (!mem) return null;
-    return JSON.parse(mem.content) as VoiceProfile;
+    // Coerce on read: a legacy/hallucinated stored row must not flow raw into
+    // prompt context. Malformed JSON throws → caught → null.
+    return coerceVoiceProfile(JSON.parse(mem.content));
   } catch {
     return null;
   }
@@ -234,18 +262,12 @@ Return exactly this JSON shape:
     const raw = res.choices[0]?.message?.content || "";
     const parsed = parseLlmJson<VoiceProfile>(raw);
 
-    // Build the profile explicitly instead of spreading the parsed object: the
-    // spread let a hallucinated tone, a stringified confidence, or extra junk
-    // keys leak into the stored profile (and downstream prompt context).
-    return {
-      tone: asEnum(parsed.tone, TONES, "mixed"),
-      avgLengthWords: asBoundedNumber(parsed.avgLengthWords, 0, 100_000, 0),
-      closingPhrases: asStringArray(parsed.closingPhrases),
-      keyTraits: asStringArray(parsed.keyTraits),
-      exampleOpeners: asStringArray(parsed.exampleOpeners),
-      confidence: asUnitInterval(parsed.confidence),
-      sampledAt: new Date().toISOString(),
-    };
+    // Coerce the parsed object instead of spreading it: a hallucinated tone, a
+    // stringified confidence, or extra junk keys would otherwise leak into the
+    // stored profile (and downstream prompt context). Same helper guards the
+    // read path so a legacy row is coerced too. parsed carries no sampledAt, so
+    // coerceVoiceProfile stamps a fresh timestamp here.
+    return coerceVoiceProfile(parsed);
   } catch (err) {
     console.warn("[VOICE] LLM analysis failed:", err);
     return null;
