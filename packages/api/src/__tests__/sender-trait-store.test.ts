@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { resolveTraitUpsert, type IncumbentTrait } from "../sender-trait-store.js";
 import type { CandidateTrait } from "../sender-trait-policy.js";
+import { type IncumbentTrait, resolveTraitUpsert } from "../sender-trait-store.js";
 
 const challenger: CandidateTrait = {
   factKind: "relationship",

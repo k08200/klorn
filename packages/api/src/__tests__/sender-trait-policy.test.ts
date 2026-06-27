@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  RELATIONSHIP_VALUES,
   RECURRING_INTENT_VALUES,
+  RELATIONSHIP_VALUES,
   validateTraitValue,
 } from "../sender-trait-policy.js";
 
