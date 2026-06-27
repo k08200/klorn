@@ -6,7 +6,6 @@ import { requireAdmin } from "../auth.js";
 import type { CalibrationSnapshotPayload } from "../calibration-snapshot.js";
 import { db, prisma } from "../db.js";
 import { getDecisionMetrics } from "../decision-metrics.js";
-import { getTraitMetrics } from "../sender-trait-metrics.js";
 import { sendBetaInviteEmail } from "../email.js";
 import { getUsageSummary } from "../llm-usage.js";
 import { clearFallbackState, getProviderCooldownInfo } from "../model-fallback.js";
@@ -20,6 +19,7 @@ import {
 import { MODEL } from "../openai.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { getProviderChain } from "../providers/index.js";
+import { getTraitMetrics } from "../sender-trait-metrics.js";
 
 type FeedbackGroup = { signal: string; _count: { signal: number } };
 

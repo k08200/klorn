@@ -53,7 +53,11 @@ export async function upsertSenderTrait(props: {
 
     const action = resolveTraitUpsert(
       existing
-        ? { factValue: existing.factValue, observedCount: existing.observedCount, status: existing.status }
+        ? {
+            factValue: existing.factValue,
+            observedCount: existing.observedCount,
+            status: existing.status,
+          }
         : null,
       candidate,
       sourceSig,

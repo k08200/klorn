@@ -41,7 +41,13 @@ describe("classifyEmailBatch — model routing", () => {
           message: {
             content: JSON.stringify({
               labels: [
-                { index: 0, priority: "medium", category: "customer", needsReply: true, reason: "q" },
+                {
+                  index: 0,
+                  priority: "medium",
+                  category: "customer",
+                  needsReply: true,
+                  reason: "q",
+                },
               ],
             }),
           },

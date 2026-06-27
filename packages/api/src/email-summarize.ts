@@ -8,8 +8,8 @@
 
 import { prisma } from "./db.js";
 import { classifyNeedsReplyFromSignals } from "./email-priority.js";
-import { getUserLlmCredentials } from "./llm-credentials.js";
 import { asEnum, asString, asStringArray } from "./llm-coerce.js";
+import { getUserLlmCredentials } from "./llm-credentials.js";
 import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, MODEL, openai } from "./openai.js";
 import type { ProviderCredentials } from "./providers/index.js";

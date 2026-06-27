@@ -1,15 +1,15 @@
+import { prisma } from "./db.js";
 import { asString, asUnitInterval } from "./llm-coerce.js";
+import { getUserLlmCredentials } from "./llm-credentials.js";
 import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, JUDGE_MODEL } from "./openai.js";
 import type { ProviderCredentials } from "./providers/index.js";
-import { captureError } from "./sentry.js";
 import type { CandidateTrait } from "./sender-trait-policy.js";
 import { TRAIT_KINDS, validateTraitValue } from "./sender-trait-policy.js";
 import type { TraitSourceEmail } from "./sender-trait-signature.js";
-import { prisma } from "./db.js";
-import { getUserLlmCredentials } from "./llm-credentials.js";
 import { computeTraitSourceSig } from "./sender-trait-signature.js";
 import { upsertSenderTrait } from "./sender-trait-store.js";
+import { captureError } from "./sentry.js";
 
 interface RawTrait {
   value?: unknown;
@@ -19,9 +19,7 @@ interface RawTrait {
 type RawResponse = Partial<Record<string, RawTrait>>;
 
 function buildPrompt(emails: TraitSourceEmail[]): string {
-  const lines = emails.map(
-    (e, i) => `${i}. from=${e.from} | subject=${e.subject} | ${e.snippet}`,
-  );
+  const lines = emails.map((e, i) => `${i}. from=${e.from} | subject=${e.subject} | ${e.snippet}`);
   return `You profile an email SENDER from their recent messages. Return JSON only, shape:
 {"relationship":{"value":"investor","confidence":0.0-1.0,"evidence":"short quote"},
  "recurring_intent":{"value":"billing","confidence":0.0-1.0,"evidence":"short quote"}}
@@ -47,7 +45,10 @@ export async function extractTraitsFromEmails(
       {
         model: JUDGE_MODEL,
         messages: [
-          { role: "system", content: "You are a strict JSON sender profiler. JSON only, no fences." },
+          {
+            role: "system",
+            content: "You are a strict JSON sender profiler. JSON only, no fences.",
+          },
           { role: "user", content: buildPrompt(emails) },
         ],
         response_format: { type: "json_object" },
@@ -77,7 +78,10 @@ export async function extractTraitsFromEmails(
     }
     return out;
   } catch (err) {
-    console.warn("[TRAITS] extraction failed — skipping sender:", err instanceof Error ? err.message : String(err));
+    console.warn(
+      "[TRAITS] extraction failed — skipping sender:",
+      err instanceof Error ? err.message : String(err),
+    );
     captureError(err, { tags: { scope: "sender-traits.extract" } });
     return [];
   }

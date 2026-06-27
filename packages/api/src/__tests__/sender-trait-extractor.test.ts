@@ -42,7 +42,11 @@ describe("extractTraitsFromEmails", () => {
           message: {
             content: JSON.stringify({
               relationship: { value: "investor", confidence: 0.9, evidence: "we want to invest" },
-              recurring_intent: { value: "sales_outreach", confidence: 0.7, evidence: "investment pitch" },
+              recurring_intent: {
+                value: "sales_outreach",
+                confidence: 0.7,
+                evidence: "investment pitch",
+              },
             }),
           },
         },
@@ -59,7 +63,13 @@ describe("extractTraitsFromEmails", () => {
   it("drops a hallucinated value instead of storing it", async () => {
     createCompletionMock.mockResolvedValue({
       choices: [
-        { message: { content: JSON.stringify({ relationship: { value: "frenemy", confidence: 0.9, evidence: "x" } }) } },
+        {
+          message: {
+            content: JSON.stringify({
+              relationship: { value: "frenemy", confidence: 0.9, evidence: "x" },
+            }),
+          },
+        },
       ],
     });
     const traits = await extractTraitsFromEmails(emails, {});
@@ -90,7 +100,13 @@ describe("extractSenderTraitsForUser — per-sender isolation", () => {
     // Both senders extract a valid trait...
     createCompletionMock.mockResolvedValue({
       choices: [
-        { message: { content: JSON.stringify({ relationship: { value: "vendor", confidence: 0.8, evidence: "b" } }) } },
+        {
+          message: {
+            content: JSON.stringify({
+              relationship: { value: "vendor", confidence: 0.8, evidence: "b" },
+            }),
+          },
+        },
       ],
     });
     // ...but ONE sender's DB write throws (extractTraitsFromEmails never throws,
