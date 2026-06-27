@@ -17,6 +17,7 @@
  * so classification never blocks on the correction loop.
  */
 
+import { SENDER_TRAITS_IN_JUDGE } from "./config.js";
 import { db } from "./db.js";
 import { extractEmailAddress } from "./email-address.js";
 import { getCachedInteractionNode } from "./interaction-graph.js";
@@ -27,6 +28,7 @@ import {
   type SenderFacts,
   type SenderPrior,
 } from "./sender-policy.js";
+import { getActiveSenderTraits, type SenderTraitFact } from "./sender-trait-store.js";
 import { captureError } from "./sentry.js";
 import { isManualOverrideReason, isTier, MANUAL_OVERRIDE_PREFIX } from "./tiers.js";
 import { getTrustScore } from "./trust-score.js";
@@ -239,6 +241,31 @@ async function fetchCommitmentFact(
 }
 
 /**
+ * Extracted sender traits for judge grounding (Phase 3b). Flag-gated
+ * (SENDER_TRAITS_IN_JUDGE, default off) and fail-soft in its OWN try/catch:
+ * a trait-query error logs a signal and returns [] rather than bubbling to the
+ * outer catch, so a trait outage never costs the correction loop.
+ */
+async function fetchSenderTraits(
+  userId: string,
+  senderAddress: string,
+): Promise<SenderTraitFact[]> {
+  if (!SENDER_TRAITS_IN_JUDGE || !senderAddress) return [];
+  try {
+    return await getActiveSenderTraits(userId, senderAddress);
+  } catch (err) {
+    // Log the message only — a raw Prisma error can embed the sender address
+    // (PII) in its meta; captureError still gets the full error for Sentry.
+    console.warn(
+      "[judge-context] sender-trait fetch failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    captureError(err, { tags: { scope: "judge-context-traits" }, extra: { userId } });
+    return [];
+  }
+}
+
+/**
  * Fetch correction few-shots, sender prior, and sender facts for one email.
  * Never throws — a broken correction loop must degrade to plain
  * classification. (getCachedInteractionNode and getTrustScore are
@@ -252,11 +279,12 @@ export async function buildJudgeContext(
     const senderAddress = extractEmailAddress(input.from || "");
     const correctionExcludeId =
       input.excludeOwnCorrection && input.excludeEmailId ? input.excludeEmailId : undefined;
-    const [corrections, senderItems, interaction, commitments] = await Promise.all([
+    const [corrections, senderItems, interaction, commitments, senderTraits] = await Promise.all([
       fetchCorrections(userId, senderAddress, correctionExcludeId),
       fetchSenderItems(userId, senderAddress, input.excludeEmailId),
       fetchInteractionFact(userId, senderAddress),
       fetchCommitmentFact(userId, senderAddress),
+      fetchSenderTraits(userId, senderAddress),
     ]);
 
     const senderPrior = senderItems.length > 0 ? buildPrior(senderItems) : null;
@@ -271,7 +299,7 @@ export async function buildJudgeContext(
           }
         : null;
 
-    return { corrections, senderPrior, senderFacts };
+    return { corrections, senderPrior, senderFacts, senderTraits };
   } catch (err) {
     captureError(err, { tags: { scope: "judge-context" }, extra: { userId } });
     return EMPTY_JUDGE_CONTEXT;

@@ -1,5 +1,9 @@
 import { prisma } from "./db.js";
-import type { CandidateTrait } from "./sender-trait-policy.js";
+import {
+  type CandidateTrait,
+  type SenderTraitKind,
+  validateTraitValue,
+} from "./sender-trait-policy.js";
 
 export interface IncumbentTrait {
   factValue: string;
@@ -11,6 +15,46 @@ export type UpsertAction =
   | { type: "create"; sourceSig: string }
   | { type: "strengthen"; observedCount: number; sourceSig: string }
   | { type: "conflict"; keepValue: string; conflictValue: string };
+
+/** A confident, active extracted trait, as the judge consumes it. */
+export interface SenderTraitFact {
+  factKind: SenderTraitKind;
+  factValue: string;
+  confidence: number;
+  evidenceText: string;
+}
+
+// Only traits this confident reach the judge — low-confidence extractions stay
+// out of the prompt so the classifier isn't grounded on noisy facts.
+export const MIN_TRAIT_CONFIDENCE_FOR_JUDGE = 0.6;
+
+/**
+ * Read a sender's active, confident traits for judge grounding. Excludes
+ * conflicted/superseded rows and anything below MIN_TRAIT_CONFIDENCE_FOR_JUDGE.
+ * Used only on the real classification path (judge-context), behind the
+ * SENDER_TRAITS_IN_JUDGE flag — never on the eval path.
+ */
+export async function getActiveSenderTraits(
+  userId: string,
+  sender: string,
+): Promise<SenderTraitFact[]> {
+  const rows = await prisma.senderTrait.findMany({
+    where: {
+      userId,
+      sender,
+      status: "active",
+      confidence: { gte: MIN_TRAIT_CONFIDENCE_FOR_JUDGE },
+    },
+    select: { factKind: true, factValue: true, confidence: true, evidenceText: true },
+    orderBy: { factKind: "asc" },
+  });
+  // Defense in depth: drop any row whose stored factValue is out of taxonomy
+  // (e.g. written by a future tool or a hand-edit, not the validated extractor)
+  // before it can reach the judge prompt.
+  return (rows as SenderTraitFact[]).filter(
+    (r) => validateTraitValue(r.factKind, r.factValue) !== null,
+  );
+}
 
 /**
  * Pure conflict resolver. Never silently overwrites: a contradicting value
