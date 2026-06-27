@@ -149,6 +149,7 @@ export default function CommandPalette() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search decisions, pages, settings..."
+            aria-label="Search commands"
             className="w-full bg-transparent text-sm focus:outline-none placeholder-stone-500"
             role="combobox"
             aria-expanded="true"

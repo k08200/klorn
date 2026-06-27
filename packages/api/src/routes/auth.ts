@@ -441,7 +441,9 @@ export function authRoutes(app: FastifyInstance) {
       // who just rotated credentials no longer expects.
       const updated = await prisma.user.updateMany({
         where: { id: userId, passwordHash: user.passwordHash },
-        data: { passwordHash: await hashPassword(newPassword) },
+        // Stamp the session epoch so pre-change JWTs are revoked by the epoch
+        // gate (not just the Device table) — same as the reset-password path.
+        data: { passwordHash: await hashPassword(newPassword), sessionsInvalidatedAt: new Date() },
       });
       if (updated.count === 0) {
         return reply
@@ -449,17 +451,14 @@ export function authRoutes(app: FastifyInstance) {
           .send({ error: "Password was changed elsewhere. Please log in again." });
       }
 
-      // Revoke other device sessions; keep current request's session active.
-      const currentToken = (request.headers.authorization ?? "").slice(7);
-      const currentHash = currentToken
-        ? crypto.createHash("sha256").update(currentToken).digest("hex")
-        : null;
-      await prisma.device.deleteMany({
-        where: {
-          userId,
-          ...(currentHash ? { tokenHash: { not: currentHash } } : {}),
-        },
-      });
+      // Password change revokes ALL sessions, including the current one. The
+      // epoch stamp above already invalidates every pre-change JWT (current
+      // token included — its iat predates the new epoch), so "keep the current
+      // session" is no longer achievable without re-issuing a token; the safe,
+      // standard posture is a full revocation + fresh login on every device.
+      // Drop all device rows to match. The web's 401 handler redirects the
+      // current session to login on its next request.
+      await prisma.device.deleteMany({ where: { userId } });
 
       return reply.send({ success: true });
     },
@@ -666,14 +665,19 @@ export function authRoutes(app: FastifyInstance) {
           return reply.redirect(`${webUrl}/login?error=google_unverified`);
         }
 
+        // Normalize to trimmed-lowercase like every email/password path — else a
+        // Workspace/custom-domain user whose Google email casing differs from
+        // their password-account email resolves to a DIFFERENT (or duplicate)
+        // row than the case-insensitive password lookups.
+        const email = normalizeEmail(profile.email);
+
         // Find or create user by email. Wrapped with withDbRetry so a Neon
         // cold-start during sign-in (suspended compute waking up) does not
         // surface as a hard "Can't reach database server" failure to the
         // user — silent retry covers the wake-up window.
-        let user = await withDbRetry(
-          () => prisma.user.findUnique({ where: { email: profile.email } }),
-          { label: "oauth.find_user_by_email" },
-        );
+        let user = await withDbRetry(() => prisma.user.findUnique({ where: { email } }), {
+          label: "oauth.find_user_by_email",
+        });
         const isNewGoogleUser = !user;
         if (!user) {
           // Beta gate: when BETA_GATE_ENABLED=true, the Google sign-in path
@@ -683,7 +687,7 @@ export function authRoutes(app: FastifyInstance) {
           const betaGateEnabled = process.env.BETA_GATE_ENABLED === "true";
           if (betaGateEnabled) {
             const waitlistEntry = await prisma.waitlist.findUnique({
-              where: { email: profile.email },
+              where: { email },
               select: { status: true },
             });
             if (waitlistEntry?.status !== "APPROVED") {
@@ -695,8 +699,8 @@ export function authRoutes(app: FastifyInstance) {
             () =>
               prisma.user.create({
                 data: {
-                  email: profile.email,
-                  name: profile.name || profile.email.split("@")[0],
+                  email,
+                  name: profile.name || email.split("@")[0],
                   passwordHash: null, // Google-only user, no password
                   emailVerified: true, // Google accounts are pre-verified
                   ...(betaGateEnabled && { plan: "PRO" }),

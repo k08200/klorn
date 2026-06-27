@@ -12,6 +12,7 @@ import { syncGitHubForUser } from "./github-source.js";
 import { captureError } from "./sentry.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
+let firstTickTimer: ReturnType<typeof setTimeout> | null = null;
 const POLL_INTERVAL_MS = 5 * 60_000; // 5 minutes — GitHub asks pollers to honor ≥60s
 
 async function tickOnce(): Promise<void> {
@@ -34,8 +35,11 @@ async function tickOnce(): Promise<void> {
 }
 
 export function startGitHubScheduler(): void {
-  if (intervalId) return;
-  setTimeout(() => {
+  // Guard the 30s boot window too: intervalId isn't set until the first tick
+  // fires, so a second start() before then would schedule a duplicate tick.
+  if (intervalId || firstTickTimer) return;
+  firstTickTimer = setTimeout(() => {
+    firstTickTimer = null;
     tickOnce().catch((err) =>
       captureError(err, { tags: { scope: "github-scheduler.first-tick" } }),
     );
@@ -49,6 +53,10 @@ export function startGitHubScheduler(): void {
 }
 
 export function stopGitHubScheduler(): void {
+  if (firstTickTimer) {
+    clearTimeout(firstTickTimer);
+    firstTickTimer = null;
+  }
   if (intervalId) {
     clearInterval(intervalId);
     intervalId = null;

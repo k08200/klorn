@@ -242,7 +242,7 @@ export default function SettingsPage() {
         method: "POST",
         body: JSON.stringify({ currentPassword, newPassword }),
       });
-      toast("Password changed.", "success");
+      toast("Password changed — please log in again on your devices.", "success");
       setCurrentPassword("");
       setNewPassword("");
     } catch (err) {
@@ -539,7 +539,8 @@ export default function SettingsPage() {
         }>;
       }>("/api/automations/agent-logs?limit=20");
       setAgentLogs(Array.isArray(data.logs) ? data.logs : []);
-    } catch {
+    } catch (err) {
+      captureClientError(err, { scope: "settings.agentLogs" });
       setAgentLogs([]);
     }
     setAgentLogsLoading(false);
@@ -559,7 +560,8 @@ export default function SettingsPage() {
       }>("/api/patterns");
       setLearnedPatterns(Array.isArray(data.patterns) ? data.patterns : []);
       setPatternsLoaded(true);
-    } catch {
+    } catch (err) {
+      captureClientError(err, { scope: "settings.patterns" });
       setLearnedPatterns([]);
       setPatternsLoaded(true);
     }
