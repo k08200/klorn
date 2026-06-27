@@ -687,25 +687,28 @@ function EmailView() {
 
       <FilterTabs current={filter} onChange={setFilter} />
 
-      <div className="mt-3 grid gap-2 md:grid-cols-4">
+      {/* Work queues: on phones these stack into 4 tall cards that bury the mail
+          list, so render them as a compact horizontal-scroll chip row on mobile
+          (title only) and keep the full 4-up grid with descriptions on md+. */}
+      <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
         {WORK_QUEUES.map((queue) => (
           <button
             key={queue.key}
             type="button"
             onClick={() => setFilter(queue.key)}
-            className={`rounded-lg border p-3 text-left transition ${
+            className={`shrink-0 rounded-lg border px-3 py-2 text-left transition md:shrink md:p-3 ${
               filter === queue.key
                 ? "border-accent/45 bg-accent/10"
                 : "border-white/10 bg-stone-900/40 hover:border-white/20 hover:bg-white/5"
             }`}
           >
-            <span className="flex items-center justify-between gap-2 text-sm font-medium text-stone-100">
+            <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-stone-100 md:justify-between md:gap-2">
               {queue.title}
               <span className="text-accent-light" aria-hidden="true">
                 →
               </span>
             </span>
-            <span className="mt-1 block text-[11px] leading-4 text-stone-500">
+            <span className="mt-1 hidden text-[11px] leading-4 text-stone-500 md:block">
               {queue.description}
             </span>
           </button>
