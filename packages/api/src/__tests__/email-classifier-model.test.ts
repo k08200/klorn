@@ -91,4 +91,28 @@ describe("classifyEmailBatch — model routing", () => {
     expect(labels).toHaveLength(1);
     expect(labels[0]?.priority).toBeDefined();
   });
+
+  it("maps labels even when the model returns a string index", async () => {
+    // A :free model can emit "index":"0" (a string). A numeric byIndex.get(i)
+    // would miss it and silently demote the email to {low, other}; the Number()
+    // coercion keeps it mapped.
+    createCompletionMock.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              labels: [
+                { index: "0", priority: "high", category: "customer", needsReply: true, reason: "q" },
+              ],
+            }),
+          },
+        },
+      ],
+    });
+
+    const labels = await classifyEmailBatch([HUMAN_EMAIL]);
+
+    expect(labels[0]?.category).toBe("customer");
+    expect(labels[0]?.priority).toBe("high");
+  });
 });
