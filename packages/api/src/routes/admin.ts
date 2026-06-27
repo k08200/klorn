@@ -621,27 +621,36 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // GET /api/admin/sender-traits — Sender-trait measurement metrics + evidence
   // inspector. Returns aggregate metrics (coverage, confidence distribution,
-  // conflict rate) and per-sender trait rows with evidenceText so the caller
-  // can inspect what the extractor learned and catch drift early.
-  // Optional ?userId= narrows to one user's inbox.
-  app.get("/sender-traits", async (request) => {
+  // conflict rate) always, and per-sender trait rows with evidenceText ONLY
+  // when an explicit ?userId= is given. Without a userId, evidenceText (which
+  // is verbatim email quotes) is withheld — a cross-user dump would leak one
+  // user's mail to an admin scoped to another, violating CASA data-min even
+  // behind the admin gate.
+  app.get("/sender-traits", async (request, reply) => {
     const userId = (request.query as { userId?: string }).userId;
+    if (userId !== undefined && !/^[0-9a-fA-F-]{10,40}$/.test(userId)) {
+      return reply.code(400).send({ error: "Invalid userId" });
+    }
     const metrics = await getTraitMetrics(prisma, userId);
-    const traits = await prisma.senderTrait.findMany({
-      where: userId ? { userId } : {},
-      orderBy: [{ sender: "asc" }, { factKind: "asc" }],
-      take: 200,
-      select: {
-        sender: true,
-        factKind: true,
-        factValue: true,
-        confidence: true,
-        evidenceText: true,
-        status: true,
-        conflictValue: true,
-        observedCount: true,
-      },
-    });
+    // Per-trait evidence (verbatim email quotes) only for an explicit user —
+    // never a cross-user dump, even behind the admin gate (CASA data-min).
+    const traits = userId
+      ? await prisma.senderTrait.findMany({
+          where: { userId },
+          orderBy: [{ sender: "asc" }, { factKind: "asc" }],
+          take: 200,
+          select: {
+            sender: true,
+            factKind: true,
+            factValue: true,
+            confidence: true,
+            evidenceText: true,
+            status: true,
+            conflictValue: true,
+            observedCount: true,
+          },
+        })
+      : [];
     return { metrics, traits };
   });
 }

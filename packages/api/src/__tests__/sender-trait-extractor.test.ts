@@ -81,6 +81,25 @@ describe("extractTraitsFromEmails", () => {
     const result = await extractTraitsFromEmails(emails, {});
     expect(result).toEqual([]);
   });
+
+  it("truncates evidenceText to 200 chars (DB column cap + unbounded-quote guard)", async () => {
+    const longEvidence = "x".repeat(500);
+    createCompletionMock.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              relationship: { value: "investor", confidence: 0.9, evidence: longEvidence },
+            }),
+          },
+        },
+      ],
+    });
+    const traits = await extractTraitsFromEmails(emails, {});
+    expect(traits).toHaveLength(1);
+    expect(traits[0].evidenceText).toHaveLength(200);
+    expect(traits[0].evidenceText).toBe("x".repeat(200));
+  });
 });
 
 describe("extractSenderTraitsForUser — per-sender isolation", () => {
