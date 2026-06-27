@@ -32,7 +32,12 @@ vi.mock("web-push", () => ({
   sendNotification: vi.fn(),
 }));
 
-import { authoredSurface, shouldRetryPushError } from "../push.js";
+import {
+  authoredSurface,
+  decidePushFailureAction,
+  MAX_CONSECUTIVE_PUSH_FAILURES,
+  shouldRetryPushError,
+} from "../push.js";
 
 describe("authoredSurface — which push categories bypass the noise heuristic", () => {
   it("maps the firewall-judged email push to the 'firewall' authored surface", () => {
@@ -53,6 +58,25 @@ describe("authoredSurface — which push categories bypass the noise heuristic",
   it("leaves all other categories subject to the noise + housekeeping filters", () => {
     expect(authoredSurface("system")).toBeNull();
     expect(authoredSurface("agent_proposal")).toBeNull();
+  });
+});
+
+describe("decidePushFailureAction — budgeted eviction", () => {
+  it("deletes a definitively-dead subscription (410/404)", () => {
+    expect(decidePushFailureAction(0, 410)).toEqual({ kind: "delete", reason: "expired" });
+    expect(decidePushFailureAction(3, 404)).toEqual({ kind: "delete", reason: "expired" });
+  });
+
+  it("increments the consecutive-failure count on an ambiguous failure below threshold", () => {
+    expect(decidePushFailureAction(0, 503)).toEqual({ kind: "increment", failureCount: 1 });
+    expect(decidePushFailureAction(2, undefined)).toEqual({ kind: "increment", failureCount: 3 });
+  });
+
+  it("evicts a sub that has failed MAX consecutive times (stops burning retry budget)", () => {
+    expect(decidePushFailureAction(MAX_CONSECUTIVE_PUSH_FAILURES - 1, 500)).toEqual({
+      kind: "delete",
+      reason: "evicted",
+    });
   });
 });
 

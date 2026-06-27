@@ -393,6 +393,13 @@ model PushSubscription {
   origin    String?
   createdAt DateTime @default(now())
 
+  // Budgeted-retry eviction: consecutive ambiguous (non-410/404) delivery
+  // failures. Reset to 0 on a successful send; the sub is deleted once it hits
+  // MAX_CONSECUTIVE_PUSH_FAILURES (push.ts) so a persistently-dead endpoint
+  // stops burning the per-send retry budget every tick.
+  failureCount Int       @default(0)
+  lastFailedAt DateTime?
+
   @@index([userId])
 }
 
