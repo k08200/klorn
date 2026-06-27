@@ -50,6 +50,35 @@ export function shouldRetryPushError(statusCode: number | undefined): boolean {
   return false;
 }
 
+// Budgeted-retry eviction threshold: after this many CONSECUTIVE ambiguous
+// (non-410/404) delivery failures across pushes, a subscription is treated as
+// dead and deleted, so it stops consuming the per-send retry budget every tick.
+export const MAX_CONSECUTIVE_PUSH_FAILURES = 10;
+
+export type PushFailureAction =
+  | { kind: "delete"; reason: "expired" | "evicted" }
+  | { kind: "increment"; failureCount: number };
+
+/**
+ * Decide what to do with a subscription after a failed delivery. A 410/404 is
+ * definitively gone → delete. Otherwise count the consecutive failure; once it
+ * reaches MAX_CONSECUTIVE_PUSH_FAILURES the endpoint has failed every push for
+ * too long → evict it. A successful send resets the count (caller's job).
+ */
+export function decidePushFailureAction(
+  currentFailureCount: number,
+  statusCode: number | undefined,
+): PushFailureAction {
+  if (statusCode === 410 || statusCode === 404) {
+    return { kind: "delete", reason: "expired" };
+  }
+  const next = currentFailureCount + 1;
+  if (next >= MAX_CONSECUTIVE_PUSH_FAILURES) {
+    return { kind: "delete", reason: "evicted" };
+  }
+  return { kind: "increment", failureCount: next };
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -60,6 +89,7 @@ interface PushSubscriptionRow {
   p256dh: string;
   auth: string;
   origin: string | null;
+  failureCount: number;
 }
 
 export interface PushSendSummary {
@@ -292,17 +322,34 @@ export async function sendPushNotification(
     if (delivered) {
       await markPushAccepted(deliveryId);
       accepted++;
+      // Recovered: clear the consecutive-failure tally so a sub that had a
+      // transient bad spell isn't evicted on a later push.
+      if (sub.failureCount > 0) {
+        await prisma.pushSubscription.update({
+          where: { id: sub.id },
+          data: { failureCount: 0, lastFailedAt: null },
+        });
+      }
     } else {
       failed++;
       await markPushFailed(deliveryId, { statusCode: lastStatusCode, body: lastBody });
       console.error(
         `[PUSH] Failed to send to subscription ${sub.id} after ${maxAttempts} attempts: status=${lastStatusCode}, body=${lastBody}, error=${lastError}`,
       );
-      if (lastStatusCode === 410 || lastStatusCode === 404) {
-        await prisma.pushSubscription.delete({
+      // Budgeted eviction: 410/404 → delete now; otherwise count the consecutive
+      // failure and delete once it crosses the threshold (stops a dead endpoint
+      // from burning the retry budget every tick).
+      const action = decidePushFailureAction(sub.failureCount, lastStatusCode);
+      if (action.kind === "delete") {
+        await prisma.pushSubscription.delete({ where: { id: sub.id } });
+        console.log(
+          `[PUSH] Removed ${action.reason} subscription ${sub.id} (failureCount=${sub.failureCount})`,
+        );
+      } else {
+        await prisma.pushSubscription.update({
           where: { id: sub.id },
+          data: { failureCount: action.failureCount, lastFailedAt: new Date() },
         });
-        console.log(`[PUSH] Removed expired subscription ${sub.id}`);
       }
     }
   }
