@@ -9,6 +9,7 @@ import {
 import { prisma } from "../db.js";
 import { getVapidPublicKey, sendPushNotification } from "../push.js";
 import { getPushDeliveryStats, recordPushReceipt } from "../push-delivery.js";
+import { sendDevicePush } from "../push-device.js";
 import { isAllowedPushOrigin } from "../push-origin-allowlist.js";
 
 export async function notificationRoutes(app: FastifyInstance) {
@@ -215,6 +216,80 @@ export async function notificationRoutes(app: FastifyInstance) {
 
     await prisma.pushSubscription.deleteMany({ where: { endpoint, userId } });
     return reply.code(204).send();
+  });
+
+  // --- Native device push (Capacitor mobile shell, FCM/APNs) ---
+
+  const FCM_TOKEN_MAX_LEN = 512;
+
+  // POST /api/notifications/push/device-token/register — Register a native push
+  // token. The shell calls this on launch after sign-in. Upsert by the unique
+  // token so a re-registration (or a token claimed by a new account) moves the
+  // row to the current user instead of duplicating it.
+  app.post("/push/device-token/register", async (request, reply) => {
+    const userId = getUserId(request);
+    const { token, platform } = request.body as { token?: string; platform?: string };
+
+    if (platform !== "android" && platform !== "ios") {
+      return reply.code(400).send({ error: "platform must be 'android' or 'ios'" });
+    }
+    // Validate token shape per platform so garbage is rejected at registration,
+    // not silently at send. FCM tokens are ~150-200 URL-safe chars; APNs tokens
+    // are hex (64 today; Apple doesn't guarantee the length, so allow a range).
+    const tokenOk =
+      typeof token === "string" &&
+      (platform === "ios"
+        ? /^[0-9a-fA-F]{64,256}$/.test(token)
+        : token.length <= FCM_TOKEN_MAX_LEN && /^[\w:.%-]+$/.test(token));
+    if (!token || !tokenOk) {
+      return reply.code(400).send({ error: "Invalid device push token" });
+    }
+
+    // A token is a stable device identifier. If it currently belongs to another
+    // user (shared/MDM device, or a client sending a stale token), the upsert
+    // below migrates it to the caller — log it so a hijack-shaped pattern is
+    // visible rather than silent.
+    const existing = await prisma.devicePushToken.findUnique({
+      where: { token },
+      select: { userId: true },
+    });
+    if (existing && existing.userId !== userId) {
+      console.warn(
+        `[PUSH-DEVICE] Device token reassigned from user ${existing.userId} to ${userId}`,
+      );
+    }
+
+    await prisma.devicePushToken.upsert({
+      where: { token },
+      create: { userId, token, platform },
+      update: { userId, platform },
+    });
+    console.log(`[PUSH-DEVICE] Registered ${platform} token for user ${userId}`);
+    return reply.code(201).send({ success: true });
+  });
+
+  // DELETE /api/notifications/push/device-token — Unregister a token (sign-out).
+  // Scoped to the caller so one user cannot drop another's.
+  app.delete("/push/device-token", async (request, reply) => {
+    const userId = getUserId(request);
+    const { token } = request.body as { token?: string };
+    if (!token) {
+      return reply.code(400).send({ error: "Token required" });
+    }
+    await prisma.devicePushToken.deleteMany({ where: { token, userId } });
+    return reply.code(204).send();
+  });
+
+  // POST /api/notifications/push/device-test — Ring the caller's device(s) via
+  // FCM (Android). Proving path independent of the gated web-push pipeline.
+  app.post("/push/device-test", async (request) => {
+    const userId = getUserId(request);
+    const result = await sendDevicePush(userId, {
+      title: "Klorn test",
+      body: "Native push is working.",
+      url: "/chat",
+    });
+    return { sent: result.status === "sent" && result.accepted > 0, result };
   });
 }
 

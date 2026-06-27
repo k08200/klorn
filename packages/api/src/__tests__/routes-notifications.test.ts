@@ -31,6 +31,14 @@ vi.mock("../push.js", () => ({
     failed: 0,
   })),
 }));
+vi.mock("../push-device.js", () => ({
+  sendDevicePush: vi.fn(async () => ({
+    status: "sent",
+    tokens: 1,
+    accepted: 1,
+    failed: 0,
+  })),
+}));
 vi.mock("../push-delivery.js", () => ({
   recordPushReceipt: vi.fn(async () => true),
   getPushDeliveryStats: vi.fn(async () => ({
@@ -56,6 +64,11 @@ vi.mock("../db.js", () => {
       }),
     },
     pushSubscription: {
+      upsert: vi.fn(async () => ({})),
+      deleteMany: vi.fn(async () => ({})),
+    },
+    devicePushToken: {
+      findUnique: vi.fn(async () => null),
       upsert: vi.fn(async () => ({})),
       deleteMany: vi.fn(async () => ({})),
     },
@@ -256,6 +269,85 @@ describe("notification routes", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ accepted: 1, received: 1, receiptRate: 1 });
+    await app.close();
+  });
+
+  it("registers a native device push token", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/device-token/register",
+      headers: auth(),
+      payload: { token: "fcm-token-abc123", platform: "android" },
+    });
+    expect(res.statusCode).toBe(201);
+    await app.close();
+  });
+
+  it("rejects device token register with an invalid platform", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/device-token/register",
+      headers: auth(),
+      payload: { token: "fcm-token-abc123", platform: "windows" },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("rejects device token register with a missing/garbage token", async () => {
+    const app = await buildApp();
+    const missing = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/device-token/register",
+      headers: auth(),
+      payload: { platform: "ios" },
+    });
+    expect(missing.statusCode).toBe(400);
+
+    const garbage = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/device-token/register",
+      headers: auth(),
+      payload: { token: "has spaces & symbols!", platform: "ios" },
+    });
+    expect(garbage.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("requires auth to register a device token", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/device-token/register",
+      payload: { token: "fcm-token-abc123", platform: "android" },
+    });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("unregisters a native device push token", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/notifications/push/device-token",
+      headers: auth(),
+      payload: { token: "fcm-token-abc123" },
+    });
+    expect(res.statusCode).toBe(204);
+    await app.close();
+  });
+
+  it("sends a native device test push", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/device-test",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ sent: true });
     await app.close();
   });
 });

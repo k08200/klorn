@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import AuthScreen from "../../components/auth-screen";
-import InAppBrowserNotice from "../../components/in-app-browser-notice";
 import { useToast } from "../../components/toast";
 import { API_BASE, apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import { isNativePlatform } from "../../lib/native/capacitor";
+import { startNativeGoogleLogin } from "../../lib/native/native-auth";
 
 export default function LoginPage() {
   return (
@@ -33,6 +34,18 @@ function LoginForm() {
   const { toast } = useToast();
   const router = useRouter();
   const nextPath = safeNextPath(searchParams.get("next"));
+
+  // In the native shell, Google blocks OAuth inside the WebView, so intercept
+  // the link and run the system-browser flow instead. On the web the <a href>
+  // navigates normally (no-op here).
+  const handleGoogleClick = (e: React.MouseEvent) => {
+    if (!isNativePlatform()) return;
+    e.preventDefault();
+    startNativeGoogleLogin().catch((err) => {
+      console.error("[AUTH] Native Google login failed:", err);
+      toast("Google sign-in could not be completed. Please try again.", "error");
+    });
+  };
 
   // Server controls whether sign-up is open. When BETA_GATE_ENABLED is on,
   // hide the Sign-up tab and point new visitors at /early-access. Until the
@@ -140,10 +153,9 @@ function LoginForm() {
         </div>
       )}
 
-      <InAppBrowserNotice />
-
       <a
         href={`${API_BASE}/api/auth/google/login`}
+        onClick={handleGoogleClick}
         className="flex h-11 w-full items-center justify-center gap-3 rounded-md bg-stone-100 text-sm font-semibold text-stone-900 shadow-sm transition hover:bg-white"
       >
         <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24">
