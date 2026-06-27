@@ -131,7 +131,7 @@ export async function commitmentRoutes(app: FastifyInstance) {
             evidence: "User dismissed commitment from inbox",
           });
         })
-        .catch(() => {});
+        .catch((err) => console.warn("[COMMITMENTS] recordFeedback DISMISSED failed:", err));
     }
 
     // When a COUNTERPARTY commitment is marked DONE, record the outcome for
@@ -158,7 +158,7 @@ export async function commitmentRoutes(app: FastifyInstance) {
           row.counterpartyName ?? null,
           wasOnTime,
           daysLate,
-        ).catch(() => {});
+        ).catch((err) => console.warn("[COMMITMENTS] updateTrustScore failed:", err));
       }
     }
 

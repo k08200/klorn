@@ -417,7 +417,10 @@ async function onOutboxCompleted(row: OutboxRow, result: string): Promise<void> 
       .then(({ learnFromApproval }) =>
         learnFromApproval(row.userId, row.toolName, asRecord(row.toolArgs)),
       )
-      .catch(() => {});
+      .catch((err) => {
+        console.warn(`[OUTBOX] learnFromApproval failed for ${row.toolName}:`, err);
+        captureError(err, { tags: { scope: "action-outbox.learn" }, extra: { rowId: row.id } });
+      });
     // APPROVED feedback fires on successful execution (mutually exclusive
     // with the FAILED signal in onOutboxDead), matching the pre-outbox
     // coupling — so a transient-failed-then-retried action records exactly
@@ -433,6 +436,7 @@ async function onOutboxCompleted(row: OutboxRow, result: string): Promise<void> 
       threadId: (await conversationIdFor(row)) ?? row.pendingActionId,
     });
   } catch (err) {
+    console.error(`[OUTBOX] onOutboxCompleted side-effects failed for row ${row.id}:`, err);
     captureError(err, { tags: { scope: "action-outbox.completed" }, extra: { rowId: row.id } });
   }
 }
@@ -482,6 +486,7 @@ async function onOutboxDead(row: OutboxRow, error: string): Promise<void> {
       createdAt: new Date().toISOString(),
     });
   } catch (err) {
+    console.error(`[OUTBOX] onOutboxDead side-effects failed for row ${row.id}:`, err);
     captureError(err, { tags: { scope: "action-outbox.dead" }, extra: { rowId: row.id } });
   }
 }

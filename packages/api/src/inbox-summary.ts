@@ -20,6 +20,7 @@ import {
   upsertAttentionForTask,
 } from "./attention-mirror.js";
 import { prisma } from "./db.js";
+import { captureError } from "./sentry.js";
 
 export interface TaskInput {
   id: string;
@@ -446,7 +447,11 @@ export async function buildInboxSummary(userId: string, now = Date.now()): Promi
     ...eventRows.map((e) => upsertAttentionForCalendarEvent(e, now)),
     ...notifRows.map((n) => upsertAttentionForNotification(n)),
     ...commitmentRows.map((c) => upsertAttentionForCommitment(c, now)),
-  ]).catch(() => {});
+  ]).catch((err) => {
+    // A swallowed batch failure here makes the attention queue silently go dark.
+    console.warn("[INBOX] Attention backfill failed:", err);
+    captureError(err, { tags: { scope: "inbox.attention-backfill" } });
+  });
 
   // Single queue read replaces the per-source merge in the old pickTop3.
   // Exclude SILENT items — those have been suppressed by the feedback adaptor

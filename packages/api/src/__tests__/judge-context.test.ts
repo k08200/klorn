@@ -72,7 +72,12 @@ function wireMocks(opts: {
   });
   emailFindMany.mockImplementation((args: { where: Record<string, unknown> }) => {
     if ("from" in args.where) {
-      return Promise.resolve((opts.senderEmailIds ?? []).map((id) => ({ id })));
+      // Mirror the real fetchSenderItems select ({ id, from }); give each row a
+      // `from` matching the queried address so the address re-check keeps it.
+      const addr = (args.where.from as { contains?: string }).contains ?? "";
+      return Promise.resolve(
+        (opts.senderEmailIds ?? []).map((id) => ({ id, from: `Sender <${addr}>` })),
+      );
     }
     return Promise.resolve(opts.correctionEmails ?? []);
   });
@@ -300,6 +305,26 @@ describe("buildJudgeContext", () => {
     });
     const correctionsCall = attentionFindMany.mock.calls.find((c) => "tierReason" in c[0].where);
     expect(correctionsCall?.[0].where.sourceId).toEqual({ not: "self-id" });
+  });
+
+  it("excludes a substring-matching different sender from the sender history", async () => {
+    // Querying alice@corp.com substring-matches malice@corp.com in the DB ILIKE;
+    // the parsed-address re-check must drop the wrong sender's rows so they can't
+    // contaminate the prior / tier history.
+    emailFindMany.mockImplementation((args: { where: Record<string, unknown> }) =>
+      "from" in args.where
+        ? Promise.resolve([
+            { id: "real1", from: "Alice <alice@corp.com>" },
+            { id: "bad1", from: "Malice <malice@corp.com>" },
+          ])
+        : Promise.resolve([]),
+    );
+    attentionFindMany.mockResolvedValue([]);
+
+    await buildJudgeContext("u1", { from: "Alice <alice@corp.com>" });
+
+    const historyCall = attentionFindMany.mock.calls.find((c) => !("tierReason" in c[0].where));
+    expect(historyCall?.[0].where.sourceId.in).toEqual(["real1"]);
   });
 });
 

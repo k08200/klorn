@@ -169,7 +169,7 @@ export async function reconcileEmails(
 
   if (toRemove.length > 0) {
     await prisma.emailMessage.deleteMany({
-      where: { id: { in: toRemove } },
+      where: { userId, id: { in: toRemove } },
     });
     console.log(`[EMAIL-SYNC] Reconciled: removed ${removed} stale emails for user ${userId}`);
   }

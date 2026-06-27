@@ -95,6 +95,7 @@ export function scheduleReminderDeliveryCheck(reminderId: string, remindAt: Date
   const timer = setTimeout(() => {
     deliverDueReminderById(reminderId).catch((err) => {
       console.error(`[REMINDER] Direct delivery check failed for ${reminderId}:`, err);
+      captureError(err, { tags: { scope: "reminder.direct-delivery", reminderId } });
     });
   }, delayMs + 500);
   timer.unref?.();
