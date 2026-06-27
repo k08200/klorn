@@ -218,8 +218,44 @@ function BriefingView() {
   const topActions = content ? extractTopActions(content) : [];
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
-      <header className="mb-6 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
+    <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-3 md:py-10">
+      {/* MOBILE — native large-title header (desktop hero below, untouched) */}
+      <header className="mb-5 flex items-end justify-between gap-3 md:hidden">
+        <div className="min-w-0">
+          <h1 className="text-[28px] font-bold leading-none tracking-tight text-stone-50">
+            Briefing
+          </h1>
+          <p className="mt-1.5 text-sm text-stone-400">
+            {content ? `Today${formattedTime ? ` · ${formattedTime}` : ""}` : "Not generated yet"}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={regenerate}
+          disabled={generating}
+          aria-label={content ? "Regenerate briefing" : "Generate briefing"}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-900/70 text-stone-300 transition active:bg-stone-800 disabled:opacity-50"
+        >
+          <svg
+            aria-hidden="true"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={generating ? "animate-spin" : ""}
+          >
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <polyline points="21 3 21 9 15 9" />
+          </svg>
+        </button>
+      </header>
+
+      {/* DESKTOP — unchanged */}
+      <header className="mb-6 hidden overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10 md:block">
         <div className="h-1 bg-gradient-to-r from-amber-300 via-amber-200/40 to-transparent" />
         {/* Mobile = content-first: hide the decorative work-signal panel and the
             3-stat dashboard below their breakpoints so the brief itself is up

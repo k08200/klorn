@@ -588,261 +588,384 @@ function EmailView() {
   const attachmentCount = emails.filter((email) => (email.attachmentCount ?? 0) > 0).length;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
+    <>
       <ComposeModal open={composeOpen} onClose={() => setComposeOpen(false)} />
-      {/* Mobile = content-first: a compact title + small action row, with the
-          description, the 4-stat dashboard, and Reanalyze hidden until md so the
-          mail list isn't pushed off-screen. Desktop (md:+) keeps the full hero. */}
-      <header className="mb-4 rounded-lg border border-white/10 bg-stone-900/40 p-4 shadow-xl shadow-black/10 md:mb-5 md:p-6">
-        <div className="flex flex-col gap-3 md:gap-5 lg:flex-row lg:items-start lg:justify-between">
+
+      {/* MOBILE — purpose-built native mail (desktop layout untouched below) */}
+      <div className="px-4 pb-28 pt-3 md:hidden">
+        <header className="mb-4 flex items-end justify-between gap-3">
           <div className="min-w-0">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80 md:mb-2">
-              Klorn · Mail
-            </p>
-            <h1 className="text-lg font-semibold tracking-tight text-stone-50 md:text-2xl">
-              Mail that needs a reply
+            <h1 className="text-[28px] font-bold leading-none tracking-tight text-stone-50">
+              Mail
             </h1>
-            <p className="mt-2 hidden max-w-xl text-sm leading-6 text-stone-400 md:block">
-              Sorted by urgency and reply-needed signal.
-              {source === "demo" && <span className="ml-2 text-accent">Demo data</span>}
+            <p className="mt-1.5 text-sm text-stone-400">
+              {source === "demo"
+                ? "Demo data — connect Gmail"
+                : replyCount > 0
+                  ? `${replyCount} need a reply`
+                  : unreadCount > 0
+                    ? `${unreadCount} unread`
+                    : "All caught up"}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setComposeOpen(true)}
+            disabled={source === "demo"}
+            aria-label="Compose"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-400 text-stone-950 transition active:bg-amber-300 disabled:opacity-40"
+          >
+            <svg
+              aria-hidden="true"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+          </button>
+        </header>
+
+        <form onSubmit={submitSearch} className="mb-3 flex gap-2">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search mail"
+            className="h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-stone-900/60 px-4 text-sm text-stone-200 outline-none transition placeholder:text-stone-600 focus:border-accent/45"
+          />
+          {appliedSearch && (
             <button
               type="button"
-              onClick={() => setComposeOpen(true)}
-              disabled={source === "demo"}
-              title={source === "demo" ? "Connect Gmail to send email" : "Compose a new email"}
-              className="min-h-11 w-fit rounded-md bg-accent px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => {
+                setSearch("");
+                setAppliedSearch("");
+              }}
+              className="shrink-0 rounded-xl border border-white/10 px-3 text-xs text-stone-400 transition active:bg-white/5"
             >
-              ✎ Compose
+              Clear
             </button>
+          )}
+        </form>
+
+        <FilterTabs current={filter} onChange={setFilter} />
+
+        {loading && (
+          <div className="mt-3 space-y-2">
+            <div className="h-16 animate-pulse rounded-2xl bg-stone-900/50" />
+            <div className="h-16 animate-pulse rounded-2xl bg-stone-900/40" />
+            <div className="h-16 animate-pulse rounded-2xl bg-stone-900/30" />
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-3 rounded-xl border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && filter !== "threads" && emails.length === 0 && (
+          <div className="mt-6 rounded-2xl bg-stone-900/40 px-6 py-12 text-center">
+            <p className="text-base font-medium text-stone-200">
+              {filter === "reply-needed" ? "Nothing needs a reply" : "No mail here"}
+            </p>
+            <p className="mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed text-stone-500">
+              {source === "demo"
+                ? "Connect Gmail in Settings so Klorn can sort your real mail."
+                : "When Klorn finds mail that needs you, it rises to the top."}
+            </p>
             <button
               type="button"
               onClick={syncNow}
               disabled={syncing}
-              className="min-h-11 w-fit rounded-md border border-white/10 bg-stone-950/60 px-3 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:bg-white/5 hover:text-stone-100 disabled:opacity-50"
+              className="mt-5 inline-flex min-h-11 items-center rounded-xl border border-stone-700 px-5 text-sm text-stone-300 transition active:bg-stone-800 disabled:opacity-50"
             >
               {syncing ? "Syncing..." : "Sync now"}
             </button>
-            <button
-              type="button"
-              onClick={reanalyzeAttachments}
-              disabled={reanalyzing}
-              className="hidden min-h-11 w-fit rounded-md border border-[#a8a29e]/25 bg-[#a8a29e]/10 px-3 text-xs font-medium text-stone-200 transition hover:bg-[#a8a29e]/15 disabled:opacity-50 md:inline-flex md:items-center"
-            >
-              {reanalyzing ? "Analyzing..." : "Reanalyze attachments"}
-            </button>
           </div>
-        </div>
-        <div className="mt-5 hidden grid-cols-4 overflow-hidden rounded-md border border-white/10 bg-stone-950/60 md:grid">
-          <SignalStat label="Unread" value={unreadCount} />
-          <SignalStat label="Urgent" value={urgentCount} />
-          <SignalStat label="Replies" value={replyCount} />
-          <SignalStat label="Files" value={attachmentCount} />
-        </div>
-      </header>
+        )}
 
-      {undoNotice && (
-        <UndoActionBanner
-          notice={undoNotice}
-          busy={undoBusy}
-          countdown={undoCountdown}
-          onDismiss={dismissUndoNotice}
-          onUndo={undoLastAction}
-        />
-      )}
+        {!loading && filter !== "threads" && emails.length > 0 && (
+          <ul className="mt-3 space-y-2">
+            {emails.map((e) => (
+              <MobileEmailRow key={e.id} email={e} queue={filter} />
+            ))}
+          </ul>
+        )}
 
-      {bulkUndoNotice && (
-        <BulkUndoActionBanner
-          notice={bulkUndoNotice}
-          busy={undoBusy}
-          countdown={bulkUndoCountdown}
-          onDismiss={dismissBulkUndoNotice}
-          onUndo={undoBulkArchive}
-        />
-      )}
-
-      <form onSubmit={submitSearch} className="mb-3 flex gap-2">
-        <input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search mail, attachments, fields"
-          className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-stone-950/60 px-3 text-sm text-stone-200 outline-none transition placeholder:text-stone-600 focus:border-accent/45"
-        />
-        <button
-          type="submit"
-          className="h-10 rounded-lg bg-accent px-4 text-sm font-medium text-stone-950 transition hover:bg-accent-muted"
-        >
-          Search
-        </button>
-        {appliedSearch && (
+        {!loading && !error && emails.length > 0 && listQuery.hasNextPage && (
           <button
             type="button"
-            onClick={() => {
-              setSearch("");
-              setAppliedSearch("");
-            }}
-            className="h-10 rounded-lg border border-white/10 bg-stone-900/40 px-3 text-xs text-stone-400 transition hover:bg-white/5"
+            onClick={() => listQuery.fetchNextPage()}
+            disabled={listQuery.isFetchingNextPage}
+            className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-stone-800 text-sm text-stone-400 transition active:bg-stone-800/60 disabled:opacity-50"
           >
-            Clear
+            {listQuery.isFetchingNextPage ? "Loading..." : "Load more"}
           </button>
         )}
-      </form>
-
-      <FilterTabs current={filter} onChange={setFilter} />
-
-      {/* Work queues: on phones these stack into 4 tall cards that bury the mail
-          list, so render them as a compact horizontal-scroll chip row on mobile
-          (title only) and keep the full 4-up grid with descriptions on md+. */}
-      <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
-        {WORK_QUEUES.map((queue) => (
-          <button
-            key={queue.key}
-            type="button"
-            onClick={() => setFilter(queue.key)}
-            className={`shrink-0 rounded-lg border px-3 py-2 text-left transition md:shrink md:p-3 ${
-              filter === queue.key
-                ? "border-accent/45 bg-accent/10"
-                : "border-white/10 bg-stone-900/40 hover:border-white/20 hover:bg-white/5"
-            }`}
-          >
-            <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-stone-100 md:justify-between md:gap-2">
-              {queue.title}
-              <span className="text-accent-light" aria-hidden="true">
-                →
-              </span>
-            </span>
-            <span className="mt-1 hidden text-[11px] leading-4 text-stone-500 md:block">
-              {queue.description}
-            </span>
-          </button>
-        ))}
       </div>
 
-      {candidateCount > 0 && (
-        <Link
-          href="/email/candidates"
-          className="mt-3 flex items-center justify-between rounded-lg border border-orange-500/20 bg-orange-500/5 px-4 py-3 text-sm text-accent-muted transition hover:bg-orange-500/10"
-        >
-          <span>Review {candidateCount} candidate signals in the intake queue.</span>
-          <span className="text-xs">Open</span>
-        </Link>
-      )}
-
-      {loading && <p className="px-1 py-3 text-sm text-stone-500">Loading...</p>}
-
-      {error && (
-        <div className="mt-3 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
-          {error}
-        </div>
-      )}
-
-      {!loading && !error && filter !== "threads" && emails.length === 0 && (
-        <div className="mt-4 rounded-lg border border-white/10 bg-stone-900/40 p-6 text-center">
-          <p className="text-sm text-stone-300">
-            {filter === "all"
-              ? "No mail signals yet."
-              : filter === "reply-needed"
-                ? "Nothing needs a reply right now."
-                : "No signals match this filter."}
-          </p>
-          <p className="mt-1 text-xs text-stone-600">
-            {filter === "reply-needed"
-              ? "Switch tabs to see urgent, unread, or all mail — Klorn promotes a thread here when it detects something you should answer."
-              : "After sync, mail that needs action rises to the top."}
-          </p>
-          {filter === "reply-needed" && (
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
+      {/* DESKTOP — unchanged */}
+      <div className="mx-auto hidden w-full max-w-5xl px-4 pb-28 pt-6 md:block md:py-10">
+        {/* Mobile = content-first: a compact title + small action row, with the
+            description, the 4-stat dashboard, and Reanalyze hidden until md so the
+            mail list isn't pushed off-screen. Desktop (md:+) keeps the full hero. */}
+        <header className="mb-4 rounded-lg border border-white/10 bg-stone-900/40 p-4 shadow-xl shadow-black/10 md:mb-5 md:p-6">
+          <div className="flex flex-col gap-3 md:gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80 md:mb-2">
+                Klorn · Mail
+              </p>
+              <h1 className="text-lg font-semibold tracking-tight text-stone-50 md:text-2xl">
+                Mail that needs a reply
+              </h1>
+              <p className="mt-2 hidden max-w-xl text-sm leading-6 text-stone-400 md:block">
+                Sorted by urgency and reply-needed signal.
+                {source === "demo" && <span className="ml-2 text-accent">Demo data</span>}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => setFilter("all")}
-                className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100"
+                onClick={() => setComposeOpen(true)}
+                disabled={source === "demo"}
+                title={source === "demo" ? "Connect Gmail to send email" : "Compose a new email"}
+                className="min-h-11 w-fit rounded-md bg-accent px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Show all signals
+                ✎ Compose
               </button>
               <button
                 type="button"
                 onClick={syncNow}
                 disabled={syncing}
-                className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100 disabled:opacity-50"
+                className="min-h-11 w-fit rounded-md border border-white/10 bg-stone-950/60 px-3 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:bg-white/5 hover:text-stone-100 disabled:opacity-50"
               >
                 {syncing ? "Syncing..." : "Sync now"}
               </button>
-            </div>
-          )}
-          {filter === "all" && (
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
-              <Link
-                href="/settings"
-                className="inline-flex min-h-11 items-center rounded-md bg-accent-light px-4 text-xs font-medium text-stone-950 transition hover:bg-accent-muted"
-              >
-                Connect Google
-              </Link>
               <button
                 type="button"
-                onClick={syncNow}
-                disabled={syncing}
-                className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100 disabled:opacity-50"
+                onClick={reanalyzeAttachments}
+                disabled={reanalyzing}
+                className="hidden min-h-11 w-fit rounded-md border border-[#a8a29e]/25 bg-[#a8a29e]/10 px-3 text-xs font-medium text-stone-200 transition hover:bg-[#a8a29e]/15 disabled:opacity-50 md:inline-flex md:items-center"
               >
-                {syncing ? "Syncing..." : "Sync now"}
+                {reanalyzing ? "Analyzing..." : "Reanalyze attachments"}
               </button>
             </div>
+          </div>
+          <div className="mt-5 hidden grid-cols-4 overflow-hidden rounded-md border border-white/10 bg-stone-950/60 md:grid">
+            <SignalStat label="Unread" value={unreadCount} />
+            <SignalStat label="Urgent" value={urgentCount} />
+            <SignalStat label="Replies" value={replyCount} />
+            <SignalStat label="Files" value={attachmentCount} />
+          </div>
+        </header>
+
+        {undoNotice && (
+          <UndoActionBanner
+            notice={undoNotice}
+            busy={undoBusy}
+            countdown={undoCountdown}
+            onDismiss={dismissUndoNotice}
+            onUndo={undoLastAction}
+          />
+        )}
+
+        {bulkUndoNotice && (
+          <BulkUndoActionBanner
+            notice={bulkUndoNotice}
+            busy={undoBusy}
+            countdown={bulkUndoCountdown}
+            onDismiss={dismissBulkUndoNotice}
+            onUndo={undoBulkArchive}
+          />
+        )}
+
+        <form onSubmit={submitSearch} className="mb-3 flex gap-2">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search mail, attachments, fields"
+            className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-stone-950/60 px-3 text-sm text-stone-200 outline-none transition placeholder:text-stone-600 focus:border-accent/45"
+          />
+          <button
+            type="submit"
+            className="h-10 rounded-lg bg-accent px-4 text-sm font-medium text-stone-950 transition hover:bg-accent-muted"
+          >
+            Search
+          </button>
+          {appliedSearch && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setAppliedSearch("");
+              }}
+              className="h-10 rounded-lg border border-white/10 bg-stone-900/40 px-3 text-xs text-stone-400 transition hover:bg-white/5"
+            >
+              Clear
+            </button>
           )}
-        </div>
-      )}
+        </form>
 
-      {!loading && filter !== "threads" && emails.length > 0 && (
-        <ul className="mt-3 space-y-2.5">
-          <li>
-            <BulkActionBar
-              allVisibleSelected={allVisibleSelected}
-              busy={bulkBusy}
-              selectedCount={selectedCount}
-              totalVisible={emails.length}
-              onApply={applyBulkAction}
-              onClear={() => setSelectedIds(new Set())}
-              onToggleAll={toggleAllVisible}
-            />
-          </li>
-          {emails.map((e) => (
-            <EmailRowItem
-              key={e.id}
-              email={e}
-              queue={filter}
-              reminderBusyKey={rowReminderBusy}
-              selected={selectedIds.has(e.id)}
-              onCreateReminder={createRowReminder}
-              onToggleSelected={toggleSelected}
-            />
+        <FilterTabs current={filter} onChange={setFilter} />
+
+        {/* Work queues: on phones these stack into 4 tall cards that bury the mail
+          list, so render them as a compact horizontal-scroll chip row on mobile
+          (title only) and keep the full 4-up grid with descriptions on md+. */}
+        <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
+          {WORK_QUEUES.map((queue) => (
+            <button
+              key={queue.key}
+              type="button"
+              onClick={() => setFilter(queue.key)}
+              className={`shrink-0 rounded-lg border px-3 py-2 text-left transition md:shrink md:p-3 ${
+                filter === queue.key
+                  ? "border-accent/45 bg-accent/10"
+                  : "border-white/10 bg-stone-900/40 hover:border-white/20 hover:bg-white/5"
+              }`}
+            >
+              <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-stone-100 md:justify-between md:gap-2">
+                {queue.title}
+                <span className="text-accent-light" aria-hidden="true">
+                  →
+                </span>
+              </span>
+              <span className="mt-1 hidden text-[11px] leading-4 text-stone-500 md:block">
+                {queue.description}
+              </span>
+            </button>
           ))}
-        </ul>
-      )}
-
-      {!loading && filter === "threads" && threads.length === 0 && !error && (
-        <div className="mt-4 rounded-lg border border-white/10 bg-stone-900/40 p-6 text-center">
-          <p className="text-sm text-stone-300">No threads match this filter.</p>
         </div>
-      )}
 
-      {!loading && filter === "threads" && threads.length > 0 && (
-        <ul className="mt-3 space-y-2.5">
-          {threads.map((thread) => (
-            <ThreadRowItem key={thread.threadId} thread={thread} />
-          ))}
-        </ul>
-      )}
+        {candidateCount > 0 && (
+          <Link
+            href="/email/candidates"
+            className="mt-3 flex items-center justify-between rounded-lg border border-orange-500/20 bg-orange-500/5 px-4 py-3 text-sm text-accent-muted transition hover:bg-orange-500/10"
+          >
+            <span>Review {candidateCount} candidate signals in the intake queue.</span>
+            <span className="text-xs">Open</span>
+          </Link>
+        )}
 
-      {!loading && !error && (emails.length > 0 || threads.length > 0) && (
-        <LoadMoreBar
-          loadedCount={emails.length + threads.length}
-          totalAvailable={totalAvailable}
-          isFetching={listQuery.isFetchingNextPage}
-          hasNext={!!listQuery.hasNextPage}
-          onLoadMore={() => listQuery.fetchNextPage()}
-        />
-      )}
-    </div>
+        {loading && <p className="px-1 py-3 text-sm text-stone-500">Loading...</p>}
+
+        {error && (
+          <div className="mt-3 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && filter !== "threads" && emails.length === 0 && (
+          <div className="mt-4 rounded-lg border border-white/10 bg-stone-900/40 p-6 text-center">
+            <p className="text-sm text-stone-300">
+              {filter === "all"
+                ? "No mail signals yet."
+                : filter === "reply-needed"
+                  ? "Nothing needs a reply right now."
+                  : "No signals match this filter."}
+            </p>
+            <p className="mt-1 text-xs text-stone-600">
+              {filter === "reply-needed"
+                ? "Switch tabs to see urgent, unread, or all mail — Klorn promotes a thread here when it detects something you should answer."
+                : "After sync, mail that needs action rises to the top."}
+            </p>
+            {filter === "reply-needed" && (
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFilter("all")}
+                  className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100"
+                >
+                  Show all signals
+                </button>
+                <button
+                  type="button"
+                  onClick={syncNow}
+                  disabled={syncing}
+                  className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100 disabled:opacity-50"
+                >
+                  {syncing ? "Syncing..." : "Sync now"}
+                </button>
+              </div>
+            )}
+            {filter === "all" && (
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <Link
+                  href="/settings"
+                  className="inline-flex min-h-11 items-center rounded-md bg-accent-light px-4 text-xs font-medium text-stone-950 transition hover:bg-accent-muted"
+                >
+                  Connect Google
+                </Link>
+                <button
+                  type="button"
+                  onClick={syncNow}
+                  disabled={syncing}
+                  className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100 disabled:opacity-50"
+                >
+                  {syncing ? "Syncing..." : "Sync now"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loading && filter !== "threads" && emails.length > 0 && (
+          <ul className="mt-3 space-y-2.5">
+            <li>
+              <BulkActionBar
+                allVisibleSelected={allVisibleSelected}
+                busy={bulkBusy}
+                selectedCount={selectedCount}
+                totalVisible={emails.length}
+                onApply={applyBulkAction}
+                onClear={() => setSelectedIds(new Set())}
+                onToggleAll={toggleAllVisible}
+              />
+            </li>
+            {emails.map((e) => (
+              <EmailRowItem
+                key={e.id}
+                email={e}
+                queue={filter}
+                reminderBusyKey={rowReminderBusy}
+                selected={selectedIds.has(e.id)}
+                onCreateReminder={createRowReminder}
+                onToggleSelected={toggleSelected}
+              />
+            ))}
+          </ul>
+        )}
+
+        {!loading && filter === "threads" && threads.length === 0 && !error && (
+          <div className="mt-4 rounded-lg border border-white/10 bg-stone-900/40 p-6 text-center">
+            <p className="text-sm text-stone-300">No threads match this filter.</p>
+          </div>
+        )}
+
+        {!loading && filter === "threads" && threads.length > 0 && (
+          <ul className="mt-3 space-y-2.5">
+            {threads.map((thread) => (
+              <ThreadRowItem key={thread.threadId} thread={thread} />
+            ))}
+          </ul>
+        )}
+
+        {!loading && !error && (emails.length > 0 || threads.length > 0) && (
+          <LoadMoreBar
+            loadedCount={emails.length + threads.length}
+            totalAvailable={totalAvailable}
+            isFetching={listQuery.isFetchingNextPage}
+            hasNext={!!listQuery.hasNextPage}
+            onLoadMore={() => listQuery.fetchNextPage()}
+          />
+        )}
+      </div>
+    </>
   );
 }
 
@@ -1426,4 +1549,55 @@ function senderName(raw: string): string {
   const match = raw.match(/^([^<]+?)\s*</);
   if (match?.[1]) return match[1].trim();
   return raw.replace(/[<>]/g, "").trim();
+}
+
+// ─── Mobile native mail row ─────────────────────────────────────────────────
+//
+// A clean phone list row (not the desktop card with checkbox + reminder band).
+// Bulk-select, threads, and per-row reminders stay desktop-only.
+
+function MobileEmailRow({ email, queue }: { email: EmailRow; queue: Filter }) {
+  const unread = !email.isRead;
+  const params = new URLSearchParams({ markRead: "false", queue });
+  const preview = email.summary || email.snippet;
+  return (
+    <li>
+      <Link
+        href={`/email/${email.id}?${params.toString()}`}
+        className="flex gap-3 rounded-2xl bg-stone-900/50 px-4 py-3 transition active:bg-stone-800/60"
+      >
+        <span
+          aria-hidden="true"
+          className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${unread ? "bg-amber-400" : "bg-transparent"}`}
+        />
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline justify-between gap-2">
+            <span
+              className={`truncate text-[15px] ${unread ? "font-semibold text-stone-50" : "font-medium text-stone-300"}`}
+            >
+              {senderName(email.from)}
+            </span>
+            <time className="shrink-0 text-[11px] tabular-nums text-stone-500">
+              {formatRelative(email.date)}
+            </time>
+          </span>
+          <span
+            className={`mt-0.5 block truncate text-[13px] ${unread ? "text-stone-200" : "text-stone-400"}`}
+          >
+            {email.subject || "No subject"}
+          </span>
+          {preview && (
+            <span className="mt-1 line-clamp-2 block text-[12px] leading-5 text-stone-500">
+              {preview}
+            </span>
+          )}
+          {email.priority === "URGENT" && (
+            <span className="mt-1.5 inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-300">
+              Urgent
+            </span>
+          )}
+        </span>
+      </Link>
+    </li>
+  );
 }
