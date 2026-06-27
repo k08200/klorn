@@ -123,6 +123,12 @@ let lastCatalogCheckDate = "";
 // UTC date of the last calibration snapshot run. Same trade-off: the daily
 // job upserts on (userId, dayKey), so a restart re-running it is idempotent.
 let lastCalibrationSnapshotDate = "";
+// UTC date of the last run of the weekly (Sunday) jobs. runAutomations() ticks
+// every 60s, so a bare `getDay() === 0` guard fires these ~1440 times every
+// Sunday; these in-memory date gates make them fire once (mirrors the catalog /
+// calibration gates above).
+let lastVoiceProfileDate = "";
+let lastSenderTraitDate = "";
 
 /** DB-based check: did we already send a briefing notification today? */
 export async function hasBriefingBeenSentToday(userId: string, timeZone: string): Promise<boolean> {
@@ -869,10 +875,17 @@ async function runAutomations() {
       cursor = configs[configs.length - 1].userId;
     }
 
+    // Gate the once-per-day / once-per-week jobs below so they fire once, not on
+    // every 60s tick. In-memory is fine: a restart re-running an idempotent job
+    // the same day is harmless.
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    const isSunday = new Date().getDay() === 0;
+
     // --- Weekly: Voice Profile Extraction (Sunday only) ---
     // Runs once per week for all users with Google connected. Each user is
     // skipped automatically if their profile was updated within the last 7 days.
-    if (new Date().getDay() === 0) {
+    if (isSunday && lastVoiceProfileDate !== todayUtc) {
+      lastVoiceProfileDate = todayUtc;
       import("./voice-profile-extractor.js")
         .then(({ extractVoiceProfilesForAllUsers }) => extractVoiceProfilesForAllUsers())
         .catch((err) => {
@@ -882,9 +895,10 @@ async function runAutomations() {
     }
 
     // --- Weekly: Sender Trait Extraction (Sunday only) ---
-    // Off-hot-path per-user extraction of relationship/recurring_intent facts.
-    // The judge does NOT read these in v0 — they are measured first (Phase 3/B2).
-    if (new Date().getDay() === 0) {
+    // Off-hot-path per-user extraction of relationship/recurring_intent facts
+    // (consumed by the judge only behind the SENDER_TRAITS_IN_JUDGE flag).
+    if (isSunday && lastSenderTraitDate !== todayUtc) {
+      lastSenderTraitDate = todayUtc;
       import("./sender-trait-extractor.js")
         .then(({ extractSenderTraitsForAllUsers }) => extractSenderTraitsForAllUsers())
         .catch((err) => {
@@ -897,7 +911,6 @@ async function runAutomations() {
     // Proactively verify every model the fallback chain depends on still
     // exists upstream, so a retired/renamed :free SKU surfaces as a named
     // alert instead of mystery 404s in the agent logs.
-    const todayUtc = new Date().toISOString().slice(0, 10);
     if (lastCatalogCheckDate !== todayUtc) {
       lastCatalogCheckDate = todayUtc;
       import("./openrouter-catalog-check.js")
@@ -940,6 +953,7 @@ async function runAutomations() {
     });
   } catch (err) {
     console.error("[AUTOMATION] Scheduler error:", err);
+    captureError(err, { tags: { scope: "automation.scheduler" } });
   } finally {
     await releaseSchedulerLock();
     schedulerInFlight = false;

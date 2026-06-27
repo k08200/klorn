@@ -185,12 +185,19 @@ async function fetchSenderItems(
     },
     orderBy: { receivedAt: "desc" },
     take: SENDER_HISTORY_SAMPLE,
-    select: { id: true },
-  })) as Array<{ id: string }>;
-  if (emails.length === 0) return [];
+    select: { id: true, from: true },
+  })) as Array<{ id: string; from: string }>;
+  // `contains` is a substring match: querying "alice@corp.com" also matches
+  // "malice@corp.com". Re-check the parsed address (extractEmailAddress is
+  // lowercased, as is senderAddress) so a different sender that merely shares
+  // an address suffix can't contaminate this sender's prior / tier history.
+  const ownIds = emails
+    .filter((e) => extractEmailAddress(e.from) === senderAddress)
+    .map((e) => e.id);
+  if (ownIds.length === 0) return [];
 
   return (await db.attentionItem.findMany({
-    where: { userId, source: "EMAIL", sourceId: { in: emails.map((e) => e.id) } },
+    where: { userId, source: "EMAIL", sourceId: { in: ownIds } },
     select: { sourceId: true, tier: true, tierReason: true, updatedAt: true },
   })) as SenderItemRow[];
 }

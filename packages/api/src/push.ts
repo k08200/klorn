@@ -346,10 +346,21 @@ export async function sendPushNotification(
           `[PUSH] Removed ${action.reason} subscription ${sub.id} (failureCount=${sub.failureCount})`,
         );
       } else {
-        await prisma.pushSubscription.update({
+        // Increment ATOMICALLY — sub.failureCount is from a findMany snapshot, so
+        // two pushes to the same sub in one tick would otherwise both write the
+        // same absolute value and lose a failure. Re-check the threshold on the
+        // fresh value so eviction can't be delayed by a stale read.
+        const updated = await prisma.pushSubscription.update({
           where: { id: sub.id },
-          data: { failureCount: action.failureCount, lastFailedAt: new Date() },
+          data: { failureCount: { increment: 1 }, lastFailedAt: new Date() },
+          select: { failureCount: true },
         });
+        if (updated.failureCount >= MAX_CONSECUTIVE_PUSH_FAILURES) {
+          await prisma.pushSubscription.delete({ where: { id: sub.id } });
+          console.log(
+            `[PUSH] Evicted subscription ${sub.id} after ${updated.failureCount} consecutive failures`,
+          );
+        }
       }
     }
   }

@@ -190,8 +190,11 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     if (!email) return reply.code(404).send({ error: "Email not found" });
 
     // Sync to Gmail first, then update DB
-    await toggleReadGmail(uid, email.gmailId, readVal).catch(() => {
-      // Gmail sync failed — still update local DB
+    await toggleReadGmail(uid, email.gmailId, readVal).catch((err) => {
+      // Gmail sync failed — still update local DB, but surface the divergence
+      // (DB will say read while Gmail still shows unread) instead of hiding it.
+      console.warn(`[EMAIL] toggleReadGmail failed for ${email.id}:`, err);
+      captureError(err, { tags: { scope: "email.read-sync" }, extra: { userId: uid } });
     });
     await prisma.emailMessage.update({
       where: { id: email.id },
@@ -212,7 +215,10 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     });
     if (!email) return reply.code(404).send({ error: "Email not found" });
 
-    await toggleStarGmail(uid, email.gmailId, starVal).catch(() => {});
+    await toggleStarGmail(uid, email.gmailId, starVal).catch((err) => {
+      console.warn(`[EMAIL] toggleStarGmail failed for ${email.id}:`, err);
+      captureError(err, { tags: { scope: "email.star-sync" }, extra: { userId: uid } });
+    });
     await prisma.emailMessage.update({
       where: { id: email.id },
       data: { isStarred: starVal },

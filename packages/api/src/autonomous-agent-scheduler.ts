@@ -183,6 +183,7 @@ async function runAutonomousAgent() {
     }
   } catch (err) {
     console.error("[AGENT] Scheduler error:", err);
+    captureError(err, { tags: { scope: "agent.scheduler" } });
   }
 }
 

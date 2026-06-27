@@ -1028,13 +1028,19 @@ export async function emailRoutes(app: FastifyInstance) {
 
   // ─── Reconcile (remove stale emails from DB) ──────────────────────────
   // POST /api/email/reconcile
-  app.post("/reconcile", async (request) => {
+  app.post("/reconcile", async (request, reply) => {
     const uid = getUserId(request);
     try {
       const result = await reconcileEmails(uid);
       return result;
     } catch (err) {
-      return { error: err instanceof Error ? err.message : "Reconcile failed" };
+      // Was returning HTTP 200 with an {error} body — a failed reconcile read as
+      // success to any caller checking status. Surface it (status + signal).
+      console.error(`[EMAIL-SYNC] Manual reconcile failed for ${uid}:`, err);
+      captureError(err, { tags: { scope: "email.reconcile.manual" }, extra: { userId: uid } });
+      return reply
+        .code(500)
+        .send({ error: err instanceof Error ? err.message : "Reconcile failed" });
     }
   });
 
