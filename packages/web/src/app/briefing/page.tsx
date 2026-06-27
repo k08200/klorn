@@ -221,20 +221,33 @@ function BriefingView() {
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
       <header className="mb-6 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
         <div className="h-1 bg-gradient-to-r from-amber-300 via-amber-200/40 to-transparent" />
-        <div className="grid gap-5 p-5 md:p-6 lg:grid-cols-[1fr_300px] lg:items-stretch">
-          <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+        {/* Mobile = content-first: hide the decorative work-signal panel and the
+            3-stat dashboard below their breakpoints so the brief itself is up
+            top. A compact Regenerate replaces the panel's button on phones. */}
+        <div className="grid gap-5 p-4 md:p-6 lg:grid-cols-[1fr_300px] lg:items-stretch">
+          <div className="min-w-0">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80 md:mb-2">
               Klorn · Briefing
             </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-              Today's decision brief
-            </h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="text-lg font-semibold tracking-tight text-stone-50 md:text-2xl">
+                Today's decision brief
+              </h1>
+              <button
+                type="button"
+                onClick={regenerate}
+                disabled={generating}
+                className="min-h-9 shrink-0 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50 lg:hidden"
+              >
+                {generating ? "..." : content ? "Regenerate" : "Generate"}
+              </button>
+            </div>
+            <p className="mt-2 hidden max-w-xl text-sm leading-6 text-stone-400 md:block">
               Mail and calendar items that need a call, sorted into approve, hold, and next steps.
               {formattedTime && <span className="ml-2 text-stone-400">Today {formattedTime}</span>}
             </p>
           </div>
-          <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
+          <div className="relative hidden min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20 lg:block">
             <EveSignalField className="absolute inset-0 border-0" />
             <button
               type="button"
@@ -245,7 +258,7 @@ function BriefingView() {
               {generating ? "Generating..." : content ? "Regenerate" : "Generate now"}
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-2 lg:col-span-2">
+          <div className="hidden grid-cols-3 gap-2 md:grid lg:col-span-2">
             <BriefStat label="Actions" value={topActions.length} />
             <BriefStat label="Feedback" value={Object.keys(feedback).length} />
             <BriefStat label="Status" value={content ? "Ready" : "Empty"} />

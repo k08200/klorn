@@ -152,19 +152,32 @@ function CalendarView() {
       <header className="mb-6 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
         <div className="h-1 bg-gradient-to-r from-amber-300 via-amber-200/40 to-transparent" />
         <div className="p-5 md:p-6">
+          {/* Mobile = content-first: the decorative work-signal panel and the
+              3-stat dashboard are hidden below their breakpoints so the month
+              shows sooner. A compact Sync replaces the panel's Sync on phones. */}
           <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
-            <div>
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+            <div className="min-w-0">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80 md:mb-2">
                 Klorn · Calendar
               </p>
-              <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
-                Meetings that need prep
-              </h1>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+              <div className="flex items-start justify-between gap-3">
+                <h1 className="text-lg font-semibold tracking-tight text-stone-50 md:text-2xl">
+                  Meetings that need prep
+                </h1>
+                <button
+                  type="button"
+                  onClick={syncNow}
+                  disabled={syncing}
+                  className="min-h-9 shrink-0 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50 lg:hidden"
+                >
+                  {syncing ? "..." : "Sync"}
+                </button>
+              </div>
+              <p className="mt-2 hidden max-w-xl text-sm leading-6 text-stone-400 md:block">
                 The next 14 days of events alongside the work signals that touch them.
               </p>
             </div>
-            <div className="relative min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
+            <div className="relative hidden min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20 lg:block">
               <EveSignalField className="absolute inset-0 border-0" />
               <button
                 type="button"
@@ -176,7 +189,7 @@ function CalendarView() {
               </button>
             </div>
           </div>
-          <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-lg border border-stone-800 bg-black/20">
+          <div className="mt-5 hidden grid-cols-3 overflow-hidden rounded-lg border border-stone-800 bg-black/20 md:grid">
             <CalendarStat label="Month" value={events.length} />
             <CalendarStat label="Today" value={eventsByDay.get(todayKey)?.length ?? 0} />
             <CalendarStat

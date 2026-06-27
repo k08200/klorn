@@ -590,47 +590,52 @@ function EmailView() {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
       <ComposeModal open={composeOpen} onClose={() => setComposeOpen(false)} />
-      <header className="mb-5 rounded-lg border border-white/10 bg-stone-900/40 p-5 shadow-xl shadow-black/10 md:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+      {/* Mobile = content-first: a compact title + small action row, with the
+          description, the 4-stat dashboard, and Reanalyze hidden until md so the
+          mail list isn't pushed off-screen. Desktop (md:+) keeps the full hero. */}
+      <header className="mb-4 rounded-lg border border-white/10 bg-stone-900/40 p-4 shadow-xl shadow-black/10 md:mb-5 md:p-6">
+        <div className="flex flex-col gap-3 md:gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80 md:mb-2">
               Klorn · Mail
             </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
+            <h1 className="text-lg font-semibold tracking-tight text-stone-50 md:text-2xl">
               Mail that needs a reply
             </h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+            <p className="mt-2 hidden max-w-xl text-sm leading-6 text-stone-400 md:block">
               Sorted by urgency and reply-needed signal.
               {source === "demo" && <span className="ml-2 text-accent">Demo data</span>}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setComposeOpen(true)}
-            disabled={source === "demo"}
-            title={source === "demo" ? "Connect Gmail to send email" : "Compose a new email"}
-            className="min-h-11 w-fit rounded-md bg-accent px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            ✎ Compose
-          </button>
-          <button
-            type="button"
-            onClick={syncNow}
-            disabled={syncing}
-            className="min-h-11 w-fit rounded-md border border-white/10 bg-stone-950/60 px-3 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:bg-white/5 hover:text-stone-100 disabled:opacity-50"
-          >
-            {syncing ? "Syncing..." : "Sync now"}
-          </button>
-          <button
-            type="button"
-            onClick={reanalyzeAttachments}
-            disabled={reanalyzing}
-            className="min-h-11 w-fit rounded-md border border-[#a8a29e]/25 bg-[#a8a29e]/10 px-3 text-xs font-medium text-stone-200 transition hover:bg-[#a8a29e]/15 disabled:opacity-50"
-          >
-            {reanalyzing ? "Analyzing..." : "Reanalyze attachments"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setComposeOpen(true)}
+              disabled={source === "demo"}
+              title={source === "demo" ? "Connect Gmail to send email" : "Compose a new email"}
+              className="min-h-11 w-fit rounded-md bg-accent px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              ✎ Compose
+            </button>
+            <button
+              type="button"
+              onClick={syncNow}
+              disabled={syncing}
+              className="min-h-11 w-fit rounded-md border border-white/10 bg-stone-950/60 px-3 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:bg-white/5 hover:text-stone-100 disabled:opacity-50"
+            >
+              {syncing ? "Syncing..." : "Sync now"}
+            </button>
+            <button
+              type="button"
+              onClick={reanalyzeAttachments}
+              disabled={reanalyzing}
+              className="hidden min-h-11 w-fit rounded-md border border-[#a8a29e]/25 bg-[#a8a29e]/10 px-3 text-xs font-medium text-stone-200 transition hover:bg-[#a8a29e]/15 disabled:opacity-50 md:inline-flex md:items-center"
+            >
+              {reanalyzing ? "Analyzing..." : "Reanalyze attachments"}
+            </button>
+          </div>
         </div>
-        <div className="mt-5 grid grid-cols-4 overflow-hidden rounded-md border border-white/10 bg-stone-950/60">
+        <div className="mt-5 hidden grid-cols-4 overflow-hidden rounded-md border border-white/10 bg-stone-950/60 md:grid">
           <SignalStat label="Unread" value={unreadCount} />
           <SignalStat label="Urgent" value={urgentCount} />
           <SignalStat label="Replies" value={replyCount} />

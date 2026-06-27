@@ -135,8 +135,10 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Spacer between header and bottom nav */}
-      <div aria-hidden="true" className="flex-1" />
+      {/* Spacer pushes nav to the bottom on desktop. On the mobile drawer that
+          leaves a huge empty void with the nav crammed at the bottom, so drop it
+          below md — nav then sits directly under the header. */}
+      <div aria-hidden="true" className="hidden flex-1 md:block" />
 
       {/* Workspace nav */}
       <div className="relative border-t border-stone-800 px-2 py-2">

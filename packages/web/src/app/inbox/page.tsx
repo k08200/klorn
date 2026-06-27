@@ -478,7 +478,7 @@ function ReplyNeededPanel() {
               <p className="mt-0.5 truncate text-[11px] text-stone-500">{formatFrom(email.from)}</p>
               {email.needsReplyReason && (
                 <p className="mt-1 line-clamp-1 text-[11px] text-stone-400">
-                  {email.needsReplyReason}
+                  {humanizeReplyReason(email.needsReplyReason)}
                 </p>
               )}
             </Link>
@@ -498,6 +498,21 @@ function formatFrom(from: string): string {
   const match = from.match(/^([^<]+)\s*</);
   if (match) return match[1].trim();
   return from;
+}
+
+// The backend's needsReplyReason is a snake_case enum (e.g. "action_items_present").
+// Never show the raw code to the user — map known ones and humanize the rest.
+function humanizeReplyReason(reason: string): string {
+  const map: Record<string, string> = {
+    action_items_present: "Has action items",
+    question_asked: "Asks a question",
+    direct_request: "Direct request",
+    deadline_mentioned: "Mentions a deadline",
+    awaiting_response: "Awaiting your response",
+    meeting_request: "Meeting request",
+    follow_up_needed: "Needs follow-up",
+  };
+  return map[reason] ?? reason.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
 // ─── Quick links panel ─────────────────────────────────────────────────────
