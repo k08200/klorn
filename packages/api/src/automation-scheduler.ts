@@ -267,6 +267,7 @@ async function notifyCandidateEmails(userId: string): Promise<void> {
       "email_candidate",
     ).catch((err) => {
       console.warn(`[AUTOMATION] Candidate email push failed for ${userId}:`, err);
+      captureError(err, { tags: { scope: "automation.candidate-push", userId } });
     });
   }
 }
@@ -338,15 +339,22 @@ async function runAutomations() {
     // the inline approve fast-path and reclaim rows orphaned by a crash.
     // Cheap (one indexed query for due rows) and runs under the scheduler
     // lock, so no duplicate execution across dynos. A no-op when empty.
-    drainActionOutbox()
-      .then(({ completed, retried, dead, reclaimed }) => {
-        if (completed + retried + dead + reclaimed > 0) {
-          console.log(
-            `[OUTBOX] drain: ${completed} completed, ${retried} retried, ${dead} dead, ${reclaimed} reclaimed`,
-          );
-        }
-      })
-      .catch((err) => console.warn("[OUTBOX] drain errored:", err));
+    // Awaited so the drain finishes INSIDE the scheduler lock — otherwise a
+    // fire-and-forget drain can outlive the lock and run concurrently with the
+    // next tick's drain, double-executing approved actions.
+    try {
+      const { completed, retried, dead, reclaimed } = await drainActionOutbox();
+      if (completed + retried + dead + reclaimed > 0) {
+        console.log(
+          `[OUTBOX] drain: ${completed} completed, ${retried} retried, ${dead} dead, ${reclaimed} reclaimed`,
+        );
+      }
+    } catch (err) {
+      // Escalate: a systemic outbox failure must not look like a routine
+      // advisory-lock false-release. Contained so the rest of the tick runs.
+      console.error("[OUTBOX] drain errored:", err);
+      captureError(err, { tags: { scope: "automation.outbox-drain" } });
+    }
 
     // Gmail watch renewal runs once per hour regardless of configs.
     // It is a no-op when GMAIL_PUBSUB_TOPIC is unset or no watches are due.
@@ -360,6 +368,7 @@ async function runAutomations() {
         })
         .catch((err) => {
           console.warn("[GMAIL-WATCH] Renewal sweep errored:", err);
+          captureError(err, { tags: { scope: "automation.gmail-watch-renewal" } });
         });
     }
 
@@ -784,6 +793,9 @@ async function runAutomations() {
                       `[AUTOMATION] Urgent email push failed for ${config.userId}:`,
                       err,
                     );
+                    captureError(err, {
+                      tags: { scope: "automation.urgent-push", userId: config.userId },
+                    });
                   });
 
                   // Admin-only SMS escalation. Gated inside sendSms (admin +
@@ -795,6 +807,9 @@ async function runAutomations() {
                   const smsBody = `Urgent: ${lead.subject || "(no subject)"} — from ${senderName(lead.from)}`;
                   sendSms(config.userId, smsBody).catch((err) => {
                     console.warn(`[AUTOMATION] Urgent email SMS failed for ${config.userId}:`, err);
+                    captureError(err, {
+                      tags: { scope: "automation.urgent-sms", userId: config.userId },
+                    });
                   });
                 }
               }
@@ -827,6 +842,9 @@ async function runAutomations() {
         if (PROACTIVE_ACTIONS_ENABLED || perUserProactive) {
           runProactiveActions(config.userId).catch((err) => {
             console.error(`[PROACTIVE] Failed for ${config.userId}:`, err);
+            captureError(err, {
+              tags: { scope: "automation.proactive", userId: config.userId },
+            });
           });
         }
 
@@ -841,6 +859,9 @@ async function runAutomations() {
         if (PHONE_ESCALATION_ENABLED && phoneOptIn) {
           escalateUnackedPush(config.userId).catch((err) => {
             console.warn(`[PHONE] Escalation sweep failed for ${config.userId}:`, err);
+            captureError(err, {
+              tags: { scope: "automation.phone-escalation", userId: config.userId },
+            });
           });
         }
       }
@@ -854,7 +875,22 @@ async function runAutomations() {
     if (new Date().getDay() === 0) {
       import("./voice-profile-extractor.js")
         .then(({ extractVoiceProfilesForAllUsers }) => extractVoiceProfilesForAllUsers())
-        .catch((err) => console.error("[AUTOMATION] Voice profile extraction failed:", err));
+        .catch((err) => {
+          console.error("[AUTOMATION] Voice profile extraction failed:", err);
+          captureError(err, { tags: { scope: "automation.voice-profile" } });
+        });
+    }
+
+    // --- Weekly: Sender Trait Extraction (Sunday only) ---
+    // Off-hot-path per-user extraction of relationship/recurring_intent facts.
+    // The judge does NOT read these in v0 — they are measured first (Phase 3/B2).
+    if (new Date().getDay() === 0) {
+      import("./sender-trait-extractor.js")
+        .then(({ extractSenderTraitsForAllUsers }) => extractSenderTraitsForAllUsers())
+        .catch((err) => {
+          console.error("[AUTOMATION] Sender trait extraction failed:", err);
+          captureError(err, { tags: { scope: "automation.sender-traits" } });
+        });
     }
 
     // --- Daily: OpenRouter catalog check ---
@@ -866,7 +902,10 @@ async function runAutomations() {
       lastCatalogCheckDate = todayUtc;
       import("./openrouter-catalog-check.js")
         .then(({ runOpenRouterCatalogCheck }) => runOpenRouterCatalogCheck())
-        .catch((err) => console.warn("[AUTOMATION] Catalog check failed:", err));
+        .catch((err) => {
+          console.warn("[AUTOMATION] Catalog check failed:", err);
+          captureError(err, { tags: { scope: "automation.catalog-check" } });
+        });
     }
 
     // --- Daily: calibration snapshot ---
@@ -878,20 +917,27 @@ async function runAutomations() {
       lastCalibrationSnapshotDate = todayUtc;
       import("./calibration-snapshot.js")
         .then(({ runDailyCalibrationSnapshots }) => runDailyCalibrationSnapshots())
-        .catch((err) => console.warn("[AUTOMATION] Calibration snapshot failed:", err));
+        .catch((err) => {
+          console.warn("[AUTOMATION] Calibration snapshot failed:", err);
+          captureError(err, { tags: { scope: "automation.calibration-snapshot" } });
+        });
       // --- Daily: ontology write-side proposals ---
       // Turn the same override ledger into advisory threshold-change proposals
       // (the read/write ontology's write side). Best-effort: never throws, never
       // mutates the classifier — proposals are applied by a human via a code PR.
       import("./ontology-proposals-store.js")
         .then(({ recomputeOntologyProposalsSafe }) => recomputeOntologyProposalsSafe())
-        .catch((err) => console.warn("[AUTOMATION] Ontology proposal recompute failed:", err));
+        .catch((err) => {
+          console.warn("[AUTOMATION] Ontology proposal recompute failed:", err);
+          captureError(err, { tags: { scope: "automation.ontology-proposals" } });
+        });
     }
 
     // --- Every tick: Resurrect snoozed AttentionItems whose snooze has expired ---
-    await resurrectSnoozedItems().catch((err) =>
-      console.warn("[AUTOMATION] Snooze resurrection failed:", err),
-    );
+    await resurrectSnoozedItems().catch((err) => {
+      console.warn("[AUTOMATION] Snooze resurrection failed:", err);
+      captureError(err, { tags: { scope: "automation.snooze-resurrection" } });
+    });
   } catch (err) {
     console.error("[AUTOMATION] Scheduler error:", err);
   } finally {

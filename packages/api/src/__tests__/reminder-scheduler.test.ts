@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sendPushNotification } from "../push.js";
 import { deliverDueReminderById, scheduleReminderDeliveryCheck } from "../reminder-scheduler.js";
+import { captureError } from "../sentry.js";
 import { pushNotification } from "../websocket.js";
 
 type ReminderRow = {
@@ -35,6 +36,7 @@ const state = vi.hoisted(() => ({
 
 vi.mock("../push.js", () => ({ sendPushNotification: vi.fn(async () => undefined) }));
 vi.mock("../websocket.js", () => ({ pushNotification: vi.fn() }));
+vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 vi.mock("../db.js", () => {
   const prisma = {
     reminder: {
@@ -114,6 +116,19 @@ describe("reminder scheduler delivery", () => {
     expect((vi.mocked(sendPushNotification).mock.calls[0]?.[1] as PushPayload).notificationId).toBe(
       "notification-1",
     );
+  });
+
+  it("surfaces a push delivery failure instead of swallowing it (F6)", async () => {
+    vi.mocked(sendPushNotification).mockRejectedValueOnce(new Error("push boom"));
+    const reminder = seedReminder();
+
+    // Delivery itself still succeeds — push is best-effort/fire-and-forget.
+    await expect(deliverDueReminderById(reminder.id)).resolves.toBe(true);
+
+    // ...but the failure must leave a signal, not vanish.
+    await vi.waitFor(() => expect(captureError).toHaveBeenCalled());
+    const ctx = vi.mocked(captureError).mock.calls[0]?.[1] as { tags?: { scope?: string } };
+    expect(ctx?.tags?.scope).toBe("reminder.push");
   });
 
   it("schedules a short direct delivery check", async () => {

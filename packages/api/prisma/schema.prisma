@@ -101,6 +101,7 @@ model User {
   contactTrustScores        ContactTrustScore[]
   llmCostLedger             LlmCostLedger[]
   llmUsageLogs              LlmUsageLog[]
+  senderTraits              SenderTrait[]
 }
 
 enum UserRole {
@@ -979,6 +980,49 @@ enum ProposalStatus {
   OPEN
   APPLIED
   DISMISSED
+}
+
+enum SenderTraitKind {
+  relationship
+  recurring_intent
+}
+
+enum SenderTraitStatus {
+  active
+  superseded
+  conflicted
+}
+
+// Extracted-from-content sender facts (Phase 3 / B2). Distinct from the
+// DB-derived SenderFacts bundle in sender-policy.ts. The judge does NOT read
+// this table in v0 — extraction is measured before any trait is injected.
+model SenderTrait {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sender        String          // sender address — same key as sender-policy.ts
+  factKind      SenderTraitKind
+  factValue     String          // validated per-kind in code (sender-trait-policy.ts)
+  confidence    Float
+  evidenceText  String
+  sourceSig     String          // attention-input-hash-style signature of the sample
+  observedCount Int             @default(1)
+
+  // Write-time contradiction capture — never a silent overwrite.
+  conflictValue    String?
+  conflictEvidence String?
+  conflictedAt     DateTime?
+
+  status SenderTraitStatus @default(active)
+
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, sender, factKind])
+  @@index([userId, sender])
+  @@index([userId, factKind, status])
 }
 
 enum AttentionSource {

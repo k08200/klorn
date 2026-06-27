@@ -19,6 +19,7 @@ import {
 import { MODEL } from "../openai.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { getProviderChain } from "../providers/index.js";
+import { getTraitMetrics } from "../sender-trait-metrics.js";
 
 type FeedbackGroup = { signal: string; _count: { signal: number } };
 
@@ -616,5 +617,31 @@ export async function adminRoutes(app: FastifyInstance) {
       })),
       runAt: new Date().toISOString(),
     };
+  });
+
+  // GET /api/admin/sender-traits — Sender-trait measurement metrics + evidence
+  // inspector. Returns aggregate metrics (coverage, confidence distribution,
+  // conflict rate) and per-sender trait rows with evidenceText so the caller
+  // can inspect what the extractor learned and catch drift early.
+  // Optional ?userId= narrows to one user's inbox.
+  app.get("/sender-traits", async (request) => {
+    const userId = (request.query as { userId?: string }).userId;
+    const metrics = await getTraitMetrics(prisma, userId);
+    const traits = await prisma.senderTrait.findMany({
+      where: userId ? { userId } : {},
+      orderBy: [{ sender: "asc" }, { factKind: "asc" }],
+      take: 200,
+      select: {
+        sender: true,
+        factKind: true,
+        factValue: true,
+        confidence: true,
+        evidenceText: true,
+        status: true,
+        conflictValue: true,
+        observedCount: true,
+      },
+    });
+    return { metrics, traits };
   });
 }
