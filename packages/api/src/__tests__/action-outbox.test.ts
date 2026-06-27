@@ -99,6 +99,7 @@ import {
   claimAndRunOutboxRow,
   deriveIdempotencyKey,
   drainActionOutbox,
+  formatOutboxError,
   isTransientToolError,
   type OutboxRow,
 } from "../action-outbox.js";
@@ -175,6 +176,30 @@ describe("isTransientToolError", () => {
   ])("permanent: %s", (e) => expect(isTransientToolError(e)).toBe(false));
 });
 
+describe("formatOutboxError", () => {
+  it("encodes category + attempt progress + message", () => {
+    expect(
+      formatOutboxError({ category: "transient", attemptNo: 1, maxAttempts: 5, message: "503" }),
+    ).toBe("[transient] attempt 1/5: 503");
+    expect(
+      formatOutboxError({
+        category: "transient-exhausted",
+        attemptNo: 5,
+        maxAttempts: 5,
+        message: "timeout",
+      }),
+    ).toBe("[transient-exhausted] attempt 5/5: timeout");
+    expect(
+      formatOutboxError({
+        category: "permanent",
+        attemptNo: 1,
+        maxAttempts: 5,
+        message: "no perm",
+      }),
+    ).toBe("[permanent] attempt 1/5: no perm");
+  });
+});
+
 describe("claimAndRunOutboxRow", () => {
   it("completes: executes, marks COMPLETED, writes PA result + chat message + APPROVED feedback", async () => {
     const row = seedRow();
@@ -238,6 +263,8 @@ describe("claimAndRunOutboxRow", () => {
     expect((stored?.nextAttemptAt as Date).getTime()).toBe(NOW.getTime() + 30_000);
     // PA stays EXECUTED (claimed), not FAILED
     expect(paStore.get("pa-1")?.status).toBe("EXECUTED");
+    // lastError is structured: category + attempt progress + message
+    expect(stored?.lastError).toBe("[transient] attempt 1/5: 503 upstream");
   });
 
   it("dead-letters a transient failure on the last allowed attempt", async () => {
@@ -247,6 +274,8 @@ describe("claimAndRunOutboxRow", () => {
     expect(outcome.kind).toBe("dead");
     expect(outboxStore.get("ob-1")?.status).toBe("DEAD");
     expect(paStore.get("pa-1")?.status).toBe("FAILED");
+    // out of retries on a transient error → category says so
+    expect(outboxStore.get("ob-1")?.lastError).toBe("[transient-exhausted] attempt 5/5: timeout");
   });
 
   it("dead-letters a permanent failure immediately, regardless of attempts left", async () => {

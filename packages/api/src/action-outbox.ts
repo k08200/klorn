@@ -222,6 +222,23 @@ export async function claimAndRunOutboxRow(
   return runOutboxAttempt(row, attemptNo, now);
 }
 
+export type OutboxFailureCategory = "transient" | "transient-exhausted" | "permanent";
+
+/**
+ * Structured `lastError` for an outbox row, so an operator reading a DEAD or
+ * QUEUED row sees WHY it failed and HOW far it got — not just a bare message
+ * fragment. "transient" = will retry; "transient-exhausted" = retryable but out
+ * of attempts; "permanent" = not retryable.
+ */
+export function formatOutboxError(props: {
+  category: OutboxFailureCategory;
+  attemptNo: number;
+  maxAttempts: number;
+  message: string;
+}): string {
+  return `[${props.category}] attempt ${props.attemptNo}/${props.maxAttempts}: ${props.message}`;
+}
+
 /**
  * Execute ONE attempt of an already-claimed row and persist its outcome.
  * `attemptNo` (1-based) is THIS attempt's number, matching what the claim
@@ -272,14 +289,34 @@ async function runOutboxAttempt(
       const nextAttemptAt = new Date(now.getTime() + backoffMs(attemptNo));
       await db.actionOutbox.update({
         where: { id: row.id },
-        data: { status: "QUEUED", attempts: attemptNo, lastError: message, nextAttemptAt },
+        data: {
+          status: "QUEUED",
+          attempts: attemptNo,
+          lastError: formatOutboxError({
+            category: "transient",
+            attemptNo,
+            maxAttempts: row.maxAttempts,
+            message,
+          }),
+          nextAttemptAt,
+        },
       });
       return { kind: "retry", error: message, nextAttemptAt };
     }
 
     await db.actionOutbox.update({
       where: { id: row.id },
-      data: { status: "DEAD", attempts: attemptNo, lastError: message, completedAt: now },
+      data: {
+        status: "DEAD",
+        attempts: attemptNo,
+        lastError: formatOutboxError({
+          category: transient ? "transient-exhausted" : "permanent",
+          attemptNo,
+          maxAttempts: row.maxAttempts,
+          message,
+        }),
+        completedAt: now,
+      },
     });
     await onOutboxDead(row, message);
     return { kind: "dead", error: message };
