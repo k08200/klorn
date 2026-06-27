@@ -263,18 +263,111 @@ function CalendarView() {
         </div>
       )}
 
+      {/* A 6×7 month grid is unreadable at ~56px/column on a phone (event times
+          clip to "00:3"). Desktop keeps the grid; mobile gets a forward-looking
+          agenda list grouped by day, which matches the hero's "next 14 days". */}
       {!loading && (
-        <MonthGrid
-          viewMonth={viewMonth}
-          monthLabel={monthLabel}
-          onPrev={goPrevMonth}
-          onNext={goNextMonth}
-          onToday={goToday}
-          eventsByDay={eventsByDay}
-          todayKey={todayKey}
-          timeZone={userTimezone}
-        />
+        <>
+          <div className="hidden md:block">
+            <MonthGrid
+              viewMonth={viewMonth}
+              monthLabel={monthLabel}
+              onPrev={goPrevMonth}
+              onNext={goNextMonth}
+              onToday={goToday}
+              eventsByDay={eventsByDay}
+              todayKey={todayKey}
+              timeZone={userTimezone}
+            />
+          </div>
+          {events.length > 0 && (
+            <div className="md:hidden">
+              <AgendaList events={events} todayKey={todayKey} timeZone={userTimezone} />
+            </div>
+          )}
+        </>
       )}
+    </div>
+  );
+}
+
+function AgendaList({
+  events,
+  todayKey,
+  timeZone,
+}: {
+  events: CalendarEvent[];
+  todayKey: string;
+  timeZone: string;
+}) {
+  // Group upcoming events (today onward) by local day, ascending. Past days are
+  // dropped — an agenda is forward-looking, unlike the month grid.
+  const byDay = new Map<string, CalendarEvent[]>();
+  for (const ev of events) {
+    const key = dayKeyForInZone(new Date(ev.startTime), timeZone);
+    if (key < todayKey) continue;
+    const list = byDay.get(key);
+    if (list) list.push(ev);
+    else byDay.set(key, [ev]);
+  }
+  const days = [...byDay.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  for (const [, list] of days) {
+    list.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  }
+
+  if (days.length === 0) {
+    return (
+      <div className="rounded-lg border border-stone-800 bg-stone-950/30 px-4 py-6 text-center text-sm text-stone-500">
+        Nothing coming up this month.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {days.map(([key, list]) => (
+        <div key={key}>
+          <div className="mb-1.5 flex items-center gap-2 px-0.5">
+            <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">
+              {new Date(list[0].startTime).toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                timeZone,
+              })}
+            </h3>
+            {key === todayKey && (
+              <span className="rounded-full bg-amber-300 px-2 py-0.5 text-[10px] font-semibold text-stone-950">
+                Today
+              </span>
+            )}
+          </div>
+          <ul className="space-y-1.5">
+            {list.map((ev) => (
+              <li key={ev.id}>
+                <Link
+                  href={`/calendar/${ev.id}`}
+                  className="flex items-start gap-3 rounded-lg border border-stone-800/60 bg-stone-950/30 px-3 py-2.5 transition hover:bg-stone-800/40"
+                >
+                  <span className="w-14 shrink-0 pt-0.5 text-right text-xs tabular-nums text-stone-400">
+                    {ev.allDay ? "All day" : formatTime(new Date(ev.startTime), timeZone)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-stone-100">
+                      {ev.title || "Untitled"}
+                    </span>
+                    {ev.location && (
+                      <span className="mt-0.5 block truncate text-[11px] text-stone-500">
+                        {ev.location}
+                      </span>
+                    )}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }

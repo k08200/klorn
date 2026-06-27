@@ -667,7 +667,7 @@ function EmailView() {
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search sender, body, attachment text, extracted fields"
+          placeholder="Search mail, attachments, fields"
           className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-stone-950/60 px-3 text-sm text-stone-200 outline-none transition placeholder:text-stone-600 focus:border-accent/45"
         />
         <button
@@ -1061,7 +1061,7 @@ function SignalStat({ label, value }: { label: string; value: number }) {
 
 function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filter) => void }) {
   return (
-    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 scrollbar-hide">
+    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {FILTERS.filter((f) => !DOMAIN_FILTER_KEYS.includes(f.key)).map((f) => {
         const active = f.key === current;
         return (

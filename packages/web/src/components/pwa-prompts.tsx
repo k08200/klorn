@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { isNativePlatform } from "../lib/native/capacitor";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -21,6 +22,11 @@ const LEGACY_INSTALL_DISMISSED_KEY = `${LEGACY_KEY_PREFIX}-install-dismissed`;
 // and surface manual Add-to-Home-Screen instructions.
 function isIosSafariBrowser(): boolean {
   if (typeof window === "undefined") return false;
+  // Inside the Capacitor native shell the app is ALREADY installed — its
+  // WKWebView is not display-mode:standalone and its UA still looks like
+  // Safari, so without this guard the "Add to Home Screen" card would tell
+  // users to install an app they are literally running.
+  if (isNativePlatform()) return false;
   const ua = window.navigator.userAgent;
   const isIos = /iPad|iPhone|iPod/.test(ua) && !(window as { MSStream?: unknown }).MSStream;
   if (!isIos) return false;
@@ -43,6 +49,8 @@ export default function PwaPrompts() {
 
   // Install prompt
   useEffect(() => {
+    // Already running as the installed native app — never prompt to install.
+    if (isNativePlatform()) return;
     const handler = (e: Event) => {
       e.preventDefault();
       setInstallPrompt(e as BeforeInstallPromptEvent);
