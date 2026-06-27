@@ -82,14 +82,24 @@ describe("buildJudgeContext", () => {
   it("returns empty context when there is no history at all", async () => {
     wireMocks({});
     const ctx = await buildJudgeContext("u1", { from: "Alice <alice@corp.com>" });
-    expect(ctx).toEqual({ corrections: [], senderPrior: null, senderFacts: null });
+    expect(ctx).toEqual({
+      corrections: [],
+      senderPrior: null,
+      senderFacts: null,
+      senderTraits: [],
+    });
   });
 
   it("returns empty context (and does not throw) when the DB fails", async () => {
     attentionFindMany.mockRejectedValue(new Error("db down"));
     emailFindMany.mockRejectedValue(new Error("db down"));
     const ctx = await buildJudgeContext("u1", { from: "Alice <alice@corp.com>" });
-    expect(ctx).toEqual({ corrections: [], senderPrior: null, senderFacts: null });
+    expect(ctx).toEqual({
+      corrections: [],
+      senderPrior: null,
+      senderFacts: null,
+      senderTraits: [],
+    });
   });
 
   it("ranks correction examples: same sender, then same domain, then recency — capped at 5", async () => {

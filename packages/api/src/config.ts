@@ -56,6 +56,14 @@ export const TRUST_MOSTLY_RELIABLE_THRESHOLD = floatEnv("TRUST_MOSTLY_RELIABLE_T
 // a recent pattern of misses.
 export const TRUST_HALF_LIFE_DAYS = intEnv("TRUST_HALF_LIFE_DAYS", 60);
 
+// ── Sender traits in judge (Phase 3b) ─────────────────────────────────
+// Inject extracted SenderTrait facts into the judge prompt. OFF by default:
+// flip only after sender-trait extraction has been measured (coverage + low
+// conflict + evidence eyeball) so the classifier isn't grounded on unvalidated
+// facts. The synthetic eval set has no traits, so this never affects the eval
+// gate; the live guardrail is decision-metrics drift.
+export const SENDER_TRAITS_IN_JUDGE = process.env.SENDER_TRAITS_IN_JUDGE === "true";
+
 // ── Feedback adaptor ──────────────────────────────────────────────────
 export const FEEDBACK_DISMISS_THRESHOLD = intEnv("FEEDBACK_DISMISS_THRESHOLD", 4);
 export const FEEDBACK_WINDOW_DAYS = intEnv("FEEDBACK_WINDOW_DAYS", 30);
