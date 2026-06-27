@@ -783,8 +783,19 @@ export default function SettingsPage() {
       <Suspense>
         <GoogleConnectRedirect />
       </Suspense>
-      <main className="mx-auto max-w-4xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
-        <header className="mb-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-sm shadow-black/20">
+      <main className="mx-auto max-w-4xl px-4 pb-28 pt-3 sm:px-6 md:py-10">
+        {/* MOBILE — native large-title header */}
+        <header className="mb-6 md:hidden">
+          <h1 className="text-[28px] font-bold leading-none tracking-tight text-stone-50">
+            Settings
+          </h1>
+          <p className="mt-1.5 text-sm text-stone-400">
+            Profile, notifications, execution, and data
+          </p>
+        </header>
+
+        {/* DESKTOP — unchanged */}
+        <header className="mb-6 hidden rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-sm shadow-black/20 md:block">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">
             Control panel
           </p>
