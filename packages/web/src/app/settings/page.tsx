@@ -8,6 +8,7 @@ import { useConfirm } from "../../components/confirm-dialog";
 import { FeedbackPolicyPanel } from "../../components/feedback-policy-panel";
 import { GitHubSection } from "../../components/github-section";
 import { GoogleConnectRedirect } from "../../components/google-connect-redirect";
+import InAppBrowserNotice from "../../components/in-app-browser-notice";
 import { NaverImapSection } from "../../components/naver-imap-section";
 import { OAuthErrorBanner } from "../../components/oauth-error-banner";
 import { ListSkeleton } from "../../components/skeleton";
@@ -1450,6 +1451,7 @@ export default function SettingsPage() {
         {/* Integrations */}
         <section className="mb-8">
           <h2 className="text-sm font-semibold text-stone-300 mb-3">Connections</h2>
+          <InAppBrowserNotice />
           <Suspense>
             <OAuthErrorBanner />
           </Suspense>

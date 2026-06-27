@@ -22,14 +22,14 @@ export const metadata: Metadata = {
     siteName: "Klorn",
     url: "https://app.klorn.ai/",
     type: "website",
-    images: [{ url: "/brand/og-image.png", width: 1200, height: 630 }],
+    images: [{ url: "/brand/og-image.png?v=k2", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Klorn — The clear signal worth acting on",
     description:
       "The approval layer for AI agents. Mail, calendar, and signals filtered into one clear decision queue.",
-    images: ["/brand/og-image.png"],
+    images: ["/brand/og-image.png?v=k2"],
   },
   appleWebApp: {
     capable: true,

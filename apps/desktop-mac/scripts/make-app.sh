@@ -48,7 +48,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Dock/Finder icon: build AppIcon.icns from the source PNG (the glossy K).
+# Dock/Finder icon: build AppIcon.icns from the source PNG (the matte K).
 ICON_SRC="Resources/AppIcon.png"
 if [ -f "$ICON_SRC" ] && command -v iconutil >/dev/null 2>&1; then
   echo "▸ Generating AppIcon.icns…"

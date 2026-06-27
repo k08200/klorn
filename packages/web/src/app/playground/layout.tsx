@@ -16,13 +16,13 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
     url: "/playground",
     type: "website",
-    images: [{ url: "/brand/og-image.png", width: 1200, height: 630 }],
+    images: [{ url: "/brand/og-image.png?v=k2", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
     title: TITLE,
     description: DESCRIPTION,
-    images: ["/brand/og-image.png"],
+    images: ["/brand/og-image.png?v=k2"],
   },
 };
 

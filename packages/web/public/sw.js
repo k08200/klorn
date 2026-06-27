@@ -1,5 +1,7 @@
 // Klorn Service Worker — offline caching + push notification support
-const CACHE_NAME = "klorn-v6";
+// v8: icons regenerated to a bigger K on a full-white tile; flush the v7 cache
+// so the query-less push icon/badge (/icon-192.png, /badge-96.png) re-fetch.
+const CACHE_NAME = "klorn-v8";
 const PRECACHE_URLS = ["/", "/chat", "/briefing", "/manifest.json"];
 
 // Install: precache shell

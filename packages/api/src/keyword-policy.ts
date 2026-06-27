@@ -26,6 +26,22 @@ export const MARKETING_SUBJECT_RE =
   /unsubscribe|view (this email )?in (your )?browser|\[광고\]|\[알림\]|\(광고\)|수신거부|무료\s*체험|할인\s*쿠폰/i;
 
 /**
+ * Promotional / marketing detector — the firewall's SILENT fast-path signal:
+ * Gmail's calibrated CATEGORY_PROMOTIONS label OR an explicit marketing subject
+ * marker (광고 / view-in-browser / unsubscribe). Single source of truth so the
+ * judge's fast-path (poc-judge.ts) and the Gmail auto-mark-read path
+ * (email-firewall.ts) can never disagree about what counts as "promotional".
+ */
+export function isClearMarketing(email: {
+  labels?: string[] | null;
+  subject?: string | null;
+}): boolean {
+  const labels = email.labels ?? [];
+  const subject = email.subject ?? "";
+  return labels.includes("CATEGORY_PROMOTIONS") || MARKETING_SUBJECT_RE.test(subject);
+}
+
+/**
  * Time-pressure vocabulary, shared by the keyword fallback and the sender-prior
  * urgency guard (poc-judge.ts:canShortCircuit). Case-insensitive — callers pass
  * raw subject/snippet.

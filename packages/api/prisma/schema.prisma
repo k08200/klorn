@@ -58,6 +58,10 @@ model User {
   // resurrected every still-unexpired stolen token.
   sessionsInvalidatedAt     DateTime?
   betaProGrantedAt          DateTime?
+  // Stamped the first time the founder welcome email is sent to this user, so
+  // they receive it exactly once across the email-verify and Google sign-in
+  // paths. Null = not sent yet (the atomic claim in welcome-email.ts flips it).
+  welcomeEmailSentAt        DateTime?
   conversations             Conversation[]
   tokens                    UserToken[]
   tasks                     Task[]
@@ -69,6 +73,7 @@ model User {
   agentLogs                 AgentLog[]
   notifications             Notification[]
   pushSubscriptions         PushSubscription[]
+  devicePushTokens          DevicePushToken[]
   pushDeliveryLogs          PushDeliveryLog[]
   pushRingEvents            PushRingEvent[]
   phoneEscalations          PhoneEscalation[]
@@ -386,6 +391,22 @@ model PushSubscription {
   // those up via scripts/cleanup-stale-push-subs.ts.
   origin    String?
   createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Native push registration for the Capacitor mobile shell (apps/mobile).
+// Unlike PushSubscription (Web Push / VAPID, browser-owned endpoint), this is
+// an FCM token (Android) or APNs token (iOS) from the device. Register upserts
+// by the unique token and prunes the stale one when a device re-registers.
+model DevicePushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String // "android" | "ios"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
 }

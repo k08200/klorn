@@ -184,7 +184,7 @@ export default function PwaPrompts() {
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f5f0e8]">
             <Image
-              src="/brand/mark.svg?v=cres1"
+              src="/brand/mark.svg?v=matte2"
               alt=""
               width={36}
               height={36}
@@ -223,7 +223,7 @@ export default function PwaPrompts() {
           <div className="flex items-start gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f5f0e8]">
               <Image
-                src="/brand/mark.svg?v=cres1"
+                src="/brand/mark.svg?v=matte2"
                 alt=""
                 width={36}
                 height={36}

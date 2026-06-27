@@ -32,11 +32,19 @@ vi.mock("../providers/index.js", () => ({
 const recorded: Array<Record<string, unknown>> = [];
 // Hoisted so we can assert the servedByUserKey flag createCompletion forwards.
 const trueUpSpy = vi.hoisted(() => vi.fn(async () => {}));
+// Model-aware pre-bill stub: a `:free` slug estimates 0 (free models cost
+// nothing to pre-bill), a paid slug estimates a positive cent. This lets the
+// vision `:free`→paid retry assert that the closure pre-bills the model that
+// ACTUALLY served (the paid slug), not the requested `:free` one (which would
+// estimate 0 — the bug this guards).
+const PAID_PREBILL_CENTS = 7;
 vi.mock("../llm-usage.js", () => ({
   recordLlmUsage: vi.fn(async (input: Record<string, unknown>) => {
     recorded.push(input);
   }),
-  estimatePrebillCents: vi.fn(() => 0),
+  estimatePrebillCents: vi.fn((model: string) =>
+    model.endsWith(":free") || model === "openrouter/free" ? 0 : PAID_PREBILL_CENTS,
+  ),
   trueUpCostLedgers: trueUpSpy,
 }));
 
@@ -224,5 +232,94 @@ describe("createVisionCompletion — usage ledger threading", () => {
     await createVisionCompletion(PARAMS, { userId: "user-4", priority: "foreground" });
 
     expect(recorded[0]).toMatchObject({ source: "foreground" });
+  });
+
+  it("retries the paid slug when the :free vision SKU is 404 (OpenRouter-only chain)", async () => {
+    // Real incident: VISION_MODEL defaults to google/gemini-2.5-flash:free and
+    // OpenRouter 404s that SKU ("This model is unavailable for free — use this
+    // slug instead: google/gemini-2.5-flash"). The fix strips :free and retries
+    // the paid slug on the SAME provider instead of hard-failing → VISION_FAILED.
+    const seen: string[] = [];
+    chain.push(
+      makeProvider("openrouter", "openrouter:env-vision", async (_p, model) => {
+        seen.push(model);
+        if (model.endsWith(":free")) {
+          throw new Error(
+            "404 This model is unavailable for free. The paid version is available now - use this slug instead: google/gemini-2.5-flash",
+          );
+        }
+        return COMPLETION;
+      }),
+    );
+    const { createVisionCompletion, VISION_MODEL } = await import("../openai.js");
+    // Test premise: the default vision SKU is the :free one that 404s.
+    expect(VISION_MODEL.endsWith(":free")).toBe(true);
+    const paid = VISION_MODEL.replace(/:free$/, "");
+
+    const result = await createVisionCompletion(PARAMS, { userId: "user-5" });
+
+    expect(result).toBe(COMPLETION);
+    // First the :free SKU (404), then the stripped paid slug (served).
+    expect(seen).toEqual([VISION_MODEL, paid]);
+    // Ledger records the model that actually served — the paid slug.
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ provider: "openrouter", model: paid });
+    // Pre-bill must reflect the PAID model that served, not the requested
+    // `:free` slug (which estimates 0). The closure was reading params.model
+    // (still `:free` on the retry) → a paid call billed at 0; it must read the
+    // resolved/dispatched model instead.
+    expect(recorded[0]?.estimatedCostCents).toBe(PAID_PREBILL_CENTS);
+  });
+
+  it("falls through to the next provider when the paid retry throws a generic error", async () => {
+    // After a :free 404 → paid retry, if the paid retry fails with a NON-budget,
+    // NON-availability error (e.g. a transient 5xx / unknown error), the vision
+    // call must not hard-fail the whole request — a healthy next provider (env
+    // Gemini, separate quota) should still serve it, mirroring createCompletion's
+    // graceful degradation. A bare `throw err2` here would escape the for-loop
+    // and fail every image OCR outright.
+    const userOR = makeProvider("openrouter", "openrouter:user:u7", async (_p, model) => {
+      if (model.endsWith(":free")) {
+        throw new Error("404 This model is unavailable for free");
+      }
+      throw new Error("boom: transient upstream error"); // generic, non-budget
+    });
+    userOR.ownedByUser = true;
+    chain.push(
+      userOR,
+      makeProvider("gemini", "gemini:env-vision", async () => COMPLETION),
+    );
+    const { createVisionCompletion } = await import("../openai.js");
+
+    const result = await createVisionCompletion(PARAMS, { userId: "u7" });
+
+    expect(result).toBe(COMPLETION);
+    // Only the SUCCESSFUL provider (env Gemini) reaches the ledger.
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ provider: "gemini", model: "gemini-2.5-flash" });
+  });
+
+  it("falls through to env Gemini when a BYOK key's :free 404 → paid retry has no credit", async () => {
+    // BYOK OpenRouter key leads the chain (userOwned first). Its :free SKU 404s,
+    // the paid retry 402s (no credit) → we fail over to env Gemini's native key
+    // (separate quota) so a keyless/credit-less path still degrades gracefully.
+    const userOR = makeProvider("openrouter", "openrouter:user:u6", async (_p, model) => {
+      if (model.endsWith(":free")) {
+        throw new Error("404 This model is unavailable for free");
+      }
+      throw { status: 402, message: "insufficient credits" };
+    });
+    userOR.ownedByUser = true;
+    chain.push(
+      userOR,
+      makeProvider("gemini", "gemini:env-vision", async () => COMPLETION),
+    );
+    const { createVisionCompletion } = await import("../openai.js");
+
+    const result = await createVisionCompletion(PARAMS, { userId: "u6" });
+
+    expect(result).toBe(COMPLETION);
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ provider: "gemini", model: "gemini-2.5-flash" });
   });
 });

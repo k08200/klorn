@@ -1,0 +1,24 @@
+# Dependencies (apps/mobile is standalone — managed with npm, not the pnpm workspace)
+node_modules/
+
+# android/ IS committed (it carries our manifest permissions + future native
+# customizations). Build artifacts inside it are excluded by android/.gitignore.
+# Web assets are copied in by `cap sync`, so don't track the generated copy:
+/android/app/src/main/assets/public/
+/android/app/src/main/assets/capacitor.config.json
+
+# ios/ IS committed (carries Info.plist permissions + future native config).
+# Build artifacts / Pods / generated assets are excluded by ios/.gitignore.
+# (Requires Xcode + CocoaPods-free SPM; build on a Mac with Xcode.)
+
+# Built APKs (5MB+ binaries — don't commit; rebuild with gradlew assembleDebug)
+*.apk
+
+# Firebase / signing secrets — NEVER commit (security.yml scans for these).
+google-services.json
+GoogleService-Info.plist
+*.keystore
+*.jks
+*.p8
+*.p12
+.env

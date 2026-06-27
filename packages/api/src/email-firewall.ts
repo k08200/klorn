@@ -14,8 +14,10 @@ import { prisma } from "./db.js";
 import { scheduleAgentForActionableEmail } from "./email-action-trigger.js";
 import { analyzePendingEmailAttachments, upsertEmailAttachments } from "./email-attachments.js";
 import { classifyNeedsReplyFromSignals, classifyPriority } from "./email-priority.js";
+import { markAsRead } from "./gmail.js";
 import type { GmailRawEmail } from "./gmail-fetch.js";
 import { buildJudgeContext } from "./judge-context.js";
+import { isClearMarketing } from "./keyword-policy.js";
 import { getUserLlmCredentials } from "./llm-credentials.js";
 import { judgeEmail, type PocTier } from "./poc-judge.js";
 import type { ProviderCredentials } from "./providers/index.js";
@@ -134,6 +136,18 @@ export async function persistGmailEmail(
       // user sees a draft proposal without waiting for the cron. Debounced
       // inside the trigger to bound LLM cost.
       scheduleAgentForActionableEmail(userId, tier);
+      // Promotional / marketing mail (the judge's fast-path SILENT bucket) is
+      // noise the user never needs to open — mark it read in Gmail so it
+      // doesn't sit unread. Promotional-ONLY by product decision: QUEUE/PUSH/
+      // AUTO and non-promotional SILENT keep their unread state + alerts. Gated
+      // on the judge's TIER (must be SILENT) AND the SAME deterministic signal
+      // the judge's fast-path uses (isClearMarketing) — without the tier gate a
+      // PUSH/QUEUE email whose subject merely contains "unsubscribe" would be
+      // silently marked read while ALSO firing a notification. Gmail-only by
+      // construction (this is the Gmail ingest path). Fire-and-forget.
+      if (tier === "SILENT" && isClearMarketing({ labels: email.labels, subject: email.subject })) {
+        void markPromotionalEmailRead(userId, { id: createdEmail.id, gmailId: email.gmailId });
+      }
     })
     .catch((err) => {
       // console first: captureError is a no-op without a Sentry DSN, so in
@@ -149,6 +163,38 @@ export async function persistGmailEmail(
     });
 
   return { emailId: createdEmail.id, isNew: true };
+}
+
+/**
+ * Auto-mark a promotional/marketing email read in Gmail. Called only for mail
+ * the judge silences via the marketing fast-path, so the user's inbox isn't
+ * littered with unread ads. Best-effort by contract: markAsRead already
+ * updates the local `isRead` mirror and returns `{ error }` (rather than
+ * throwing) when Gmail is disconnected, so neither outcome can break sync or
+ * classification — but we still surface a log signal on every skip/failure so
+ * a silently-never-marked inbox stays diagnosable (captureError is a no-op
+ * without a Sentry DSN).
+ */
+async function markPromotionalEmailRead(
+  userId: string,
+  email: { id: string; gmailId: string },
+): Promise<void> {
+  try {
+    const result = await markAsRead(userId, email.gmailId);
+    if ("error" in result && result.error) {
+      // Gmail not connected / token expired — an expected, benign state (the
+      // user simply hasn't linked Gmail). Log it but do NOT captureError: this
+      // would fire on every promo email for every keyless user and bury real
+      // signal. The unexpected failures (thrown below) are the ones worth Sentry.
+      console.warn(`[FIREWALL] promo auto-read skipped (user ${userId}): ${result.error}`);
+    }
+  } catch (err) {
+    console.warn("[FIREWALL] promo auto-read failed (ids in Sentry extra)", err);
+    captureError(err, {
+      tags: { scope: "firewall.promo_auto_read" },
+      extra: { userId, emailId: email.id, gmailId: email.gmailId },
+    });
+  }
 }
 
 interface JudgeableEmailRow {

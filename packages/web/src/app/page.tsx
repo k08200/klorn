@@ -62,7 +62,7 @@ const trustRows = [
 ];
 
 function BrandMark({ className = "" }: { className?: string }) {
-  return <img className={className} src="/brand/mark.svg?v=cres1" alt="" />;
+  return <img className={className} src="/brand/mark.svg?v=matte2" alt="" />;
 }
 
 function HeroProductScene() {
