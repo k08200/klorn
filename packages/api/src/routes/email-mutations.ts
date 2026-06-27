@@ -67,15 +67,22 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
   app.post(
     "/send",
     { preHandler: requireAuth, config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
-    async (request) => {
+    async (request, reply) => {
       const uid = getUserId(request);
       const { to, subject, body } = request.body as { to: string; subject: string; body: string };
 
       if (!to || !subject || !body) {
-        return { error: "Missing required fields: to, subject, body" };
+        return reply.code(400).send({ error: "Missing required fields: to, subject, body" });
       }
 
+      // A soft error from sendEmail (bad address, no-reply, Gmail not connected)
+      // must be a 4xx, not a 200 with an { error } body — otherwise callers that
+      // gate on HTTP status treat a failed send as success (the reply-draft flow
+      // cleared the draft on failure before this).
       const result = await sendEmail(uid, to, subject, body);
+      if (result && "error" in result) {
+        return reply.code(400).send(result);
+      }
       return result;
     },
   );
