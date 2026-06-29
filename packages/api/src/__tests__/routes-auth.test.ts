@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken, verifyToken } from "../auth.js";
+import { getOAuth2Client } from "../gmail.js";
 
 // Stub email sender — auth register fires it non-blocking and swallows errors,
 // but we want to assert it was called with the right token.
@@ -209,6 +210,51 @@ async function registerAndGetToken(
 function authHeader(token: string) {
   return { authorization: `Bearer ${token}` };
 }
+
+describe("GET /api/auth/google/callback — error handling", () => {
+  beforeEach(resetStores);
+
+  // A provider/library error that must NEVER reach the client.
+  const SECRET = "ENOTFOUND internal-oauth-host.acme.local";
+  const GENERIC = "Google authorization failed. Please try again.";
+  const makeTokenExchangeThrow = () =>
+    vi.mocked(getOAuth2Client).mockReturnValueOnce({
+      getToken: vi.fn(async () => {
+        throw new Error(SECRET);
+      }),
+    } as never);
+
+  it("redirects social login with a generic error, never the raw provider error", async () => {
+    makeTokenExchangeThrow();
+    const state = signToken({ userId: "n1", email: "__google_login__" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`,
+    });
+    expect(res.statusCode).toBe(302);
+    const location = res.headers.location as string;
+    expect(location).toContain("/login?error=");
+    expect(location).toContain(encodeURIComponent(GENERIC));
+    expect(location).not.toContain("ENOTFOUND");
+    expect(location).not.toContain("internal-oauth-host");
+    await app.close();
+  });
+
+  it("returns a generic error on the integration 500, never the raw provider error", async () => {
+    makeTokenExchangeThrow();
+    const state = signToken({ userId: "u-int", email: "user@example.com" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/auth/google/callback?code=abc&state=${encodeURIComponent(state)}`,
+    });
+    expect(res.statusCode).toBe(500);
+    expect(res.json().error).toBe(GENERIC);
+    expect(JSON.stringify(res.json())).not.toContain("ENOTFOUND");
+    await app.close();
+  });
+});
 
 describe("POST /api/auth/register", () => {
   beforeEach(resetStores);
