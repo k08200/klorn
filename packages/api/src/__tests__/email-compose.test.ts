@@ -19,14 +19,16 @@ vi.mock("../gmail.js", () => ({
 // import graph stays light and side-effect free.
 vi.mock("../email-sync.js", () => ({ syncEmailByGmailId: vi.fn() }));
 
-// requireAuth touches user + device rows. A user with no devices is a legacy
-// session that auth lets through; null sessionsInvalidatedAt means not revoked.
+// requireAuth touches user + device rows. A valid session has a registered
+// device (every login calls registerDevice), so the device lookup must resolve
+// for auth to pass; null sessionsInvalidatedAt means not revoked.
 vi.mock("../db.js", () => {
   const prisma = {
     user: { findUnique: vi.fn(async () => ({ id: "user-1", sessionsInvalidatedAt: null })) },
     device: {
-      findUnique: vi.fn(async () => null),
-      count: vi.fn(async () => 0),
+      findUnique: vi.fn(async () => ({ id: "auth-device", userId: "user-1" })),
+      count: vi.fn(async () => 1),
+      update: vi.fn(async () => ({})),
     },
     emailMessage: { findFirst: vi.fn(async () => null) },
   };
