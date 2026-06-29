@@ -26,6 +26,7 @@ import sanitizeHtml from "sanitize-html";
 import { upsertAttentionForEmailJudgement } from "./attention-mirror.js";
 import { decryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
+import { isAllowedImapHost } from "./is-allowed-imap-host.js";
 import { buildJudgeContext } from "./judge-context.js";
 import { getUserLlmCredentials } from "./llm-credentials.js";
 import { judgeEmail } from "./poc-judge.js";
@@ -346,6 +347,17 @@ export async function syncNaverImapForUser(userId: string): Promise<SyncResult |
     },
   });
   if (!user?.naverImapEmail || !user.naverImapPasswordCipher || !user.naverImapHost) {
+    return null;
+  }
+  // Re-validate the stored host at the connection boundary, not only at the
+  // /connect write. Enforcing the SSRF allowlist on every poll means a host
+  // that ever reaches this column by any other write path (migration, admin
+  // tooling, future endpoint) can never open a TLS connection to an internal
+  // target.
+  if (!isAllowedImapHost(user.naverImapHost)) {
+    console.warn(
+      `[naver-imap] poll skipped — host not allowlisted for user ${userId}: ${user.naverImapHost}`,
+    );
     return null;
   }
   return syncNaverImap({

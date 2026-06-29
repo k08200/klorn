@@ -7,14 +7,15 @@
  * (169.254.169.254:993, localhost, an internal hostname) and use the reflected
  * connection error as a blind-SSRF reachability oracle.
  *
- * Naver is the only supported provider today, so the allowlist is exact: a host
- * on the naver.com domain, IMAPS port only. Adding a provider later means adding
- * its host here on purpose — not silently accepting arbitrary hosts.
+ * Naver is the only supported provider today, so the allowlist is an EXACT set
+ * of known IMAP hosts, IMAPS port only. A wildcard suffix (e.g. "*.naver.com")
+ * is deliberately NOT used: it would also accept non-IMAP hosts like
+ * smtp.naver.com and any future user-controllable subdomain. Adding a provider
+ * later means adding its exact host here on purpose — never silently widening.
  */
 
 const ALLOWED_IMAP_PORTS = new Set(["993"]); // IMAPS (TLS) only
 const ALLOWED_IMAP_HOSTS = new Set(["imap.naver.com"]);
-const ALLOWED_IMAP_HOST_SUFFIXES = [".naver.com"];
 
 export function isAllowedImapHost(hostInput: string): boolean {
   const trimmed = hostInput.trim().toLowerCase();
@@ -29,6 +30,5 @@ export function isAllowedImapHost(hostInput: string): boolean {
 
   if (!host) return false;
   if (!ALLOWED_IMAP_PORTS.has(port)) return false;
-  if (ALLOWED_IMAP_HOSTS.has(host)) return true;
-  return ALLOWED_IMAP_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+  return ALLOWED_IMAP_HOSTS.has(host);
 }
