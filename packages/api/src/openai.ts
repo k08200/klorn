@@ -161,7 +161,16 @@ async function enforceCostGates(
     if (!gate.allowed) {
       throw new DailyCostCapExceededError(DAILY_COST_CAP_MESSAGE);
     }
-    if (!userKeyAvailable) void recordCostUsage(userId, estCents, model);
+    if (!userKeyAvailable) {
+      // Await the pre-bill so the atomic increment lands before we return, and
+      // re-check the post-increment total: concurrent calls that both passed
+      // the read-side gate above can't both slip past the cap (closes the
+      // check-then-act TOCTOU under concurrency / multi-dyno).
+      const usage = await recordCostUsage(userId, estCents, model);
+      if (usage?.overCap) {
+        throw new DailyCostCapExceededError(DAILY_COST_CAP_MESSAGE);
+      }
+    }
   }
 
   if (!userKeyAvailable) recordGlobalCostUsage(estCents);

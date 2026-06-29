@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 let mockRow: { cents: number } | null = null;
+let mockUpsertCents = 0;
+let upsertShouldThrow = false;
 const upserts: Array<{ userId: string; dayKey: string; data: Record<string, unknown> }> = [];
 
 vi.mock("../db.js", () => ({
@@ -8,6 +10,7 @@ vi.mock("../db.js", () => ({
     llmCostLedger: {
       findUnique: vi.fn(async () => mockRow),
       upsert: vi.fn(async (args: unknown) => {
+        if (upsertShouldThrow) throw new Error("db down");
         const a = args as {
           where: { userId_dayKey: { userId: string; dayKey: string } };
           create: Record<string, unknown>;
@@ -17,7 +20,8 @@ vi.mock("../db.js", () => ({
           dayKey: a.where.userId_dayKey.dayKey,
           data: a.create,
         });
-        return {};
+        // Post-increment total the real DB would return from `select: { cents }`.
+        return { cents: mockUpsertCents };
       }),
     },
   },
@@ -28,6 +32,8 @@ const ORIGINAL_GLOBAL_CAP = process.env.GLOBAL_DAILY_COST_CAP_CENTS;
 
 afterEach(() => {
   mockRow = null;
+  mockUpsertCents = 0;
+  upsertShouldThrow = false;
   upserts.length = 0;
   if (ORIGINAL_CAP === undefined) {
     delete process.env.DAILY_COST_CAP_CENTS;
@@ -97,6 +103,49 @@ describe("checkCostGate", () => {
     const { checkCostGate } = await import("../cost-guard.js");
     const result = await checkCostGate("user-1");
     expect(result.allowed).toBe(false);
+  });
+});
+
+describe("recordCostUsage — atomic pre-bill with post-increment over-cap signal (M3/L)", () => {
+  it("returns the post-increment total and flags overCap when the atomic increment crosses the cap", async () => {
+    process.env.DAILY_COST_CAP_CENTS = "100";
+    vi.resetModules();
+    mockUpsertCents = 130; // two concurrent calls both passed the read gate, total now 130
+    const { recordCostUsage } = await import("../cost-guard.js");
+    const usage = await recordCostUsage("user-1", 20, "gpt-x");
+    expect(usage).toEqual({ totalCents: 130, overCap: true });
+    // select cents so the caller can short-circuit on the real total
+    expect(upserts).toHaveLength(1);
+  });
+
+  it("does not flag overCap when the post-increment total is under the cap", async () => {
+    process.env.DAILY_COST_CAP_CENTS = "100";
+    vi.resetModules();
+    mockUpsertCents = 80;
+    const { recordCostUsage } = await import("../cost-guard.js");
+    expect(await recordCostUsage("user-1", 20, "gpt-x")).toEqual({
+      totalCents: 80,
+      overCap: false,
+    });
+  });
+
+  it("never flags overCap when the cap is disabled (0)", async () => {
+    process.env.DAILY_COST_CAP_CENTS = "0";
+    vi.resetModules();
+    mockUpsertCents = 9999;
+    const { recordCostUsage } = await import("../cost-guard.js");
+    expect(await recordCostUsage("user-1", 20, "gpt-x")).toEqual({
+      totalCents: 9999,
+      overCap: false,
+    });
+  });
+
+  it("returns null on a ledger write failure (best-effort, never throws)", async () => {
+    process.env.DAILY_COST_CAP_CENTS = "100";
+    vi.resetModules();
+    upsertShouldThrow = true;
+    const { recordCostUsage } = await import("../cost-guard.js");
+    expect(await recordCostUsage("user-1", 20, "gpt-x")).toBeNull();
   });
 });
 

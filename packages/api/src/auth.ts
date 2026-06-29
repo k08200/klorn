@@ -223,12 +223,13 @@ export async function isDeviceSessionValid(token: string): Promise<boolean> {
   const tHash = hashToken(token);
   const device = await db.device.findUnique({ where: { tokenHash: tHash } });
   if (!device) {
-    // No device record — check if the user has ANY devices registered.
-    // If they do, this token was kicked. If they don't, it's a legacy session (pre-device tracking).
-    const payload = verifyToken(token);
-    const deviceCount = await db.device.count({ where: { userId: payload.userId } });
-    // Legacy session: no devices registered at all → allow through
-    return deviceCount === 0;
+    // No device record → this session was logged out or kicked. Reject it.
+    // Every real session has registered a device since the Device table shipped
+    // (2026-03), and any pre-device-tracking "legacy" token expired long ago
+    // (7-day TTL). The old "0 devices = allow through" allowance is therefore
+    // dead for legitimate sessions and only re-accepted logged-out/kicked tokens
+    // — defeating server-side revocation on the common single-device logout.
+    return false;
   }
   // Update lastActiveAt (non-blocking)
   db.device

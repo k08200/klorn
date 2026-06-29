@@ -27,6 +27,12 @@ describe("isAllowedImapHost — SSRF allowlist", () => {
     expect(isAllowedImapHost("naver.com.evil.com:993")).toBe(false);
   });
 
+  it("rejects non-IMAP naver subdomains (exact-set, not a wildcard suffix)", () => {
+    expect(isAllowedImapHost("smtp.naver.com:993")).toBe(false);
+    expect(isAllowedImapHost("naver.com:993")).toBe(false);
+    expect(isAllowedImapHost("workmail.naver.com:993")).toBe(false);
+  });
+
   it("rejects empty / malformed input", () => {
     expect(isAllowedImapHost("")).toBe(false);
     expect(isAllowedImapHost("   ")).toBe(false);

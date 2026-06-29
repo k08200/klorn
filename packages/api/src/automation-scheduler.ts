@@ -11,6 +11,7 @@
 
 import { drainActionOutbox } from "./action-outbox.js";
 import { findOpenEmailAttentionItemId } from "./attention-override.js";
+import { sendAutoReplyViaFloor } from "./auto-reply-send.js";
 import { createDailyBriefingDelivery } from "./briefing.js";
 import {
   SCHEDULER_CALENDAR_SYNC_INTERVAL_MS,
@@ -30,7 +31,7 @@ import {
   summarizeUnsummarizedEmails,
   syncEmails,
 } from "./email-sync.js";
-import { getAuthedClient, renewExpiringGmailWatches, sendEmail } from "./gmail.js";
+import { getAuthedClient, renewExpiringGmailWatches } from "./gmail.js";
 import { parseGoogleDateTime } from "./google-calendar-time.js";
 import { formatUrgentEmailBody, senderName } from "./notification-format.js";
 import { escalateUnackedPush } from "./phone-escalation.js";
@@ -381,6 +382,11 @@ async function runAutomations() {
 
     const BATCH_SIZE = 100;
     let cursor: string | undefined;
+    // Every active userId seen across ALL batches this run. Used after the loop
+    // to prune the per-user dedup Maps so they don't grow unbounded with users
+    // who were later deleted/disabled (accumulate-then-prune, never per-batch —
+    // a per-batch prune would evict users paginated into other batches).
+    const activeUserIds = new Set<string>();
 
     for (;;) {
       const configs = await prisma.automationConfig.findMany({
@@ -401,6 +407,7 @@ async function runAutomations() {
 
       // Fetch user plans for feature gating
       const configUserIds = configs.map((c) => c.userId);
+      for (const id of configUserIds) activeUserIds.add(id);
       const automationUsers = await prisma.user.findMany({
         where: { id: { in: configUserIds } },
         select: { id: true, plan: true, role: true },
@@ -674,7 +681,17 @@ async function runAutomations() {
                       if (matched.actionType === "AUTO_REPLY") {
                         const emailMatch = email.from.match(/<([^>]+)>/) || [null, email.from];
                         const toAddr = emailMatch[1] || email.from;
-                        await sendEmail(config.userId, toAddr, `Re: ${email.subject}`, replyBody);
+                        // Route the autonomous send through the deterministic
+                        // floor (mint receipt → executeToolCall re-verifies the
+                        // payloadHash) instead of calling gmail.sendEmail
+                        // directly, so every send stays on the single gated,
+                        // audited path (W1).
+                        await sendAutoReplyViaFloor(
+                          config.userId,
+                          toAddr,
+                          `Re: ${email.subject}`,
+                          replyBody,
+                        );
                         const notification = await prisma.notification.create({
                           data: {
                             userId: config.userId,
@@ -884,6 +901,15 @@ async function runAutomations() {
       }
       if (configs.length < BATCH_SIZE) break;
       cursor = configs[configs.length - 1].userId;
+    }
+
+    // Reclaim per-user dedup Map entries for users no longer in any automation
+    // config (deleted/disabled). Pruned once against the full active set so a
+    // user paginated into another batch is never wrongly evicted.
+    for (const map of [briefingSentToday, lastEmailSyncAt, lastReconcileAt, lastCalendarSyncAt]) {
+      for (const userId of map.keys()) {
+        if (!activeUserIds.has(userId)) map.delete(userId);
+      }
     }
 
     // Gate the once-per-day / once-per-week jobs below so they fire once, not on

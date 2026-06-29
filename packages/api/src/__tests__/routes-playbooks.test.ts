@@ -13,8 +13,10 @@ vi.mock("../gmail.js", () => ({
 vi.mock("../db.js", () => ({
   db: {
     device: {
-      findUnique: vi.fn(async () => null),
-      count: vi.fn(async () => 0),
+      // A valid session has a registered device (every login registers one),
+      // so the auth device lookup must resolve for requireAuth to pass.
+      findUnique: vi.fn(async () => ({ id: "auth-device", userId: "user-1" })),
+      count: vi.fn(async () => 1),
       update: vi.fn(async () => ({})),
     },
   },
