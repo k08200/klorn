@@ -97,10 +97,10 @@ export function getToolsForPlan(hasGoogle: boolean, plan: string) {
  * Check if a specific tool call is allowed for a plan.
  * Used by autonomous agent and tool executor to reject gated calls at runtime.
  */
-export function isToolAllowedForPlan(toolName: string, plan: string): boolean {
+export function isToolAllowedForPlan(toolName: string, plan: string, role?: string): boolean {
   const featureKey = TOOL_FEATURE_MAP[toolName];
   if (!featureKey) return true;
-  return planHasFeature(plan, featureKey);
+  return planHasFeature(plan, featureKey, role);
 }
 
 /** Basic string guard — returns trimmed string or throws */

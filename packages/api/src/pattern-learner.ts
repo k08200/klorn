@@ -559,10 +559,12 @@ async function runPatternAnalysisForAllUsers() {
     const patternUserIds = configs.map((c) => c.userId);
     const patternUsers = await prisma.user.findMany({
       where: { id: { in: patternUserIds } },
-      select: { id: true, plan: true },
+      select: { id: true, plan: true, role: true },
     });
     const eligibleUserIds = new Set(
-      patternUsers.filter((u) => planHasFeature(u.plan, "pattern_learning")).map((u) => u.id),
+      patternUsers
+        .filter((u) => planHasFeature(u.plan, "pattern_learning", u.role ?? undefined))
+        .map((u) => u.id),
     );
 
     for (const { userId } of configs.filter((c) => eligibleUserIds.has(c.userId))) {
