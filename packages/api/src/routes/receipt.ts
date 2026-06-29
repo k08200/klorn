@@ -25,6 +25,7 @@ import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
+import { requireEntitled } from "../entitlement-guard.js";
 
 interface ReceiptItem {
   id: string;
@@ -54,6 +55,13 @@ interface DailyReceipt {
 }
 
 export async function receiptRoutes(app: FastifyInstance) {
+  // Plugin-level auth + paywall gate (the per-route requireAuth below is kept
+  // and idempotent). requireEntitled runs after requireAuth so request.userId
+  // is set; it's a no-op pre-launch. Refuses non-entitled users at the paid
+  // firewall-receipt surface.
+  app.addHook("preHandler", requireAuth);
+  app.addHook("preHandler", requireEntitled);
+
   app.get("/today", { preHandler: requireAuth }, async (request): Promise<DailyReceipt> => {
     const userId = getUserId(request);
 
