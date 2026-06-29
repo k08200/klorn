@@ -25,6 +25,7 @@ import {
   markGoogleTokenForReconnect,
 } from "../gmail.js";
 import { mapGoogleEventTimes } from "../google-calendar-time.js";
+import { captureError } from "../sentry.js";
 import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
 import { maybeSendWelcomeEmail } from "../welcome-email.js";
 
@@ -886,24 +887,24 @@ export function authRoutes(app: FastifyInstance) {
 
       return reply.redirect(`${webUrl}/settings?google=connected`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "OAuth failed";
+      // Never reflect the raw provider/library error to the client — it can leak
+      // internal infrastructure detail (hostnames, library internals, stack
+      // fragments). Log the real error server-side; show a generic message. The
+      // message is now a constant, so the desktop HTML needs no escaping.
+      console.error("[OAUTH] callback failed:", err instanceof Error ? err.message : String(err));
+      captureError(err, { tags: { scope: "auth.oauth.callback" } });
+      const message = "Google authorization failed. Please try again.";
       if (statePayload.email === "__google_login__") {
         return reply.redirect(`${webUrl}/login?error=${encodeURIComponent(message)}`);
       }
       if (statePayload.email === "__google_login_desktop__") {
-        const htmlMessage = message
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;")
-          .replace(/'/g, "&#39;");
         reply.type("text/html");
         return reply.send(`<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Klorn Login</title>
 <style>body{font-family:system-ui;background:#0a0a0a;color:#e5e7eb;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
 .box{text-align:center;padding:40px}.err{font-size:48px;margin-bottom:16px;color:#ef4444}.t{font-size:14px;color:#9ca3af;margin-top:12px}</style>
 </head><body><div class="box"><div class="err">✕</div><h2>Login Failed</h2>
-<p class="t">${htmlMessage}<br>Please try again in Klorn Desktop.</p>
+<p class="t">${message}<br>Please try again in Klorn Desktop.</p>
 </div></body></html>`);
       }
       return reply.code(500).send({ error: message });
@@ -959,7 +960,11 @@ export function authRoutes(app: FastifyInstance) {
   // POST /api/auth/reset-password — Reset password with token
   app.post(
     "/reset-password",
-    { schema: { body: resetPasswordBodySchema } },
+    {
+      schema: { body: resetPasswordBodySchema },
+      // Rate-limit token-grinding, matching /forgot-password and /resend-verification.
+      config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
+    },
     async (request, reply) => {
       const { token, newPassword } = request.body as {
         token: string;
