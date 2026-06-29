@@ -17,10 +17,12 @@
  * so classification never blocks on the correction loop.
  */
 
-import { SENDER_TRAITS_IN_JUDGE } from "./config.js";
+import { LEARNED_RULES_IN_JUDGE, SENDER_TRAITS_IN_JUDGE } from "./config.js";
 import { db } from "./db.js";
 import { extractEmailAddress } from "./email-address.js";
 import { getCachedInteractionNode } from "./interaction-graph.js";
+import { getAppliedRulesForMatch } from "./learned-rule-store.js";
+import type { LearnedRule } from "./learned-rules.js";
 import { EMPTY_JUDGE_CONTEXT, type JudgeContext } from "./poc-judge.js";
 import {
   type CorrectionExample,
@@ -273,6 +275,27 @@ async function fetchSenderTraits(
 }
 
 /**
+ * APPLIED learned rules for judge short-circuiting (Slice 4). Flag-gated
+ * (LEARNED_RULES_IN_JUDGE, default off) and fail-soft in its OWN try/catch: a
+ * rule-query error logs a signal and returns [] rather than bubbling to the
+ * outer catch, so a rule outage never costs the correction loop. Returns ALL
+ * the user's APPLIED rules; the per-email match runs in poc-judge.
+ */
+async function fetchLearnedRules(userId: string): Promise<LearnedRule[]> {
+  if (!LEARNED_RULES_IN_JUDGE) return [];
+  try {
+    return await getAppliedRulesForMatch(userId);
+  } catch (err) {
+    console.warn(
+      "[judge-context] learned-rule fetch failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    captureError(err, { tags: { scope: "judge-context-learned-rules" }, extra: { userId } });
+    return [];
+  }
+}
+
+/**
  * Fetch correction few-shots, sender prior, and sender facts for one email.
  * Never throws — a broken correction loop must degrade to plain
  * classification. (getCachedInteractionNode and getTrustScore are
@@ -286,13 +309,15 @@ export async function buildJudgeContext(
     const senderAddress = extractEmailAddress(input.from || "");
     const correctionExcludeId =
       input.excludeOwnCorrection && input.excludeEmailId ? input.excludeEmailId : undefined;
-    const [corrections, senderItems, interaction, commitments, senderTraits] = await Promise.all([
-      fetchCorrections(userId, senderAddress, correctionExcludeId),
-      fetchSenderItems(userId, senderAddress, input.excludeEmailId),
-      fetchInteractionFact(userId, senderAddress),
-      fetchCommitmentFact(userId, senderAddress),
-      fetchSenderTraits(userId, senderAddress),
-    ]);
+    const [corrections, senderItems, interaction, commitments, senderTraits, learnedRules] =
+      await Promise.all([
+        fetchCorrections(userId, senderAddress, correctionExcludeId),
+        fetchSenderItems(userId, senderAddress, input.excludeEmailId),
+        fetchInteractionFact(userId, senderAddress),
+        fetchCommitmentFact(userId, senderAddress),
+        fetchSenderTraits(userId, senderAddress),
+        fetchLearnedRules(userId),
+      ]);
 
     const senderPrior = senderItems.length > 0 ? buildPrior(senderItems) : null;
     const history = buildTierHistory(senderItems);
@@ -306,7 +331,7 @@ export async function buildJudgeContext(
           }
         : null;
 
-    return { corrections, senderPrior, senderFacts, senderTraits };
+    return { corrections, senderPrior, senderFacts, senderTraits, learnedRules };
   } catch (err) {
     captureError(err, { tags: { scope: "judge-context" }, extra: { userId } });
     return EMPTY_JUDGE_CONTEXT;

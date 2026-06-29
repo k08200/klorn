@@ -18,6 +18,7 @@
 import type { ClassifiableEmail } from "./email-classifier.js";
 import { resolveEscalation } from "./judge-dial.js";
 import { isClearMarketing, keywordFeatures, looksUrgent } from "./keyword-policy.js";
+import { type LearnedRule, matchLearnedRules } from "./learned-rules.js";
 import { asString, asUnitInterval, isNonFinitePresent } from "./llm-coerce.js";
 import { parseLlmJson } from "./llm-json.js";
 import { getEffectiveThresholds } from "./ontology-overrides.js";
@@ -66,7 +67,7 @@ export interface PocJudgement {
   reason: string;
   features: PocFeatures;
   /** Which path produced this judgement — useful for accuracy diffs. */
-  source: "fast-path" | "sender-prior" | "llm" | "keyword-fallback";
+  source: "fast-path" | "sender-prior" | "learned-rule" | "llm" | "keyword-fallback";
 }
 
 // CorrectionExample, SenderPrior, and SenderFacts are the sender-knowledge
@@ -81,6 +82,10 @@ export interface JudgeContext {
   // SENDER_TRAITS_IN_JUDGE is on (real path, via judge-context); empty on the
   // eval path (EMPTY_JUDGE_CONTEXT), so the eval gate is unaffected.
   senderTraits?: SenderTraitFact[] | null;
+  // APPLIED learned rules for this user (learned-rule-store.ts). Only populated
+  // when LEARNED_RULES_IN_JUDGE is on (real path, via judge-context); empty on
+  // the eval path (EMPTY_JUDGE_CONTEXT), so the eval gate is unaffected.
+  learnedRules?: LearnedRule[] | null;
 }
 
 export const EMPTY_JUDGE_CONTEXT: JudgeContext = {
@@ -88,6 +93,7 @@ export const EMPTY_JUDGE_CONTEXT: JudgeContext = {
   senderPrior: null,
   senderFacts: null,
   senderTraits: [],
+  learnedRules: [],
 };
 
 interface LlmFeatureResponse {
@@ -511,6 +517,21 @@ export async function judgeEmail(
       reason: `Sender pattern — ${basis} → ${prior.tier}`,
       features: priorFeatures(prior.tier),
       source: "sender-prior",
+    };
+  }
+
+  // Learned rule (context) — a generalising rule mined from repeated overrides
+  // and APPLIED by a human, covering senders the exact prior has never seen.
+  // Sits BELOW the sender-prior (exact match wins) and ABOVE the LLM. Reuses
+  // canShortCircuit's urgency guard: a SILENT/QUEUE rule must not bury an urgent
+  // email, so urgent content defers to the LLM; a PUSH rule skips the guard.
+  const rule = matchLearnedRules(email, context.learnedRules ?? []);
+  if (rule && (rule.tier === "PUSH" || !looksUrgent(email))) {
+    return {
+      tier: rule.tier,
+      reason: `Learned rule — ${rule.pattern} "${rule.value}" → ${rule.tier}`,
+      features: priorFeatures(rule.tier),
+      source: "learned-rule",
     };
   }
 

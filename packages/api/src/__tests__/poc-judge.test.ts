@@ -31,7 +31,62 @@ vi.mock("../openai.js", async (importOriginal) => {
   };
 });
 
-import { buildSenderTraitsBlock, judgeEmail, tierFromFeatures } from "../poc-judge.js";
+import {
+  buildSenderTraitsBlock,
+  EMPTY_JUDGE_CONTEXT,
+  type JudgeContext,
+  judgeEmail,
+  tierFromFeatures,
+} from "../poc-judge.js";
+
+describe("learned-rule short-circuit (judgeEmail)", () => {
+  const withRules = (rules: NonNullable<JudgeContext["learnedRules"]>): JudgeContext => ({
+    ...EMPTY_JUDGE_CONTEXT,
+    learnedRules: rules,
+  });
+
+  it("short-circuits an unseen sender on an APPLIED domain rule", async () => {
+    const ctx = withRules([{ pattern: "sender-domain", value: "news.acme.com", tier: "SILENT" }]);
+    const out = await judgeEmail(
+      { from: "Fresh <never@news.acme.com>", subject: "Weekly digest", labels: [] },
+      "u1",
+      ctx,
+    );
+    expect(out.tier).toBe("SILENT");
+    expect(out.source).toBe("learned-rule");
+  });
+
+  it("does NOT bury an urgent email under a SILENT/QUEUE rule (urgency guard)", async () => {
+    const ctx = withRules([{ pattern: "sender-domain", value: "news.acme.com", tier: "SILENT" }]);
+    const out = await judgeEmail(
+      { from: "x@news.acme.com", subject: "Urgent: action required today", labels: [] },
+      "u1",
+      ctx,
+    );
+    expect(out.source).not.toBe("learned-rule");
+  });
+
+  it("lets a PUSH rule fire even on an urgent email (guard skipped)", async () => {
+    const ctx = withRules([{ pattern: "subject-keyword", value: "invoice", tier: "PUSH" }]);
+    const out = await judgeEmail(
+      { from: "x@vendor.io", subject: "Urgent invoice due", labels: [] },
+      "u1",
+      ctx,
+    );
+    expect(out.tier).toBe("PUSH");
+    expect(out.source).toBe("learned-rule");
+  });
+
+  it("falls through to the LLM/keyword path when no rule matches", async () => {
+    const ctx = withRules([{ pattern: "sender-domain", value: "news.acme.com", tier: "SILENT" }]);
+    const out = await judgeEmail(
+      { from: "x@unknown.com", subject: "Hello there", labels: [] },
+      "u1",
+      ctx,
+    );
+    expect(out.source).not.toBe("learned-rule");
+  });
+});
 
 describe("buildSenderTraitsBlock", () => {
   const investorTrait = {
