@@ -8,6 +8,7 @@ import { CURATED_MODELS, isCuratedModel } from "../model-catalog.js";
 import { clearFallbackState } from "../model-fallback.js";
 import { MODEL } from "../openai.js";
 import { getUserUsage } from "../quota-limiter.js";
+import { captureError } from "../sentry.js";
 import { getEffectivePlan, isEntitled, PLAN_FEATURES, PLANS, stripe } from "../stripe.js";
 
 function keyHash(apiKey: string | null | undefined): string | null {
@@ -49,8 +50,13 @@ export async function billingRoutes(app: FastifyInstance) {
         const existing = await stripe.customers.list({ email: user.email, limit: 1 });
         customerId = existing.data[0]?.id;
       } catch (err) {
-        // Non-fatal: fall back to email-based customer creation below.
+        // The fallback below mints a fresh customer + trial, so a flaky lookup
+        // here is a trial-farming hole — surface it (don't swallow) per the
+        // never-swallow rule. NOTE: email sub-addressing (you+1@) still creates
+        // a distinct customer and bypasses this guard; that needs Stripe Radar /
+        // address canonicalization (product control), not just code.
         console.warn("[BILLING] customer lookup by email failed", err);
+        captureError(err, { tags: { scope: "billing.checkout.customer_lookup" } });
       }
     }
 
