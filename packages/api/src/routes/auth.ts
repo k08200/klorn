@@ -292,7 +292,16 @@ export function authRoutes(app: FastifyInstance) {
 
       return reply.code(201).send({
         token,
-        user: { id: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role },
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          plan: user.plan,
+          role: user.role,
+          // Include entitled here too (not just /me) so the client paywall guard
+          // never sees it undefined at session start and skips the check.
+          entitled: isEntitled(user.plan, user.role),
+        },
       });
     },
   );
@@ -336,7 +345,16 @@ export function authRoutes(app: FastifyInstance) {
 
       return reply.send({
         token,
-        user: { id: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role },
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          plan: user.plan,
+          role: user.role,
+          // Include entitled here too (not just /me) so the client paywall guard
+          // never sees it undefined at session start and skips the check.
+          entitled: isEntitled(user.plan, user.role),
+        },
       });
     },
   );
@@ -400,7 +418,16 @@ export function authRoutes(app: FastifyInstance) {
       });
 
       return reply.send({
-        user: { id: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role },
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          plan: user.plan,
+          role: user.role,
+          // Include entitled here too (not just /me) so the client paywall guard
+          // never sees it undefined at session start and skips the check.
+          entitled: isEntitled(user.plan, user.role),
+        },
       });
     },
   );
