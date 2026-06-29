@@ -903,6 +903,11 @@ model AttentionItem {
   @@unique([userId, source, sourceId])
   @@index([userId, status, surfacedAt])
   @@index([userId, tier, surfacedAt])
+  // The 6-hourly global decay scan (amplifyStaleAttentionItems) filters on
+  // status + surfacedAt with NO userId, so the userId-leading indexes above
+  // can't serve it; this status-leading index keeps it from seq-scanning the
+  // whole table as rows accumulate across users.
+  @@index([status, surfacedAt])
 }
 
 // Decision ledger: the tier the firewall SHOWED the user for each classified
@@ -955,6 +960,11 @@ model DecisionLabel {
   // user's row even if a non-uuid sourceId (e.g. GITHUB) ever collides.
   @@unique([userId, source, sourceId])
   @@index([userId, shownTier, judgedAt])
+  // The admin-wide / ontology-calibration aggregation (getDecisionMetrics with
+  // no userId) filters on source + judgedAt only; the userId-leading index
+  // can't serve it. Mirrors the standalone @@index([createdAt]) added for
+  // LlmUsageLog for the same userId-less aggregation pattern.
+  @@index([source, judgedAt])
 }
 
 // Ontology write-side v0 — a proposed adjustment to a deterministic-core
