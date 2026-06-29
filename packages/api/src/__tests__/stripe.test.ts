@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import { getEffectivePlan, PLANS, planHasFeature } from "../stripe.js";
 
 describe("plan device limits", () => {
-  it("allows free users to stay signed in on phone and desktop at the same time", () => {
-    expect(PLANS.FREE.deviceLimit).toBeGreaterThanOrEqual(2);
+  it("gives free accounts a single device (no free tier — locked at launch)", () => {
+    expect(PLANS.FREE.deviceLimit).toBe(1);
   });
 
-  it("keeps higher plans at or above the free device allowance", () => {
-    expect(PLANS.PRO.deviceLimit).toBeGreaterThanOrEqual(PLANS.FREE.deviceLimit);
+  it("gives Pro a small multi-device allowance above Free", () => {
+    expect(PLANS.PRO.deviceLimit).toBe(3);
+    expect(PLANS.PRO.deviceLimit).toBeGreaterThan(PLANS.FREE.deviceLimit);
     expect(PLANS.TEAM.deviceLimit).toBeGreaterThanOrEqual(PLANS.PRO.deviceLimit);
   });
 
