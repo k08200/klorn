@@ -29,6 +29,7 @@ import {
   summarizeUnsummarizedEmails,
   syncEmails,
 } from "../email-sync.js";
+import { requireEntitled } from "../entitlement-guard.js";
 import { toggleReadGmail } from "../gmail.js";
 import { senderEmail } from "../notification-format.js";
 import { captureError } from "../sentry.js";
@@ -522,6 +523,11 @@ export async function emailRoutes(app: FastifyInstance) {
   // applies to all of them. (Sub-files keep their own per-route requireAuth for
   // standalone test registration; the double-run is idempotent.)
   app.addHook("preHandler", requireAuth);
+  // Paid surface: when the paywall is on, a non-entitled user (FREE / trial
+  // expired) is refused here so a valid token can't reach send/compose/
+  // reply-draft/summarize directly and bypass the client paywall. No-op
+  // pre-launch. Covers the sub-route groups too (same encapsulation context).
+  app.addHook("preHandler", requireEntitled);
 
   // Sub-route groups live in sibling files and register against the same
   // FastifyInstance + prefix so client paths stay byte-identical.

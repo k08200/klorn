@@ -7,6 +7,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { requireEntitled } from "../entitlement-guard.js";
 import {
   activatePlaybook,
   buildPlaybookRecommendations,
@@ -26,6 +27,8 @@ const playbookIdParamSchema = {
 
 export function playbookRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
+  // Paywall: refuse non-entitled users at the paid surface (no-op pre-launch).
+  app.addHook("preHandler", requireEntitled);
 
   app.get("/", async (request) => {
     const userId = getUserId(request);

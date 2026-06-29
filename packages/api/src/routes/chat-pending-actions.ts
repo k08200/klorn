@@ -22,6 +22,7 @@ import {
 import { upsertAttentionForPendingAction } from "../attention-mirror.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { db, prisma } from "../db.js";
+import { requireEntitled } from "../entitlement-guard.js";
 import { recipientFromToolArgs, recordFeedback } from "../feedback.js";
 
 /**
@@ -95,6 +96,8 @@ export async function chatRoutes(app: FastifyInstance) {
   // plugin so revoked/kicked tokens are rejected — bare getUserId() skips the
   // device-kick + password-reset epoch checks that requireAuth enforces.
   app.addHook("preHandler", requireAuth);
+  // Paywall: refuse non-entitled users at the paid surface (no-op pre-launch).
+  app.addHook("preHandler", requireEntitled);
 
   // GET /api/chat/pending-actions — All pending actions for the current user across conversations.
   // Powers the mobile inbox so users can see & act on every "needs your attention" item in one place.
