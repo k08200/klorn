@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type Stripe from "stripe";
 import { prisma } from "../db.js";
 import { sendPushNotification } from "../push.js";
+import { captureError } from "../sentry.js";
 import { PLANS, stripe } from "../stripe.js";
 import { pushNotification } from "../websocket.js";
 
@@ -39,12 +40,13 @@ export async function webhookRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: "Invalid signature" });
       }
 
-      // Dedup: skip already-processed events
+      // Dedup: skip already-processed events. Recorded AFTER the switch so a
+      // transient DB failure (which throws → 500) doesn't mark the event done
+      // and silently drop a revenue-bearing grant — Stripe retries (up to 72h)
+      // and the retry re-applies it.
       if (processedEvents.has(event.id)) {
         return { received: true };
       }
-      processedEvents.set(event.id, Date.now());
-      cleanupProcessedEvents();
 
       switch (event.type) {
         case "checkout.session.completed": {
@@ -77,13 +79,14 @@ export async function webhookRoutes(app: FastifyInstance) {
           // finally fired subscription.deleted days later.
           const entitled = sub.status === "active" || sub.status === "trialing";
           if (entitled) {
-            // Re-grant after a recovered payment. Map the price back to the plan
-            // (legacy TEAM stays TEAM); default PRO.
+            // Re-grant/sync to the live plan. Map the price back to the plan
+            // (legacy TEAM stays TEAM); default PRO. Unconditional + idempotent:
+            // the previous `if (user.plan === "FREE")` guard skipped the write
+            // for a non-FREE row, so an out-of-order past_due (which set FREE)
+            // followed by active could leave a live subscriber wrongly downgraded.
             const priceId = sub.items?.data?.[0]?.price?.id;
             const plan = priceId && priceId === PLANS.TEAM.priceId ? "TEAM" : "PRO";
-            if (user.plan === "FREE") {
-              await prisma.user.update({ where: { id: user.id }, data: { plan } });
-            }
+            await prisma.user.update({ where: { id: user.id }, data: { plan } });
           } else {
             // past_due / unpaid / canceled / incomplete_expired → revoke access.
             if (user.plan !== "FREE") {
@@ -122,7 +125,6 @@ export async function webhookRoutes(app: FastifyInstance) {
         case "invoice.payment_failed": {
           const invoice = event.data.object as Stripe.Invoice;
           const failedCustomer = invoice.customer as string;
-          console.log(`[STRIPE] Payment failed for customer ${failedCustomer}`);
 
           const user = await prisma.user.findFirst({
             where: { stripeId: failedCustomer },
@@ -135,11 +137,21 @@ export async function webhookRoutes(app: FastifyInstance) {
               "Your latest payment failed. Please update your payment method to keep your plan active.",
               "/settings",
             );
+          } else {
+            // A payment failure for a customer we can't map to a user is a real
+            // billing signal (stripeId drift) — never drop it silently.
+            console.warn(`[STRIPE] payment_failed for unmapped customer ${failedCustomer}`);
+            captureError(new Error("payment_failed for unmapped stripe customer"), {
+              tags: { scope: "stripe.webhook" },
+              extra: { customer: failedCustomer },
+            });
           }
           break;
         }
       }
 
+      processedEvents.set(event.id, Date.now());
+      cleanupProcessedEvents();
       return { received: true };
     },
   });
