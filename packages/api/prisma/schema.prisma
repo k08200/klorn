@@ -102,6 +102,7 @@ model User {
   llmCostLedger             LlmCostLedger[]
   llmUsageLogs              LlmUsageLog[]
   senderTraits              SenderTrait[]
+  learnedRules              LearnedRule[]
 }
 
 enum UserRole {
@@ -987,6 +988,35 @@ enum ProposalStatus {
   OPEN
   APPLIED
   DISMISSED
+}
+
+// Learned-rule layer (write side) — generalising rules mined from a user's
+// repeated manual overrides (learned-rule-mining.ts). Unlike the per-address
+// sender-prior (judge-context.ts) and the GLOBAL threshold knobs
+// (OntologyProposal), a rule generalises to UNSEEN senders ("anything from this
+// domain → SILENT"). Per-user: a rule encodes THIS user's taste. Advisory until
+// APPLIED — the classifier acts only on APPLIED rules, so every learned
+// decision stays reviewable + reversible (deterministic-floor). status reuses
+// ProposalStatus (OPEN = advisory, APPLIED = live, DISMISSED = terminal).
+model LearnedRule {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  pattern         String   // "sender-domain" | "subject-keyword" (matched in learned-rules.ts)
+  value           String   // normalised domain or subject token
+  tier            String   // target Tier the rule assigns
+  evidenceCount   Int      // overrides backing this rule at mine time
+  distinctSenders Int      // distinct senders spanned — the generalisation guard
+  sourceIds       String[] // provenance: the override sourceIds this was mined from
+
+  status    ProposalStatus @default(OPEN)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  // At most one rule per (user, pattern, value); dedup/strengthen in code.
+  @@unique([userId, pattern, value])
+  @@index([userId, status])
 }
 
 enum SenderTraitKind {
