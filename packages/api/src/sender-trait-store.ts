@@ -140,6 +140,11 @@ export async function upsertSenderTrait(props: {
           conflictEvidence: candidate.evidenceText,
           conflictedAt: new Date(),
           lastSeenAt: new Date(),
+          // Keep the signature current on every write path. Without this a
+          // conflicted row keeps its old sourceSig, so the staleness skip
+          // (extractSenderTraitsForUser) never matches and the sender is
+          // re-extracted via the paid LLM every run despite unchanged evidence.
+          sourceSig,
         },
       });
     }

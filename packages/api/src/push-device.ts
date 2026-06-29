@@ -7,10 +7,11 @@
  * reaches Android directly and iOS via APNs (an APNs auth key uploaded to the
  * Firebase project). One backend, both platforms.
  *
- * This is the Phase 0 proving path: a standalone sender, NOT yet wired into the
- * gated `sendPushNotification` pipeline (that integration — sharing the
- * suppression/quiet-hours/rate-limit gates — is Phase 2). It exists so a
- * device-test route can ring a real phone and confirm the FCM path end to end.
+ * These senders are invoked from the gated `sendPushNotification` pipeline
+ * (push.ts) — AFTER the shared suppression / quiet-hours / rate-limit gates, so
+ * native push inherits the same delivery decisions as Web Push — and also
+ * directly from the device-test route, which rings a real phone to confirm the
+ * FCM/APNs path end to end.
  *
  * Environment:
  * - FIREBASE_SERVICE_ACCOUNT — the Firebase service-account JSON (as a string).

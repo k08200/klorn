@@ -2,9 +2,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CandidateTrait } from "../sender-trait-policy.js";
 
 const findManyMock = vi.hoisted(() => vi.fn());
+const findUniqueMock = vi.hoisted(() => vi.fn());
+const createMock = vi.hoisted(() => vi.fn());
+const updateMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../db.js", () => ({
-  prisma: { senderTrait: { findMany: findManyMock } },
+  prisma: {
+    senderTrait: { findMany: findManyMock },
+    $transaction: async (cb: (tx: unknown) => unknown) =>
+      cb({
+        senderTrait: {
+          findUnique: findUniqueMock,
+          create: createMock,
+          update: updateMock,
+        },
+      }),
+  },
 }));
 
 import {
@@ -12,6 +25,7 @@ import {
   type IncumbentTrait,
   MIN_TRAIT_CONFIDENCE_FOR_JUDGE,
   resolveTraitUpsert,
+  upsertSenderTrait,
 } from "../sender-trait-store.js";
 
 const challenger: CandidateTrait = {
@@ -53,6 +67,35 @@ describe("resolveTraitUpsert", () => {
       expect(action.keepValue).toBe("vendor");
       expect(action.conflictValue).toBe("investor");
     }
+  });
+});
+
+describe("upsertSenderTrait — conflict branch keeps the stored signature current", () => {
+  beforeEach(() => {
+    findUniqueMock.mockReset();
+    createMock.mockReset();
+    updateMock.mockReset();
+  });
+
+  it("writes sourceSig when flipping a row to conflicted so the staleness skip can fire", async () => {
+    // Incumbent value differs from the challenger → conflict branch.
+    findUniqueMock.mockResolvedValue({
+      factValue: "vendor",
+      observedCount: 4,
+      status: "active",
+    });
+
+    const action = await upsertSenderTrait({
+      userId: "u1",
+      sender: "a@b.com",
+      candidate: challenger,
+      sourceSig: "sig-new",
+    });
+
+    expect(action).toBe("conflict");
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    const data = (updateMock.mock.calls[0]?.[0] as { data: Record<string, unknown> }).data;
+    expect(data).toMatchObject({ status: "conflicted", sourceSig: "sig-new" });
   });
 });
 

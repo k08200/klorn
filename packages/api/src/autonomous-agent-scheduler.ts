@@ -24,6 +24,7 @@ const CONCURRENCY_LIMIT = 5; // Max users to run concurrently
 const PENDING_ACTION_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours — expire faster to prevent blocking
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
+let firstRunTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Track last run per user to respect per-user interval. Module-local so the
 // schedule survives across ticks but resets on process restart, which is
@@ -202,10 +203,13 @@ export function startAutonomousAgent() {
 
   console.log("[AGENT] Autonomous agent started (checking every 60s)");
 
-  // First run after 30 seconds
-  setTimeout(() => {
+  // First run after 30 seconds. Track the handle so stop() can cancel it
+  // during the boot window (otherwise a deferred tick fires after shutdown).
+  firstRunTimer = setTimeout(() => {
+    firstRunTimer = null;
     runAutonomousAgent();
   }, 30_000);
+  firstRunTimer.unref?.();
 
   // Check every minute, respects per-user intervals
   intervalId = setInterval(runAutonomousAgent, CHECK_INTERVAL_MS);
@@ -213,6 +217,10 @@ export function startAutonomousAgent() {
 
 /** Stop the autonomous agent */
 export function stopAutonomousAgent() {
+  if (firstRunTimer) {
+    clearTimeout(firstRunTimer);
+    firstRunTimer = null;
+  }
   if (intervalId) {
     clearInterval(intervalId);
     intervalId = null;

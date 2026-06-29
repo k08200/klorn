@@ -521,6 +521,7 @@ function hashPattern(description: string): string {
 // ─── Scheduler ──────────────────────────────────────────────────────────
 
 let patternIntervalId: ReturnType<typeof setInterval> | null = null;
+let patternFirstRunTimer: ReturnType<typeof setTimeout> | null = null;
 const PATTERN_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 export function startPatternLearner() {
@@ -528,18 +529,26 @@ export function startPatternLearner() {
 
   console.log("[PATTERN] Pattern learner started (6h interval)");
 
-  // Run first analysis after 5 minutes (let server warm up)
-  setTimeout(
+  // Run first analysis after 5 minutes (let server warm up). Track the handle
+  // so stop() can cancel it during the boot window — otherwise a deferred
+  // analysis fires after shutdown.
+  patternFirstRunTimer = setTimeout(
     async () => {
+      patternFirstRunTimer = null;
       await runPatternAnalysisForAllUsers();
     },
     5 * 60 * 1000,
   );
+  patternFirstRunTimer.unref?.();
 
   patternIntervalId = setInterval(runPatternAnalysisForAllUsers, PATTERN_INTERVAL_MS);
 }
 
 export function stopPatternLearner() {
+  if (patternFirstRunTimer) {
+    clearTimeout(patternFirstRunTimer);
+    patternFirstRunTimer = null;
+  }
   if (patternIntervalId) {
     clearInterval(patternIntervalId);
     patternIntervalId = null;
