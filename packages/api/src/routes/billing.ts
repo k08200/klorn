@@ -39,10 +39,25 @@ export async function billingRoutes(app: FastifyInstance) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return reply.code(404).send({ error: "User not found" });
 
+    // Anti trial-farming: a user who deletes their account loses their stripeId,
+    // so a re-registration would otherwise mint a fresh Stripe customer and a
+    // fresh free trial. Reuse the existing customer for this email so Stripe's
+    // one-trial-per-customer guarantee survives delete + re-register.
+    let customerId = user.stripeId || undefined;
+    if (!customerId) {
+      try {
+        const existing = await stripe.customers.list({ email: user.email, limit: 1 });
+        customerId = existing.data[0]?.id;
+      } catch (err) {
+        // Non-fatal: fall back to email-based customer creation below.
+        console.warn("[BILLING] customer lookup by email failed", err);
+      }
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
-      customer_email: user.stripeId ? undefined : user.email,
-      customer: user.stripeId || undefined,
+      customer_email: customerId ? undefined : user.email,
+      customer: customerId,
       line_items: [{ price: planConfig.priceId, quantity: 1 }],
       // Card-required free trial: Stripe collects the card now, charges nothing
       // until day TRIAL_DAYS, then auto-converts. The card requirement (and one

@@ -4,6 +4,15 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { API_BASE } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import PaywallScreen from "./paywall-screen";
+
+// Routes a non-entitled user can still reach: billing (to subscribe), settings
+// (manage/cancel), and the sign-in flow. Everything else shows the paywall.
+const PAYWALL_BYPASS_PREFIXES = ["/billing", "/settings", "/login", "/auth"];
+
+function isPaywallBypass(pathname: string): boolean {
+  return PAYWALL_BYPASS_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
 
 // Pages that stay reachable while Google is unconnected. /onboarding is the
 // gate itself; /settings is where the user manages the connection; any path
@@ -57,6 +66,14 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) return null;
+
+  // Paywall: a signed-in but non-entitled user (trial expired / never
+  // subscribed) gets the subscribe screen on every app route except the
+  // billing/settings/sign-in paths. `entitled` is always true while the
+  // paywall is off, so this is inert until launch flips PAYWALL_ENABLED.
+  if (user.entitled === false && !isPaywallBypass(pathname)) {
+    return <PaywallScreen />;
+  }
 
   return <>{children}</>;
 }
