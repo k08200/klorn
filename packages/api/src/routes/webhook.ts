@@ -6,17 +6,6 @@ import { captureError } from "../sentry.js";
 import { PLANS, stripe } from "../stripe.js";
 import { pushNotification } from "../websocket.js";
 
-// In-memory dedup for processed webhook event IDs (TTL: 1 hour)
-const processedEvents = new Map<string, number>();
-const DEDUP_TTL_MS = 60 * 60 * 1000;
-
-function cleanupProcessedEvents() {
-  const now = Date.now();
-  for (const [id, ts] of processedEvents) {
-    if (now - ts > DEDUP_TTL_MS) processedEvents.delete(id);
-  }
-}
-
 export async function webhookRoutes(app: FastifyInstance) {
   // POST /api/webhook/stripe — Stripe webhook handler
   app.post("/stripe", {
@@ -40,11 +29,15 @@ export async function webhookRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: "Invalid signature" });
       }
 
-      // Dedup: skip already-processed events. Recorded AFTER the switch so a
-      // transient DB failure (which throws → 500) doesn't mark the event done
-      // and silently drop a revenue-bearing grant — Stripe retries (up to 72h)
-      // and the retry re-applies it.
-      if (processedEvents.has(event.id)) {
+      // Dedup: skip already-processed events. Persisted in WebhookEvent (not an
+      // in-memory map) so it survives restarts and is shared across dynos.
+      // Recorded AFTER the switch so a transient DB failure (which throws → 500)
+      // doesn't mark the event done and silently drop a revenue-bearing grant —
+      // Stripe retries (up to 72h) and the retry re-applies it.
+      const alreadyProcessed = await prisma.webhookEvent.findUnique({
+        where: { id: event.id },
+      });
+      if (alreadyProcessed) {
         return { received: true };
       }
 
@@ -150,8 +143,10 @@ export async function webhookRoutes(app: FastifyInstance) {
         }
       }
 
-      processedEvents.set(event.id, Date.now());
-      cleanupProcessedEvents();
+      // Mark processed only after the switch succeeded. create() (not upsert)
+      // so a concurrent duplicate that raced past the findUnique above hits the
+      // PK conflict and is swallowed — the work was idempotent either way.
+      await prisma.webhookEvent.create({ data: { id: event.id } }).catch(() => {});
       return { received: true };
     },
   });
