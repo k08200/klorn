@@ -1,13 +1,14 @@
 import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { TRIAL_DAYS } from "../config.js";
 import { encryptOptional } from "../crypto-tokens.js";
 import { db, prisma } from "../db.js";
 import { CURATED_MODELS, isCuratedModel } from "../model-catalog.js";
 import { clearFallbackState } from "../model-fallback.js";
 import { MODEL } from "../openai.js";
 import { getUserUsage } from "../quota-limiter.js";
-import { getEffectivePlan, PLAN_FEATURES, PLANS, stripe } from "../stripe.js";
+import { getEffectivePlan, isEntitled, PLAN_FEATURES, PLANS, stripe } from "../stripe.js";
 
 function keyHash(apiKey: string | null | undefined): string | null {
   if (!apiKey) return null;
@@ -43,6 +44,11 @@ export async function billingRoutes(app: FastifyInstance) {
       customer_email: user.stripeId ? undefined : user.email,
       customer: user.stripeId || undefined,
       line_items: [{ price: planConfig.priceId, quantity: 1 }],
+      // Card-required free trial: Stripe collects the card now, charges nothing
+      // until day TRIAL_DAYS, then auto-converts. The card requirement (and one
+      // trial per customer) is what makes this the high-conversion model and
+      // blocks re-signup trial farming on web.
+      subscription_data: TRIAL_DAYS > 0 ? { trial_period_days: TRIAL_DAYS } : undefined,
       success_url: `${process.env.WEB_URL || "http://localhost:8001"}/billing?success=true`,
       cancel_url: `${process.env.WEB_URL || "http://localhost:8001"}/billing?canceled=true`,
       metadata: { userId, plan },
@@ -190,6 +196,18 @@ export async function billingRoutes(app: FastifyInstance) {
 
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) return reply.code(404).send({ error: "User not found" });
+
+      // BYOK is a subscriber-only feature: don't even STORE a key for a
+      // non-entitled user (the read path ignores it anyway, but storing it is
+      // misleading + unnecessary PII). Clearing keys stays allowed so a
+      // downgraded user can remove theirs.
+      const isSettingKey =
+        (typeof openRouterApiKey === "string" && openRouterApiKey.trim().length > 0) ||
+        (typeof geminiApiKey === "string" && geminiApiKey.trim().length > 0) ||
+        typeof chatModel === "string";
+      if (isSettingKey && !isEntitled(user.plan, user.role)) {
+        return reply.code(403).send({ error: "BYOK requires an active subscription" });
+      }
 
       const updateData: {
         chatModel?: string;

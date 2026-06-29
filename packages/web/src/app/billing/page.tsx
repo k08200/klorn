@@ -6,6 +6,7 @@ import AuthGuard from "../../components/auth-guard";
 import { CardSkeleton } from "../../components/skeleton";
 import { useToast } from "../../components/toast";
 import { apiFetch } from "../../lib/api";
+import { isNativePlatform } from "../../lib/native/capacitor";
 
 interface BillingStatus {
   plan: string;
@@ -178,7 +179,10 @@ function BillingContent() {
                   About ${status.estimatedCost.toFixed(4)} this month
                 </span>
               )}
-              {status.stripeId && (
+              {/* No Stripe checkout/portal inside the iOS app (App Store
+                  anti-steering 3.1.1). Billing is managed on the web; the app
+                  offers IAP at launch. */}
+              {status.stripeId && !isNativePlatform() && (
                 <button
                   type="button"
                   onClick={handleManage}
@@ -296,6 +300,10 @@ function BillingContent() {
                 >
                   Contact sales
                 </a>
+              ) : isNativePlatform() ? (
+                // iOS app: no Stripe checkout (anti-steering). The IAP purchase
+                // button takes this slot at launch.
+                <div aria-hidden="true" />
               ) : (
                 <button
                   type="button"
