@@ -126,7 +126,16 @@ export async function trueUpCostLedgers(input: {
 
     const { recordCostUsage, recordGlobalCostUsage } = await import("./cost-guard.js");
     if (input.userId) {
-      void recordCostUsage(input.userId, deltaCents, input.model);
+      // Await so the atomic delta lands (and this try/catch owns any failure).
+      // The call already completed, so an over-cap true-up can't be gated here
+      // (you can't un-spend); surface it for observability — the next pre-bill's
+      // checkCostGate is what actually blocks further calls.
+      const usage = await recordCostUsage(input.userId, deltaCents, input.model);
+      if (usage?.overCap) {
+        console.warn(
+          `[llm-usage] true-up pushed user ${input.userId} past the daily cost cap (now ${usage.totalCents}¢)`,
+        );
+      }
     }
     recordGlobalCostUsage(deltaCents);
   } catch (err) {

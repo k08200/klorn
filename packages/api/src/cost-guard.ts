@@ -64,11 +64,15 @@ export async function recordCostUsage(
   userId: string,
   cents: number,
   model: string | null,
-): Promise<void> {
+): Promise<{ totalCents: number; overCap: boolean } | null> {
   const safeCents = Math.max(0, Math.round(cents));
   const dayKey = utcDayKey();
   try {
-    await prisma.llmCostLedger.upsert({
+    // The increment is atomic, and we read the post-increment total back so the
+    // caller can close the check-then-act TOCTOU: two concurrent calls can both
+    // pass the read-side checkCostGate, but only the increments that actually
+    // cross the cap report overCap=true.
+    const row = await prisma.llmCostLedger.upsert({
       where: { userId_dayKey: { userId, dayKey } },
       create: {
         userId,
@@ -82,11 +86,15 @@ export async function recordCostUsage(
         callCount: { increment: 1 },
         lastModel: model ?? undefined,
       },
+      select: { cents: true },
     });
+    const cap = DAILY_COST_CAP_CENTS;
+    return { totalCents: row.cents, overCap: cap > 0 && row.cents > cap };
   } catch (err) {
     // The ledger is best-effort accounting; never fail the user-facing call
     // because of a write here.
     console.warn("[cost-guard] failed to record usage:", err);
+    return null;
   }
 }
 
