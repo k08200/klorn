@@ -175,24 +175,33 @@ export default function SettingsPage() {
   }, [user]);
 
   const saveProfile = async () => {
-    // Save name to server
+    // Persist language/timezone locally first so the UI preference always
+    // sticks even if a server call below fails.
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+
+    // Name is server-owned (the load path reads it from user.name, not
+    // localStorage), so a failed PATCH silently reverts the displayed name on
+    // the next reload. Surface the failure instead of falsely toasting success.
     try {
       await apiFetch("/api/auth/me", {
         method: "PATCH",
         body: JSON.stringify({ name: profile.name }),
       });
-    } catch {
-      // fallback to local only
+    } catch (err) {
+      captureClientError(err, { scope: "settings.save-profile-name" });
+      toast("Could not save your name. Please try again.", "error");
+      return;
     }
-    // Save language/timezone to localStorage
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
     try {
       await apiFetch("/api/automations", {
         method: "PATCH",
         body: JSON.stringify({ timezone: profile.timezone }),
       });
-    } catch {
-      // Profile still saves locally; automation timezone can be retried later.
+    } catch (err) {
+      // Non-fatal: timezone is persisted locally and retried on the next save,
+      // so we don't block the success toast — but log a signal rather than
+      // swallow it (project rule; captureClientError consoles when Sentry off).
+      captureClientError(err, { scope: "settings.save-profile-timezone" });
     }
     setProfileSaved(true);
     toast("Profile saved.", "success");
