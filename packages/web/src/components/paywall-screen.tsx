@@ -20,6 +20,8 @@ export default function PaywallScreen() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const native = isNativePlatform();
+  // Web is cheaper (no Apple cut). Founding price is locked in for early users.
+  const price = native ? "$9.99" : "$7.99";
 
   const startWebTrial = async () => {
     if (loading) return;
@@ -40,7 +42,10 @@ export default function PaywallScreen() {
     <main className="flex min-h-dvh flex-col justify-center bg-[#0f1115] px-6 pb-safe pt-safe text-stone-100">
       <div className="mx-auto w-full max-w-sm">
         <img src="/brand/mark.svg?v=matte2" alt="" className="mb-6 h-12 w-12" />
-        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-stone-50">
+        <span className="inline-flex items-center rounded-full bg-amber-400/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-300">
+          Founding price
+        </span>
+        <h1 className="mt-3 text-[28px] font-bold leading-tight tracking-tight text-stone-50">
           Start your 7-day free trial
         </h1>
         <p className="mt-2 text-sm leading-6 text-stone-400">
@@ -91,7 +96,7 @@ export default function PaywallScreen() {
             </button>
           )}
           <p className="mt-3 text-center text-xs text-stone-500">
-            7 days free, then $7.99/month. Cancel anytime.
+            7 days free, then {price}/month — locked in for early members. Cancel anytime.
           </p>
         </div>
 
