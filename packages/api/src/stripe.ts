@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { PAYWALL_ENABLED } from "./config.js";
 
 if (!process.env.STRIPE_SECRET_KEY) {
   console.warn("STRIPE_SECRET_KEY not set — billing endpoints will fail");
@@ -73,16 +74,23 @@ export type FeatureKey =
   | "notion"
   | "meeting_tools";
 
+// When the paywall is ON there is NO free tier — every gated feature requires
+// an active subscription/trial (or admin). When OFF (pre-launch default) FREE
+// keeps its historical taster set so merging changes nothing.
+const FREE_FEATURES: FeatureKey[] = PAYWALL_ENABLED
+  ? []
+  : [
+      "email_read",
+      "calendar_read",
+      "calendar_create",
+      "daily_briefing",
+      "email_auto_classify",
+      "autonomous_agent",
+      "pattern_learning",
+    ];
+
 export const PLAN_FEATURES: Record<string, Set<FeatureKey>> = {
-  FREE: new Set<FeatureKey>([
-    "email_read",
-    "calendar_read",
-    "calendar_create",
-    "daily_briefing",
-    "email_auto_classify",
-    "autonomous_agent",
-    "pattern_learning",
-  ]),
+  FREE: new Set<FeatureKey>(FREE_FEATURES),
   // PRO now includes every paid feature (TEAM tier merged in). TEAM key retained
   // only for existing subscribers on the legacy price; new signups go to PRO.
   PRO: new Set<FeatureKey>([
@@ -147,6 +155,20 @@ export function planHasFeature(plan: string, feature: FeatureKey, role?: string)
   const features = PLAN_FEATURES[plan];
   if (!features) return false;
   return features.has(feature);
+}
+
+/**
+ * True if the user may use any paid feature — i.e. is on a paid/trialing/comped
+ * plan (PRO/TEAM/ENTERPRISE), or is an admin. The single gate behind BYOK and
+ * other subscriber-only capabilities. When the paywall is OFF (pre-launch) this
+ * is always true, so nothing is gated until launch flips PAYWALL_ENABLED.
+ * Comped accounts work for free: an admin sets `plan` to a paid tier from
+ * /admin and `isEntitled` returns true without any Stripe subscription.
+ */
+export function isEntitled(plan: string, role?: string): boolean {
+  if (!PAYWALL_ENABLED) return true;
+  if (role === "ADMIN") return true;
+  return plan === "PRO" || plan === "TEAM" || plan === "ENTERPRISE";
 }
 
 /**

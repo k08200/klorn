@@ -110,7 +110,7 @@ async function runAutonomousAgent() {
     const [users, latestDevices] = await Promise.all([
       prisma.user.findMany({
         where: { id: { in: userIds } },
-        select: { id: true, plan: true },
+        select: { id: true, plan: true, role: true },
       }),
       prisma.device.groupBy({
         by: ["userId"],
@@ -118,7 +118,9 @@ async function runAutonomousAgent() {
         _max: { lastActiveAt: true },
       }),
     ]);
-    const userPlanMap = new Map(users.map((u) => [u.id, u.plan]));
+    // Keep role so planHasFeature's ADMIN bypass applies here too (an ADMIN on
+    // a FREE plan must not have the agent loop silently gated when FREE locks).
+    const userPlanMap = new Map(users.map((u) => [u.id, { plan: u.plan, role: u.role }]));
     const lastActiveMap = new Map<string, Date | null>(
       latestDevices.map((row) => [row.userId, row._max.lastActiveAt ?? null]),
     );
@@ -135,8 +137,10 @@ async function runAutonomousAgent() {
       if (cfg.autonomousAgent !== true) continue;
 
       // Plan-based gating: autonomous agent requires PRO+ plan
-      const userPlan = userPlanMap.get(config.userId) || "FREE";
-      if (!planHasFeature(userPlan, "autonomous_agent")) {
+      const userEntry = userPlanMap.get(config.userId);
+      const userPlan = userEntry?.plan || "FREE";
+      const userRole = userEntry?.role;
+      if (!planHasFeature(userPlan, "autonomous_agent", userRole)) {
         continue;
       }
 
@@ -154,7 +158,7 @@ async function runAutonomousAgent() {
 
       // Plan-based mode gating: AUTO mode requires TEAM+ plan
       let mode = normalizeAgentMode(cfg.agentMode);
-      if (mode === "AUTO" && !planHasFeature(userPlan, "agent_mode_auto")) {
+      if (mode === "AUTO" && !planHasFeature(userPlan, "agent_mode_auto", userRole)) {
         mode = "SUGGEST"; // Downgrade to SUGGEST for PRO users
       }
 

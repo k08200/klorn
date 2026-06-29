@@ -71,6 +71,18 @@ export const SENDER_TRAITS_IN_JUDGE = process.env.SENDER_TRAITS_IN_JUDGE === "tr
 // APPLIED rules, so this never affects the eval gate.
 export const LEARNED_RULES_IN_JUDGE = process.env.LEARNED_RULES_IN_JUDGE === "true";
 
+// ── Paywall / monetization ────────────────────────────────────────────
+// Master kill-switch for the subscription paywall. OFF by default so merging
+// to main (which auto-deploys to prod) changes NOTHING: FREE keeps its current
+// feature set and BYOK stays open. Flip to "true" at launch — only once Stripe
+// prices + the IAP products exist — to lock FREE (no free tier) and make BYOK a
+// subscriber-only feature. ADMIN role bypasses regardless (see stripe.ts), and
+// admins can comp any account's plan from /admin.
+export const PAYWALL_ENABLED = process.env.PAYWALL_ENABLED === "true";
+// Length of the card-required free trial granted by checkout (Stripe
+// trial_period_days; the iOS IAP intro offer mirrors this at launch).
+export const TRIAL_DAYS = intEnv("TRIAL_DAYS", 7);
+
 // ── Feedback adaptor ──────────────────────────────────────────────────
 export const FEEDBACK_DISMISS_THRESHOLD = intEnv("FEEDBACK_DISMISS_THRESHOLD", 4);
 export const FEEDBACK_WINDOW_DAYS = intEnv("FEEDBACK_WINDOW_DAYS", 30);

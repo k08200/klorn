@@ -3,11 +3,14 @@ import { prisma } from "./db.js";
 import { isCuratedModel } from "./model-catalog.js";
 import type { ProviderCredentials } from "./providers/index.js";
 import { captureError } from "./sentry.js";
+import { isEntitled } from "./stripe.js";
 
 type UserWithKeys = {
   openRouterApiKey?: string | null;
   geminiApiKey?: string | null;
   chatModel?: string | null;
+  plan?: string | null;
+  role?: string | null;
 };
 
 /**
@@ -52,7 +55,13 @@ export async function getUserLlmCredentials(userId: string): Promise<ProviderCre
     // column were ever removed.
     user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { openRouterApiKey: true, geminiApiKey: true, chatModel: true },
+      select: {
+        openRouterApiKey: true,
+        geminiApiKey: true,
+        chatModel: true,
+        plan: true,
+        role: true,
+      },
     });
   } catch (err) {
     console.warn("[BYOK] user lookup failed — falling back to the shared env key", err);
@@ -60,6 +69,14 @@ export async function getUserLlmCredentials(userId: string): Promise<ProviderCre
     return {};
   }
   if (!user) return {};
+
+  // BYOK is a subscriber-only feature: bringing your own key must not be a way
+  // to use Klorn for free. When the paywall is on, a non-entitled user's stored
+  // key is ignored (resolves to the shared env key, which the locked FREE tier
+  // can't reach anyway). Entitled users (paid/trial/comped/admin) keep BYOK.
+  if (!isEntitled(user.plan ?? "FREE", user.role ?? undefined)) {
+    return {};
+  }
 
   const openRouterApiKey = safeDecrypt(user.openRouterApiKey, "openRouterApiKey", userId);
   const geminiApiKey = safeDecrypt(user.geminiApiKey, "geminiApiKey", userId);

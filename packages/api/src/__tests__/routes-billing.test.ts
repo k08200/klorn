@@ -29,6 +29,7 @@ vi.mock("../stripe.js", () => ({
   })),
   PLANS: { PRO: { priceId: "price_pro" }, TEAM: { priceId: "price_team" } },
   PLAN_FEATURES: { FREE: new Set(["basic"]) },
+  isEntitled: vi.fn(() => true),
 }));
 
 vi.mock("../db.js", () => {

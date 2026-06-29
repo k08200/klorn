@@ -403,9 +403,14 @@ async function runAutomations() {
       const configUserIds = configs.map((c) => c.userId);
       const automationUsers = await prisma.user.findMany({
         where: { id: { in: configUserIds } },
-        select: { id: true, plan: true },
+        select: { id: true, plan: true, role: true },
       });
-      const automationPlanMap = new Map(automationUsers.map((u) => [u.id, u.plan]));
+      // Keep role alongside plan so planHasFeature's ADMIN bypass works here too
+      // — without it, an ADMIN on a FREE plan would have background jobs
+      // silently suppressed once the paywall locks FREE.
+      const automationPlanMap = new Map(
+        automationUsers.map((u) => [u.id, { plan: u.plan, role: u.role }]),
+      );
 
       // Pre-fetch which users have a Google token. Abandoned signups never
       // OAuth-connect, so trying to sync Gmail/Calendar for them throws
@@ -418,7 +423,9 @@ async function runAutomations() {
       const googleConnectedUserIds = new Set(googleTokens.map((t) => t.userId));
 
       for (const config of configs) {
-        const configUserPlan = automationPlanMap.get(config.userId) || "FREE";
+        const configUserEntry = automationPlanMap.get(config.userId);
+        const configUserPlan = configUserEntry?.plan || "FREE";
+        const configUserRole = configUserEntry?.role;
         const timeZone = normalizeTimeZone((config as unknown as { timezone?: string }).timezone);
         const today = localDateKey(new Date(), timeZone);
 
@@ -426,7 +433,7 @@ async function runAutomations() {
         if (
           config.dailyBriefing &&
           briefingSentToday.get(config.userId) !== today &&
-          planHasFeature(configUserPlan, "daily_briefing")
+          planHasFeature(configUserPlan, "daily_briefing", configUserRole)
         ) {
           if (isBriefingDue(config.briefingTime, timeZone)) {
             // DB-based dedup: check if briefing was already sent today (survives restarts)
@@ -593,7 +600,7 @@ async function runAutomations() {
         // its own interval without any config step.
         if (
           config.emailAutoClassify &&
-          planHasFeature(configUserPlan, "email_auto_classify") &&
+          planHasFeature(configUserPlan, "email_auto_classify", configUserRole) &&
           googleConnectedUserIds.has(config.userId)
         ) {
           if (isEmailSyncDue(config.userId)) {
@@ -628,7 +635,10 @@ async function runAutomations() {
 
               // Auto-reply: check rules for newly synced emails (dedup by gmailId)
               // Requires TEAM+ plan for auto-reply
-              if (syncResult.newCount > 0 && planHasFeature(configUserPlan, "email_auto_reply")) {
+              if (
+                syncResult.newCount > 0 &&
+                planHasFeature(configUserPlan, "email_auto_reply", configUserRole)
+              ) {
                 const newEmails = await prisma.emailMessage.findMany({
                   where: { userId: config.userId },
                   orderBy: { syncedAt: "desc" },

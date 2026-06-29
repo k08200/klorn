@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type Stripe from "stripe";
 import { prisma } from "../db.js";
 import { sendPushNotification } from "../push.js";
-import { stripe } from "../stripe.js";
+import { PLANS, stripe } from "../stripe.js";
 import { pushNotification } from "../websocket.js";
 
 // In-memory dedup for processed webhook event IDs (TTL: 1 hour)
@@ -67,11 +67,30 @@ export async function webhookRoutes(app: FastifyInstance) {
         case "customer.subscription.updated": {
           const sub = event.data.object as Stripe.Subscription;
           const custId = sub.customer as string;
+          const user = await prisma.user.findFirst({ where: { stripeId: custId } });
+          if (!user) break;
 
-          if (sub.status === "past_due" || sub.status === "unpaid") {
-            const user = await prisma.user.findFirst({ where: { stripeId: custId } });
-            if (user) {
-              const msg = `Your subscription is ${sub.status}. Please update your payment method to avoid service interruption.`;
+          // Sync entitlement (user.plan) to the subscription's live status.
+          // isEntitled() reads user.plan, so this is what actually grants/revokes
+          // access. Previously past_due/unpaid only notified and left plan=PRO,
+          // so a card decline at trial end kept the user entitled until Stripe
+          // finally fired subscription.deleted days later.
+          const entitled = sub.status === "active" || sub.status === "trialing";
+          if (entitled) {
+            // Re-grant after a recovered payment. Map the price back to the plan
+            // (legacy TEAM stays TEAM); default PRO.
+            const priceId = sub.items?.data?.[0]?.price?.id;
+            const plan = priceId && priceId === PLANS.TEAM.priceId ? "TEAM" : "PRO";
+            if (user.plan === "FREE") {
+              await prisma.user.update({ where: { id: user.id }, data: { plan } });
+            }
+          } else {
+            // past_due / unpaid / canceled / incomplete_expired → revoke access.
+            if (user.plan !== "FREE") {
+              await prisma.user.update({ where: { id: user.id }, data: { plan: "FREE" } });
+            }
+            if (sub.status === "past_due" || sub.status === "unpaid") {
+              const msg = `Your subscription is ${sub.status}. Please update your payment method to restore access.`;
               await notifyUser(user.id, "billing", "Payment Issue", msg, "/settings");
             }
           }
