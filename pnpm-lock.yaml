@@ -148,6 +148,9 @@ importers:
       '@ebarooni/capacitor-calendar':
         specifier: ^8.2.0
         version: 8.2.0(@capacitor/core@8.4.1)
+      '@revenuecat/purchases-capacitor':
+        specifier: ^13.2.0
+        version: 13.2.0(@capacitor/core@8.4.1)
       '@sentry/browser':
         specifier: ^10.48.0
         version: 10.48.0
@@ -1202,6 +1205,14 @@ packages:
 
   '@protobufjs/utf8@1.1.1':
     resolution: {integrity: sha512-oOAWABowe8EAbMyWKM0tYDKi8Yaox52D+HWZhAIJqQXbqe0xI/GV7FhLWqlEKreMkfDjshR5FKgi3mnle0h6Eg==}
+
+  '@revenuecat/purchases-capacitor@13.2.0':
+    resolution: {integrity: sha512-vRIEMkL3oqfdRWDU6FusGHV+iYyVPLMC7nVPyISw1iWmaa1gaETnLJumzmeQIrODTF2dYD20JFmWf1/hpNBUmQ==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
+  '@revenuecat/purchases-typescript-internal-esm@18.15.1':
+    resolution: {integrity: sha512-hIjrJ5B1nJQWEdn3B7SBvY9iwVrjS+AwJOO2BpWvN+hlb9ovUfqpnLtSDpSRQNGSroTa2VtesKjjDdsfeyXo5A==}
 
   '@rolldown/binding-android-arm64@1.0.0-rc.15':
     resolution: {integrity: sha512-YYe6aWruPZDtHNpwu7+qAHEMbQ/yRl6atqb/AhznLTnD3UY99Q1jE7ihLSahNWkF4EqRPVC4SiR4O0UkLK02tA==}
@@ -5256,6 +5267,13 @@ snapshots:
 
   '@protobufjs/utf8@1.1.1':
     optional: true
+
+  '@revenuecat/purchases-capacitor@13.2.0(@capacitor/core@8.4.1)':
+    dependencies:
+      '@capacitor/core': 8.4.1
+      '@revenuecat/purchases-typescript-internal-esm': 18.15.1
+
+  '@revenuecat/purchases-typescript-internal-esm@18.15.1': {}
 
   '@rolldown/binding-android-arm64@1.0.0-rc.15':
     optional: true

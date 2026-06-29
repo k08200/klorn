@@ -4,7 +4,22 @@ import { prisma } from "../db.js";
 import { sendPushNotification } from "../push.js";
 import { captureError } from "../sentry.js";
 import { PLANS, stripe } from "../stripe.js";
+import { timingSafeEqualStr } from "../timing-safe-equal.js";
 import { pushNotification } from "../websocket.js";
+
+// RevenueCat event types that mean "the user has access". CANCELLATION (auto-
+// renew off) is intentionally absent — the user keeps access until EXPIRATION.
+const RC_GRANT_EVENTS = new Set([
+  "INITIAL_PURCHASE",
+  "RENEWAL",
+  "UNCANCELLATION",
+  "NON_RENEWING_PURCHASE",
+  "PRODUCT_CHANGE",
+  "SUBSCRIPTION_EXTENDED",
+]);
+// Klorn user ids are uuids (@default(uuid())). RevenueCat anonymous ids
+// ($RCAnonymousID:…) or anything malformed can't map to an account.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function webhookRoutes(app: FastifyInstance) {
   // POST /api/webhook/stripe — Stripe webhook handler
@@ -150,6 +165,75 @@ export async function webhookRoutes(app: FastifyInstance) {
       return { received: true };
     },
   });
+
+  // POST /api/webhook/revenuecat — RevenueCat (iOS/Android IAP) webhook.
+  // Mirrors the Stripe handler: syncs the in-app subscription state to
+  // user.plan, which isEntitled() reads. Auth is a shared secret in the
+  // Authorization header (set identically in the RevenueCat dashboard) — RC
+  // doesn't HMAC-sign, so no raw body is needed. app_user_id is the Klorn user
+  // id (we configure RevenueCat with appUserID = user.id in iap.ts).
+  app.post(
+    "/revenuecat",
+    { config: { rateLimit: { max: 100, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const expected = process.env.REVENUECAT_WEBHOOK_AUTH;
+      if (!expected) return reply.code(500).send({ error: "Webhook auth not configured" });
+      // Constant-time compare — the shared secret is the only gate on a route
+      // that grants PRO, so a plain !== leaks the secret via a timing oracle.
+      if (!timingSafeEqualStr((request.headers.authorization as string) ?? "", expected)) {
+        return reply.code(401).send({ error: "Unauthorized" });
+      }
+
+      const body = request.body as {
+        event?: { id?: string; type?: string; app_user_id?: string };
+      };
+      const event = body?.event;
+      if (!event?.id || !event?.type || !event?.app_user_id) {
+        return reply.code(400).send({ error: "Malformed event" });
+      }
+      if (!UUID_RE.test(event.app_user_id)) {
+        return reply.code(400).send({ error: "Invalid app_user_id" });
+      }
+
+      // Dedup (shared table with Stripe) — recorded after processing so a DB
+      // blip doesn't drop a revenue-bearing grant (RevenueCat retries ~5 days).
+      const alreadyProcessed = await prisma.webhookEvent.findUnique({ where: { id: event.id } });
+      if (alreadyProcessed) return { received: true };
+
+      const user = await prisma.user.findUnique({ where: { id: event.app_user_id } });
+      if (user) {
+        if (RC_GRANT_EVENTS.has(event.type)) {
+          // Unconditional (like the Stripe handler) so an out-of-order event
+          // can't leave a paying user stuck on FREE.
+          await prisma.user.update({ where: { id: user.id }, data: { plan: "PRO" } });
+        } else if (event.type === "EXPIRATION") {
+          if (user.plan !== "FREE") {
+            await prisma.user.update({ where: { id: user.id }, data: { plan: "FREE" } });
+          }
+        } else if (event.type === "BILLING_ISSUE") {
+          // Grace period: notify, don't revoke. EXPIRATION revokes if it lapses.
+          await notifyUser(
+            user.id,
+            "billing",
+            "Payment Issue",
+            "Your subscription payment failed. Please update your payment method to keep your plan.",
+            "/settings",
+          );
+        }
+      }
+
+      await prisma.webhookEvent.create({ data: { id: event.id } }).catch((err) => {
+        // A PK conflict from a raced duplicate is expected; surface anything else.
+        if ((err as { code?: string })?.code !== "P2002") {
+          captureError(err, {
+            tags: { scope: "revenuecat.webhook.dedup" },
+            extra: { id: event.id },
+          });
+        }
+      });
+      return { received: true };
+    },
+  );
 }
 
 /** Create DB notification + WebSocket push + browser push */

@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 import { apiFetch } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import { isNativePlatform } from "../lib/native/capacitor";
+import { iapAvailable, restoreNativePurchases, startNativePurchase } from "../lib/native/iap";
 import { useToast } from "./toast";
 
 const VALUE_PROPS = [
@@ -18,8 +20,12 @@ const VALUE_PROPS = [
 // trial; the iOS app uses IAP (wired with RevenueCat at launch).
 export default function PaywallScreen() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const native = isNativePlatform();
+  // Native IAP is live only once a RevenueCat key is configured; until then the
+  // app shows a disabled state (the web build always uses the Stripe path).
+  const iapReady = iapAvailable();
   // Web is cheaper (no Apple cut). Founding price is locked in for early users.
   const price = native ? "$9.99" : "$7.99";
 
@@ -36,6 +42,56 @@ export default function PaywallScreen() {
       toast("Could not start checkout. Please try again.", "error");
       setLoading(false);
     }
+  };
+
+  // The entitlement is granted server-side by the RevenueCat webhook, which can
+  // lag a second or two after the purchase. Poll /me until it lands (≤ ~8s)
+  // before reloading, so a slow webhook doesn't bounce the user back here.
+  const reloadWhenEntitled = async () => {
+    for (let i = 0; i < 8; i++) {
+      try {
+        const data = await apiFetch<{ user?: { entitled?: boolean } }>("/api/auth/me");
+        if (data.user?.entitled) break;
+      } catch {
+        // ignore and retry
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    window.location.reload();
+  };
+
+  // Native: purchase via RevenueCat (StoreKit/Play Billing).
+  const startAppPurchase = async () => {
+    if (loading || !user) return;
+    setLoading(true);
+    const outcome = await startNativePurchase(user.id);
+    if (outcome === "purchased") {
+      await reloadWhenEntitled();
+      return;
+    }
+    if (outcome === "cancelled") {
+      setLoading(false);
+      return;
+    }
+    toast(
+      outcome === "unavailable"
+        ? "Subscriptions aren't available right now."
+        : "Could not complete the purchase. Please try again.",
+      "error",
+    );
+    setLoading(false);
+  };
+
+  const restore = async () => {
+    if (loading || !user) return;
+    setLoading(true);
+    const ok = await restoreNativePurchases(user.id);
+    if (ok) {
+      await reloadWhenEntitled();
+      return;
+    }
+    toast("No previous purchase found.", "info");
+    setLoading(false);
   };
 
   return (
@@ -75,9 +131,9 @@ export default function PaywallScreen() {
         </ul>
 
         <div className="mt-8">
-          {native ? (
-            // iOS: purchase happens through Apple IAP (RevenueCat at launch).
-            // No web checkout/link here (App Store anti-steering 3.1.1).
+          {native && !iapReady ? (
+            // Native build without a RevenueCat key yet — no web checkout/link
+            // here (App Store anti-steering 3.1.1).
             <button
               type="button"
               disabled
@@ -88,11 +144,21 @@ export default function PaywallScreen() {
           ) : (
             <button
               type="button"
-              onClick={startWebTrial}
+              onClick={native ? startAppPurchase : startWebTrial}
               disabled={loading}
               className="flex min-h-12 w-full items-center justify-center rounded-xl bg-amber-400 text-[15px] font-semibold text-stone-950 transition active:bg-amber-300 disabled:opacity-50"
             >
               {loading ? "Starting..." : "Start free trial"}
+            </button>
+          )}
+          {native && iapReady && (
+            <button
+              type="button"
+              onClick={restore}
+              disabled={loading}
+              className="mt-2 flex min-h-9 w-full items-center justify-center text-xs text-stone-400 transition active:text-stone-200 disabled:opacity-50"
+            >
+              Restore purchase
             </button>
           )}
           <p className="mt-3 text-center text-xs text-stone-500">

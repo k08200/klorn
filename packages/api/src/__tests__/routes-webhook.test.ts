@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../push.js", () => ({ sendPushNotification: vi.fn() }));
+vi.mock("../push.js", () => ({ sendPushNotification: vi.fn(async () => {}) }));
 vi.mock("../websocket.js", () => ({ pushNotification: vi.fn() }));
 vi.mock("../stripe.js", () => ({
   stripe: {
@@ -28,6 +28,7 @@ vi.mock("../db.js", () => {
     user: {
       update: vi.fn(async () => ({})),
       findFirst: vi.fn(async () => null),
+      findUnique: vi.fn(async () => null),
       findMany: vi.fn(async () => []),
       updateMany: vi.fn(async () => ({})),
     },
@@ -113,6 +114,138 @@ describe("webhook routes", () => {
     expect(prisma.user.update).not.toHaveBeenCalled(); // processing skipped
     expect(prisma.webhookEvent.create).not.toHaveBeenCalled(); // not re-recorded
     delete process.env.STRIPE_WEBHOOK_SECRET;
+    await app.close();
+  });
+
+  // ── RevenueCat (in-app purchase) webhook ──────────────────────────────────
+  const RC_UUID = "11111111-1111-4111-8111-111111111111";
+  const rcEvent = (type: string, appUserId = RC_UUID) => ({
+    event: { id: `rc_${type}_${appUserId}`, type, app_user_id: appUserId },
+  });
+
+  it("rejects a RevenueCat event whose app_user_id is not a uuid (400)", async () => {
+    process.env.REVENUECAT_WEBHOOK_AUTH = "rc-secret";
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/webhook/revenuecat",
+      headers: { authorization: "rc-secret", "content-type": "application/json" },
+      payload: rcEvent("INITIAL_PURCHASE", "$RCAnonymousID:abc"),
+    });
+    expect(res.statusCode).toBe(400);
+    delete process.env.REVENUECAT_WEBHOOK_AUTH;
+    await app.close();
+  });
+
+  it("notifies but does not revoke on BILLING_ISSUE (grace period)", async () => {
+    process.env.REVENUECAT_WEBHOOK_AUTH = "rc-secret";
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.user.update).mockClear();
+    vi.mocked(prisma.notification.create).mockClear();
+    vi.mocked(prisma.webhookEvent.findUnique).mockResolvedValueOnce(null);
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      id: RC_UUID,
+      plan: "PRO",
+    } as never);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/webhook/revenuecat",
+      headers: { authorization: "rc-secret", "content-type": "application/json" },
+      payload: rcEvent("BILLING_ISSUE"),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.notification.create).toHaveBeenCalled();
+    delete process.env.REVENUECAT_WEBHOOK_AUTH;
+    await app.close();
+  });
+
+  it("rejects a RevenueCat webhook with a wrong/missing Authorization header (401)", async () => {
+    process.env.REVENUECAT_WEBHOOK_AUTH = "rc-secret";
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/webhook/revenuecat",
+      headers: { authorization: "wrong", "content-type": "application/json" },
+      payload: rcEvent("INITIAL_PURCHASE"),
+    });
+    expect(res.statusCode).toBe(401);
+    delete process.env.REVENUECAT_WEBHOOK_AUTH;
+    await app.close();
+  });
+
+  it("grants PRO on a RevenueCat INITIAL_PURCHASE for a FREE user", async () => {
+    process.env.REVENUECAT_WEBHOOK_AUTH = "rc-secret";
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.user.update).mockClear();
+    vi.mocked(prisma.webhookEvent.findUnique).mockResolvedValueOnce(null);
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      id: "user-1",
+      plan: "FREE",
+    } as never);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/webhook/revenuecat",
+      headers: { authorization: "rc-secret", "content-type": "application/json" },
+      payload: rcEvent("INITIAL_PURCHASE"),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { plan: "PRO" } }),
+    );
+    delete process.env.REVENUECAT_WEBHOOK_AUTH;
+    await app.close();
+  });
+
+  it("revokes to FREE on a RevenueCat EXPIRATION for a PRO user", async () => {
+    process.env.REVENUECAT_WEBHOOK_AUTH = "rc-secret";
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.user.update).mockClear();
+    vi.mocked(prisma.webhookEvent.findUnique).mockResolvedValueOnce(null);
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      id: "user-1",
+      plan: "PRO",
+    } as never);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/webhook/revenuecat",
+      headers: { authorization: "rc-secret", "content-type": "application/json" },
+      payload: rcEvent("EXPIRATION"),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { plan: "FREE" } }),
+    );
+    delete process.env.REVENUECAT_WEBHOOK_AUTH;
+    await app.close();
+  });
+
+  it("does not revoke on CANCELLATION (access continues until EXPIRATION)", async () => {
+    process.env.REVENUECAT_WEBHOOK_AUTH = "rc-secret";
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.user.update).mockClear();
+    vi.mocked(prisma.webhookEvent.findUnique).mockResolvedValueOnce(null);
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      id: "user-1",
+      plan: "PRO",
+    } as never);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/webhook/revenuecat",
+      headers: { authorization: "rc-secret", "content-type": "application/json" },
+      payload: rcEvent("CANCELLATION"),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    delete process.env.REVENUECAT_WEBHOOK_AUTH;
     await app.close();
   });
 });
