@@ -79,6 +79,14 @@ export const LEARNED_RULES_IN_JUDGE = process.env.LEARNED_RULES_IN_JUDGE === "tr
 // subscriber-only feature. ADMIN role bypasses regardless (see stripe.ts), and
 // admins can comp any account's plan from /admin.
 export const PAYWALL_ENABLED = process.env.PAYWALL_ENABLED === "true";
+// Fail-open is intentional pre-launch, but a lost/typo'd env var in production
+// silently makes every paid feature free. Emit a loud startup signal so the
+// operator notices a misconfigured deploy rather than discovering it via revenue.
+if (process.env.NODE_ENV === "production" && !PAYWALL_ENABLED) {
+  console.warn(
+    "[PAYWALL] PAYWALL_ENABLED is not 'true' — all gated features are FREE. Set it at launch.",
+  );
+}
 // Length of the card-required free trial granted by checkout (Stripe
 // trial_period_days; the iOS IAP intro offer mirrors this at launch).
 export const TRIAL_DAYS = intEnv("TRIAL_DAYS", 7);

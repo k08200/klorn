@@ -20,6 +20,7 @@ import {
   updateCommitment,
 } from "../commitments.js";
 import { prisma } from "../db.js";
+import { requireEntitled } from "../entitlement-guard.js";
 import { recordFeedback } from "../feedback.js";
 import { getTrustScoresBulk, updateTrustScore } from "../trust-score.js";
 
@@ -27,6 +28,8 @@ const ALLOWED_STATUSES = new Set(["OPEN", "DONE", "DISMISSED", "SNOOZED"]);
 
 export async function commitmentRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
+  // Paywall: refuse non-entitled users at the paid surface (no-op pre-launch).
+  app.addHook("preHandler", requireEntitled);
 
   // GET /api/commitments — list, optionally filtered by status
   app.get("/", async (request) => {

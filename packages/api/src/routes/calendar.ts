@@ -11,6 +11,7 @@ import {
 import { getUserId, requireAuth } from "../auth.js";
 import { createEvent as googleCreateEvent, deleteEvent as googleDeleteEvent } from "../calendar.js";
 import { prisma } from "../db.js";
+import { requireEntitled } from "../entitlement-guard.js";
 import { getAuthedClient, isGoogleAuthError, markGoogleTokenForReconnect } from "../gmail.js";
 import { parseGoogleDateTime } from "../google-calendar-time.js";
 import { buildMeetingPrepPack } from "../meeting-prep-pack.js";
@@ -18,6 +19,8 @@ import { normalizeTimeZone } from "../time-zone.js";
 
 export async function calendarRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
+  // Paywall: refuse non-entitled users at the paid surface (no-op pre-launch).
+  app.addHook("preHandler", requireEntitled);
 
   // List events — supports ?start=ISO&end=ISO or ?days=N (from today)
   app.get("/", async (request) => {

@@ -1384,6 +1384,15 @@ model LlmCostLedger {
   @@unique([userId, dayKey])
 }
 
+// Persistent Stripe webhook idempotency. The handler records an event id here
+// AFTER processing succeeds; a duplicate delivery (Stripe retry, or a second
+// dyno) finds the row and skips. Survives restarts and works across dynos,
+// unlike the in-memory map it replaces. `id` is Stripe's event id.
+model WebhookEvent {
+  id          String   @id
+  processedAt DateTime @default(now())
+}
+
 // ─── LLM usage log ─────────────────────────────────────────────────────────
 // Ground-truth token accounting: one row per successful provider call,
 // written at the createCompletion/createVisionCompletion chokepoints

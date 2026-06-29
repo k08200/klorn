@@ -8,6 +8,7 @@
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
+import { requireEntitled } from "../entitlement-guard.js";
 
 interface SkillPayload {
   name: string;
@@ -30,6 +31,8 @@ function slugify(name: string): string {
 
 export async function skillRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
+  // Paywall: refuse non-entitled users at the paid surface (no-op pre-launch).
+  app.addHook("preHandler", requireEntitled);
 
   // GET /api/skills — List user's skills
   app.get("/", async (request) => {

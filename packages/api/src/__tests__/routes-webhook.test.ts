@@ -32,6 +32,10 @@ vi.mock("../db.js", () => {
       updateMany: vi.fn(async () => ({})),
     },
     notification: { create: vi.fn(async () => ({ id: "n1", createdAt: new Date() })) },
+    webhookEvent: {
+      findUnique: vi.fn(async () => null),
+      create: vi.fn(async () => ({})),
+    },
   };
   return { prisma, db: prisma };
 });
@@ -82,6 +86,32 @@ describe("webhook routes", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().received).toBe(true);
+    delete process.env.STRIPE_WEBHOOK_SECRET;
+    await app.close();
+  });
+
+  it("skips an event already recorded in WebhookEvent (idempotent dedup)", async () => {
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.user.update).mockClear();
+    vi.mocked(prisma.webhookEvent.create).mockClear();
+    // The event id is already persisted → handler must skip processing.
+    vi.mocked(prisma.webhookEvent.findUnique).mockResolvedValueOnce({
+      id: "evt_test",
+      processedAt: new Date(),
+    } as never);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/webhook/stripe",
+      headers: { "stripe-signature": "valid", "content-type": "application/json" },
+      body: "{}",
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.user.update).not.toHaveBeenCalled(); // processing skipped
+    expect(prisma.webhookEvent.create).not.toHaveBeenCalled(); // not re-recorded
     delete process.env.STRIPE_WEBHOOK_SECRET;
     await app.close();
   });

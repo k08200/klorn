@@ -292,6 +292,10 @@ export async function runAgentForUser(
     // Load user plan and model for tool gating
     const agentUser = await prisma.user.findUnique({ where: { id: userId } });
     const userPlan = agentUser?.plan || "FREE";
+    // Thread role so planHasFeature's ADMIN bypass applies to the in-loop tool
+    // gate too — without it an ADMIN on a FREE plan has every tool rejected
+    // mid-loop once the paywall locks FREE (the scheduler already passes role).
+    const userRole = agentUser?.role ?? undefined;
     const agentModelForUser = AGENT_MODEL;
 
     const { analyzePatterns } = await import("./pattern-learner.js");
@@ -1160,7 +1164,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
           }
 
           // Plan-based tool gating — reject tools not allowed for user's plan
-          if (!isToolAllowedForPlan(fnName, userPlan)) {
+          if (!isToolAllowedForPlan(fnName, userPlan, userRole)) {
             result = JSON.stringify({
               error: `Tool "${fnName}" requires a higher plan. Current plan: ${userPlan}`,
               upgrade_required: true,
