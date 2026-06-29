@@ -92,6 +92,7 @@ describe("buildJudgeContext", () => {
       senderPrior: null,
       senderFacts: null,
       senderTraits: [],
+      learnedRules: [],
     });
   });
 
@@ -104,6 +105,7 @@ describe("buildJudgeContext", () => {
       senderPrior: null,
       senderFacts: null,
       senderTraits: [],
+      learnedRules: [],
     });
   });
 

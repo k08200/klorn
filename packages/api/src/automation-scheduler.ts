@@ -129,6 +129,7 @@ let lastCalibrationSnapshotDate = "";
 // calibration gates above).
 let lastVoiceProfileDate = "";
 let lastSenderTraitDate = "";
+let lastLearnedRuleDate = "";
 
 /** DB-based check: did we already send a briefing notification today? */
 export async function hasBriefingBeenSentToday(userId: string, timeZone: string): Promise<boolean> {
@@ -904,6 +905,20 @@ async function runAutomations() {
         .catch((err) => {
           console.error("[AUTOMATION] Sender trait extraction failed:", err);
           captureError(err, { tags: { scope: "automation.sender-traits" } });
+        });
+    }
+
+    // --- Weekly: Learned-rule recompute (Sunday only) ---
+    // Mine each user's repeated manual overrides into generalising rules
+    // (learned-rule-store.ts). Rules are written OPEN (advisory) — the
+    // classifier reads only APPLIED rules, so this never changes classification.
+    if (isSunday && lastLearnedRuleDate !== todayUtc) {
+      lastLearnedRuleDate = todayUtc;
+      import("./learned-rule-store.js")
+        .then(({ recomputeLearnedRulesForAllUsers }) => recomputeLearnedRulesForAllUsers())
+        .catch((err) => {
+          console.error("[AUTOMATION] Learned-rule recompute failed:", err);
+          captureError(err, { tags: { scope: "automation.learned-rules" } });
         });
     }
 

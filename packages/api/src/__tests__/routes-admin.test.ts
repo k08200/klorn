@@ -38,6 +38,16 @@ vi.mock("../ontology-overrides.js", () => ({
 type StoredProposal = { id: string; status: string; knob: string; proposedValue: number };
 const proposalById = new Map<string, StoredProposal>();
 
+type StoredRule = {
+  id: string;
+  userId: string;
+  status: string;
+  pattern: string;
+  value: string;
+  tier: string;
+};
+const ruleById = new Map<string, StoredRule>();
+
 vi.mock("../db.js", () => {
   const prisma = {
     user: {
@@ -139,6 +149,26 @@ vi.mock("../db.js", () => {
           if (!entry) throw new Error("OntologyProposal not found");
           const updated = { ...entry, status: data.status };
           proposalById.set(where.id, updated);
+          return updated;
+        },
+      ),
+    },
+    learnedRule: {
+      findFirst: vi.fn(async ({ where }: { where: { id: string; userId: string } }) => {
+        const r = ruleById.get(where.id);
+        return r && r.userId === where.userId ? r : null;
+      }),
+      findMany: vi.fn(async ({ where }: { where: { userId: string; status: string } }) =>
+        [...ruleById.values()].filter(
+          (r) => r.userId === where.userId && r.status === where.status,
+        ),
+      ),
+      update: vi.fn(
+        async ({ where, data }: { where: { id: string }; data: { status: string } }) => {
+          const r = ruleById.get(where.id);
+          if (!r) throw new Error("LearnedRule not found");
+          const updated = { ...r, status: data.status };
+          ruleById.set(where.id, updated);
           return updated;
         },
       ),
@@ -661,5 +691,111 @@ describe("GET /api/admin/sender-traits — cross-user evidence gate", () => {
     // A rejected request must touch neither metrics nor evidence queries.
     expect(vi.mocked(prisma.senderTrait.findMany)).not.toHaveBeenCalled();
     await app.close();
+  });
+});
+
+describe("admin learned-rule approval gate", () => {
+  beforeEach(() => {
+    delete process.env.ADMIN_EMAILS;
+    ruleById.clear();
+  });
+
+  const seed = (id: string, status: string, userId = "admin-1") =>
+    ruleById.set(id, {
+      id,
+      userId,
+      status,
+      pattern: "sender-domain",
+      value: "news.acme.com",
+      tier: "SILENT",
+    });
+
+  const post = async (url: string, token = ADMIN_TOKEN) => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    await app.close();
+    return res;
+  };
+
+  it("lists the user's OPEN and APPLIED rules", async () => {
+    seed("r1", "OPEN");
+    seed("r2", "APPLIED");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/learned-rules",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.open).toHaveLength(1);
+    expect(body.applied).toHaveLength(1);
+    expect(body.open[0].id).toBe("r1");
+    await app.close();
+  });
+
+  it("approves an OPEN rule → APPLIED", async () => {
+    seed("r1", "OPEN");
+    const res = await post("/api/admin/learned-rules/r1/approve");
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ status: "APPLIED" });
+    expect(ruleById.get("r1")?.status).toBe("APPLIED");
+  });
+
+  it("blocks double-approve of a non-OPEN rule with 409", async () => {
+    seed("r1", "APPLIED");
+    const res = await post("/api/admin/learned-rules/r1/approve");
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("returns 404 approving a missing rule", async () => {
+    const res = await post("/api/admin/learned-rules/nope/approve");
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 404 and leaves another user's rule untouched (ownership scope)", async () => {
+    seed("r1", "OPEN", "other-user");
+    const res = await post("/api/admin/learned-rules/r1/approve");
+    expect(res.statusCode).toBe(404);
+    expect(ruleById.get("r1")?.status).toBe("OPEN");
+  });
+
+  it("reverts an APPLIED rule → DISMISSED", async () => {
+    seed("r1", "APPLIED");
+    const res = await post("/api/admin/learned-rules/r1/revert");
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ status: "DISMISSED" });
+    expect(ruleById.get("r1")?.status).toBe("DISMISSED");
+  });
+
+  it("blocks reverting a non-APPLIED rule with 409", async () => {
+    seed("r1", "OPEN");
+    const res = await post("/api/admin/learned-rules/r1/revert");
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("dismisses an OPEN rule → 204", async () => {
+    seed("r1", "OPEN");
+    const res = await post("/api/admin/learned-rules/r1/dismiss");
+    expect(res.statusCode).toBe(204);
+    expect(ruleById.get("r1")?.status).toBe("DISMISSED");
+  });
+
+  it("blocks dismissing an APPLIED rule with 409 (revert it instead)", async () => {
+    seed("r1", "APPLIED");
+    const res = await post("/api/admin/learned-rules/r1/dismiss");
+    expect(res.statusCode).toBe(409);
+    expect(ruleById.get("r1")?.status).toBe("APPLIED");
+  });
+
+  it("rejects a non-admin from the approval gate with 403", async () => {
+    seed("r1", "OPEN");
+    const res = await post("/api/admin/learned-rules/r1/approve", USER_TOKEN);
+    expect(res.statusCode).toBe(403);
+    expect(ruleById.get("r1")?.status).toBe("OPEN");
   });
 });

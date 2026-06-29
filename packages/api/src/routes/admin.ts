@@ -2,11 +2,16 @@ import type { WaitlistStatus } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { Resend } from "resend";
 import { runAllScenarios, summarizeEval } from "../agent-eval.js";
-import { requireAdmin } from "../auth.js";
+import { getUserId, requireAdmin } from "../auth.js";
 import type { CalibrationSnapshotPayload } from "../calibration-snapshot.js";
 import { db, prisma } from "../db.js";
 import { getDecisionMetrics } from "../decision-metrics.js";
 import { sendBetaInviteEmail } from "../email.js";
+import {
+  listAppliedLearnedRules,
+  listOpenLearnedRules,
+  recomputeLearnedRules,
+} from "../learned-rule-store.js";
 import { getUsageSummary } from "../llm-usage.js";
 import { clearFallbackState, getProviderCooldownInfo } from "../model-fallback.js";
 import { describePolicy } from "../ontology.js";
@@ -599,6 +604,76 @@ export async function adminRoutes(app: FastifyInstance) {
     await prisma.ontologyProposal.update({ where: { id }, data: { status: "DISMISSED" } });
     const cacheRefreshed = await refreshOverrideCache();
     return { status: "DISMISSED", cacheRefreshed };
+  });
+
+  // ── Learned rules (per-user generalising rules mined from overrides) ──
+  // Unlike ontology proposals (global thresholds), these are scoped to the
+  // authenticated admin's OWN userId — a rule can only be reviewed or approved
+  // by its owner. There is no cache to refresh: the judge reads APPLIED rules
+  // per email (getAppliedRulesForMatch, behind LEARNED_RULES_IN_JUDGE), so a
+  // status flip is live on the next email.
+
+  // GET /api/admin/learned-rules — this user's OPEN + APPLIED rules. Each row
+  // carries the override sourceIds it was mined from (provenance for review).
+  app.get("/learned-rules", async (request) => {
+    const userId = getUserId(request);
+    const [open, applied] = await Promise.all([
+      listOpenLearnedRules(userId),
+      listAppliedLearnedRules(userId),
+    ]);
+    return { open, applied };
+  });
+
+  // POST /api/admin/learned-rules/recompute — re-mine this user's rules from
+  // their override ledger on demand (the weekly job also does this).
+  app.post("/learned-rules/recompute", async (request) => {
+    const userId = getUserId(request);
+    return recomputeLearnedRules(userId);
+  });
+
+  // POST /api/admin/learned-rules/:id/approve — OPEN → APPLIED so the judge
+  // starts acting on it (behind the flag). Scoped to the owner.
+  app.post("/learned-rules/:id/approve", async (request, reply) => {
+    const userId = getUserId(request);
+    const { id } = request.params as { id: string };
+    const existing = await prisma.learnedRule.findFirst({ where: { id, userId } });
+    if (!existing) return reply.code(404).send({ error: "Learned rule not found" });
+    if (existing.status !== "OPEN") {
+      return reply.code(409).send({ error: `Cannot approve a ${existing.status} rule` });
+    }
+    await prisma.learnedRule.update({ where: { id }, data: { status: "APPLIED" } });
+    return { status: "APPLIED" };
+  });
+
+  // POST /api/admin/learned-rules/:id/dismiss — OPEN → DISMISSED (advisory; the
+  // judge never read it). OPEN-only: an APPLIED rule is live, so it must be
+  // reverted (not silently disabled via dismiss). Scoped to the owner.
+  app.post("/learned-rules/:id/dismiss", async (request, reply) => {
+    const userId = getUserId(request);
+    const { id } = request.params as { id: string };
+    const existing = await prisma.learnedRule.findFirst({ where: { id, userId } });
+    if (!existing) return reply.code(404).send({ error: "Learned rule not found" });
+    if (existing.status !== "OPEN") {
+      return reply
+        .code(409)
+        .send({ error: `Cannot dismiss a ${existing.status} rule (revert it instead)` });
+    }
+    await prisma.learnedRule.update({ where: { id }, data: { status: "DISMISSED" } });
+    return reply.code(204).send();
+  });
+
+  // POST /api/admin/learned-rules/:id/revert — APPLIED → DISMISSED (the judge
+  // drops it on the next email). Scoped to the owner.
+  app.post("/learned-rules/:id/revert", async (request, reply) => {
+    const userId = getUserId(request);
+    const { id } = request.params as { id: string };
+    const existing = await prisma.learnedRule.findFirst({ where: { id, userId } });
+    if (!existing) return reply.code(404).send({ error: "Learned rule not found" });
+    if (existing.status !== "APPLIED") {
+      return reply.code(409).send({ error: `Cannot revert a ${existing.status} rule` });
+    }
+    await prisma.learnedRule.update({ where: { id }, data: { status: "DISMISSED" } });
+    return { status: "DISMISSED" };
   });
 
   // GET /api/admin/eval — Run agent decision-logic eval scenarios

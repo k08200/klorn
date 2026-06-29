@@ -64,6 +64,13 @@ export const TRUST_HALF_LIFE_DAYS = intEnv("TRUST_HALF_LIFE_DAYS", 60);
 // gate; the live guardrail is decision-metrics drift.
 export const SENDER_TRAITS_IN_JUDGE = process.env.SENDER_TRAITS_IN_JUDGE === "true";
 
+// Let APPLIED learned rules (learned-rule-store.ts) short-circuit the judge for
+// emails they generalise to. OFF by default: a rule only fires once a human has
+// APPLIED it, but the flag is the single kill-switch for the whole read path so
+// a misbehaving rule can be cut without a deploy. The synthetic eval set has no
+// APPLIED rules, so this never affects the eval gate.
+export const LEARNED_RULES_IN_JUDGE = process.env.LEARNED_RULES_IN_JUDGE === "true";
+
 // ── Feedback adaptor ──────────────────────────────────────────────────
 export const FEEDBACK_DISMISS_THRESHOLD = intEnv("FEEDBACK_DISMISS_THRESHOLD", 4);
 export const FEEDBACK_WINDOW_DAYS = intEnv("FEEDBACK_WINDOW_DAYS", 30);
