@@ -20,6 +20,7 @@ vi.mock("../stripe.js", () => ({
     billingPortal: {
       sessions: { create: vi.fn(async () => ({ url: "https://billing.stripe.com/test" })) },
     },
+    customers: { list: vi.fn(async () => ({ data: [] })) },
   },
   getEffectivePlan: vi.fn(() => ({
     name: "FREE",

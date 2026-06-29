@@ -10,6 +10,10 @@ interface User {
   name: string | null;
   plan: string;
   role: string;
+  // Whether the user may use paid features (active sub / trial / comped /
+  // admin). Server-computed; always true while the paywall is off. The client
+  // shows the paywall when this is explicitly false.
+  entitled?: boolean;
   // IANA timezone (e.g., "Asia/Seoul"). Always present — defaults server-side
   // to "Asia/Seoul" when the column is null. Used for date/time rendering so
   // the UI doesn't silently fall back to the browser timezone, which on iOS

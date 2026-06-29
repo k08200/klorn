@@ -26,6 +26,7 @@ import {
 } from "../gmail.js";
 import { mapGoogleEventTimes } from "../google-calendar-time.js";
 import { captureError } from "../sentry.js";
+import { isEntitled } from "../stripe.js";
 import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
 import { maybeSendWelcomeEmail } from "../welcome-email.js";
 
@@ -361,6 +362,10 @@ export function authRoutes(app: FastifyInstance) {
           name: user.name,
           plan: user.plan,
           role: user.role,
+          // Whether the user may use paid features (active sub / trial / comped
+          // / admin). The client renders the paywall when this is false. Always
+          // true while PAYWALL_ENABLED is off, so nothing gates pre-launch.
+          entitled: isEntitled(user.plan, user.role),
           // Stored IANA timezone (User.timezone, default "Asia/Seoul").
           // Surfaced so the web client can render calendar/briefing times
           // in the user's intended zone instead of the browser default
