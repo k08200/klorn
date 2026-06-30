@@ -150,6 +150,10 @@ async function attachFirewallJudgment(
     // AttentionItem the firewall wrote for each email (sourceId = EmailMessage.id).
     const tierBySourceId = new Map<string, string | null>();
     if (rows.length > 0) {
+      // No status filter: the tier is the firewall's classification of the
+      // email itself, which stays valid regardless of whether the AttentionItem
+      // was later resolved/snoozed — the briefing wants the verdict, not the
+      // attention-lifecycle state.
       const attn = await prisma.attentionItem.findMany({
         where: { userId, source: "EMAIL", sourceId: { in: rows.map((r) => r.id) } },
         select: { sourceId: true, tier: true },
