@@ -253,11 +253,13 @@ labels: ${labels}
 snippet: ${wrapUntrusted(snippet, "email:snippet")}${body ? `\nbody: ${wrapUntrusted(body, "email:body")}` : ""}`;
 }
 
-// One retry: a single transient provider failure must not demote the email
-// to the keyword fallback — the fallback structurally cannot emit PUSH, so
-// every fallback on an urgent mail is a missed interrupt. The 2026-06-12
-// eval runs showed isolated per-call failures knocking 3 of 13 PUSH items
-// to the fallback while the LLM scored the other 10 perfectly.
+// One retry: a single transient provider failure must not demote the email to
+// the keyword fallback. The fallback can only reach PUSH for a pattern-matched
+// sender (investor / system notice) that also carries an explicit urgency word —
+// an urgent mail from an ordinary human caps at confidence 0.55 and falls to
+// QUEUE, so every fallback on such a mail is a missed interrupt. The 2026-06-12
+// eval runs showed isolated per-call failures knocking 3 of 13 PUSH items to
+// the fallback while the LLM scored the other 10 perfectly.
 const JUDGE_LLM_ATTEMPTS = 2;
 
 // Max chars of the email body fed to the judge when JUDGE_INCLUDE_BODY is on.

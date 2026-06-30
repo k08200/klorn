@@ -71,6 +71,24 @@ export function isNoReplySender(from: string): boolean {
   return NO_REPLY_RE.test(from);
 }
 
+/**
+ * Automated logistics/transactional sender (shipping, order, delivery notices).
+ * Matches the local-part ROLE — ship-confirm@, order-update@, orders@,
+ * shipment@, delivery@, dispatch@, tracking@ — so order/shipping CONFIRMATIONS
+ * from a real (non no-reply) address never become fake dated ledger commitments.
+ * The `(?:^|[._+-])` anchor keeps the token a standalone role word, so people /
+ * teams that merely contain it (shipley@, leadership@, jordan@, notifications@)
+ * are NOT matched. Scoped to logistics roles only — billing/invoice/receipt are
+ * excluded because a person may legitimately promise "I'll send the invoice".
+ */
+const TRANSACTIONAL_SENDER_RE =
+  /(?:^|[._+-])(?:ship(?:ping|ment|ments)?|order(?:s|update|status|confirm)?|deliver(?:y|ies)|dispatch|tracking|courier|parcel|fulfil(?:l)?ment)(?:[._+-][^@]*)?@/i;
+
+/** True for an automated shipping/order/delivery sender (see regex above). */
+export function isTransactionalSender(from: string): boolean {
+  return TRANSACTIONAL_SENDER_RE.test(from);
+}
+
 /** Investor signal (from) → high trust, low reversibility. */
 const INVESTOR_RE = /investor|vc|capital|ventures|partner@|fund/;
 /** Meeting / scheduling signal (subject + snippet). */
@@ -129,10 +147,13 @@ export function keywordFeatures(email: ClassifiableEmail): TierFeatures {
   else if (isSystemNotification) senderTrust = s.senderTrust.systemNotification;
   else if (isInvestor) senderTrust = s.senderTrust.investor;
 
+  // Marketing is checked FIRST: a promo blast with an urgent word ("URGENT:
+  // sale today!") must not borrow the urgentWord urgency and clear the PUSH gate
+  // in the fallback — marketing never interrupts.
   let urgency: number = s.urgency.default;
-  if (isUrgentWord) urgency = s.urgency.urgentWord;
+  if (isMarketing) urgency = s.urgency.marketing;
+  else if (isUrgentWord) urgency = s.urgency.urgentWord;
   else if (isMeeting) urgency = s.urgency.meeting;
-  else if (isMarketing) urgency = s.urgency.marketing;
 
   // Replies to a human are hard to undo; archives are trivial.
   let reversibility: number = s.reversibility.default;
