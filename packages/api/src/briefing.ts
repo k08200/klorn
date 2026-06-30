@@ -186,6 +186,64 @@ async function attachFirewallJudgment(
   }
 }
 
+// Max open-PUSH items pulled in beyond the recent inbox window, so the briefing
+// reminds without dumping a backlog.
+const OPEN_PUSH_CAP = 5;
+
+/**
+ * Recency-cliff guard for the bridge. `listEmails` only returns the most recent
+ * inbox window, so a still-open PUSH email older than that window never reaches
+ * the briefing — it silently falls off "what matters today" the moment newer
+ * mail arrives on top of it. Pull the firewall's OPEN, EMAIL-source, PUSH-tier
+ * AttentionItems directly (highest priority first, capped), resolve them to email
+ * shape via EmailMessage, and drop any already in the recent window. status=OPEN
+ * means a resolved/dismissed/snoozed item is never resurfaced. Best-effort: any
+ * DB error returns [] so the briefing never blocks on the guard.
+ */
+async function fetchOpenPushEmails(
+  userId: string,
+  excludeGmailIds: Set<string>,
+): Promise<unknown[]> {
+  try {
+    const items = await prisma.attentionItem.findMany({
+      where: { userId, source: "EMAIL", status: "OPEN", tier: "PUSH" },
+      orderBy: [{ priority: "desc" }, { surfacedAt: "desc" }],
+      take: OPEN_PUSH_CAP,
+      select: { sourceId: true },
+    });
+    if (items.length === 0) return [];
+
+    const rows = await prisma.emailMessage.findMany({
+      where: { userId, id: { in: items.map((i) => i.sourceId) } },
+      select: {
+        gmailId: true,
+        from: true,
+        subject: true,
+        snippet: true,
+        priority: true,
+        needsReply: true,
+      },
+    });
+    return rows
+      .filter((r) => !excludeGmailIds.has(r.gmailId))
+      .map((r) => ({
+        id: r.gmailId,
+        from: r.from,
+        subject: r.subject,
+        snippet: r.snippet,
+        priority: r.priority,
+        needsReply: r.needsReply,
+        tier: "PUSH",
+      }));
+  } catch (err) {
+    console.warn(
+      `[BRIEFING] open-PUSH fetch failed for ${userId} — skipping recency-cliff guard:`,
+      err instanceof Error ? err.message : err,
+    );
+    return [];
+  }
+}
+
 async function gatherBriefingData(userId: string): Promise<BriefingData> {
   const now = new Date();
   const results = await Promise.allSettled([
@@ -195,13 +253,21 @@ async function gatherBriefingData(userId: string): Promise<BriefingData> {
     listNotes(userId).catch(() => ({ notes: [] })),
   ]);
 
+  const recent = await attachFirewallJudgment(
+    userId,
+    results[2].status === "fulfilled" ? results[2].value : { emails: [] },
+  );
+  const recentGmailIds = new Set(
+    recent.emails
+      .map((e) => (e && typeof e === "object" ? (e as { id?: unknown }).id : null))
+      .filter((id): id is string => typeof id === "string"),
+  );
+  const openPush = await fetchOpenPushEmails(userId, recentGmailIds);
+
   const data = {
     tasks: results[0].status === "fulfilled" ? results[0].value : { tasks: [] },
     events: results[1].status === "fulfilled" ? results[1].value : { events: [] },
-    emails: await attachFirewallJudgment(
-      userId,
-      results[2].status === "fulfilled" ? results[2].value : { emails: [] },
-    ),
+    emails: { emails: [...recent.emails, ...openPush] },
     notes: results[3].status === "fulfilled" ? results[3].value : { notes: [] },
   };
 
