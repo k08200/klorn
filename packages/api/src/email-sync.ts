@@ -30,6 +30,10 @@ const RECONCILE_CONCURRENCY = 8;
 // per row) to the most recent N emails, so the reconcile cost is bounded by N
 // rather than scaling linearly with total mailbox size every 30 min/user.
 const RECONCILE_REFRESH_CAP = 500;
+// Postgres caps a statement at 65535 bind parameters. Keep any IN / NOT IN list
+// well under that; an INBOX larger than this falls back to an in-Node diff so a
+// single huge NOT IN can never crash the reconcile.
+const INBOX_PARAM_CAP = 10000;
 
 // extractEmailAddress lives in ./email-address.js; re-export preserved here for
 // back-compat (judge-context and tests import it via ./email-sync.js).
@@ -150,39 +154,58 @@ export async function reconcileEmails(
     throw err;
   }
 
-  // Get all DB emails for this user
-  const dbEmails = await prisma.emailMessage.findMany({
-    where: { userId },
-    select: { id: true, gmailId: true, isRead: true },
-    orderBy: { receivedAt: "desc" },
-  });
+  // An empty INBOX listing is almost always a transient Gmail hiccup, not the
+  // user archiving every message. Treating it as "all stale" would wipe the
+  // entire local mirror, so skip this tick rather than mass-delete. (Trade-off:
+  // a genuinely-empty INBOX keeps its now-stale rows until one message returns.)
+  if (inboxIds.size === 0) {
+    return { removed: 0, updated: 0 };
+  }
+  const inboxIdList = Array.from(inboxIds);
 
-  // Remove DB emails no longer in Gmail INBOX
+  // Remove DB rows no longer in INBOX. For a normal-sized INBOX, let Postgres do
+  // the diff with NOT IN — no need to load the whole mailbox into Node. For a
+  // pathologically large INBOX a single NOT IN would exceed the 65535 bind-param
+  // ceiling, so fall back to diffing stored gmailIds in Node and deleting the
+  // (usually tiny) stale set by id, in chunks. No query exceeds INBOX_PARAM_CAP.
   let removed = 0;
-  const toRemove: string[] = [];
-  for (const dbEmail of dbEmails) {
-    if (!inboxIds.has(dbEmail.gmailId)) {
-      toRemove.push(dbEmail.id);
-      removed++;
+  if (inboxIdList.length <= INBOX_PARAM_CAP) {
+    const res = await prisma.emailMessage.deleteMany({
+      where: { userId, gmailId: { notIn: inboxIdList } },
+    });
+    removed = res.count;
+  } else {
+    const stored = await prisma.emailMessage.findMany({
+      where: { userId },
+      select: { id: true, gmailId: true },
+    });
+    const staleIds = stored.filter((e) => !inboxIds.has(e.gmailId)).map((e) => e.id);
+    for (let i = 0; i < staleIds.length; i += INBOX_PARAM_CAP) {
+      const res = await prisma.emailMessage.deleteMany({
+        where: { userId, id: { in: staleIds.slice(i, i + INBOX_PARAM_CAP) } },
+      });
+      removed += res.count;
     }
   }
-
-  if (toRemove.length > 0) {
-    await prisma.emailMessage.deleteMany({
-      where: { userId, id: { in: toRemove } },
-    });
+  if (removed > 0) {
     console.log(`[EMAIL-SYNC] Reconciled: removed ${removed} stale emails for user ${userId}`);
   }
 
-  // Refresh read/star status for emails still in INBOX (bounded concurrency).
-  // Cap to the most recent N (dbEmails is ordered receivedAt desc) so the
-  // per-row Gmail get + updateMany cost can't scale with total mailbox size;
-  // older read-state drift is rare and the next tick re-checks the top N again.
-  const remainingGmailIds = dbEmails
-    .filter((e) => inboxIds.has(e.gmailId))
-    .map((e) => e.gmailId)
-    .slice(0, RECONCILE_REFRESH_CAP);
-  const updated = await refreshReadStatus(gmail, userId, remainingGmailIds);
+  // Refresh read/star status for the most recent N rows (bounded). After the
+  // delete above, every remaining row for the user is in INBOX, so the
+  // most-recent N are exactly the rows worth re-checking — no INBOX-sized IN
+  // clause needed, and the per-row Gmail get + updateMany cost stays capped at N.
+  const remaining = await prisma.emailMessage.findMany({
+    where: { userId },
+    select: { gmailId: true },
+    orderBy: { receivedAt: "desc" },
+    take: RECONCILE_REFRESH_CAP,
+  });
+  const updated = await refreshReadStatus(
+    gmail,
+    userId,
+    remaining.map((e) => e.gmailId),
+  );
 
   return { removed, updated };
 }
