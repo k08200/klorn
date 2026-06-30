@@ -16,6 +16,7 @@ import {
 } from "./commitment-refiner.js";
 import { type CommitmentInput, upsertCommitment } from "./commitments.js";
 import { prisma } from "./db.js";
+import { isNoReplySender } from "./keyword-policy.js";
 
 const TITLE_MAX_LEN = 120;
 const HASH_LEN = 16;
@@ -106,6 +107,14 @@ function buildCommitmentInput(
 export async function extractAndUpsertCommitmentsFromText(
   input: CommitmentIngestionInput,
 ): Promise<CommitmentIngestionResult> {
+  // No-reply senders (order confirmations, shipping notices) don't make
+  // interpersonal commitments — their "X will deliver/arrive" text would
+  // otherwise be mined into a fake dated COUNTERPARTY commitment on the ledger.
+  // Narrow to no-reply ONLY (not notifications@): GitHub/Jira/Linear notices
+  // relay genuine human commitments the ledger should still capture.
+  if (input.senderEmail && isNoReplySender(input.senderEmail)) {
+    return { candidatesFound: 0, commitmentsCreated: 0, duplicatesSkipped: 0 };
+  }
   const candidates = extractCommitmentCandidates(input.text, {
     maxCandidates: input.maxCandidates ?? 5,
   });
