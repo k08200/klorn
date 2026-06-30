@@ -98,7 +98,14 @@ export async function persistGmailEmail(
     });
   }
   const commitmentText = [email.subject, email.body || email.snippet].filter(Boolean).join("\n\n");
-  if (commitmentText.trim()) {
+  // Skip commitment mining for promotional/marketing mail: it never carries a
+  // personal promise, and its "X will …" copy otherwise becomes a fake ledger
+  // commitment. Automated/no-reply senders are gated inside the ingestion call
+  // itself (it also runs from non-email sources, so the guard belongs there).
+  if (
+    commitmentText.trim() &&
+    !isClearMarketing({ labels: email.labels, subject: email.subject })
+  ) {
     extractAndUpsertCommitmentsFromText({
       userId,
       sourceType: "EMAIL",

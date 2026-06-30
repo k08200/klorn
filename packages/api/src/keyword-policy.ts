@@ -56,6 +56,21 @@ const MARKETING_RE =
 /** Broader system-notification signal (from) → still QUEUE, not SILENT. */
 const SYSTEM_NOTIFICATION_RE =
   /no[-_]?reply@|noreply@|donotreply@|notifications?@|@updates\.|@email\.|@notifications\./;
+
+/** No-reply / do-not-reply machine sender (from). */
+const NO_REPLY_RE = /no[-_]?reply@|donotreply@/;
+
+/**
+ * No-reply sender check — a machine address that never carries an interpersonal
+ * promise. Deliberately narrower than SYSTEM_NOTIFICATION_RE: notifications@
+ * (GitHub/Jira/Linear) and marketing subdomains DO relay human commitments
+ * ("Sarah will review the PR Friday"), so callers that gate commitment mining
+ * must not treat them as automated.
+ */
+export function isNoReplySender(from: string): boolean {
+  return NO_REPLY_RE.test(from);
+}
+
 /** Investor signal (from) → high trust, low reversibility. */
 const INVESTOR_RE = /investor|vc|capital|ventures|partner@|fund/;
 /** Meeting / scheduling signal (subject + snippet). */

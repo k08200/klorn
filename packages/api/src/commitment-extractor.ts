@@ -132,6 +132,21 @@ function dedupeCandidates(candidates: CommitmentCandidate[]): CommitmentCandidat
   return out;
 }
 
+// Transactional / shipping noise: order-confirmation and delivery emails phrase
+// updates as "Order will arrive…" / "Amazon will deliver your package". The key
+// disambiguator vs a real commitment: in a notification the transactional word
+// is the SUBJECT of the matched span ("Order will…", "Delivery will…", "Your
+// package will…"); in a human commitment it is a verb/object ("Sarah will SHIP
+// the feature", "John will ORDER the laptop", "He will send a RECEIPT"). So we
+// match transactional nouns only in subject position, plus unambiguous shipping
+// phrases — never bare verbs like ship/order/deliver/refund/receipt.
+const TRANSACTIONAL_NOISE_RE =
+  /^(?:your\s+)?(?:orders?|shipments?|parcels?|packages?|deliver(?:y|ies)|tracking|courier)\b|\byour (?:order|package|parcel|shipment)\b|\b(?:out for delivery|estimated (?:delivery|arrival)|tracking number|has shipped|on its way|will be delivered)\b/i;
+
+function isTransactionalNoise(text: string): boolean {
+  return TRANSACTIONAL_NOISE_RE.test(text);
+}
+
 /**
  * Scan a chunk of text for commitment-shaped sentences. Returns at most
  * `maxCandidates` results (default 10), in order of appearance.
@@ -149,7 +164,7 @@ export function extractCommitmentCandidates(
     let match: RegExpExecArray | null = rule.pattern.exec(text);
     while (match !== null) {
       const matched = match[0].trim();
-      if (matched.length > 0) {
+      if (matched.length > 0 && !isTransactionalNoise(matched)) {
         collected.push({
           text: matched,
           owner: rule.owner,
