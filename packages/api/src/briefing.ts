@@ -144,14 +144,31 @@ async function attachFirewallJudgment(
   try {
     const rows = await prisma.emailMessage.findMany({
       where: { userId, gmailId: { in: gmailIds } },
-      select: { gmailId: true, priority: true, needsReply: true },
+      select: { id: true, gmailId: true, priority: true, needsReply: true },
     });
-    const verdict = new Map(rows.map((r) => [r.gmailId, r]));
+    // Second hop: the 4-tier verdict (PUSH/QUEUE/SILENT/AUTO) lives on the
+    // AttentionItem the firewall wrote for each email (sourceId = EmailMessage.id).
+    const tierBySourceId = new Map<string, string | null>();
+    if (rows.length > 0) {
+      const attn = await prisma.attentionItem.findMany({
+        where: { userId, source: "EMAIL", sourceId: { in: rows.map((r) => r.id) } },
+        select: { sourceId: true, tier: true },
+      });
+      for (const a of attn) tierBySourceId.set(a.sourceId, a.tier);
+    }
+    const verdict = new Map(
+      rows.map((r) => [
+        r.gmailId,
+        { priority: r.priority, needsReply: r.needsReply, tier: tierBySourceId.get(r.id) ?? null },
+      ]),
+    );
     return {
       emails: emails.map((e) => {
         const id = e && typeof e === "object" ? (e as { id?: unknown }).id : null;
         const v = typeof id === "string" ? verdict.get(id) : undefined;
-        return v ? { ...(e as object), priority: v.priority, needsReply: v.needsReply } : e;
+        return v
+          ? { ...(e as object), priority: v.priority, needsReply: v.needsReply, tier: v.tier }
+          : e;
       }),
     };
   } catch (err) {

@@ -277,4 +277,63 @@ describe("buildBriefingSignals", () => {
 
     expect(signals.urgentItems.some((u) => u.id === "email-normal")).toBe(false);
   });
+
+  it("excludes an email the firewall tiered SILENT even when it has urgency keywords (respects verdict)", () => {
+    const signals = buildBriefingSignals(
+      {
+        tasks: { tasks: [] },
+        events: { events: [] },
+        emails: {
+          emails: [
+            {
+              id: "email-silent",
+              from: "deals@shop.example.com",
+              subject: "URGENT: last chance deal — deadline today",
+              snippet: "Do not miss this asap offer.",
+              priority: "URGENT",
+              tier: "SILENT",
+            },
+          ],
+        },
+      },
+      { now: NOW },
+    );
+
+    expect(signals.urgentItems.some((u) => u.id === "email-silent")).toBe(false);
+    expect(signals.deadlines.some((d) => d.id === "email-silent")).toBe(false);
+    expect(signals.topActions.some((a) => a.refs.some((r) => r.id === "email-silent"))).toBe(false);
+  });
+
+  it("surfaces an email the firewall tiered PUSH even with no keyword (4-tier verdict drives the briefing)", () => {
+    const signals = buildBriefingSignals(
+      {
+        tasks: { tasks: [] },
+        events: { events: [] },
+        emails: {
+          emails: [
+            {
+              id: "email-push",
+              from: "dana@board.example.com",
+              subject: "Re: notes",
+              snippet: "Thanks for the recap.",
+              priority: "NORMAL",
+              tier: "PUSH",
+            },
+          ],
+        },
+      },
+      { now: NOW },
+    );
+
+    expect(signals.urgentItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "email",
+          id: "email-push",
+          reason: "firewall flagged urgent",
+        }),
+      ]),
+    );
+    expect(signals.topActions.some((a) => a.refs.some((r) => r.id === "email-push"))).toBe(true);
+  });
 });
