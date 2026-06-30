@@ -14,6 +14,7 @@
 
 import { prisma } from "./db.js";
 import { getUpcomingMeetings } from "./meeting.js";
+import { captureError } from "./sentry.js";
 import { pushNotification } from "./websocket.js";
 
 // In-memory cache only used to skip redundant DB queries within same process lifetime.
@@ -221,12 +222,19 @@ async function checkUpcomingMeetings() {
             );
           }
         }
-      } catch {
-        // Individual user's Google might be expired — skip
+      } catch (err) {
+        // A single user's check can fail (expired Google token, transient DB
+        // error) — skip that user, but never silently: a systemic failure
+        // (DB down, every token bad) must still surface a signal.
+        console.warn(`[BACKGROUND] meeting check failed for user ${userId}:`, err);
+        captureError(err, { tags: { scope: "background.meeting-check-user" } });
       }
     }
-  } catch {
-    // Meeting check is optional
+  } catch (err) {
+    // The whole sweep is best-effort, but a throw here aborted it for everyone
+    // — surface it rather than hiding the outage.
+    console.warn("[BACKGROUND] meeting check sweep failed:", err);
+    captureError(err, { tags: { scope: "background.meeting-check" } });
   } finally {
     meetingCheckInFlight = false;
   }

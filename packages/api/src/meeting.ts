@@ -8,10 +8,10 @@
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { decryptOptional, decryptToken } from "./crypto-tokens.js";
-import { prisma } from "./db.js";
+import { getAuthedClient } from "./gmail.js";
 import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, MODEL } from "./openai.js";
+import { captureError } from "./sentry.js";
 
 const exec = promisify(execFile);
 const IS_MACOS = process.platform === "darwin";
@@ -38,19 +38,18 @@ interface MeetingSummary {
 
 /** Check calendar for upcoming meetings with video links */
 export async function getUpcomingMeetings(userId: string): Promise<MeetingEvent[]> {
-  const token = await prisma.userToken.findFirst({
-    where: { userId, provider: "google" },
-  });
-  if (!token) return [];
+  // Use the shared authed client (getAuthedClient) rather than a raw OAuth2
+  // client built from the stored token. A bare `new google.auth.OAuth2()` has
+  // no client credentials, so it cannot refresh an expired access token and
+  // never persists a refreshed one — once the access token expired, the call
+  // would fail and the bare catch below would silently return [], so meeting
+  // reminders would just stop with no signal. getAuthedClient refreshes and
+  // persists the token the same way the Gmail path does.
+  const auth = await getAuthedClient(userId);
+  if (!auth) return [];
 
   try {
     const { google } = await import("googleapis");
-    const auth = new google.auth.OAuth2();
-    auth.setCredentials({
-      access_token: token.accessToken ? decryptToken(token.accessToken) : "",
-      refresh_token: decryptOptional(token.refreshToken),
-    });
-
     const calendar = google.calendar({ version: "v3", auth });
     const now = new Date();
     const later = new Date(now.getTime() + 24 * 60 * 60 * 1000); // next 24 hours
@@ -92,7 +91,19 @@ export async function getUpcomingMeetings(userId: string): Promise<MeetingEvent[
         };
       })
       .filter((e) => e.meetingLink); // Only meetings with links
-  } catch {
+  } catch (err) {
+    // Never swallow silently: without a signal, a systemic calendar failure
+    // (revoked scope, API outage) is indistinguishable from "no meetings".
+    // Log only the message + a clean Error: a GaxiosError carries the outbound
+    // request config (incl. the Authorization: Bearer header) on err.config, so
+    // serializing the raw error could write a live access token to stdout/Sentry.
+    // (The other googleapis catch blocks share this raw-error pattern — a global
+    // Sentry beforeSend scrub is the codebase-wide fix, tracked separately.)
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[MEETING] getUpcomingMeetings failed for user ${userId}: ${msg}`);
+    captureError(new Error(`getUpcomingMeetings: ${msg}`), {
+      tags: { scope: "meeting.get-upcoming" },
+    });
     return [];
   }
 }
