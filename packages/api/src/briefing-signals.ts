@@ -73,6 +73,10 @@ interface NormalizedEmail {
   subject: string;
   snippet: string;
   date: string | null;
+  /** Firewall verdict (EmailMessage.priority): "URGENT" | "NORMAL" | "LOW" | "". */
+  priority: string;
+  /** Firewall verdict (EmailMessage.needsReply). */
+  needsReply: boolean;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -110,6 +114,14 @@ const URGENCY_PATTERNS = [
   { pattern: /urgent|asap|blocked|deadline|overdue|by eod|eow/i, reason: "urgent keyword" },
   { pattern: /긴급|급함|급해|마감|오늘까지|기한|늦었|지연|장애|실패/i, reason: "긴급 키워드" },
 ];
+
+// The 4-tier firewall already scored each email (subject + body, when
+// JUDGE_INCLUDE_BODY is on). When it tags an email URGENT, that verdict is
+// stronger evidence than a surface keyword match — it can see urgency buried
+// below the snippet, which the regex above cannot. Used both as an urgency
+// trigger and a Top-3 score boost so the firewall's per-user judgment outranks
+// bag-of-words. (Bridge: engine A's verdict feeding engine B's "what matters".)
+const FIREWALL_URGENT_REASON = "firewall flagged urgent";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -180,6 +192,8 @@ function normalizeEmails(value: unknown): NormalizedEmail[] {
       subject: readDisplayString(row, ["subject"]),
       snippet: readDisplayString(row, ["snippet", "summary"]),
       date: readNullableString(row, ["date", "receivedAt"]),
+      priority: readString(row, ["priority"]).toUpperCase(),
+      needsReply: row.needsReply === true,
     }))
     .filter((email) => email.subject.trim().length > 0 || email.snippet.trim().length > 0);
 }
@@ -333,14 +347,16 @@ function buildUrgency(input: {
   }
 
   for (const email of input.emails) {
-    const text = textFromEmail(email);
-    const match = URGENCY_PATTERNS.find((entry) => entry.pattern.test(text));
-    if (!match) continue;
+    // Prefer the firewall's URGENT verdict over a surface keyword match: it
+    // scored the body too, so it catches urgency the snippet-level regex can't.
+    const firewallUrgent = email.priority === "URGENT";
+    const match = URGENCY_PATTERNS.find((entry) => entry.pattern.test(textFromEmail(email)));
+    if (!firewallUrgent && !match) continue;
     signals.push({
       source: "email",
       id: email.id,
       title: titleFromEmail(email),
-      reason: match.reason,
+      reason: firewallUrgent ? FIREWALL_URGENT_REASON : (match?.reason ?? "urgent keyword"),
     });
   }
 
@@ -554,7 +570,8 @@ function buildTopActions(input: {
     const refs = [ref(urgent.source, urgent.id, urgent.title)];
     candidates.push({
       id: candidateKey("urgent", refs),
-      score: 64 + priorityBoost(task),
+      // Firewall-flagged urgency outranks a keyword hit — A's verdict wins.
+      score: 64 + priorityBoost(task) + (urgent.reason === FIREWALL_URGENT_REASON ? 10 : 0),
       action: actionForUrgency(urgent),
       reason: urgent.reason,
       refs,

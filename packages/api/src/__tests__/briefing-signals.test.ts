@@ -220,4 +220,61 @@ describe("buildBriefingSignals", () => {
     const distinctActions = new Set(signals.topActions.map((a) => a.action));
     expect(distinctActions.size).toBe(signals.topActions.length);
   });
+
+  it("surfaces an email the firewall flagged URGENT even with no keyword in subject/snippet (bridge)", () => {
+    const signals = buildBriefingSignals(
+      {
+        tasks: { tasks: [] },
+        events: { events: [] },
+        emails: {
+          emails: [
+            {
+              id: "email-fw",
+              from: "alex@bigclient.example.com",
+              subject: "checking in",
+              snippet: "Hope you are doing well.",
+              priority: "URGENT",
+              needsReply: true,
+            },
+          ],
+        },
+      },
+      { now: NOW },
+    );
+
+    expect(signals.urgentItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "email",
+          id: "email-fw",
+          reason: "firewall flagged urgent",
+        }),
+      ]),
+    );
+    expect(signals.topActions.some((a) => a.refs.some((r) => r.id === "email-fw"))).toBe(true);
+  });
+
+  it("does not flag a NORMAL-priority email that has no urgency keyword", () => {
+    const signals = buildBriefingSignals(
+      {
+        tasks: { tasks: [] },
+        events: { events: [] },
+        emails: {
+          emails: [
+            {
+              id: "email-normal",
+              from: "alex@bigclient.example.com",
+              subject: "checking in",
+              snippet: "Hope you are doing well.",
+              priority: "NORMAL",
+              needsReply: false,
+            },
+          ],
+        },
+      },
+      { now: NOW },
+    );
+
+    expect(signals.urgentItems.some((u) => u.id === "email-normal")).toBe(false);
+  });
 });
