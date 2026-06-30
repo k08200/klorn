@@ -147,10 +147,13 @@ export function keywordFeatures(email: ClassifiableEmail): TierFeatures {
   else if (isSystemNotification) senderTrust = s.senderTrust.systemNotification;
   else if (isInvestor) senderTrust = s.senderTrust.investor;
 
+  // Marketing is checked FIRST: a promo blast with an urgent word ("URGENT:
+  // sale today!") must not borrow the urgentWord urgency and clear the PUSH gate
+  // in the fallback — marketing never interrupts.
   let urgency: number = s.urgency.default;
-  if (isUrgentWord) urgency = s.urgency.urgentWord;
+  if (isMarketing) urgency = s.urgency.marketing;
+  else if (isUrgentWord) urgency = s.urgency.urgentWord;
   else if (isMeeting) urgency = s.urgency.meeting;
-  else if (isMarketing) urgency = s.urgency.marketing;
 
   // Replies to a human are hard to undo; archives are trivial.
   let reversibility: number = s.reversibility.default;
