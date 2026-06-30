@@ -118,6 +118,28 @@ export async function syncEmails(
 // ─── Gmail ↔ DB Reconciliation ────────────────────────────────────────────
 
 /**
+ * Resolve the EMAIL attention items mirroring the given EmailMessage ids. Called
+ * when those emails leave the INBOX (archived/trashed in Gmail) so a handled
+ * email also leaves the attention queue — otherwise the AttentionItem is orphaned
+ * OPEN and the priority amplifier keeps surfacing it (the stale-PUSH accumulation
+ * bug). Only OPEN/SNOOZED are touched, so a terminal user decision (already
+ * RESOLVED/DISMISSED) is preserved. Chunked for the bind-param cap.
+ */
+async function resolveAttentionForDeletedEmails(userId: string, emailIds: string[]): Promise<void> {
+  for (let i = 0; i < emailIds.length; i += INBOX_PARAM_CAP) {
+    await prisma.attentionItem.updateMany({
+      where: {
+        userId,
+        source: "EMAIL",
+        sourceId: { in: emailIds.slice(i, i + INBOX_PARAM_CAP) },
+        status: { in: ["OPEN", "SNOOZED"] },
+      },
+      data: { status: "RESOLVED", resolvedAt: new Date() },
+    });
+  }
+}
+
+/**
  * Reconcile local DB with Gmail.
  * Removes DB emails that no longer exist in Gmail INBOX (deleted/archived/trashed).
  * Updates read/star status for remaining emails.
@@ -170,6 +192,17 @@ export async function reconcileEmails(
   // (usually tiny) stale set by id, in chunks. No query exceeds INBOX_PARAM_CAP.
   let removed = 0;
   if (inboxIdList.length <= INBOX_PARAM_CAP) {
+    // Resolve the attention items of the rows we're about to delete BEFORE the
+    // delete, so an archived/trashed email leaves the attention queue instead of
+    // orphaning an OPEN item the priority amplifier keeps surfacing forever.
+    const stale = await prisma.emailMessage.findMany({
+      where: { userId, gmailId: { notIn: inboxIdList } },
+      select: { id: true },
+    });
+    await resolveAttentionForDeletedEmails(
+      userId,
+      stale.map((r) => r.id),
+    );
     const res = await prisma.emailMessage.deleteMany({
       where: { userId, gmailId: { notIn: inboxIdList } },
     });
@@ -180,6 +213,7 @@ export async function reconcileEmails(
       select: { id: true, gmailId: true },
     });
     const staleIds = stored.filter((e) => !inboxIds.has(e.gmailId)).map((e) => e.id);
+    await resolveAttentionForDeletedEmails(userId, staleIds);
     for (let i = 0; i < staleIds.length; i += INBOX_PARAM_CAP) {
       const res = await prisma.emailMessage.deleteMany({
         where: { userId, id: { in: staleIds.slice(i, i + INBOX_PARAM_CAP) } },
