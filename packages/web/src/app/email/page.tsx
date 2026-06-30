@@ -320,6 +320,17 @@ function EmailView() {
     setSelectedIds(new Set());
   }, []);
 
+  // Real-time auto-sync: when new mail lands, gmail-push emits
+  // conversations-updated (NotificationBell bridges the WS message to this
+  // window event), so refetch the list automatically — no manual "Sync".
+  useEffect(() => {
+    const handler = () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.email.all });
+    };
+    window.addEventListener("conversations-updated", handler);
+    return () => window.removeEventListener("conversations-updated", handler);
+  }, [queryClient]);
+
   const submitSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setAppliedSearch(search.trim());
