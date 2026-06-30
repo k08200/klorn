@@ -613,8 +613,26 @@ async function runPatternAnalysisForAllUsers() {
  * Runs every 6 hours via the pattern-learner batch cycle.
  */
 const DECAY_RATE = 3; // priority points per day of age
-const MAX_AMPLIFIED_PRIORITY = 120; // never exceed this via decay alone
+export const MAX_AMPLIFIED_PRIORITY = 100; // the documented 0-100 ceiling (was 120)
+const MAX_BOOST_PER_RUN = 5; // bound one run's rise so amplification nudges, never slams
 const MIN_AGE_HOURS = 24; // start decaying after 24h in queue
+
+/**
+ * Bounded priority nudge for a stale attention item. The previous version added
+ * floor(ageDays * DECAY_RATE) to the CURRENT priority on every 6h run — which
+ * compounded (re-adding the full age each cycle) and slammed items to a 120
+ * ceiling that violated the documented 0-100 range, letting stale items outrank
+ * every fresh item and dominate the queue (and, via the briefing bridge, the
+ * daily Top 3). This caps a single run's rise at MAX_BOOST_PER_RUN and the
+ * result at MAX_AMPLIFIED_PRIORITY, so a stale item rises gradually until
+ * addressed without ever leaving 0-100 or jumping the queue in one cycle.
+ * (Per-tier ceilings — so a QUEUE item can't creep into PUSH range over many
+ * days — are a follow-up, coupled with EMAIL auto-resolution.)
+ */
+export function amplifiedPriority(current: number, ageDays: number): number {
+  const boost = Math.min(Math.max(0, Math.floor(ageDays * DECAY_RATE)), MAX_BOOST_PER_RUN);
+  return Math.min(current + boost, MAX_AMPLIFIED_PRIORITY);
+}
 
 async function amplifyStaleAttentionItems(): Promise<void> {
   const cutoff = new Date(Date.now() - MIN_AGE_HOURS * 60 * 60 * 1000);
@@ -651,9 +669,11 @@ async function amplifyStaleAttentionItems(): Promise<void> {
   for (const item of stale) {
     const ageMs = now - item.surfacedAt.getTime();
     const ageDays = ageMs / (24 * 60 * 60 * 1000);
-    const boost = Math.floor(ageDays * DECAY_RATE);
-    const newPriority = Math.min(item.priority + boost, MAX_AMPLIFIED_PRIORITY);
-    if (newPriority <= item.priority) continue; // already at cap or no change
+    const newPriority = amplifiedPriority(item.priority, ageDays);
+    // `===` (not `<=`) so an item already above the cap (e.g. a legacy 120 from
+    // the old unbounded amplifier) is healed DOWN to 100 on its next run; a
+    // normal aging item only ever rises (boost >= 0).
+    if (newPriority === item.priority) continue;
 
     updates.push(
       (
