@@ -267,6 +267,10 @@ export async function syncNaverImap(args: SyncArgs): Promise<SyncResult> {
                     from,
                     subject,
                     snippet,
+                    // Same body the Gmail path feeds the judge, so JUDGE_INCLUDE_BODY
+                    // behaves identically across ingest sources. Truncated inside
+                    // buildJudgePrompt; off by default.
+                    body: bodyBuf ? bodyBuf.toString("utf8") : null,
                     labels,
                   },
                   args.userId,

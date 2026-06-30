@@ -128,6 +128,7 @@ export async function persistGmailEmail(
     from: email.from,
     subject: email.subject,
     snippet: email.snippet,
+    body: email.body,
     labels: email.labels,
     receivedAt: email.receivedAt,
   })
@@ -203,6 +204,7 @@ interface JudgeableEmailRow {
   from: string;
   subject: string;
   snippet: string | null;
+  body?: string | null;
   labels: string[];
   receivedAt: Date;
 }
@@ -236,6 +238,7 @@ export async function judgeAndMirrorEmail(
       from: email.from,
       subject: email.subject,
       snippet: email.snippet,
+      body: email.body,
       labels: email.labels,
     },
     userId,
@@ -399,6 +402,7 @@ export async function backfillEmailAttentionItems(userId: string): Promise<numbe
       from: true,
       subject: true,
       snippet: true,
+      body: true,
       labels: true,
       receivedAt: true,
     },

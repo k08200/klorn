@@ -32,6 +32,8 @@ export interface ClassifiableEmail {
   from: string;
   subject: string;
   snippet?: string | null;
+  /** Full plaintext body. Fed to the judge only when JUDGE_INCLUDE_BODY is on. */
+  body?: string | null;
   /**
    * Gmail labels attached to the message (CATEGORY_PROMOTIONS,
    * CATEGORY_UPDATES, UNREAD, etc.). Caller is responsible for forwarding
