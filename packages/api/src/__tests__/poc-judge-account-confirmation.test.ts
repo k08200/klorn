@@ -15,7 +15,9 @@ describe("isRoutineAccountConfirmation", () => {
   it("flags routine account/security confirmations (→ urgency capped → QUEUE)", () => {
     expect(isRoutineAccountConfirmation(email("Phone number added on Instagram"))).toBe(true);
     expect(
-      isRoutineAccountConfirmation(email("Phone number added as a two-factor authentication method")),
+      isRoutineAccountConfirmation(
+        email("Phone number added as a two-factor authentication method"),
+      ),
     ).toBe(true);
     expect(isRoutineAccountConfirmation(email("Security alert: new sign-in on Mac"))).toBe(true);
     expect(isRoutineAccountConfirmation(email("Your password was reset"))).toBe(true);
@@ -40,9 +42,9 @@ describe("isRoutineAccountConfirmation", () => {
 
   it("does NOT flag unrelated mail with no confirmation pattern (stays PUSH-eligible)", () => {
     expect(isRoutineAccountConfirmation(email("Due diligence docs due Friday"))).toBe(false);
-    expect(isRoutineAccountConfirmation(email("Action required: confirm your interview slot"))).toBe(
-      false,
-    );
+    expect(
+      isRoutineAccountConfirmation(email("Action required: confirm your interview slot")),
+    ).toBe(false);
     expect(isRoutineAccountConfirmation(email("URGENT: production down, need response ASAP"))).toBe(
       false,
     );
