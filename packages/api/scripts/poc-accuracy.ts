@@ -26,6 +26,13 @@ interface GroundTruthItem {
   from: string;
   subject: string;
   snippet: string | null;
+  /**
+   * Full plaintext body. Only fed to the judge when JUDGE_INCLUDE_BODY is on
+   * (see poc-judge.ts). Absent in the locked 50-item gate set — there it is
+   * inert. Present in the body-eval set so an off-vs-on run measures the
+   * body's effect on cases whose true tier lives below the snippet.
+   */
+  body?: string | null;
   labels: string[];
   receivedAt: string;
   label: null | PocTier;
@@ -161,6 +168,7 @@ async function main() {
       from: i.from,
       subject: i.subject,
       snippet: i.snippet ?? null,
+      body: i.body ?? null,
       labels: i.labels,
     })),
     { concurrency: args.concurrency, interCallDelayMs: args.delayMs },

@@ -1,0 +1,106 @@
+{
+  "metadata": {
+    "userEmail": "synthetic@klorn.ai",
+    "extractedAt": "2026-06-30T00:00:00.000Z",
+    "count": 8,
+    "note": "Synthetic, PII-free BODY-DEPENDENT eval set. Every item is built so that from+subject+snippet point at the WRONG tier and the true tier lives only in the body. Purpose: measure the JUDGE_INCLUDE_BODY flag (poc-judge.ts). Run it twice and compare 'Overall accuracy' + per-tier recall:\n  JUDGE_INCLUDE_BODY=false DATABASE_URL=... OPENROUTER_API_KEY=... npx tsx scripts/poc-accuracy.ts --in=eval/judge-body-eval-set.json --concurrency=1 --delay=3000\n  JUDGE_INCLUDE_BODY=true  DATABASE_URL=... OPENROUTER_API_KEY=... npx tsx scripts/poc-accuracy.ts --in=eval/judge-body-eval-set.json --concurrency=1 --delay=3000\nbody=off accuracy is the floor (judge is blind to the body); body=on accuracy is the measured value of feeding the body. The delta = what the body buys. This is NOT the locked 50-item gate — the tier-floor FAIL/exit-2 on the body=off run is expected (that is the point)."
+  },
+  "items": [
+    {
+      "id": "eval-body-001",
+      "gmailId": "synthetic",
+      "from": "Jordan Lee <jordan@acme-partners.example.com>",
+      "subject": "Re: following up",
+      "snippet": "Hi, hope the week is going well. Circling back on a couple of items from our last call.",
+      "body": "Hi — hope the week is going well. Circling back on a couple of items from our last call. The main thing: legal flagged that Acme will walk from the signed agreement unless we return the countersigned addendum before 5pm today. I need your approval in the next hour or we lose the deal. Everything else can wait.",
+      "labels": ["UNREAD"],
+      "receivedAt": "2026-06-30T01:00:00.000Z",
+      "label": "PUSH",
+      "note": "Subject/snippet read as a routine QUEUE follow-up; the deal-killing same-day deadline is body-only."
+    },
+    {
+      "id": "eval-body-002",
+      "gmailId": "synthetic",
+      "from": "Sam Rivera <sam@internal-eng.example.com>",
+      "subject": "quick note when you get a sec",
+      "snippet": "Wanted to flag something, no big deal, whenever you are free.",
+      "body": "Wanted to flag something. Production login has been down for about 40 minutes — customers cannot sign in and support tickets are piling up. I have a rollback ready but I need your sign-off to ship it now. Can you reply in the next few minutes?",
+      "labels": ["UNREAD"],
+      "receivedAt": "2026-06-30T01:05:00.000Z",
+      "label": "PUSH",
+      "note": "Snippet is deliberately casual ('no big deal'); the outage + sign-off request that make it PUSH are body-only."
+    },
+    {
+      "id": "eval-body-003",
+      "gmailId": "synthetic",
+      "from": "Updates <news@some-saas.example.com>",
+      "subject": "An update about your account",
+      "snippet": "We have some news to share with you.",
+      "body": "Big news — we are launching our Pro plan! Upgrade now and save 40% this week only. A limited-time offer for our loyal users. Click here to claim your discount before it expires. Unsubscribe anytime.",
+      "labels": ["CATEGORY_UPDATES"],
+      "receivedAt": "2026-06-30T01:10:00.000Z",
+      "label": "SILENT",
+      "note": "Subject looks like a transactional account notice (QUEUE); the body is pure promotional marketing. No PROMOTIONS label, so the marketing fast-path does not fire — only body-on reveals it."
+    },
+    {
+      "id": "eval-body-004",
+      "gmailId": "synthetic",
+      "from": "Priya Nair <priya@vendor-co.example.com>",
+      "subject": "URGENT: action required",
+      "snippet": "Immediate attention needed on the items below.",
+      "body": "Thanks for your patience. Just so it is on your radar — whenever you get to it over the next couple of weeks, could you review the updated style guide? No rush at all, the end of the month is totally fine.",
+      "labels": ["UNREAD"],
+      "receivedAt": "2026-06-30T01:15:00.000Z",
+      "label": "QUEUE",
+      "note": "Subject screams urgency; the body explicitly says no rush / end of month. body-on should pull it down from a false PUSH."
+    },
+    {
+      "id": "eval-body-005",
+      "gmailId": "synthetic",
+      "from": "Dana Kim <dana@boardstuff.example.com>",
+      "subject": "Re: Re: Re: project sync notes",
+      "snippet": "Thanks everyone for the detailed notes from today's sync.",
+      "body": "Thanks everyone for the detailed notes from today's sync. Lots of good threads in here. One thing that cannot slip: the board deck has to be finalized and sent to the investors by tomorrow 9am or we miss the quarterly review window entirely. The owner for that is you — please confirm tonight.",
+      "labels": ["UNREAD"],
+      "receivedAt": "2026-06-30T01:20:00.000Z",
+      "label": "PUSH",
+      "note": "Reads as a recap thread (QUEUE); the hard tomorrow-9am board deadline + ownership are at the end of the body."
+    },
+    {
+      "id": "eval-body-006",
+      "gmailId": "synthetic",
+      "from": "billing@tool.example.com",
+      "subject": "Re: your request",
+      "snippet": "Regarding your recent request.",
+      "body": "This is an automated confirmation that your monthly invoice has been paid in full. No action is needed. A copy is attached for your records. Please do not reply to this message.",
+      "labels": ["UNREAD"],
+      "receivedAt": "2026-06-30T01:25:00.000Z",
+      "label": "AUTO",
+      "note": "Subject implies an open conversation needing a reply; the body shows an automated paid-invoice receipt — reversible + no action, so the AUTO signal is body-only."
+    },
+    {
+      "id": "eval-body-007",
+      "gmailId": "synthetic",
+      "from": "Alex Park <alex@bigclient.example.com>",
+      "subject": "checking in",
+      "snippet": "Hope you are doing well.",
+      "body": "Hope you are doing well. Heads up — our exec team is reconsidering the renewal and wants a call before they decide. If we do not talk today, they will likely sign with the other vendor instead. Are you free this afternoon?",
+      "labels": ["UNREAD"],
+      "receivedAt": "2026-06-30T01:30:00.000Z",
+      "label": "PUSH",
+      "note": "Bland 'checking in' subject; the at-risk renewal + same-day call that make it PUSH are body-only."
+    },
+    {
+      "id": "eval-body-008",
+      "gmailId": "synthetic",
+      "from": "Morgan Tan <morgan@partner-firm.example.com>",
+      "subject": "newsletter + one ask",
+      "snippet": "Our monthly newsletter is here with product updates and tips.",
+      "body": "Our monthly newsletter is here with the usual product updates and tips. P.S. — separately, could you send over the Q3 numbers when you have a chance this week? Our finance team needs them to close the joint report.",
+      "labels": ["UNREAD"],
+      "receivedAt": "2026-06-30T01:35:00.000Z",
+      "label": "QUEUE",
+      "note": "Snippet reads as a newsletter (SILENT); a genuine same-week work ask is appended in the body, making it QUEUE."
+    }
+  ]
+}
