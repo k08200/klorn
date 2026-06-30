@@ -96,10 +96,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <img src="/brand/mark.svg?v=matte2" alt="" className="h-6 w-6" />
           <div className="min-w-0">
             <p className="text-sm font-semibold leading-none text-stone-100">Klorn</p>
-            <p
-              className="mt-0.5 truncate text-[10px] leading-none text-stone-500"
-              data-testid="mobile-section-label"
-            >
+            {/* The section name is redundant with each screen's large title, so
+                it's visually hidden — kept in the DOM (sr-only) for screen
+                readers and the navigation e2e checks. */}
+            <p className="sr-only" data-testid="mobile-section-label">
               {sectionLabel}
             </p>
           </div>

@@ -403,10 +403,10 @@ function OnboardingHint() {
   if (dismissed !== false) return null;
 
   return (
-    <div className="mb-4 rounded-xl border border-amber-300/30 bg-amber-300/5 p-3 text-sm md:mb-5 md:p-4">
-      <div className="flex items-start justify-between gap-3">
+    <div className="mb-3 text-sm md:mb-5 md:rounded-xl md:border md:border-amber-300/30 md:bg-amber-300/5 md:p-4">
+      <div className="flex items-center justify-between gap-3 md:items-start">
         <div className="min-w-0 space-y-1.5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300">
+          <p className="text-[11px] font-medium text-stone-500 md:font-semibold md:uppercase md:tracking-[0.16em] md:text-amber-300">
             New here? 30-second tour
           </p>
           <ul
