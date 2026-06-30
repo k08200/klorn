@@ -15,11 +15,14 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  calendarLabelMap,
   hasExplicitOffset,
   mapGoogleEventTimes,
   naiveLocalToUtc,
   parseGoogleDateTime,
+  selectFreeBusyCalendarIds,
   summarizeConflicts,
+  summarizeFreeBusy,
   toAbsoluteInstant,
 } from "../google-calendar-time.js";
 
@@ -271,5 +274,95 @@ describe("summarizeConflicts (all-day false-positive guard)", () => {
 
   it("tolerates an empty list", () => {
     expect(summarizeConflicts([])).toEqual([]);
+  });
+});
+
+describe("selectFreeBusyCalendarIds (multi-calendar selection)", () => {
+  it("keeps primary + owner/writer calendars (the user's double-book risk)", () => {
+    const ids = selectFreeBusyCalendarIds([
+      { id: "primary", primary: true, accessRole: "owner" },
+      { id: "work@group.calendar.google.com", accessRole: "writer" },
+      { id: "owned2@group.calendar.google.com", accessRole: "owner" },
+    ]);
+    expect(ids).toEqual([
+      "primary",
+      "work@group.calendar.google.com",
+      "owned2@group.calendar.google.com",
+    ]);
+  });
+
+  it("drops reader / freeBusyReader subscriptions (someone else's busy ≠ my clash)", () => {
+    const ids = selectFreeBusyCalendarIds([
+      { id: "primary", primary: true, accessRole: "owner" },
+      { id: "holidays@group.v.calendar.google.com", accessRole: "reader" },
+      { id: "coworker@company.com", accessRole: "freeBusyReader" },
+    ]);
+    expect(ids).toEqual(["primary"]);
+  });
+
+  it("tolerates null/empty and skips items with no id", () => {
+    expect(selectFreeBusyCalendarIds(null)).toEqual([]);
+    expect(selectFreeBusyCalendarIds([{ accessRole: "owner" }])).toEqual([]);
+  });
+});
+
+describe("calendarLabelMap (never leak the raw email-form calendar id)", () => {
+  it("labels primary as 'primary' and secondaries by their display name", () => {
+    const map = calendarLabelMap([
+      { id: "alice@company.com", primary: true, summary: "alice@company.com" },
+      { id: "abc123@group.calendar.google.com", summary: "Work" },
+      { id: "def456@group.calendar.google.com", summary: "Team", summaryOverride: "Team (mine)" },
+    ]);
+    expect(map).toEqual({
+      "alice@company.com": "primary",
+      "abc123@group.calendar.google.com": "Work",
+      "def456@group.calendar.google.com": "Team (mine)",
+    });
+  });
+
+  it("falls back to a generic label and skips id-less entries", () => {
+    expect(calendarLabelMap([{ id: "x@group.calendar.google.com" }])).toEqual({
+      "x@group.calendar.google.com": "calendar",
+    });
+    expect(calendarLabelMap([{ summary: "no id" }])).toEqual({});
+    expect(calendarLabelMap(null)).toEqual({});
+  });
+});
+
+describe("summarizeFreeBusy (flatten busy intervals across calendars)", () => {
+  it("tags each block with the mapped label — never the raw (email) calendar id", () => {
+    const out = summarizeFreeBusy(
+      {
+        "alice@company.com": {
+          busy: [{ start: "2026-06-03T05:00:00Z", end: "2026-06-03T06:00:00Z" }],
+        },
+        "work@group.calendar.google.com": {
+          busy: [{ start: "2026-06-03T07:00:00Z", end: "2026-06-03T08:00:00Z" }],
+        },
+      },
+      { "alice@company.com": "primary", "work@group.calendar.google.com": "Work" },
+    );
+    expect(out).toEqual([
+      { start: "2026-06-03T05:00:00Z", end: "2026-06-03T06:00:00Z", calendar: "primary" },
+      { start: "2026-06-03T07:00:00Z", end: "2026-06-03T08:00:00Z", calendar: "Work" },
+    ]);
+  });
+
+  it("degrades to a non-identifying label when no map entry exists", () => {
+    const out = summarizeFreeBusy({
+      primary: { busy: [{ start: "2026-06-03T05:00:00Z", end: "2026-06-03T06:00:00Z" }] },
+      "secret@company.com": {
+        busy: [{ start: "2026-06-03T07:00:00Z", end: "2026-06-03T08:00:00Z" }],
+      },
+    });
+    expect(out.map((c) => c.calendar)).toEqual(["primary", "calendar"]);
+  });
+
+  it("returns empty when no calendar is busy, and skips malformed slots", () => {
+    expect(summarizeFreeBusy({ primary: { busy: [] } })).toEqual([]);
+    expect(summarizeFreeBusy({ primary: { busy: [{ start: "2026-06-03T05:00:00Z" }] } })).toEqual(
+      [],
+    );
+    expect(summarizeFreeBusy(null)).toEqual([]);
   });
 });
