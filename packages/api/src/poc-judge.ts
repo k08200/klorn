@@ -488,6 +488,42 @@ function canShortCircuit(prior: SenderPrior, email: ClassifiableEmail): boolean 
   return true;
 }
 
+// Founder decision (2026-06-30): account-change / security CONFIRMATIONS are
+// informational "it happened" reports the recipient signed up to receive, so
+// they belong in QUEUE, not PUSH. The LLM over-scores their urgency (it reads
+// "phone number added" as a possible takeover). This deterministic cap holds
+// urgency down for confirmation-pattern mail — but ONLY when the email carries
+// no explicit ask to act on something suspicious/unauthorized, so a genuine
+// alert ("verify unusual transaction", "action required: was this you") stays
+// urgent. Surgical: it touches only matching mail, leaving the rest of the
+// classifier (and the eval gate) unperturbed — unlike a prompt change, which
+// measurably shifted unrelated tiers. Match is narrow (subject+snippet); the
+// action/suspicion EXCLUSION is broad (also scans the body) so a real alert is
+// never silenced.
+const ACCOUNT_CONFIRMATION_RE =
+  /\b(new sign[-\s]?in|signed in|sign[-\s]?in (from|on|detected|notice)|phone(\s+number)?\s+(was\s+)?added|number added as|device\s+(was\s+)?added|new device added|passkey added|password\s+(was\s+)?(reset|changed|updated)|two[-\s]?factor|2fa|recovery (email|phone)\s+added|verification method (was\s+)?added)\b/i;
+const ACCOUNT_ALERT_ACTION_RE =
+  /\b(action required|verify|confirm it was you|wasn'?t you|was this you|unauthorized|unusual|suspicious|we blocked|blocked a sign|secure your account|if you did(n'?t| not))\b/i;
+const ROUTINE_CONFIRMATION_URGENCY_CAP = 0.3;
+
+/**
+ * Whether an email is a routine account/security CONFIRMATION (a change that
+ * already happened) carrying no explicit ask to act — these are QUEUE, not PUSH.
+ */
+export function isRoutineAccountConfirmation(email: ClassifiableEmail): boolean {
+  const head = `${email.subject || ""} ${email.snippet || ""}`;
+  if (!ACCOUNT_CONFIRMATION_RE.test(head)) return false;
+  const full = `${head} ${(email.body || "").slice(0, 1000)}`;
+  return !ACCOUNT_ALERT_ACTION_RE.test(full);
+}
+
+/** Cap urgency for routine account/security confirmations (immutable, no-op otherwise). */
+function applyRoutineConfirmationCap(email: ClassifiableEmail, features: PocFeatures): PocFeatures {
+  if (features.urgency <= ROUTINE_CONFIRMATION_URGENCY_CAP) return features;
+  if (!isRoutineAccountConfirmation(email)) return features;
+  return { ...features, urgency: ROUTINE_CONFIRMATION_URGENCY_CAP };
+}
+
 /**
  * Judge a single email → 4-tier. Pure: does not persist anything.
  *
@@ -580,16 +616,17 @@ export async function judgeEmail(
         `[JUDGE] sender-facts grounded: llmTrust=${llm.features.senderTrust.toFixed(2)} history=${history} overrides=${senderFacts.manualOverrides} interaction=${senderFacts.interaction ? "yes" : "no"} commitments=${senderFacts.commitments ? `${senderFacts.commitments.onTime}/${senderFacts.commitments.total}` : "none"}`,
       );
     }
-    const { tier, reason: ruleReason } = tierFromFeatures(llm.features, getEffectiveThresholds());
+    const features = applyRoutineConfirmationCap(email, llm.features);
+    const { tier, reason: ruleReason } = tierFromFeatures(features, getEffectiveThresholds());
     return {
       tier,
       reason: llm.reason || ruleReason,
-      features: llm.features,
+      features,
       source: "llm",
     };
   }
 
-  const features = keywordFeatures(email);
+  const features = applyRoutineConfirmationCap(email, keywordFeatures(email));
   const { tier, reason } = tierFromFeatures(features, getEffectiveThresholds());
   return { tier, reason, features, source: "keyword-fallback" };
 }
