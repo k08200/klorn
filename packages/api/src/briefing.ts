@@ -118,6 +118,74 @@ async function listLocalBriefingEvents(userId: string, now: Date): Promise<{ eve
   return { events };
 }
 
+/**
+ * Bridge: listEmails pulls email metadata live from Gmail, so it carries no
+ * firewall verdict. Join those emails back to the firewall's stored judgment
+ * (EmailMessage.priority / needsReply, written by the 4-tier judge) by gmailId
+ * so "what matters today" reflects what Klorn already decided about each email
+ * rather than a re-derived keyword guess. Best-effort: any DB error degrades to
+ * the unenriched emails so the briefing never blocks on the join.
+ */
+async function attachFirewallJudgment(
+  userId: string,
+  emailsValue: unknown,
+): Promise<{ emails: unknown[] }> {
+  const emails =
+    emailsValue &&
+    typeof emailsValue === "object" &&
+    Array.isArray((emailsValue as { emails?: unknown }).emails)
+      ? (emailsValue as { emails: unknown[] }).emails
+      : [];
+  const gmailIds = emails
+    .map((e) => (e && typeof e === "object" ? (e as { id?: unknown }).id : null))
+    .filter((id): id is string => typeof id === "string");
+  if (gmailIds.length === 0) return { emails };
+
+  try {
+    const rows = await prisma.emailMessage.findMany({
+      where: { userId, gmailId: { in: gmailIds } },
+      select: { id: true, gmailId: true, priority: true, needsReply: true },
+    });
+    // Second hop: the 4-tier verdict (PUSH/QUEUE/SILENT/AUTO) lives on the
+    // AttentionItem the firewall wrote for each email (sourceId = EmailMessage.id).
+    const tierBySourceId = new Map<string, string | null>();
+    if (rows.length > 0) {
+      // No status filter: the tier is the firewall's classification of the
+      // email itself, which stays valid regardless of whether the AttentionItem
+      // was later resolved/snoozed — the briefing wants the verdict, not the
+      // attention-lifecycle state.
+      const attn = await prisma.attentionItem.findMany({
+        where: { userId, source: "EMAIL", sourceId: { in: rows.map((r) => r.id) } },
+        select: { sourceId: true, tier: true },
+      });
+      for (const a of attn) tierBySourceId.set(a.sourceId, a.tier);
+    }
+    const verdict = new Map(
+      rows.map((r) => [
+        r.gmailId,
+        { priority: r.priority, needsReply: r.needsReply, tier: tierBySourceId.get(r.id) ?? null },
+      ]),
+    );
+    return {
+      emails: emails.map((e) => {
+        const id = e && typeof e === "object" ? (e as { id?: unknown }).id : null;
+        const v = typeof id === "string" ? verdict.get(id) : undefined;
+        return v
+          ? { ...(e as object), priority: v.priority, needsReply: v.needsReply, tier: v.tier }
+          : e;
+      }),
+    };
+  } catch (err) {
+    // Never block the briefing on the join — log a signal (captureError is a
+    // no-op without Sentry) and fall back to the unenriched emails.
+    console.warn(
+      `[BRIEFING] firewall-judgment join failed for ${userId} — using unenriched emails:`,
+      err instanceof Error ? err.message : err,
+    );
+    return { emails };
+  }
+}
+
 async function gatherBriefingData(userId: string): Promise<BriefingData> {
   const now = new Date();
   const results = await Promise.allSettled([
@@ -130,7 +198,10 @@ async function gatherBriefingData(userId: string): Promise<BriefingData> {
   const data = {
     tasks: results[0].status === "fulfilled" ? results[0].value : { tasks: [] },
     events: results[1].status === "fulfilled" ? results[1].value : { events: [] },
-    emails: results[2].status === "fulfilled" ? results[2].value : { emails: [] },
+    emails: await attachFirewallJudgment(
+      userId,
+      results[2].status === "fulfilled" ? results[2].value : { emails: [] },
+    ),
     notes: results[3].status === "fulfilled" ? results[3].value : { notes: [] },
   };
 
