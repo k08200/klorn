@@ -156,6 +156,7 @@ export async function sendDevicePush(
   }
 
   const deadTokens: string[] = [];
+  const transientCodes: string[] = [];
   res.responses.forEach((r, i) => {
     if (r.success) return;
     const code = r.error?.code;
@@ -165,9 +166,21 @@ export async function sendDevicePush(
     } else {
       // Transient/unknown failure — leave the token, but log a signal so a
       // systemic FCM problem (bad APNs key, quota) is visible, not swallowed.
+      transientCodes.push(code ?? "unknown");
       console.error(`[PUSH-DEVICE] Send failed for user ${userId} (${code ?? "unknown"})`);
     }
   });
+
+  // console.error alone is invisible when Sentry is the alerting channel. A
+  // systemic FCM problem (bad service-account key, quota) surfaces as per-token
+  // transient failures rather than a sendEach throw, so capture it once (not per
+  // token, to avoid one Sentry event per device) so it actually pages.
+  if (transientCodes.length > 0) {
+    captureError(new Error(`FCM transient send failures (${transientCodes.length})`), {
+      tags: { scope: "push-device.transient-failure" },
+      extra: { userId, count: transientCodes.length, codes: transientCodes.slice(0, 20) },
+    });
+  }
 
   if (deadTokens.length > 0) {
     // Scope the delete to this user (least privilege) even though token is unique.
