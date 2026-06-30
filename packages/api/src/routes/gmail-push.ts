@@ -28,6 +28,7 @@ import { registerGmailWatch, stopGmailWatch } from "../gmail.js";
 import { verifyGoogleOidcToken } from "../google-oidc.js";
 import { captureError } from "../sentry.js";
 import { timingSafeEqualStr } from "../timing-safe-equal.js";
+import { pushNotification } from "../websocket.js";
 
 function extractBearerToken(req: FastifyRequest): string | null {
   const auth = req.headers.authorization;
@@ -140,13 +141,29 @@ export async function gmailPushRoutes(app: FastifyInstance) {
     // consistently failing sync (DB down, quota, expired auth) must still reach
     // error tracking, not just dyno logs. console.warn keeps a signal when
     // Sentry is not configured; captureError preserves the stack + context.
-    syncEmails(user.id, 30).catch((err) => {
-      console.warn(`[GMAIL-PUSH] sync failed for ${user.id}: ${String(err)}`);
-      captureError(err, {
-        tags: { scope: "gmail-push.sync" },
-        extra: { userId: user.id },
+    syncEmails(user.id, 30)
+      .then((result) => {
+        // Real-time auto-sync: new mail just landed in the DB, so tell every
+        // open client to refetch instead of making the user press "Sync".
+        // conversations-updated is the existing app-wide refresh signal
+        // (NotificationBell bridges the WS message to a window event).
+        if (result.newCount > 0) {
+          pushNotification(user.id, {
+            id: "mail-sync",
+            type: "system",
+            title: "conversations-updated",
+            message: "",
+            createdAt: new Date().toISOString(),
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn(`[GMAIL-PUSH] sync failed for ${user.id}: ${String(err)}`);
+        captureError(err, {
+          tags: { scope: "gmail-push.sync" },
+          extra: { userId: user.id },
+        });
       });
-    });
 
     return reply.code(204).send();
   });
