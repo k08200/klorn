@@ -11,6 +11,7 @@ const m = vi.hoisted(() => ({
   deleteMany: vi.fn(async () => ({ count: 0 })),
   findMany: vi.fn(async () => [] as { gmailId: string }[]),
   updateMany: vi.fn(async () => ({ count: 0 })),
+  attentionUpdateMany: vi.fn(async () => ({ count: 0 })),
 }));
 
 vi.mock("googleapis", () => ({
@@ -32,6 +33,7 @@ vi.mock("../resolve-user-email.js", () => ({ resolveUserEmail: vi.fn() }));
 vi.mock("../db.js", () => ({
   prisma: {
     emailMessage: { deleteMany: m.deleteMany, findMany: m.findMany, updateMany: m.updateMany },
+    attentionItem: { updateMany: m.attentionUpdateMany },
   },
 }));
 
@@ -106,5 +108,26 @@ describe("reconcileEmails", () => {
       }),
     );
     expect(result.removed).toBe(1);
+  });
+
+  it("resolves the attention items of archived/trashed emails so they don't orphan as stale PUSH", async () => {
+    m.listMock.mockResolvedValue(inboxListing(["a", "b"]));
+    // First findMany = the stale-rows lookup (ids about to be deleted).
+    m.findMany.mockResolvedValueOnce([{ id: "row-1" }, { id: "row-2" }] as never);
+    m.deleteMany.mockResolvedValue({ count: 2 });
+
+    await reconcileEmails("user-1");
+
+    // The mirror row is deleted AND its OPEN/SNOOZED attention item is RESOLVED,
+    // so the priority amplifier can't keep surfacing a handled email forever.
+    expect(m.attentionUpdateMany).toHaveBeenCalledWith({
+      where: {
+        userId: "user-1",
+        source: "EMAIL",
+        sourceId: { in: ["row-1", "row-2"] },
+        status: { in: ["OPEN", "SNOOZED"] },
+      },
+      data: expect.objectContaining({ status: "RESOLVED" }),
+    });
   });
 });
