@@ -529,6 +529,69 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Pricing */}
+      <section id="pricing" className="mx-auto max-w-3xl px-5 py-20 md:px-8 md:py-28">
+        <div className="text-center">
+          <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-brand-gold">
+            Pricing
+          </p>
+          <h2 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">
+            One plan. Seven days free.
+          </h2>
+          <p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-stone-400">
+            Klorn runs on real AI, so there's no ad-supported free tier — try everything free for 7
+            days, then keep it for the price of a couple of coffees.
+          </p>
+        </div>
+
+        <div className="mx-auto mt-12 max-w-md overflow-hidden rounded-2xl border border-brand-gold/30 bg-white/[0.03]">
+          <div className="h-1 bg-gradient-to-r from-brand-gold via-brand-gold/40 to-transparent" />
+          <div className="p-7">
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center rounded-full bg-brand-gold/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-gold">
+                Founding price
+              </span>
+              <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-stone-500">
+                Klorn Pro
+              </span>
+            </div>
+            <div className="mt-5 flex items-baseline gap-1.5">
+              <span className="text-4xl font-bold tracking-tight text-white">$7.99</span>
+              <span className="text-sm text-stone-400">/month</span>
+            </div>
+            <p className="mt-1 text-xs text-stone-500">
+              7 days free, then $7.99/mo on the web. Cancel anytime.
+            </p>
+
+            <ul className="mt-6 space-y-3">
+              {[
+                "Only get interrupted by mail that actually matters",
+                "Klorn auto-handles the noise while you're away",
+                "A morning brief of what needs a decision",
+                "Works on iPhone, web, and desktop",
+              ].map((feature) => (
+                <li key={feature} className="flex items-start gap-3 text-sm text-stone-200">
+                  <Icon type="shield" className="mt-0.5 h-4 w-4 shrink-0 text-brand-gold" />
+                  <span>{feature}</span>
+                </li>
+              ))}
+            </ul>
+
+            <Link
+              href="/login"
+              aria-label="Start free trial from pricing section"
+              className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-md bg-brand-cream-soft text-sm font-semibold text-brand-ink transition hover:bg-white"
+            >
+              Start 7-day free trial
+              <Icon type="arrow" className="h-4 w-4" />
+            </Link>
+            <p className="mt-3 text-center text-[11px] text-stone-500">
+              On iPhone you subscribe in the app. Self-host it free — Klorn is open source.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section className="mx-auto max-w-7xl px-5 pb-24 text-center md:px-8 md:pb-32">
         <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-brand-gold">
           Built for decisions
