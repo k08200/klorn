@@ -14,6 +14,10 @@ const NAV_ITEMS = [
   { href: "/briefing", label: "Briefing", icon: "bell" },
 ];
 
+// Routes that already have a bottom-tab on mobile — hidden in the mobile drawer
+// to avoid duplicating the nav (the desktop sidebar still shows them).
+const BOTTOM_TAB_HREFS = new Set(["/inbox", "/email", "/calendar", "/briefing"]);
+
 function NavIcon({ type, size = 16 }: { type: string; size?: number }) {
   const props = {
     width: size,
@@ -148,7 +152,10 @@ export default function Sidebar({
               key={item.href}
               href={item.href}
               onClick={onMobileClose}
-              className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition ${
+              // The bottom tab bar already covers these on mobile, so hide the
+              // duplicates in the drawer below md (desktop sidebar keeps them —
+              // it's the only nav there).
+              className={`${BOTTOM_TAB_HREFS.has(item.href) ? "hidden md:flex" : "flex"} items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition ${
                 pathname.startsWith(item.href)
                   ? "bg-stone-800 text-stone-100"
                   : "text-stone-500 hover:bg-stone-800/70 hover:text-stone-300"

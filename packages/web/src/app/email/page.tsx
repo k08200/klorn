@@ -828,7 +828,7 @@ function EmailView() {
         {/* Work queues: on phones these stack into 4 tall cards that bury the mail
           list, so render them as a compact horizontal-scroll chip row on mobile
           (title only) and keep the full 4-up grid with descriptions on md+. */}
-        <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
+        <div className="mt-3 hidden gap-2 md:grid md:grid-cols-4">
           {WORK_QUEUES.map((queue) => (
             <button
               key={queue.key}
@@ -1193,6 +1193,10 @@ function SignalStat({ label, value }: { label: string; value: number }) {
   );
 }
 
+// On mobile only the essential mail filters show; the rest (attachments,
+// candidates, threads, automated) stay desktop-only to keep the chip row short.
+const MOBILE_FILTERS = new Set<Filter>(["all", "reply-needed", "urgent", "unread"]);
+
 function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filter) => void }) {
   return (
     <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -1203,7 +1207,7 @@ function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filt
             key={f.key}
             type="button"
             onClick={() => onChange(f.key)}
-            className={`min-h-[32px] shrink-0 rounded-full px-3 py-1.5 text-xs transition ${
+            className={`${MOBILE_FILTERS.has(f.key) ? "inline-flex" : "hidden md:inline-flex"} min-h-[32px] shrink-0 items-center rounded-full px-3 py-1.5 text-xs transition ${
               active
                 ? "bg-accent text-stone-950"
                 : "border border-white/10 bg-stone-900/40 text-stone-400 hover:bg-white/6 hover:text-stone-200"
