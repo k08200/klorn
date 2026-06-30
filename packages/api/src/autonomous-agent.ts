@@ -53,7 +53,6 @@ import { db, prisma } from "./db.js";
 import { recipientFromToolArgs, recordFeedback } from "./feedback.js";
 import { isNoReplyAddress, markAsRead } from "./gmail.js";
 import { loadMemoriesForPrompt } from "./memory.js";
-import { estimateModelCostUsd } from "./model-fallback.js";
 import { humanizeAutoExec } from "./notification-format.js";
 import { notificationSuppressionReason } from "./notification-policy.js";
 import type { NotifCategory } from "./notification-prefs.js";
@@ -61,6 +60,7 @@ import { AGENT_MODEL, createCompletion } from "./openai.js";
 import { getFeedbackPolicyContextForPrompt } from "./policy-extraction.js";
 import { sendPushNotification } from "./push.js";
 import { captureError } from "./sentry.js";
+import { trackTokenUsage } from "./token-usage.js";
 import { ALL_TOOLS, executeToolCall, isToolAllowedForPlan } from "./tool-executor.js";
 import { pushNotification } from "./websocket.js";
 
@@ -94,39 +94,6 @@ const EXECUTABLE_TOOL_NAMES = new Set(
 // agent-proposal-dedup.ts so they can be tested without booting the
 // full agent runtime. The autonomous loop imports what it needs at the
 // top of this file.
-
-/** Track LLM token usage for cost monitoring */
-async function trackTokenUsage(
-  userId: string,
-  usage:
-    | {
-        prompt_tokens?: number;
-        completion_tokens?: number;
-        total_tokens?: number;
-      }
-    | undefined,
-  modelName: string = AGENT_MODEL,
-) {
-  if (!usage) return;
-  const prompt = usage.prompt_tokens || 0;
-  const completion = usage.completion_tokens || 0;
-  const total = usage.total_tokens || prompt + completion;
-  const estimatedCost = estimateModelCostUsd(modelName, prompt, completion);
-  try {
-    await db.tokenUsage.create({
-      data: {
-        userId,
-        model: modelName,
-        promptTokens: prompt,
-        completionTokens: completion,
-        totalTokens: total,
-        estimatedCost,
-      },
-    });
-  } catch {
-    // Non-critical — silently fail
-  }
-}
 
 /** Log agent activity for transparency */
 async function logAgentAction(
