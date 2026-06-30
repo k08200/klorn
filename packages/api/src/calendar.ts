@@ -1,6 +1,27 @@
 import { google } from "googleapis";
+import { prisma } from "./db.js";
 import { getAuthedClient, isGoogleAuthError, markGoogleTokenForReconnect } from "./gmail.js";
+import {
+  type CalendarConflictItem,
+  summarizeConflicts,
+  toAbsoluteInstant,
+} from "./google-calendar-time.js";
+import { normalizeTimeZone } from "./time-zone.js";
 import { wrapUntrusted } from "./untrusted.js";
+
+/**
+ * The user's configured IANA timezone (defaults to the product default). Used to
+ * interpret an offset-less conflict window in the user's wall clock. Mirrors
+ * proactive-actions.getUserTimeZone — extract to a shared util if a third caller
+ * appears.
+ */
+async function getUserTimeZone(userId: string): Promise<string> {
+  const config = await prisma.automationConfig.findUnique({
+    where: { userId },
+    select: { timezone: true },
+  });
+  return normalizeTimeZone(config?.timezone);
+}
 
 export async function listEvents(userId: string, maxResults = 10) {
   const auth = await getAuthedClient(userId);
@@ -123,22 +144,24 @@ export async function checkConflicts(userId: string, startTime: string, endTime:
   const auth = await getAuthedClient(userId);
   if (!auth) return { error: "Google Calendar not connected." };
 
+  // The conflict window must be an absolute instant. The tool contract asks the
+  // agent for offset-bearing ISO8601, but a naive (offset-less) string must be
+  // read in the USER's zone, never the server's UTC — otherwise the queried
+  // window is hours off and a real clash is missed or invented.
+  const userZone = await getUserTimeZone(userId);
+  const timeMin = toAbsoluteInstant(startTime, userZone);
+  const timeMax = toAbsoluteInstant(endTime, userZone);
+  if (!timeMin || !timeMax) {
+    return { error: "Invalid time range — start_time and end_time must be valid ISO 8601." };
+  }
+
   const calendar = google.calendar({ version: "v3", auth });
-  let res: {
-    data: {
-      items?: Array<{
-        id?: string | null;
-        summary?: string | null;
-        start?: { dateTime?: string | null; date?: string | null } | null;
-        end?: { dateTime?: string | null; date?: string | null } | null;
-      }> | null;
-    };
-  };
+  let res: { data: { items?: CalendarConflictItem[] | null } };
   try {
     res = await calendar.events.list({
       calendarId: "primary",
-      timeMin: startTime,
-      timeMax: endTime,
+      timeMin,
+      timeMax,
       singleEvents: true,
       orderBy: "startTime",
     });
@@ -150,12 +173,8 @@ export async function checkConflicts(userId: string, startTime: string, endTime:
     throw err;
   }
 
-  const conflicts = (res.data.items || []).map((e) => ({
-    id: e.id,
-    summary: e.summary || "(No title)",
-    start: e.start?.dateTime || e.start?.date || "",
-    end: e.end?.dateTime || e.end?.date || "",
-  }));
+  // Only timed events double-book a slot; all-day markers are excluded.
+  const conflicts = summarizeConflicts(res.data.items || []);
 
   return {
     hasConflicts: conflicts.length > 0,

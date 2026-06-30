@@ -145,3 +145,54 @@ export function mapGoogleEventTimes(
     : new Date(endRaw);
   return { startTime, endTime, allDay: !isTimed };
 }
+
+/**
+ * Normalize an agent-supplied ISO time into an absolute UTC instant string for
+ * a Google `events.list` timeMin/timeMax. The conflict-check tool asks the model
+ * for an offset-bearing ISO8601, but if it drops the offset the only correct
+ * reading is the USER's wall clock — never the server's UTC. Reusing
+ * {@link hasExplicitOffset} / {@link naiveLocalToUtc} keeps this on the same
+ * defensive path as the sync mapper. Returns null when the string is unparseable
+ * so the caller can fail loudly instead of querying a garbage window.
+ */
+export function toAbsoluteInstant(value: string, userZone: string): string | null {
+  if (hasExplicitOffset(value)) {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  const utc = naiveLocalToUtc(value, userZone);
+  return utc ? utc.toISOString() : null;
+}
+
+/** Structural slice of a Google `events.list` item used for conflict checks. */
+export interface CalendarConflictItem {
+  id?: string | null;
+  summary?: string | null;
+  start?: { dateTime?: string | null; date?: string | null } | null;
+  end?: { dateTime?: string | null; date?: string | null } | null;
+}
+
+/** A timed event reduced to the fields the conflict response surfaces. */
+export interface ConflictSummary {
+  id: string | null | undefined;
+  summary: string;
+  start: string;
+  end: string;
+}
+
+/**
+ * Reduce raw `events.list` items to genuine time-slot conflicts. All-day events
+ * (date-only, no `dateTime`) are full-day markers — holidays, birthdays, PTO —
+ * and surfacing them as a clash for a timed meeting is a false positive, so they
+ * are excluded. Only timed events (carrying `start.dateTime`) can double-book.
+ */
+export function summarizeConflicts(items: CalendarConflictItem[]): ConflictSummary[] {
+  return items
+    .filter((e) => Boolean(e.start?.dateTime))
+    .map((e) => ({
+      id: e.id,
+      summary: e.summary || "(No title)",
+      start: e.start?.dateTime || "",
+      end: e.end?.dateTime || "",
+    }));
+}

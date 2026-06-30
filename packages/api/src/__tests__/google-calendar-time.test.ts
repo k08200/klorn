@@ -19,6 +19,8 @@ import {
   mapGoogleEventTimes,
   naiveLocalToUtc,
   parseGoogleDateTime,
+  summarizeConflicts,
+  toAbsoluteInstant,
 } from "../google-calendar-time.js";
 
 describe("hasExplicitOffset", () => {
@@ -167,5 +169,107 @@ describe("mapGoogleEventTimes (shared init-sync + scheduler mapping)", () => {
       mapGoogleEventTimes({ start: { dateTime: "2026-06-03T15:00:00" } }, "Asia/Seoul"),
     ).toBeNull();
     expect(mapGoogleEventTimes({}, "Asia/Seoul")).toBeNull();
+  });
+});
+
+describe("toAbsoluteInstant (conflict-window normalizer)", () => {
+  it("trusts an offset-bearing time verbatim (KST)", () => {
+    // 2026-06-03 15:00 +09:00 = 06:00 UTC
+    expect(toAbsoluteInstant("2026-06-03T15:00:00+09:00", "Asia/Seoul")).toBe(
+      "2026-06-03T06:00:00.000Z",
+    );
+  });
+
+  it("trusts a Z time regardless of user zone", () => {
+    expect(toAbsoluteInstant("2026-06-03T06:00:00Z", "America/New_York")).toBe(
+      "2026-06-03T06:00:00.000Z",
+    );
+  });
+
+  it("reads a naive (offset-less) time in the USER's zone, not server UTC", () => {
+    // Regression: the agent sometimes drops the offset. Reading 15:00 as the
+    // user's KST wall clock = 06:00 UTC; reading it as naive UTC (the bug) would
+    // query a window 9h off and miss/invent a clash.
+    const out = toAbsoluteInstant("2026-06-03T15:00:00", "Asia/Seoul");
+    expect(out).toBe("2026-06-03T06:00:00.000Z");
+    expect(out).not.toBe("2026-06-03T15:00:00.000Z");
+  });
+
+  it("reads a naive time in a non-KST user zone (cross-tz safety)", () => {
+    // 2026-06-03 15:00 America/New_York (EDT) = 19:00 UTC
+    expect(toAbsoluteInstant("2026-06-03T15:00:00", "America/New_York")).toBe(
+      "2026-06-03T19:00:00.000Z",
+    );
+  });
+
+  it("returns null for an unparseable or empty time", () => {
+    expect(toAbsoluteInstant("not a date", "Asia/Seoul")).toBeNull();
+    expect(toAbsoluteInstant("", "Asia/Seoul")).toBeNull();
+  });
+});
+
+describe("summarizeConflicts (all-day false-positive guard)", () => {
+  it("excludes all-day (date-only) events — they don't double-book a time slot", () => {
+    const out = summarizeConflicts([
+      {
+        id: "allday",
+        summary: "Company Holiday",
+        start: { date: "2026-06-03" },
+        end: { date: "2026-06-04" },
+      },
+    ]);
+    expect(out).toHaveLength(0);
+  });
+
+  it("counts a timed event as a conflict", () => {
+    const out = summarizeConflicts([
+      {
+        id: "timed",
+        summary: "1:1",
+        start: { dateTime: "2026-06-03T14:00:00+09:00" },
+        end: { dateTime: "2026-06-03T15:00:00+09:00" },
+      },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({
+      id: "timed",
+      summary: "1:1",
+      start: "2026-06-03T14:00:00+09:00",
+      end: "2026-06-03T15:00:00+09:00",
+    });
+  });
+
+  it("keeps only the timed event when an all-day event overlaps the window", () => {
+    const out = summarizeConflicts([
+      {
+        id: "allday",
+        summary: "Birthday",
+        start: { date: "2026-06-03" },
+        end: { date: "2026-06-04" },
+      },
+      {
+        id: "timed",
+        summary: "Standup",
+        start: { dateTime: "2026-06-03T09:30:00+09:00" },
+        end: { dateTime: "2026-06-03T10:00:00+09:00" },
+      },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe("timed");
+  });
+
+  it("defaults a missing summary to (No title)", () => {
+    const out = summarizeConflicts([
+      {
+        id: "x",
+        start: { dateTime: "2026-06-03T09:30:00+09:00" },
+        end: { dateTime: "2026-06-03T10:00:00+09:00" },
+      },
+    ]);
+    expect(out[0]?.summary).toBe("(No title)");
+  });
+
+  it("tolerates an empty list", () => {
+    expect(summarizeConflicts([])).toEqual([]);
   });
 });
