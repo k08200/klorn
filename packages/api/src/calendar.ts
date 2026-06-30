@@ -1,6 +1,31 @@
-import { google } from "googleapis";
+import { type calendar_v3, google } from "googleapis";
+import { prisma } from "./db.js";
 import { getAuthedClient, isGoogleAuthError, markGoogleTokenForReconnect } from "./gmail.js";
+import {
+  type CalendarConflictItem,
+  calendarLabelMap,
+  selectFreeBusyCalendarIds,
+  summarizeConflicts,
+  summarizeFreeBusy,
+  toAbsoluteInstant,
+} from "./google-calendar-time.js";
+import { captureError } from "./sentry.js";
+import { normalizeTimeZone } from "./time-zone.js";
 import { wrapUntrusted } from "./untrusted.js";
+
+/**
+ * The user's configured IANA timezone (defaults to the product default). Used to
+ * interpret an offset-less conflict window in the user's wall clock. Mirrors
+ * proactive-actions.getUserTimeZone — extract to a shared util if a third caller
+ * appears.
+ */
+async function getUserTimeZone(userId: string): Promise<string> {
+  const config = await prisma.automationConfig.findUnique({
+    where: { userId },
+    select: { timezone: true },
+  });
+  return normalizeTimeZone(config?.timezone);
+}
 
 export async function listEvents(userId: string, maxResults = 10) {
   const auth = await getAuthedClient(userId);
@@ -119,28 +144,72 @@ export async function deleteEvent(userId: string, eventId: string) {
   return { success: true };
 }
 
-export async function checkConflicts(userId: string, startTime: string, endTime: string) {
-  const auth = await getAuthedClient(userId);
-  if (!auth) return { error: "Google Calendar not connected." };
+/** A 403 from the calendar API. On the multi-calendar path this means the token
+ *  predates the calendar.readonly scope (existing users), so we degrade to
+ *  primary-only rather than failing the whole conflict check. */
+function isForbidden(err: unknown): boolean {
+  const e = err as { response?: { status?: number }; code?: number | string };
+  return e?.response?.status === 403 || e?.code === 403;
+}
 
-  const calendar = google.calendar({ version: "v3", auth });
-  let res: {
-    data: {
-      items?: Array<{
-        id?: string | null;
-        summary?: string | null;
-        start?: { dateTime?: string | null; date?: string | null } | null;
-        end?: { dateTime?: string | null; date?: string | null } | null;
-      }> | null;
-    };
+function conflictResult(conflicts: readonly unknown[], opts: { multiCalendar: boolean }) {
+  return {
+    hasConflicts: conflicts.length > 0,
+    conflicts,
+    scope: opts.multiCalendar ? "all_calendars" : "primary_only",
+    message:
+      conflicts.length > 0
+        ? `Found ${conflicts.length} conflicting event(s) in this time range.`
+        : "No conflicts — this time slot is free.",
   };
+}
+
+/** Free/busy across every calendar the user writes to — one query covers the
+ *  work / shared / secondary calendars a primary-only check structurally misses. */
+async function freeBusyConflicts(calendar: calendar_v3.Calendar, timeMin: string, timeMax: string) {
+  const list = await calendar.calendarList.list({ maxResults: 250, minAccessRole: "writer" });
+  const ids = selectFreeBusyCalendarIds(list.data.items);
+  if (ids.length === 0) return [];
+  const fb = await calendar.freebusy.query({
+    requestBody: { timeMin, timeMax, items: ids.map((id) => ({ id })) },
+  });
+  const calendars = fb.data.calendars ?? {};
+
+  // freebusy reports per-calendar failures inline (not as an HTTP error): a
+  // calendar the token can't read returns { errors:[...] } with empty busy. If
+  // we ignored it, that calendar would look free — a silent false "no conflict".
+  // Surface it so the gap is visible instead of becoming a missed double-book.
+  const failed = Object.entries(calendars).filter(([, c]) => (c?.errors?.length ?? 0) > 0);
+  if (failed.length > 0) {
+    const reasons = failed.map(([id, c]) => `${id}:${c?.errors?.[0]?.reason ?? "unknown"}`);
+    console.warn(`[CALENDAR] freebusy partial — ${failed.length} calendar(s) failed: ${reasons}`);
+    captureError(new Error("freebusy partial result"), {
+      tags: { scope: "calendar.freebusy_partial" },
+      extra: { failedCount: failed.length, reasons },
+    });
+  }
+
+  return summarizeFreeBusy(calendars, calendarLabelMap(list.data.items));
+}
+
+/** Primary-only fallback for tokens that lack calendar.readonly. Still
+ *  timezone-correct and all-day-safe — just blind to other calendars. */
+async function primaryOnlyConflicts(
+  calendar: calendar_v3.Calendar,
+  userId: string,
+  timeMin: string,
+  timeMax: string,
+) {
   try {
-    res = await calendar.events.list({
+    const res = await calendar.events.list({
       calendarId: "primary",
-      timeMin: startTime,
-      timeMax: endTime,
+      timeMin,
+      timeMax,
       singleEvents: true,
       orderBy: "startTime",
+    });
+    return conflictResult(summarizeConflicts((res.data.items as CalendarConflictItem[]) || []), {
+      multiCalendar: false,
     });
   } catch (err) {
     if (isGoogleAuthError(err)) {
@@ -149,22 +218,42 @@ export async function checkConflicts(userId: string, startTime: string, endTime:
     }
     throw err;
   }
+}
 
-  const conflicts = (res.data.items || []).map((e) => ({
-    id: e.id,
-    summary: e.summary || "(No title)",
-    start: e.start?.dateTime || e.start?.date || "",
-    end: e.end?.dateTime || e.end?.date || "",
-  }));
+export async function checkConflicts(userId: string, startTime: string, endTime: string) {
+  const auth = await getAuthedClient(userId);
+  if (!auth) return { error: "Google Calendar not connected." };
 
-  return {
-    hasConflicts: conflicts.length > 0,
-    conflicts,
-    message:
-      conflicts.length > 0
-        ? `Found ${conflicts.length} conflicting event(s) in this time range.`
-        : "No conflicts — this time slot is free.",
-  };
+  // The conflict window must be an absolute instant. The tool contract asks the
+  // agent for offset-bearing ISO8601, but a naive (offset-less) string must be
+  // read in the USER's zone, never the server's UTC — otherwise the queried
+  // window is hours off and a real clash is missed or invented.
+  const userZone = await getUserTimeZone(userId);
+  const timeMin = toAbsoluteInstant(startTime, userZone);
+  const timeMax = toAbsoluteInstant(endTime, userZone);
+  if (!timeMin || !timeMax) {
+    return { error: "Invalid time range — start_time and end_time must be valid ISO 8601." };
+  }
+
+  const calendar = google.calendar({ version: "v3", auth });
+
+  try {
+    // A double-book can sit on ANY of the user's calendars (work, shared,
+    // secondary), not just primary. One free/busy query covers them all.
+    const conflicts = await freeBusyConflicts(calendar, timeMin, timeMax);
+    return conflictResult(conflicts, { multiCalendar: true });
+  } catch (err) {
+    if (isGoogleAuthError(err)) {
+      await markGoogleTokenForReconnect(userId);
+      return { error: "Google Calendar not connected. Please reconnect your Google account." };
+    }
+    if (isForbidden(err)) {
+      // Token predates the calendar.readonly scope — degrade to primary-only
+      // until the user reconnects and picks up multi-calendar free/busy.
+      return primaryOnlyConflicts(calendar, userId, timeMin, timeMax);
+    }
+    throw err;
+  }
 }
 
 export const CALENDAR_TOOLS = [

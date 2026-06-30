@@ -145,3 +145,135 @@ export function mapGoogleEventTimes(
     : new Date(endRaw);
   return { startTime, endTime, allDay: !isTimed };
 }
+
+/**
+ * Normalize an agent-supplied ISO time into an absolute UTC instant string for
+ * a Google `events.list` timeMin/timeMax. The conflict-check tool asks the model
+ * for an offset-bearing ISO8601, but if it drops the offset the only correct
+ * reading is the USER's wall clock — never the server's UTC. Reusing
+ * {@link hasExplicitOffset} / {@link naiveLocalToUtc} keeps this on the same
+ * defensive path as the sync mapper. Returns null when the string is unparseable
+ * so the caller can fail loudly instead of querying a garbage window.
+ */
+export function toAbsoluteInstant(value: string, userZone: string): string | null {
+  if (hasExplicitOffset(value)) {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  const utc = naiveLocalToUtc(value, userZone);
+  return utc ? utc.toISOString() : null;
+}
+
+/** Structural slice of a Google `events.list` item used for conflict checks. */
+export interface CalendarConflictItem {
+  id?: string | null;
+  summary?: string | null;
+  start?: { dateTime?: string | null; date?: string | null } | null;
+  end?: { dateTime?: string | null; date?: string | null } | null;
+}
+
+/** A timed event reduced to the fields the conflict response surfaces. */
+export interface ConflictSummary {
+  id: string | null | undefined;
+  summary: string;
+  start: string;
+  end: string;
+}
+
+/**
+ * Reduce raw `events.list` items to genuine time-slot conflicts. All-day events
+ * (date-only, no `dateTime`) are full-day markers — holidays, birthdays, PTO —
+ * and surfacing them as a clash for a timed meeting is a false positive, so they
+ * are excluded. Only timed events (carrying `start.dateTime`) can double-book.
+ */
+export function summarizeConflicts(items: CalendarConflictItem[]): ConflictSummary[] {
+  return items
+    .filter((e) => Boolean(e.start?.dateTime))
+    .map((e) => ({
+      id: e.id,
+      summary: e.summary || "(No title)",
+      start: e.start?.dateTime || "",
+      end: e.end?.dateTime || "",
+    }));
+}
+
+/** Structural slice of a `calendarList.list` item. */
+export interface CalendarListEntry {
+  id?: string | null;
+  accessRole?: string | null;
+  primary?: boolean | null;
+  summary?: string | null;
+  summaryOverride?: string | null;
+}
+
+/**
+ * Map calendar IDs to a human, non-identifying label. The raw freebusy key is
+ * the calendar ID, which for the primary / Workspace calendars is the user's
+ * email address — we must not surface that into the LLM prompt or any response.
+ * `primary` → "primary"; secondary calendars → their user-chosen display name;
+ * anything unlabelled → a generic "calendar".
+ */
+export function calendarLabelMap(
+  items: CalendarListEntry[] | null | undefined,
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const c of items ?? []) {
+    if (!c.id) continue;
+    map[c.id] = c.primary === true ? "primary" : c.summaryOverride || c.summary || "calendar";
+  }
+  return map;
+}
+
+/**
+ * Pick the calendars a free/busy conflict check should query. A double-book can
+ * only land on a calendar the user actually writes to, so we keep `primary` plus
+ * any calendar with owner/writer access. Reader / freeBusyReader subscriptions
+ * (shared team calendars, holidays, a colleague's calendar) are excluded — their
+ * busy blocks are someone else's commitments, not the user's double-book.
+ */
+export function selectFreeBusyCalendarIds(items: CalendarListEntry[] | null | undefined): string[] {
+  return (items ?? [])
+    .filter(
+      (c) =>
+        !!c.id && (c.primary === true || c.accessRole === "owner" || c.accessRole === "writer"),
+    )
+    .map((c) => c.id as string);
+}
+
+/** Structural slice of one calendar's `freebusy.query` result. */
+export interface FreeBusyCalendar {
+  busy?: Array<{ start?: string | null; end?: string | null }> | null;
+}
+
+/** A busy interval found on one of the user's calendars. */
+export interface BusyConflict {
+  start: string;
+  end: string;
+  calendar: string;
+}
+
+/**
+ * Flatten a `freebusy.query` response (a map of calendarId → busy intervals)
+ * into a flat conflict list. freebusy already honours each event's free/busy
+ * (transparency) status, so all-day "free" markers never appear here — only real
+ * busy time. Intervals missing a start or end are skipped.
+ *
+ * The raw calendar ID (often the user's email) is NEVER emitted — each block is
+ * tagged via `labelById` (see {@link calendarLabelMap}); an unmapped id degrades
+ * to "primary" / "calendar".
+ */
+export function summarizeFreeBusy(
+  calendars: Record<string, FreeBusyCalendar> | null | undefined,
+  labelById?: Record<string, string>,
+): BusyConflict[] {
+  const out: BusyConflict[] = [];
+  for (const [id, cal] of Object.entries(calendars ?? {})) {
+    const calendar = labelById?.[id] ?? (id === "primary" ? "primary" : "calendar");
+    for (const slot of cal?.busy ?? []) {
+      if (slot?.start && slot?.end) {
+        out.push({ start: slot.start, end: slot.end, calendar });
+      }
+    }
+  }
+  return out;
+}
