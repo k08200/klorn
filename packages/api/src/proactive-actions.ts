@@ -29,10 +29,26 @@ import type { NotifCategory } from "./notification-prefs.js";
 import { sendPushNotification } from "./push.js";
 import { captureError } from "./sentry.js";
 import { sendSms } from "./sms.js";
+import {
+  isLocalTimeWithin,
+  localDayOfWeek,
+  localDayUtcRange,
+  localMinuteOfDay,
+  normalizeTimeZone,
+} from "./time-zone.js";
 import { pushNotification } from "./websocket.js";
 
+/** The user's configured IANA timezone (defaults to the product default). */
+async function getUserTimeZone(userId: string): Promise<string> {
+  const config = await prisma.automationConfig.findUnique({
+    where: { userId },
+    select: { timezone: true },
+  });
+  return normalizeTimeZone(config?.timezone);
+}
+
 /** Check for emails that haven't been replied to in 48 hours */
-async function checkUnansweredEmails(userId: string): Promise<void> {
+async function checkUnansweredEmails(userId: string, tz: string): Promise<void> {
   const threshold = new Date(Date.now() - UNANSWERED_THRESHOLD_HOURS * 60 * 60 * 1000);
 
   const unanswered = await prisma.emailMessage.findMany({
@@ -49,8 +65,7 @@ async function checkUnansweredEmails(userId: string): Promise<void> {
   if (unanswered.length === 0) return;
 
   // Dedup: check if we already notified about unanswered emails today
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  const todayStart = localDayUtcRange(new Date(), tz).gte;
   const existing = await prisma.notification.findFirst({
     where: {
       userId,
@@ -76,7 +91,7 @@ function truncate(value: string, max: number): string {
 }
 
 /** Send a notification 1 hour before meetings with a mini-brief */
-async function checkUpcomingMeetings(userId: string): Promise<void> {
+async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> {
   const now = new Date();
   const soon = new Date(now.getTime() + MEETING_PREP_MINUTES * 60 * 1000);
   const justAfter = new Date(now.getTime() + (MEETING_PREP_MINUTES + 5) * 60 * 1000);
@@ -110,7 +125,7 @@ async function checkUpcomingMeetings(userId: string): Promise<void> {
     if (existing) continue;
 
     const time = event.startTime.toLocaleTimeString("en-US", {
-      timeZone: "Asia/Seoul",
+      timeZone: tz,
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -136,7 +151,7 @@ async function checkUpcomingMeetings(userId: string): Promise<void> {
 }
 
 /** Alert on tasks that are past their due date */
-async function checkOverdueTasks(userId: string): Promise<void> {
+async function checkOverdueTasks(userId: string, tz: string): Promise<void> {
   const now = new Date();
 
   const overdue = await prisma.task.findMany({
@@ -152,8 +167,7 @@ async function checkOverdueTasks(userId: string): Promise<void> {
   if (overdue.length === 0) return;
 
   // Dedup: check if we already notified about overdue tasks today
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  const todayStart = localDayUtcRange(new Date(), tz).gte;
   const existing = await prisma.notification.findFirst({
     where: {
       userId,
@@ -177,14 +191,14 @@ async function checkOverdueTasks(userId: string): Promise<void> {
 }
 
 /** Weekly review summary every Monday morning */
-async function checkWeeklyReview(userId: string): Promise<void> {
+async function checkWeeklyReview(userId: string, tz: string): Promise<void> {
   const now = new Date();
-  if (now.getDay() !== WEEKLY_REVIEW_DAY) return;
-  if (now.getHours() !== 9 || now.getMinutes() > 5) return;
+  // Fire at 9am in the USER's timezone, not the server's UTC hour.
+  if (localDayOfWeek(now, tz) !== WEEKLY_REVIEW_DAY) return;
+  if (!isLocalTimeWithin(now, tz, 9)) return;
 
   // Dedup: check if we already sent a weekly review this week
-  const weekStart = new Date();
-  weekStart.setHours(0, 0, 0, 0);
+  const weekStart = localDayUtcRange(new Date(), tz).gte;
   const existing = await prisma.notification.findFirst({
     where: {
       userId,
@@ -216,21 +230,22 @@ async function checkWeeklyReview(userId: string): Promise<void> {
 // ─── NEW: End-of-day review (6pm) ──────────────────────────────────────
 
 /** Evening summary: what was done today + what's coming tomorrow */
-async function checkEndOfDayReview(userId: string): Promise<void> {
+async function checkEndOfDayReview(userId: string, tz: string): Promise<void> {
   const now = new Date();
-  if (now.getHours() !== EOD_HOUR || now.getMinutes() > 5) return;
+  // Fire at EOD_HOUR in the USER's timezone, not the server's UTC hour.
+  if (!isLocalTimeWithin(now, tz, EOD_HOUR)) return;
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  // Day boundaries in the USER's timezone (not server-UTC) so "today" and
+  // "tomorrow" match the user's calendar day — otherwise a KST user's summary
+  // counts tasks from 09:00 KST (server midnight) and misses the morning.
+  const { gte: todayStart, lt: tomorrow } = localDayUtcRange(now, tz);
+  const tomorrowEnd = localDayUtcRange(new Date(tomorrow.getTime() + 12 * 60 * 60 * 1000), tz).lt;
 
   // Dedup
   const existing = await prisma.notification.findFirst({
     where: { userId, type: "eod_review", createdAt: { gte: todayStart } },
   });
   if (existing) return;
-
-  const tomorrow = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
-  const tomorrowEnd = new Date(tomorrow.getTime() + 24 * 60 * 60 * 1000);
 
   const [completedToday, tomorrowTasks, tomorrowMeetings] = await Promise.all([
     prisma.task.count({
@@ -257,7 +272,7 @@ async function checkEndOfDayReview(userId: string): Promise<void> {
   if (tomorrowMeetings.length > 0) {
     const meetingList = tomorrowMeetings.map((m) => {
       const time = m.startTime.toLocaleTimeString("en-US", {
-        timeZone: "Asia/Seoul",
+        timeZone: tz,
         hour: "2-digit",
         minute: "2-digit",
       });
@@ -275,7 +290,7 @@ async function checkEndOfDayReview(userId: string): Promise<void> {
 // ─── NEW: Deadline countdown (D-3) ─────────────────────────────────────
 
 /** Warn about tasks with deadlines approaching in 3 days */
-async function checkDeadlineCountdown(userId: string): Promise<void> {
+async function checkDeadlineCountdown(userId: string, tz: string): Promise<void> {
   const now = new Date();
   const warningDate = new Date(now.getTime() + DEADLINE_WARNING_DAYS * 24 * 60 * 60 * 1000);
 
@@ -292,8 +307,7 @@ async function checkDeadlineCountdown(userId: string): Promise<void> {
   if (approaching.length === 0) return;
 
   // Dedup
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  const todayStart = localDayUtcRange(new Date(), tz).gte;
   const existing = await prisma.notification.findFirst({
     where: { userId, type: "deadline", createdAt: { gte: todayStart } },
   });
@@ -337,7 +351,7 @@ async function getContactContext(userId: string, fromEmail: string): Promise<str
 // ─── NEW: Follow-up draft suggestion ───────────────────────────────────
 
 /** For 48h+ unanswered emails, suggest sending a follow-up */
-async function checkFollowUpSuggestions(userId: string): Promise<void> {
+async function checkFollowUpSuggestions(userId: string, tz: string): Promise<void> {
   const threshold = new Date(Date.now() - 72 * 60 * 60 * 1000); // 72 hours (older than 48h check)
 
   const stale = await prisma.emailMessage.findMany({
@@ -355,8 +369,7 @@ async function checkFollowUpSuggestions(userId: string): Promise<void> {
   if (stale.length === 0) return;
 
   // Dedup
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  const todayStart = localDayUtcRange(new Date(), tz).gte;
   const existing = await prisma.notification.findFirst({
     where: { userId, type: "followup", createdAt: { gte: todayStart } },
   });
@@ -382,16 +395,17 @@ async function checkFollowUpSuggestions(userId: string): Promise<void> {
 // ─── NEW: Back-to-back meeting warning ─────────────────────────────────
 
 /** Detect consecutive meetings with no break and warn */
-async function checkBackToBackMeetings(userId: string): Promise<void> {
+async function checkBackToBackMeetings(userId: string, tz: string): Promise<void> {
   const now = new Date();
-  const todayEnd = new Date(now);
-  todayEnd.setHours(23, 59, 59, 999);
 
-  // Only check once in the morning (8-9am window)
-  if (now.getHours() < 8 || now.getHours() > 9) return;
+  // Only check once in the morning (8-9am window) in the USER's timezone.
+  const localHour = Math.floor(localMinuteOfDay(now, tz) / 60);
+  if (localHour < 8 || localHour > 9) return;
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  // User-local day boundaries (not server-UTC) so "rest of today's meetings"
+  // and the daily dedup match the user's calendar day.
+  const { gte: todayStart, lt: tomorrowStart } = localDayUtcRange(now, tz);
+  const todayEnd = new Date(tomorrowStart.getTime() - 1);
 
   // Dedup
   const existing = await prisma.notification.findFirst({
@@ -486,15 +500,19 @@ export async function runProactiveActions(userId: string): Promise<void> {
   // rejected check must leave a signal. allSettled never rejects, so an outer
   // try/catch can't see inner failures — inspect each settled result and
   // surface it (console for when Sentry is off, captureError for when it's on).
+  // Resolve the user's timezone once per tick and thread it into every check,
+  // so each check fires/queries against the user's local day, not the server's
+  // UTC day — and we don't issue one automationConfig lookup per check.
+  const tz = await getUserTimeZone(userId);
   const checks: ReadonlyArray<readonly [string, Promise<unknown>]> = [
-    ["unanswered", checkUnansweredEmails(userId)],
-    ["meetings", checkUpcomingMeetings(userId)],
-    ["overdue", checkOverdueTasks(userId)],
-    ["weekly", checkWeeklyReview(userId)],
-    ["eod", checkEndOfDayReview(userId)],
-    ["deadline", checkDeadlineCountdown(userId)],
-    ["followup", checkFollowUpSuggestions(userId)],
-    ["backToBack", checkBackToBackMeetings(userId)],
+    ["unanswered", checkUnansweredEmails(userId, tz)],
+    ["meetings", checkUpcomingMeetings(userId, tz)],
+    ["overdue", checkOverdueTasks(userId, tz)],
+    ["weekly", checkWeeklyReview(userId, tz)],
+    ["eod", checkEndOfDayReview(userId, tz)],
+    ["deadline", checkDeadlineCountdown(userId, tz)],
+    ["followup", checkFollowUpSuggestions(userId, tz)],
+    ["backToBack", checkBackToBackMeetings(userId, tz)],
   ];
   const results = await Promise.allSettled(checks.map(([, p]) => p));
   results.forEach((r, i) => {

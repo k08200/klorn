@@ -33,6 +33,31 @@ export function localMinuteOfDay(
   return parts.hour * 60 + parts.minute;
 }
 
+/** Day of week in `timeZone`, 0 = Sunday … 6 = Saturday (matches Date.getDay). */
+export function localDayOfWeek(
+  now: Date = new Date(),
+  timeZone: string = DEFAULT_TIME_ZONE,
+): number {
+  const parts = getLocalParts(now, normalizeTimeZone(timeZone));
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
+}
+
+/**
+ * True when the wall-clock time in `timeZone` is within `windowMinutes` of the
+ * top of `hour` (e.g. hour=18, window=5 → 18:00–18:05 local). The proactive
+ * scheduler uses this so daily/weekly notifications fire at the user's local
+ * hour, not the server's UTC hour.
+ */
+export function isLocalTimeWithin(
+  now: Date,
+  timeZone: string,
+  hour: number,
+  windowMinutes = 5,
+): boolean {
+  const minuteOfDay = localMinuteOfDay(now, timeZone);
+  return minuteOfDay >= hour * 60 && minuteOfDay <= hour * 60 + windowMinutes;
+}
+
 export function localDayUtcRange(
   now: Date = new Date(),
   timeZone: string = DEFAULT_TIME_ZONE,
