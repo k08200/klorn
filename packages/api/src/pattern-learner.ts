@@ -485,7 +485,8 @@ export async function updateConfidence(
       where: { id: memory.id },
       data: { confidence: newConfidence, updatedAt: new Date() },
     });
-  } catch {
+  } catch (err) {
+    console.warn("[PATTERN] updateConfidence failed:", err);
     // Non-critical, ignore errors
   }
 }
@@ -579,7 +580,8 @@ async function runPatternAnalysisForAllUsers() {
     for (const { userId } of configs.filter((c) => eligibleUserIds.has(c.userId))) {
       try {
         await persistLearnedPatterns(userId);
-      } catch {
+      } catch (err) {
+        console.warn("[PATTERN] persistLearnedPatterns failed for user", userId, err);
         // Skip individual user failures
       }
     }
@@ -685,7 +687,7 @@ async function amplifyStaleAttentionItems(): Promise<void> {
           where: { id: item.id },
           data: { priority: newPriority, lastAmplifiedAt: new Date() },
         })
-        .catch(() => {}),
+        .catch((err) => console.warn("[PATTERN] amplify stale item update failed:", err)),
     );
   }
 

@@ -275,7 +275,8 @@ export async function detectSkillsForAllUsers(): Promise<void> {
     for (const { userId } of configs) {
       try {
         await detectAndProposeSkills(userId);
-      } catch {
+      } catch (err) {
+        console.warn("[SKILL-RECORDER] detectAndProposeSkills failed for", userId, err);
         // skip individual failures
       }
     }

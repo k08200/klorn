@@ -91,6 +91,7 @@ export async function persistGmailEmail(
       attachments: email.attachments,
     });
     analyzePendingEmailAttachments(userId, email.attachments.length).catch((err) => {
+      console.warn("[FIREWALL] attachment analysis failed:", err);
       captureError(err, {
         tags: { scope: "email_attachment.analysis" },
         extra: { userId, emailId: createdEmail.id, gmailId: email.gmailId },

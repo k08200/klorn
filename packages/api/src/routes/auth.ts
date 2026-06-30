@@ -1246,6 +1246,7 @@ export function authRoutes(app: FastifyInstance) {
       }
     } catch (err) {
       if (isGoogleAuthError(err)) await markGoogleTokenForReconnect(userId);
+      console.warn("[AUTH] init-sync calendar sync failed (non-auth):", err);
       // Calendar sync failed — continue with other syncs
     }
 
@@ -1301,6 +1302,7 @@ export function authRoutes(app: FastifyInstance) {
       }
     } catch (err) {
       if (isGoogleAuthError(err)) await markGoogleTokenForReconnect(userId);
+      console.warn("[AUTH] init-sync Gmail contact sync failed (non-auth):", err);
       // Gmail contact sync failed — skip
     }
 
@@ -1309,7 +1311,8 @@ export function authRoutes(app: FastifyInstance) {
       const { syncEmails } = await import("../email-sync.js");
       const emailResult = await syncEmails(userId, 30);
       results.emails = emailResult.newCount;
-    } catch {
+    } catch (err) {
+      console.warn("[AUTH] init-sync email sync failed:", err);
       // Email sync failed — skip
     }
 
