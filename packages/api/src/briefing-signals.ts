@@ -536,6 +536,7 @@ function candidateKey(prefix: string, refs: BriefingReference[]): string {
 
 function buildTopActions(input: {
   tasks: NormalizedTask[];
+  emails: NormalizedEmail[];
   deadlines: BriefingDeadlineSignal[];
   urgentItems: BriefingUrgencySignal[];
   crossLinks: BriefingCrossLink[];
@@ -582,6 +583,21 @@ function buildTopActions(input: {
     });
   }
 
+  // Firewall said these need a reply — a concrete "what you owe today" action.
+  // A reply-needed email that is also urgent already appears above with a higher
+  // score; the ref-dedup below keeps only the stronger framing for that email.
+  for (const email of input.emails) {
+    if (!email.needsReply) continue;
+    const refs = [ref("email", email.id, titleFromEmail(email))];
+    candidates.push({
+      id: candidateKey("reply", refs),
+      score: 58 + (email.tier === "PUSH" ? 12 : email.priority === "URGENT" ? 8 : 0),
+      action: `Reply to: ${titleFromEmail(email)}`,
+      reason: "firewall flagged needs reply",
+      refs,
+    });
+  }
+
   const chosen: BriefingTopAction[] = [];
   const usedRefs = new Set<string>();
   const usedActions = new Set<string>();
@@ -622,6 +638,6 @@ export function buildBriefingSignals(
     deadlines,
     urgentItems,
     crossLinks,
-    topActions: buildTopActions({ tasks, deadlines, urgentItems, crossLinks, now }),
+    topActions: buildTopActions({ tasks, emails, deadlines, urgentItems, crossLinks, now }),
   };
 }

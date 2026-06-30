@@ -336,4 +336,62 @@ describe("buildBriefingSignals", () => {
     );
     expect(signals.topActions.some((a) => a.refs.some((r) => r.id === "email-push"))).toBe(true);
   });
+
+  it("surfaces a needsReply email as a 'Reply to' Top-3 action (uses the firewall's reply verdict)", () => {
+    const signals = buildBriefingSignals(
+      {
+        tasks: { tasks: [] },
+        events: { events: [] },
+        emails: {
+          emails: [
+            {
+              id: "email-reply",
+              from: "client@example.com",
+              subject: "Question about the proposal",
+              snippet: "Could you confirm the scope?",
+              priority: "NORMAL",
+              tier: "QUEUE",
+              needsReply: true,
+            },
+          ],
+        },
+      },
+      { now: NOW },
+    );
+
+    expect(signals.topActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "Reply to: Question about the proposal",
+          reason: "firewall flagged needs reply",
+          refs: expect.arrayContaining([expect.objectContaining({ id: "email-reply" })]),
+        }),
+      ]),
+    );
+  });
+
+  it("does not create a reply action when the firewall did not flag needsReply", () => {
+    const signals = buildBriefingSignals(
+      {
+        tasks: { tasks: [] },
+        events: { events: [] },
+        emails: {
+          emails: [
+            {
+              id: "email-noreply",
+              from: "client@example.com",
+              subject: "FYI only",
+              snippet: "Just sharing for your awareness.",
+              priority: "NORMAL",
+              tier: "QUEUE",
+              needsReply: false,
+            },
+          ],
+        },
+      },
+      { now: NOW },
+    );
+
+    expect(signals.topActions.some((a) => a.action.startsWith("Reply to:"))).toBe(false);
+  });
 });
