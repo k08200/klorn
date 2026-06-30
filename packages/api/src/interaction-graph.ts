@@ -60,7 +60,8 @@ export async function getInteractionGraph(userId: string): Promise<InteractionGr
       const ageMs = Date.now() - new Date(parsed.builtAt).getTime();
       if (ageMs < GRAPH_TTL_DAYS * 24 * 60 * 60 * 1000) return parsed;
     }
-  } catch {
+  } catch (err) {
+    console.warn("[INTERACTION-GRAPH] stale-check read failed (rebuilding):", err);
     // rebuild below
   }
   return buildAndCacheGraph(userId);
@@ -98,7 +99,8 @@ export async function getCachedInteractionNode(
     const ageMs = Date.now() - new Date(parsed.builtAt).getTime();
     if (!(ageMs < GRAPH_TTL_DAYS * 24 * 60 * 60 * 1000)) return null;
     return parsed.nodes.find((n) => n.email.toLowerCase() === address) ?? null;
-  } catch {
+  } catch (err) {
+    console.warn("[INTERACTION-GRAPH] getCachedInteractionNode failed:", err);
     return null;
   }
 }
@@ -131,7 +133,8 @@ export async function buildInteractionHintForPrompt(userId: string): Promise<str
     return `\n\n## Your Key Relationships (by recent activity)
 Who you email and meet with most. Use this to prioritize proposals and replies.
 ${lines.join("\n")}`;
-  } catch {
+  } catch (err) {
+    console.warn("[INTERACTION-GRAPH] buildInteractionHintForPrompt failed:", err);
     return "";
   }
 }
@@ -148,7 +151,8 @@ export async function buildInteractionGraphsForAllUsers(): Promise<void> {
     for (const { userId } of configs) {
       try {
         await buildAndCacheGraph(userId);
-      } catch {
+      } catch (err) {
+        console.warn("[INTERACTION-GRAPH] per-user build failed for", userId, err);
         // skip individual failures
       }
     }

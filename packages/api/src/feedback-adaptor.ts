@@ -91,13 +91,18 @@ export async function getSuppressionSet(userId: string): Promise<Set<string>> {
         for (const e of entries) {
           set.add(suppressionKey(e.source, e.type, e.bucket ?? null));
         }
-      } catch {
+      } catch (err) {
+        console.warn("[FEEDBACK-ADAPTOR] malformed memory blob skipped:", err);
         // Skip malformed memory blobs; the next adaptation run will repair them.
       }
     }
     cache.set(userId, { set, expiresAt: Date.now() + CACHE_TTL_MS });
     return set;
-  } catch {
+  } catch (err) {
+    console.warn(
+      "[FEEDBACK-ADAPTOR] getSuppressionSet failed (suppression disabled this cycle):",
+      err,
+    );
     return new Set();
   }
 }
@@ -239,7 +244,8 @@ export async function runFeedbackAdaptationForAllUsers(): Promise<void> {
     for (const { userId } of configs) {
       try {
         await runFeedbackAdaptation(userId);
-      } catch {
+      } catch (err) {
+        console.warn("[FEEDBACK-ADAPTOR] per-user adaptation failed for", userId, err);
         // skip individual failures
       }
     }

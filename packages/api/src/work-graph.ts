@@ -434,7 +434,7 @@ async function persistWorkContextSnapshots(
             generatedAt: new Date(now),
           },
         })
-        .catch(() => {}),
+        .catch((err) => console.warn("[WORK-GRAPH] context snapshot upsert failed:", err)),
     ),
   );
 }

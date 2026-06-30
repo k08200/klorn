@@ -114,7 +114,8 @@ export async function getVoiceProfile(userId: string): Promise<VoiceProfile | nu
     // Coerce on read: a legacy/hallucinated stored row must not flow raw into
     // prompt context. Malformed JSON throws → caught → null.
     return coerceVoiceProfile(JSON.parse(mem.content));
-  } catch {
+  } catch (err) {
+    console.warn("[VOICE] getVoiceProfile read failed:", err);
     return null;
   }
 }
@@ -164,7 +165,13 @@ async function fetchSentMailBodies(userId: string): Promise<string[]> {
   let refreshToken: string;
   try {
     refreshToken = decryptToken(token.refreshToken);
-  } catch {
+  } catch (err) {
+    // Log the message only — never the raw error, so token ciphertext can never
+    // leak into logs even if decryptToken's error shape changes (CASA Tier 2).
+    console.warn(
+      "[VOICE] decryptToken failed for user — skipping sent mail sample:",
+      err instanceof Error ? err.message : "decryption error",
+    );
     return [];
   }
 
@@ -180,7 +187,8 @@ async function fetchSentMailBodies(userId: string): Promise<string[]> {
       q: "-category:automated -from:noreply",
     });
     messageIds = (listRes.data.messages || []).map((m) => m.id!).filter(Boolean);
-  } catch {
+  } catch (err) {
+    console.warn("[VOICE] Gmail SENT list fetch failed:", err);
     return [];
   }
 
@@ -321,7 +329,8 @@ export async function extractVoiceProfilesForAllUsers(): Promise<void> {
     for (const { userId } of tokens) {
       try {
         await extractVoiceProfile(userId);
-      } catch {
+      } catch (err) {
+        console.warn("[VOICE] extractVoiceProfile failed for user", userId, err);
         // skip individual failures silently
       }
     }

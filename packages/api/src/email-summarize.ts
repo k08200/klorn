@@ -48,6 +48,11 @@ export function parseAiSummary(content: string, fallbackSubject: string): AISumm
       parsed = raw as Partial<AISummaryResult>;
     }
   } catch {
+    // Log length, not content: surfaces the format regression the eval gate
+    // watches for without echoing any model output that might contain PII.
+    console.warn(
+      `[SUMMARIZE] model returned non-JSON output (len=${String(content).length}), falling back to subject`,
+    );
     // Non-JSON model output — keep the defaults below.
   }
   return {

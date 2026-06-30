@@ -107,7 +107,8 @@ async function logAgentAction(
     await db.agentLog.create({
       data: { userId, action, summary, tool, reasoning },
     });
-  } catch {
+  } catch (err) {
+    console.warn("[AGENT] logAgentAction failed (audit gap):", err);
     // Logging is non-critical — silently fail before migration
   }
 }
@@ -162,7 +163,8 @@ async function getAgentFeedback(userId: string): Promise<string> {
     }
 
     return feedback;
-  } catch {
+  } catch (err) {
+    console.warn("[AGENT] getAgentFeedback failed:", err);
     return "";
   }
 }
@@ -213,7 +215,8 @@ async function getProposalHistory(userId: string): Promise<string> {
     }
 
     return summary;
-  } catch {
+  } catch (err) {
+    console.warn("[AGENT] getProposalHistory failed:", err);
     return "";
   }
 }

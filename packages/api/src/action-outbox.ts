@@ -380,7 +380,9 @@ export async function drainActionOutbox(now: Date = new Date()): Promise<{
             nextAttemptAt: new Date(now.getTime() + backoffMs(row.attempts + 1)),
           },
         })
-        .catch(() => {});
+        .catch((err) =>
+          console.warn("[OUTBOX] reset-to-QUEUED after infra failure also failed:", err),
+        );
     }
   }
 

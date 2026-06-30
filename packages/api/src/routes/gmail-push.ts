@@ -121,7 +121,11 @@ export async function gmailPushRoutes(app: FastifyInstance) {
       return reply.code(204).send();
     }
 
-    const email = payload.emailAddress?.toLowerCase();
+    // payload is JSON.parse output (effectively untyped): a non-string
+    // emailAddress (e.g. a number) would throw on .toLowerCase() and 500 the
+    // public webhook. Guard the type, then ack-drain anything malformed.
+    const rawEmail = payload.emailAddress;
+    const email = typeof rawEmail === "string" ? rawEmail.toLowerCase() : "";
     if (!email) {
       return reply.code(204).send();
     }
