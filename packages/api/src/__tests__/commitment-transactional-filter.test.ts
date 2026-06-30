@@ -20,7 +20,7 @@ vi.mock("../commitments.js", () => ({
 
 import { extractCommitmentCandidates } from "../commitment-extractor.js";
 import { extractAndUpsertCommitmentsFromText } from "../commitment-ingestion.js";
-import { isNoReplySender } from "../keyword-policy.js";
+import { isNoReplySender, isTransactionalSender } from "../keyword-policy.js";
 
 describe("isNoReplySender (F1 helper)", () => {
   it("flags no-reply / do-not-reply machine senders", () => {
@@ -32,6 +32,30 @@ describe("isNoReplySender (F1 helper)", () => {
     expect(isNoReplySender("sarah@company.com")).toBe(false);
     expect(isNoReplySender("notifications@github.com")).toBe(false);
     expect(isNoReplySender("notifications@linear.app")).toBe(false);
+  });
+});
+
+describe("isTransactionalSender (F3 helper — logistics role addresses)", () => {
+  it("flags shipping/order/delivery role senders (non no-reply, would evade F1+F2)", () => {
+    expect(isTransactionalSender("ship-confirm@fedex.com")).toBe(true);
+    expect(isTransactionalSender("order-update@amazon.com")).toBe(true);
+    expect(isTransactionalSender("orders@store.example")).toBe(true);
+    expect(isTransactionalSender("orderstatus@shop.example")).toBe(true);
+    expect(isTransactionalSender("shipment@ups.com")).toBe(true);
+    expect(isTransactionalSender("delivery@dhl.com")).toBe(true);
+    expect(isTransactionalSender("tracking@store.example")).toBe(true);
+    expect(isTransactionalSender("dispatch@store.example")).toBe(true);
+  });
+  it("does NOT flag people, teams, or commitment-bearing notifications", () => {
+    // The token must be a standalone role word — names/words that merely contain
+    // it must not match, or a real person's promise would be silently dropped.
+    expect(isTransactionalSender("sarah@company.com")).toBe(false);
+    expect(isTransactionalSender("shipley@company.com")).toBe(false);
+    expect(isTransactionalSender("jordan@company.com")).toBe(false);
+    expect(isTransactionalSender("gordon@company.com")).toBe(false);
+    expect(isTransactionalSender("leadership@company.com")).toBe(false);
+    expect(isTransactionalSender("notifications@github.com")).toBe(false);
+    expect(isTransactionalSender("notifications@linear.app")).toBe(false);
   });
 });
 
@@ -102,5 +126,19 @@ describe("extractAndUpsertCommitmentsFromText — no-reply gate (F1)", () => {
       senderEmail: "notifications@github.com",
     });
     expect(result.commitmentsCreated).toBe(1);
+  });
+
+  it("creates 0 commitments for a logistics role sender even when text evades F2 (F3 gate)", async () => {
+    // ship-confirm@ is NOT no-reply (F1 misses) and a refund/return line carries
+    // no shipping noun (F2 misses) — the role-address gate is the backstop.
+    const result = await extractAndUpsertCommitmentsFromText({
+      userId: "user-1",
+      sourceType: "EMAIL",
+      sourceId: "email-4",
+      text: "We will refund your return within 5 business days.",
+      senderEmail: "ship-confirm@fedex.com",
+    });
+    expect(result.commitmentsCreated).toBe(0);
+    expect(upsertCalls).toHaveLength(0);
   });
 });
