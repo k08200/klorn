@@ -550,6 +550,9 @@ async function persistRefreshedInboxToken(
 ): Promise<void> {
   const decision = decideRefreshTokenWrite(newTokens);
   if (!decision.write) return;
+  // A successful refresh means the token is healthy again — clear any stale
+  // needsReconnect flag so a previously-revoked inbox that the user re-authorized
+  // stops showing the reconnect prompt without needing a full re-link.
   if (decision.mode === "rotate") {
     await prisma.linkedInboxAccount.updateMany({
       where: { id: rowId, userId },
@@ -557,6 +560,7 @@ async function persistRefreshedInboxToken(
         accessToken: encryptToken(decision.accessTokenPlain),
         refreshToken: encryptOptional(decision.refreshTokenPlain),
         expiresAt: decision.expiresAt,
+        needsReconnect: false,
       },
     });
     return;
@@ -567,7 +571,11 @@ async function persistRefreshedInboxToken(
       userId,
       OR: [{ expiresAt: null }, { expiresAt: { lt: decision.expiresAt } }],
     },
-    data: { accessToken: encryptToken(decision.accessTokenPlain), expiresAt: decision.expiresAt },
+    data: {
+      accessToken: encryptToken(decision.accessTokenPlain),
+      expiresAt: decision.expiresAt,
+      needsReconnect: false,
+    },
   });
   if (result.count === 0) {
     console.log(`[GOOGLE] Skipped stale linked-inbox token write for user ${userId}`);
@@ -585,13 +593,17 @@ function buildInboxOAuthClient(
     refreshTokenPlain = decryptOptional(row.refreshToken);
   } catch (err) {
     // A permanently undecryptable linked token (key rotation / at-rest
-    // corruption) would otherwise drop this inbox silently every tick forever.
-    // Surface it so an operator sees it — mirrors why the primary path calls
-    // invalidateGoogleToken. (A per-inbox "reconnect" UI signal is a follow-up.)
+    // corruption) can only be fixed by a re-link, so flag it for reconnect AND
+    // surface it to an operator. Fire-and-forget (this fn is sync) but never
+    // silent on failure of the flag write itself.
     console.warn(`[GOOGLE] Skipping linked inbox ${row.id} — token decrypt failed`);
     captureError(err, {
       tags: { scope: "gmail.linked-inbox.decrypt" },
       extra: { rowId: row.id, userId },
+    });
+    void markLinkedInboxForReconnect(userId, row.id).catch((markErr) => {
+      console.error(`[GOOGLE] Failed to flag linked inbox ${row.id} for reconnect:`, markErr);
+      captureError(markErr, { tags: { scope: "gmail.linked-inbox.mark-reconnect" } });
     });
     return null;
   }
@@ -690,17 +702,35 @@ async function resolveMailClient(
 }
 
 /**
- * Handle a Gmail auth error for a mail action. ONLY the primary token may be
- * invalidated here — a linked-inbox auth failure must never poison the primary
- * connection (markGoogleTokenForReconnect is userId-keyed). For a linked inbox
- * we leave the primary alone; the linked row surfaces its own revocation on the
- * next sync fan-out.
+ * Durably flag ONE linked inbox as needing a re-link (its token is revoked or
+ * undecryptable). Scoped by {id, userId} so it can only touch the caller's own
+ * linked account. Cleared on a successful token refresh or re-link. This is what
+ * turns a silently-rotting linked inbox into a visible "Reconnect" prompt — at
+ * scale, revoked linked tokens are routine, not an edge case.
  */
-async function markPrimaryReconnectIfPrimary(
+export async function markLinkedInboxForReconnect(
+  userId: string,
+  linkedInboxAccountId: string,
+): Promise<void> {
+  await prisma.linkedInboxAccount.updateMany({
+    where: { id: linkedInboxAccountId, userId },
+    data: { needsReconnect: true },
+  });
+}
+
+/**
+ * Route a Gmail auth error to the RIGHT account. A linked-inbox failure must
+ * never poison the primary connection (markGoogleTokenForReconnect is
+ * userId-keyed) — it flags only that linked row; a primary failure flags the
+ * primary token. Used by every mail action so a revoked account of either kind
+ * surfaces a reconnect prompt instead of failing silently.
+ */
+async function markInboxForReconnect(
   userId: string,
   linkedInboxAccountId?: string | null,
 ): Promise<void> {
-  if (!linkedInboxAccountId) await markGoogleTokenForReconnect(userId);
+  if (linkedInboxAccountId) await markLinkedInboxForReconnect(userId, linkedInboxAccountId);
+  else await markGoogleTokenForReconnect(userId);
 }
 
 // Gmail tool functions for Eve
@@ -1052,7 +1082,7 @@ export async function markAsRead(
     });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markPrimaryReconnectIfPrimary(userId, linkedInboxAccountId);
+      await markInboxForReconnect(userId, linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;
@@ -1081,7 +1111,7 @@ export async function trashEmail(
     await gmail.users.messages.trash({ userId: "me", id: gmailMessageId });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markPrimaryReconnectIfPrimary(userId, linkedInboxAccountId);
+      await markInboxForReconnect(userId, linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;
@@ -1112,7 +1142,7 @@ export async function archiveEmail(
     });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markPrimaryReconnectIfPrimary(userId, linkedInboxAccountId);
+      await markInboxForReconnect(userId, linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;
@@ -1143,7 +1173,7 @@ export async function unarchiveEmail(
     });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markPrimaryReconnectIfPrimary(userId, linkedInboxAccountId);
+      await markInboxForReconnect(userId, linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;
@@ -1166,7 +1196,7 @@ export async function untrashEmail(
     await gmail.users.messages.untrash({ userId: "me", id: gmailMessageId });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markPrimaryReconnectIfPrimary(userId, linkedInboxAccountId);
+      await markInboxForReconnect(userId, linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;
@@ -1194,7 +1224,7 @@ export async function toggleStarGmail(
     });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markPrimaryReconnectIfPrimary(userId, linkedInboxAccountId);
+      await markInboxForReconnect(userId, linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;
@@ -1227,7 +1257,7 @@ export async function toggleReadGmail(
     });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markPrimaryReconnectIfPrimary(userId, linkedInboxAccountId);
+      await markInboxForReconnect(userId, linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;

@@ -14,6 +14,9 @@ const m = vi.hoisted(() => ({
   attentionUpdateMany: vi.fn(async () => ({ count: 0 })),
   getLinkedInboxClients: vi.fn(async () => [] as { client: object; id: string; email: string }[]),
   captureError: vi.fn(),
+  isGoogleAuthError: vi.fn(() => false),
+  markGoogleReconnect: vi.fn(async () => {}),
+  markLinkedReconnect: vi.fn(async () => {}),
 }));
 
 vi.mock("googleapis", () => ({
@@ -24,9 +27,10 @@ vi.mock("googleapis", () => ({
 vi.mock("../gmail.js", () => ({
   getAuthedClient: vi.fn(async () => ({})),
   getLinkedInboxClients: m.getLinkedInboxClients,
-  isGoogleAuthError: () => false,
+  isGoogleAuthError: m.isGoogleAuthError,
   isGoogleNotFoundError: () => false,
-  markGoogleTokenForReconnect: vi.fn(async () => {}),
+  markGoogleTokenForReconnect: m.markGoogleReconnect,
+  markLinkedInboxForReconnect: m.markLinkedReconnect,
 }));
 vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
 // Stub heavy import chains pulled in by email-sync.ts but unused by reconcileEmails.
@@ -214,5 +218,20 @@ describe("reconcileLinkedInboxes", () => {
     expect(result).toEqual({ removed: 0, updated: 0 });
     expect(m.listMock).not.toHaveBeenCalled();
     expect(m.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("flags a revoked linked inbox for reconnect on auth error — never poisons the primary token", async () => {
+    m.getLinkedInboxClients.mockResolvedValue([{ client: {}, id: "link-1", email: "a@b.com" }]);
+    m.listMock.mockRejectedValue({ response: { status: 401 } });
+    m.isGoogleAuthError.mockReturnValueOnce(true);
+
+    // Per-account isolation swallows the throw at the reconcileLinkedInboxes level.
+    const result = await reconcileLinkedInboxes("user-1");
+
+    // The linked row is durably flagged for reconnect...
+    expect(m.markLinkedReconnect).toHaveBeenCalledWith("user-1", "link-1");
+    // ...and the primary token is NEVER touched by a linked failure.
+    expect(m.markGoogleReconnect).not.toHaveBeenCalled();
+    expect(result).toEqual({ removed: 0, updated: 0 });
   });
 });
