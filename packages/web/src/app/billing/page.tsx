@@ -176,7 +176,7 @@ function BillingContent() {
             <div className="flex flex-wrap items-center gap-3">
               {status.estimatedCost > 0 && (
                 <span className="rounded-full border border-stone-700 bg-stone-900/70 px-3 py-1 text-xs text-stone-400">
-                  About ${status.estimatedCost.toFixed(4)} this month
+                  About ${status.estimatedCost.toFixed(2)} this month
                 </span>
               )}
               {/* No Stripe checkout/portal inside the iOS app (App Store
@@ -292,7 +292,9 @@ function BillingContent() {
                   Current plan
                 </div>
               ) : plan.key === "FREE" ? (
-                <div />
+                <div className="rounded-lg border border-stone-800 py-2 text-center text-sm font-medium text-stone-500">
+                  Free forever
+                </div>
               ) : plan.key === "ENTERPRISE" ? (
                 <a
                   href="mailto:sales@klorn.ai"

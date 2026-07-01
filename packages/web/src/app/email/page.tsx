@@ -314,11 +314,14 @@ function EmailView() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.email.all });
   };
 
-  // Reset selection whenever the filter / search changes (the keyed
-  // query already refetches automatically).
+  // Reset selection whenever the filter / search changes (the keyed query
+  // already refetches automatically). The deps MUST include filter + search:
+  // with an empty dep array this only ran on mount, so a stale selection could
+  // survive a filter change and a bulk action would then archive/delete rows no
+  // longer visible in the list (data-loss adjacent).
   useEffect(() => {
     setSelectedIds(new Set());
-  }, []);
+  }, [filter, search]);
 
   // Real-time auto-sync: when new mail lands, gmail-push emits
   // conversations-updated (NotificationBell bridges the WS message to this
