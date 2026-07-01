@@ -239,6 +239,7 @@ export async function judgeAndMirrorEmail(
   const llmCredentials = credentials ?? (await getUserLlmCredentials(userId));
   const judgeContext = await buildJudgeContext(userId, {
     from: email.from,
+    subject: email.subject,
     excludeEmailId: email.id,
   });
   const judgement = await judgeEmail(
