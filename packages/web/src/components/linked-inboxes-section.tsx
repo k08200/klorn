@@ -13,6 +13,25 @@ interface LinkedAccount {
   id: string;
   email: string;
   createdAt: string;
+  // null until the first sync tick after MULTI_INBOX_SYNC_ENABLED flips.
+  lastSyncedAt: string | null;
+}
+
+// Compact "synced 5m ago" / "Not yet synced" for the connected-inbox rows.
+// Self-contained so this section doesn't depend on the firewall board's private
+// relativeTime helper.
+function formatLastSynced(iso: string | null): string {
+  if (!iso) return "Not yet synced";
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "Not yet synced";
+  const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (secs < 60) return "Synced just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `Synced ${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `Synced ${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `Synced ${days}d ago`;
 }
 
 /**
@@ -97,14 +116,19 @@ export function LinkedInboxesSection() {
           {accounts.map((account) => (
             <li
               key={account.id}
-              className="flex items-center justify-between rounded-md border border-stone-800 bg-black/20 px-3 py-2 text-sm"
+              className="flex items-center justify-between gap-3 rounded-md border border-stone-800 bg-black/20 px-3 py-2 text-sm"
             >
-              <span className="truncate text-stone-200">{account.email}</span>
+              <div className="min-w-0">
+                <span className="block truncate text-stone-200">{account.email}</span>
+                <span className="block truncate text-[11px] text-stone-500">
+                  {formatLastSynced(account.lastSyncedAt)}
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={() => disconnect.mutate(account.id)}
                 disabled={disconnect.isPending}
-                className="ml-3 shrink-0 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 transition hover:bg-stone-800 disabled:opacity-50"
+                className="shrink-0 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 transition hover:bg-stone-800 disabled:opacity-50"
               >
                 Disconnect
               </button>

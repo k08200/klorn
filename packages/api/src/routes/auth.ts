@@ -1115,8 +1115,10 @@ export function authRoutes(app: FastifyInstance) {
   );
 
   // GET /api/auth/google/linked-inboxes — list the user's linked secondary
-  // inboxes (never returns tokens — id + email + connectedAt only). Pro-gated to
-  // match the connect route so a lapsed user can't read the paid feature's data.
+  // inboxes (never returns tokens — id + email + connectedAt + last-sync only).
+  // Pro-gated to match the connect route so a lapsed user can't read the paid
+  // feature's data. lastSyncedAt lets the UI confirm an inbox is actually syncing
+  // after MULTI_INBOX_SYNC_ENABLED flips (null until the first sync tick).
   app.get(
     "/google/linked-inboxes",
     { preHandler: [requireAuth, requireEntitled] },
@@ -1124,7 +1126,7 @@ export function authRoutes(app: FastifyInstance) {
       const userId = getUserId(request);
       const accounts = await prisma.linkedInboxAccount.findMany({
         where: { userId },
-        select: { id: true, email: true, createdAt: true },
+        select: { id: true, email: true, createdAt: true, lastSyncedAt: true },
         orderBy: { createdAt: "asc" },
       });
       return { accounts };
