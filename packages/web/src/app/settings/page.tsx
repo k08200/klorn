@@ -794,7 +794,7 @@ export default function SettingsPage() {
       <Suspense>
         <GoogleConnectRedirect />
       </Suspense>
-      <main className="mx-auto max-w-4xl px-4 pb-28 pt-3 sm:px-6 md:py-10">
+      <div className="mx-auto max-w-4xl px-4 pb-28 pt-3 sm:px-6 md:py-10">
         {/* MOBILE — native large-title header */}
         <header className="mb-6 md:hidden">
           <h1 className="text-[28px] font-bold leading-none tracking-tight text-stone-50">
@@ -1696,7 +1696,7 @@ export default function SettingsPage() {
             <p className="text-xs text-stone-400 mt-3">v0.2.0 — MVP</p>
           </div>
         </section>
-      </main>
+      </div>
     </AuthGuard>
   );
 }
