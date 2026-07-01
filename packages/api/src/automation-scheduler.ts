@@ -29,6 +29,7 @@ import {
   checkAutoReplyRules,
   generateSmartReply,
   reconcileEmails,
+  reconcileLinkedInboxes,
   summarizeUnsummarizedEmails,
   syncEmails,
 } from "./email-sync.js";
@@ -872,6 +873,23 @@ async function runAutomations() {
                   captureError(err, {
                     tags: { scope: "automation.reconcile", userId: config.userId },
                   });
+                }
+                // Reconcile linked secondary inboxes too (each against its own
+                // client). Gated + isolated from the primary reconcile so a
+                // linked failure never masks a primary success. Off unless the
+                // flag is on, matching the sync fan-out above.
+                if (MULTI_INBOX_SYNC_ENABLED) {
+                  try {
+                    await reconcileLinkedInboxes(config.userId);
+                  } catch (err) {
+                    console.error(
+                      `[AUTOMATION] Linked-inbox reconcile failed for ${config.userId}:`,
+                      err,
+                    );
+                    captureError(err, {
+                      tags: { scope: "automation.reconcile.linked", userId: config.userId },
+                    });
+                  }
                 }
               }
 
