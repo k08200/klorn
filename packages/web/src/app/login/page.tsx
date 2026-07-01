@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import AuthScreen from "../../components/auth-screen";
+import InAppBrowserNotice from "../../components/in-app-browser-notice";
 import { useToast } from "../../components/toast";
 import { API_BASE, apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
@@ -133,6 +134,8 @@ function LoginForm() {
         </Link>
       }
     >
+      <InAppBrowserNotice />
+
       {nextPath !== "/inbox" && (
         <div className="mb-4 rounded-md border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100">
           Sign in to continue to{" "}
