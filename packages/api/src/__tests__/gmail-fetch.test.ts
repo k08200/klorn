@@ -126,3 +126,48 @@ describe("fetchGmailEmails — parallel fetch with per-message isolation", () =>
     expect(markGoogleTokenForReconnect).toHaveBeenCalledWith("user-1");
   });
 });
+
+describe("fetchGmailEmailById — primary vs linked auth handling", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  it("flags PRIMARY reconnect on a primary auth error (no linked client)", async () => {
+    getMock.mockRejectedValue(httpError(401));
+
+    const { fetchGmailEmailById } = await import("../gmail-fetch.js");
+    const result = await fetchGmailEmailById("user-1", "g1");
+
+    expect(result).toBeNull();
+    expect(markGoogleTokenForReconnect).toHaveBeenCalledWith("user-1");
+  });
+
+  it("does NOT poison the primary token on a LINKED auth error, but still leaves a signal", async () => {
+    getMock.mockRejectedValue(httpError(401));
+    const linkedClient = {} as never;
+
+    const { fetchGmailEmailById } = await import("../gmail-fetch.js");
+    const result = await fetchGmailEmailById("user-1", "g1", linkedClient);
+
+    expect(result).toBeNull();
+    // The security invariant: a revoked LINKED token must never mark the healthy
+    // primary connection for reconnect.
+    expect(markGoogleTokenForReconnect).not.toHaveBeenCalled();
+    // ...but the failure must not vanish (the undo route only returns a bare 502).
+    expect(captureError).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ extra: expect.objectContaining({ gmailId: "g1" }) }),
+    );
+  });
+
+  it("returns the parsed email on success", async () => {
+    getMock.mockResolvedValue(detailFor("g1"));
+
+    const { fetchGmailEmailById } = await import("../gmail-fetch.js");
+    const email = await fetchGmailEmailById("user-1", "g1");
+
+    expect(email?.gmailId).toBe("g1");
+    expect(markGoogleTokenForReconnect).not.toHaveBeenCalled();
+  });
+});
