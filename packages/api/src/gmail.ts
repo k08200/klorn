@@ -654,6 +654,35 @@ export async function getAuthedInboxClient(
   return buildInboxOAuthClient(row, userId);
 }
 
+/**
+ * Resolve the Gmail OAuth client to ACT on a message: the primary account by
+ * default, or a specific linked secondary inbox when the message belongs to one
+ * (EmailMessage.linkedInboxAccountId). This is what makes multi-account actions
+ * (archive/read/star/trash) hit the right account instead of always the primary.
+ */
+async function resolveMailClient(
+  userId: string,
+  linkedInboxAccountId?: string | null,
+): Promise<InstanceType<typeof google.auth.OAuth2> | null> {
+  return linkedInboxAccountId
+    ? getAuthedInboxClient(userId, linkedInboxAccountId)
+    : getAuthedClient(userId);
+}
+
+/**
+ * Handle a Gmail auth error for a mail action. ONLY the primary token may be
+ * invalidated here — a linked-inbox auth failure must never poison the primary
+ * connection (markGoogleTokenForReconnect is userId-keyed). For a linked inbox
+ * we leave the primary alone; the linked row surfaces its own revocation on the
+ * next sync fan-out.
+ */
+async function markPrimaryReconnectIfPrimary(
+  userId: string,
+  linkedInboxAccountId?: string | null,
+): Promise<void> {
+  if (!linkedInboxAccountId) await markGoogleTokenForReconnect(userId);
+}
+
 // Gmail tool functions for Eve
 
 export async function listEmails(userId: string, maxResults = 10) {
@@ -986,8 +1015,12 @@ export async function createEmailDraft(
 }
 
 /** Mark a Gmail message as read (remove UNREAD label) */
-export async function markAsRead(userId: string, gmailMessageId: string) {
-  const auth = await getAuthedClient(userId);
+export async function markAsRead(
+  userId: string,
+  gmailMessageId: string,
+  linkedInboxAccountId?: string | null,
+) {
+  const auth = await resolveMailClient(userId, linkedInboxAccountId);
   if (!auth) return { error: "Gmail not connected." };
 
   const gmail = google.gmail({ version: "v1", auth });
@@ -999,7 +1032,7 @@ export async function markAsRead(userId: string, gmailMessageId: string) {
     });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markGoogleTokenForReconnect(userId);
+      await markPrimaryReconnectIfPrimary(userId, linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;
@@ -1015,8 +1048,12 @@ export async function markAsRead(userId: string, gmailMessageId: string) {
 }
 
 /** Trash a Gmail message (move to Trash) */
-export async function trashEmail(userId: string, gmailMessageId: string) {
-  const auth = await getAuthedClient(userId);
+export async function trashEmail(
+  userId: string,
+  gmailMessageId: string,
+  linkedInboxAccountId?: string | null,
+) {
+  const auth = await resolveMailClient(userId, linkedInboxAccountId);
   if (!auth) return { error: "Gmail not connected." };
 
   const gmail = google.gmail({ version: "v1", auth });
@@ -1024,7 +1061,7 @@ export async function trashEmail(userId: string, gmailMessageId: string) {
     await gmail.users.messages.trash({ userId: "me", id: gmailMessageId });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markGoogleTokenForReconnect(userId);
+      await markPrimaryReconnectIfPrimary(userId, linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;
@@ -1038,8 +1075,12 @@ export async function trashEmail(userId: string, gmailMessageId: string) {
 }
 
 /** Archive a Gmail message (remove INBOX label) */
-export async function archiveEmail(userId: string, gmailMessageId: string) {
-  const auth = await getAuthedClient(userId);
+export async function archiveEmail(
+  userId: string,
+  gmailMessageId: string,
+  linkedInboxAccountId?: string | null,
+) {
+  const auth = await resolveMailClient(userId, linkedInboxAccountId);
   if (!auth) return { error: "Gmail not connected." };
 
   const gmail = google.gmail({ version: "v1", auth });
@@ -1051,7 +1092,7 @@ export async function archiveEmail(userId: string, gmailMessageId: string) {
     });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markGoogleTokenForReconnect(userId);
+      await markPrimaryReconnectIfPrimary(userId, linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;
@@ -1065,8 +1106,12 @@ export async function archiveEmail(userId: string, gmailMessageId: string) {
 }
 
 /** Restore a Gmail message to the inbox */
-export async function unarchiveEmail(userId: string, gmailMessageId: string) {
-  const auth = await getAuthedClient(userId);
+export async function unarchiveEmail(
+  userId: string,
+  gmailMessageId: string,
+  linkedInboxAccountId?: string | null,
+) {
+  const auth = await resolveMailClient(userId, linkedInboxAccountId);
   if (!auth) return { error: "Gmail not connected." };
 
   const gmail = google.gmail({ version: "v1", auth });
@@ -1078,7 +1123,7 @@ export async function unarchiveEmail(userId: string, gmailMessageId: string) {
     });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markGoogleTokenForReconnect(userId);
+      await markPrimaryReconnectIfPrimary(userId, linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;
@@ -1088,8 +1133,12 @@ export async function unarchiveEmail(userId: string, gmailMessageId: string) {
 }
 
 /** Restore a Gmail message from trash */
-export async function untrashEmail(userId: string, gmailMessageId: string) {
-  const auth = await getAuthedClient(userId);
+export async function untrashEmail(
+  userId: string,
+  gmailMessageId: string,
+  linkedInboxAccountId?: string | null,
+) {
+  const auth = await resolveMailClient(userId, linkedInboxAccountId);
   if (!auth) return { error: "Gmail not connected." };
 
   const gmail = google.gmail({ version: "v1", auth });
@@ -1097,7 +1146,7 @@ export async function untrashEmail(userId: string, gmailMessageId: string) {
     await gmail.users.messages.untrash({ userId: "me", id: gmailMessageId });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markGoogleTokenForReconnect(userId);
+      await markPrimaryReconnectIfPrimary(userId, linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;
@@ -1107,8 +1156,13 @@ export async function untrashEmail(userId: string, gmailMessageId: string) {
 }
 
 /** Toggle star on Gmail (add/remove STARRED label) */
-export async function toggleStarGmail(userId: string, gmailMessageId: string, starred: boolean) {
-  const auth = await getAuthedClient(userId);
+export async function toggleStarGmail(
+  userId: string,
+  gmailMessageId: string,
+  starred: boolean,
+  linkedInboxAccountId?: string | null,
+) {
+  const auth = await resolveMailClient(userId, linkedInboxAccountId);
   if (!auth) return { error: "Gmail not connected." };
 
   const gmail = google.gmail({ version: "v1", auth });
@@ -1120,7 +1174,7 @@ export async function toggleStarGmail(userId: string, gmailMessageId: string, st
     });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markGoogleTokenForReconnect(userId);
+      await markPrimaryReconnectIfPrimary(userId, linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;
@@ -1135,8 +1189,13 @@ export async function toggleStarGmail(userId: string, gmailMessageId: string, st
 }
 
 /** Toggle read/unread on Gmail */
-export async function toggleReadGmail(userId: string, gmailMessageId: string, isRead: boolean) {
-  const auth = await getAuthedClient(userId);
+export async function toggleReadGmail(
+  userId: string,
+  gmailMessageId: string,
+  isRead: boolean,
+  linkedInboxAccountId?: string | null,
+) {
+  const auth = await resolveMailClient(userId, linkedInboxAccountId);
   if (!auth) return { error: "Gmail not connected." };
 
   const gmail = google.gmail({ version: "v1", auth });
@@ -1148,7 +1207,7 @@ export async function toggleReadGmail(userId: string, gmailMessageId: string, is
     });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markGoogleTokenForReconnect(userId);
+      await markPrimaryReconnectIfPrimary(userId, linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;
