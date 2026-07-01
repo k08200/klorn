@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import { captureClientError } from "../lib/sentry";
 
 interface NaverImapStatus {
@@ -23,6 +24,12 @@ const DEFAULT_HOST = "imap.naver.com:993";
 const PASSWORD_HELP_URL = "https://help.naver.com/service/3007/contents/?lang=ko";
 
 export function NaverImapSection() {
+  const { user } = useAuth();
+  // Multi-account (a second inbox) is a paid feature. `entitled` is server-
+  // computed and always true while the paywall is off, so this gate is inert
+  // pre-launch. An already-connected mailbox stays visible so a user who
+  // downgraded can still see and disconnect it.
+  const entitled = user?.entitled !== false;
   const [status, setStatus] = useState<NaverImapStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -137,6 +144,17 @@ export function NaverImapSection() {
             </div>
           </div>
           {error && <p className="text-xs text-red-400">{error}</p>}
+        </div>
+      ) : !entitled ? (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-4">
+          <p className="text-sm text-stone-200">
+            Connecting a second inbox is a <span className="font-semibold text-amber-300">Pro</span>{" "}
+            feature.
+          </p>
+          <p className="mt-1 text-xs text-stone-400">
+            Free covers your primary Google account. Upgrade in the Subscription section to run the
+            firewall across a Naver mailbox too.
+          </p>
         </div>
       ) : (
         <form onSubmit={handleConnect} className="space-y-3">

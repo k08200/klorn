@@ -81,6 +81,17 @@ describe("free tier under the paywall (PAYWALL_ENABLED=true)", () => {
     expect(has("FREE", "notion")).toBe(false);
     expect(has("FREE", "web_search")).toBe(false);
     expect(has("FREE", "meeting_tools")).toBe(false);
+    // Multi-account (a second inbox / secondary account) is a paid differentiator.
+    expect(has("FREE", "multi_account")).toBe(false);
+  });
+
+  it("grants multi-account to every paid plan (Pro/Team/Enterprise)", async () => {
+    const { planHasFeature: has } = await loadPaywalled();
+    expect(has("PRO", "multi_account")).toBe(true);
+    expect(has("TEAM", "multi_account")).toBe(true);
+    expect(has("ENTERPRISE", "multi_account")).toBe(true);
+    // ADMIN bypass still covers it for founder dogfooding.
+    expect(has("FREE", "multi_account", "ADMIN")).toBe(true);
   });
 
   it("does not hard-wall free users on entry (usable free tier)", async () => {

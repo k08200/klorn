@@ -16,6 +16,7 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
+import { requireEntitled } from "../entitlement-guard.js";
 import { isAllowedImapHost } from "../is-allowed-imap-host.js";
 import { verifyNaverImapCredentials } from "../naver-imap.js";
 
@@ -58,6 +59,12 @@ export async function naverImapRoutes(app: FastifyInstance) {
   }>(
     "/connect",
     {
+      // Multi-account (connecting a SECOND inbox beyond the primary Google
+      // account) is a paid feature — Pro/Team/Enterprise only. requireAuth
+      // first sets userId for requireEntitled. Inert while the paywall is off.
+      // /status (read) and /disconnect stay open so a downgraded user can still
+      // see and remove an inbox they connected while paid.
+      preHandler: [requireAuth, requireEntitled],
       schema: { body: connectBodySchema },
       // Every call opens a real IMAP connection to Naver; without a tight
       // limit this is both a credential-stuffing oracle and a way to get
