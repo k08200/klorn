@@ -1,10 +1,20 @@
 "use client";
 
 import type { InputHTMLAttributes, TextareaHTMLAttributes } from "react";
-import { forwardRef } from "react";
+import { forwardRef, useId } from "react";
 
 const baseStyles =
-  "w-full bg-stone-950 border border-stone-800 rounded-lg px-4 py-2.5 text-sm text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25 transition-colors";
+  "w-full bg-stone-950 border border-stone-800 rounded-lg px-4 py-2.5 text-sm text-stone-100 placeholder-stone-500 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25 transition-colors";
+
+const errorStyles = "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500/30";
+
+/** Prefer an explicit id, then a label-derived slug, then a stable useId(). */
+function useControlId(id: string | undefined, label: string | undefined): string {
+  const fallback = useId();
+  if (id) return id;
+  if (label) return label.toLowerCase().replace(/\s+/g, "-");
+  return fallback;
+}
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -13,7 +23,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ label, error, className = "", id, ...props }, ref) => {
-    const inputId = id || label?.toLowerCase().replace(/\s+/g, "-");
+    const inputId = useControlId(id, label);
     return (
       <div>
         {label && (
@@ -24,7 +34,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         <input
           ref={ref}
           id={inputId}
-          className={`${baseStyles} ${error ? "border-red-500 focus:border-red-500 focus:ring-red-500/30" : ""} ${className}`}
+          className={`${baseStyles} ${error ? errorStyles : ""} ${className}`}
           aria-invalid={error ? "true" : undefined}
           aria-describedby={error ? `${inputId}-error` : undefined}
           {...props}
@@ -47,7 +57,7 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ label, error, className = "", id, ...props }, ref) => {
-    const inputId = id || label?.toLowerCase().replace(/\s+/g, "-");
+    const inputId = useControlId(id, label);
     return (
       <div>
         {label && (
@@ -58,7 +68,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         <textarea
           ref={ref}
           id={inputId}
-          className={`${baseStyles} resize-none ${error ? "border-red-500" : ""} ${className}`}
+          className={`${baseStyles} resize-none ${error ? errorStyles : ""} ${className}`}
           aria-invalid={error ? "true" : undefined}
           aria-describedby={error ? `${inputId}-error` : undefined}
           {...props}
@@ -81,7 +91,7 @@ interface SelectProps extends InputHTMLAttributes<HTMLSelectElement> {
 }
 
 export function Select({ label, error, children, className = "", id, ...props }: SelectProps) {
-  const inputId = id || label?.toLowerCase().replace(/\s+/g, "-");
+  const inputId = useControlId(id, label);
   return (
     <div>
       {label && (
@@ -91,7 +101,7 @@ export function Select({ label, error, children, className = "", id, ...props }:
       )}
       <select
         id={inputId}
-        className={`${baseStyles} ${error ? "border-red-500" : ""} ${className}`}
+        className={`${baseStyles} ${error ? errorStyles : ""} ${className}`}
         aria-invalid={error ? "true" : undefined}
         aria-describedby={error ? `${inputId}-error` : undefined}
         {...(props as React.SelectHTMLAttributes<HTMLSelectElement>)}

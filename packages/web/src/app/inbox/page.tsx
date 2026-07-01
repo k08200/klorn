@@ -187,9 +187,19 @@ function CommandCenterView() {
 
   const pendingCount = actions.filter((a) => a.status === "PENDING").length;
   const introLine = buildIntroLine(pendingCount);
+  // Approve/skip/snooze mutate the queue with only a transient toast; this
+  // polite live region announces the new waiting count to screen readers so
+  // the list change isn't silent (WCAG 4.1.3). Re-derives from query data
+  // after each optimistic update.
+  const queueAnnouncement =
+    pendingCount === 1 ? "1 decision waiting" : `${pendingCount} decisions waiting`;
 
   return (
     <>
+      <p aria-live="polite" className="sr-only">
+        {queueAnnouncement}
+      </p>
+
       {/* MOBILE — purpose-built native screen (desktop layout untouched below) */}
       <div className="px-4 pb-8 pt-3 md:hidden">
         <OnboardingHint />
@@ -267,7 +277,11 @@ function CommandCenterView() {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 rounded-lg border border-stone-800 bg-stone-950/80 p-1">
+                  <div
+                    role="group"
+                    aria-label="Filter decisions"
+                    className="flex items-center gap-1 rounded-lg border border-stone-800 bg-stone-950/80 p-1"
+                  >
                     <FilterTab
                       active={filter === "pending"}
                       label={`Pending${pendingCount ? ` (${pendingCount})` : ""}`}
@@ -419,7 +433,7 @@ function OnboardingHint() {
             <li>
               2.{" "}
               <Link href="/inbox/firewall" className="text-amber-200 hover:text-amber-100">
-                POC firewall view
+                Firewall board
               </Link>{" "}
               — see every signal sorted into SILENT / QUEUE / PUSH. Move what we got wrong.
             </li>
@@ -558,7 +572,7 @@ function QuickLinksPanel() {
   // from /inbox: today's receipt and the morning briefing. Agent timeline
   // and the chat root live one click away through the sidebar nav already.
   const links = [
-    { href: "/inbox/firewall", label: "POC firewall view" },
+    { href: "/inbox/firewall", label: "Firewall board" },
     { href: "/inbox/receipt", label: "Today's receipt" },
     { href: "/briefing", label: "Full briefing" },
   ] as const;
@@ -593,8 +607,9 @@ function FilterTab({
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
-      className={`rounded-md px-3 py-1.5 text-xs transition ${
+      className={`rounded-md px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
         active ? "bg-stone-800 text-white" : "text-stone-400 hover:text-stone-200"
       }`}
     >
@@ -682,24 +697,26 @@ function ActionCard({
         </p>
       )}
 
-      {/* Email body disclosure — hidden by default to keep the card calm */}
+      {/* Outbound email body — shown INLINE, not collapsed. Approving a
+          send_email dispatches real mail, so the user must see the full body
+          before "Act now" rather than opting in to expand a disclosure. */}
       {emailPreview && (
-        <details className="mx-5 mb-4 rounded-lg border border-stone-800 bg-black/20">
-          <summary className="cursor-pointer list-none px-3 py-2 text-xs text-stone-400 transition hover:text-stone-200">
+        <div className="mx-5 mb-4 rounded-lg border border-stone-800 bg-black/20">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-stone-800 px-3 py-2">
             <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-amber-300">
-              Email body
+              Email to send
             </span>
-            <span className="ml-2 text-stone-500">To: {emailPreview.to}</span>
-          </summary>
-          <div className="space-y-2 border-t border-stone-800 px-3 py-3">
+            <span className="text-xs text-stone-500">To: {emailPreview.to}</span>
+          </div>
+          <div className="space-y-2 px-3 py-3">
             <p className="break-words text-xs text-stone-300">Subject: {emailPreview.subject}</p>
             {emailPreview.body && (
-              <p className="line-clamp-8 whitespace-pre-wrap text-xs leading-relaxed text-stone-300">
+              <p className="whitespace-pre-wrap text-xs leading-relaxed text-stone-300">
                 {emailPreview.body}
               </p>
             )}
           </div>
-        </details>
+        </div>
       )}
 
       {/* Action band */}
@@ -989,7 +1006,11 @@ function MobileDecisionQueue({
       </header>
 
       {actions.length > 0 && (
-        <div className="mb-4 flex gap-1 rounded-xl bg-stone-900/70 p-1">
+        <div
+          role="group"
+          aria-label="Filter decisions"
+          className="mb-4 flex gap-1 rounded-xl bg-stone-900/70 p-1"
+        >
           <MobileSeg
             active={filter === "pending"}
             label={`Pending${pendingCount ? ` · ${pendingCount}` : ""}`}
@@ -1043,8 +1064,9 @@ function MobileSeg({
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
-      className={`flex-1 rounded-lg py-2 text-[13px] font-medium transition ${
+      className={`flex-1 rounded-lg py-2 text-[13px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
         active ? "bg-stone-700 text-white shadow-sm" : "text-stone-400 active:text-stone-200"
       }`}
     >
@@ -1125,6 +1147,23 @@ function MobileActionCard({
           <p className="mt-1.5 line-clamp-3 text-[13px] leading-relaxed text-stone-400">
             {context}
           </p>
+        )}
+        {/* Outbound body inline so a send_email can't be approved unseen. */}
+        {emailPreview && (
+          <div className="mt-3 rounded-xl border border-stone-800 bg-black/20 p-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-amber-300">
+              Email to send
+            </p>
+            <p className="mt-1 break-words text-[11px] text-stone-500">To: {emailPreview.to}</p>
+            <p className="mt-1 break-words text-xs text-stone-300">
+              Subject: {emailPreview.subject}
+            </p>
+            {emailPreview.body && (
+              <p className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-stone-300">
+                {emailPreview.body}
+              </p>
+            )}
+          </div>
         )}
       </div>
       {isPending ? (

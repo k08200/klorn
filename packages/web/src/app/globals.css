@@ -28,6 +28,16 @@
   --color-brand-cream-soft: #f2eadc;
   --color-brand-ink: #11100d;
   --color-brand-ink-soft: #12100d;
+
+  /* 4-tier firewall colors (PUSH/QUEUE/SILENT/AUTO). Single source of truth
+     for the classifier's core mental model — consumed by the firewall board,
+     the relationship-graph legend, and tier badges so the four tiers read as
+     ONE color+label system everywhere instead of drifting per surface
+     (was: graph red #f87171, board rose, retired coral glow — all divergent). */
+  --color-tier-push: #fb7185;
+  --color-tier-queue: #fbbf24;
+  --color-tier-silent: #a8a29e;
+  --color-tier-auto: #34d399;
 }
 
 body {
@@ -166,8 +176,10 @@ body {
 /* Per-tier ambient glow on the column panel. The negative spread keeps the
    glow tight to the panel instead of bleeding across the whole board. */
 .tier-plane-push {
+  /* rose #fb7185 == --color-tier-push. Was retired coral rgba(255,107,74) —
+     the last coral survivor after the 2026-06-16 accent unification. */
   box-shadow:
-    0 0 60px -22px rgba(255, 107, 74, 0.55),
+    0 0 60px -22px rgba(251, 113, 133, 0.5),
     inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
 }
 .tier-plane-queue {
@@ -237,14 +249,18 @@ body {
   animation: count-pop 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Respect reduced-motion: keep the depth, drop the movement. These rules
-   share specificity with the definitions above and are declared after them,
-   so source order alone lets them win — no !important needed. */
+/* Respect reduced-motion: keep the depth, drop the movement. Covers ALL
+   keyframes — including the infinite decorative loops (eve-scan/pulse/drift)
+   which are the sharpest WCAG 2.2.2 (Pause/Stop/Hide) risk. These rules share
+   specificity with the definitions above and are declared after them, so
+   source order alone lets them win — no !important needed. */
 @media (prefers-reduced-motion: reduce) {
-  /* Kill ALL motion for users who request it — covers every keyframe (including
-     the infinite eve-scan / eve-pulse / eve-drift and slide/fade/shimmer) and
-     transitions, not just the three classes that were listed. 0.01ms (not 0)
-     keeps animationend/transitionend events firing so nothing hangs. */
+  /* Kill ALL motion for users who request it — one universal rule covers every
+     keyframe (the infinite eve-scan / eve-pulse / eve-drift, the slide/fade/
+     shimmer/card-in/count-pop set, AND Tailwind's built-in loops:
+     .animate-pulse / .animate-bounce / .animate-spin — spinners, pulsing status
+     dots, bell bounce). 0.01ms (not 0) keeps animationend/transitionend events
+     firing so nothing hangs. */
   *,
   *::before,
   *::after {
@@ -278,7 +294,10 @@ body {
 }
 
 /* ── Focus ring utility ─────────────────────────── */
-.focus-ring:focus {
+/* Keyed to :focus-visible so the ring shows for keyboard/AT users but not on
+   mouse click. Primitives (button/input/modal) route their rings through this
+   so the ring color lives in exactly one place. */
+.focus-ring:focus-visible {
   outline: none;
   box-shadow:
     0 0 0 2px #10100d,

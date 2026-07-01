@@ -274,7 +274,7 @@ export default function PlaygroundPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0f1115] text-white">
+    <main id="main" className="min-h-screen bg-[#0f1115] text-white">
       <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
         <Link href="/" className="text-sm font-semibold tracking-tight text-white">
           Klorn
@@ -325,7 +325,7 @@ export default function PlaygroundPage() {
               id="pg-from"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              className="mb-3 w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+              className="mb-3 w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus-visible:border-amber-300 focus-visible:ring-1 focus-visible:ring-amber-300/25"
               placeholder="Jane Park <jane@sequoia.com>"
             />
 
@@ -336,7 +336,7 @@ export default function PlaygroundPage() {
               id="pg-subject"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              className="mb-3 w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+              className="mb-3 w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus-visible:border-amber-300 focus-visible:ring-1 focus-visible:ring-amber-300/25"
               placeholder="Can we talk today?"
             />
 
@@ -348,7 +348,7 @@ export default function PlaygroundPage() {
               value={snippet}
               onChange={(e) => setSnippet(e.target.value)}
               rows={4}
-              className="mb-4 w-full resize-y rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+              className="mb-4 w-full resize-y rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus-visible:border-amber-300 focus-visible:ring-1 focus-visible:ring-amber-300/25"
               placeholder="Paste the first lines of the email…"
             />
 
@@ -364,7 +364,7 @@ export default function PlaygroundPage() {
                   id="pg-provider"
                   value={provider}
                   onChange={(e) => onProviderChange(e.target.value as ProviderId)}
-                  className="w-full rounded-md border border-stone-700 bg-stone-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-300"
+                  className="w-full rounded-md border border-stone-700 bg-stone-950 px-3 py-2.5 text-sm text-white outline-none focus-visible:border-amber-300"
                 >
                   {(Object.keys(PROVIDER_META) as ProviderId[]).map((id) => (
                     <option key={id} value={id}>
@@ -384,7 +384,7 @@ export default function PlaygroundPage() {
                   id="pg-model"
                   value={PROVIDER_META[provider].models.includes(model) ? model : "__custom__"}
                   onChange={(e) => setModel(e.target.value === "__custom__" ? "" : e.target.value)}
-                  className="w-full rounded-md border border-stone-700 bg-stone-950 px-3 py-2.5 font-mono text-xs text-white outline-none focus:border-amber-300"
+                  className="w-full rounded-md border border-stone-700 bg-stone-950 px-3 py-2.5 font-mono text-xs text-white outline-none focus-visible:border-amber-300"
                 >
                   {PROVIDER_META[provider].models.map((m) => (
                     <option key={m} value={m}>
@@ -402,7 +402,7 @@ export default function PlaygroundPage() {
                     autoCapitalize="off"
                     spellCheck={false}
                     placeholder="vendor/model-id"
-                    className="mt-2 w-full rounded-md border border-stone-700 bg-stone-950 px-3 py-2.5 font-mono text-xs text-white outline-none placeholder:text-stone-400 focus:border-amber-300"
+                    className="mt-2 w-full rounded-md border border-stone-700 bg-stone-950 px-3 py-2.5 font-mono text-xs text-white outline-none placeholder:text-stone-400 focus-visible:border-amber-300"
                   />
                 )}
               </div>
@@ -430,7 +430,7 @@ export default function PlaygroundPage() {
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
-              className="mb-1.5 w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 font-mono text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+              className="mb-1.5 w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 font-mono text-sm text-white outline-none transition placeholder:text-stone-400 focus-visible:border-amber-300 focus-visible:ring-1 focus-visible:ring-amber-300/25"
               placeholder={PROVIDER_META[provider].keyPlaceholder}
             />
             <p className="mb-4 text-[11px] text-stone-500">
@@ -448,7 +448,10 @@ export default function PlaygroundPage() {
             </button>
 
             {error && (
-              <div className="mt-4 whitespace-pre-line rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              <div
+                role="alert"
+                className="mt-4 whitespace-pre-line rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+              >
                 {error}
               </div>
             )}

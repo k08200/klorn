@@ -49,6 +49,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="bg-surface-app text-stone-100 antialiased">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:left-4 focus-visible:top-4 focus-visible:z-[200] focus-visible:rounded-md focus-visible:bg-surface-elevated focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-medium focus-visible:text-accent focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          Skip to main content
+        </a>
         <Providers>
           <KeyboardShortcuts />
           <CommandPalette />

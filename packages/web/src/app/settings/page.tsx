@@ -16,6 +16,8 @@ import { ListSkeleton } from "../../components/skeleton";
 import { SubscriptionSection } from "../../components/subscription-section";
 import { TelegramSection } from "../../components/telegram-section";
 import { useToast } from "../../components/toast";
+import StatusChip from "../../components/ui/status-chip";
+import Switch from "../../components/ui/switch";
 import { API_BASE, apiFetch, authHeaders, startGoogleConnect } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import {
@@ -988,22 +990,13 @@ export default function SettingsPage() {
                   Time zone: {profile.timezone}. Change it in the profile section above.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => updateDailyBriefing(!dailyBriefingEnabled)}
-                className={`relative inline-flex min-h-11 min-w-14 shrink-0 items-center rounded-full transition-colors ${
-                  dailyBriefingEnabled ? "bg-amber-300" : "bg-stone-700"
-                }`}
-                role="switch"
-                aria-checked={dailyBriefingEnabled}
-                aria-label="Toggle morning briefing"
-              >
-                <span
-                  className={`absolute left-1 h-6 w-6 rounded-full bg-white transition-transform ${
-                    dailyBriefingEnabled ? "translate-x-6" : ""
-                  }`}
-                />
-              </button>
+              <Switch
+                checked={dailyBriefingEnabled}
+                onChange={(next) => updateDailyBriefing(next)}
+                label="Morning briefing"
+                hideLabel
+                className="shrink-0"
+              />
             </div>
             <div className="flex items-center gap-3 border-t border-stone-800 pt-3">
               <label htmlFor="briefing-time" className="text-sm font-medium text-stone-200">
@@ -1058,16 +1051,14 @@ export default function SettingsPage() {
 
           {/* Granular Notification Preferences */}
           <div className="mt-4 bg-stone-950/35 border border-stone-700/45 rounded-xl p-4 space-y-3">
-            <div>
-              <h3 className="font-medium">Which signals are worth interrupting you?</h3>
-              <p className="text-xs text-stone-500 mt-0.5">
-                Disabled categories stay quiet across push and in-app notifications.
-              </p>
-            </div>
-            <fieldset className="space-y-2 border-0 p-0 m-0">
-              <legend className="sr-only">
-                Which signals are worth interrupting you? Disabled categories stay quiet across push
-                and in-app notifications.
+            <fieldset className="space-y-2">
+              <legend className="w-full">
+                <span className="block font-medium text-stone-100">
+                  Which signals are worth interrupting you?
+                </span>
+                <span className="mt-0.5 block text-xs text-stone-400">
+                  Disabled categories stay quiet across push and in-app notifications.
+                </span>
               </legend>
               {[
                 {
@@ -1104,18 +1095,18 @@ export default function SettingsPage() {
                     type="checkbox"
                     checked={notifPrefs[row.key]}
                     onChange={(e) => updateNotifPref(row.key, e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-stone-600 bg-stone-900 text-amber-300 focus:ring-amber-300 focus:ring-offset-stone-950"
+                    className="mt-0.5 w-4 h-4 rounded border-stone-600 bg-stone-900 text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-stone-950"
                   />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-stone-200">{row.label}</p>
-                    <p className="text-xs text-stone-500">{row.desc}</p>
+                    <p className="text-xs text-stone-400">{row.desc}</p>
                   </div>
                 </label>
               ))}
             </fieldset>
             <div className="pt-3 border-t border-stone-800">
               <p className="text-sm font-medium text-stone-200 mb-1">Quiet hours</p>
-              <p className="text-xs text-stone-500 mb-3">
+              <p className="text-xs text-stone-400 mb-3">
                 Pause push notifications during this window. Leave blank for no limit.
               </p>
               <div className="flex items-center gap-3">
@@ -1125,20 +1116,22 @@ export default function SettingsPage() {
                 <input
                   id="quiet-hours-start"
                   type="time"
+                  aria-label="Quiet hours start"
                   value={notifPrefs.quietHoursStart || ""}
                   onChange={(e) => updateNotifPref("quietHoursStart", e.target.value || null)}
-                  className="bg-stone-900 border border-stone-700 rounded px-2 py-1 text-sm text-stone-200"
+                  className="min-h-11 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-sm text-stone-200 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
                 />
-                <span className="text-stone-500 text-sm">to</span>
+                <span className="text-stone-400 text-sm">to</span>
                 <label htmlFor="quiet-hours-end" className="sr-only">
                   Quiet hours end time
                 </label>
                 <input
                   id="quiet-hours-end"
                   type="time"
+                  aria-label="Quiet hours end"
                   value={notifPrefs.quietHoursEnd || ""}
                   onChange={(e) => updateNotifPref("quietHoursEnd", e.target.value || null)}
-                  className="bg-stone-900 border border-stone-700 rounded px-2 py-1 text-sm text-stone-200"
+                  className="min-h-11 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-sm text-stone-200 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
                 />
               </div>
             </div>
@@ -1152,22 +1145,13 @@ export default function SettingsPage() {
                     server-side Twilio setup.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => updatePhoneEscalation(!phoneEscalationEnabled)}
-                  className={`relative inline-flex min-h-11 min-w-14 shrink-0 items-center rounded-full transition-colors ${
-                    phoneEscalationEnabled ? "bg-amber-300" : "bg-stone-700"
-                  }`}
-                  role="switch"
-                  aria-checked={phoneEscalationEnabled}
-                  aria-label="Toggle phone escalation"
-                >
-                  <span
-                    className={`absolute left-1 h-6 w-6 rounded-full bg-white transition-transform ${
-                      phoneEscalationEnabled ? "translate-x-6" : ""
-                    }`}
-                  />
-                </button>
+                <Switch
+                  checked={phoneEscalationEnabled}
+                  onChange={(next) => updatePhoneEscalation(next)}
+                  label="Phone escalation"
+                  hideLabel
+                  className="shrink-0"
+                />
               </div>
             </div>
           </div>
@@ -1184,22 +1168,13 @@ export default function SettingsPage() {
                   Let Klorn watch work, calendar, and mail in the background within approval limits.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => toggleAgent(!agentEnabled)}
-                className={`relative inline-flex min-h-11 min-w-14 items-center rounded-full transition-colors ${
-                  agentEnabled ? "bg-amber-300" : "bg-stone-700"
-                }`}
-                role="switch"
-                aria-checked={agentEnabled}
-                aria-label="Toggle execution boundary"
-              >
-                <span
-                  className={`absolute left-1 h-6 w-6 rounded-full bg-white transition-transform ${
-                    agentEnabled ? "translate-x-6" : ""
-                  }`}
-                />
-              </button>
+              <Switch
+                checked={agentEnabled}
+                onChange={(next) => toggleAgent(next)}
+                label="Execution boundary"
+                hideLabel
+                className="shrink-0"
+              />
             </div>
 
             {agentEnabled && (
@@ -1506,15 +1481,12 @@ export default function SettingsPage() {
                   </div>
                   {int.connected ? (
                     <div className="flex items-center gap-3">
-                      <span className="text-sm text-green-400 flex items-center gap-1">
-                        <span className="w-2 h-2 bg-green-400 rounded-full" />
-                        Connected
-                      </span>
+                      <StatusChip status="connected" />
                       {int.name === "Google" && (
                         <button
                           type="button"
                           onClick={disconnectGoogle}
-                          className="text-xs text-stone-500 hover:text-red-400 transition"
+                          className="inline-flex min-h-11 items-center rounded-lg border border-stone-700 px-3 text-xs text-stone-300 transition hover:border-red-500/50 hover:text-red-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                         >
                           Disconnect
                         </button>
@@ -1524,7 +1496,7 @@ export default function SettingsPage() {
                           type="button"
                           onClick={testSlack}
                           disabled={slackTesting}
-                          className="text-xs text-amber-300 hover:text-amber-200 disabled:opacity-50 transition"
+                          className="inline-flex min-h-11 items-center rounded-lg border border-stone-700 px-3 text-xs text-accent transition hover:border-accent/50 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                         >
                           {slackTesting ? "Sending..." : "Send test"}
                         </button>

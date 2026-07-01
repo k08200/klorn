@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { captureClientError } from "../lib/sentry";
+import Button from "./ui/button";
 
 type FeedbackPolicyKind =
   | "ALLOW_AFTER_SUGGESTION"
@@ -45,14 +46,14 @@ const KIND_COPY: Record<
 > = {
   ALLOW_AFTER_SUGGESTION: {
     label: "Repeated approvals",
-    tone: "border-orange-500/30 bg-orange-500/10 text-accent-muted",
+    tone: "border-accent/30 bg-accent/10 text-accent",
     dot: "bg-accent",
     summary: "Suggest with more confidence",
   },
   REQUIRE_DRAFT_REVIEW: {
     label: "Keep review",
-    tone: "border-[#a8a29e]/30 bg-[#a8a29e]/10 text-stone-300",
-    dot: "bg-[#a8a29e]",
+    tone: "border-stone-500/30 bg-stone-500/10 text-stone-300",
+    dot: "bg-stone-400",
     summary: "Review drafts before running",
   },
   AVOID_SUGGESTION: {
@@ -108,14 +109,15 @@ export function FeedbackPolicyPanel() {
               : "Recent feedback patterns"}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={load}
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => void load()}
           disabled={loading}
-          className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-1.5 text-xs font-medium text-stone-300 transition hover:bg-stone-700 disabled:opacity-50"
+          loading={loading}
         >
-          {loading ? "Checking" : "Refresh"}
-        </button>
+          Refresh
+        </Button>
       </div>
 
       {loading ? (
@@ -124,7 +126,10 @@ export function FeedbackPolicyPanel() {
           <div className="h-16 animate-pulse rounded-lg bg-stone-900/60" />
         </div>
       ) : error ? (
-        <div className="mt-4 rounded-lg border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-200">
+        <div
+          role="alert"
+          className="mt-4 rounded-lg border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-200"
+        >
           Could not load operating signals.
         </div>
       ) : candidates.length === 0 ? (

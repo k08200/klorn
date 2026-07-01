@@ -160,6 +160,14 @@ export default function CommandPalette() {
             aria-autocomplete="list"
           />
         </div>
+        {/* Announce the filtered result count to AT so typing isn't silent —
+            the visible "No matching commands" text lives inside the listbox
+            and is not a live region. */}
+        <div aria-live="polite" className="sr-only">
+          {filtered.length === 0
+            ? "No matching commands"
+            : `${filtered.length} ${filtered.length === 1 ? "command" : "commands"} available`}
+        </div>
         <div id={listboxId} className="max-h-64 overflow-y-auto py-1" role="listbox">
           {filtered.length === 0 ? (
             <p className="text-sm text-stone-500 px-4 py-3">No matching commands.</p>

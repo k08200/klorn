@@ -27,21 +27,35 @@ interface GraphData {
   overriddenKnobs?: string[];
 }
 
-const REL_LEGEND: Array<{ color: string; label: string }> = [
-  { color: "#fbbf24", label: "You" },
-  { color: "#f87171", label: "Waiting on a reply" },
-  { color: "#f59e0b", label: "Meeting soon" },
-  { color: "#34d399", label: "Frequent contact" },
-  { color: "#60a5fa", label: "Contact" },
+// Legend swatch shapes double as a non-colour differentiator (WCAG 1.4.1) so
+// the 4 tiers are still distinguishable without relying on hue alone.
+type SwatchShape = "circle" | "diamond" | "square" | "ring" | "triangle";
+
+const REL_LEGEND: Array<{ color: string; label: string; shape: SwatchShape }> = [
+  { color: "#fbbf24", label: "You", shape: "diamond" },
+  { color: "#fb7185", label: "Waiting on a reply", shape: "triangle" },
+  { color: "#f59e0b", label: "Meeting soon", shape: "square" },
+  { color: "#34d399", label: "Frequent contact", shape: "ring" },
+  { color: "#60a5fa", label: "Contact", shape: "circle" },
 ];
 
-const DEC_LEGEND: Array<{ color: string; label: string }> = [
-  { color: "#a78bfa", label: "Feature (scored input)" },
-  { color: "#f87171", label: "PUSH" },
-  { color: "#60a5fa", label: "QUEUE" },
-  { color: "#9ca3af", label: "SILENT" },
-  { color: "#34d399", label: "AUTO" },
+// Tier colours mirror --color-tier-* (globals.css) so the decision-brain view
+// reads identically to the firewall board.
+const DEC_LEGEND: Array<{ color: string; label: string; shape: SwatchShape }> = [
+  { color: "#a78bfa", label: "Feature (scored input)", shape: "square" },
+  { color: "#fb7185", label: "PUSH", shape: "diamond" },
+  { color: "#fbbf24", label: "QUEUE", shape: "square" },
+  { color: "#a8a29e", label: "SILENT", shape: "ring" },
+  { color: "#34d399", label: "AUTO", shape: "circle" },
 ];
+
+const SWATCH_CLASS: Record<SwatchShape, string> = {
+  circle: "rounded-full",
+  diamond: "rotate-45 rounded-[2px]",
+  square: "rounded-[2px]",
+  ring: "rounded-full border-2 bg-transparent",
+  triangle: "[clip-path:polygon(50%_0%,100%_100%,0%_100%)]",
+};
 
 const COPY: Record<Mode, { eyebrow: string; title: string; body: string }> = {
   relationships: {
@@ -91,19 +105,32 @@ function GraphPageInner() {
   const copy = COPY[mode];
   const legend = mode === "decisions" ? DEC_LEGEND : REL_LEGEND;
   const contactCount = data ? data.nodes.filter((n) => n.kind === "contact").length : 0;
+  // Top nodes by score — a keyboard/AT-reachable text fallback for the WebGL
+  // force-graph, which is otherwise pointer-only and has no text alternative.
+  const topNodes = data
+    ? [...data.nodes]
+        .filter((n) => n.kind !== "self")
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 12)
+    : [];
 
   return (
-    <div className="h-full overflow-y-auto bg-[#10100d] px-4 pb-28 pt-6 text-stone-50 sm:px-6 md:py-10">
+    <div className="h-full overflow-y-auto bg-surface-app px-4 pb-28 pt-6 text-stone-50 sm:px-6 md:py-10">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-4 inline-flex rounded-xl border border-stone-700/45 bg-stone-950/40 p-1">
+        <div
+          role="group"
+          aria-label="Graph view"
+          className="mb-4 inline-flex rounded-xl border border-stone-700/45 bg-stone-950/40 p-1"
+        >
           {(["relationships", "decisions"] as Mode[]).map((mKey) => (
             <button
               key={mKey}
               type="button"
+              aria-pressed={mode === mKey}
               onClick={() => setMode(mKey)}
-              className={`rounded-lg px-3 py-1.5 text-sm transition ${
+              className={`rounded-lg px-3 py-1.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                 mode === mKey
-                  ? "bg-amber-300 font-semibold text-stone-950"
+                  ? "bg-accent font-semibold text-stone-950"
                   : "text-stone-400 hover:text-stone-200"
               }`}
             >
@@ -144,8 +171,9 @@ function GraphPageInner() {
           {legend.map((l) => (
             <span key={l.label} className="flex items-center gap-1.5 text-xs text-stone-400">
               <span
-                className="inline-block h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: l.color }}
+                aria-hidden="true"
+                className={`inline-block h-2.5 w-2.5 shrink-0 ${SWATCH_CLASS[l.shape]}`}
+                style={l.shape === "ring" ? { borderColor: l.color } : { backgroundColor: l.color }}
               />
               {l.label}
             </span>
@@ -159,9 +187,43 @@ function GraphPageInner() {
             No graph data.
           </p>
         ) : (
-          <ForceGraph3DView nodes={data.nodes} edges={data.edges} />
+          <>
+            <ForceGraph3DView nodes={data.nodes} edges={data.edges} />
+            <TopNodesFallback nodes={topNodes} mode={mode} />
+          </>
         )}
       </div>
     </div>
+  );
+}
+
+// Keyboard + screen-reader alternative to the pointer-only WebGL graph
+// (WCAG 1.1.1 / 2.1.1): the highest-scoring nodes as a plain readable list.
+function TopNodesFallback({ nodes, mode }: { nodes: GraphNode[]; mode: Mode }) {
+  if (nodes.length === 0) return null;
+  const scoreLabel = mode === "decisions" ? "weight" : "interaction score";
+  return (
+    <section className="mt-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5">
+      <h2 className="text-sm font-semibold text-stone-200">
+        {mode === "decisions" ? "Top decision signals" : "Top contacts"}
+      </h2>
+      <p className="mt-1 text-xs text-stone-500">
+        A text view of the graph for keyboard and screen-reader users — the same ranked nodes shown
+        visually above ({scoreLabel}, highest first).
+      </p>
+      <ol className="mt-3 space-y-1.5">
+        {nodes.map((n) => (
+          <li
+            key={n.id}
+            className="flex items-baseline justify-between gap-3 border-b border-stone-800/50 pb-1.5 text-sm text-stone-300 last:border-0"
+          >
+            <span className="min-w-0 truncate">{n.label}</span>
+            <span className="shrink-0 tabular-nums text-xs text-stone-500">
+              {Math.round(n.score)}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }

@@ -394,6 +394,10 @@ export default function NotificationBell({ userId }: { userId: string }) {
     });
 
   const renderItem = (n: Notification) => (
+    // Plain container — the tappable summary is a real <button> sibling of the
+    // Approve/Reject buttons, so no interactive element nests inside another
+    // (the previous role="button" div wrapped the action buttons, which is an
+    // invalid nested-interactive pattern for AT).
     <div
       key={n.id}
       className={`border-b border-stone-800/50 ${
@@ -405,7 +409,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
       <button
         type="button"
         onClick={() => handleNotificationClick(n)}
-        className="w-full text-left px-4 py-3.5 md:py-3 hover:bg-stone-800/50 transition cursor-pointer"
+        className="focus-ring block w-full min-h-11 cursor-pointer px-4 py-3.5 md:py-3 text-left transition hover:bg-stone-800/50"
       >
         <div className="flex items-center gap-2">
           <span className="text-sm">
@@ -425,17 +429,17 @@ export default function NotificationBell({ userId }: { userId: string }) {
         </div>
         <p className="text-[13px] md:text-xs text-stone-400 mt-1 line-clamp-2 ml-6">{n.message}</p>
         <div className="flex items-center gap-2 mt-1 ml-6">
-          <p className="text-[10px] text-stone-400">{formatRelative(n.createdAt)}</p>
+          <span className="text-[10px] text-stone-400">{formatRelative(n.createdAt)}</span>
           {getNotificationTarget(n) && <span className="text-[10px] text-amber-300">Open</span>}
         </div>
       </button>
       {n.pendingActionId && n.pendingActionStatus === "PENDING" && (
-        <div className="flex items-center gap-2 mt-2.5 mb-3.5 ml-6 px-4">
+        <div className="flex items-center gap-2 px-4 pb-3 ml-6">
           <button
             type="button"
             onClick={(e) => handleApprovePendingAction(n, e)}
             disabled={!!pendingActionLoading[n.id]}
-            className="text-sm md:text-[11px] px-4 py-2 md:px-2.5 md:py-1 rounded-md md:rounded bg-amber-400 hover:bg-amber-300 disabled:bg-stone-700 disabled:text-stone-500 disabled:cursor-not-allowed text-stone-950 font-medium transition min-w-[72px] md:min-w-0"
+            className="focus-ring text-sm md:text-[11px] px-4 py-2 md:px-2.5 md:py-1 rounded-md md:rounded bg-amber-400 hover:bg-amber-300 disabled:bg-stone-700 disabled:text-stone-500 disabled:cursor-not-allowed text-stone-950 font-medium transition min-w-[72px] md:min-w-0"
           >
             {pendingActionLoading[n.id] === "approve" ? "..." : "Approve"}
           </button>
@@ -443,15 +447,15 @@ export default function NotificationBell({ userId }: { userId: string }) {
             type="button"
             onClick={(e) => handleRejectPendingAction(n, e)}
             disabled={!!pendingActionLoading[n.id]}
-            className="text-sm md:text-[11px] px-4 py-2 md:px-2.5 md:py-1 rounded-md md:rounded bg-stone-800 hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed text-stone-300 font-medium transition min-w-[72px] md:min-w-0"
+            className="focus-ring text-sm md:text-[11px] px-4 py-2 md:px-2.5 md:py-1 rounded-md md:rounded bg-stone-800 hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed text-stone-300 font-medium transition min-w-[72px] md:min-w-0"
           >
             {pendingActionLoading[n.id] === "reject" ? "..." : "Reject"}
           </button>
         </div>
       )}
       {n.pendingActionId && n.pendingActionStatus && n.pendingActionStatus !== "PENDING" && (
-        <div className="mt-2 mb-3 ml-6 px-4">
-          <span className="text-[10px] text-stone-500">
+        <div className="px-4 pb-2 ml-6">
+          <span className="text-[10px] text-stone-400">
             {n.pendingActionStatus === "EXECUTED"
               ? "Done"
               : n.pendingActionStatus === "REJECTED"
@@ -470,7 +474,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         key={`${group.key}_header`}
         type="button"
         onClick={() => toggleGroup(group.key)}
-        className={`w-full text-left px-4 py-3 border-b border-stone-800/50 hover:bg-stone-800/50 transition ${
+        className={`focus-ring w-full min-h-11 text-left px-4 py-3 border-b border-stone-800/50 hover:bg-stone-800/50 transition ${
           group.unreadCount > 0 ? "bg-amber-400/5" : ""
         } ${group.isAgent ? "border-l-2 border-l-amber-300/60" : ""}`}
         aria-expanded={expanded}
@@ -513,7 +517,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         ref={bellRef}
         type="button"
         onClick={() => setOpen(!open)}
-        className={`relative text-stone-400 hover:text-white transition p-1 ${flash ? "animate-bounce" : ""}`}
+        className={`focus-ring relative rounded-md text-stone-400 hover:text-white transition p-1 ${flash ? "animate-bounce" : ""}`}
         aria-label="Notifications"
       >
         <svg

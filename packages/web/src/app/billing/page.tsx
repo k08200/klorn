@@ -25,6 +25,12 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
+/** Round to cents; sub-cent spend reads "< $0.01" instead of a noisy $0.0001. */
+function formatUsd(amount: number): string {
+  if (amount > 0 && amount < 0.01) return "< $0.01";
+  return `$${amount.toFixed(2)}`;
+}
+
 const PLANS = [
   {
     key: "FREE",
@@ -176,7 +182,7 @@ function BillingContent() {
             <div className="flex flex-wrap items-center gap-3">
               {status.estimatedCost > 0 && (
                 <span className="rounded-full border border-stone-700 bg-stone-900/70 px-3 py-1 text-xs text-stone-400">
-                  About ${status.estimatedCost.toFixed(2)} this month
+                  About {formatUsd(status.estimatedCost)} this month
                 </span>
               )}
               {/* No Stripe checkout/portal inside the iOS app (App Store
@@ -281,7 +287,9 @@ function BillingContent() {
               <ul className="mb-6 flex-1 space-y-2">
                 {plan.features.map((f) => (
                   <li key={f} className="flex items-start gap-2 text-sm text-stone-300">
-                    <span className="mt-0.5 text-emerald-300">✓</span>
+                    <span aria-hidden="true" className="mt-0.5 text-emerald-300">
+                      ✓
+                    </span>
                     {f}
                   </li>
                 ))}
@@ -292,8 +300,10 @@ function BillingContent() {
                   Current plan
                 </div>
               ) : plan.key === "FREE" ? (
-                <div className="rounded-lg border border-stone-800 py-2 text-center text-sm font-medium text-stone-500">
-                  Free forever
+                // Non-current FREE card: render a neutral pill (not an empty div)
+                // so every plan card keeps the same footer height and alignment.
+                <div className="rounded-lg border border-stone-700 bg-stone-900/40 py-2 text-center text-sm font-medium text-stone-400">
+                  Included with every plan
                 </div>
               ) : plan.key === "ENTERPRISE" ? (
                 <a

@@ -42,7 +42,7 @@ export default function ErrorAlert({
         <button
           type="button"
           onClick={onRetry}
-          className="mt-3 inline-flex items-center rounded-md border border-red-700/60 px-3 py-1.5 text-xs font-medium text-red-100 hover:bg-red-900/40"
+          className="mt-3 inline-flex min-h-11 items-center rounded-md border border-red-700/60 px-3 py-1.5 text-xs font-medium text-red-100 hover:bg-red-900/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
         >
           Try again
         </button>

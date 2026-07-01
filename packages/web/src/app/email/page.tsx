@@ -314,14 +314,15 @@ function EmailView() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.email.all });
   };
 
-  // Reset selection whenever the filter / search changes (the keyed query
-  // already refetches automatically). The deps MUST include filter + search:
-  // with an empty dep array this only ran on mount, so a stale selection could
-  // survive a filter change and a bulk action would then archive/delete rows no
-  // longer visible in the list (data-loss adjacent).
+  // Reset selection whenever the filter / applied search changes (the keyed
+  // query already refetches automatically). The deps MUST list the real
+  // filter + applied-search state that drives the query (appliedSearch, not the
+  // raw input): with an empty dep array this only ran on mount, so a stale
+  // selection could survive a filter change and a bulk action would then
+  // archive/delete rows no longer visible in the list (data-loss adjacent).
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [filter, search]);
+  }, [filter, appliedSearch]);
 
   // Real-time auto-sync: when new mail lands, gmail-push emits
   // conversations-updated (NotificationBell bridges the WS message to this
@@ -1202,15 +1203,20 @@ const MOBILE_FILTERS = new Set<Filter>(["all", "reply-needed", "urgent", "unread
 
 function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filter) => void }) {
   return (
-    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div
+      role="group"
+      aria-label="Filter mail"
+      className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
       {FILTERS.filter((f) => !DOMAIN_FILTER_KEYS.includes(f.key)).map((f) => {
         const active = f.key === current;
         return (
           <button
             key={f.key}
             type="button"
+            aria-pressed={active}
             onClick={() => onChange(f.key)}
-            className={`${MOBILE_FILTERS.has(f.key) ? "inline-flex" : "hidden md:inline-flex"} min-h-[32px] shrink-0 items-center rounded-full px-3 py-1.5 text-xs transition ${
+            className={`${MOBILE_FILTERS.has(f.key) ? "inline-flex" : "hidden md:inline-flex"} min-h-[32px] shrink-0 items-center rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
               active
                 ? "bg-accent text-stone-950"
                 : "border border-white/10 bg-stone-900/40 text-stone-400 hover:bg-white/6 hover:text-stone-200"
@@ -1393,28 +1399,61 @@ function EmailRowReminderActions({
   );
 }
 
+// Cap visible chips so a heavily-tagged email (priority + reply + candidate +
+// 3 attachment counts + category) doesn't overflow/clip on a phone. Extras
+// collapse into a "+N" chip; the row also wraps as a safety net.
+const MAX_VISIBLE_BADGES = 4;
+
 function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
+  const badges: ReactNode[] = [];
+  const priorityBadge = <PriorityBadge key="priority" priority={email.priority} />;
+  // PriorityBadge returns null for NORMAL — only count it when it renders.
+  if (email.priority !== "NORMAL") badges.push(priorityBadge);
+  if (email.needsReply) badges.push(<ReplyNeededBadge key="reply" />);
+  if ((email.attachmentCandidateCount ?? 0) > 0) badges.push(<CandidateBadge key="candidate" />);
+  if ((email.attachmentCount ?? 0) > 0) {
+    badges.push(
+      <span
+        key="files"
+        className="shrink-0 rounded border border-[#a8a29e]/30 bg-[#a8a29e]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#a8a29e]"
+      >
+        Files {email.attachmentCount}
+      </span>,
+    );
+  }
+  if ((email.attachmentPendingCount ?? 0) > 0) {
+    badges.push(
+      <span
+        key="pending"
+        className="shrink-0 rounded border border-stone-600 bg-stone-900/70 px-1.5 py-0.5 text-[10px] font-medium text-stone-400"
+      >
+        Pending {email.attachmentPendingCount}
+      </span>,
+    );
+  }
+  if ((email.attachmentFallbackCount ?? 0) > 0) {
+    badges.push(
+      <span
+        key="fallback"
+        className="shrink-0 rounded border border-accent/25 bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent"
+      >
+        Fallback {email.attachmentFallbackCount}
+      </span>,
+    );
+  }
+  if (email.category) badges.push(<CategoryBadge key="category" category={email.category} />);
+
+  const visible = badges.slice(0, MAX_VISIBLE_BADGES);
+  const overflow = badges.length - visible.length;
+
   return (
-    <div className="flex items-center gap-2">
-      <PriorityBadge priority={email.priority} />
-      {email.needsReply && <ReplyNeededBadge />}
-      {(email.attachmentCandidateCount ?? 0) > 0 && <CandidateBadge />}
-      {(email.attachmentCount ?? 0) > 0 && (
-        <span className="shrink-0 rounded border border-[#a8a29e]/30 bg-[#a8a29e]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#a8a29e]">
-          Files {email.attachmentCount}
+    <div className="flex flex-wrap items-center gap-1.5">
+      {visible}
+      {overflow > 0 && (
+        <span className="shrink-0 rounded border border-stone-700 bg-stone-900/60 px-1.5 py-0.5 text-[10px] font-medium text-stone-400">
+          +{overflow}
         </span>
       )}
-      {(email.attachmentPendingCount ?? 0) > 0 && (
-        <span className="shrink-0 rounded border border-stone-600 bg-stone-900/70 px-1.5 py-0.5 text-[10px] font-medium text-stone-400">
-          Pending {email.attachmentPendingCount}
-        </span>
-      )}
-      {(email.attachmentFallbackCount ?? 0) > 0 && (
-        <span className="shrink-0 rounded border border-accent/25 bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
-          Fallback {email.attachmentFallbackCount}
-        </span>
-      )}
-      {email.category && <CategoryBadge category={email.category} />}
       {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />}
     </div>
   );

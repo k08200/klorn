@@ -5,6 +5,9 @@ import { apiFetch } from "../lib/api";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
 import { useToast } from "./toast";
+import Button from "./ui/button";
+import { Input } from "./ui/input";
+import StatusChip from "./ui/status-chip";
 
 interface GitHubStatus {
   connected: boolean;
@@ -117,21 +120,18 @@ export function GitHubSection() {
           </p>
         </div>
         {loading ? (
-          <span className="text-sm text-stone-500">Loading...</span>
+          <span className="text-sm text-stone-400">Loading...</span>
         ) : connected ? (
           <div className="flex shrink-0 items-center gap-3">
-            <span className="text-sm text-green-400 flex items-center gap-1">
-              <span className="w-2 h-2 bg-green-400 rounded-full" />
-              Connected
-            </span>
-            <button
-              type="button"
-              onClick={disconnect}
+            <StatusChip status="connected" />
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => void disconnect()}
               disabled={submitting}
-              className="text-xs text-stone-500 hover:text-red-400 transition disabled:opacity-50"
             >
               Disconnect
-            </button>
+            </Button>
           </div>
         ) : null}
       </div>
@@ -161,27 +161,31 @@ export function GitHubSection() {
             </a>{" "}
             on GitHub, then paste it below.
           </p>
-          <input
+          <Input
+            aria-label="GitHub personal access token"
             type="password"
             value={token}
             onChange={(e) => setToken(e.target.value)}
             placeholder="ghp_..."
             autoComplete="off"
             spellCheck={false}
-            className="w-full rounded-md border border-stone-700 bg-stone-900/60 px-3 py-2 text-sm text-stone-100 placeholder-stone-600 focus:border-amber-500/60 focus:outline-none"
           />
-          <button
-            type="button"
-            onClick={connect}
+          <Button
+            variant="primary"
+            onClick={() => void connect()}
             disabled={submitting || !token.trim()}
-            className="rounded-md bg-amber-300 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
+            loading={submitting}
           >
-            {submitting ? "Verifying..." : "Connect"}
-          </button>
+            Connect
+          </Button>
         </div>
       )}
 
-      {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-2 text-xs text-red-300">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

@@ -316,7 +316,8 @@ function AdminDashboard() {
                           : "bg-red-500/20 text-red-400"
                       }`}
                     >
-                      {r.passed ? "✓" : "✕"}
+                      <span className="sr-only">{r.passed ? "Passed" : "Failed"}</span>
+                      <span aria-hidden="true">{r.passed ? "✓" : "✕"}</span>
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -426,10 +427,46 @@ function AdminDashboard() {
                 <h2 className="mb-3 text-sm font-medium text-stone-400">
                   Route latency (since last restart)
                 </h2>
-                <div className="overflow-x-auto rounded-2xl border border-stone-700/45 bg-stone-950/35">
+                {/* Mobile: stacked cards; the 7-column table is unreadable when it
+                    only scrolls sideways on a phone. */}
+                <div className="space-y-2 sm:hidden">
+                  {perf.routes.slice(0, 20).map((r) => (
+                    <div
+                      key={r.route}
+                      className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-3 text-xs"
+                    >
+                      <p className="font-mono text-stone-300 break-all">{r.route}</p>
+                      <dl className="mt-2 grid grid-cols-3 gap-2">
+                        <RouteStat label="Count" value={`${r.count}`} />
+                        <RouteStat
+                          label="Errors"
+                          value={`${r.errorCount}`}
+                          tone={r.errorCount > 0 ? "error" : "muted"}
+                        />
+                        <RouteStat label="p50" value={`${r.p50}ms`} />
+                        <RouteStat
+                          label="p95"
+                          value={`${r.p95}ms`}
+                          tone={r.p95 > 1000 ? "warn" : "muted"}
+                        />
+                        <RouteStat
+                          label="p99"
+                          value={`${r.p99}ms`}
+                          tone={r.p99 > 1000 ? "warn" : "muted"}
+                        />
+                        <RouteStat
+                          label="Max"
+                          value={`${r.max}ms`}
+                          tone={r.max > 2000 ? "error" : "muted"}
+                        />
+                      </dl>
+                    </div>
+                  ))}
+                </div>
+                <div className="hidden overflow-x-auto rounded-2xl border border-stone-700/45 bg-stone-950/35 sm:block">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-stone-800 text-left text-stone-500">
+                      <tr className="border-b border-stone-800 text-left text-stone-400">
                         <th className="p-3">Route</th>
                         <th className="p-3">Count</th>
                         <th className="p-3">Errors</th>
@@ -445,7 +482,7 @@ function AdminDashboard() {
                           <td className="p-3 font-mono text-stone-300">{r.route}</td>
                           <td className="p-3 text-stone-400">{r.count}</td>
                           <td
-                            className={`p-3 ${r.errorCount > 0 ? "text-red-400" : "text-stone-500"}`}
+                            className={`p-3 ${r.errorCount > 0 ? "text-red-400" : "text-stone-400"}`}
                           >
                             {r.errorCount}
                           </td>
@@ -496,67 +533,80 @@ function AdminDashboard() {
         )}
 
         {tab === "users" && (
-          <div className="overflow-x-auto rounded-2xl border border-stone-700/45 bg-stone-950/35">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-stone-800 text-left text-stone-500">
-                  <th className="p-3 pr-4">Email</th>
-                  <th className="p-3 pr-4">Name</th>
-                  <th className="p-3 pr-4">Role</th>
-                  <th className="p-3 pr-4">Plan</th>
-                  <th className="p-3 pr-4">Turns</th>
-                  <th className="p-3 pr-4">Threads</th>
-                  <th className="p-3 pr-4">Joined</th>
-                  <th className="p-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id} className="border-b border-stone-800/60">
-                    <td className="p-3 pr-4 text-stone-300">{u.email}</td>
-                    <td className="p-3 pr-4 text-stone-400">{u.name || "-"}</td>
-                    <td className="p-3 pr-4">
-                      <select
-                        value={u.role}
-                        onChange={(e) => updateUser(u.id, { role: e.target.value })}
-                        className="rounded border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200"
-                      >
-                        <option value="USER">USER</option>
-                        <option value="ADMIN">ADMIN</option>
-                      </select>
-                    </td>
-                    <td className="p-3 pr-4">
-                      <select
-                        value={u.plan}
-                        onChange={(e) => updateUser(u.id, { plan: e.target.value })}
-                        className="rounded border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200"
-                      >
-                        <option value="FREE">FREE</option>
-                        <option value="PRO">PRO</option>
-                        <option value="ENTERPRISE">ENTERPRISE</option>
-                      </select>
-                    </td>
-                    <td className="p-3 pr-4 text-stone-400">{u.messageCount}</td>
-                    <td className="p-3 pr-4 text-stone-400">{u._count.conversations}</td>
-                    <td className="p-3 pr-4 text-xs text-stone-500">
-                      {new Date(u.createdAt).toLocaleDateString("en-US")}
-                    </td>
-                    <td className="p-3">
-                      {u.role !== "ADMIN" && (
-                        <button
-                          type="button"
-                          onClick={() => deleteUser(u.id, u.email)}
-                          className="text-red-500 hover:text-red-400 text-xs"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </td>
+          <>
+            {/* Mobile: stacked cards. A 8-column table only scrolls sideways on a
+                phone; below `sm` each user renders as a labeled card instead. */}
+            <div className="space-y-3 sm:hidden">
+              {users.map((u) => (
+                <UserCard key={u.id} user={u} onUpdate={updateUser} onDelete={deleteUser} />
+              ))}
+            </div>
+
+            {/* Desktop: full table, still wrapped for horizontal scroll safety. */}
+            <div className="hidden overflow-x-auto rounded-2xl border border-stone-700/45 bg-stone-950/35 sm:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-stone-800 text-left text-stone-400">
+                    <th className="p-3 pr-4">Email</th>
+                    <th className="p-3 pr-4">Name</th>
+                    <th className="p-3 pr-4">Role</th>
+                    <th className="p-3 pr-4">Plan</th>
+                    <th className="p-3 pr-4">Turns</th>
+                    <th className="p-3 pr-4">Threads</th>
+                    <th className="p-3 pr-4">Joined</th>
+                    <th className="p-3">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.id} className="border-b border-stone-800/60">
+                      <td className="p-3 pr-4 text-stone-300">{u.email}</td>
+                      <td className="p-3 pr-4 text-stone-400">{u.name || "-"}</td>
+                      <td className="p-3 pr-4">
+                        <select
+                          aria-label={`Role for ${u.email}`}
+                          value={u.role}
+                          onChange={(e) => updateUser(u.id, { role: e.target.value })}
+                          className="min-h-11 rounded border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+                        >
+                          <option value="USER">USER</option>
+                          <option value="ADMIN">ADMIN</option>
+                        </select>
+                      </td>
+                      <td className="p-3 pr-4">
+                        <select
+                          aria-label={`Plan for ${u.email}`}
+                          value={u.plan}
+                          onChange={(e) => updateUser(u.id, { plan: e.target.value })}
+                          className="min-h-11 rounded border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+                        >
+                          <option value="FREE">FREE</option>
+                          <option value="PRO">PRO</option>
+                          <option value="ENTERPRISE">ENTERPRISE</option>
+                        </select>
+                      </td>
+                      <td className="p-3 pr-4 text-stone-400">{u.messageCount}</td>
+                      <td className="p-3 pr-4 text-stone-400">{u._count.conversations}</td>
+                      <td className="p-3 pr-4 text-xs text-stone-400">
+                        {new Date(u.createdAt).toLocaleDateString("en-US")}
+                      </td>
+                      <td className="p-3">
+                        {u.role !== "ADMIN" && (
+                          <button
+                            type="button"
+                            onClick={() => deleteUser(u.id, u.email)}
+                            className="inline-flex min-h-11 items-center rounded-md px-2 text-xs text-red-400 transition hover:text-red-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -566,8 +616,89 @@ function AdminDashboard() {
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
-      <p className="text-xs text-stone-500">{label}</p>
+      <p className="text-xs text-stone-400">{label}</p>
       <p className="mt-1 text-lg font-semibold text-stone-50">{value}</p>
+    </div>
+  );
+}
+
+function RouteStat({
+  label,
+  value,
+  tone = "muted",
+}: {
+  label: string;
+  value: string;
+  tone?: "muted" | "warn" | "error";
+}) {
+  const valueTone =
+    tone === "error" ? "text-red-400" : tone === "warn" ? "text-amber-300" : "text-stone-300";
+  return (
+    <div>
+      <dt className="text-[10px] uppercase tracking-wide text-stone-500">{label}</dt>
+      <dd className={`mt-0.5 font-medium ${valueTone}`}>{value}</dd>
+    </div>
+  );
+}
+
+function UserCard({
+  user,
+  onUpdate,
+  onDelete,
+}: {
+  user: UserRow;
+  onUpdate: (id: string, data: { plan?: string; role?: string }) => void;
+  onDelete: (id: string, email: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4 text-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-stone-200">{user.email}</p>
+          <p className="text-xs text-stone-400">{user.name || "-"}</p>
+        </div>
+        {user.role !== "ADMIN" && (
+          <button
+            type="button"
+            onClick={() => onDelete(user.id, user.email)}
+            className="inline-flex min-h-11 shrink-0 items-center rounded-md px-2 text-xs text-red-400 transition hover:text-red-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+          >
+            Delete
+          </button>
+        )}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <label className="text-xs text-stone-400">
+          Role
+          <select
+            aria-label={`Role for ${user.email}`}
+            value={user.role}
+            onChange={(e) => onUpdate(user.id, { role: e.target.value })}
+            className="mt-1 block min-h-11 w-full rounded border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+          >
+            <option value="USER">USER</option>
+            <option value="ADMIN">ADMIN</option>
+          </select>
+        </label>
+        <label className="text-xs text-stone-400">
+          Plan
+          <select
+            aria-label={`Plan for ${user.email}`}
+            value={user.plan}
+            onChange={(e) => onUpdate(user.id, { plan: e.target.value })}
+            className="mt-1 block min-h-11 w-full rounded border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+          >
+            <option value="FREE">FREE</option>
+            <option value="PRO">PRO</option>
+            <option value="ENTERPRISE">ENTERPRISE</option>
+          </select>
+        </label>
+      </div>
+      <div className="mt-3 flex gap-4 text-xs text-stone-400">
+        <span>Turns: {user.messageCount}</span>
+        <span>Threads: {user._count.conversations}</span>
+        <span>Joined {new Date(user.createdAt).toLocaleDateString("en-US")}</span>
+      </div>
     </div>
   );
 }

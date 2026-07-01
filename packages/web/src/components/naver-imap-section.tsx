@@ -5,6 +5,9 @@ import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
+import Button from "./ui/button";
+import { Input } from "./ui/input";
+import StatusChip from "./ui/status-chip";
 
 interface NaverImapStatus {
   connected: boolean;
@@ -93,7 +96,7 @@ export function NaverImapSection() {
     if (submitting) return;
     const ok = await confirm({
       title: "Disconnect Naver mail?",
-      message: "Existing classified emails stay. You can reconnect anytime.",
+      message: "Existing classified emails stay. You can reconnect the mailbox any time.",
       confirmLabel: "Disconnect",
       danger: true,
     });
@@ -121,11 +124,7 @@ export function NaverImapSection() {
             4-tier firewall as Gmail.
           </p>
         </div>
-        {status?.connected && (
-          <span className="rounded border border-emerald-700/40 bg-emerald-950/30 px-2 py-1 text-[11px] font-medium text-emerald-300">
-            Connected
-          </span>
-        )}
+        {status?.connected && <StatusChip status="connected" />}
       </header>
 
       {loading ? (
@@ -141,17 +140,22 @@ export function NaverImapSection() {
                   {status.connectedAt ? new Date(status.connectedAt).toLocaleString() : "—"}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={handleDisconnect}
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => void handleDisconnect()}
                 disabled={submitting}
-                className="rounded-md border border-stone-700 px-3 py-1.5 text-xs text-stone-300 transition hover:border-red-500/50 hover:text-red-300 disabled:opacity-50"
+                className="shrink-0"
               >
                 Disconnect
-              </button>
+              </Button>
             </div>
           </div>
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && (
+            <p role="alert" className="text-xs text-red-300">
+              {error}
+            </p>
+          )}
         </div>
       ) : !entitled ? (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-4">
@@ -166,36 +170,28 @@ export function NaverImapSection() {
         </div>
       ) : (
         <form onSubmit={handleConnect} className="space-y-3">
+          <Input
+            id="naver-email"
+            label="Naver email"
+            type="email"
+            value={emailInput}
+            onChange={(e) => setEmailInput(e.target.value)}
+            placeholder="you@naver.com"
+            required
+            autoComplete="off"
+          />
           <div>
-            <label htmlFor="naver-email" className="mb-1 block text-xs text-stone-400">
-              Naver email
-            </label>
-            <input
-              id="naver-email"
-              type="email"
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              placeholder="you@naver.com"
-              required
-              autoComplete="off"
-              className="w-full rounded-md border border-stone-700 bg-stone-900/60 px-3 py-2 text-sm text-stone-100 placeholder-stone-600 focus:border-amber-500/60 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label htmlFor="naver-password" className="mb-1 block text-xs text-stone-400">
-              App password (외부 메일 가져오기 비밀번호)
-            </label>
-            <input
+            <Input
               id="naver-password"
+              label="App password (외부 메일 가져오기 비밀번호)"
               type="password"
               value={passwordInput}
               onChange={(e) => setPasswordInput(e.target.value)}
               placeholder="generated in Naver security settings"
               required
               autoComplete="off"
-              className="w-full rounded-md border border-stone-700 bg-stone-900/60 px-3 py-2 text-sm text-stone-100 placeholder-stone-600 focus:border-amber-500/60 focus:outline-none"
             />
-            <p className="mt-1 text-[11px] text-stone-500">
+            <p className="mt-1 text-[11px] text-stone-400">
               This is NOT your Naver account password. Generate one at{" "}
               <a
                 href={PASSWORD_HELP_URL}
@@ -208,28 +204,34 @@ export function NaverImapSection() {
               . We store it encrypted (AES-GCM), never the plaintext.
             </p>
           </div>
-          <details className="text-xs text-stone-500">
+          <details className="text-xs text-stone-400">
             <summary className="cursor-pointer">Advanced: IMAP host</summary>
-            <input
-              type="text"
-              value={hostInput}
-              onChange={(e) => setHostInput(e.target.value)}
-              placeholder={DEFAULT_HOST}
-              className="mt-2 w-full rounded-md border border-stone-800 bg-stone-900/40 px-3 py-1.5 text-xs text-stone-300 focus:border-amber-500/60 focus:outline-none"
-            />
+            <div className="mt-2">
+              <Input
+                aria-label="IMAP host"
+                type="text"
+                value={hostInput}
+                onChange={(e) => setHostInput(e.target.value)}
+                placeholder={DEFAULT_HOST}
+              />
+            </div>
           </details>
           {error && (
-            <div className="rounded-md border border-red-700/40 bg-red-950/30 p-3 text-xs text-red-300">
+            <div
+              role="alert"
+              className="rounded-md border border-red-700/40 bg-red-950/30 p-3 text-xs text-red-200"
+            >
               {error}
             </div>
           )}
-          <button
+          <Button
             type="submit"
+            variant="primary"
             disabled={submitting || !emailInput || !passwordInput}
-            className="rounded-md border border-amber-500/60 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-200 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            loading={submitting}
           >
-            {submitting ? "Verifying…" : "Connect Naver Mail"}
-          </button>
+            Connect Naver Mail
+          </Button>
         </form>
       )}
     </section>

@@ -274,7 +274,7 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
         onClick={onDone}
         className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
       >
-        Open Command Center
+        Open decision queue
         <span aria-hidden>→</span>
       </button>
     </div>

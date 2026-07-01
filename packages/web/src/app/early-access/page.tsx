@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import AuthScreen from "@/components/auth-screen";
+import { Input, Textarea } from "@/components/ui/input";
 import { API_BASE } from "@/lib/api";
 
 type Status = "idle" | "submitting" | "success" | "already" | "error";
@@ -15,19 +16,23 @@ export default function EarlyAccessPage() {
   const [useCase, setUseCase] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const resetFormError = () => {
     if (errorMsg) setErrorMsg(null);
+    if (emailError) setEmailError(null);
     if (status === "error") setStatus("idle");
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setEmailError(null);
 
     const cleanEmail = email.trim().toLowerCase();
     if (!EMAIL_RE.test(cleanEmail)) {
-      setErrorMsg("Enter a valid email address.");
+      // Field-associated inline error (WCAG 3.3.1): attach to the email input.
+      setEmailError("Enter a valid email address.");
       return;
     }
 
@@ -167,50 +172,39 @@ export default function EarlyAccessPage() {
         </div>
       ) : (
         <form onSubmit={submit} className="space-y-4" noValidate>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-stone-400" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => {
-                resetFormError();
-                setEmail(e.target.value);
-              }}
-              className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
-              placeholder="you@example.com"
-            />
-          </div>
+          <Input
+            id="email"
+            label="Email"
+            type="email"
+            required
+            autoComplete="email"
+            value={email}
+            onChange={(e) => {
+              resetFormError();
+              setEmail(e.target.value);
+            }}
+            placeholder="you@example.com"
+            error={emailError ?? undefined}
+          />
+
+          <Input
+            id="name"
+            label="Name (optional)"
+            type="text"
+            autoComplete="name"
+            value={name}
+            onChange={(e) => {
+              resetFormError();
+              setName(e.target.value);
+            }}
+            maxLength={120}
+            placeholder="Optional"
+          />
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-stone-400" htmlFor="name">
-              Name (optional)
-            </label>
-            <input
-              id="name"
-              type="text"
-              autoComplete="name"
-              value={name}
-              onChange={(e) => {
-                resetFormError();
-                setName(e.target.value);
-              }}
-              maxLength={120}
-              className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
-              placeholder="Optional"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-stone-400" htmlFor="useCase">
-              Work pattern (optional)
-            </label>
-            <textarea
+            <Textarea
               id="useCase"
+              label="Work pattern (optional)"
               value={useCase}
               onChange={(e) => {
                 resetFormError();
@@ -218,7 +212,6 @@ export default function EarlyAccessPage() {
               }}
               maxLength={500}
               rows={3}
-              className="w-full resize-none rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
               placeholder="Example: 50+ emails/day, follow-ups, meeting prep."
             />
             <p className="mt-2 text-xs leading-5 text-stone-500">
@@ -227,7 +220,10 @@ export default function EarlyAccessPage() {
           </div>
 
           {errorMsg && (
-            <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            <p
+              role="alert"
+              className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+            >
               {errorMsg}
             </p>
           )}

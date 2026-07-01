@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { EveSignalField } from "../../components/brand-visuals";
@@ -520,6 +521,25 @@ function DayCell({
   const MAX_VISIBLE = 3;
   const visible = events.slice(0, MAX_VISIBLE);
   const hidden = events.length - visible.length;
+  const router = useRouter();
+
+  // The date number is a focusable day trigger: it opens the day (its first
+  // event) as a proxy day-view, so the cell is reachable by keyboard — the
+  // event chips were previously the ONLY interactive targets in a cell.
+  // cell.key is YYYY-MM-DD; anchor at noon UTC so the label doesn't slip a day
+  // across timezone offsets (matches the noon-UTC convention used elsewhere).
+  const dayLabel = new Date(`${cell.key}T12:00:00Z`).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone,
+  });
+  const openDay = () => {
+    if (events.length > 0) router.push(`/calendar/${events[0].id}`);
+  };
+  const dayNumberClass = `inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-[11px] font-medium tabular-nums transition ${
+    isToday ? "bg-amber-300 text-stone-950" : inMonth ? "text-stone-300" : "text-stone-400"
+  }`;
 
   return (
     <div
@@ -528,13 +548,18 @@ function DayCell({
       }`}
     >
       <div className="mb-1 flex items-center justify-between">
-        <span
-          className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-medium tabular-nums ${
-            isToday ? "bg-amber-300 text-stone-950" : inMonth ? "text-stone-300" : "text-stone-400"
-          }`}
-        >
-          {cell.dayNumber}
-        </span>
+        {events.length > 0 ? (
+          <button
+            type="button"
+            onClick={openDay}
+            aria-label={`${dayLabel} — ${events.length} event${events.length === 1 ? "" : "s"}`}
+            className={`${dayNumberClass} hover:ring-1 hover:ring-amber-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
+          >
+            {cell.dayNumber}
+          </button>
+        ) : (
+          <span className={dayNumberClass}>{cell.dayNumber}</span>
+        )}
       </div>
       <div className="space-y-0.5">
         {visible.map((ev) => (

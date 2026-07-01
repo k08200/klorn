@@ -1,21 +1,16 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { GraphEdge, GraphNode } from "./relationship-graph";
+import { type GraphEdge, type GraphNode, TIER_COLORS } from "./relationship-graph";
 
-/** The 4 tiers, coloured consistently with the firewall UI. */
-const TIER_COLORS: Record<string, string> = {
-  PUSH: "#f87171",
-  QUEUE: "#60a5fa",
-  SILENT: "#9ca3af",
-  AUTO: "#34d399",
-};
+// 4-tier colours come from the shared token map in relationship-graph so the
+// 2D SVG, this 3D view, the firewall board, and legend never drift apart.
 
 function colorFor(n: GraphNode): string {
-  if (n.kind === "self") return "#fbbf24";
+  if (n.kind === "self") return "#fbbf24"; // == --color-accent
   if (n.kind === "feature") return "#a78bfa";
   if (n.kind === "tier") return TIER_COLORS[n.tags?.[0] ?? ""] ?? "#a78bfa";
-  if (n.tags?.includes("overdue_reply")) return "#f87171";
+  if (n.tags?.includes("overdue_reply")) return "#fb7185"; // reuses PUSH rose
   if (n.tags?.includes("meeting_soon")) return "#f59e0b";
   if (n.tags?.includes("frequent")) return "#34d399";
   return "#60a5fa";

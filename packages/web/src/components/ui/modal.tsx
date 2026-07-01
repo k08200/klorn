@@ -71,9 +71,6 @@ export default function Modal({ open, onClose, title, children, footer, size = "
       onClick={(e) => {
         if (e.target === overlayRef.current) onClose();
       }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") onClose();
-      }}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -90,7 +87,7 @@ export default function Modal({ open, onClose, title, children, footer, size = "
           <button
             type="button"
             onClick={onClose}
-            className="text-stone-500 hover:text-stone-300 transition p-1 rounded-lg hover:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-300/35"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center text-stone-500 hover:text-stone-300 transition rounded-lg hover:bg-stone-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
             aria-label="Close"
           >
             <svg

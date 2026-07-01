@@ -4,8 +4,11 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import AuthScreen from "../../components/auth-screen";
-import { useToast } from "../../components/toast";
+import { Input } from "../../components/ui/input";
 import { apiFetch } from "../../lib/api";
+
+// Signup enforces 8; reset must not be weaker — unify to the stronger policy.
+const MIN_PASSWORD_LENGTH = 8;
 
 export default function ResetPasswordPage() {
   return (
@@ -31,11 +34,12 @@ function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
-  const { toast } = useToast();
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
+    setEmailError(null);
     setLoading(true);
     try {
       await apiFetch("/api/auth/forgot-password", {
@@ -44,7 +48,9 @@ function ForgotPasswordForm() {
       });
       setSent(true);
     } catch {
-      toast("Could not send the reset link.", "error");
+      // Inline field error is the single announcement (WCAG 4.1.3) — it is
+      // rendered role="alert", so no duplicate error toast.
+      setEmailError("Could not send the reset link. Check the address and try again.");
     }
     setLoading(false);
   };
@@ -86,20 +92,19 @@ function ForgotPasswordForm() {
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="email" className="mb-1.5 block text-xs font-medium text-stone-400">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-            className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
-          />
-        </div>
+        <Input
+          id="email"
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(e) => {
+            if (emailError) setEmailError(null);
+            setEmail(e.target.value);
+          }}
+          placeholder="you@example.com"
+          required
+          error={emailError ?? undefined}
+        />
 
         <button
           type="submit"
@@ -118,12 +123,22 @@ function NewPasswordForm({ token }: { token: string }) {
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const { toast } = useToast();
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setPasswordError(null);
+    setConfirmError(null);
+
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setPasswordError(`Use at least ${MIN_PASSWORD_LENGTH} characters.`);
+      return;
+    }
     if (password !== confirm) {
-      toast("Passwords do not match.", "error");
+      // Field-level validation: inline error is the single announcement
+      // (WCAG 4.1.3, rendered role="alert") — no duplicate error toast.
+      setConfirmError("Passwords do not match.");
       return;
     }
     setLoading(true);
@@ -134,7 +149,9 @@ function NewPasswordForm({ token }: { token: string }) {
       });
       setDone(true);
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Reset failed.", "error");
+      const message = err instanceof Error ? err.message : "Reset failed.";
+      // Inline field error is the single announcement (WCAG 4.1.3) — no toast.
+      setPasswordError(message);
     }
     setLoading(false);
   };
@@ -168,37 +185,35 @@ function NewPasswordForm({ token }: { token: string }) {
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="password" className="mb-1.5 block text-xs font-medium text-stone-400">
-            New password
-          </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 6 characters"
-            required
-            minLength={6}
-            className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
-          />
-        </div>
+        <Input
+          id="password"
+          label="New password"
+          type="password"
+          value={password}
+          onChange={(e) => {
+            if (passwordError) setPasswordError(null);
+            setPassword(e.target.value);
+          }}
+          placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+          required
+          minLength={MIN_PASSWORD_LENGTH}
+          error={passwordError ?? undefined}
+        />
 
-        <div>
-          <label htmlFor="confirm" className="mb-1.5 block text-xs font-medium text-stone-400">
-            Confirm password
-          </label>
-          <input
-            id="confirm"
-            type="password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            placeholder="Re-enter password"
-            required
-            minLength={6}
-            className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
-          />
-        </div>
+        <Input
+          id="confirm"
+          label="Confirm password"
+          type="password"
+          value={confirm}
+          onChange={(e) => {
+            if (confirmError) setConfirmError(null);
+            setConfirm(e.target.value);
+          }}
+          placeholder="Re-enter password"
+          required
+          minLength={MIN_PASSWORD_LENGTH}
+          error={confirmError ?? undefined}
+        />
 
         <button
           type="submit"
