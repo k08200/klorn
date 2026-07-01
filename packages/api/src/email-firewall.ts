@@ -17,6 +17,7 @@ import { classifyNeedsReplyFromSignals, classifyPriority } from "./email-priorit
 import { markAsRead } from "./gmail.js";
 import type { GmailRawEmail } from "./gmail-fetch.js";
 import { buildJudgeContext } from "./judge-context.js";
+import { recordJudgeSource } from "./judge-health.js";
 import { isClearMarketing } from "./keyword-policy.js";
 import { getUserLlmCredentials } from "./llm-credentials.js";
 import { judgeEmail, type PocTier } from "./poc-judge.js";
@@ -254,6 +255,10 @@ export async function judgeAndMirrorEmail(
     judgeContext,
     llmCredentials,
   );
+  // Fleet-wide accuracy tripwire: track how the judge decided (LLM vs the
+  // keyword fallback that caps PUSH recall ~46%). Prod path only — the eval
+  // harness calls judgeEmail directly and must not pollute the window.
+  recordJudgeSource(judgement.source);
   await upsertAttentionForEmailJudgement({ userId, ...email }, judgement);
 
   // The whole point of the firewall: a PUSH tier should actually interrupt
