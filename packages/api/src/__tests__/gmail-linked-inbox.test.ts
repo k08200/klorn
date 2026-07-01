@@ -7,10 +7,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * mirrors the linked-calendar client loader.
  */
 
-const m = vi.hoisted(() => ({ findMany: vi.fn(), findFirst: vi.fn() }));
+const m = vi.hoisted(() => ({
+  findMany: vi.fn(),
+  findFirst: vi.fn(),
+  userTokenFindFirst: vi.fn(),
+}));
 
 vi.mock("../db.js", () => ({
-  prisma: { linkedInboxAccount: { findMany: m.findMany, findFirst: m.findFirst } },
+  prisma: {
+    linkedInboxAccount: { findMany: m.findMany, findFirst: m.findFirst },
+    userToken: { findFirst: m.userTokenFindFirst },
+  },
 }));
 vi.mock("../crypto-tokens.js", () => ({
   decryptToken: (v: string) => {
@@ -105,5 +112,33 @@ describe("getAuthedInboxClient", () => {
       expiresAt: null,
     });
     expect(await getAuthedInboxClient("u1", "a")).toBeNull();
+  });
+});
+
+describe("mail actions route to the correct account (P2b)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("archiveEmail with a linkedInboxAccountId resolves the LINKED inbox, never the primary token", async () => {
+    // Linked row doesn't resolve → returns not-connected and stops. The point:
+    // it looked up linkedInboxAccount by (id, userId) and NEVER touched the
+    // primary userToken. Proves the linkedInboxAccountId routes to the linked
+    // client (getAuthedInboxClient), not getAuthedClient.
+    m.findFirst.mockResolvedValue(null);
+    const { archiveEmail } = await import("../gmail.js");
+    const result = await archiveEmail("u1", "gmail-123", "acc-1");
+    expect(result).toEqual({ error: "Gmail not connected." });
+    expect(m.findFirst).toHaveBeenCalledWith({ where: { id: "acc-1", userId: "u1" } });
+    expect(m.userTokenFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("archiveEmail without a linkedInboxAccountId uses the PRIMARY token path", async () => {
+    m.userTokenFindFirst.mockResolvedValue(null); // primary not connected → early return
+    const { archiveEmail } = await import("../gmail.js");
+    const result = await archiveEmail("u1", "gmail-123");
+    expect(result).toEqual({ error: "Gmail not connected." });
+    expect(m.userTokenFindFirst).toHaveBeenCalled();
+    expect(m.findFirst).not.toHaveBeenCalled();
   });
 });

@@ -201,7 +201,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     if (!email) return reply.code(404).send({ error: "Email not found" });
 
     // Sync to Gmail first, then update DB
-    await toggleReadGmail(uid, email.gmailId, readVal).catch((err) => {
+    await toggleReadGmail(uid, email.gmailId, readVal, email.linkedInboxAccountId).catch((err) => {
       // Gmail sync failed — still update local DB, but surface the divergence
       // (DB will say read while Gmail still shows unread) instead of hiding it.
       console.warn(`[EMAIL] toggleReadGmail failed for ${email.id}:`, err);
@@ -226,7 +226,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     });
     if (!email) return reply.code(404).send({ error: "Email not found" });
 
-    await toggleStarGmail(uid, email.gmailId, starVal).catch((err) => {
+    await toggleStarGmail(uid, email.gmailId, starVal, email.linkedInboxAccountId).catch((err) => {
       console.warn(`[EMAIL] toggleStarGmail failed for ${email.id}:`, err);
       captureError(err, { tags: { scope: "email.star-sync" }, extra: { userId: uid } });
     });
@@ -249,7 +249,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
 
     // Try Gmail first — only delete from DB if Gmail succeeds (or not connected)
     try {
-      const result = await trashEmail(uid, email.gmailId);
+      const result = await trashEmail(uid, email.gmailId, email.linkedInboxAccountId);
       if (result && "error" in result) {
         // Gmail not connected — just remove from DB
         await prisma.emailMessage.deleteMany({ where: { id: email.id } });
@@ -295,7 +295,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     if (!email) return reply.code(404).send({ error: "Email not found" });
 
     try {
-      const result = await archiveEmail(uid, email.gmailId);
+      const result = await archiveEmail(uid, email.gmailId, email.linkedInboxAccountId);
       if (result && "error" in result) {
         await prisma.emailMessage.deleteMany({ where: { id: email.id } });
         return { success: true, warning: "Gmail not connected, removed locally only" };
