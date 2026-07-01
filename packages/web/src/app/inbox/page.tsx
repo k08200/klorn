@@ -2,9 +2,11 @@
 
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import type { CommitmentItem } from "../../components/commitment-card";
+import { FirewallBoard } from "../../components/firewall-board";
 import { RejectReasonDialog } from "../../components/reject-reason-dialog";
 import { useToast } from "../../components/toast";
 import { apiFetch } from "../../lib/api";
@@ -29,6 +31,14 @@ interface PendingActionItem {
 
 type StatusFilter = "pending" | "all";
 
+// Which top-level surface /inbox is showing. Driven by the `?view=` search
+// param so the choice is shareable and back-button friendly.
+type SegmentView = "decisions" | "firewall";
+
+function parseView(raw: string | null): SegmentView {
+  return raw === "firewall" ? "firewall" : "decisions";
+}
+
 export default function InboxPage() {
   return (
     <AuthGuard>
@@ -47,6 +57,28 @@ function CommandCenterView() {
   // Action id awaiting the reject-with-reason dialog; null when closed.
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // Top-level surface toggle ("Decisions" ⇄ "Firewall board"). Read from
+  // `?view=` so it's shareable and works with the back button; changing it
+  // rewrites the URL rather than holding local state.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const view = parseView(searchParams.get("view"));
+
+  const setView = useCallback(
+    (next: SegmentView) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === "decisions") {
+        params.delete("view");
+      } else {
+        params.set("view", next);
+      }
+      const query = params.toString();
+      router.push(query ? `${pathname}?${query}` : pathname);
+    },
+    [router, pathname, searchParams],
+  );
 
   // Parallel fetch via useQueries. Each branch has independent loading
   // and error state so a flaky endpoint never blocks the other.
@@ -200,6 +232,114 @@ function CommandCenterView() {
         {queueAnnouncement}
       </p>
 
+      {/* Top-level surface toggle: the approval queue vs the tier board. */}
+      <div className="mx-auto w-full max-w-6xl px-4 pt-3 md:pt-6">
+        <SegmentControl view={view} onSelect={setView} />
+      </div>
+
+      {view === "firewall" ? (
+        <FirewallBoard />
+      ) : (
+        <DecisionsBody
+          actions={actions}
+          commitments={commitments}
+          pendingCount={pendingCount}
+          filter={filter}
+          setFilter={setFilter}
+          loading={loading}
+          error={error}
+          introLine={introLine}
+          actionLoading={actionLoading}
+          onRefresh={() => load(filter)}
+          onApprove={handleApprove}
+          onOpenReject={setRejectTargetId}
+          onSnooze={(id) => handleSnooze(id, 1)}
+        />
+      )}
+
+      <RejectReasonDialog
+        open={rejectTargetId !== null}
+        onCancel={() => setRejectTargetId(null)}
+        onReject={(reason) => {
+          const id = rejectTargetId;
+          setRejectTargetId(null);
+          if (id) void handleReject(id, reason);
+        }}
+      />
+    </>
+  );
+}
+
+// ─── Segment control ──────────────────────────────────────────────────────
+//
+// Same role="group" + aria-pressed toggle-button pattern as the FilterTab
+// below, styled to match. Drives the top-level surface via `?view=`.
+
+function SegmentControl({
+  view,
+  onSelect,
+}: {
+  view: SegmentView;
+  onSelect: (next: SegmentView) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Inbox view"
+      className="mb-4 inline-flex items-center gap-1 rounded-lg border border-stone-800 bg-stone-950/80 p-1"
+    >
+      <FilterTab
+        active={view === "decisions"}
+        label="Decisions"
+        onClick={() => onSelect("decisions")}
+      />
+      <FilterTab
+        active={view === "firewall"}
+        label="Firewall board"
+        onClick={() => onSelect("firewall")}
+      />
+    </div>
+  );
+}
+
+// ─── Decisions body ─────────────────────────────────────────────────────────
+//
+// The approval-queue surface (mobile + desktop layouts). Extracted verbatim
+// from CommandCenterView's original render so the firewall view can sit
+// alongside it under the same segment toggle. Data + handlers are lifted in
+// as props; the fetch/optimistic-update logic stays in CommandCenterView.
+
+function DecisionsBody({
+  actions,
+  commitments,
+  pendingCount,
+  filter,
+  setFilter,
+  loading,
+  error,
+  introLine,
+  actionLoading,
+  onRefresh,
+  onApprove,
+  onOpenReject,
+  onSnooze,
+}: {
+  actions: PendingActionItem[];
+  commitments: CommitmentItem[];
+  pendingCount: number;
+  filter: StatusFilter;
+  setFilter: (f: StatusFilter) => void;
+  loading: boolean;
+  error: string | null;
+  introLine: string | null;
+  actionLoading: Record<string, "approve" | "reject" | "snooze" | null>;
+  onRefresh: () => void;
+  onApprove: (id: string) => void;
+  onOpenReject: (id: string) => void;
+  onSnooze: (id: string) => void;
+}) {
+  return (
+    <>
       {/* MOBILE — purpose-built native screen (desktop layout untouched below) */}
       <div className="px-4 pb-8 pt-3 md:hidden">
         <OnboardingHint />
@@ -210,11 +350,11 @@ function CommandCenterView() {
           filter={filter}
           setFilter={setFilter}
           loading={loading}
-          onRefresh={() => load(filter)}
+          onRefresh={onRefresh}
           actionLoading={actionLoading}
-          onApprove={handleApprove}
-          onReject={(id) => setRejectTargetId(id)}
-          onSnooze={(id) => handleSnooze(id, 1)}
+          onApprove={onApprove}
+          onReject={onOpenReject}
+          onSnooze={onSnooze}
         />
       </div>
 
@@ -238,7 +378,7 @@ function CommandCenterView() {
           <div className="flex shrink-0 items-center gap-3">
             <button
               type="button"
-              onClick={() => load(filter)}
+              onClick={onRefresh}
               disabled={loading}
               className="h-8 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
             >
@@ -314,9 +454,9 @@ function CommandCenterView() {
                       <ActionCard
                         action={action}
                         loading={actionLoading[action.id] ?? null}
-                        onApprove={() => handleApprove(action.id)}
-                        onReject={() => setRejectTargetId(action.id)}
-                        onSnooze={() => handleSnooze(action.id, 1)}
+                        onApprove={() => onApprove(action.id)}
+                        onReject={() => onOpenReject(action.id)}
+                        onSnooze={() => onSnooze(action.id)}
                       />
                     </li>
                   ))}
@@ -331,16 +471,6 @@ function CommandCenterView() {
           </div>
         </div>
       </div>
-
-      <RejectReasonDialog
-        open={rejectTargetId !== null}
-        onCancel={() => setRejectTargetId(null)}
-        onReject={(reason) => {
-          const id = rejectTargetId;
-          setRejectTargetId(null);
-          if (id) void handleReject(id, reason);
-        }}
-      />
     </>
   );
 }
