@@ -141,7 +141,7 @@ function LoginForm() {
       )}
 
       {signupOpen && (
-        <div className="mb-4 rounded-md border border-amber-300/25 bg-amber-300/[0.06] px-3 py-2.5 text-[11px] leading-5 text-amber-100/90">
+        <div className="mb-4 hidden rounded-md border border-amber-300/25 bg-amber-300/[0.06] px-3 py-2.5 text-[11px] leading-5 text-amber-100/90 md:block">
           <span className="font-semibold text-amber-100">First time here?</span> Klorn is
           invite-only — Google will block sign-in unless I've added your email as a test user.{" "}
           <Link
@@ -178,8 +178,10 @@ function LoginForm() {
         </svg>
         Continue with Google
       </a>
+      {/* Marketing/doctrine copy is landing-page context — hide it on the app
+          (mobile) for a clean login; keep it on desktop. */}
       {signupOpen ? (
-        <div className="mt-3 space-y-2 text-center text-[11px] leading-5 text-stone-500">
+        <div className="mt-3 hidden space-y-2 text-center text-[11px] leading-5 text-stone-500 md:block">
           <p>
             Free during the private beta. Google flags unverified apps with the restricted Gmail
             scope until CASA review clears — standard for every Gmail integration.
@@ -201,7 +203,7 @@ function LoginForm() {
           </p>
         </div>
       ) : (
-        <p className="mt-3 text-center text-[11px] leading-5 text-stone-500">
+        <p className="mt-3 hidden text-center text-[11px] leading-5 text-stone-500 md:block">
           Klorn is in a private beta — sign in with an invited Google account.
         </p>
       )}
