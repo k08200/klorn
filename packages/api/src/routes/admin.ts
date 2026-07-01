@@ -7,6 +7,7 @@ import type { CalibrationSnapshotPayload } from "../calibration-snapshot.js";
 import { db, prisma } from "../db.js";
 import { getDecisionMetrics } from "../decision-metrics.js";
 import { sendBetaInviteEmail } from "../email.js";
+import { getJudgeHealth } from "../judge-health.js";
 import {
   listAppliedLearnedRules,
   listOpenLearnedRules,
@@ -533,6 +534,16 @@ export async function adminRoutes(app: FastifyInstance) {
       ...(sinceDays !== undefined && Number.isFinite(sinceDays) ? { sinceDays } : {}),
       source: channel,
     });
+  });
+
+  // GET /api/admin/judge-health — fleet-wide judge health: the rolling rate at
+  // which the judge fell back to the keyword pipeline (which caps PUSH recall
+  // ~46% / AUTO 0%). `degraded: true` means the LLM scorer is likely failing and
+  // classification accuracy has silently collapsed across all users. Pairs with
+  // the alarm in judge-health.ts. In-process per dyno (best-effort, resets on
+  // restart) — a point-in-time read, not a historical series.
+  app.get("/judge-health", async () => {
+    return getJudgeHealth();
   });
 
   // GET /api/admin/ontology — the read side of the shared deterministic core.

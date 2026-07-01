@@ -324,6 +324,33 @@ describe("admin routes", () => {
     await app.close();
   });
 
+  it("reports fleet judge health via /judge-health", async () => {
+    const { recordJudgeSource, __resetJudgeHealth } = await import("../judge-health.js");
+    __resetJudgeHealth();
+    for (let i = 0; i < 10; i++) recordJudgeSource("llm");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/judge-health",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ total: 10, fallbackRate: 0, degraded: false });
+    __resetJudgeHealth();
+    await app.close();
+  });
+
+  it("blocks a non-admin from /judge-health (403)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/judge-health",
+      headers: { authorization: `Bearer ${USER_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
   it("clears provider cooldown state via POST /llm-state/clear", async () => {
     const { markKeyLimited, isKeyLimited, clearFallbackState } = await import(
       "../model-fallback.js"
