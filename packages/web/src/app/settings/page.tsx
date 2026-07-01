@@ -1064,7 +1064,11 @@ export default function SettingsPage() {
                 Disabled categories stay quiet across push and in-app notifications.
               </p>
             </div>
-            <div className="space-y-2">
+            <fieldset className="space-y-2 border-0 p-0 m-0">
+              <legend className="sr-only">
+                Which signals are worth interrupting you? Disabled categories stay quiet across push
+                and in-app notifications.
+              </legend>
               {[
                 {
                   key: "notifyEmailUrgent" as const,
@@ -1108,21 +1112,29 @@ export default function SettingsPage() {
                   </div>
                 </label>
               ))}
-            </div>
+            </fieldset>
             <div className="pt-3 border-t border-stone-800">
               <p className="text-sm font-medium text-stone-200 mb-1">Quiet hours</p>
               <p className="text-xs text-stone-500 mb-3">
                 Pause push notifications during this window. Leave blank for no limit.
               </p>
               <div className="flex items-center gap-3">
+                <label htmlFor="quiet-hours-start" className="sr-only">
+                  Quiet hours start time
+                </label>
                 <input
+                  id="quiet-hours-start"
                   type="time"
                   value={notifPrefs.quietHoursStart || ""}
                   onChange={(e) => updateNotifPref("quietHoursStart", e.target.value || null)}
                   className="bg-stone-900 border border-stone-700 rounded px-2 py-1 text-sm text-stone-200"
                 />
                 <span className="text-stone-500 text-sm">to</span>
+                <label htmlFor="quiet-hours-end" className="sr-only">
+                  Quiet hours end time
+                </label>
                 <input
+                  id="quiet-hours-end"
                   type="time"
                   value={notifPrefs.quietHoursEnd || ""}
                   onChange={(e) => updateNotifPref("quietHoursEnd", e.target.value || null)}
