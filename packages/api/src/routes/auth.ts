@@ -14,11 +14,13 @@ import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../email.js";
+import { requireEntitled } from "../entitlement-guard.js";
 import {
   getAuthedClient,
   getAuthUrl,
   getGoogleConnectionStatus,
   getGoogleUserInfo,
+  getLinkCalendarAuthUrl,
   getLoginAuthUrl,
   getOAuth2Client,
   isGoogleAuthError,
@@ -650,6 +652,25 @@ export function authRoutes(app: FastifyInstance) {
     return reply.send({ url });
   });
 
+  // POST /api/auth/google/link-calendar — Start OAuth to link a SECONDARY Google
+  // account for calendar free/busy ONLY (calendar.readonly, no Gmail). Pro-gated.
+  // Returns {url} like /google/start so the session JWT never enters the redirect.
+  app.post(
+    "/google/link-calendar",
+    { preHandler: [requireAuth, requireEntitled] },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      if (isDemoUser(userId)) {
+        return reply.code(403).send({ error: "Authentication required to link a calendar" });
+      }
+      // Short-lived state (10 min): the link callback attaches a credential-
+      // bearing row, so an intercepted state URL must not be replayable for the
+      // default 7-day token window.
+      const signedState = signToken({ userId, email: "__link_calendar__" }, "10m");
+      return reply.send({ url: getLinkCalendarAuthUrl(signedState) });
+    },
+  );
+
   // GET /api/auth/google/callback — OAuth callback (handles both login and integration)
   app.get("/google/callback", async (request, reply) => {
     const { code, state } = request.query as { code?: string; state?: string };
@@ -674,6 +695,39 @@ export function authRoutes(app: FastifyInstance) {
     try {
       const oauth2 = getOAuth2Client();
       const { tokens } = await oauth2.getToken(code);
+
+      // --- Link secondary calendar flow (state marker __link_calendar__) ---
+      // A DIFFERENT Google account is being attached to the ALREADY-logged-in
+      // user (statePayload.userId) purely for calendar free/busy. We do NOT
+      // resolve or switch the user by this Google email — the linked token only
+      // ever feeds checkConflicts.
+      if (statePayload.email === "__link_calendar__") {
+        if (!tokens.access_token) {
+          return reply.redirect(`${webUrl}/calendar?linked=failed`);
+        }
+        const profile = await getGoogleUserInfo(tokens.access_token);
+        if (profile.verified_email !== true) {
+          return reply.redirect(`${webUrl}/calendar?linked=unverified`);
+        }
+        const linkedEmail = normalizeEmail(profile.email);
+        const expiresAt = tokens.expiry_date ? new Date(tokens.expiry_date) : null;
+        await prisma.linkedCalendarAccount.upsert({
+          where: { userId_email: { userId: statePayload.userId, email: linkedEmail } },
+          update: {
+            accessToken: encryptToken(tokens.access_token),
+            refreshToken: encryptOptional(tokens.refresh_token),
+            expiresAt,
+          },
+          create: {
+            userId: statePayload.userId,
+            email: linkedEmail,
+            accessToken: encryptToken(tokens.access_token),
+            refreshToken: encryptOptional(tokens.refresh_token),
+            expiresAt,
+          },
+        });
+        return reply.redirect(`${webUrl}/calendar?linked=success`);
+      }
 
       // --- Google Social Login flow (state signed with __google_login__ or __google_login_desktop__ marker) ---
       const isGoogleLogin =
@@ -951,6 +1005,41 @@ export function authRoutes(app: FastifyInstance) {
     });
     return reply.code(204).send();
   });
+
+  // GET /api/auth/google/linked-calendars — list the user's linked secondary
+  // calendar accounts (never returns tokens — id + email + connectedAt only).
+  // Pro-gated to match the connect route, so a lapsed user can't read the paid
+  // feature's data. DELETE below stays auth-only so off-boarding always works.
+  app.get(
+    "/google/linked-calendars",
+    { preHandler: [requireAuth, requireEntitled] },
+    async (request) => {
+      const userId = getUserId(request);
+      const accounts = await prisma.linkedCalendarAccount.findMany({
+        where: { userId },
+        select: { id: true, email: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      });
+      return { accounts };
+    },
+  );
+
+  // DELETE /api/auth/google/linked-calendars/:id — unlink one secondary calendar.
+  // Scoped by userId so a token can only remove its OWN linked accounts. Auth-only
+  // (not Pro-gated) so a downgraded user can always disconnect.
+  app.delete(
+    "/google/linked-calendars/:id",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const { id } = request.params as { id: string };
+      const result = await prisma.linkedCalendarAccount.deleteMany({ where: { id, userId } });
+      if (result.count === 0) {
+        return reply.code(404).send({ error: "Linked calendar not found" });
+      }
+      return { success: true };
+    },
+  );
 
   // GET /api/auth/google/status — Check if Gmail is connected and token is valid
   app.get("/google/status", { preHandler: requireAuth }, async (request, reply) => {

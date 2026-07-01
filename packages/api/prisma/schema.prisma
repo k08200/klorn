@@ -64,6 +64,7 @@ model User {
   welcomeEmailSentAt        DateTime?
   conversations             Conversation[]
   tokens                    UserToken[]
+  linkedCalendarAccounts    LinkedCalendarAccount[]
   tasks                     Task[]
   notes                     Note[]
   reminders                 Reminder[]
@@ -185,6 +186,24 @@ model UserToken {
   updatedAt           DateTime  @updatedAt
 
   @@unique([userId, provider])
+}
+
+// A secondary Google account (e.g. work) linked ONLY for cross-account calendar
+// free/busy. Kept separate from UserToken (the single primary account that owns
+// email + the main calendar) so the email path stays single-account; this table
+// is read only by checkConflicts. Scope granted is calendar.readonly, nothing else.
+model LinkedCalendarAccount {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email        String // the linked Google account address — label + dedup key
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, email])
 }
 
 model Task {

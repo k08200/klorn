@@ -78,6 +78,27 @@ export function getLoginAuthUrl(signedState: string) {
   });
 }
 
+/**
+ * OAuth URL to link a SECONDARY Google account for calendar free/busy only.
+ * Least-privilege: requests just calendar.readonly (+ openid/email to identify
+ * which account was linked) — no Gmail, no calendar.events. This is what makes
+ * the consent screen non-scary for a work account and keeps the linked token
+ * unable to read mail or write events.
+ */
+export function getLinkCalendarAuthUrl(signedState: string) {
+  const oauth2 = getOAuth2Client();
+  return oauth2.generateAuthUrl({
+    access_type: "offline",
+    prompt: "consent",
+    state: signedState,
+    scope: [
+      "openid",
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/calendar.readonly",
+    ],
+  });
+}
+
 /** Get Google user profile from access token */
 export async function getGoogleUserInfo(
   accessToken: string,
@@ -398,6 +419,92 @@ async function persistRefreshedGoogleToken(
     );
   } else {
     console.log(`[GOOGLE] Token refreshed for user ${userId}`);
+  }
+}
+
+/**
+ * OAuth2 clients for every SECONDARY calendar account the user linked. Mirrors
+ * getAuthedClient (decrypt + auto-refresh) but returns one client per
+ * LinkedCalendarAccount row, tagged with its email. A row whose token can't be
+ * decrypted is skipped, not fatal — the primary account and the other linked
+ * accounts still work. Read only by checkConflicts.
+ */
+export async function getLinkedCalendarClients(
+  userId: string,
+): Promise<Array<{ client: InstanceType<typeof google.auth.OAuth2>; email: string }>> {
+  const rows = await prisma.linkedCalendarAccount.findMany({ where: { userId } });
+  const clients: Array<{ client: InstanceType<typeof google.auth.OAuth2>; email: string }> = [];
+  for (const row of rows) {
+    let accessTokenPlain = "";
+    let refreshTokenPlain: string | null = null;
+    try {
+      accessTokenPlain = row.accessToken ? decryptToken(row.accessToken) : "";
+      refreshTokenPlain = decryptOptional(row.refreshToken);
+    } catch {
+      console.warn(`[GOOGLE] Skipping linked calendar ${row.id} — token decrypt failed`);
+      continue;
+    }
+    if (!accessTokenPlain && !refreshTokenPlain) continue;
+
+    const oauth2 = getOAuth2Client();
+    oauth2.setCredentials({
+      access_token: accessTokenPlain,
+      refresh_token: refreshTokenPlain,
+      expiry_date: row.expiresAt ? row.expiresAt.getTime() : undefined,
+    });
+    oauth2.on("tokens", async (newTokens) => {
+      try {
+        await persistRefreshedLinkedToken(row.id, userId, newTokens);
+      } catch (err) {
+        console.error(
+          `[GOOGLE] Failed to persist refreshed linked-calendar token for user ${userId}:`,
+          err instanceof Error ? err.message : err,
+        );
+      }
+    });
+    clients.push({ client: oauth2, email: row.email });
+  }
+  return clients;
+}
+
+async function persistRefreshedLinkedToken(
+  rowId: string,
+  userId: string,
+  newTokens: {
+    access_token?: string | null;
+    refresh_token?: string | null;
+    expiry_date?: number | null;
+  },
+): Promise<void> {
+  const decision = decideRefreshTokenWrite(newTokens);
+  if (!decision.write) return;
+
+  // Both writes are scoped by { id, userId } (not id alone): the row id is a
+  // UUID already filtered by userId in getLinkedCalendarClients, but scoping the
+  // write too makes this function safe to reuse from any future call site and
+  // can never touch another user's row.
+  if (decision.mode === "rotate") {
+    await prisma.linkedCalendarAccount.updateMany({
+      where: { id: rowId, userId },
+      data: {
+        accessToken: encryptToken(decision.accessTokenPlain),
+        refreshToken: encryptOptional(decision.refreshTokenPlain),
+        expiresAt: decision.expiresAt,
+      },
+    });
+    return;
+  }
+
+  const result = await prisma.linkedCalendarAccount.updateMany({
+    where: {
+      id: rowId,
+      userId,
+      OR: [{ expiresAt: null }, { expiresAt: { lt: decision.expiresAt } }],
+    },
+    data: { accessToken: encryptToken(decision.accessTokenPlain), expiresAt: decision.expiresAt },
+  });
+  if (result.count === 0) {
+    console.log(`[GOOGLE] Skipped stale linked-calendar token write for user ${userId}`);
   }
 }
 

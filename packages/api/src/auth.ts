@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import type { FastifyReply, FastifyRequest } from "fastify";
-import jwt from "jsonwebtoken";
+import jwt, { type SignOptions } from "jsonwebtoken";
 import { db, prisma } from "./db.js";
 import { getEffectivePlan } from "./stripe.js";
 
@@ -37,12 +37,15 @@ export interface JwtPayload {
   sessionId?: string;
 }
 
-export function signToken(payload: JwtPayload): string {
+export function signToken(
+  payload: JwtPayload,
+  expiresIn: SignOptions["expiresIn"] = TOKEN_EXPIRY,
+): string {
   return jwt.sign(
     { ...payload, sessionId: payload.sessionId || crypto.randomUUID() },
     EFFECTIVE_SECRET,
     {
-      expiresIn: TOKEN_EXPIRY,
+      expiresIn,
     },
   );
 }

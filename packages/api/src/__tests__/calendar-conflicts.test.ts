@@ -13,6 +13,7 @@ const m = vi.hoisted(() => ({
   eventsListMock: vi.fn(),
   markGoogleTokenForReconnect: vi.fn(async () => {}),
   captureError: vi.fn(),
+  linkedClientsMock: vi.fn(async () => [] as Array<{ client: unknown; email: string }>),
 }));
 const {
   calendarListMock,
@@ -20,6 +21,7 @@ const {
   eventsListMock,
   markGoogleTokenForReconnect,
   captureError,
+  linkedClientsMock,
 } = m;
 
 vi.mock("googleapis", () => ({
@@ -34,6 +36,7 @@ vi.mock("googleapis", () => ({
 
 vi.mock("../gmail.js", () => ({
   getAuthedClient: vi.fn(async () => ({})),
+  getLinkedCalendarClients: m.linkedClientsMock,
   isGoogleAuthError: (e: { response?: { status?: number } }) => e?.response?.status === 401,
   markGoogleTokenForReconnect: m.markGoogleTokenForReconnect,
 }));
@@ -54,6 +57,7 @@ const END = "2026-06-03T15:00:00+09:00"; // 06:00Z
 describe("checkConflicts — multi-calendar free/busy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    linkedClientsMock.mockResolvedValue([]); // default: no linked accounts
   });
 
   it("queries free/busy across owner+writer calendars (skips reader subs) and merges busy blocks", async () => {
@@ -173,5 +177,82 @@ describe("checkConflicts — multi-calendar free/busy", () => {
     const result = await checkConflicts("user-1", "not-a-date", END);
     expect(result).toMatchObject({ error: expect.stringContaining("Invalid time range") });
     expect(calendarListMock).not.toHaveBeenCalled();
+  });
+
+  it("merges a busy block from a LINKED (work) account across a separate Google account", async () => {
+    // The real cross-account fix: the work calendar lives on a different Google
+    // account, so the primary token can't see it — a linked account can.
+    linkedClientsMock.mockResolvedValue([{ client: {}, email: "me@work.com" }]);
+    // Call sequence: primary calendarList → primary freebusy → work calendarList → work freebusy.
+    calendarListMock
+      .mockResolvedValueOnce({
+        data: {
+          items: [
+            { id: "primary", primary: true, accessRole: "owner", summary: "me@personal.com" },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          items: [{ id: "primary", primary: true, accessRole: "owner", summary: "me@work.com" }],
+        },
+      });
+    freebusyMock
+      .mockResolvedValueOnce({ data: { calendars: { primary: { busy: [] } } } }) // personal: free
+      .mockResolvedValueOnce({
+        data: {
+          calendars: {
+            primary: { busy: [{ start: "2026-06-03T05:30:00Z", end: "2026-06-03T06:00:00Z" }] },
+          },
+        },
+      }); // work: busy
+
+    const result = await checkConflicts("user-1", START, END);
+
+    expect(result).toMatchObject({
+      hasConflicts: true,
+      scope: "all_calendars",
+      linkedAccountsChecked: 1,
+    });
+    expect(result.conflicts).toEqual([
+      { start: "2026-06-03T05:30:00Z", end: "2026-06-03T06:00:00Z", calendar: "primary" },
+    ]);
+  });
+
+  it("does not let a failing linked account sink the check (best-effort + capture)", async () => {
+    linkedClientsMock.mockResolvedValue([{ client: {}, email: "me@work.com" }]);
+    calendarListMock
+      .mockResolvedValueOnce({
+        data: {
+          items: [
+            { id: "primary", primary: true, accessRole: "owner", summary: "me@personal.com" },
+          ],
+        },
+      })
+      .mockRejectedValueOnce(new Error("work account boom")); // linked calendarList fails
+    freebusyMock.mockResolvedValueOnce({
+      data: {
+        calendars: {
+          primary: { busy: [{ start: "2026-06-03T05:30:00Z", end: "2026-06-03T06:00:00Z" }] },
+        },
+      },
+    });
+
+    const result = await checkConflicts("user-1", START, END);
+
+    // primary conflict still returned; linked failure captured, not thrown
+    expect(result).toMatchObject({
+      hasConflicts: true,
+      scope: "all_calendars",
+      linkedAccountsChecked: 1,
+    });
+    expect(result.conflicts).toHaveLength(1);
+    expect(
+      captureError.mock.calls.some(
+        (c) =>
+          (c[1] as { tags?: { scope?: string } })?.tags?.scope ===
+          "calendar.linked_freebusy_failed",
+      ),
+    ).toBe(true);
   });
 });
