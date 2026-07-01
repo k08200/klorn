@@ -41,6 +41,7 @@ export const queryKeys = {
     commitments: () => ["inbox", "commitments"] as const,
     pending: () => ["inbox", "pending"] as const,
     receipt: (date?: string) => ["inbox", "receipt", date ?? "today"] as const,
+    linkedAccounts: () => ["inbox", "linked-accounts"] as const,
   },
   email: {
     all: ["email"] as const,

@@ -99,6 +99,31 @@ export function getLinkCalendarAuthUrl(signedState: string) {
   });
 }
 
+/**
+ * OAuth URL to link a SECONDARY Google account as a FULL INBOX (Pro feature).
+ * Requests the same gmail scopes as the primary login (readonly/send/modify) so
+ * the firewall can read, classify, and act on this account's mail — plus
+ * openid/email to identify which account was linked. NO calendar scopes here:
+ * an inbox link is mail-only (calendar linking is a separate least-privilege
+ * flow). Reuses the app's already-verified scope set, so linking a second inbox
+ * does NOT request any new Google scope and does not reopen CASA verification.
+ */
+export function getLinkInboxAuthUrl(signedState: string) {
+  const oauth2 = getOAuth2Client();
+  return oauth2.generateAuthUrl({
+    access_type: "offline",
+    prompt: "consent",
+    state: signedState,
+    scope: [
+      "openid",
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/gmail.send",
+      "https://www.googleapis.com/auth/gmail.modify",
+    ],
+  });
+}
+
 /** Get Google user profile from access token */
 export async function getGoogleUserInfo(
   accessToken: string,

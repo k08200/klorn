@@ -9,6 +9,7 @@ import { FeedbackPolicyPanel } from "../../components/feedback-policy-panel";
 import { GitHubSection } from "../../components/github-section";
 import { GoogleConnectRedirect } from "../../components/google-connect-redirect";
 import InAppBrowserNotice from "../../components/in-app-browser-notice";
+import { LinkedInboxesSection } from "../../components/linked-inboxes-section";
 import { NaverImapSection } from "../../components/naver-imap-section";
 import { OAuthErrorBanner } from "../../components/oauth-error-banner";
 import { ListSkeleton } from "../../components/skeleton";
@@ -1599,6 +1600,13 @@ export default function SettingsPage() {
 
           {/* GitHub notifications source */}
           <GitHubSection />
+        </section>
+
+        {/* Connected Google inboxes (multi-account, Pro) */}
+        <section className="mb-8">
+          <Suspense>
+            <LinkedInboxesSection />
+          </Suspense>
         </section>
 
         {/* Naver Mail (IMAP) */}
