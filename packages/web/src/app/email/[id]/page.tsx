@@ -657,9 +657,9 @@ function EmailDetailView() {
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
                     <span className="max-w-full truncate">{email.from}</span>
                     {email.trust && <TrustBadgeChip trust={email.trust} />}
-                    <span className="text-stone-600">·</span>
+                    <span className="text-stone-400">·</span>
                     <time className="shrink-0 tabular-nums">{formatFull(email.date)}</time>
-                    <span className="text-stone-600">·</span>
+                    <span className="text-stone-400">·</span>
                     <span>{email.isRead ? "Read" : "Kept unread"}</span>
                   </div>
                 </div>
@@ -850,7 +850,7 @@ function CandidateProfileCard({
         </div>
       )}
       <label className="mt-3 block">
-        <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-stone-600">
+        <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-stone-400">
           Review note
         </span>
         <textarea
@@ -915,7 +915,7 @@ function ThreadContextPanel({
                 <p className="min-w-0 truncate text-xs font-medium text-stone-200">
                   {senderName(message.from)}
                 </p>
-                <time className="shrink-0 text-[10px] tabular-nums text-stone-600">
+                <time className="shrink-0 text-[10px] tabular-nums text-stone-400">
                   {formatFull(message.date)}
                 </time>
               </div>
@@ -1210,7 +1210,7 @@ function ReplyDraftBox({
         <div className="space-y-2">
           <div className="grid gap-2 text-xs sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-600">
+              <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-400">
                 To
               </span>
               <input
@@ -1220,7 +1220,7 @@ function ReplyDraftBox({
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-600">
+              <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-400">
                 Subject
               </span>
               <input
@@ -1255,7 +1255,7 @@ function ReplyDraftBox({
                 </span>
               </label>
               <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-stone-600">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-stone-400">
                   Save original attachments too
                 </span>
                 <button
@@ -1287,7 +1287,7 @@ function ReplyDraftBox({
                     <span className="min-w-0 flex-1 truncate text-[11px] text-stone-400">
                       {attachment.filename}
                     </span>
-                    <span className="shrink-0 text-[10px] text-stone-600">
+                    <span className="shrink-0 text-[10px] text-stone-400">
                       {formatBytes(attachment.size)}
                     </span>
                   </label>

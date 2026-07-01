@@ -181,7 +181,7 @@ export default function EarlyAccessPage() {
                 resetFormError();
                 setEmail(e.target.value);
               }}
-              className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+              className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
               placeholder="you@example.com"
             />
           </div>
@@ -200,7 +200,7 @@ export default function EarlyAccessPage() {
                 setName(e.target.value);
               }}
               maxLength={120}
-              className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+              className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
               placeholder="Optional"
             />
           </div>
@@ -218,7 +218,7 @@ export default function EarlyAccessPage() {
               }}
               maxLength={500}
               rows={3}
-              className="w-full resize-none rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+              className="w-full resize-none rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
               placeholder="Example: 50+ emails/day, follow-ups, meeting prep."
             />
             <p className="mt-2 text-xs leading-5 text-stone-500">

@@ -97,7 +97,7 @@ function ForgotPasswordForm() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
             required
-            className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+            className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
           />
         </div>
 
@@ -180,7 +180,7 @@ function NewPasswordForm({ token }: { token: string }) {
             placeholder="At least 6 characters"
             required
             minLength={6}
-            className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+            className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
           />
         </div>
 
@@ -196,7 +196,7 @@ function NewPasswordForm({ token }: { token: string }) {
             placeholder="Re-enter password"
             required
             minLength={6}
-            className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+            className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
           />
         </div>
 

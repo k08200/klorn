@@ -157,7 +157,7 @@ export function CommitmentCard({
             <span className="text-[11px] text-stone-500">
               {commitmentKindLabel(commitment.kind)}
             </span>
-            <span className="text-[11px] text-stone-600">{commitmentDueLabel(commitment)}</span>
+            <span className="text-[11px] text-stone-400">{commitmentDueLabel(commitment)}</span>
           </div>
           <p className="mt-2 text-sm font-medium text-stone-100 break-words">{commitment.title}</p>
           {commitment.description && (
@@ -411,7 +411,7 @@ function CommitmentPathPanel({
                 >
                   {step.step}
                 </p>
-                <p className="mt-0.5 text-[11px] text-stone-600">
+                <p className="mt-0.5 text-[11px] text-stone-400">
                   {dueLabel} · ~{step.estimatedMinutes}m
                 </p>
               </div>
@@ -432,7 +432,7 @@ function CommitmentPathPanel({
         })}
       </ol>
 
-      <p className="mt-2 text-[10px] text-stone-600">
+      <p className="mt-2 text-[10px] text-stone-400">
         {pathData.model ?? "AI"} · {new Date(pathData.builtAt).toLocaleDateString()}
       </p>
     </div>

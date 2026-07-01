@@ -111,7 +111,7 @@ export default function KeyboardShortcuts() {
             </div>
           ))}
         </div>
-        <p className="text-xs text-stone-600 mt-4 text-center">
+        <p className="text-xs text-stone-400 mt-4 text-center">
           Press Esc or click outside to close.
         </p>
         <button

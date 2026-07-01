@@ -13,7 +13,7 @@
 export function ProfileFact({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="rounded-lg border border-stone-800/60 bg-black/15 px-3 py-2">
-      <p className="text-[10px] font-medium uppercase tracking-wider text-stone-600">{label}</p>
+      <p className="text-[10px] font-medium uppercase tracking-wider text-stone-400">{label}</p>
       <p className="mt-1 truncate text-xs text-stone-300">{value || "-"}</p>
     </div>
   );
@@ -23,7 +23,7 @@ export function ProfileFact({ label, value }: { label: string; value: string | n
 export function DetailStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-stone-700/45 bg-black/20 px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">
         {label}
       </p>
       <p className="mt-1 truncate text-sm font-semibold text-stone-100">{value}</p>

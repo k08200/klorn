@@ -159,7 +159,7 @@ function SmsContent() {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="+821012345678"
-            className="w-full rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-100 placeholder:text-stone-600 focus:border-amber-400/50 focus:outline-none"
+            className="w-full rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-100 placeholder:text-stone-400 focus:border-amber-400/50 focus:outline-none"
           />
           <p className="text-[11px] text-stone-500">{E164_HINT}</p>
 

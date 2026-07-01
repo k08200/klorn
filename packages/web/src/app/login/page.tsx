@@ -199,7 +199,7 @@ function LoginForm() {
             >
               Read the doctrine before the login flow →
             </a>
-            <span className="ml-2 text-stone-600">Open source · AGPLv3 · v0.3.0</span>
+            <span className="ml-2 text-stone-400">Open source · AGPLv3 · v0.3.0</span>
           </p>
         </div>
       ) : (
@@ -210,7 +210,7 @@ function LoginForm() {
 
       <div className="my-5 flex items-center gap-3">
         <div className="h-px flex-1 bg-stone-800/80" />
-        <span className="text-xs text-stone-600">or continue with email</span>
+        <span className="text-xs text-stone-400">or continue with email</span>
         <div className="h-px flex-1 bg-stone-800/80" />
       </div>
 
@@ -253,7 +253,7 @@ function LoginForm() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Name"
-              className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+              className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
             />
           </div>
         )}
@@ -269,7 +269,7 @@ function LoginForm() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
             required
-            className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+            className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
           />
         </div>
 
@@ -295,7 +295,7 @@ function LoginForm() {
             placeholder={mode === "register" ? "At least 8 characters" : "Password"}
             required
             minLength={mode === "register" ? 8 : undefined}
-            className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+            className="w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
           />
         </div>
 

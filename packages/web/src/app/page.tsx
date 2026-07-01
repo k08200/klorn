@@ -137,7 +137,7 @@ function HeroProductScene() {
                       <span className="rounded border border-stone-700 px-2 py-1 text-[10px] text-stone-400">
                         {tag}
                       </span>
-                      <span className="text-xs text-stone-600">{time}</span>
+                      <span className="text-xs text-stone-400">{time}</span>
                     </div>
                     <p className="text-sm font-medium text-stone-100">{sender}</p>
                     <p className="mt-1 text-sm text-stone-500">{subject}</p>

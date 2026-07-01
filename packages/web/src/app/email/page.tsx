@@ -648,7 +648,7 @@ function EmailView() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search mail"
-            className="h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-stone-900/60 px-4 text-sm text-stone-200 outline-none transition placeholder:text-stone-600 focus:border-accent/45"
+            className="h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-stone-900/60 px-4 text-sm text-stone-200 outline-none transition placeholder:text-stone-400 focus:border-accent/45"
           />
           {appliedSearch && (
             <button
@@ -801,7 +801,7 @@ function EmailView() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search mail, attachments, fields"
-            className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-stone-950/60 px-3 text-sm text-stone-200 outline-none transition placeholder:text-stone-600 focus:border-accent/45"
+            className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-stone-950/60 px-3 text-sm text-stone-200 outline-none transition placeholder:text-stone-400 focus:border-accent/45"
           />
           <button
             type="submit"
@@ -880,7 +880,7 @@ function EmailView() {
                   ? "Nothing needs a reply right now."
                   : "No signals match this filter."}
             </p>
-            <p className="mt-1 text-xs text-stone-600">
+            <p className="mt-1 text-xs text-stone-400">
               {filter === "reply-needed"
                 ? "Switch tabs to see urgent, unread, or all mail — Klorn promotes a thread here when it detects something you should answer."
                 : "After sync, mail that needs action rises to the top."}
@@ -1185,7 +1185,7 @@ function BulkButton({
 function SignalStat({ label, value }: { label: string; value: number }) {
   return (
     <div className="border-r border-stone-800 px-4 py-3 last:border-r-0">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">
         {label}
       </p>
       <p className="mt-1 text-2xl font-semibold text-stone-100">{value}</p>
@@ -1278,7 +1278,7 @@ function LoadMoreBar({
           {isFetching ? "Loading…" : "Load more"}
         </button>
       ) : (
-        <span className="text-stone-600">All loaded.</span>
+        <span className="text-stone-400">All loaded.</span>
       )}
     </div>
   );
@@ -1337,7 +1337,7 @@ function EmailRowItem({
                   {email.summary}
                 </p>
               ) : email.snippet ? (
-                <p className="mt-2 line-clamp-2 text-xs leading-5 text-stone-600">
+                <p className="mt-2 line-clamp-2 text-xs leading-5 text-stone-400">
                   {email.snippet}
                 </p>
               ) : null}
@@ -1446,7 +1446,7 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
             {thread.summary ? (
               <p className="mt-2 line-clamp-2 text-xs leading-5 text-stone-400">{thread.summary}</p>
             ) : thread.lastMessage.snippet ? (
-              <p className="mt-2 line-clamp-2 text-xs leading-5 text-stone-600">
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-stone-400">
                 {thread.lastMessage.snippet}
               </p>
             ) : null}

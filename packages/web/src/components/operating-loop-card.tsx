@@ -156,7 +156,7 @@ export default function OperatingLoopCard() {
         <section>
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-stone-100">Next moves</h3>
-            <span className="text-[11px] text-stone-600">{plan.nextMoves.length}</span>
+            <span className="text-[11px] text-stone-400">{plan.nextMoves.length}</span>
           </div>
           <ul className="space-y-2">
             {plan.nextMoves.map((move) => (
@@ -244,7 +244,7 @@ function DecisionOutcomeRow({ outcome }: { outcome: OperatingPlanOutcome }) {
             {outcomeStatusLabel(outcome.status)}
           </span>
         </div>
-        <p className="mt-1 truncate text-[11px] text-stone-600">
+        <p className="mt-1 truncate text-[11px] text-stone-400">
           {outcome.toolName && outcome.toolName !== "decision"
             ? outcome.toolName.replace(/_/g, " ")
             : "Decision"}
@@ -261,7 +261,7 @@ function MoveRow({ move }: { move: OperatingPlanMove }) {
     <article className="rounded-xl border border-stone-800 bg-stone-900/35 p-3 transition hover:border-amber-300/25 hover:bg-stone-900/55">
       <div className="flex flex-wrap items-center gap-2">
         <ToneBadge tone={move.tone} label={displayText(move.label)} />
-        <span className="text-[11px] text-stone-600">{sourceLabel(move.source)}</span>
+        <span className="text-[11px] text-stone-400">{sourceLabel(move.source)}</span>
       </div>
       {move.href ? (
         <Link
@@ -306,9 +306,9 @@ function WatchRow({ context }: { context: OperatingPlanWatchContext }) {
         <p className="min-w-0 truncate text-xs font-medium text-stone-300">
           {displayText(context.title)}
         </p>
-        <span className="shrink-0 text-[10px] text-stone-600">{riskLabel(context.risk)}</span>
+        <span className="shrink-0 text-[10px] text-stone-400">{riskLabel(context.risk)}</span>
       </div>
-      <p className="mt-1 line-clamp-1 text-[11px] text-stone-600">{displayText(context.reason)}</p>
+      <p className="mt-1 line-clamp-1 text-[11px] text-stone-400">{displayText(context.reason)}</p>
     </div>
   );
   return context.href ? (
@@ -326,7 +326,7 @@ function LoopMetric({ metric }: { metric: OperatingPlanMetric }) {
   return (
     <div className="border-r border-white/10 px-2 py-2 last:border-r-0">
       <p className={`text-lg font-semibold ${metricColor(metric.tone)}`}>{metric.value}</p>
-      <p className="mt-0.5 truncate text-[10px] text-stone-600">{displayText(metric.label)}</p>
+      <p className="mt-0.5 truncate text-[10px] text-stone-400">{displayText(metric.label)}</p>
     </div>
   );
 }

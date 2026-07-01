@@ -28,7 +28,7 @@ export default function Tabs({ tabs, active, onChange }: TabsProps) {
         >
           {tab.label}
           {tab.count !== undefined && (
-            <span className={`ml-1.5 ${active === tab.id ? "text-stone-400" : "text-stone-600"}`}>
+            <span className={`ml-1.5 ${active === tab.id ? "text-stone-400" : "text-stone-400"}`}>
               {tab.count}
             </span>
           )}

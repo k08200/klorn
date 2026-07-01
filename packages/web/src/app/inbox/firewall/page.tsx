@@ -438,7 +438,7 @@ function TierColumn({
       <p className="mb-4 text-[11px] leading-5 text-stone-500">{v.description}</p>
 
       {items.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-stone-800/70 px-3 py-8 text-center text-xs text-stone-600">
+        <p className="rounded-lg border border-dashed border-stone-800/70 px-3 py-8 text-center text-xs text-stone-400">
           Nothing here yet.
         </p>
       ) : (
@@ -498,7 +498,7 @@ function FirewallCard({
           </span>
         </p>
       )}
-      <div className="mt-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-stone-600">
+      <div className="mt-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-stone-400">
         <SourceBadge source={item.source} />
         {item.toolName && (
           <>
@@ -604,7 +604,7 @@ function AutoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
   if (count === 0) {
     return (
       <section className="glass mt-4 flex items-center gap-2 rounded-2xl border border-stone-800/70 bg-stone-950/30 p-4 text-xs text-stone-500">
-        <TierGlyph tier="AUTO" className="text-stone-600" />
+        <TierGlyph tier="AUTO" className="text-stone-400" />
         <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-stone-500">
           AUTO
         </span>

@@ -241,11 +241,17 @@ body {
    share specificity with the definitions above and are declared after them,
    so source order alone lets them win — no !important needed. */
 @media (prefers-reduced-motion: reduce) {
-  .lift,
-  .animate-card-in,
-  .animate-count-pop {
-    animation: none;
-    transition: none;
+  /* Kill ALL motion for users who request it — covers every keyframe (including
+     the infinite eve-scan / eve-pulse / eve-drift and slide/fade/shimmer) and
+     transitions, not just the three classes that were listed. 0.01ms (not 0)
+     keeps animationend/transitionend events firing so nothing hangs. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
   .lift:hover {
     transform: none;

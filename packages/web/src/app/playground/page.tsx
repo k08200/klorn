@@ -325,7 +325,7 @@ export default function PlaygroundPage() {
               id="pg-from"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              className="mb-3 w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+              className="mb-3 w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
               placeholder="Jane Park <jane@sequoia.com>"
             />
 
@@ -336,7 +336,7 @@ export default function PlaygroundPage() {
               id="pg-subject"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              className="mb-3 w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+              className="mb-3 w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
               placeholder="Can we talk today?"
             />
 
@@ -348,7 +348,7 @@ export default function PlaygroundPage() {
               value={snippet}
               onChange={(e) => setSnippet(e.target.value)}
               rows={4}
-              className="mb-4 w-full resize-y rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+              className="mb-4 w-full resize-y rounded-md border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
               placeholder="Paste the first lines of the email…"
             />
 
@@ -402,7 +402,7 @@ export default function PlaygroundPage() {
                     autoCapitalize="off"
                     spellCheck={false}
                     placeholder="vendor/model-id"
-                    className="mt-2 w-full rounded-md border border-stone-700 bg-stone-950 px-3 py-2.5 font-mono text-xs text-white outline-none placeholder:text-stone-600 focus:border-amber-300"
+                    className="mt-2 w-full rounded-md border border-stone-700 bg-stone-950 px-3 py-2.5 font-mono text-xs text-white outline-none placeholder:text-stone-400 focus:border-amber-300"
                   />
                 )}
               </div>
@@ -430,7 +430,7 @@ export default function PlaygroundPage() {
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
-              className="mb-1.5 w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 font-mono text-sm text-white outline-none transition placeholder:text-stone-600 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
+              className="mb-1.5 w-full rounded-md border border-stone-700 bg-stone-950 px-4 py-3 font-mono text-sm text-white outline-none transition placeholder:text-stone-400 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/25"
               placeholder={PROVIDER_META[provider].keyPlaceholder}
             />
             <p className="mb-4 text-[11px] text-stone-500">
@@ -531,7 +531,7 @@ export default function PlaygroundPage() {
           </section>
         </div>
 
-        <p className="mx-auto mt-10 max-w-2xl text-center text-xs leading-relaxed text-stone-600">
+        <p className="mx-auto mt-10 max-w-2xl text-center text-xs leading-relaxed text-stone-400">
           This is a demo of the classifier on a single email you pick. The real product runs on your
           live inbox and learns your corrections over time — that's where it gets good.
         </p>

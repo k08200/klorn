@@ -92,7 +92,7 @@ export function RejectReasonDialog({ open, onCancel, onReject }: RejectReasonDia
           placeholder="e.g. Wrong recipient, bad timing, not my task"
           className="w-full resize-none rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-200 placeholder-stone-600 transition focus:border-amber-300 focus:outline-none"
         />
-        <p className="mt-1 text-right text-[10px] text-stone-600">
+        <p className="mt-1 text-right text-[10px] text-stone-400">
           {reason.length}/{MAX_REJECT_REASON_LENGTH}
         </p>
         <div className="mt-4 flex flex-wrap justify-end gap-2">

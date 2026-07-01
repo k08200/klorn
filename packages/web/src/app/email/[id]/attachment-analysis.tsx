@@ -214,7 +214,7 @@ export function AttachmentAnalysis({
                   {attachmentCategoryLabel(attachment.category)}
                 </span>
               )}
-              <span className="text-[11px] text-stone-600">
+              <span className="text-[11px] text-stone-400">
                 {formatBytes(attachment.size)} · {attachmentStatusLabel(attachment.analysisStatus)}
               </span>
               {attachmentNeedsManualReview(attachment) && (
@@ -425,7 +425,7 @@ function AttachmentCorrectionForm({
     <div className="mt-3 rounded-lg border border-accent/15 bg-accent/5 p-3">
       <div className="grid gap-2 sm:grid-cols-[1fr_160px]">
         <label className="block">
-          <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-600">
+          <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-400">
             Summary
           </span>
           <input
@@ -435,7 +435,7 @@ function AttachmentCorrectionForm({
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-600">
+          <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-400">
             Category
           </span>
           <select
@@ -465,7 +465,7 @@ function AttachmentCorrectionForm({
       </div>
       <div className="mt-2">
         <div className="mb-1 flex items-center justify-between gap-2">
-          <span className="block text-[10px] uppercase tracking-wider text-stone-600">
+          <span className="block text-[10px] uppercase tracking-wider text-stone-400">
             Extracted fields
           </span>
           <button

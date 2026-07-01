@@ -297,7 +297,7 @@ function AdminDashboard() {
                 >
                   Pass rate {(evalData.summary.passRate * 100).toFixed(0)}%
                 </span>
-                <span className="text-stone-600">
+                <span className="text-stone-400">
                   {new Date(evalData.runAt).toLocaleString("en-US")}
                 </span>
               </div>
@@ -322,7 +322,7 @@ function AdminDashboard() {
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-stone-500">{r.id}</span>
                         <span className="text-stone-300">{r.name}</span>
-                        <span className="text-[10px] uppercase text-stone-600">[{r.severity}]</span>
+                        <span className="text-[10px] uppercase text-stone-400">[{r.severity}]</span>
                       </div>
                       {!r.passed && r.message && <p className="text-red-400 mt-0.5">{r.message}</p>}
                     </div>
@@ -481,12 +481,12 @@ function AdminDashboard() {
                         <span className="text-red-400 font-mono">
                           {e.tool || (e.summary.startsWith("Agent error") ? "Agent loop" : "Agent")}
                         </span>
-                        <span className="text-stone-600">
+                        <span className="text-stone-400">
                           {new Date(e.createdAt).toLocaleString("en-US")}
                         </span>
                       </div>
                       <p className="truncate text-stone-400">{e.summary}</p>
-                      <p className="mt-1 text-stone-600">User: {e.userId.slice(0, 8)}</p>
+                      <p className="mt-1 text-stone-400">User: {e.userId.slice(0, 8)}</p>
                     </div>
                   ))}
                 </div>

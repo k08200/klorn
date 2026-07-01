@@ -422,7 +422,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
       </div>
       <p className="text-[13px] md:text-xs text-stone-400 mt-1 line-clamp-2 ml-6">{n.message}</p>
       <div className="flex items-center gap-2 mt-1 ml-6">
-        <p className="text-[10px] text-stone-600">{formatRelative(n.createdAt)}</p>
+        <p className="text-[10px] text-stone-400">{formatRelative(n.createdAt)}</p>
         {getNotificationTarget(n) && <span className="text-[10px] text-amber-300">Open</span>}
       </div>
       {n.pendingActionId && n.pendingActionStatus === "PENDING" && (
@@ -490,7 +490,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         <p className="text-[13px] md:text-xs text-stone-400 mt-1 line-clamp-1 ml-6">
           {notificationTitle(group.latestItem.title)}
         </p>
-        <p className="text-[10px] text-stone-600 mt-1 ml-6">
+        <p className="text-[10px] text-stone-400 mt-1 ml-6">
           Latest {formatRelative(group.latestItem.createdAt)}
         </p>
       </button>
