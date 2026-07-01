@@ -131,6 +131,11 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
       });
       count++;
     } catch (err) {
+      // The daily cost cap is expected back-pressure, not a per-email failure:
+      // re-throw it so the scheduler's classify catch treats it as the cap
+      // (and fires the free-tier upgrade nudge). Swallowing it here left the cap
+      // invisible and the nudge never firing.
+      if (err instanceof Error && err.name === "DailyCostCapExceededError") throw err;
       // Skip this email and retry next cycle, but don't go fully silent: a
       // persistent failure (e.g. the :free model is quota-locked for ~an hour,
       // or a misconfigured BYOK key 401s every call) would otherwise re-fail
