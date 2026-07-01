@@ -19,10 +19,26 @@ export default function PushRegister() {
 
     // Native shell: register for FCM/APNs (native push), not Web Push — iOS
     // WKWebView has no usable Web Push and on Android a web subscription would
-    // just be a redundant channel. Also run the Phase 0 Samsung calendar probe.
+    // just be a redundant channel.
     if (isNativePlatform()) {
       void registerNativePush();
-      void probeDeviceCalendars();
+
+      // Phase 0 Samsung-calendar probe is a throwaway diagnostic that fires a
+      // SECOND OS permission prompt (calendar) alongside push on first launch.
+      // Gate it out of production so shipping users don't get a permission
+      // prompt for a feature that isn't built yet. Enable with
+      // NEXT_PUBLIC_CALENDAR_PROBE=1 (or any non-production build) to run it.
+      if (
+        process.env.NODE_ENV !== "production" ||
+        process.env.NEXT_PUBLIC_CALENDAR_PROBE === "1"
+      ) {
+        void probeDeviceCalendars();
+      } else {
+        // Log a signal so the skip is never silent (project reliability rule).
+        console.info(
+          "[CALENDAR-PROBE] Skipped on production launch (set NEXT_PUBLIC_CALENDAR_PROBE=1 to run).",
+        );
+      }
       return;
     }
 
