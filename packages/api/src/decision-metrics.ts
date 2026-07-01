@@ -185,10 +185,41 @@ export interface UserDecisionSummary {
   overrideRate: number | null;
 }
 
+/**
+ * Per-tier accuracy from CONFIRMED overrides only. A user override ("OVERRIDE:X"
+ * to a different tier) is the ONLY ground truth in the ledger, so this reports
+ * the confirmed-error picture across all four tiers — never inferring
+ * correctness from a null/terminal outcome (honest-by-design, like the bounds
+ * above). This is the accuracy instrument that SCALES: it grows automatically
+ * with real user overrides, per-user, and needs no synthetic labels.
+ */
+export interface TierConfusion {
+  tier: Tier;
+  /** Rows shown this tier. */
+  shown: number;
+  /** Shown this tier, then overridden to a DIFFERENT tier — confirmed wrong. */
+  overriddenAway: number;
+  /** Confirmed-error LOWER bound: overriddenAway / shown (unconfirmed rows never counted correct). */
+  correctionRate: number | null;
+  /** Where the user moved shown-this-tier items (confirmed overrides only). */
+  movedTo: Partial<Record<Tier, number>>;
+}
+
+export interface ConfusionReport {
+  total: number;
+  /** Tier-moving overrides across all tiers — the only ground-truth cells. */
+  confirmedOverrides: number;
+  perTier: TierConfusion[];
+  /** shownTier → revealedTier counts, confirmed overrides only. */
+  matrix: Partial<Record<Tier, Partial<Record<Tier, number>>>>;
+}
+
 export interface DecisionMetricsReport {
   /** How many days back the ledger was read (the recall/over-suppression window). */
   windowDays: number;
   overall: DecisionMetrics;
+  /** Full per-tier confusion from confirmed overrides (all 4 tiers). */
+  confusion: ConfusionReport;
   perUser: UserDecisionSummary[];
 }
 
@@ -217,6 +248,54 @@ function summarizePerUser(rows: readonly LedgerRow[]): UserDecisionSummary[] {
       };
     })
     .sort((a, b) => b.total - a.total);
+}
+
+/**
+ * Pure: fold ledger rows into the per-tier confusion from confirmed overrides.
+ * Uses only the ground-truth signal (a tier-moving override); null/terminal
+ * outcomes are unconfirmed and never counted as correct or incorrect.
+ */
+export function summarizeConfusion(rows: readonly DecisionRow[]): ConfusionReport {
+  const shown = new Map<Tier, number>();
+  const movedTo = new Map<Tier, Map<Tier, number>>();
+  let confirmedOverrides = 0;
+
+  for (const row of rows) {
+    if (!TIER_SET.has(row.shownTier)) continue; // skip legacy/garbage tiers
+    const from = row.shownTier as Tier;
+    shown.set(from, (shown.get(from) ?? 0) + 1);
+    const target = overrideTarget(row.outcome);
+    if (target !== null && target !== from) {
+      confirmedOverrides += 1;
+      const inner = movedTo.get(from) ?? new Map<Tier, number>();
+      inner.set(target, (inner.get(target) ?? 0) + 1);
+      movedTo.set(from, inner);
+    }
+  }
+
+  const perTier: TierConfusion[] = TIERS.map((tier) => {
+    const s = shown.get(tier) ?? 0;
+    const moved = movedTo.get(tier);
+    const overriddenAway = moved ? [...moved.values()].reduce((a, b) => a + b, 0) : 0;
+    const movedToObj: Partial<Record<Tier, number>> = {};
+    if (moved) for (const [t, n] of moved) movedToObj[t] = n;
+    return {
+      tier,
+      shown: s,
+      overriddenAway,
+      correctionRate: ratio(overriddenAway, s),
+      movedTo: movedToObj,
+    };
+  });
+
+  const matrix: Partial<Record<Tier, Partial<Record<Tier, number>>>> = {};
+  for (const [from, inner] of movedTo) {
+    const obj: Partial<Record<Tier, number>> = {};
+    for (const [to, n] of inner) obj[to] = n;
+    matrix[from] = obj;
+  }
+
+  return { total: rows.length, confirmedOverrides, perTier, matrix };
 }
 
 /**
@@ -286,5 +365,10 @@ export async function getDecisionMetrics(
     select: { userId: true, shownTier: true, outcome: true, decidedBy: true },
   })) as LedgerRow[];
 
-  return { windowDays, overall: summarizeDecisions(rows), perUser: summarizePerUser(rows) };
+  return {
+    windowDays,
+    overall: summarizeDecisions(rows),
+    confusion: summarizeConfusion(rows),
+    perUser: summarizePerUser(rows),
+  };
 }
