@@ -32,15 +32,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div
-        className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none pb-safe pr-safe"
-        aria-live="polite"
-        aria-atomic="true"
-      >
+      {/* The container is NOT itself a live region: a container aria-live +
+          aria-atomic re-announced the WHOLE stack on every change and competed
+          with each toast's own role. Each toast carries its OWN live semantics
+          instead — role="alert" (assertive) for errors, role="status" (polite)
+          for success/info — so only the new toast is announced, at the right
+          urgency. */}
+      <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none pb-safe pr-safe">
         {toasts.map((t) => (
           <div
             key={t.id}
             role={t.type === "error" ? "alert" : "status"}
+            aria-live={t.type === "error" ? "assertive" : "polite"}
             className={`pointer-events-auto px-4 py-3 rounded-lg text-sm font-medium shadow-lg animate-slide-up ${
               t.type === "success"
                 ? "bg-green-600 text-white"
