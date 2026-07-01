@@ -12,6 +12,7 @@ import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { buildAttachmentCandidateProfile, listEmailAttachments } from "../email-attachments.js";
 import { updateCandidateIntake } from "../email-candidate-intake.js";
+import { requireEntitled } from "../entitlement-guard.js";
 import { createEmailDraft, type GmailDraftAttachment, getAuthedClient } from "../gmail.js";
 import { getUserLlmCredentials } from "../llm-credentials.js";
 import { createCompletion, DRAFT_MODEL } from "../openai.js";
@@ -162,7 +163,10 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
   app.post(
     "/:id/reply-draft",
     {
-      preHandler: requireAuth,
+      // Pro-only compose: generating a reply draft is the paid "writes your
+      // replies" value, so gate it even though the parent email routes are now
+      // open to the free tier. requireAuth first sets userId for requireEntitled.
+      preHandler: [requireAuth, requireEntitled],
       config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
     },
     async (request, reply) => {
@@ -215,72 +219,86 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
   );
 
   // POST /api/email/:id/gmail-draft
-  app.post("/:id/gmail-draft", { preHandler: requireAuth }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const uid = getUserId(request);
-    const { to, subject, body, attachmentIds, includeBriefAttachment } = request.body as {
-      to?: string;
-      subject?: string;
-      body?: string;
-      attachmentIds?: string[];
-      includeBriefAttachment?: boolean;
-    };
-    if (!to || !subject || !body) {
-      return reply.code(400).send({ error: "Missing required fields: to, subject, body" });
-    }
+  // Pro-only: writing a draft into Gmail is a compose (email_write) action.
+  app.post(
+    "/:id/gmail-draft",
+    { preHandler: [requireAuth, requireEntitled] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const uid = getUserId(request);
+      const { to, subject, body, attachmentIds, includeBriefAttachment } = request.body as {
+        to?: string;
+        subject?: string;
+        body?: string;
+        attachmentIds?: string[];
+        includeBriefAttachment?: boolean;
+      };
+      if (!to || !subject || !body) {
+        return reply.code(400).send({ error: "Missing required fields: to, subject, body" });
+      }
 
-    const dbEmail = await prisma.emailMessage.findFirst({
-      where: { userId: uid, OR: [{ id }, { gmailId: id }] },
-      select: {
-        id: true,
-        gmailId: true,
-        threadId: true,
-        from: true,
-        subject: true,
-        summary: true,
-        receivedAt: true,
-      },
-    });
-    if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
+      const dbEmail = await prisma.emailMessage.findFirst({
+        where: { userId: uid, OR: [{ id }, { gmailId: id }] },
+        select: {
+          id: true,
+          gmailId: true,
+          threadId: true,
+          from: true,
+          subject: true,
+          summary: true,
+          receivedAt: true,
+        },
+      });
+      if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
 
-    let attachments: GmailDraftAttachment[] = [];
-    try {
-      attachments = await fetchOriginalAttachmentsForDraft({
+      let attachments: GmailDraftAttachment[] = [];
+      try {
+        attachments = await fetchOriginalAttachmentsForDraft({
+          userId: uid,
+          emailId: dbEmail.id,
+          gmailMessageId: dbEmail.gmailId,
+          attachmentIds: Array.isArray(attachmentIds) ? attachmentIds : [],
+        });
+        if (includeBriefAttachment) {
+          const analyzedAttachments = await listEmailAttachments([dbEmail.id], uid);
+          const candidateProfile = buildAttachmentCandidateProfile(analyzedAttachments);
+          const brief = buildEmailAttachmentBrief({
+            subject: dbEmail.subject,
+            from: dbEmail.from,
+            receivedAt: dbEmail.receivedAt,
+            summary: dbEmail.summary,
+            attachments: analyzedAttachments,
+            candidateProfile,
+          });
+          attachments.unshift({
+            filename: "klorn-attachment-brief.txt",
+            mimeType: "text/plain; charset=utf-8",
+            content: Buffer.from(brief, "utf-8"),
+          });
+        }
+      } catch (err) {
+        return reply
+          .code(409)
+          .send({ error: err instanceof Error ? err.message : "Attachment fetch failed" });
+      }
+
+      const result = await createEmailDraft(uid, to, subject, body, dbEmail.threadId, attachments);
+      if ("error" in result) return reply.code(409).send(result);
+      await updateCandidateIntake({
         userId: uid,
         emailId: dbEmail.id,
-        gmailMessageId: dbEmail.gmailId,
-        attachmentIds: Array.isArray(attachmentIds) ? attachmentIds : [],
+        status: "CONTACTED",
+      }).catch((err) => {
+        // Best-effort status write — the draft already succeeded, so don't fail
+        // the request. But log a signal instead of swallowing: a systemic
+        // failure here silently stops candidate intake tracking.
+        console.warn("[email-replies] failed to update candidate intake status:", err);
+        captureError(err, {
+          tags: { scope: "email-replies.intake-status" },
+          extra: { userId: uid, emailId: dbEmail.id },
+        });
       });
-      if (includeBriefAttachment) {
-        const analyzedAttachments = await listEmailAttachments([dbEmail.id], uid);
-        const candidateProfile = buildAttachmentCandidateProfile(analyzedAttachments);
-        const brief = buildEmailAttachmentBrief({
-          subject: dbEmail.subject,
-          from: dbEmail.from,
-          receivedAt: dbEmail.receivedAt,
-          summary: dbEmail.summary,
-          attachments: analyzedAttachments,
-          candidateProfile,
-        });
-        attachments.unshift({
-          filename: "klorn-attachment-brief.txt",
-          mimeType: "text/plain; charset=utf-8",
-          content: Buffer.from(brief, "utf-8"),
-        });
-      }
-    } catch (err) {
-      return reply
-        .code(409)
-        .send({ error: err instanceof Error ? err.message : "Attachment fetch failed" });
-    }
-
-    const result = await createEmailDraft(uid, to, subject, body, dbEmail.threadId, attachments);
-    if ("error" in result) return reply.code(409).send(result);
-    await updateCandidateIntake({
-      userId: uid,
-      emailId: dbEmail.id,
-      status: "CONTACTED",
-    }).catch(() => null);
-    return { ...result, attachedCount: attachments.length };
-  });
+      return { ...result, attachedCount: attachments.length };
+    },
+  );
 }

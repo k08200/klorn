@@ -29,7 +29,7 @@ import {
   summarizeUnsummarizedEmails,
   syncEmails,
 } from "../email-sync.js";
-import { requireEntitled } from "../entitlement-guard.js";
+import { requireAppAccess } from "../entitlement-guard.js";
 import { toggleReadGmail } from "../gmail.js";
 import { senderEmail } from "../notification-format.js";
 import { captureError } from "../sentry.js";
@@ -523,11 +523,13 @@ export async function emailRoutes(app: FastifyInstance) {
   // applies to all of them. (Sub-files keep their own per-route requireAuth for
   // standalone test registration; the double-run is idempotent.)
   app.addHook("preHandler", requireAuth);
-  // Paid surface: when the paywall is on, a non-entitled user (FREE / trial
-  // expired) is refused here so a valid token can't reach send/compose/
-  // reply-draft/summarize directly and bypass the client paywall. No-op
-  // pre-launch. Covers the sub-route groups too (same encapsulation context).
-  app.addHook("preHandler", requireEntitled);
+  // Usable free tier: reading mail, syncing, summarizing (cost-capped), rules,
+  // triage and reversible actions are core free value, so admit any
+  // non-hard-walled user. The Pro compose surface — reply-draft / gmail-draft
+  // in the replies sub-routes — keeps its OWN per-route requireEntitled, so a
+  // free token still can't generate or write drafts. No-op pre-launch. Applies
+  // to the sub-route groups too (same encapsulation context).
+  app.addHook("preHandler", requireAppAccess);
 
   // Sub-route groups live in sibling files and register against the same
   // FastifyInstance + prefix so client paths stay byte-identical.

@@ -77,3 +77,45 @@ describe("requireEntitled", () => {
     expect(reply.statusCode).toBe(401);
   });
 });
+
+describe("requireAppAccess (usable free tier gate)", () => {
+  it("is a zero-DB no-op when the paywall is OFF (pre-launch)", async () => {
+    process.env.PAYWALL_ENABLED = "";
+    vi.resetModules();
+    const { requireAppAccess } = await import("../entitlement-guard.js");
+    const reply = makeReply();
+    await requireAppAccess({ userId: "u1" } as never, reply as never);
+    expect(reply.statusCode).toBe(0);
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+
+  it("ADMITS a FREE user when the paywall is ON (not hard-walled)", async () => {
+    process.env.PAYWALL_ENABLED = "true";
+    vi.resetModules();
+    findUnique.mockResolvedValue({ plan: "FREE", role: "USER" });
+    const { requireAppAccess } = await import("../entitlement-guard.js");
+    const reply = makeReply();
+    await requireAppAccess({ userId: "u1" } as never, reply as never);
+    // Free tier is usable — the app-entry gate lets them in.
+    expect(reply.statusCode).toBe(0);
+  });
+
+  it("ADMITS a paid (PRO) user when the paywall is ON", async () => {
+    process.env.PAYWALL_ENABLED = "true";
+    vi.resetModules();
+    findUnique.mockResolvedValue({ plan: "PRO", role: "USER" });
+    const { requireAppAccess } = await import("../entitlement-guard.js");
+    const reply = makeReply();
+    await requireAppAccess({ userId: "u1" } as never, reply as never);
+    expect(reply.statusCode).toBe(0);
+  });
+
+  it("401s when no authenticated userId is present and the paywall is ON", async () => {
+    process.env.PAYWALL_ENABLED = "true";
+    vi.resetModules();
+    const { requireAppAccess } = await import("../entitlement-guard.js");
+    const reply = makeReply();
+    await requireAppAccess({} as never, reply as never);
+    expect(reply.statusCode).toBe(401);
+  });
+});

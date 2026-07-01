@@ -11,16 +11,20 @@ import {
 import { getUserId, requireAuth } from "../auth.js";
 import { createEvent as googleCreateEvent, deleteEvent as googleDeleteEvent } from "../calendar.js";
 import { prisma } from "../db.js";
-import { requireEntitled } from "../entitlement-guard.js";
+import { requireAppAccess, requireEntitled } from "../entitlement-guard.js";
 import { getAuthedClient, isGoogleAuthError, markGoogleTokenForReconnect } from "../gmail.js";
 import { parseGoogleDateTime } from "../google-calendar-time.js";
 import { buildMeetingPrepPack } from "../meeting-prep-pack.js";
+import { captureError } from "../sentry.js";
 import { normalizeTimeZone } from "../time-zone.js";
 
 export async function calendarRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
-  // Paywall: refuse non-entitled users at the paid surface (no-op pre-launch).
-  app.addHook("preHandler", requireEntitled);
+  // Usable free tier: reading the calendar + conflict/prep views is core free
+  // value, so admit any non-hard-walled user. Event writes (create/update/
+  // delete) keep their OWN per-route requireEntitled below (calendar_write is
+  // Pro). No-op pre-launch.
+  app.addHook("preHandler", requireAppAccess);
 
   // List events — supports ?start=ISO&end=ISO or ?days=N (from today)
   app.get("/", async (request) => {
@@ -70,8 +74,8 @@ export async function calendarRoutes(app: FastifyInstance) {
     return event;
   });
 
-  // Create event (local + Google Calendar sync)
-  app.post("/", async (request) => {
+  // Create event (local + Google Calendar sync) — Pro (calendar_write)
+  app.post("/", { preHandler: requireEntitled }, async (request) => {
     const userId = getUserId(request);
     const { title, description, startTime, endTime, location, meetingLink, color, allDay } =
       request.body as {
@@ -129,8 +133,8 @@ export async function calendarRoutes(app: FastifyInstance) {
     return event;
   });
 
-  // Update event
-  app.patch("/:id", async (request, reply) => {
+  // Update event — Pro (calendar_write)
+  app.patch("/:id", { preHandler: requireEntitled }, async (request, reply) => {
     const uid = getUserId(request);
     const { id } = request.params as { id: string };
     const existing = await prisma.calendarEvent.findUnique({ where: { id } });
@@ -156,8 +160,8 @@ export async function calendarRoutes(app: FastifyInstance) {
     return event;
   });
 
-  // Delete event (local + Google Calendar sync)
-  app.delete("/:id", async (request, reply) => {
+  // Delete event (local + Google Calendar sync) — Pro (calendar_write)
+  app.delete("/:id", { preHandler: requireEntitled }, async (request, reply) => {
     const userId = getUserId(request);
     const { id } = request.params as { id: string };
     const event = await prisma.calendarEvent.findUnique({ where: { id } });
@@ -168,8 +172,15 @@ export async function calendarRoutes(app: FastifyInstance) {
     if (event.googleId) {
       try {
         await googleDeleteEvent(userId, event.googleId);
-      } catch {
-        // Google delete failed — still delete locally
+      } catch (err) {
+        // Best-effort: still delete locally. But don't swallow silently — a
+        // systemic Google-delete failure (token/quota/API) would otherwise be
+        // invisible while events resurface on the next sync.
+        console.warn("[calendar] Google delete failed, proceeding with local delete:", err);
+        captureError(err, {
+          tags: { scope: "calendar.delete.google-sync" },
+          extra: { userId, googleId: event.googleId },
+        });
       }
     }
 

@@ -67,11 +67,13 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!user) return null;
 
-  // Paywall: a signed-in but non-entitled user (trial expired / never
-  // subscribed) gets the subscribe screen on every app route except the
-  // billing/settings/sign-in paths. `entitled` is always true while the
-  // paywall is off, so this is inert until launch flips PAYWALL_ENABLED.
-  if (user.entitled === false && !isPaywallBypass(pathname)) {
+  // Hard paywall: only when the server says this user is fully walled out —
+  // pure subscriber-only mode (no free tier). With the usable free tier this
+  // is always false, so free users get into the app and are bounded by the
+  // free daily cost cap instead; the upgrade path lives in Settings. Inert
+  // until launch flips PAYWALL_ENABLED, and even then only if FREE grants
+  // nothing. Billing/settings/sign-in paths stay reachable regardless.
+  if (user.paywalled === true && !isPaywallBypass(pathname)) {
     return <PaywallScreen />;
   }
 

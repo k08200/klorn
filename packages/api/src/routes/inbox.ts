@@ -12,7 +12,7 @@
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
-import { requireEntitled } from "../entitlement-guard.js";
+import { requireAppAccess } from "../entitlement-guard.js";
 import { buildInboxSummary } from "../inbox-summary.js";
 import { buildOperatingPlan } from "../operating-plan.js";
 
@@ -20,8 +20,9 @@ const REPLY_NEEDED_LIMIT = 8;
 
 export function inboxRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
-  // Paywall: refuse non-entitled users at the paid surface (no-op pre-launch).
-  app.addHook("preHandler", requireEntitled);
+  // Usable free tier: the decision queue is core firewall value, so admit any
+  // non-hard-walled user (free included). No-op pre-launch.
+  app.addHook("preHandler", requireAppAccess);
 
   app.get("/summary", (request) => {
     const userId = getUserId(request);

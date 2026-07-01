@@ -23,25 +23,36 @@ describe("paywall entitlement (stripe.ts)", () => {
     expect(isEntitled("PRO")).toBe(true);
   });
 
-  it("paywall ON: FREE is fully locked; only paid/admin are entitled", async () => {
+  it("paywall ON: FREE gets the usable taster tier; only paid/admin are entitled", async () => {
     vi.stubEnv("PAYWALL_ENABLED", "true");
     vi.resetModules();
-    const { planHasFeature, isEntitled } = await import("../stripe.js");
+    const { planHasFeature, isEntitled, isHardPaywalled } = await import("../stripe.js");
 
-    // No free tier — every gated feature is off for FREE.
-    expect(planHasFeature("FREE", "email_auto_classify")).toBe(false);
-    expect(planHasFeature("FREE", "daily_briefing")).toBe(false);
-    expect(planHasFeature("FREE", "email_read")).toBe(false);
+    // Usable free tier — the core firewall experience stays on for FREE
+    // (bounded by the free daily cost cap, not by feature removal).
+    expect(planHasFeature("FREE", "email_auto_classify")).toBe(true);
+    expect(planHasFeature("FREE", "daily_briefing")).toBe(true);
+    expect(planHasFeature("FREE", "email_read")).toBe(true);
+    expect(planHasFeature("FREE", "agent_mode_auto")).toBe(true);
+    // Pro-only value stays gated for FREE: sending, replies, learning.
+    expect(planHasFeature("FREE", "email_write")).toBe(false);
+    expect(planHasFeature("FREE", "email_auto_reply")).toBe(false);
+    expect(planHasFeature("FREE", "pattern_learning")).toBe(false);
     // Paid plan still has everything.
     expect(planHasFeature("PRO", "email_auto_classify")).toBe(true);
     // ADMIN bypass survives (founder dogfooding / comped admin).
-    expect(planHasFeature("FREE", "email_auto_classify", "ADMIN")).toBe(true);
+    expect(planHasFeature("FREE", "email_write", "ADMIN")).toBe(true);
 
-    // Entitlement: locked FREE is out; paid + admin (comp) are in.
+    // Entitlement (paid features): FREE is out; paid + admin (comp) are in.
     expect(isEntitled("FREE")).toBe(false);
     expect(isEntitled("PRO")).toBe(true);
     expect(isEntitled("TEAM")).toBe(true);
     expect(isEntitled("ENTERPRISE")).toBe(true);
     expect(isEntitled("FREE", "ADMIN")).toBe(true);
+
+    // But FREE is NOT hard-walled out of the app — usable free tier.
+    expect(isHardPaywalled("FREE")).toBe(false);
+    expect(isHardPaywalled("PRO")).toBe(false);
+    expect(isHardPaywalled("FREE", "ADMIN")).toBe(false);
   });
 });

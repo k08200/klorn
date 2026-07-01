@@ -118,6 +118,13 @@ export const AGENT_IDLE_THRESHOLD_MS = intEnv("AGENT_IDLE_THRESHOLD_MS", 24 * 60
 // bypass the gate because their cost-per-token is 0.
 export const DAILY_COST_CAP_CENTS = intEnv("DAILY_COST_CAP_CENTS", 100);
 
+// Free-tier daily LLM spend cap (cents), applied ONLY when PAYWALL_ENABLED and
+// the user is not entitled (free plan). This is the free tier's "daily N emails"
+// limit expressed as cost — ~10¢/day is roughly 50–100 gemini-flash
+// classifications, enough to feel Klorn sort + auto-handle your inbox before
+// the wall. Entitled users (paid/trial/admin) keep DAILY_COST_CAP_CENTS.
+export const FREE_DAILY_COST_CAP_CENTS = intEnv("FREE_DAILY_COST_CAP_CENTS", 10);
+
 // Global hard cap across ALL users + system-initiated calls per UTC day, in
 // cents (USD). The per-user gate can't see calls made without a userId
 // (background reconcilers, system briefings), so a runaway system loop is
