@@ -58,6 +58,7 @@ export const queryKeys = {
   calendar: {
     all: ["calendar"] as const,
     events: (range?: { from: string; to: string }) => ["calendar", "events", range ?? {}] as const,
+    linkedAccounts: () => ["calendar", "linked-accounts"] as const,
   },
   reminders: {
     all: ["reminders"] as const,
