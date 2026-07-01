@@ -1,7 +1,13 @@
 import { type calendar_v3, google } from "googleapis";
 import { prisma } from "./db.js";
-import { getAuthedClient, isGoogleAuthError, markGoogleTokenForReconnect } from "./gmail.js";
 import {
+  getAuthedClient,
+  getLinkedCalendarClients,
+  isGoogleAuthError,
+  markGoogleTokenForReconnect,
+} from "./gmail.js";
+import {
+  type BusyConflict,
   type CalendarConflictItem,
   calendarLabelMap,
   selectFreeBusyCalendarIds,
@@ -152,11 +158,15 @@ function isForbidden(err: unknown): boolean {
   return e?.response?.status === 403 || e?.code === 403;
 }
 
-function conflictResult(conflicts: readonly unknown[], opts: { multiCalendar: boolean }) {
+function conflictResult(
+  conflicts: readonly unknown[],
+  opts: { scope: "all_calendars" | "primary_only"; linkedAccountsChecked: number },
+) {
   return {
     hasConflicts: conflicts.length > 0,
     conflicts,
-    scope: opts.multiCalendar ? "all_calendars" : "primary_only",
+    scope: opts.scope,
+    linkedAccountsChecked: opts.linkedAccountsChecked,
     message:
       conflicts.length > 0
         ? `Found ${conflicts.length} conflicting event(s) in this time range.`
@@ -192,32 +202,50 @@ async function freeBusyConflicts(calendar: calendar_v3.Calendar, timeMin: string
   return summarizeFreeBusy(calendars, calendarLabelMap(list.data.items));
 }
 
-/** Primary-only fallback for tokens that lack calendar.readonly. Still
- *  timezone-correct and all-day-safe — just blind to other calendars. */
-async function primaryOnlyConflicts(
+/** Primary-only busy blocks (events.list) for tokens that lack calendar.readonly.
+ *  Still timezone-correct and all-day-safe — just blind to other calendars. */
+async function primaryOnlyBusy(
   calendar: calendar_v3.Calendar,
+  timeMin: string,
+  timeMax: string,
+): Promise<readonly unknown[]> {
+  const res = await calendar.events.list({
+    calendarId: "primary",
+    timeMin,
+    timeMax,
+    singleEvents: true,
+    orderBy: "startTime",
+  });
+  return summarizeConflicts((res.data.items as CalendarConflictItem[]) || []);
+}
+
+/** Busy blocks from every LINKED (secondary) Google account — e.g. a work
+ *  account — which one primary token structurally can't see. Best-effort: a
+ *  linked account that errors is logged + captured and skipped, never sinking
+ *  the whole check (primary + the other linked accounts still count). */
+async function linkedAccountConflicts(
   userId: string,
   timeMin: string,
   timeMax: string,
-) {
-  try {
-    const res = await calendar.events.list({
-      calendarId: "primary",
-      timeMin,
-      timeMax,
-      singleEvents: true,
-      orderBy: "startTime",
-    });
-    return conflictResult(summarizeConflicts((res.data.items as CalendarConflictItem[]) || []), {
-      multiCalendar: false,
-    });
-  } catch (err) {
-    if (isGoogleAuthError(err)) {
-      await markGoogleTokenForReconnect(userId);
-      return { error: "Google Calendar not connected. Please reconnect your Google account." };
+): Promise<{ conflicts: BusyConflict[]; accountsChecked: number }> {
+  const linked = await getLinkedCalendarClients(userId);
+  const conflicts: BusyConflict[] = [];
+  for (const { client, email } of linked) {
+    try {
+      const cal = google.calendar({ version: "v3", auth: client });
+      conflicts.push(...(await freeBusyConflicts(cal, timeMin, timeMax)));
+    } catch (err) {
+      console.warn(
+        `[CALENDAR] linked-account free/busy failed (skipped): ${err instanceof Error ? err.message : err}`,
+      );
+      captureError(err, {
+        tags: { scope: "calendar.linked_freebusy_failed" },
+        // Domain only — never send the full linked email (PII) to Sentry.
+        extra: { userId, accountDomain: email.split("@")[1] ?? "unknown" },
+      });
     }
-    throw err;
   }
+  return { conflicts, accountsChecked: linked.length };
 }
 
 export async function checkConflicts(userId: string, startTime: string, endTime: string) {
@@ -237,23 +265,43 @@ export async function checkConflicts(userId: string, startTime: string, endTime:
 
   const calendar = google.calendar({ version: "v3", auth });
 
+  // Primary account: free/busy across ITS calendars, degrading to primary-only
+  // events.list when the token predates the calendar.readonly scope (403).
+  let primaryConflicts: readonly unknown[];
+  let scope: "all_calendars" | "primary_only";
   try {
-    // A double-book can sit on ANY of the user's calendars (work, shared,
-    // secondary), not just primary. One free/busy query covers them all.
-    const conflicts = await freeBusyConflicts(calendar, timeMin, timeMax);
-    return conflictResult(conflicts, { multiCalendar: true });
+    primaryConflicts = await freeBusyConflicts(calendar, timeMin, timeMax);
+    scope = "all_calendars";
   } catch (err) {
     if (isGoogleAuthError(err)) {
       await markGoogleTokenForReconnect(userId);
       return { error: "Google Calendar not connected. Please reconnect your Google account." };
     }
-    if (isForbidden(err)) {
-      // Token predates the calendar.readonly scope — degrade to primary-only
-      // until the user reconnects and picks up multi-calendar free/busy.
-      return primaryOnlyConflicts(calendar, userId, timeMin, timeMax);
+    if (!isForbidden(err)) throw err;
+    try {
+      primaryConflicts = await primaryOnlyBusy(calendar, timeMin, timeMax);
+      scope = "primary_only";
+    } catch (fallbackErr) {
+      if (isGoogleAuthError(fallbackErr)) {
+        await markGoogleTokenForReconnect(userId);
+        return { error: "Google Calendar not connected. Please reconnect your Google account." };
+      }
+      throw fallbackErr;
     }
-    throw err;
   }
+
+  // Linked (secondary) accounts widen the window ACROSS Google accounts — the
+  // real fix for a double-book that lives on a separate work account.
+  const { conflicts: linkedConflicts, accountsChecked } = await linkedAccountConflicts(
+    userId,
+    timeMin,
+    timeMax,
+  );
+
+  return conflictResult([...primaryConflicts, ...linkedConflicts], {
+    scope,
+    linkedAccountsChecked: accountsChecked,
+  });
 }
 
 export const CALENDAR_TOOLS = [
