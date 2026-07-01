@@ -12,6 +12,7 @@
  */
 
 import type { DecisionMetrics } from "./decision-metrics.js";
+import { riskCoverageThreshold, type ScoredOutcome } from "./selective-threshold.js";
 import { CLAMP, type ThresholdConfig, TIER_THRESHOLDS } from "./tier-policy.js";
 
 /** PUSH recall below this (the CI eval-gate floor) means the firewall is missing
@@ -24,6 +25,13 @@ export const SILENT_OVERSUPPRESS_TARGET = 0.1;
 export const MIN_SAMPLE = 20;
 /** Never propose more than this much movement in one run (small, reversible). */
 export const MAX_STEP = 0.05;
+/**
+ * Max tolerable AUTO error rate. AUTO auto-handles mail, so a wrong AUTO (the
+ * user later had to override it) is costly — hold it tight. The risk-coverage
+ * calibrator finds the confidence cutoff that keeps observed AUTO error under
+ * this bound while covering as much as possible.
+ */
+export const AUTO_ERROR_TARGET = 0.05;
 
 const DEFAULT_WINDOW_DAYS = 30;
 
@@ -65,6 +73,8 @@ export interface ProposalOpts {
   maxStep?: number;
   pushRecallTarget?: number;
   silentOverSuppressTarget?: number;
+  /** Max tolerable AUTO error rate for the risk-coverage calibrator. */
+  autoErrorTarget?: number;
 }
 
 /** Adapt the full decision-metrics summary to the signals a proposal needs. */
@@ -147,4 +157,53 @@ export function proposeThresholdAdjustments(
   }
 
   return out;
+}
+
+/**
+ * Calibrate the AUTO confidence gate from observed AUTO decisions using the
+ * risk-coverage primitive (selective-threshold.ts). Unlike the aggregate-metric
+ * proposals above, this reads per-row (confidence, correct) outcomes and asks:
+ * what confidence cutoff keeps AUTO error under `autoErrorTarget` while covering
+ * the most mail? It then proposes moving tier.auto.confidence toward that cutoff
+ * — LOWER when the current gate is over-cautious (safe headroom → more AUTO
+ * recall), RAISE when observed AUTO error demands a tighter gate. Movement is
+ * bounded by maxStep and clamped to [0,1]; returns null on thin data, no safe
+ * threshold, or when already calibrated.
+ *
+ * Pure — the caller supplies the rows (from the DecisionLabel ledger).
+ */
+export function proposeAutoConfidenceAdjustment(
+  rows: readonly ScoredOutcome[],
+  opts: ProposalOpts = {},
+): ProposalCandidate | null {
+  const thresholds = opts.thresholds ?? TIER_THRESHOLDS;
+  const windowDays = opts.windowDays ?? DEFAULT_WINDOW_DAYS;
+  const minSample = opts.minSample ?? MIN_SAMPLE;
+  const maxStep = opts.maxStep ?? MAX_STEP;
+  const alpha = opts.autoErrorTarget ?? AUTO_ERROR_TARGET;
+
+  if (rows.length < minSample) return null;
+
+  const rc = riskCoverageThreshold(rows, { alpha, minCovered: minSample });
+  if (!rc) return null; // no confidence cutoff keeps AUTO error under alpha here
+
+  const current = thresholds.auto.confidence;
+  // Step toward the calibrated cutoff, but never more than maxStep in one run.
+  const delta = Math.max(-maxStep, Math.min(maxStep, rc.threshold - current));
+  const proposed = CLAMP(current + delta);
+  if (proposed === current) return null;
+
+  return {
+    knob: "tier.auto.confidence",
+    currentValue: current,
+    proposedValue: proposed,
+    direction: proposed < current ? "LOWER" : "RAISE",
+    evidence: {
+      metric: "auto.confidence@riskCoverage",
+      value: rc.threshold,
+      target: alpha,
+      sampleSize: rows.length,
+      windowDays,
+    },
+  };
 }
