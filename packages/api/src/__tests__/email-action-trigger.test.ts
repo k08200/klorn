@@ -59,11 +59,39 @@ describe("scheduleAgentForActionableEmail", () => {
     expect(runAgentForUser).not.toHaveBeenCalled();
   });
 
-  it("does NOT trigger the agent for AUTO-tier emails", async () => {
+  it("does NOT trigger the agent for AUTO-tier emails by default (flag off)", async () => {
     scheduleAgentForActionableEmail("user-a", "AUTO");
     await flushImmediate();
     await flushImmediate();
     expect(runAgentForUser).not.toHaveBeenCalled();
+  });
+
+  it("triggers the agent for AUTO-tier emails when AUTO_TIER_EXECUTION is enabled", async () => {
+    const prev = process.env.AUTO_TIER_EXECUTION;
+    process.env.AUTO_TIER_EXECUTION = "true";
+    try {
+      scheduleAgentForActionableEmail("user-a", "AUTO");
+      await flushImmediate();
+      await flushImmediate();
+      expect(runAgentForUser).toHaveBeenCalledTimes(1);
+    } finally {
+      if (prev === undefined) delete process.env.AUTO_TIER_EXECUTION;
+      else process.env.AUTO_TIER_EXECUTION = prev;
+    }
+  });
+
+  it("still ignores SILENT even when AUTO_TIER_EXECUTION is enabled", async () => {
+    const prev = process.env.AUTO_TIER_EXECUTION;
+    process.env.AUTO_TIER_EXECUTION = "true";
+    try {
+      scheduleAgentForActionableEmail("user-a", "SILENT");
+      await flushImmediate();
+      await flushImmediate();
+      expect(runAgentForUser).not.toHaveBeenCalled();
+    } finally {
+      if (prev === undefined) delete process.env.AUTO_TIER_EXECUTION;
+      else process.env.AUTO_TIER_EXECUTION = prev;
+    }
   });
 
   it("debounces multiple triggers within the window to a single run", async () => {
