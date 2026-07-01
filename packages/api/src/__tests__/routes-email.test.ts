@@ -492,7 +492,7 @@ describe("email routes (demo mode)", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true, gmailId: "gmail-1", emailId: "email-1" });
-    expect(gmail.unarchiveEmail).toHaveBeenCalledWith("user-1", "gmail-1");
+    expect(gmail.unarchiveEmail).toHaveBeenCalledWith("user-1", "gmail-1", null);
     expect(emailSync.syncEmailByGmailId).toHaveBeenCalledWith("user-1", "gmail-1");
     await app.close();
   });
@@ -512,7 +512,7 @@ describe("email routes (demo mode)", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true, gmailId: "gmail-2", emailId: "email-1" });
-    expect(gmail.untrashEmail).toHaveBeenCalledWith("user-1", "gmail-2");
+    expect(gmail.untrashEmail).toHaveBeenCalledWith("user-1", "gmail-2", null);
     expect(emailSync.syncEmailByGmailId).toHaveBeenCalledWith("user-1", "gmail-2");
     await app.close();
   });

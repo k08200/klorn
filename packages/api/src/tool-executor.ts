@@ -182,8 +182,18 @@ async function executeToolCallInternal(
       }
       case "classify_emails":
         return JSON.stringify(await classifyEmails(userId, safeInt(args.max_results, 10, 100)));
-      case "mark_read":
-        return JSON.stringify(await markAsRead(userId, requireString(args.email_id, "email_id")));
+      case "mark_read": {
+        // Resolve the row so we mark-read on the RIGHT account: a message synced
+        // from a linked secondary inbox must be acted on via that inbox's client.
+        const emailId = requireString(args.email_id, "email_id");
+        const row = await prisma.emailMessage.findFirst({
+          where: { userId, OR: [{ id: emailId }, { gmailId: emailId }] },
+          select: { gmailId: true, linkedInboxAccountId: true },
+        });
+        return JSON.stringify(
+          await markAsRead(userId, row?.gmailId ?? emailId, row?.linkedInboxAccountId),
+        );
+      }
       case "list_events":
         return JSON.stringify(await listEvents(userId, safeInt(args.max_results, 10, 200)));
       case "create_event": {
