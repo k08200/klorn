@@ -229,7 +229,7 @@ function ReceiptView() {
         {receipt.summary.totalSeen === 0 && (
           <div className="rounded-lg border border-stone-800 bg-stone-900/40 p-8 text-center">
             <p className="text-sm text-stone-400">No signals processed today yet.</p>
-            <p className="mt-1 text-xs text-stone-600">
+            <p className="mt-1 text-xs text-stone-400">
               Come back later — Klorn processes your mail and meetings continuously.
             </p>
           </div>
@@ -267,9 +267,9 @@ function ReceiptSection({
       <div className="mb-2 flex items-center justify-between">
         <div>
           <h2 className={`text-sm font-semibold ${labelClass}`}>{title}</h2>
-          <p className="text-xs text-stone-600">{description}</p>
+          <p className="text-xs text-stone-400">{description}</p>
         </div>
-        <span className="text-[11px] text-stone-600">{items.length}</span>
+        <span className="text-[11px] text-stone-400">{items.length}</span>
       </div>
       <ul className="space-y-2">
         {items.map((item) => (
@@ -281,12 +281,12 @@ function ReceiptSection({
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <SourceBadge source={item.source} type={item.type} />
                     {item.tierReason && (
-                      <span className="text-[11px] text-stone-600">{item.tierReason}</span>
+                      <span className="text-[11px] text-stone-400">{item.tierReason}</span>
                     )}
                   </div>
                 </div>
                 <div className="shrink-0 flex flex-col items-end gap-1">
-                  <span className="text-[11px] text-stone-600">{formatTime(item.surfacedAt)}</span>
+                  <span className="text-[11px] text-stone-400">{formatTime(item.surfacedAt)}</span>
                   {renderExtra?.(item)}
                   {renderActions?.(item)}
                 </div>

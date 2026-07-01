@@ -133,7 +133,7 @@ export default function BriefingCard() {
           <p className="mt-1 line-clamp-2 text-sm text-stone-400">
             {status.note?.preview || emptyMessage(status)}
           </p>
-          {time && <p className="mt-2 text-[11px] text-stone-600">{time}</p>}
+          {time && <p className="mt-2 text-[11px] text-stone-400">{time}</p>}
           {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
         </div>
 

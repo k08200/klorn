@@ -145,13 +145,13 @@ export function EmailFeedbackList() {
                 </div>
                 <RelativeTime
                   date={fixture.capturedAt}
-                  className="shrink-0 text-xs text-stone-600"
+                  className="shrink-0 text-xs text-stone-400"
                 />
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <PriorityPill priority={fixture.capturedHeuristic.priority} />
-                <span className="text-xs text-stone-600">-&gt;</span>
+                <span className="text-xs text-stone-400">-&gt;</span>
                 <PriorityPill priority={fixture.expectedSyncPriority} />
                 {fixture.capturedHeuristic.reason && (
                   <span className="rounded-full border border-stone-700/45 bg-black/15 px-2 py-0.5 text-[10px] text-stone-500">

@@ -1396,7 +1396,7 @@ export default function SettingsPage() {
                           }`}
                         />
                         <span className="text-stone-300 flex-1 truncate">{log.summary}</span>
-                        <span className="text-stone-600 text-xs shrink-0">
+                        <span className="text-stone-400 text-xs shrink-0">
                           {new Date(log.createdAt).toLocaleString("en-US", {
                             month: "short",
                             day: "numeric",
@@ -1693,7 +1693,7 @@ export default function SettingsPage() {
             <p className="text-sm text-stone-500 mt-1">
               Built to reduce scattered tabs and make the next decision clearer.
             </p>
-            <p className="text-xs text-stone-600 mt-3">v0.2.0 — MVP</p>
+            <p className="text-xs text-stone-400 mt-3">v0.2.0 — MVP</p>
           </div>
         </section>
       </main>

@@ -156,7 +156,7 @@ export default function FeedbackPolicyStudio() {
                   <p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500">
                     {candidate.rationale}
                   </p>
-                  <p className="mt-2 text-[11px] text-stone-600">
+                  <p className="mt-2 text-[11px] text-stone-400">
                     Approved {candidate.support.approved} · Rejected {candidate.support.rejected} ·
                     Edited {candidate.support.edited} · Failed {candidate.support.failed} · Total{" "}
                     {candidate.support.total}

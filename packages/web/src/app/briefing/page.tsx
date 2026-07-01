@@ -587,7 +587,7 @@ function pushReasonLabel(reason: string): string {
 function BriefStat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-lg border border-stone-700/45 bg-black/15 px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">
         {label}
       </p>
       <p className="mt-1 truncate text-lg font-semibold text-stone-100">{value}</p>

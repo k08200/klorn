@@ -183,12 +183,12 @@ export default function CommandPalette() {
                 }`}
               >
                 <span>{cmd.label}</span>
-                {cmd.sublabel && <span className="text-xs text-stone-600">{cmd.sublabel}</span>}
+                {cmd.sublabel && <span className="text-xs text-stone-400">{cmd.sublabel}</span>}
               </button>
             ))
           )}
         </div>
-        <div className="border-t border-stone-800 px-4 py-2 flex items-center justify-between text-[10px] text-stone-600">
+        <div className="border-t border-stone-800 px-4 py-2 flex items-center justify-between text-[10px] text-stone-400">
           <span>Use arrows to move, Enter to open</span>
           <span>Esc to close</span>
         </div>

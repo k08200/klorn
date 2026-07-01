@@ -17,7 +17,7 @@ function ErrorPage({
         Reload the latest context and continue from there.
       </p>
       {error.message && (
-        <p className="text-xs text-stone-600 mb-6 font-mono bg-stone-950 border border-stone-800 rounded px-3 py-1.5 max-w-md truncate">
+        <p className="text-xs text-stone-400 mb-6 font-mono bg-stone-950 border border-stone-800 rounded px-3 py-1.5 max-w-md truncate">
           {error.message}
         </p>
       )}

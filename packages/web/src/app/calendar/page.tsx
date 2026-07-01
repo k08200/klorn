@@ -524,13 +524,13 @@ function DayCell({
   return (
     <div
       className={`min-h-[96px] border-b border-r border-stone-800/60 px-1.5 py-1 transition ${
-        inMonth ? "bg-stone-950/20" : "bg-stone-950/45 text-stone-600"
+        inMonth ? "bg-stone-950/20" : "bg-stone-950/45 text-stone-400"
       }`}
     >
       <div className="mb-1 flex items-center justify-between">
         <span
           className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-medium tabular-nums ${
-            isToday ? "bg-amber-300 text-stone-950" : inMonth ? "text-stone-300" : "text-stone-600"
+            isToday ? "bg-amber-300 text-stone-950" : inMonth ? "text-stone-300" : "text-stone-400"
           }`}
         >
           {cell.dayNumber}
@@ -570,7 +570,7 @@ function EventChip({
       title={`${timeLabel ? `${timeLabel} · ` : ""}${event.title || "Untitled"}`}
       className={`flex items-center gap-1 truncate rounded px-1 py-0.5 text-[11px] transition ${
         dimmed
-          ? "text-stone-600 hover:bg-stone-800/40 hover:text-stone-400"
+          ? "text-stone-400 hover:bg-stone-800/40 hover:text-stone-400"
           : "text-stone-200 hover:bg-amber-500/10 hover:text-amber-100"
       }`}
     >
@@ -587,7 +587,7 @@ function EventChip({
 function CalendarStat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="border-r border-stone-800 px-4 py-3 last:border-r-0">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">
         {label}
       </p>
       <p className="mt-1 truncate text-2xl font-semibold text-stone-100">{value}</p>

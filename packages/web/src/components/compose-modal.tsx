@@ -23,7 +23,7 @@ function formatBytes(bytes: number): string {
 }
 
 const fieldClass =
-  "w-full rounded-md border border-white/10 bg-stone-950/60 px-3 py-2 text-sm text-stone-100 outline-none transition placeholder:text-stone-600 focus:border-accent/45 disabled:opacity-60";
+  "w-full rounded-md border border-white/10 bg-stone-950/60 px-3 py-2 text-sm text-stone-100 outline-none transition placeholder:text-stone-400 focus:border-accent/45 disabled:opacity-60";
 
 export function ComposeModal({ open, onClose }: ComposeModalProps) {
   const { toast } = useToast();

@@ -222,7 +222,7 @@ function CandidateDetailView() {
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-medium text-stone-200">{file.filename}</span>
-                    <span className="text-[10px] text-stone-600">
+                    <span className="text-[10px] text-stone-400">
                       {file.category || "document"} · {file.analysisStatus}
                     </span>
                     {file.needsManualReview && (
@@ -259,7 +259,7 @@ function CandidateDetailView() {
               ))}
             </div>
             <label className="mt-4 block">
-              <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-600">
+              <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-400">
                 Notes
               </span>
               <textarea
@@ -279,7 +279,7 @@ function CandidateDetailView() {
             </button>
             <div className="mt-4 rounded-lg border border-stone-800/70 bg-black/15 px-3 py-2">
               <p className="text-xs text-stone-300">{email.subject || "Untitled"}</p>
-              <p className="mt-1 text-[11px] text-stone-600">{email.from}</p>
+              <p className="mt-1 text-[11px] text-stone-400">{email.from}</p>
             </div>
           </aside>
         </main>
@@ -311,7 +311,7 @@ function CandidateDetailView() {
           </div>
           <div className="mt-5 rounded-lg border border-stone-800/70 bg-black/15 px-3 py-2">
             <p className="text-xs text-stone-300">{email.subject || "Untitled"}</p>
-            <p className="mt-1 text-[11px] text-stone-600">{email.from}</p>
+            <p className="mt-1 text-[11px] text-stone-400">{email.from}</p>
           </div>
         </main>
       )}
@@ -322,7 +322,7 @@ function CandidateDetailView() {
 function Fact({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="rounded-lg border border-stone-800/70 bg-black/15 px-3 py-2">
-      <p className="text-[10px] uppercase tracking-wider text-stone-600">{label}</p>
+      <p className="text-[10px] uppercase tracking-wider text-stone-400">{label}</p>
       <p className="mt-1 truncate text-sm text-stone-200">{value || "-"}</p>
     </div>
   );

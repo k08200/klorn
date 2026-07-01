@@ -364,7 +364,7 @@ function SubList({ label, items, tone }: { label: string; items: SubListItem[]; 
           </li>
         ))}
         {items.length > 3 && (
-          <li className="text-[11px] text-stone-600 px-2">+{items.length - 3} more</li>
+          <li className="text-[11px] text-stone-400 px-2">+{items.length - 3} more</li>
         )}
       </ul>
     </div>

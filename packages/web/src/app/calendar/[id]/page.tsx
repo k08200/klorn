@@ -317,7 +317,7 @@ function CalendarEventDetail({ id }: { id: string }) {
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-amber-200">
                   Prep pack
                 </p>
-                <p className="mt-0.5 text-[11px] text-stone-600">
+                <p className="mt-0.5 text-[11px] text-stone-400">
                   Mail {pack.relatedEmails.length} · Tasks {pack.openTasks.length} · Commitments{" "}
                   {pack.openCommitments.length}
                 </p>
@@ -402,7 +402,7 @@ function CalendarEventDetail({ id }: { id: string }) {
                       key={c.id}
                       className="rounded-md border border-stone-800 bg-stone-950/40 px-3 py-2 text-[12px] text-stone-300"
                     >
-                      <span className="mr-2 text-[10px] uppercase tracking-wider text-stone-600">
+                      <span className="mr-2 text-[10px] uppercase tracking-wider text-stone-400">
                         {c.owner === "USER"
                           ? "I owe"
                           : c.owner === "COUNTERPARTY"

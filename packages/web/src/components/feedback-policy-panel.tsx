@@ -170,7 +170,7 @@ export function FeedbackPolicyPanel() {
                   <SignalCount label="Snoozed" value={candidate.support.snoozed} />
                   <SignalCount label="Closed" value={candidate.support.dismissed} />
                 </div>
-                <div className="mt-2 flex items-center justify-between text-[10px] text-stone-600">
+                <div className="mt-2 flex items-center justify-between text-[10px] text-stone-400">
                   <span>Confidence {Math.round(candidate.confidence * 100)}%</span>
                   <span>{candidate.support.total} events</span>
                 </div>
@@ -194,7 +194,7 @@ function SignalCount({
 }) {
   return (
     <div className="rounded-md bg-stone-950/70 px-2 py-1">
-      <div className={tone === "critical" ? "text-red-400/70" : "text-stone-600"}>{label}</div>
+      <div className={tone === "critical" ? "text-red-400/70" : "text-stone-400"}>{label}</div>
       <div
         className={`text-xs font-medium ${tone === "critical" ? "text-red-300" : "text-stone-300"}`}
       >

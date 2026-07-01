@@ -75,7 +75,7 @@ export default function AuthScreen({
                 className="grid grid-cols-[72px_1fr] gap-4 border-b border-stone-800 px-4 py-4 last:border-b-0"
               >
                 <div>
-                  <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone-600">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone-400">
                     0{index + 1}
                   </p>
                   <p className="mt-1 text-sm font-medium text-stone-200">{item.label}</p>

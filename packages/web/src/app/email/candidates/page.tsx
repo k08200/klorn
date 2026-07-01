@@ -465,7 +465,7 @@ function CandidateIntakeView() {
       {!loading && !error && candidates.length === 0 && (
         <div className="mt-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-center">
           <p className="text-sm text-stone-300">No candidate materials yet.</p>
-          <p className="mt-1 text-xs text-stone-600">
+          <p className="mt-1 text-xs text-stone-400">
             After Gmail sync and attachment analysis, candidate signals appear here automatically.
           </p>
         </div>
@@ -490,7 +490,7 @@ function CandidateIntakeView() {
 function QueueStat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-xl border border-stone-700/45 bg-black/15 px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">
         {label}
       </p>
       <p className="mt-1 text-lg font-semibold text-stone-100">{value}</p>
@@ -587,7 +587,7 @@ function CandidateCard({
       </div>
       <div className="mt-3 rounded-lg border border-stone-800/60 bg-black/15 px-3 py-2">
         <p className="truncate text-xs text-stone-300">{candidate.email.subject || "Untitled"}</p>
-        <p className="mt-1 truncate text-[11px] text-stone-600">
+        <p className="mt-1 truncate text-[11px] text-stone-400">
           {senderName(candidate.email.from)}
         </p>
       </div>

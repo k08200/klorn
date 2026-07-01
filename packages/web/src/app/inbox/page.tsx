@@ -572,7 +572,7 @@ function QuickLinksPanel() {
           className="inline-flex items-center gap-1 rounded-md border border-stone-800 bg-stone-900/30 px-2.5 py-1.5 text-[11px] text-stone-400 transition hover:border-stone-700 hover:bg-stone-900/60 hover:text-stone-200"
         >
           {link.label}
-          <span className="text-stone-600">→</span>
+          <span className="text-stone-400">→</span>
         </Link>
       ))}
     </nav>
@@ -658,7 +658,7 @@ function ActionCard({
           <RiskBadge risk={risk} />
           {!isPending && <StatusBadge status={action.status} />}
         </div>
-        <span className="font-mono text-[11px] text-stone-600">
+        <span className="font-mono text-[11px] text-stone-400">
           {formatRelative(action.createdAt)}
         </span>
       </div>
@@ -669,7 +669,7 @@ function ActionCard({
           {heroSubject}
         </h3>
         {showThreadHint && (
-          <p className="mt-1.5 truncate text-[11px] text-stone-600">
+          <p className="mt-1.5 truncate text-[11px] text-stone-400">
             Thread: {action.conversationTitle}
           </p>
         )}
