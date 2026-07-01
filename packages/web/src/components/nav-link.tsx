@@ -18,10 +18,11 @@ export default function NavLink({
   return (
     <Link
       href={href}
-      className={`text-[13px] px-2.5 py-1.5 rounded-md transition-colors ${
+      aria-current={isActive ? "page" : undefined}
+      className={`focus-ring flex min-h-11 items-center rounded-md px-2.5 py-1.5 text-[13px] transition-colors ${
         isActive
-          ? "text-white bg-stone-800/80 font-medium"
-          : "text-stone-400 hover:text-stone-200 hover:bg-stone-800/40"
+          ? "bg-accent/10 font-medium text-accent"
+          : "text-stone-400 hover:bg-stone-800/40 hover:text-stone-200"
       } ${className}`}
     >
       {children}

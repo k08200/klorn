@@ -2,21 +2,36 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import AuthScreen from "../../components/auth-screen";
-import { apiFetch } from "../../lib/api";
+import { API_BASE, apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const { user, token: authToken } = useAuth();
-  const [status, setStatus] = useState<"loading" | "success" | "error" | "pending">("loading");
+  const [status, setStatus] = useState<"loading" | "verifying" | "error" | "pending" | "sent">(
+    "loading",
+  );
+  // The token branch navigates away with a SINGLE-USE token. `user` resolves
+  // async (after /api/auth/me), which would otherwise re-run this effect and
+  // fire a second navigation with the already-spent token (→ 400). Guard it.
+  const navigatedRef = useRef(false);
 
   useEffect(() => {
     if (token) {
-      // Redirected from email link; the API handles verification through GET redirect.
-      setStatus("success");
+      if (navigatedRef.current) return;
+      navigatedRef.current = true;
+      // A real link means the token must be confirmed against the API before we
+      // claim anything. GET /api/auth/verify-email verifies server-side, then
+      // redirects to /login?verified=true (success) or returns a 400 for an
+      // expired/invalid token. Hand the browser to that endpoint so the server
+      // is the single source of truth — never show success from mere presence.
+      setStatus("verifying");
+      window.location.assign(
+        `${API_BASE}/api/auth/verify-email?token=${encodeURIComponent(token)}`,
+      );
     } else if (user) {
       setStatus("pending");
     } else {
@@ -31,16 +46,25 @@ function VerifyEmailContent() {
         method: "POST",
         headers: { Authorization: `Bearer ${authToken}` },
       });
-      setStatus("success");
+      // A resend genuinely sends a new email — this success is confirmed by the
+      // API call, unlike the old token-presence guess.
+      setStatus("sent");
     } catch {
       setStatus("error");
     }
   };
 
-  if (status === "loading") {
+  // While loading (no decision yet) or verifying a link token (browser is being
+  // handed to the API), show a spinner — never a premature success claim.
+  if (status === "loading" || status === "verifying") {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#10100d]">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-300 border-t-transparent" />
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-surface-app">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+        {status === "verifying" && (
+          <p className="text-sm text-stone-400" aria-live="polite">
+            Verifying your email…
+          </p>
+        )}
       </div>
     );
   }
@@ -49,14 +73,14 @@ function VerifyEmailContent() {
     <AuthScreen
       eyebrow="Email verification"
       title={
-        status === "success"
+        status === "sent"
           ? "Verification email sent"
           : status === "pending"
             ? "Verify your email"
             : "Verification failed"
       }
       description={
-        status === "success"
+        status === "sent"
           ? "Open the verification link in your inbox to unlock your Klorn workspace."
           : status === "pending"
             ? "Verify your account email to unlock every workspace feature."
@@ -74,7 +98,7 @@ function VerifyEmailContent() {
             Next step
           </p>
           <p className="mt-2 text-sm leading-6 text-stone-300">
-            {status === "success"
+            {status === "sent"
               ? "Open the Klorn verification email and follow the link. You can return to the decision queue after verification."
               : status === "pending"
                 ? "If the email is missing, send a fresh verification link."
@@ -82,20 +106,13 @@ function VerifyEmailContent() {
           </p>
         </div>
 
-        {status === "success" ? (
-          <Link
-            href="/inbox"
-            className="flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
-          >
-            Open decision queue
-          </Link>
-        ) : status === "pending" ? (
+        {status === "pending" || status === "sent" ? (
           <button
             type="button"
             onClick={resend}
             className="flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
           >
-            Resend verification email
+            {status === "sent" ? "Resend again" : "Resend verification email"}
           </button>
         ) : (
           <Link

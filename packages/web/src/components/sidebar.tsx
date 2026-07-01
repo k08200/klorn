@@ -4,9 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/auth";
+import { NavIcon, type NavIconType } from "./nav-icons";
 import NotificationBell from "./notification-bell";
 
-const NAV_ITEMS = [
+const NAV_ITEMS: { href: string; label: string; icon: NavIconType }[] = [
   { href: "/inbox", label: "Decision queue", icon: "check" },
   { href: "/graph", label: "Graph", icon: "graph" },
   { href: "/email", label: "Mail", icon: "mail" },
@@ -17,72 +18,6 @@ const NAV_ITEMS = [
 // Routes that already have a bottom-tab on mobile — hidden in the mobile drawer
 // to avoid duplicating the nav (the desktop sidebar still shows them).
 const BOTTOM_TAB_HREFS = new Set(["/inbox", "/email", "/calendar", "/briefing"]);
-
-function NavIcon({ type, size = 16 }: { type: string; size?: number }) {
-  const props = {
-    width: size,
-    height: size,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.5,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-  };
-
-  switch (type) {
-    case "mail":
-      return (
-        <svg aria-hidden="true" {...props}>
-          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-          <polyline points="22,6 12,13 2,6" />
-        </svg>
-      );
-    case "check":
-      return (
-        <svg aria-hidden="true" {...props}>
-          <polyline points="9 11 12 14 22 4" />
-          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-        </svg>
-      );
-    case "calendar":
-      return (
-        <svg aria-hidden="true" {...props}>
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-          <line x1="16" y1="2" x2="16" y2="6" />
-          <line x1="8" y1="2" x2="8" y2="6" />
-          <line x1="3" y1="10" x2="21" y2="10" />
-        </svg>
-      );
-    case "bell":
-      return (
-        <svg aria-hidden="true" {...props}>
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-        </svg>
-      );
-    case "graph":
-      return (
-        <svg aria-hidden="true" {...props}>
-          <circle cx="5" cy="6" r="2" />
-          <circle cx="19" cy="6" r="2" />
-          <circle cx="12" cy="18" r="2" />
-          <line x1="6.7" y1="7.3" x2="10.5" y2="16.4" />
-          <line x1="17.3" y1="7.3" x2="13.5" y2="16.4" />
-          <line x1="7" y1="6" x2="17" y2="6" />
-        </svg>
-      );
-    case "settings":
-      return (
-        <svg aria-hidden="true" {...props}>
-          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-        </svg>
-      );
-    default:
-      return null;
-  }
-}
 
 export default function Sidebar({
   mobileOpen,
@@ -147,32 +82,37 @@ export default function Sidebar({
       {/* Workspace nav */}
       <div className="relative border-t border-stone-800 px-2 py-2">
         <div className="space-y-0.5">
-          {NAV_ITEMS.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onMobileClose}
-              // The bottom tab bar already covers these on mobile, so hide the
-              // duplicates in the drawer below md (desktop sidebar keeps them —
-              // it's the only nav there).
-              className={`${BOTTOM_TAB_HREFS.has(item.href) ? "hidden md:flex" : "flex"} items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition ${
-                pathname.startsWith(item.href)
-                  ? "bg-stone-800 text-stone-100"
-                  : "text-stone-500 hover:bg-stone-800/70 hover:text-stone-300"
-              }`}
-            >
-              <NavIcon type={item.icon} size={14} />
-              <span className="flex-1">{item.label}</span>
-            </Link>
-          ))}
+          {NAV_ITEMS.map((item) => {
+            const active = pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onMobileClose}
+                aria-current={active ? "page" : undefined}
+                // The bottom tab bar already covers these on mobile, so hide the
+                // duplicates in the drawer below md (desktop sidebar keeps them —
+                // it's the only nav there).
+                className={`${BOTTOM_TAB_HREFS.has(item.href) ? "hidden md:flex" : "flex"} focus-ring min-h-11 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition ${
+                  active
+                    ? "bg-accent/10 text-accent"
+                    : "text-stone-400 hover:bg-stone-800/70 hover:text-stone-300"
+                }`}
+              >
+                <NavIcon type={item.icon} size={14} />
+                <span className="flex-1">{item.label}</span>
+              </Link>
+            );
+          })}
           {user?.role === "ADMIN" && (
             <Link
               href="/admin"
               onClick={onMobileClose}
-              className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] transition ${
+              aria-current={pathname.startsWith("/admin") ? "page" : undefined}
+              className={`focus-ring flex min-h-11 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition ${
                 pathname.startsWith("/admin")
-                  ? "bg-stone-800/80 text-white"
-                  : "text-stone-500 hover:bg-stone-800/50 hover:text-stone-300"
+                  ? "bg-accent/10 text-accent"
+                  : "text-stone-400 hover:bg-stone-800/50 hover:text-stone-300"
               }`}
             >
               <NavIcon type="settings" size={14} />

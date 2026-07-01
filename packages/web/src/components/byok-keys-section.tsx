@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
+import Button from "./ui/button";
+import { Input, Select } from "./ui/input";
+import StatusChip from "./ui/status-chip";
 
 interface CuratedModelOption {
   id: string;
@@ -119,8 +122,8 @@ export function ByokKeysSection() {
   const removeKey = async (p: Provider, label: string) => {
     const ok = await confirm({
       title: `Remove your ${label} key?`,
-      message: "Klorn falls back to its shared key.",
-      confirmLabel: "Remove",
+      message: "Klorn falls back to its shared key for your mail.",
+      confirmLabel: "Remove key",
       danger: true,
     });
     if (!ok) return;
@@ -175,47 +178,44 @@ export function ByokKeysSection() {
               <div key={p.id} className="rounded-md border border-stone-800 bg-stone-900/40 p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <span className="text-sm font-medium text-stone-200">{p.label}</span>
-                  {set && (
-                    <span className="rounded border border-emerald-700/40 bg-emerald-950/30 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
-                      Using your key
-                    </span>
-                  )}
+                  {set && <StatusChip status="connected" label="Using your key" />}
                 </div>
                 {set ? (
                   <div className="flex items-center justify-between gap-3">
-                    <span className="font-mono text-xs text-stone-500">•••••••• stored</span>
-                    <button
-                      type="button"
-                      onClick={() => removeKey(p.id, p.label)}
+                    <span className="font-mono text-xs text-stone-400">•••••••• stored</span>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => void removeKey(p.id, p.label)}
                       disabled={working}
-                      className="rounded-md border border-stone-700 px-3 py-1.5 text-xs text-stone-300 transition hover:border-red-500/50 hover:text-red-300 disabled:opacity-50"
+                      loading={working}
                     >
-                      {working ? "Removing…" : "Remove"}
-                    </button>
+                      Remove
+                    </Button>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <label htmlFor={`byok-key-${p.id}`} className="sr-only">
-                      {p.label} API key
-                    </label>
-                    <input
-                      id={`byok-key-${p.id}`}
-                      type="password"
-                      value={inputs[p.id]}
-                      onChange={(e) => setInputs((s) => ({ ...s, [p.id]: e.target.value }))}
-                      placeholder={p.placeholder}
-                      autoComplete="off"
-                      maxLength={512}
-                      className="w-full rounded-md border border-stone-700 bg-stone-900/60 px-3 py-2 text-sm text-stone-100 placeholder-stone-600 focus:border-amber-500/60 focus:outline-none"
-                    />
-                    <button
-                      type="button"
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <div className="flex-1">
+                      <Input
+                        id={`byok-key-${p.id}`}
+                        label={`${p.label} API key`}
+                        type="password"
+                        value={inputs[p.id]}
+                        onChange={(e) => setInputs((s) => ({ ...s, [p.id]: e.target.value }))}
+                        placeholder={p.placeholder}
+                        autoComplete="off"
+                        maxLength={512}
+                      />
+                    </div>
+                    <Button
+                      variant="primary"
                       onClick={() => saveKey(p.id)}
                       disabled={working || !inputs[p.id].trim()}
-                      className="shrink-0 rounded-md border border-amber-500/60 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-200 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      loading={working}
+                      className="shrink-0"
                     >
-                      {working ? "Saving…" : "Save"}
-                    </button>
+                      Save
+                    </Button>
                   </div>
                 )}
                 <p className="mt-1.5 text-[11px] text-stone-500">
@@ -238,24 +238,21 @@ export function ByokKeysSection() {
             const options = status?.availableModels ?? [];
             return (
               <div className="rounded-md border border-stone-800 bg-stone-900/40 p-3">
-                <label htmlFor="byok-model" className="mb-1 block text-xs text-stone-400">
-                  Model
-                </label>
-                <select
+                <Select
                   id="byok-model"
+                  label="Model"
                   disabled={!anyKey || savingModel}
                   value={status?.selectedModel ?? options[0]?.id ?? ""}
                   onChange={(e) => void saveModel(e.target.value)}
-                  className="w-full rounded-md border border-stone-700 bg-stone-900/60 px-3 py-2 text-sm text-stone-100 focus:border-amber-500/60 focus:outline-none disabled:opacity-50"
                 >
                   {options.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.label} — {m.note}
                     </option>
                   ))}
-                </select>
+                </Select>
                 {!anyKey && (
-                  <p className="mt-1 text-[11px] text-stone-500">
+                  <p className="mt-1 text-[11px] text-stone-400">
                     Add a key above to choose a model.
                   </p>
                 )}
@@ -263,7 +260,10 @@ export function ByokKeysSection() {
             );
           })()}
           {error && (
-            <div className="rounded-md border border-red-700/40 bg-red-950/30 p-3 text-xs text-red-300">
+            <div
+              role="alert"
+              className="rounded-md border border-red-700/40 bg-red-950/30 p-3 text-xs text-red-200"
+            >
               {error}
             </div>
           )}

@@ -1,9 +1,19 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
+/**
+ * `default` — flat translucent panel.
+ * `glass`   — adds the signature backdrop-blur (`.glass`) glass-panel look.
+ * `elevated`— tactile lift (`.lift`): rises + casts a shadow on hover.
+ * `glass`/`elevated` map to the existing globals.css utilities so the
+ * board's panel language is expressible through the primitive.
+ */
+type CardVariant = "default" | "glass" | "elevated";
+
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
   hover?: boolean;
   padding?: "sm" | "md" | "lg";
+  variant?: CardVariant;
 }
 
 const paddings = {
@@ -12,16 +22,23 @@ const paddings = {
   lg: "p-5",
 };
 
+const variantStyles: Record<CardVariant, string> = {
+  default: "",
+  glass: "glass",
+  elevated: "lift",
+};
+
 export default function Card({
   children,
   hover = false,
   padding = "md",
+  variant = "default",
   className = "",
   ...props
 }: CardProps) {
   return (
     <div
-      className={`bg-stone-950/35 border border-stone-700/45 rounded-xl ${paddings[padding]} ${
+      className={`bg-stone-950/35 border border-stone-700/45 rounded-xl ${paddings[padding]} ${variantStyles[variant]} ${
         hover ? "hover:border-stone-700 hover:bg-stone-950 transition-colors cursor-pointer" : ""
       } ${className}`}
       {...props}

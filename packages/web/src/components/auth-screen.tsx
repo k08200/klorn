@@ -33,7 +33,7 @@ export default function AuthScreen({
   navCtaLabel = "Early access",
 }: AuthScreenProps) {
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#0f1115] text-stone-50">
+    <main id="main" className="min-h-screen overflow-x-hidden bg-surface-canvas text-stone-50">
       <nav className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-6">
         <Link href="/" className="flex items-center gap-3">
           <img src="/brand/mark.svg?v=matte2" alt="" className="h-8 w-8" />
@@ -68,7 +68,7 @@ export default function AuthScreen({
             </h2>
             <p className="mt-5 max-w-lg text-base leading-7 text-stone-400">{asideBody}</p>
           </div>
-          <div className="mt-9 max-w-xl overflow-hidden rounded-lg border border-stone-800 bg-[#111318]">
+          <div className="mt-9 max-w-xl overflow-hidden rounded-lg border border-stone-800 bg-surface-panel">
             {asideItems.map((item, index) => (
               <div
                 key={item.label}
@@ -95,7 +95,24 @@ export default function AuthScreen({
             <p className="mt-3 text-sm leading-6 text-stone-400">{description}</p>
           </div>
 
-          <div className="rounded-lg border border-stone-800 bg-[#111318] p-4 shadow-xl shadow-black/20 sm:p-5">
+          {/* Condensed reassurance for mobile + WebView users — the full <aside>
+              is hidden below lg, so surface the same three signals compactly
+              above the form so phone visitors still get context. */}
+          <div className="mb-5 overflow-hidden rounded-lg border border-stone-800 bg-surface-panel lg:hidden">
+            <p className="border-b border-stone-800 px-4 py-3 text-sm font-medium text-stone-200">
+              {asideTitle}
+            </p>
+            <ul className="divide-y divide-stone-800">
+              {asideItems.map((item) => (
+                <li key={item.label} className="flex gap-3 px-4 py-2.5">
+                  <span className="shrink-0 text-xs font-medium text-stone-400">{item.label}</span>
+                  <span className="text-xs leading-5 text-stone-300">{item.value}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="rounded-lg border border-stone-800 bg-surface-panel p-4 shadow-xl shadow-black/20 sm:p-5">
             {children}
           </div>
 

@@ -24,23 +24,34 @@ const W = 1000;
 const H = 680;
 const ITERATIONS = 300;
 
-/** The 4 tiers, coloured consistently with the firewall UI. */
-const TIER_COLORS: Record<string, string> = {
-  PUSH: "#f87171",
-  QUEUE: "#60a5fa",
-  SILENT: "#9ca3af",
-  AUTO: "#34d399",
+// The 4 tiers, coloured from the single --color-tier-* token source of truth
+// (globals.css @theme) so the graph reads as ONE system with the firewall
+// board + tier badges. Kept as literals mirroring the tokens because SVG/
+// WebGL fills can't consume Tailwind utility classes.
+export const TIER_COLORS: Record<string, string> = {
+  PUSH: "#fb7185", // --color-tier-push
+  QUEUE: "#fbbf24", // --color-tier-queue
+  SILENT: "#a8a29e", // --color-tier-silent
+  AUTO: "#34d399", // --color-tier-auto
 };
+
+// Relationship-signal colours (not part of the 4-tier system).
+const SELF_COLOR = "#fbbf24"; // you (== --color-accent)
+const FEATURE_COLOR = "#a78bfa"; // a scored input feature (violet)
+const OVERDUE_COLOR = "#fb7185"; // waiting on a reply (reuses PUSH rose)
+const MEETING_COLOR = "#f59e0b"; // meeting coming up
+const FREQUENT_COLOR = "#34d399"; // high-frequency contact
+const CONTACT_COLOR = "#60a5fa"; // a plain contact
 
 /** Node colour. Relationships mode keys off tags; decisions mode off kind. */
 function colorFor(n: GraphNode): string {
-  if (n.kind === "self") return "#fbbf24"; // you
-  if (n.kind === "feature") return "#a78bfa"; // a scored input feature (violet)
-  if (n.kind === "tier") return TIER_COLORS[n.tags[0] ?? ""] ?? "#a78bfa"; // a tier
-  if (n.tags.includes("overdue_reply")) return "#f87171"; // waiting on a reply
-  if (n.tags.includes("meeting_soon")) return "#f59e0b"; // meeting coming up
-  if (n.tags.includes("frequent")) return "#34d399"; // high-frequency contact
-  return "#60a5fa";
+  if (n.kind === "self") return SELF_COLOR;
+  if (n.kind === "feature") return FEATURE_COLOR;
+  if (n.kind === "tier") return TIER_COLORS[n.tags[0] ?? ""] ?? FEATURE_COLOR;
+  if (n.tags.includes("overdue_reply")) return OVERDUE_COLOR;
+  if (n.tags.includes("meeting_soon")) return MEETING_COLOR;
+  if (n.tags.includes("frequent")) return FREQUENT_COLOR;
+  return CONTACT_COLOR;
 }
 
 function radiusFor(n: GraphNode): number {

@@ -8,18 +8,61 @@ export const metadata: Metadata = {
 
 const updatedAt = "May 4, 2026";
 
+/** Stable, URL-safe anchor id so the TOC links line up with each section. */
+function slug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+const SECTIONS = [
+  "What Klorn Does",
+  "Data We Collect",
+  "How We Use Data",
+  "Google User Data",
+  "Your Rights (GDPR / CCPA)",
+  "AI Processing",
+  "Retention and Deletion",
+  "Security",
+  "Contact",
+];
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-3">
+    <section id={slug(title)} className="scroll-mt-24 space-y-3">
       <h2 className="text-xl font-semibold text-white">{title}</h2>
-      <div className="space-y-3 text-sm leading-6 text-stone-300">{children}</div>
+      <div className="space-y-3 text-base leading-7 text-stone-300">{children}</div>
     </section>
+  );
+}
+
+function TableOfContents({ sections }: { sections: string[] }) {
+  return (
+    <nav
+      aria-label="On this page"
+      className="mt-10 rounded-xl border border-stone-800 bg-stone-950/40 p-5"
+    >
+      <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-400">On this page</p>
+      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+        {sections.map((title) => (
+          <li key={title}>
+            <a
+              href={`#${slug(title)}`}
+              className="inline-flex min-h-11 items-center text-sm text-stone-300 transition hover:text-amber-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-stone-950 rounded"
+            >
+              {title}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
   );
 }
 
 export default function PrivacyPage() {
   return (
-    <main className="min-h-screen bg-[#0f1115] text-white">
+    <main id="main" className="min-h-screen bg-[#0f1115] text-white">
       <nav className="mx-auto flex max-w-4xl items-center justify-between px-6 py-5">
         <Link href="/" className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-[#f5f0e8]">
@@ -48,6 +91,8 @@ export default function PrivacyPage() {
           Last updated: {updatedAt}. Klorn is currently a beta product. This policy explains what
           data Klorn can access, why it needs that access, and how you can request deletion.
         </p>
+
+        <TableOfContents sections={SECTIONS} />
 
         <div className="mt-12 space-y-10">
           <Section title="What Klorn Does">

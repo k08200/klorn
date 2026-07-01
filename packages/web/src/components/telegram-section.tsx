@@ -5,6 +5,8 @@ import { apiFetch } from "../lib/api";
 import { captureClientError } from "../lib/sentry";
 import { useConfirm } from "./confirm-dialog";
 import { useToast } from "./toast";
+import Button from "./ui/button";
+import StatusChip from "./ui/status-chip";
 
 interface TelegramLinkCode {
   code: string;
@@ -116,32 +118,30 @@ export function TelegramSection() {
           </p>
         </div>
         {loading ? (
-          <span className="text-sm text-stone-500">Loading...</span>
+          <span className="text-sm text-stone-400">Loading...</span>
         ) : linked ? (
           <div className="flex shrink-0 items-center gap-3">
-            <span className="text-sm text-green-400 flex items-center gap-1">
-              <span className="w-2 h-2 bg-green-400 rounded-full" />
-              Connected
-            </span>
-            <button
-              type="button"
-              onClick={disconnect}
+            <StatusChip status="connected" />
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => void disconnect()}
               disabled={submitting}
-              className="text-xs text-stone-500 hover:text-red-400 transition disabled:opacity-50"
             >
               Disconnect
-            </button>
+            </Button>
           </div>
         ) : (
           !linkCode && (
-            <button
-              type="button"
-              onClick={startLink}
+            <Button
+              variant="primary"
+              onClick={() => void startLink()}
               disabled={submitting}
-              className="shrink-0 bg-amber-300 hover:bg-amber-200 disabled:opacity-50 text-stone-950 px-4 py-2 rounded-lg text-sm font-medium transition"
+              loading={submitting}
+              className="shrink-0"
             >
-              {submitting ? "..." : "Connect Telegram"}
-            </button>
+              Connect Telegram
+            </Button>
           )
         )}
       </div>
@@ -172,27 +172,32 @@ export function TelegramSection() {
             {new Date(linkCode.expiresAt).toLocaleTimeString()}.
           </p>
           <div className="flex items-center gap-2 pt-1">
-            <button
-              type="button"
-              onClick={checkLinked}
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => void checkLinked()}
               disabled={submitting}
-              className="rounded-md bg-amber-300 px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
+              loading={submitting}
             >
-              {submitting ? "..." : "Check connection"}
-            </button>
-            <button
-              type="button"
-              onClick={startLink}
+              Check connection
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void startLink()}
               disabled={submitting}
-              className="rounded-md border border-stone-700 px-3 py-1.5 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
             >
               New code
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
-      {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-2 text-xs text-red-300">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

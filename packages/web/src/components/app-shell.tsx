@@ -114,7 +114,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <main
-          id="main-content"
+          id="main"
           tabIndex={-1}
           className="relative z-10 flex-1 overflow-y-auto pb-[calc(62px+env(safe-area-inset-bottom))] md:pb-safe focus:outline-none"
         >
@@ -129,6 +129,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 function SessionTransition({ label }: { label: string }) {
   return (
     <main
+      id="main"
       className="flex min-h-dvh items-center justify-center bg-[#0f1115] px-6 text-stone-100"
       role="status"
       aria-live="polite"

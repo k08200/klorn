@@ -76,45 +76,45 @@ const TIER_VISUAL: Record<
     label: "PUSH",
     description: "Worth interrupting you for. Push notifications fire here.",
     plane:
-      "tier-plane-push border-rose-400/35 bg-gradient-to-b from-rose-500/[0.07] to-transparent",
-    card: "border-rose-400/15 bg-stone-950/60 hover:border-rose-400/45",
-    accent: "text-rose-300",
-    dot: "text-rose-400",
+      "tier-plane-push border-tier-push/35 bg-gradient-to-b from-tier-push/[0.07] to-transparent",
+    card: "border-tier-push/15 bg-stone-950/60 hover:border-tier-push/45",
+    accent: "text-tier-push",
+    dot: "text-tier-push",
   },
   QUEUE: {
     label: "QUEUE",
     description: "Visible when you choose to look. No push.",
     plane:
-      "tier-plane-queue border-amber-300/25 bg-gradient-to-b from-amber-300/[0.05] to-transparent",
-    card: "border-amber-300/10 bg-stone-950/55 hover:border-amber-300/35",
-    accent: "text-amber-300",
-    dot: "text-amber-300",
+      "tier-plane-queue border-tier-queue/25 bg-gradient-to-b from-tier-queue/[0.05] to-transparent",
+    card: "border-tier-queue/10 bg-stone-950/55 hover:border-tier-queue/35",
+    accent: "text-tier-queue",
+    dot: "text-tier-queue",
   },
   SILENT: {
     label: "SILENT",
     description: "Recorded only. Klorn decided this wasn't worth surfacing.",
     plane: "tier-plane-silent border-stone-800/70 bg-stone-950/30 opacity-90 hover:opacity-100",
     card: "border-stone-800/60 bg-stone-950/40 hover:border-stone-700",
-    accent: "text-stone-400",
-    dot: "text-stone-500",
+    accent: "text-tier-silent",
+    dot: "text-tier-silent",
   },
   AUTO: {
     label: "AUTO",
     description: "Handled without asking. Eligible for auto-execution.",
     plane:
-      "tier-plane-auto border-emerald-400/30 bg-gradient-to-b from-emerald-500/[0.05] to-transparent",
-    card: "border-emerald-400/15 bg-stone-950/55 hover:border-emerald-400/40",
-    accent: "text-emerald-300",
-    dot: "text-emerald-400",
+      "tier-plane-auto border-tier-auto/30 bg-gradient-to-b from-tier-auto/[0.05] to-transparent",
+    card: "border-tier-auto/15 bg-stone-950/55 hover:border-tier-auto/40",
+    accent: "text-tier-auto",
+    dot: "text-tier-auto",
   },
 };
 
-// Per-target tint for the override pills, so "Move → PUSH" hints coral, etc.
+// Per-target tint for the override pills, so "Move → PUSH" hints its tier hue.
 const TARGET_BUTTON: Record<Tier, string> = {
-  PUSH: "hover:border-rose-400/50 hover:text-rose-200",
-  QUEUE: "hover:border-amber-300/50 hover:text-amber-200",
-  SILENT: "hover:border-stone-600 hover:text-stone-200",
-  AUTO: "hover:border-emerald-400/50 hover:text-emerald-200",
+  PUSH: "hover:border-tier-push/50 hover:text-tier-push",
+  QUEUE: "hover:border-tier-queue/50 hover:text-tier-queue",
+  SILENT: "hover:border-stone-600 hover:text-tier-silent",
+  AUTO: "hover:border-tier-auto/50 hover:text-tier-auto",
 };
 
 const OVERRIDE_TARGETS: Tier[] = ["SILENT", "QUEUE", "PUSH"];
@@ -133,6 +133,9 @@ function FirewallView() {
   const [receipt, setReceipt] = useState<DailyReceipt | null>(null);
   const [loading, setLoading] = useState(true);
   const [overriding, setOverriding] = useState<string | null>(null);
+  // Screen-reader announcement for tier moves — the board mutates silently
+  // otherwise (WCAG 4.1.3). Rendered into a polite live region below.
+  const [announcement, setAnnouncement] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -185,6 +188,7 @@ function FirewallView() {
         method: "POST",
         body: JSON.stringify({ tier: newTier }),
       });
+      setAnnouncement(`Moved “${item.title}” from ${item.tier} to ${newTier}.`);
     } catch (err) {
       // Roll back
       setData((prev) => moveItemBetweenTiers(prev, { ...item, tier: newTier }, item.tier));
@@ -225,9 +229,12 @@ function FirewallView() {
   return (
     <div className="min-h-full px-4 pb-28 pt-6 md:py-10">
       <div className="mx-auto max-w-6xl">
+        <p aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
         <header className="mb-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-300/80">
-            POC firewall view
+            Firewall board
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-50 sm:text-[2rem]">
             Today's attention firewall
@@ -512,8 +519,12 @@ function FirewallCard({
 
       {snippet && (
         <details className="group mt-2.5 rounded-lg border border-stone-800/80 bg-black/30">
-          <summary className="cursor-pointer list-none px-2.5 py-1.5 text-[11px] text-stone-400 transition hover:text-stone-200">
-            <span className="inline-block transition group-open:rotate-90">›</span> Preview
+          <summary className="flex cursor-pointer list-none items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] text-stone-400 transition hover:text-stone-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            <span aria-hidden="true" className="inline-block transition group-open:rotate-90">
+              ›
+            </span>
+            <span className="group-open:hidden">Show preview</span>
+            <span className="hidden group-open:inline">Hide preview</span>
           </summary>
           <p className="line-clamp-6 whitespace-pre-wrap border-t border-stone-800/80 px-2.5 py-2 text-[11px] leading-4 text-stone-300">
             {snippet}
@@ -534,7 +545,7 @@ function FirewallCard({
             type="button"
             disabled={busy}
             onClick={() => onOverride(item, target)}
-            className={`inline-flex min-h-7 items-center rounded-full border border-stone-700/80 px-2.5 text-[10px] font-medium uppercase tracking-wider text-stone-400 transition disabled:opacity-40 ${TARGET_BUTTON[target]}`}
+            className={`inline-flex min-h-7 items-center rounded-full border border-stone-700/80 px-2.5 text-[10px] font-medium uppercase tracking-wider text-stone-400 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 ${TARGET_BUTTON[target]}`}
           >
             Move → {target}
           </button>
@@ -616,7 +627,7 @@ function AutoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
     <section className={`glass mt-4 rounded-2xl border p-4 ${v.plane}`}>
       <header className="flex items-center gap-2">
         <TierGlyph tier="AUTO" className={v.dot} />
-        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-tier-auto">
           AUTO
         </h2>
         <CountChip value={count} className={`ml-auto text-sm font-semibold ${v.accent}`} />
@@ -627,7 +638,7 @@ function AutoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
       <ul className="mt-3 space-y-1.5 text-xs text-stone-400">
         {items.slice(0, 5).map((item) => (
           <li key={item.id} className="flex items-center gap-2 line-clamp-1">
-            <span className="text-emerald-400/60">·</span>
+            <span className="text-tier-auto/60">·</span>
             <span className="truncate">{item.title}</span>
           </li>
         ))}
