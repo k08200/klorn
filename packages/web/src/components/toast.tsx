@@ -126,9 +126,9 @@ function ToastItem({
       onBlur={onResume}
       className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-lg text-sm font-medium shadow-lg animate-slide-up ${
         toast.type === "success"
-          ? "bg-green-600 text-white"
+          ? "bg-green-700 text-white"
           : toast.type === "error"
-            ? "bg-red-600 text-white"
+            ? "bg-red-700 text-white"
             : "bg-surface-elevated text-stone-100 border border-stone-700"
       }`}
     >

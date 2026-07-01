@@ -71,7 +71,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           keyboard user tabs to it, so they can jump past the whole sidebar to
           the content on every route. */}
       <a
-        href="#main-content"
+        href="#main"
         className="sr-only rounded-md bg-amber-300 px-4 py-2 text-sm font-semibold text-stone-950 focus-visible:not-sr-only focus-visible:absolute focus-visible:left-4 focus-visible:top-4 focus-visible:z-50"
       >
         Skip to content

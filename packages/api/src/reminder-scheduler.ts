@@ -39,14 +39,31 @@ async function deliverReminder(reminder: ReminderRecord): Promise<boolean> {
   });
   if (updated.count === 0) return false;
 
-  const notification = await prisma.notification.create({
-    data: {
-      userId: reminder.userId,
-      type: "reminder",
-      title: reminder.title,
-      message: msg,
-    },
-  });
+  // We already claimed the reminder (PENDING -> SENT) above. If creating the
+  // notification fails now, the reminder would be marked delivered with nothing
+  // actually delivered — permanent loss. Revert to PENDING so the next tick
+  // retries (a duplicate delivery is strictly better than a lost reminder).
+  let notification: Awaited<ReturnType<typeof prisma.notification.create>>;
+  try {
+    notification = await prisma.notification.create({
+      data: {
+        userId: reminder.userId,
+        type: "reminder",
+        title: reminder.title,
+        message: msg,
+      },
+    });
+  } catch (err) {
+    await prisma.reminder
+      .updateMany({ where: { id: reminder.id }, data: { status: "PENDING" } })
+      .catch(() => {});
+    console.error(
+      `[REMINDER] notification create failed for ${reminder.id}, reverted to PENDING:`,
+      err,
+    );
+    captureError(err, { tags: { scope: "reminder.deliver" }, extra: { reminderId: reminder.id } });
+    return false;
+  }
 
   // Push real-time notification via WebSocket
   pushNotification(reminder.userId, {

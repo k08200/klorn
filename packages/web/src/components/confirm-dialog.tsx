@@ -49,6 +49,12 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     }, 0);
     const handler = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        // This confirm is the TOP-most modal. Stop the event before any modal
+        // underneath (e.g. the compose modal, also a window keydown listener)
+        // also handles Escape — otherwise one Escape closes both and wipes the
+        // compose draft. Paired with the capture-phase registration below so
+        // this runs before the underlying modal's bubble-phase listener.
+        event.stopImmediatePropagation();
         handleClose(false);
         return;
       }
@@ -68,10 +74,12 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
         first.focus();
       }
     };
-    window.addEventListener("keydown", handler);
+    // Capture phase so this top-most dialog's Escape handler runs BEFORE an
+    // underlying modal's bubble-phase window listener (see stopImmediatePropagation).
+    window.addEventListener("keydown", handler, true);
     return () => {
       window.clearTimeout(focusTimer);
-      window.removeEventListener("keydown", handler);
+      window.removeEventListener("keydown", handler, true);
       previousFocusRef.current?.focus();
     };
   }, [options]);
