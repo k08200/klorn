@@ -18,6 +18,7 @@ import {
   isGoogleAuthError,
   isGoogleNotFoundError,
   markGoogleTokenForReconnect,
+  markLinkedInboxForReconnect,
 } from "./gmail.js";
 import { fetchGmailEmailById, fetchGmailEmails } from "./gmail-fetch.js";
 import { resolveUserEmail } from "./resolve-user-email.js";
@@ -75,7 +76,12 @@ export async function syncEmailByGmailId(
   if (linkedInboxAccountId && !linked) throw new Error("Gmail not connected");
 
   const rawEmail = await fetchGmailEmailById(userId, gmailId, linked?.client ?? null);
-  if (!rawEmail) throw new Error("Gmail not connected");
+  if (!rawEmail) {
+    // A null here for a valid linked client means its token was rejected — flag
+    // the inbox for reconnect so a revoked account prompts a re-link.
+    if (linkedInboxAccountId) await markLinkedInboxForReconnect(userId, linkedInboxAccountId);
+    throw new Error("Gmail not connected");
+  }
 
   const persisted = await persistGmailEmail(userId, rawEmail, {
     userEmail: linked?.email ?? null,
@@ -103,7 +109,13 @@ export async function syncEmails(
   linkedInbox?: { id: string; email: string; client: InstanceType<typeof google.auth.OAuth2> },
 ): Promise<{ synced: number; newCount: number; source: "gmail" }> {
   const rawEmails = await fetchGmailEmails(userId, maxResults, query, linkedInbox?.client);
-  if (!rawEmails) throw new Error("Gmail not connected");
+  if (!rawEmails) {
+    // Null for a valid linked client = its token was rejected. Flag the inbox so
+    // the scheduler/push fan-out surfaces a reconnect prompt instead of retrying
+    // a dead inbox silently every tick.
+    if (linkedInbox) await markLinkedInboxForReconnect(userId, linkedInbox.id);
+    throw new Error("Gmail not connected");
+  }
 
   // For a linked inbox, "self" (self-reply detection in the firewall) is that
   // inbox's own address, not the primary user's email.
@@ -242,9 +254,11 @@ async function reconcileInboxScope(
     } while (pageToken);
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      // Only the PRIMARY token may be invalidated here — a linked-inbox auth
-      // error must not poison the primary connection (keyed on userId alone).
-      if (!linkedInboxAccountId) await markGoogleTokenForReconnect(userId);
+      // Flag the RIGHT account for reconnect — the linked row on a linked-scope
+      // failure, the primary token otherwise. A linked failure must never poison
+      // the primary connection (markGoogleTokenForReconnect is userId-keyed).
+      if (linkedInboxAccountId) await markLinkedInboxForReconnect(userId, linkedInboxAccountId);
+      else await markGoogleTokenForReconnect(userId);
       throw new Error("Gmail not connected");
     }
     throw err;

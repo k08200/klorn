@@ -15,6 +15,9 @@ interface LinkedAccount {
   createdAt: string;
   // null until the first sync tick after MULTI_INBOX_SYNC_ENABLED flips.
   lastSyncedAt: string | null;
+  // true once this inbox's token was found revoked/undecryptable — the user must
+  // re-link to resume syncing (server clears it on a successful refresh/re-link).
+  needsReconnect: boolean;
 }
 
 // Compact "synced 5m ago" / "Not yet synced" for the connected-inbox rows.
@@ -120,18 +123,35 @@ export function LinkedInboxesSection() {
             >
               <div className="min-w-0">
                 <span className="block truncate text-stone-200">{account.email}</span>
-                <span className="block truncate text-[11px] text-stone-500">
-                  {formatLastSynced(account.lastSyncedAt)}
-                </span>
+                {account.needsReconnect ? (
+                  <span className="block truncate text-[11px] text-amber-400">
+                    Reconnect needed — access was revoked
+                  </span>
+                ) : (
+                  <span className="block truncate text-[11px] text-stone-500">
+                    {formatLastSynced(account.lastSyncedAt)}
+                  </span>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => disconnect.mutate(account.id)}
-                disabled={disconnect.isPending}
-                className="shrink-0 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 transition hover:bg-stone-800 disabled:opacity-50"
-              >
-                Disconnect
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                {account.needsReconnect && (
+                  <button
+                    type="button"
+                    onClick={() => void connect()}
+                    className="rounded-md border border-amber-400/50 bg-amber-400/10 px-2 py-1 text-xs text-amber-200 transition hover:bg-amber-400/20"
+                  >
+                    Reconnect
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => disconnect.mutate(account.id)}
+                  disabled={disconnect.isPending}
+                  className="rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 transition hover:bg-stone-800 disabled:opacity-50"
+                >
+                  Disconnect
+                </button>
+              </div>
             </li>
           ))}
         </ul>

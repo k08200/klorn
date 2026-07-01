@@ -10,12 +10,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({
   findMany: vi.fn(),
   findFirst: vi.fn(),
+  updateMany: vi.fn(async () => ({ count: 1 })),
   userTokenFindFirst: vi.fn(),
 }));
 
 vi.mock("../db.js", () => ({
   prisma: {
-    linkedInboxAccount: { findMany: m.findMany, findFirst: m.findFirst },
+    linkedInboxAccount: { findMany: m.findMany, findFirst: m.findFirst, updateMany: m.updateMany },
     userToken: { findFirst: m.userTokenFindFirst },
   },
 }));
@@ -39,7 +40,11 @@ vi.mock("googleapis", () => ({
   },
 }));
 
-import { getAuthedInboxClient, getLinkedInboxClients } from "../gmail.js";
+import {
+  getAuthedInboxClient,
+  getLinkedInboxClients,
+  markLinkedInboxForReconnect,
+} from "../gmail.js";
 
 describe("getLinkedInboxClients", () => {
   beforeEach(() => {
@@ -140,5 +145,21 @@ describe("mail actions route to the correct account (P2b)", () => {
     expect(result).toEqual({ error: "Gmail not connected." });
     expect(m.userTokenFindFirst).toHaveBeenCalled();
     expect(m.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe("markLinkedInboxForReconnect", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("durably flags ONE linked inbox scoped by (id, userId), never touching another account", async () => {
+    await markLinkedInboxForReconnect("u1", "acc-1");
+
+    // Scoped by BOTH id and userId so a caller can only flag its own linked row,
+    // and sets the durable needsReconnect flag (not the primary token).
+    expect(m.updateMany).toHaveBeenCalledWith({
+      where: { id: "acc-1", userId: "u1" },
+      data: { needsReconnect: true },
+    });
+    expect(m.userTokenFindFirst).not.toHaveBeenCalled();
   });
 });

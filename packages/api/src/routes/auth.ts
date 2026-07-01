@@ -790,6 +790,8 @@ export function authRoutes(app: FastifyInstance) {
             accessToken: encryptToken(tokens.access_token),
             refreshToken: encryptOptional(tokens.refresh_token),
             expiresAt,
+            // Re-linking a previously-revoked inbox clears the reconnect prompt.
+            needsReconnect: false,
           },
           create: {
             userId: statePayload.userId,
@@ -1126,7 +1128,13 @@ export function authRoutes(app: FastifyInstance) {
       const userId = getUserId(request);
       const accounts = await prisma.linkedInboxAccount.findMany({
         where: { userId },
-        select: { id: true, email: true, createdAt: true, lastSyncedAt: true },
+        select: {
+          id: true,
+          email: true,
+          createdAt: true,
+          lastSyncedAt: true,
+          needsReconnect: true,
+        },
         orderBy: { createdAt: "asc" },
       });
       return { accounts };
