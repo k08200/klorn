@@ -12,6 +12,7 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { syncEmailByGmailId } from "../email-sync.js";
+import { requireEntitled } from "../entitlement-guard.js";
 import {
   archiveEmail,
   type GmailDraftAttachment,
@@ -66,7 +67,13 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
   // as an abuse vector against the user's Gmail send quota.
   app.post(
     "/send",
-    { preHandler: requireAuth, config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    {
+      // Pro-only: sending mail is email_write, excluded from the free taster.
+      // The parent email plugin now uses requireAppAccess (free-tier gate), so
+      // this MUST carry its own requireEntitled or a free token could send.
+      preHandler: [requireAuth, requireEntitled],
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    },
     async (request, reply) => {
       const uid = getUserId(request);
       const { to, subject, body } = request.body as { to: string; subject: string; body: string };
@@ -92,7 +99,11 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
   // Fields: to, subject, body. Files: any number of `files` parts (<= cap).
   app.post(
     "/compose",
-    { preHandler: requireAuth, config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    {
+      // Pro-only: compose+send is email_write. Same gate as /send.
+      preHandler: [requireAuth, requireEntitled],
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    },
     async (request, reply) => {
       const uid = getUserId(request);
       if (!request.isMultipart()) {

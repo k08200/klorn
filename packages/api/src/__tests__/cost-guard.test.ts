@@ -3,10 +3,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 let mockRow: { cents: number } | null = null;
 let mockUpsertCents = 0;
 let upsertShouldThrow = false;
+let mockUser: { plan: string; role: string | null } | null = null;
+let userLookupShouldThrow = false;
 const upserts: Array<{ userId: string; dayKey: string; data: Record<string, unknown> }> = [];
 
 vi.mock("../db.js", () => ({
   prisma: {
+    user: {
+      findUnique: vi.fn(async () => {
+        if (userLookupShouldThrow) throw new Error("db down");
+        return mockUser;
+      }),
+    },
     llmCostLedger: {
       findUnique: vi.fn(async () => mockRow),
       upsert: vi.fn(async (args: unknown) => {
@@ -29,11 +37,15 @@ vi.mock("../db.js", () => ({
 
 const ORIGINAL_CAP = process.env.DAILY_COST_CAP_CENTS;
 const ORIGINAL_GLOBAL_CAP = process.env.GLOBAL_DAILY_COST_CAP_CENTS;
+const ORIGINAL_FREE_CAP = process.env.FREE_DAILY_COST_CAP_CENTS;
+const ORIGINAL_PAYWALL = process.env.PAYWALL_ENABLED;
 
 afterEach(() => {
   mockRow = null;
   mockUpsertCents = 0;
   upsertShouldThrow = false;
+  mockUser = null;
+  userLookupShouldThrow = false;
   upserts.length = 0;
   if (ORIGINAL_CAP === undefined) {
     delete process.env.DAILY_COST_CAP_CENTS;
@@ -44,6 +56,16 @@ afterEach(() => {
     delete process.env.GLOBAL_DAILY_COST_CAP_CENTS;
   } else {
     process.env.GLOBAL_DAILY_COST_CAP_CENTS = ORIGINAL_GLOBAL_CAP;
+  }
+  if (ORIGINAL_FREE_CAP === undefined) {
+    delete process.env.FREE_DAILY_COST_CAP_CENTS;
+  } else {
+    process.env.FREE_DAILY_COST_CAP_CENTS = ORIGINAL_FREE_CAP;
+  }
+  if (ORIGINAL_PAYWALL === undefined) {
+    delete process.env.PAYWALL_ENABLED;
+  } else {
+    process.env.PAYWALL_ENABLED = ORIGINAL_PAYWALL;
   }
 });
 
@@ -103,6 +125,80 @@ describe("checkCostGate", () => {
     const { checkCostGate } = await import("../cost-guard.js");
     const result = await checkCostGate("user-1");
     expect(result.allowed).toBe(false);
+  });
+});
+
+describe("checkCostGate — free-tier plan-aware cap (paywall on)", () => {
+  const enablePaywall = () => {
+    process.env.PAYWALL_ENABLED = "true";
+    process.env.DAILY_COST_CAP_CENTS = "100";
+    process.env.FREE_DAILY_COST_CAP_CENTS = "10";
+    vi.resetModules();
+  };
+
+  it("caps a free (non-entitled) user at the free cap, not the full cap", async () => {
+    enablePaywall();
+    mockUser = { plan: "FREE", role: "USER" };
+    mockRow = { cents: 5 };
+    const { checkCostGate } = await import("../cost-guard.js");
+    const result = await checkCostGate("free-1");
+    expect(result.capCents).toBe(10);
+    expect(result.allowed).toBe(true);
+    expect(result.remainingCents).toBe(5);
+  });
+
+  it("blocks a free user once they reach the free cap", async () => {
+    enablePaywall();
+    mockUser = { plan: "FREE", role: "USER" };
+    mockRow = { cents: 10 };
+    const { checkCostGate } = await import("../cost-guard.js");
+    const result = await checkCostGate("free-1");
+    expect(result.allowed).toBe(false);
+    expect(result.capCents).toBe(10);
+  });
+
+  it("keeps the full cap for an entitled (PRO) user", async () => {
+    enablePaywall();
+    mockUser = { plan: "PRO", role: "USER" };
+    mockRow = { cents: 50 };
+    const { checkCostGate } = await import("../cost-guard.js");
+    const result = await checkCostGate("pro-1");
+    expect(result.capCents).toBe(100);
+    expect(result.allowed).toBe(true);
+  });
+
+  it("keeps the full cap for an ADMIN even on the free plan", async () => {
+    enablePaywall();
+    mockUser = { plan: "FREE", role: "ADMIN" };
+    mockRow = { cents: 50 };
+    const { checkCostGate } = await import("../cost-guard.js");
+    const result = await checkCostGate("admin-1");
+    expect(result.capCents).toBe(100);
+    expect(result.allowed).toBe(true);
+  });
+
+  it("fails safe to the full cap when the plan lookup throws", async () => {
+    enablePaywall();
+    userLookupShouldThrow = true;
+    mockRow = { cents: 50 };
+    const { checkCostGate } = await import("../cost-guard.js");
+    const result = await checkCostGate("free-1");
+    // A DB blip must not wrongly block a free user nor throw on the hot path.
+    expect(result.capCents).toBe(100);
+    expect(result.allowed).toBe(true);
+  });
+
+  it("ignores plan and uses the full cap when the paywall is off", async () => {
+    process.env.PAYWALL_ENABLED = "false";
+    process.env.DAILY_COST_CAP_CENTS = "100";
+    process.env.FREE_DAILY_COST_CAP_CENTS = "10";
+    vi.resetModules();
+    mockUser = { plan: "FREE", role: "USER" };
+    mockRow = { cents: 50 };
+    const { checkCostGate } = await import("../cost-guard.js");
+    const result = await checkCostGate("free-1");
+    expect(result.capCents).toBe(100);
+    expect(result.allowed).toBe(true);
   });
 });
 

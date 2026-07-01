@@ -21,7 +21,7 @@ import { overrideAttentionTier } from "../attention-override.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { getDecisionMetrics } from "../decision-metrics.js";
-import { requireEntitled } from "../entitlement-guard.js";
+import { requireAppAccess } from "../entitlement-guard.js";
 import { ensureFreshGmailWatch } from "../gmail.js";
 import { getInteractionGraph } from "../interaction-graph.js";
 import { senderEmail } from "../notification-format.js";
@@ -124,8 +124,9 @@ function extractEmailId(
 
 export async function firewallRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
-  // Paywall: refuse non-entitled users at the paid surface (no-op pre-launch).
-  app.addHook("preHandler", requireEntitled);
+  // Usable free tier: the firewall graph/classification view is core, read-only
+  // value — admit any non-hard-walled user (free included). No-op pre-launch.
+  app.addHook("preHandler", requireAppAccess);
 
   // GET /api/inbox/firewall/graph?mode=relationships|decisions — nodes/edges for
   // a force-directed view. Read-only over data we already have: NO new graph

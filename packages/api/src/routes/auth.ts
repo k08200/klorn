@@ -28,7 +28,7 @@ import {
 } from "../gmail.js";
 import { mapGoogleEventTimes } from "../google-calendar-time.js";
 import { captureError } from "../sentry.js";
-import { isEntitled } from "../stripe.js";
+import { isEntitled, isHardPaywalled } from "../stripe.js";
 import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
 import { maybeSendWelcomeEmail } from "../welcome-email.js";
 
@@ -303,6 +303,9 @@ export function authRoutes(app: FastifyInstance) {
           // Include entitled here too (not just /me) so the client paywall guard
           // never sees it undefined at session start and skips the check.
           entitled: isEntitled(user.plan, user.role),
+          // Hard-wall only pure subscriber-only mode; with the usable free tier
+          // this is always false so free users get into the app.
+          paywalled: isHardPaywalled(user.plan, user.role),
         },
       });
     },
@@ -356,6 +359,9 @@ export function authRoutes(app: FastifyInstance) {
           // Include entitled here too (not just /me) so the client paywall guard
           // never sees it undefined at session start and skips the check.
           entitled: isEntitled(user.plan, user.role),
+          // Hard-wall only pure subscriber-only mode; with the usable free tier
+          // this is always false so free users get into the app.
+          paywalled: isHardPaywalled(user.plan, user.role),
         },
       });
     },
@@ -383,9 +389,13 @@ export function authRoutes(app: FastifyInstance) {
           plan: user.plan,
           role: user.role,
           // Whether the user may use paid features (active sub / trial / comped
-          // / admin). The client renders the paywall when this is false. Always
-          // true while PAYWALL_ENABLED is off, so nothing gates pre-launch.
+          // / admin). Gates Pro-only capabilities. Always true while
+          // PAYWALL_ENABLED is off, so nothing gates pre-launch.
           entitled: isEntitled(user.plan, user.role),
+          // Whether to hard-wall the app on entry (pure subscriber-only mode).
+          // Always false with the usable free tier — free users get in and are
+          // bounded by the free daily cost cap instead.
+          paywalled: isHardPaywalled(user.plan, user.role),
           // Stored IANA timezone (User.timezone, default "Asia/Seoul").
           // Surfaced so the web client can render calendar/briefing times
           // in the user's intended zone instead of the browser default
@@ -429,6 +439,9 @@ export function authRoutes(app: FastifyInstance) {
           // Include entitled here too (not just /me) so the client paywall guard
           // never sees it undefined at session start and skips the check.
           entitled: isEntitled(user.plan, user.role),
+          // Hard-wall only pure subscriber-only mode; with the usable free tier
+          // this is always false so free users get into the app.
+          paywalled: isHardPaywalled(user.plan, user.role),
         },
       });
     },

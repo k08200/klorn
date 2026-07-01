@@ -11,9 +11,13 @@ interface User {
   plan: string;
   role: string;
   // Whether the user may use paid features (active sub / trial / comped /
-  // admin). Server-computed; always true while the paywall is off. The client
-  // shows the paywall when this is explicitly false.
+  // admin). Server-computed; always true while the paywall is off. Gates
+  // Pro-only surfaces (e.g. the Settings subscription state).
   entitled?: boolean;
+  // Whether to hard-wall the app on entry (pure subscriber-only mode). Always
+  // false with the usable free tier — free users get in, bounded by the free
+  // daily cost cap. The client shows the full paywall only when this is true.
+  paywalled?: boolean;
   // IANA timezone (e.g., "Asia/Seoul"). Always present — defaults server-side
   // to "Asia/Seoul" when the column is null. Used for date/time rendering so
   // the UI doesn't silently fall back to the browser timezone, which on iOS

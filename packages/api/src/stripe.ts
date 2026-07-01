@@ -74,11 +74,28 @@ export type FeatureKey =
   | "notion"
   | "meeting_tools";
 
-// When the paywall is ON there is NO free tier — every gated feature requires
-// an active subscription/trial (or admin). When OFF (pre-launch default) FREE
-// keeps its historical taster set so merging changes nothing.
+// The free tier is a real, continuously-usable product — not just a trial. When
+// the paywall is ON, FREE still grants the core "firewall" experience so a new
+// user can feel Klorn sort their inbox and auto-handle the noise: read the
+// classified mail, the daily briefing, and AUTO (reversible actions only). What
+// stays Pro is everything that costs us more or is the moat: sending/replying,
+// calendar writes, pattern learning, and all integrations. Free volume is
+// bounded by FREE_DAILY_COST_CAP_CENTS (see cost-guard), which is the real
+// "daily N emails" limit. Setting this list to [] restores a pure
+// subscriber-only model (isHardPaywalled then hard-walls free users on entry).
+const FREE_TASTER: FeatureKey[] = [
+  "email_read",
+  "calendar_read",
+  "daily_briefing",
+  "email_auto_classify",
+  "autonomous_agent",
+  "agent_mode_auto",
+];
+
+// When the paywall is OFF (pre-launch default) FREE keeps its historical fuller
+// set so merging changes nothing until launch flips PAYWALL_ENABLED.
 const FREE_FEATURES: FeatureKey[] = PAYWALL_ENABLED
-  ? []
+  ? FREE_TASTER
   : [
       "email_read",
       "calendar_read",
@@ -169,6 +186,20 @@ export function isEntitled(plan: string, role?: string): boolean {
   if (!PAYWALL_ENABLED) return true;
   if (role === "ADMIN") return true;
   return plan === "PRO" || plan === "TEAM" || plan === "ENTERPRISE";
+}
+
+/**
+ * True only when a signed-in user should be hard-walled out of the app on
+ * entry (shown the full PaywallScreen). This happens ONLY when the paywall is
+ * on, the user is not entitled (not paid/trial/admin), AND the free tier grants
+ * no features at all — i.e. a pure subscriber-only model. With the usable free
+ * tier (FREE grants the taster set) this is always false: free users get into
+ * the app and are bounded by the free daily cost cap, not blocked at the door.
+ * Flipping FREE to [] is the single switch back to subscriber-only.
+ */
+export function isHardPaywalled(plan: string, role?: string): boolean {
+  if (isEntitled(plan, role)) return false;
+  return PLAN_FEATURES.FREE.size === 0;
 }
 
 /**
