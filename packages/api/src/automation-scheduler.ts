@@ -14,6 +14,7 @@ import { findOpenEmailAttentionItemId } from "./attention-override.js";
 import { sendAutoReplyViaFloor } from "./auto-reply-send.js";
 import { createDailyBriefingDelivery } from "./briefing.js";
 import {
+  MULTI_INBOX_SYNC_ENABLED,
   SCHEDULER_CALENDAR_SYNC_INTERVAL_MS,
   SCHEDULER_CHECK_INTERVAL_MS,
   SCHEDULER_EMAIL_SYNC_INTERVAL_MS,
@@ -31,7 +32,7 @@ import {
   summarizeUnsummarizedEmails,
   syncEmails,
 } from "./email-sync.js";
-import { getAuthedClient, renewExpiringGmailWatches } from "./gmail.js";
+import { getAuthedClient, getLinkedInboxClients, renewExpiringGmailWatches } from "./gmail.js";
 import { parseGoogleDateTime } from "./google-calendar-time.js";
 import { formatUrgentEmailBody, senderName } from "./notification-format.js";
 import { escalateUnackedPush } from "./phone-escalation.js";
@@ -684,6 +685,70 @@ async function runAutomations() {
               }
               await syncRecentCandidateIntakes(config.userId, Math.max(syncResult.newCount, 10));
               await notifyCandidateEmails(config.userId);
+
+              // Multi-account (Pro): also sync each LINKED secondary inbox via
+              // its own OAuth client so the firewall classifies its mail too.
+              // Flag-gated (default off) so this path stays dark in production
+              // until verified against real accounts — it can never touch the
+              // primary sync above. Per-account isolation: one bad linked inbox
+              // (revoked token, quota) is logged and skipped, never aborting the
+              // others or the tick. The per-user daily cost cap covers all
+              // inboxes, so on a cap hit we stop the rest of the fan-out.
+              if (
+                MULTI_INBOX_SYNC_ENABLED &&
+                planHasFeature(configUserPlan, "multi_account", configUserRole)
+              ) {
+                // The lookup itself is wrapped so a DB blip degrades to "skip the
+                // fan-out this tick" — never escaping to the outer catch and
+                // silently skipping the primary account's backfill/auto-reply/
+                // reconcile below.
+                let linkedInboxes: Awaited<ReturnType<typeof getLinkedInboxClients>> = [];
+                try {
+                  linkedInboxes = await getLinkedInboxClients(config.userId);
+                } catch (err) {
+                  console.warn(
+                    `[AUTOMATION] Linked-inbox lookup failed for ${config.userId} — skipping fan-out this tick:`,
+                    err,
+                  );
+                  captureError(err, {
+                    tags: { scope: "automation.linked-inbox-lookup", userId: config.userId },
+                  });
+                }
+                for (const inbox of linkedInboxes) {
+                  try {
+                    const linkedResult = await syncEmails(config.userId, 20, undefined, {
+                      id: inbox.id,
+                      email: inbox.email,
+                      client: inbox.client,
+                    });
+                    if (linkedResult.newCount > 0) {
+                      await summarizeUnsummarizedEmails(config.userId, linkedResult.newCount);
+                    }
+                  } catch (err) {
+                    const errName = err instanceof Error ? err.name : "";
+                    if (errName === "DailyCostCapExceededError") {
+                      console.log(
+                        `[AUTOMATION] Linked-inbox sync stopped for ${config.userId} — daily cost cap`,
+                      );
+                      break;
+                    }
+                    if (err instanceof Error && err.message === "Gmail not connected") {
+                      console.warn(
+                        `[AUTOMATION] Linked inbox ${inbox.email} not connected (revoked?) for ${config.userId}`,
+                      );
+                      continue;
+                    }
+                    console.warn(
+                      `[AUTOMATION] Linked-inbox sync failed for ${config.userId} / ${inbox.email}:`,
+                      err,
+                    );
+                    captureError(err, {
+                      tags: { scope: "automation.linked-inbox-sync", userId: config.userId },
+                      extra: { linkedInboxAccountId: inbox.id },
+                    });
+                  }
+                }
+              }
 
               // Backfill: re-judge recently-synced emails that never got an
               // AttentionItem (the inline judge is fire-and-forget; a transient

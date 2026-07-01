@@ -720,6 +720,12 @@ model EmailMessage {
   userId               String
   user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   gmailId              String // Gmail message ID
+  // Which linked secondary inbox this mail came from. NULL = the primary Google
+  // account (the vast majority). Plain tag (no FK) so unlinking an inbox keeps
+  // its already-classified mail; a stale tag just means getAuthedInboxClient
+  // returns null and actions fall back. Dedup stays @@unique([userId, gmailId])
+  // — Gmail message IDs don't collide across accounts.
+  linkedInboxAccountId String?
   threadId             String? // Gmail thread ID for conversation grouping
   from                 String
   to                   String
