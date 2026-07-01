@@ -39,7 +39,7 @@ import { runProactiveActions } from "./proactive-actions.js";
 import { sendPushNotification } from "./push.js";
 import { captureError } from "./sentry.js";
 import { sendSms } from "./sms.js";
-import { planHasFeature } from "./stripe.js";
+import { isEntitled, planHasFeature } from "./stripe.js";
 import {
   localDateKey,
   localDayUtcRange,
@@ -323,6 +323,68 @@ async function dbHeartbeat(): Promise<void> {
   } catch (err) {
     // Don't crash the scheduler on a stuck DB — the next tick will try again.
     console.warn("[AUTOMATION] DB heartbeat failed (will retry next tick):", err);
+  }
+}
+
+// Title used both to create and to dedup the free-tier limit nudge, so the two
+// stay in lockstep (a title drift would break the once-a-day guard).
+const FREE_LIMIT_NUDGE_TITLE = "Daily free limit reached";
+const FREE_LIMIT_NUDGE_MESSAGE =
+  "You've reached today's free limit. Upgrade to Pro for unlimited classification and auto-handling.";
+
+function startOfUtcDay(): Date {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+/**
+ * When a FREE user's classify cycle is stopped by the daily cost cap, drop one
+ * in-app nudge per UTC day pointing at the upgrade path. No-op for entitled
+ * users (paid/trial/admin) and — because isEntitled is always true then — a
+ * no-op while the paywall is off. Best-effort: a failure here must never break
+ * the tick, so it's caught and logged rather than propagated.
+ */
+export async function maybeNudgeFreeDailyLimit(
+  userId: string,
+  plan: string,
+  role: string | undefined,
+): Promise<void> {
+  if (isEntitled(plan, role)) return;
+  try {
+    const existing = await prisma.notification.findFirst({
+      where: {
+        userId,
+        type: "reminder",
+        title: FREE_LIMIT_NUDGE_TITLE,
+        createdAt: { gte: startOfUtcDay() },
+      },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    const notification = await prisma.notification.create({
+      data: {
+        userId,
+        type: "reminder",
+        title: FREE_LIMIT_NUDGE_TITLE,
+        message: FREE_LIMIT_NUDGE_MESSAGE,
+        link: "/settings",
+      },
+    });
+    pushNotification(userId, {
+      id: notification.id,
+      type: "reminder",
+      title: FREE_LIMIT_NUDGE_TITLE,
+      message: FREE_LIMIT_NUDGE_MESSAGE,
+      link: "/settings",
+      createdAt: notification.createdAt.toISOString(),
+    });
+  } catch (err) {
+    // The nudge is best-effort UX — never let it break the classify tick or
+    // spam retries. Log a signal (console + captureError) instead of swallowing.
+    console.warn(`[AUTOMATION] free-limit nudge failed for ${userId}:`, err);
+    captureError(err, { tags: { scope: "automation.free-limit-nudge", userId } });
   }
 }
 
@@ -848,12 +910,29 @@ async function runAutomations() {
                 }
               }
             } catch (err) {
+              const errName = err instanceof Error ? err.name : "";
               // "Gmail not connected" is an expected state: the pre-filter
               // catches it before we even try, but a token can be revoked
               // mid-tick (race). Warn without Sentry to avoid noise.
               if (err instanceof Error && err.message === "Gmail not connected") {
                 console.warn(
                   `[AUTOMATION] Email sync skipped for ${config.userId}: Gmail not connected`,
+                );
+              } else if (errName === "DailyCostCapExceededError") {
+                // Expected back-pressure, not an outage — don't Sentry-spam it
+                // (mirrors the briefing handler above). For a FREE user this is
+                // their daily limit; nudge them toward Pro at most once a day.
+                console.log(`[AUTOMATION] Classify skipped for ${config.userId} — daily cost cap`);
+                // .catch() isolates the blast radius to this one user: the helper
+                // already self-catches, but if its own catch ever threw the await
+                // would abort the rest of this tick's users. Belt and suspenders.
+                await maybeNudgeFreeDailyLimit(config.userId, configUserPlan, configUserRole).catch(
+                  (nudgeErr) => {
+                    console.warn(
+                      `[AUTOMATION] free-limit nudge threw unexpectedly for ${config.userId}:`,
+                      nudgeErr,
+                    );
+                  },
                 );
               } else {
                 // Token expired, rate-limited, or network flake — log +
