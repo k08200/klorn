@@ -16,6 +16,7 @@
  */
 
 import type { ClassifiableEmail } from "./email-classifier.js";
+import { getCachedJudgeFeatures, judgeCacheKey, setCachedJudgeFeatures } from "./judge-cache.js";
 import { resolveEscalation } from "./judge-dial.js";
 import { isClearMarketing, keywordFeatures, looksUrgent } from "./keyword-policy.js";
 import { type LearnedRule, matchLearnedRules } from "./learned-rules.js";
@@ -305,11 +306,25 @@ async function extractFeaturesWithLlm(
   modelOverride?: string,
   onError?: (message: string) => void,
 ): Promise<{ features: PocFeatures; reason: string } | null> {
+  const model = modelOverride || JUDGE_MODEL;
+  const userPrompt = buildJudgePrompt(email, corrections, senderFacts, senderTraits);
+  // Exact prompt→result cache is only sound at temperature 0 (deterministic).
+  // A sampled call (JUDGE_TEMPERATURE > 0) must neither read nor write it.
+  const cacheable = JUDGE_TEMPERATURE === 0;
+  const cacheKey = cacheable ? judgeCacheKey(model, userPrompt) : "";
+  if (cacheable) {
+    const cached = getCachedJudgeFeatures(cacheKey);
+    if (cached) {
+      console.log("[JUDGE] feature cache hit — skipping LLM call");
+      return cached;
+    }
+  }
+
   for (let attempt = 1; attempt <= JUDGE_LLM_ATTEMPTS; attempt++) {
     try {
       const response = await createCompletion(
         {
-          model: modelOverride || JUDGE_MODEL,
+          model,
           messages: [
             {
               role: "system",
@@ -318,7 +333,7 @@ async function extractFeaturesWithLlm(
             },
             {
               role: "user",
-              content: buildJudgePrompt(email, corrections, senderFacts, senderTraits),
+              content: userPrompt,
             },
           ],
           response_format: { type: "json_object" },
@@ -368,7 +383,9 @@ async function extractFeaturesWithLlm(
         });
       }
       const reason = asString(parsed.reason);
-      return { features, reason };
+      const result = { features, reason };
+      if (cacheable) setCachedJudgeFeatures(cacheKey, result);
+      return result;
     } catch (err) {
       // Surface WHY in plain logs — captureError is a no-op without a
       // Sentry DSN (e.g. CI), which made eval fallbacks undiagnosable.

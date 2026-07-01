@@ -14,6 +14,7 @@ vi.mock("../openai.js", async (importOriginal) => {
   return { ...actual, createCompletion: createCompletionMock };
 });
 
+import { __resetJudgeCache } from "../judge-cache.js";
 import { judgeEmail } from "../poc-judge.js";
 
 const SCORE = {
@@ -47,6 +48,7 @@ function lastPrompt(): string {
 }
 
 beforeEach(() => {
+  __resetJudgeCache();
   createCompletionMock.mockReset();
   createCompletionMock.mockResolvedValue(SCORE);
 });

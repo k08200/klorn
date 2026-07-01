@@ -17,6 +17,7 @@ vi.mock("../sentry.js", () => ({
   captureError: vi.fn(),
 }));
 
+import { __resetJudgeCache } from "../judge-cache.js";
 import { type JudgeContext, judgeEmail } from "../poc-judge.js";
 
 const PLAIN_EMAIL = {
@@ -31,6 +32,7 @@ function ctx(partial: Partial<JudgeContext>): JudgeContext {
 }
 
 beforeEach(() => {
+  __resetJudgeCache();
   createCompletionMock.mockReset();
   createCompletionMock.mockRejectedValue(new Error("LLM should not be called"));
 });
