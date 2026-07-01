@@ -20,6 +20,7 @@
 import { LEARNED_RULES_IN_JUDGE, SENDER_TRAITS_IN_JUDGE } from "./config.js";
 import { db } from "./db.js";
 import { extractEmailAddress } from "./email-address.js";
+import { embedTexts, isEmbeddingEnabled, rankBySimilarity } from "./embedding.js";
 import { getCachedInteractionNode } from "./interaction-graph.js";
 import { getAppliedRulesForMatch } from "./learned-rule-store.js";
 import type { LearnedRule } from "./learned-rules.js";
@@ -50,6 +51,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface JudgeContextInput {
   from: string;
+  /**
+   * Subject of the email being judged. Only used to semantically rank the
+   * correction few-shots (embedding.ts) when EMBEDDING_MODEL is set; absent or
+   * flag-off falls back to lexical (same-sender/domain/recency) ranking.
+   */
+  subject?: string;
   /** EmailMessage.id of the email being judged — excluded from its own prior. */
   excludeEmailId?: string;
   /**
@@ -114,10 +121,49 @@ function rankCorrections(
     .map((s) => s.example);
 }
 
+/** Text an email contributes to embedding-based ranking (matches the few-shot line). */
+function correctionText(from: string, subject: string): string {
+  return `${from} ${subject}`.trim();
+}
+
+/**
+ * Semantically rank the correction pool by cosine similarity of the incoming
+ * email to each candidate (embedding.ts), returning the top few-shots. Returns
+ * null on any embedding failure (query or all candidates) so the caller falls
+ * back to the deterministic lexical ranking — semantic is an enhancement, never
+ * a new failure mode.
+ */
+async function semanticRankCorrections(
+  incomingText: string,
+  rows: readonly OverrideRow[],
+  emailsById: Map<string, EmailRow>,
+): Promise<CorrectionExample[] | null> {
+  const candidates = rows.flatMap((row) => {
+    const email = emailsById.get(row.sourceId);
+    if (!email || !isTier(row.tier)) return [];
+    return [
+      {
+        example: { from: email.from, subject: email.subject, tier: row.tier },
+        text: correctionText(email.from, email.subject),
+      },
+    ];
+  });
+  if (candidates.length === 0) return [];
+
+  const vectors = await embedTexts([incomingText, ...candidates.map((c) => c.text)]);
+  const query = vectors[0];
+  if (!query) return null; // query embedding failed → lexical fallback
+  const candidateVectors = vectors.slice(1);
+  const topIdx = rankBySimilarity(query, candidateVectors, MAX_FEW_SHOT);
+  if (topIdx.length === 0) return null; // all candidate embeddings failed
+  return topIdx.map((i) => candidates[i].example);
+}
+
 async function fetchCorrections(
   userId: string,
   senderAddress: string,
   excludeSourceId?: string,
+  incomingText?: string,
 ): Promise<CorrectionExample[]> {
   const rows = (await db.attentionItem.findMany({
     where: {
@@ -139,6 +185,13 @@ async function fetchCorrections(
   })) as EmailRow[];
   const emailsById = new Map(emails.map((e) => [e.id, e]));
 
+  // Semantic ranking when an embedding model is configured and we have the
+  // incoming email's text; otherwise (and on any embedding failure) fall back to
+  // the deterministic same-sender/domain/recency ranking.
+  if (isEmbeddingEnabled() && incomingText) {
+    const semantic = await semanticRankCorrections(incomingText, rows, emailsById);
+    if (semantic) return semantic;
+  }
   return rankCorrections(rows, emailsById, senderAddress);
 }
 
@@ -309,9 +362,14 @@ export async function buildJudgeContext(
     const senderAddress = extractEmailAddress(input.from || "");
     const correctionExcludeId =
       input.excludeOwnCorrection && input.excludeEmailId ? input.excludeEmailId : undefined;
+    // Only build the embedding query text when the feature is on — keeps the
+    // no-embedding path (and the eval gate) byte-identical.
+    const incomingText = isEmbeddingEnabled()
+      ? correctionText(input.from || "", input.subject || "")
+      : undefined;
     const [corrections, senderItems, interaction, commitments, senderTraits, learnedRules] =
       await Promise.all([
-        fetchCorrections(userId, senderAddress, correctionExcludeId),
+        fetchCorrections(userId, senderAddress, correctionExcludeId, incomingText),
         fetchSenderItems(userId, senderAddress, input.excludeEmailId),
         fetchInteractionFact(userId, senderAddress),
         fetchCommitmentFact(userId, senderAddress),
