@@ -36,6 +36,8 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
   const [error, setError] = useState<string | null>(null);
   const toInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
 
   const reset = useCallback(() => {
@@ -52,20 +54,52 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
     onClose();
   }, [reset, onClose]);
 
-  // Focus the first field on open and let Escape dismiss (never mid-send, so a
-  // stray keypress can't abandon a request the server may already be running).
+  // Read sending/close inside the keydown handler via refs so the focus effect
+  // can key on [open] ALONE. Keying it on `sending` too would re-run the effect
+  // mid-send, firing its cleanup (focus-restore) and yanking focus out of the
+  // modal while a send is in flight.
+  const sendingRef = useRef(sending);
+  sendingRef.current = sending;
+  const closeRef = useRef(close);
+  closeRef.current = close;
+
+  // Focus the first field on open, TRAP Tab within the dialog (WCAG 2.1.2 /
+  // 2.4.3 — focus must not leak to the page behind the modal), and RESTORE focus
+  // to the trigger on close. Escape dismisses, but never mid-send so a stray
+  // keypress can't abandon a request the server may already be running.
   useEffect(() => {
     if (!open) return;
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const focusTimer = window.setTimeout(() => toInputRef.current?.focus(), 0);
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !sending) close();
+      if (event.key === "Escape") {
+        if (!sendingRef.current) closeRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = getFocusableElements(dialogRef.current);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => {
       window.clearTimeout(focusTimer);
       window.removeEventListener("keydown", onKey);
+      previousFocusRef.current?.focus();
     };
-  }, [open, sending, close]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -171,6 +205,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -311,4 +346,20 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
       </div>
     </div>
   );
+}
+
+function getFocusableElements(root: HTMLElement | null): HTMLElement[] {
+  if (!root) return [];
+  return Array.from(
+    root.querySelectorAll<HTMLElement>(
+      [
+        "a[href]",
+        "button:not([disabled])",
+        "textarea:not([disabled])",
+        "input:not([disabled])",
+        "select:not([disabled])",
+        '[tabindex]:not([tabindex="-1"])',
+      ].join(","),
+    ),
+  ).filter((element) => !element.hasAttribute("disabled") && element.offsetParent !== null);
 }
