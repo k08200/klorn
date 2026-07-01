@@ -26,6 +26,7 @@ import { sendDevicePush } from "./push-device.js";
 import { isAllowedPushOrigin } from "./push-origin-allowlist.js";
 import { recordPushAttempt } from "./push-rate-limit.js";
 import { sendTelegramForPush } from "./telegram-notify.js";
+import { mintTierOverrideToken } from "./tier-override-token.js";
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
@@ -295,6 +296,7 @@ export async function sendPushNotification(
           },
           JSON.stringify({
             ...payload,
+            ...tierOverrideFields(userId, payload.attentionItemId),
             deliveryId,
             receiptUrl: pushReceiptUrl(deliveryId),
           }),
@@ -395,6 +397,39 @@ async function recordSkipped(
 function pushReceiptUrl(deliveryId: string): string | null {
   if (!PUSH_RECEIPT_BASE_URL) return null;
   return `${PUSH_RECEIPT_BASE_URL.replace(/\/+$/, "")}/api/notifications/push/receipts/${deliveryId}`;
+}
+
+// One-tap notification action buttons for a firewall interrupt: "Later" defers
+// to QUEUE, "Mute" silences (SILENT). Both are reversible — a notification can
+// never escalate to PUSH/AUTO. The service worker reads these from the payload.
+const TIER_OVERRIDE_ACTIONS = [
+  { action: "queue", title: "Later" },
+  { action: "silent", title: "Mute" },
+] as const;
+
+function tierOverrideUrl(): string | null {
+  if (!PUSH_RECEIPT_BASE_URL) return null;
+  return `${PUSH_RECEIPT_BASE_URL.replace(/\/+$/, "")}/api/notifications/push/tier-override`;
+}
+
+/**
+ * One-tap retier fields for a firewall push: notification action buttons, a
+ * capability token scoped to this (user, item), and the endpoint to POST it to.
+ * Returns {} when the push is not a 1:1 firewall item (no attentionItemId) or
+ * the base URL is unset — so a non-firewall push's payload is byte-identical to
+ * before and never carries override buttons.
+ */
+function tierOverrideFields(
+  userId: string,
+  attentionItemId: string | undefined,
+): Record<string, unknown> {
+  const url = tierOverrideUrl();
+  if (!attentionItemId || !url) return {};
+  return {
+    actions: TIER_OVERRIDE_ACTIONS,
+    overrideUrl: url,
+    overrideToken: mintTierOverrideToken(userId, attentionItemId),
+  };
 }
 
 async function hasRecentAgentProposalPush(userId: string): Promise<boolean> {

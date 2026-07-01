@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { overrideAttentionTier } from "../attention-override.js";
 import { getUserId, requireAuth } from "../auth.js";
 import {
   clearNotifications,
@@ -11,6 +12,8 @@ import { getVapidPublicKey, sendPushNotification } from "../push.js";
 import { getPushDeliveryStats, recordPushReceipt } from "../push-delivery.js";
 import { sendDevicePush } from "../push-device.js";
 import { isAllowedPushOrigin } from "../push-origin-allowlist.js";
+import { verifyTierOverrideToken } from "../tier-override-token.js";
+import type { Tier } from "../tiers.js";
 
 export async function notificationRoutes(app: FastifyInstance) {
   // POST /api/notifications/push/receipts/:deliveryId — public, high-entropy
@@ -25,11 +28,46 @@ export async function notificationRoutes(app: FastifyInstance) {
     return reply.code(204).send();
   });
 
+  // POST /api/notifications/push/tier-override — public, capability-authenticated
+  // one-tap retier from a push notification action button ("Later" → QUEUE,
+  // "Mute" → SILENT). The signed token (NOT a session cookie — the service
+  // worker has none) is the authorization; it is scoped to exactly one
+  // (userId, itemId). Only the safe, reversible tiers are accepted here, so a
+  // capability can never escalate an item to PUSH/AUTO.
+  app.post(
+    "/push/tier-override",
+    { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { token, tier } = (request.body || {}) as { token?: string; tier?: string };
+      if (typeof token !== "string" || typeof tier !== "string") {
+        return reply.code(400).send({ error: "Invalid override request" });
+      }
+      const grant = verifyTierOverrideToken(token);
+      if (!grant) {
+        return reply.code(401).send({ error: "Invalid or expired token" });
+      }
+      // Tier is enforced from the TOKEN's permitted set, not just a route
+      // allowlist — a capability can only ever apply what it was minted for.
+      if (!grant.tiers.includes(tier)) {
+        return reply.code(403).send({ error: "Token not permitted to apply this tier" });
+      }
+      const result = await overrideAttentionTier(grant.userId, grant.itemId, tier as Tier);
+      if (!result.ok) {
+        return reply.code(404).send({ error: "Attention item not found" });
+      }
+      return reply.code(200).send({ ok: true, tier: result.tier });
+    },
+  );
+
   app.addHook("preHandler", async (request, reply) => {
     const path = request.url.split("?")[0] ?? "";
     if (
       path.startsWith("/push/receipts/") ||
       path.startsWith("/api/notifications/push/receipts/") ||
+      // One-tap tier override from a notification action: authenticated by the
+      // signed capability token in the body, not a session (the SW has none).
+      path.startsWith("/push/tier-override") ||
+      path.startsWith("/api/notifications/push/tier-override") ||
       // The SW's pushsubscriptionchange handler has no auth token; the
       // rotate route authenticates by matching the OLD endpoint (a
       // high-entropy capability URL) against an existing row instead.

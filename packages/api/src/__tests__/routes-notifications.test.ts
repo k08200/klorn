@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
+import { mintTierOverrideToken } from "../tier-override-token.js";
 
 // Set before importing push-origin-allowlist (loaded transitively via routes).
 process.env.PUSH_ALLOWED_ORIGINS = "https://app.klorn.ai,http://localhost:8001";
@@ -79,6 +80,16 @@ vi.mock("../db.js", () => {
       count: vi.fn(async () => 1),
       update: vi.fn(async () => ({})),
     },
+    attentionItem: {
+      findFirst: vi.fn(async ({ where }: { where: { id: string; userId: string } }) => {
+        if (where.id === "item-1" && where.userId === "user-1") {
+          return { id: "item-1", source: "EMAIL", sourceId: "email-1" };
+        }
+        return null;
+      }),
+      update: vi.fn(async () => ({})),
+    },
+    decisionLabel: { updateMany: vi.fn(async () => ({ count: 1 })) },
   };
   return { prisma, db: prisma };
 });
@@ -348,6 +359,64 @@ describe("notification routes", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ sent: true });
+    await app.close();
+  });
+
+  // ── one-tap tier override (public capability endpoint) ──────────────────
+  it("applies a tier override from a valid capability token WITHOUT a session", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/tier-override",
+      // No auth header — the signed token is the only credential.
+      payload: { token: mintTierOverrideToken("user-1", "item-1"), tier: "QUEUE" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, tier: "QUEUE" });
+    await app.close();
+  });
+
+  it("rejects a garbage override token with 401", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/tier-override",
+      payload: { token: "not-a-real-token", tier: "QUEUE" },
+    });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("rejects a non-reversible tier (PUSH) — token is not permitted to apply it (403)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/tier-override",
+      payload: { token: mintTierOverrideToken("user-1", "item-1"), tier: "PUSH" },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("rejects a malformed tier (non-string) with 400", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/tier-override",
+      payload: { token: mintTierOverrideToken("user-1", "item-1"), tier: 123 },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("returns 404 when the token's item does not belong to the user", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/tier-override",
+      payload: { token: mintTierOverrideToken("user-1", "missing-item"), tier: "SILENT" },
+    });
+    expect(res.statusCode).toBe(404);
     await app.close();
   });
 });

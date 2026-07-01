@@ -108,10 +108,15 @@ self.addEventListener("push", (event) => {
       body: data.body || "You have a new notification",
       icon: "/icon-192.png",
       badge: "/badge-96.png",
+      // One-tap "Later"/"Mute" buttons for firewall interrupts (server only
+      // sends these when the push maps 1:1 to an attention item).
+      actions: Array.isArray(data.actions) ? data.actions : undefined,
       data: {
         url: data.url || "/chat",
         deliveryId: data.deliveryId || null,
         receiptUrl: data.receiptUrl || null,
+        overrideUrl: data.overrideUrl || null,
+        overrideToken: data.overrideToken || null,
       },
     };
   } catch (err) {
@@ -133,6 +138,30 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const data = event.notification.data || {};
+
+  // One-tap tier override from an action button: retier in the background and
+  // do NOT open the app. The capability token authenticates (the SW has no
+  // session); only the reversible tiers are offered.
+  if (
+    (event.action === "queue" || event.action === "silent") &&
+    data.overrideUrl &&
+    data.overrideToken &&
+    isSameOrigin(data.overrideUrl)
+  ) {
+    const tier = event.action === "queue" ? "QUEUE" : "SILENT";
+    event.waitUntil(
+      Promise.all([
+        sendPushReceipt(data, "clicked"),
+        fetch(data.overrideUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: data.overrideToken, tier }),
+        }).catch((err) => console.warn("[SW] tier override failed:", err)),
+      ]),
+    );
+    return;
+  }
+
   const url = data.url || "/chat";
   event.waitUntil(
     Promise.all([
@@ -146,6 +175,16 @@ self.addEventListener("notificationclick", (event) => {
     ]),
   );
 });
+
+// Only ever POST the capability token to our own origin — defends against a
+// misconfigured server base URL sending the token off-origin.
+function isSameOrigin(url) {
+  try {
+    return new URL(url, self.location.origin).origin === self.location.origin;
+  } catch {
+    return false;
+  }
+}
 
 function sendPushReceipt(data, event) {
   if (!data || !data.deliveryId || !data.receiptUrl) return Promise.resolve();
