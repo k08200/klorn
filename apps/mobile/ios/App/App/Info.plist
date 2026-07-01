@@ -46,7 +46,10 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<true/>
+	<false/>
+	<!-- Light status-bar content over the dark web UI. -->
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleLightContent</string>
 	<!-- On-device calendar (EventKit) via @ebarooni/capacitor-calendar.
 	     Pre-iOS 17 uses NSCalendarsUsageDescription; iOS 17+ read access maps to
 	     full-access and requires NSCalendarsFullAccessUsageDescription. -->
