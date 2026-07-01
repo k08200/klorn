@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { captureClientError } from "../lib/sentry";
+import { useConfirm } from "./confirm-dialog";
 
 interface NaverImapStatus {
   connected: boolean;
@@ -25,6 +26,7 @@ const PASSWORD_HELP_URL = "https://help.naver.com/service/3007/contents/?lang=ko
 
 export function NaverImapSection() {
   const { user } = useAuth();
+  const { confirm } = useConfirm();
   // Multi-account (a second inbox) is a paid feature. `entitled` is server-
   // computed and always true while the paywall is off, so this gate is inert
   // pre-launch. An already-connected mailbox stays visible so a user who
@@ -89,7 +91,13 @@ export function NaverImapSection() {
 
   const handleDisconnect = async () => {
     if (submitting) return;
-    if (!confirm("Disconnect Naver mail? Existing classified emails stay.")) return;
+    const ok = await confirm({
+      title: "Disconnect Naver mail?",
+      message: "Existing classified emails stay. You can reconnect anytime.",
+      confirmLabel: "Disconnect",
+      danger: true,
+    });
+    if (!ok) return;
     setSubmitting(true);
     setError(null);
     try {
