@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
+import { ComposeModal } from "../../components/compose-modal";
 import { useToast } from "../../components/toast";
 import { TrustDot, type TrustScoreData } from "../../components/trust-badge";
 import { apiFetch } from "../../lib/api";
@@ -236,6 +237,7 @@ function EmailView() {
   const [appliedSearch, setAppliedSearch] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -587,6 +589,7 @@ function EmailView() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
+      <ComposeModal open={composeOpen} onClose={() => setComposeOpen(false)} />
       <header className="mb-5 rounded-lg border border-white/10 bg-stone-900/40 p-5 shadow-xl shadow-black/10 md:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -601,6 +604,15 @@ function EmailView() {
               {source === "demo" && <span className="ml-2 text-accent">Demo data</span>}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setComposeOpen(true)}
+            disabled={source === "demo"}
+            title={source === "demo" ? "Connect Gmail to send email" : "Compose a new email"}
+            className="min-h-11 w-fit rounded-md bg-accent px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            ✎ Compose
+          </button>
           <button
             type="button"
             onClick={syncNow}

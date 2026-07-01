@@ -557,6 +557,17 @@ function safeAsciiFilename(filename: string): string {
   return fallback || "attachment";
 }
 
+// A MIME type is interpolated raw into the `Content-Type:` header line, so an
+// unsanitized value (from an attacker-crafted multipart part's Content-Type)
+// containing a quote or semicolon could break out and append an attacker-chosen
+// parameter. Accept only a strict `type/subtype` token per RFC 6838 and drop
+// any parameters; anything else falls back to a safe generic type.
+function safeMimeType(mimeType: string | undefined): string {
+  const value = (mimeType || "").trim();
+  const TOKEN = "[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*";
+  return new RegExp(`^${TOKEN}/${TOKEN}$`).test(value) ? value : "application/octet-stream";
+}
+
 function buildPlainTextRawEmail(
   to: string,
   subject: string,
@@ -596,7 +607,7 @@ function buildPlainTextRawEmail(
     const asciiFilename = safeAsciiFilename(filename);
     parts.push(
       `--${boundary}`,
-      `Content-Type: ${attachment.mimeType || "application/octet-stream"}; name="${asciiFilename}"`,
+      `Content-Type: ${safeMimeType(attachment.mimeType)}; name="${asciiFilename}"`,
       "Content-Transfer-Encoding: base64",
       `Content-Disposition: attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
       "",
@@ -608,7 +619,20 @@ function buildPlainTextRawEmail(
   return Buffer.from(parts.join("\r\n")).toString("base64url");
 }
 
-export async function sendEmail(userId: string, to: string, subject: string, body: string) {
+export async function sendEmail(
+  userId: string,
+  to: string,
+  subject: string,
+  body: string,
+  attachments: GmailDraftAttachment[] = [],
+) {
+  // Single recipient only. A comma or semicolon means multiple addresses —
+  // reject it so the angle-bracket display-name trick
+  // (`a@x.com, evil@y.com <legit@z.com>`, whose addr-spec passes the check
+  // below) can't smuggle an extra recipient into the To header.
+  if (to.includes(",") || to.includes(";")) {
+    return { error: "Send to one recipient at a time (no commas or semicolons in the address)." };
+  }
   if (!looksLikeEmailAddress(to)) {
     return {
       error: `Invalid email address: "${to}". Use a full address like local@domain, not a domain such as accounts.google.com.`,
@@ -625,7 +649,7 @@ export async function sendEmail(userId: string, to: string, subject: string, bod
 
   const gmail = google.gmail({ version: "v1", auth });
 
-  const raw = buildPlainTextRawEmail(to, subject, body);
+  const raw = buildPlainTextRawEmail(to, subject, body, attachments);
 
   let res: { data: { id?: string | null } };
   try {
