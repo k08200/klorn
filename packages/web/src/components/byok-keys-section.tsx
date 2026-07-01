@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { captureClientError } from "../lib/sentry";
+import { useConfirm } from "./confirm-dialog";
 
 interface CuratedModelOption {
   id: string;
@@ -56,6 +57,7 @@ const CLEAR_FIELD: Record<Provider, "clearOpenRouterApiKey" | "clearGeminiApiKey
 };
 
 export function ByokKeysSection() {
+  const { confirm } = useConfirm();
   const [status, setStatus] = useState<ModelStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -114,8 +116,14 @@ export function ByokKeysSection() {
     void patchModels({ [KEY_FIELD[p]]: key }, p);
   };
 
-  const removeKey = (p: Provider, label: string) => {
-    if (!confirm(`Remove your ${label} key? Klorn falls back to its shared key.`)) return;
+  const removeKey = async (p: Provider, label: string) => {
+    const ok = await confirm({
+      title: `Remove your ${label} key?`,
+      message: "Klorn falls back to its shared key.",
+      confirmLabel: "Remove",
+      danger: true,
+    });
+    if (!ok) return;
     void patchModels({ [CLEAR_FIELD[p]]: true }, p);
   };
 
