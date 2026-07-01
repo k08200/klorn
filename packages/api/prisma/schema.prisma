@@ -187,6 +187,9 @@ model UserToken {
   updatedAt           DateTime  @updatedAt
 
   @@unique([userId, provider])
+  // renewExpiringGmailWatches scans all tokens by expiry (no userId) every tick;
+  // without this it seq-scans the whole table as the user base grows.
+  @@index([gmailWatchExpiresAt])
 }
 
 // A secondary Google account (e.g. work) linked ONLY for cross-account calendar
@@ -234,6 +237,10 @@ model LinkedInboxAccount {
   updatedAt           DateTime  @updatedAt
 
   @@unique([userId, email])
+  // renewExpiringGmailWatches scans linked inboxes by watch expiry (no userId)
+  // every tick — including the `gmailWatchExpiresAt IS NULL` first-register case,
+  // which a btree serves too. Without this it seq-scans every linked inbox.
+  @@index([gmailWatchExpiresAt])
 }
 
 model Task {
