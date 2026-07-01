@@ -183,6 +183,9 @@ model UserToken {
   // Gmail push watch (users.watch) expires ~7 days after registration.
   // Null means the user has not enabled real-time push.
   gmailWatchExpiresAt DateTime?
+  // Last-synced Gmail historyId watermark for incremental (History API) sync.
+  // Null = never baselined; the next sync snapshots then records the current id.
+  historyId           String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 

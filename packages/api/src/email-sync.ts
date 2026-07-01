@@ -17,7 +17,13 @@ import {
   isGoogleNotFoundError,
   markGoogleTokenForReconnect,
 } from "./gmail.js";
-import { fetchGmailEmailById, fetchGmailEmails } from "./gmail-fetch.js";
+import {
+  fetchCurrentHistoryId,
+  fetchGmailEmailById,
+  fetchGmailEmails,
+  fetchGmailHistory,
+  type GmailRawEmail,
+} from "./gmail-fetch.js";
 import { resolveUserEmail } from "./resolve-user-email.js";
 import { Semaphore } from "./semaphore.js";
 import { captureError } from "./sentry.js";
@@ -75,37 +81,74 @@ export async function syncEmailByGmailId(
   };
 }
 
-/**
- * Sync Gmail → DB. Only inserts new emails, updates existing ones.
- * Returns count of new + updated emails.
- */
-export async function syncEmails(
+type LinkedInbox = {
+  id: string;
+  email: string;
+  client: InstanceType<typeof google.auth.OAuth2>;
+};
+
+/** Read the account's stored Gmail historyId watermark (null on first sync). */
+async function readStoredHistoryId(
   userId: string,
-  maxResults = 30,
-  query?: string,
-  // Multi-account: when set, sync a LINKED secondary inbox using its own OAuth
-  // client, and stamp every persisted email with its account id. Omitted =
-  // primary Google account (unchanged behavior).
-  linkedInbox?: { id: string; email: string; client: InstanceType<typeof google.auth.OAuth2> },
-): Promise<{ synced: number; newCount: number; source: "gmail" }> {
-  const rawEmails = await fetchGmailEmails(userId, maxResults, query, linkedInbox?.client);
-  if (!rawEmails) throw new Error("Gmail not connected");
+  linkedInbox?: LinkedInbox,
+): Promise<string | null> {
+  if (linkedInbox) {
+    // Scope by userId too (not just the id) so a mismatched (userId, id) pair
+    // from a future caller can't read another user's watermark — defense in
+    // depth matching getAuthedInboxClient's `{ id, userId }` filter.
+    const row = await prisma.linkedInboxAccount.findFirst({
+      where: { id: linkedInbox.id, userId },
+      select: { historyId: true },
+    });
+    return row?.historyId ?? null;
+  }
+  const token = await prisma.userToken.findFirst({
+    where: { userId, provider: "google" },
+    select: { historyId: true },
+  });
+  return token?.historyId ?? null;
+}
 
-  // For a linked inbox, "self" (self-reply detection in the firewall) is that
-  // inbox's own address, not the primary user's email.
-  const userEmail = linkedInbox?.email ?? (await resolveUserEmail(userId));
-  const linkedInboxAccountId = linkedInbox?.id ?? null;
+/** Advance the account's stored watermark to a NEW, non-null historyId. */
+async function storeHistoryId(
+  userId: string,
+  historyId: string,
+  linkedInbox?: LinkedInbox,
+): Promise<void> {
+  if (linkedInbox) {
+    // updateMany (not update) so we can scope by { id, userId } — a compound
+    // non-unique filter — and never advance another user's watermark.
+    await prisma.linkedInboxAccount.updateMany({
+      where: { id: linkedInbox.id, userId },
+      data: { historyId },
+    });
+    return;
+  }
+  await prisma.userToken.updateMany({
+    where: { userId, provider: "google" },
+    data: { historyId },
+  });
+}
+
+/**
+ * Persist a batch of raw emails with per-email isolation. One malformed message
+ * (an unparseable Date header, or a P2002 unique race with a concurrent
+ * gmail-push sync) must not throw out of the loop and strand every email after
+ * it. persistGmailEmail is an idempotent upsert, so an isolated failure is
+ * safely re-attempted on the next sync. Returns the count of NEW emails.
+ */
+async function persistEmailBatch(
+  userId: string,
+  emails: GmailRawEmail[],
+  userEmail: string | null,
+  linkedInboxAccountId: string | null,
+): Promise<number> {
   let newCount = 0;
-
-  for (const email of rawEmails) {
+  for (const email of emails) {
     try {
       const persisted = await persistGmailEmail(userId, email, { userEmail, linkedInboxAccountId });
       if (persisted.isNew) newCount++;
     } catch (err) {
-      // Isolate per-email failures: one malformed message (an unparseable Date
-      // header, or a P2002 unique race with a concurrent gmail-push sync) must
-      // not throw out of the loop and strand every email after it in the batch.
-      // (The backfill loop above already uses this pattern.)
       // console first — captureError is silent without a Sentry DSN (self-host/
       // dev), and the sibling reconcile catch follows the same console discipline.
       console.warn(
@@ -118,8 +161,93 @@ export async function syncEmails(
       });
     }
   }
+  return newCount;
+}
+
+/**
+ * Snapshot path: a bounded top-N `messages.list` fetch (first sync or after an
+ * expired watermark). Persists, then baselines the watermark from getProfile so
+ * the NEXT sync switches to the incremental History path and stops dropping the
+ * >N messages a snapshot misses. Returns the sync result.
+ */
+async function syncSnapshot(
+  userId: string,
+  maxResults: number,
+  query: string | undefined,
+  userEmail: string | null,
+  linkedInbox: LinkedInbox | undefined,
+): Promise<{ synced: number; newCount: number; source: "gmail" }> {
+  const rawEmails = await fetchGmailEmails(userId, maxResults, query, linkedInbox?.client);
+  if (!rawEmails) throw new Error("Gmail not connected");
+
+  const newCount = await persistEmailBatch(userId, rawEmails, userEmail, linkedInbox?.id ?? null);
+
+  // Baseline the watermark ONLY after the snapshot persisted. A search query is
+  // not an INBOX baseline, so never re-baseline off a filtered fetch.
+  if (!query) {
+    const currentHistoryId = await fetchCurrentHistoryId(userId, linkedInbox?.client);
+    if (currentHistoryId) await storeHistoryId(userId, currentHistoryId, linkedInbox);
+  }
 
   return { synced: rawEmails.length, newCount, source: "gmail" };
+}
+
+/**
+ * Sync Gmail → DB, history-aware and per-account (primary or linked inbox).
+ *
+ * The old single-page top-30 `messages.list` PERMANENTLY missed any message
+ * beyond the newest 30 when >30 arrived between syncs (Pub/Sub drop or a slept
+ * process): reconcile only deletes/refreshes KNOWN rows, so unseen ids were
+ * never gap-filled. This routes through the Gmail History API from a stored
+ * watermark so every INBOX addition is fetched. Only inserts new emails / updates
+ * existing ones. Returns count of new + total processed emails.
+ *
+ * CRITICAL ordering: persist FIRST, advance the watermark ONLY after the
+ * fetch+persist completes without a thrown error — persistGmailEmail is
+ * idempotent, so re-processing on the next sync is safe if we didn't advance.
+ */
+export async function syncEmails(
+  userId: string,
+  maxResults = 30,
+  query?: string,
+  // Multi-account: when set, sync a LINKED secondary inbox using its own OAuth
+  // client, and stamp every persisted email with its account id. Omitted =
+  // primary Google account (unchanged behavior).
+  linkedInbox?: LinkedInbox,
+): Promise<{ synced: number; newCount: number; source: "gmail" }> {
+  // For a linked inbox, "self" (self-reply detection in the firewall) is that
+  // inbox's own address, not the primary user's email.
+  const userEmail = linkedInbox?.email ?? (await resolveUserEmail(userId));
+
+  // A search query is an ad-hoc filtered fetch, not INBOX incremental sync —
+  // keep it on the direct snapshot path with no watermark side effects.
+  const storedHistoryId = query ? null : await readStoredHistoryId(userId, linkedInbox);
+
+  // First sync (no watermark): snapshot to populate + baseline for next time.
+  if (!storedHistoryId) {
+    return syncSnapshot(userId, maxResults, query, userEmail, linkedInbox);
+  }
+
+  // Incremental: gap-fill every INBOX addition since the stored watermark.
+  const history = await fetchGmailHistory(userId, storedHistoryId, linkedInbox?.client);
+  if (!history) throw new Error("Gmail not connected"); // auth failure
+
+  // Watermark aged out of Gmail's ~7-day retention → snapshot + re-baseline.
+  if (history.expired) {
+    return syncSnapshot(userId, maxResults, query, userEmail, linkedInbox);
+  }
+
+  const newCount = await persistEmailBatch(
+    userId,
+    history.emails,
+    userEmail,
+    linkedInbox?.id ?? null,
+  );
+
+  // Advance the watermark ONLY after a clean persist, and only to a real id.
+  if (history.newHistoryId) await storeHistoryId(userId, history.newHistoryId, linkedInbox);
+
+  return { synced: history.emails.length, newCount, source: "gmail" };
 }
 
 // ─── Gmail ↔ DB Reconciliation ────────────────────────────────────────────
