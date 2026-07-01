@@ -39,7 +39,9 @@ export default function AuthScreen({
           <img src="/brand/mark.svg?v=matte2" alt="" className="h-8 w-8" />
           <span className="text-sm font-semibold tracking-[0.14em] text-stone-100">Klorn</span>
         </Link>
-        <div className="flex items-center gap-3 text-sm">
+        {/* Landing nav (Home / Early access) is noise on the app login —
+            hide it on phones; the logo stays. */}
+        <div className="hidden items-center gap-3 text-sm sm:flex">
           <Link
             className="inline-flex min-h-11 items-center whitespace-nowrap text-stone-400 transition hover:text-stone-100"
             href="/"
