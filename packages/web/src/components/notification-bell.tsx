@@ -396,37 +396,41 @@ export default function NotificationBell({ userId }: { userId: string }) {
   const renderItem = (n: Notification) => (
     <div
       key={n.id}
-      role="button"
-      tabIndex={0}
-      onClick={() => handleNotificationClick(n)}
-      onKeyDown={(e) => e.key === "Enter" && handleNotificationClick(n)}
-      className={`w-full text-left px-4 py-3.5 md:py-3 border-b border-stone-800/50 hover:bg-stone-800/50 transition cursor-pointer ${
+      className={`border-b border-stone-800/50 ${
         !n.isRead ? "bg-amber-400/5" : ""
       } ${isAgentNotification(n.title) ? "border-l-2 border-l-amber-300/60" : ""}`}
     >
-      <div className="flex items-center gap-2">
-        <span className="text-sm">
-          {isAgentNotification(n.title) ? "🤖" : typeIcon[n.type] || "📌"}
-        </span>
-        <span
-          className={`text-sm truncate ${!n.isRead ? "font-semibold" : "text-stone-300"} ${isAgentNotification(n.title) ? "text-amber-200" : ""}`}
-        >
-          {notificationTitle(n.title)}
-        </span>
-        {isAgentNotification(n.title) && (
-          <span className="text-[9px] text-amber-300 bg-amber-300/10 px-1 py-0.5 rounded shrink-0">
-            Klorn
+      {/* The row itself is a real button (Enter + Space activate). Action buttons
+          live in a sibling block below so we never nest interactive-in-interactive. */}
+      <button
+        type="button"
+        onClick={() => handleNotificationClick(n)}
+        className="w-full text-left px-4 py-3.5 md:py-3 hover:bg-stone-800/50 transition cursor-pointer"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-sm">
+            {isAgentNotification(n.title) ? "🤖" : typeIcon[n.type] || "📌"}
           </span>
-        )}
-        {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-amber-300 shrink-0 ml-auto" />}
-      </div>
-      <p className="text-[13px] md:text-xs text-stone-400 mt-1 line-clamp-2 ml-6">{n.message}</p>
-      <div className="flex items-center gap-2 mt-1 ml-6">
-        <p className="text-[10px] text-stone-400">{formatRelative(n.createdAt)}</p>
-        {getNotificationTarget(n) && <span className="text-[10px] text-amber-300">Open</span>}
-      </div>
+          <span
+            className={`text-sm truncate ${!n.isRead ? "font-semibold" : "text-stone-300"} ${isAgentNotification(n.title) ? "text-amber-200" : ""}`}
+          >
+            {notificationTitle(n.title)}
+          </span>
+          {isAgentNotification(n.title) && (
+            <span className="text-[9px] text-amber-300 bg-amber-300/10 px-1 py-0.5 rounded shrink-0">
+              Klorn
+            </span>
+          )}
+          {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-amber-300 shrink-0 ml-auto" />}
+        </div>
+        <p className="text-[13px] md:text-xs text-stone-400 mt-1 line-clamp-2 ml-6">{n.message}</p>
+        <div className="flex items-center gap-2 mt-1 ml-6">
+          <p className="text-[10px] text-stone-400">{formatRelative(n.createdAt)}</p>
+          {getNotificationTarget(n) && <span className="text-[10px] text-amber-300">Open</span>}
+        </div>
+      </button>
       {n.pendingActionId && n.pendingActionStatus === "PENDING" && (
-        <div className="flex items-center gap-2 mt-2.5 ml-6">
+        <div className="flex items-center gap-2 mt-2.5 mb-3.5 ml-6 px-4">
           <button
             type="button"
             onClick={(e) => handleApprovePendingAction(n, e)}
@@ -446,7 +450,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         </div>
       )}
       {n.pendingActionId && n.pendingActionStatus && n.pendingActionStatus !== "PENDING" && (
-        <div className="mt-2 ml-6">
+        <div className="mt-2 mb-3 ml-6 px-4">
           <span className="text-[10px] text-stone-500">
             {n.pendingActionStatus === "EXECUTED"
               ? "Done"

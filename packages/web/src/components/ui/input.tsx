@@ -59,10 +59,12 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           ref={ref}
           id={inputId}
           className={`${baseStyles} resize-none ${error ? "border-red-500" : ""} ${className}`}
+          aria-invalid={error ? "true" : undefined}
+          aria-describedby={error ? `${inputId}-error` : undefined}
           {...props}
         />
         {error && (
-          <p className="text-xs text-red-400 mt-1" role="alert">
+          <p id={`${inputId}-error`} className="text-xs text-red-400 mt-1" role="alert">
             {error}
           </p>
         )}
@@ -74,10 +76,11 @@ Textarea.displayName = "Textarea";
 
 interface SelectProps extends InputHTMLAttributes<HTMLSelectElement> {
   label?: string;
+  error?: string;
   children: React.ReactNode;
 }
 
-export function Select({ label, children, className = "", id, ...props }: SelectProps) {
+export function Select({ label, error, children, className = "", id, ...props }: SelectProps) {
   const inputId = id || label?.toLowerCase().replace(/\s+/g, "-");
   return (
     <div>
@@ -88,11 +91,18 @@ export function Select({ label, children, className = "", id, ...props }: Select
       )}
       <select
         id={inputId}
-        className={`${baseStyles} ${className}`}
+        className={`${baseStyles} ${error ? "border-red-500" : ""} ${className}`}
+        aria-invalid={error ? "true" : undefined}
+        aria-describedby={error ? `${inputId}-error` : undefined}
         {...(props as React.SelectHTMLAttributes<HTMLSelectElement>)}
       >
         {children}
       </select>
+      {error && (
+        <p id={`${inputId}-error`} className="text-xs text-red-400 mt-1" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
