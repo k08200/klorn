@@ -12,6 +12,8 @@ const m = vi.hoisted(() => ({
   findMany: vi.fn(async () => [] as { gmailId: string }[]),
   updateMany: vi.fn(async () => ({ count: 0 })),
   attentionUpdateMany: vi.fn(async () => ({ count: 0 })),
+  getLinkedInboxClients: vi.fn(async () => [] as { client: object; id: string; email: string }[]),
+  captureError: vi.fn(),
 }));
 
 vi.mock("googleapis", () => ({
@@ -21,11 +23,12 @@ vi.mock("googleapis", () => ({
 }));
 vi.mock("../gmail.js", () => ({
   getAuthedClient: vi.fn(async () => ({})),
+  getLinkedInboxClients: m.getLinkedInboxClients,
   isGoogleAuthError: () => false,
   isGoogleNotFoundError: () => false,
   markGoogleTokenForReconnect: vi.fn(async () => {}),
 }));
-vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
 // Stub heavy import chains pulled in by email-sync.ts but unused by reconcileEmails.
 vi.mock("../email-firewall.js", () => ({ persistGmailEmail: vi.fn() }));
 vi.mock("../gmail-fetch.js", () => ({ fetchGmailEmails: vi.fn(), fetchGmailEmailById: vi.fn() }));
@@ -37,7 +40,7 @@ vi.mock("../db.js", () => ({
   },
 }));
 
-import { reconcileEmails } from "../email-sync.js";
+import { reconcileEmails, reconcileLinkedInboxes } from "../email-sync.js";
 
 function inboxListing(ids: string[]) {
   return { data: { messages: ids.map((id) => ({ id })), nextPageToken: undefined } };
@@ -154,5 +157,62 @@ describe("reconcileEmails", () => {
       },
       data: expect.objectContaining({ status: "RESOLVED" }),
     });
+  });
+});
+
+describe("reconcileLinkedInboxes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    m.findMany.mockResolvedValue([]);
+    m.deleteMany.mockResolvedValue({ count: 0 });
+    m.getLinkedInboxClients.mockResolvedValue([]);
+  });
+
+  it("reconciles each linked inbox scoped to ITS OWN account id (never null/primary)", async () => {
+    m.getLinkedInboxClients.mockResolvedValue([{ client: {}, id: "link-1", email: "a@b.com" }]);
+    m.listMock.mockResolvedValue(inboxListing(["a", "b"]));
+    m.deleteMany.mockResolvedValue({ count: 2 });
+
+    const result = await reconcileLinkedInboxes("user-1");
+
+    // The delete must be scoped to this linked account — NOT linkedInboxAccountId:
+    // null (that is the primary reconcile's job) and NOT unscoped.
+    expect(m.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", linkedInboxAccountId: "link-1", gmailId: { notIn: ["a", "b"] } },
+    });
+    expect(result.removed).toBe(2);
+  });
+
+  it("isolates a failing linked inbox so the others still reconcile, and reports it", async () => {
+    m.getLinkedInboxClients.mockResolvedValue([
+      { client: {}, id: "link-bad", email: "bad@b.com" },
+      { client: {}, id: "link-ok", email: "ok@b.com" },
+    ]);
+    // First account's INBOX list throws; second returns a normal listing.
+    m.listMock.mockRejectedValueOnce(new Error("revoked")).mockResolvedValue(inboxListing(["a"]));
+    m.deleteMany.mockResolvedValue({ count: 1 });
+
+    const result = await reconcileLinkedInboxes("user-1");
+
+    // The bad inbox is captured, not swallowed silently...
+    expect(m.captureError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ extra: { linkedInboxAccountId: "link-bad" } }),
+    );
+    // ...and the healthy inbox still reconciled.
+    expect(m.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", linkedInboxAccountId: "link-ok", gmailId: { notIn: ["a"] } },
+    });
+    expect(result.removed).toBe(1);
+  });
+
+  it("is a no-op when the user has no linked inboxes", async () => {
+    m.getLinkedInboxClients.mockResolvedValue([]);
+
+    const result = await reconcileLinkedInboxes("user-1");
+
+    expect(result).toEqual({ removed: 0, updated: 0 });
+    expect(m.listMock).not.toHaveBeenCalled();
+    expect(m.deleteMany).not.toHaveBeenCalled();
   });
 });

@@ -14,6 +14,7 @@ import { persistGmailEmail } from "./email-firewall.js";
 import {
   getAuthedClient,
   getAuthedInboxAccount,
+  getLinkedInboxClients,
   isGoogleAuthError,
   isGoogleNotFoundError,
   markGoogleTokenForReconnect,
@@ -160,18 +161,69 @@ async function resolveAttentionForDeletedEmails(userId: string, emailIds: string
 }
 
 /**
- * Reconcile local DB with Gmail.
- * Removes DB emails that no longer exist in Gmail INBOX (deleted/archived/trashed).
- * Updates read/star status for remaining emails.
+ * Reconcile local DB with Gmail for the PRIMARY account.
+ * Removes DB emails that no longer exist in Gmail INBOX (deleted/archived/trashed)
+ * and refreshes read/star status. Scoped to primary rows only — linked secondary
+ * inboxes are reconciled separately by reconcileLinkedInboxes.
  */
 export async function reconcileEmails(
   userId: string,
 ): Promise<{ removed: number; updated: number }> {
   const auth = await getAuthedClient(userId);
   if (!auth) throw new Error("Gmail not connected");
-
   const gmail = google.gmail({ version: "v1", auth });
+  return reconcileInboxScope(userId, gmail, null);
+}
 
+/**
+ * Reconcile every LINKED secondary inbox, each against its OWN Gmail client and
+ * scoped to its own rows. Without this, once MULTI_INBOX_SYNC_ENABLED is on,
+ * linked-inbox mail removed in Gmail would accumulate forever in the mirror
+ * (reconcileEmails only touches primary rows) and read/star drift on linked rows
+ * would never self-heal. Per-account isolation: one revoked/erroring linked inbox
+ * never aborts the others. Callers gate this on MULTI_INBOX_SYNC_ENABLED, mirroring
+ * the sync fan-out.
+ */
+export async function reconcileLinkedInboxes(
+  userId: string,
+): Promise<{ removed: number; updated: number }> {
+  const linked = await getLinkedInboxClients(userId);
+  let removed = 0;
+  let updated = 0;
+  for (const account of linked) {
+    try {
+      const gmail = google.gmail({ version: "v1", auth: account.client });
+      const r = await reconcileInboxScope(userId, gmail, account.id);
+      removed += r.removed;
+      updated += r.updated;
+    } catch (err) {
+      // Isolate per-account failures (e.g. a revoked linked token) so one bad
+      // inbox never strands the rest — and never silently: console first
+      // (captureError is a no-op without a Sentry DSN).
+      console.warn(
+        `[EMAIL-SYNC] linked-inbox reconcile failed for user ${userId} (account ${account.id}):`,
+        err instanceof Error ? err.message : String(err),
+      );
+      captureError(err, {
+        tags: { scope: "email.reconcile.linked", userId },
+        extra: { linkedInboxAccountId: account.id },
+      });
+    }
+  }
+  return { removed, updated };
+}
+
+/**
+ * Core reconcile for ONE inbox scope: the primary account (linkedInboxAccountId =
+ * null) or a single linked secondary inbox. `gmail` is THAT account's client;
+ * every DB query is scoped to `{ userId, linkedInboxAccountId }`, so a reconcile
+ * driven by one account's INBOX can never touch another account's rows.
+ */
+async function reconcileInboxScope(
+  userId: string,
+  gmail: gmail_v1.Gmail,
+  linkedInboxAccountId: string | null,
+): Promise<{ removed: number; updated: number }> {
   // Get ALL current INBOX message IDs from Gmail (lightweight list call)
   const inboxIds = new Set<string>();
   let pageToken: string | undefined;
@@ -190,7 +242,9 @@ export async function reconcileEmails(
     } while (pageToken);
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markGoogleTokenForReconnect(userId);
+      // Only the PRIMARY token may be invalidated here — a linked-inbox auth
+      // error must not poison the primary connection (keyed on userId alone).
+      if (!linkedInboxAccountId) await markGoogleTokenForReconnect(userId);
       throw new Error("Gmail not connected");
     }
     throw err;
@@ -210,21 +264,17 @@ export async function reconcileEmails(
   // pathologically large INBOX a single NOT IN would exceed the 65535 bind-param
   // ceiling, so fall back to diffing stored gmailIds in Node and deleting the
   // (usually tiny) stale set by id, in chunks. No query exceeds INBOX_PARAM_CAP.
-  // CRITICAL: scope every reconcile query to PRIMARY-account rows only
-  // (linkedInboxAccountId: null). inboxIdList was built from the primary
-  // account's INBOX (getAuthedClient above), so linked-inbox rows — whose
-  // gmailIds come from a DIFFERENT account and are never in this list — would
-  // ALL match `gmailId notIn inboxIdList` and be wiped. The gap only bites once
-  // MULTI_INBOX_SYNC_ENABLED is on, but it would silently delete every linked
-  // inbox's mail on the first reconcile tick, so guard it before the flag flips.
-  const primaryScope = { userId, linkedInboxAccountId: null } as const;
+  // CRITICAL: scope every query to THIS account's rows. inboxIdList was built
+  // from this account's INBOX, so rows tagged to a DIFFERENT account would all
+  // match `gmailId notIn inboxIdList` and be wrongly wiped without this guard.
+  const scope = { userId, linkedInboxAccountId } as const;
   let removed = 0;
   if (inboxIdList.length <= INBOX_PARAM_CAP) {
     // Resolve the attention items of the rows we're about to delete BEFORE the
     // delete, so an archived/trashed email leaves the attention queue instead of
     // orphaning an OPEN item the priority amplifier keeps surfacing forever.
     const stale = await prisma.emailMessage.findMany({
-      where: { ...primaryScope, gmailId: { notIn: inboxIdList } },
+      where: { ...scope, gmailId: { notIn: inboxIdList } },
       select: { id: true },
     });
     await resolveAttentionForDeletedEmails(
@@ -232,12 +282,12 @@ export async function reconcileEmails(
       stale.map((r) => r.id),
     );
     const res = await prisma.emailMessage.deleteMany({
-      where: { ...primaryScope, gmailId: { notIn: inboxIdList } },
+      where: { ...scope, gmailId: { notIn: inboxIdList } },
     });
     removed = res.count;
   } else {
     const stored = await prisma.emailMessage.findMany({
-      where: primaryScope,
+      where: scope,
       select: { id: true, gmailId: true },
     });
     const staleIds = stored.filter((e) => !inboxIds.has(e.gmailId)).map((e) => e.id);
@@ -250,18 +300,19 @@ export async function reconcileEmails(
     }
   }
   if (removed > 0) {
-    console.log(`[EMAIL-SYNC] Reconciled: removed ${removed} stale emails for user ${userId}`);
+    const label = linkedInboxAccountId ? `linked ${linkedInboxAccountId}` : "primary";
+    console.log(
+      `[EMAIL-SYNC] Reconciled: removed ${removed} stale emails for user ${userId} (${label})`,
+    );
   }
 
   // Refresh read/star status for the most recent N rows (bounded). After the
-  // delete above, every remaining row for the user is in INBOX, so the
+  // delete above, every remaining row in THIS scope is in INBOX, so the
   // most-recent N are exactly the rows worth re-checking — no INBOX-sized IN
   // clause needed, and the per-row Gmail get + updateMany cost stays capped at N.
-  // Same primary-only scope: these gmailIds are re-checked against the primary
-  // Gmail client below, so a linked-inbox gmailId would 404 there (wasted slot)
-  // or, on a cross-account id collision, mis-update the wrong row.
+  // Re-checked against THIS account's client, so a foreign gmailId would 404 there.
   const remaining = await prisma.emailMessage.findMany({
-    where: primaryScope,
+    where: scope,
     select: { gmailId: true },
     orderBy: { receivedAt: "desc" },
     take: RECONCILE_REFRESH_CAP,
