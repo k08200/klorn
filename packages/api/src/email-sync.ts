@@ -83,16 +83,23 @@ export async function syncEmails(
   userId: string,
   maxResults = 30,
   query?: string,
+  // Multi-account: when set, sync a LINKED secondary inbox using its own OAuth
+  // client, and stamp every persisted email with its account id. Omitted =
+  // primary Google account (unchanged behavior).
+  linkedInbox?: { id: string; email: string; client: InstanceType<typeof google.auth.OAuth2> },
 ): Promise<{ synced: number; newCount: number; source: "gmail" }> {
-  const rawEmails = await fetchGmailEmails(userId, maxResults, query);
+  const rawEmails = await fetchGmailEmails(userId, maxResults, query, linkedInbox?.client);
   if (!rawEmails) throw new Error("Gmail not connected");
 
-  const userEmail = await resolveUserEmail(userId);
+  // For a linked inbox, "self" (self-reply detection in the firewall) is that
+  // inbox's own address, not the primary user's email.
+  const userEmail = linkedInbox?.email ?? (await resolveUserEmail(userId));
+  const linkedInboxAccountId = linkedInbox?.id ?? null;
   let newCount = 0;
 
   for (const email of rawEmails) {
     try {
-      const persisted = await persistGmailEmail(userId, email, { userEmail });
+      const persisted = await persistGmailEmail(userId, email, { userEmail, linkedInboxAccountId });
       if (persisted.isNew) newCount++;
     } catch (err) {
       // Isolate per-email failures: one malformed message (an unparseable Date

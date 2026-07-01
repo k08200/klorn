@@ -188,8 +188,11 @@ export async function fetchGmailEmails(
   userId: string,
   maxResults = 30,
   query?: string,
+  // When set, fetch from THIS OAuth client (a linked secondary inbox) instead of
+  // the user's primary Google account. Multi-account sync passes it in.
+  authClient?: InstanceType<typeof google.auth.OAuth2> | null,
 ): Promise<GmailRawEmail[] | null> {
-  const auth = await getAuthedClient(userId);
+  const auth = authClient ?? (await getAuthedClient(userId));
   if (!auth) return null;
 
   const gmail = google.gmail({ version: "v1", auth });
@@ -250,7 +253,14 @@ export async function fetchGmailEmails(
     return fetched.filter((e): e is GmailRawEmail => e !== null);
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markGoogleTokenForReconnect(userId);
+      // CRITICAL: only touch the PRIMARY token when this fetch actually used it.
+      // For a linked secondary inbox (authClient passed in), a revoked linked
+      // token must NOT invalidate the user's healthy primary Google connection
+      // — markGoogleTokenForReconnect keys on userId alone. Let the linked-inbox
+      // caller handle its own revocation (it surfaces as "Gmail not connected").
+      if (!authClient) {
+        await markGoogleTokenForReconnect(userId);
+      }
       return null;
     }
     throw err;

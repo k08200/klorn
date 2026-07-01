@@ -79,6 +79,12 @@ export const LEARNED_RULES_IN_JUDGE = process.env.LEARNED_RULES_IN_JUDGE === "tr
 // subscriber-only feature. ADMIN role bypasses regardless (see stripe.ts), and
 // admins can comp any account's plan from /admin.
 export const PAYWALL_ENABLED = process.env.PAYWALL_ENABLED === "true";
+
+// Multi-account: fan the classify sync out over a user's LINKED secondary
+// inboxes (Pro), not just the primary Google account. Default OFF — the linked
+// sync path is built but stays dark until real-account testing flips it, so a
+// bug in it can never touch the primary mail path in production.
+export const MULTI_INBOX_SYNC_ENABLED = process.env.MULTI_INBOX_SYNC_ENABLED === "true";
 // Fail-open is intentional pre-launch, but a lost/typo'd env var in production
 // silently makes every paid feature free. Emit a loud startup signal so the
 // operator notices a misconfigured deploy rather than discovering it via revenue.

@@ -533,6 +533,127 @@ async function persistRefreshedLinkedToken(
   }
 }
 
+// ─── Linked (secondary) full inboxes — multi-account sync ─────────────────────
+// Mirrors the linked-calendar client helpers above, but for LinkedInboxAccount
+// (full gmail scopes). Kept separate from the primary getAuthedClient so the
+// single-account UserToken path is never touched.
+
+async function persistRefreshedInboxToken(
+  rowId: string,
+  userId: string,
+  newTokens: {
+    access_token?: string | null;
+    refresh_token?: string | null;
+    expiry_date?: number | null;
+  },
+): Promise<void> {
+  const decision = decideRefreshTokenWrite(newTokens);
+  if (!decision.write) return;
+  if (decision.mode === "rotate") {
+    await prisma.linkedInboxAccount.updateMany({
+      where: { id: rowId, userId },
+      data: {
+        accessToken: encryptToken(decision.accessTokenPlain),
+        refreshToken: encryptOptional(decision.refreshTokenPlain),
+        expiresAt: decision.expiresAt,
+      },
+    });
+    return;
+  }
+  const result = await prisma.linkedInboxAccount.updateMany({
+    where: {
+      id: rowId,
+      userId,
+      OR: [{ expiresAt: null }, { expiresAt: { lt: decision.expiresAt } }],
+    },
+    data: { accessToken: encryptToken(decision.accessTokenPlain), expiresAt: decision.expiresAt },
+  });
+  if (result.count === 0) {
+    console.log(`[GOOGLE] Skipped stale linked-inbox token write for user ${userId}`);
+  }
+}
+
+function buildInboxOAuthClient(
+  row: { id: string; accessToken: string; refreshToken: string | null; expiresAt: Date | null },
+  userId: string,
+): InstanceType<typeof google.auth.OAuth2> | null {
+  let accessTokenPlain = "";
+  let refreshTokenPlain: string | null = null;
+  try {
+    accessTokenPlain = row.accessToken ? decryptToken(row.accessToken) : "";
+    refreshTokenPlain = decryptOptional(row.refreshToken);
+  } catch (err) {
+    // A permanently undecryptable linked token (key rotation / at-rest
+    // corruption) would otherwise drop this inbox silently every tick forever.
+    // Surface it so an operator sees it — mirrors why the primary path calls
+    // invalidateGoogleToken. (A per-inbox "reconnect" UI signal is a follow-up.)
+    console.warn(`[GOOGLE] Skipping linked inbox ${row.id} — token decrypt failed`);
+    captureError(err, {
+      tags: { scope: "gmail.linked-inbox.decrypt" },
+      extra: { rowId: row.id, userId },
+    });
+    return null;
+  }
+  if (!accessTokenPlain && !refreshTokenPlain) return null;
+
+  const oauth2 = getOAuth2Client();
+  oauth2.setCredentials({
+    access_token: accessTokenPlain,
+    refresh_token: refreshTokenPlain,
+    expiry_date: row.expiresAt ? row.expiresAt.getTime() : undefined,
+  });
+  oauth2.on("tokens", async (newTokens) => {
+    try {
+      await persistRefreshedInboxToken(row.id, userId, newTokens);
+    } catch (err) {
+      console.error(
+        `[GOOGLE] Failed to persist refreshed linked-inbox token for user ${userId}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  });
+  return oauth2;
+}
+
+/**
+ * One OAuth2 client per LINKED (secondary) full inbox, for multi-account sync.
+ * A corrupt/undecryptable row is skipped, never fatal, so one bad linked inbox
+ * can't break sync for the primary or the other linked accounts. Returns the
+ * row id + email alongside the client so the caller can attribute synced mail
+ * (EmailMessage.linkedInboxAccountId).
+ */
+export async function getLinkedInboxClients(
+  userId: string,
+): Promise<Array<{ client: InstanceType<typeof google.auth.OAuth2>; id: string; email: string }>> {
+  const rows = await prisma.linkedInboxAccount.findMany({ where: { userId } });
+  const clients: Array<{
+    client: InstanceType<typeof google.auth.OAuth2>;
+    id: string;
+    email: string;
+  }> = [];
+  for (const row of rows) {
+    const client = buildInboxOAuthClient(row, userId);
+    if (client) clients.push({ client, id: row.id, email: row.email });
+  }
+  return clients;
+}
+
+/**
+ * OAuth2 client for ONE linked inbox (by row id, scoped to userId). Used to act
+ * on mail that was synced from a specific secondary inbox (e.g. archive/reply).
+ * Returns null if the row is missing or its token is unusable.
+ */
+export async function getAuthedInboxClient(
+  userId: string,
+  linkedInboxAccountId: string,
+): Promise<InstanceType<typeof google.auth.OAuth2> | null> {
+  const row = await prisma.linkedInboxAccount.findFirst({
+    where: { id: linkedInboxAccountId, userId },
+  });
+  if (!row) return null;
+  return buildInboxOAuthClient(row, userId);
+}
+
 // Gmail tool functions for Eve
 
 export async function listEmails(userId: string, maxResults = 10) {

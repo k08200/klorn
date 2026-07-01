@@ -28,7 +28,7 @@ import { captureError } from "./sentry.js";
 export async function persistGmailEmail(
   userId: string,
   email: GmailRawEmail,
-  options: { userEmail?: string | null } = {},
+  options: { userEmail?: string | null; linkedInboxAccountId?: string | null } = {},
 ): Promise<{ emailId: string; isNew: boolean }> {
   const existing = await prisma.emailMessage.findUnique({
     where: { userId_gmailId: { userId, gmailId: email.gmailId } },
@@ -67,6 +67,7 @@ export async function persistGmailEmail(
     data: {
       userId,
       gmailId: email.gmailId,
+      linkedInboxAccountId: options.linkedInboxAccountId ?? null,
       threadId: email.threadId,
       from: email.from,
       to: email.to,
