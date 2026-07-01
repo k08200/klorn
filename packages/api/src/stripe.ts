@@ -72,7 +72,11 @@ export type FeatureKey =
   | "write_document"
   | "slack"
   | "notion"
-  | "meeting_tools";
+  | "meeting_tools"
+  // Connect more than one mail account (e.g. a Naver inbox or a secondary
+  // Google account) so the firewall runs across all of them. Free = the single
+  // primary Google account only; multi-account is a paid differentiator.
+  | "multi_account";
 
 // The free tier is a real, continuously-usable product — not just a trial. When
 // the paywall is ON, FREE still grants the core "firewall" experience so a new
@@ -127,6 +131,7 @@ export const PLAN_FEATURES: Record<string, Set<FeatureKey>> = {
     "slack",
     "notion",
     "meeting_tools",
+    "multi_account",
   ]),
   TEAM: new Set<FeatureKey>([
     "email_read",
@@ -145,6 +150,7 @@ export const PLAN_FEATURES: Record<string, Set<FeatureKey>> = {
     "slack",
     "notion",
     "meeting_tools",
+    "multi_account",
   ]),
   ENTERPRISE: new Set<FeatureKey>([
     "email_read",
@@ -163,6 +169,7 @@ export const PLAN_FEATURES: Record<string, Set<FeatureKey>> = {
     "slack",
     "notion",
     "meeting_tools",
+    "multi_account",
   ]),
 };
 
