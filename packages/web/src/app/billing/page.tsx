@@ -132,7 +132,7 @@ function BillingContent() {
   }
 
   return (
-    <main className="mx-auto max-w-5xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
+    <div className="mx-auto max-w-5xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
       <header className="mb-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-sm shadow-black/20">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">
           Plan ledger
@@ -317,6 +317,6 @@ function BillingContent() {
           );
         })}
       </div>
-    </main>
+    </div>
   );
 }

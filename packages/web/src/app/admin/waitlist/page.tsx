@@ -112,7 +112,7 @@ function WaitlistPageInner() {
   };
 
   return (
-    <main className="min-h-dvh bg-[#10100d] px-4 pb-28 pt-6 text-stone-50 sm:px-6 md:py-10">
+    <div className="min-h-dvh bg-[#10100d] px-4 pb-28 pt-6 text-stone-50 sm:px-6 md:py-10">
       <div className="mx-auto max-w-5xl">
         <header className="mb-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-sm shadow-black/20">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">
@@ -254,7 +254,7 @@ function WaitlistPageInner() {
           </ul>
         )}
       </div>
-    </main>
+    </div>
   );
 }
 
