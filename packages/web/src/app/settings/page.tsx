@@ -12,6 +12,7 @@ import InAppBrowserNotice from "../../components/in-app-browser-notice";
 import { NaverImapSection } from "../../components/naver-imap-section";
 import { OAuthErrorBanner } from "../../components/oauth-error-banner";
 import { ListSkeleton } from "../../components/skeleton";
+import { SubscriptionSection } from "../../components/subscription-section";
 import { TelegramSection } from "../../components/telegram-section";
 import { useToast } from "../../components/toast";
 import { API_BASE, apiFetch, authHeaders, startGoogleConnect } from "../../lib/api";
@@ -815,6 +816,8 @@ export default function SettingsPage() {
             Tune profile, notifications, execution mode, and data access in one compact place.
           </p>
         </header>
+
+        <SubscriptionSection />
 
         {/* Profile */}
         <section className="mb-8">
