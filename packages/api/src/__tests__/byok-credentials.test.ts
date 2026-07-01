@@ -14,7 +14,7 @@
  * credentials are supplied, i.e. the unchanged env-key path).
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createCompletionMock = vi.hoisted(() => vi.fn());
 
@@ -29,6 +29,7 @@ vi.mock("../openai.js", async (importOriginal) => {
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { classifyEmailBatch } from "../email-classifier.js";
+import { __resetJudgeCache } from "../judge-cache.js";
 import { judgeEmail } from "../poc-judge.js";
 import type { ProviderCredentials } from "../providers/index.js";
 
@@ -46,6 +47,13 @@ const HUMAN_EMAIL = {
   snippet: "Could you take a look at section 3 before our call?",
   labels: [],
 };
+
+// The judge feature cache is keyed on (model, prompt) and persists across tests;
+// identical-prompt judgements in a later test would hit it and skip the LLM,
+// hiding the createCompletion call these tests assert on. Reset per test.
+beforeEach(() => {
+  __resetJudgeCache();
+});
 
 function mockLlmReturns(content: string) {
   createCompletionMock.mockReset();
