@@ -26,6 +26,7 @@ import {
 } from "../gmail.js";
 import { mapGoogleEventTimes } from "../google-calendar-time.js";
 import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
+import { maybeSendWelcomeEmail } from "../welcome-email.js";
 
 const authHeaderSchema = {
   type: "object",
@@ -710,6 +711,12 @@ export function authRoutes(app: FastifyInstance) {
           );
         }
 
+        // Genuine Google sign-in (the integration-connect path never reaches
+        // this __google_login__ branch): send the founder welcome. Fire-and-
+        // forget with an atomic once-per-user claim inside, so it never blocks
+        // or fails the login and can only ever send a single email per user.
+        void maybeSendWelcomeEmail({ id: user!.id, email: user!.email, name: user!.name });
+
         // Auto-save Google tokens for Gmail/Calendar integration (one-click setup).
         // Refuse to save a token without a refresh_token unless we already have
         // one on file to preserve. Otherwise Google's silent omission of
@@ -1013,7 +1020,7 @@ export function authRoutes(app: FastifyInstance) {
           verifyToken: token,
           verifyTokenExp: { gte: new Date() },
         },
-        select: { id: true },
+        select: { id: true, email: true, name: true },
       });
 
       if (!user) {
@@ -1037,6 +1044,10 @@ export function authRoutes(app: FastifyInstance) {
       if (updated.count === 0) {
         return reply.code(400).send({ error: "Invalid or expired verification token" });
       }
+
+      // Email verification complete (password-signup path) → founder welcome,
+      // once per user via the atomic claim inside. Fire-and-forget.
+      void maybeSendWelcomeEmail({ id: user.id, email: user.email, name: user.name });
 
       // Validate WEB_URL to prevent open redirect — only allow http(s) origins
       const rawUrl = process.env.WEB_URL || "http://localhost:8001";

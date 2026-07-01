@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { captureError } from "./sentry.js";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -202,5 +203,129 @@ export async function sendVerificationEmail(to: string, verifyToken: string): Pr
   } catch (err) {
     console.error("[EMAIL] Failed to send verification email:", err);
     return false;
+  }
+}
+
+/** Who the welcome email is signed from. An empty `name` drops to a neutral team voice. */
+export interface FounderIdentity {
+  /** Founder first name, e.g. "Ada". Empty string → team voice, no title line. */
+  name: string;
+  /** Title under the sign-off, e.g. "Founder". Only rendered when `name` is set. */
+  title: string;
+  /** Community link; when null the "come say hi" line is omitted entirely. */
+  communityUrl: string | null;
+}
+
+const FOUNDER: FounderIdentity = {
+  name: (process.env.FOUNDER_NAME || "").trim(),
+  title: (process.env.FOUNDER_TITLE || "Founder").trim(),
+  communityUrl: process.env.COMMUNITY_URL?.trim() || null,
+};
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Greeting name: the first token of the display name, else the email's local part. */
+function greetingName(email: string, name: string | null): string {
+  const trimmed = (name ?? "").trim();
+  if (trimmed) return trimmed.split(/\s+/)[0];
+  const local = email.split("@")[0];
+  return local || "there";
+}
+
+export interface WelcomeEmailContent {
+  subject: string;
+  text: string;
+  html: string;
+}
+
+/**
+ * Build the founder welcome email. Pure (no I/O) so it is unit-testable and
+ * reusable by any send path. The recipient name is the only untrusted input, so
+ * it is HTML-escaped everywhere it reaches the markup.
+ */
+export function buildWelcomeEmail(
+  email: string,
+  name: string | null,
+  founder: FounderIdentity = FOUNDER,
+): WelcomeEmailContent {
+  const subject = "Welcome to Klorn";
+  const first = greetingName(email, name);
+  const hasFounder = founder.name.trim().length > 0;
+
+  const intro = hasFounder
+    ? `I'm ${founder.name}, and I build Klorn.`
+    : "I'm on the team that builds Klorn.";
+  const signoff = hasFounder ? `— ${founder.name}\n${founder.title}, Klorn` : "— The Klorn team";
+  const pitch =
+    "Klorn is your email firewall — it reads every incoming message, decides what actually deserves your attention, and quietly handles the noise. What's left is the clear signal worth acting on.";
+  const learn =
+    'Give it a day or two to learn your patterns. Tell it "less" or "more" on any decision and the tiers adjust to you.';
+  const reply = "Just reply to this email if you hit any friction — it comes straight to me.";
+
+  const textLines = [`Hey ${first},`, "", intro, "", pitch, "", learn, "", reply];
+  if (founder.communityUrl) textLines.push("", `Come say hi: ${founder.communityUrl}`);
+  textLines.push("", signoff);
+  const text = textLines.join("\n");
+
+  const p = (inner: string) =>
+    `<p style="color:#374151;font-size:16px;line-height:1.6;">${inner}</p>`;
+  const communityHtml = founder.communityUrl
+    ? `<p style="color:#6b7280;font-size:14px;line-height:1.6;">Come say hi: <a href="${escapeHtml(
+        founder.communityUrl,
+      )}" style="color:#d8a45d;">${escapeHtml(founder.communityUrl)}</a></p>`
+    : "";
+  const signoffHtml = hasFounder
+    ? `— ${escapeHtml(founder.name)}<br/>${escapeHtml(founder.title)}, Klorn`
+    : "— The Klorn team";
+  const html = `
+    <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px;">
+      <h2 style="color: #d8a45d; margin-bottom: 24px;">Welcome to Klorn</h2>
+      ${p(`Hey ${escapeHtml(first)},`)}
+      ${p(escapeHtml(intro))}
+      ${p(pitch)}
+      ${p(learn)}
+      ${p(reply)}
+      ${communityHtml}
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
+      <p style="color:#9ca3af;font-size:14px;line-height:1.6;">${signoffHtml}</p>
+    </div>
+  `;
+
+  return { subject, text, html };
+}
+
+/**
+ * Send the welcome email via Resend. Returns a tri-state so the caller can tell a
+ * real failure ("failed", already logged + captured here) from a graceful no-op
+ * ("skipped", Resend unconfigured) and release/keep its idempotency claim
+ * accordingly. Never throws.
+ */
+export async function sendWelcomeEmail(
+  to: string,
+  name?: string | null,
+): Promise<"sent" | "skipped" | "failed"> {
+  const safeAddr = maskEmail(to);
+  const { subject, text, html } = buildWelcomeEmail(to, name ?? null);
+
+  if (!resend) {
+    console.log("[EMAIL] No RESEND_API_KEY — welcome email skipped for", safeAddr);
+    return "skipped";
+  }
+
+  try {
+    await resend.emails.send({ from: FROM_EMAIL, to, subject, text, html });
+    console.log("[EMAIL] Welcome email sent to", safeAddr);
+    return "sent";
+  } catch (err) {
+    console.error("[EMAIL] Failed to send welcome email to", safeAddr, err);
+    captureError(err, { tags: { scope: "welcome-email.send" }, extra: { to: safeAddr } });
+    return "failed";
   }
 }
