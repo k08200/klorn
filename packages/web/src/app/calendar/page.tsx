@@ -2,9 +2,10 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { EveSignalField } from "../../components/brand-visuals";
+import { LinkedCalendars } from "../../components/linked-calendars";
 import { apiFetch, startGoogleConnect } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { queryKeys } from "../../lib/query-keys";
@@ -245,6 +246,12 @@ function CalendarView() {
           )}
         </div>
       </header>
+
+      <div className="mb-6">
+        <Suspense fallback={null}>
+          <LinkedCalendars />
+        </Suspense>
+      </div>
 
       {loading && (
         <div className="rounded-lg border border-stone-800 bg-stone-950/35 px-4 py-5 text-center text-sm text-stone-500">

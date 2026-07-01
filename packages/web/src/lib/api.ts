@@ -104,3 +104,15 @@ export async function startGoogleConnect(): Promise<void> {
     window.location.href = url;
   }
 }
+
+// Start the OAuth flow to link a SECONDARY Google account for calendar
+// free/busy only (Pro-gated on the server). Mirrors startGoogleConnect —
+// returns a URL, then navigates. Throws (e.g. 403) if the API rejects.
+export async function startLinkCalendar(): Promise<void> {
+  const { url } = await apiFetch<{ url: string }>("/api/auth/google/link-calendar", {
+    method: "POST",
+  });
+  if (typeof window !== "undefined") {
+    window.location.href = url;
+  }
+}
