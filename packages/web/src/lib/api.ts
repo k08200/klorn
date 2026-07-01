@@ -116,3 +116,13 @@ export async function startLinkCalendar(): Promise<void> {
     window.location.href = url;
   }
 }
+
+/** Kick off the OAuth flow to link a secondary Google inbox (Pro feature). */
+export async function startLinkInbox(): Promise<void> {
+  const { url } = await apiFetch<{ url: string }>("/api/auth/google/link-inbox", {
+    method: "POST",
+  });
+  if (typeof window !== "undefined") {
+    window.location.href = url;
+  }
+}

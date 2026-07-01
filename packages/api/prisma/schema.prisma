@@ -65,6 +65,7 @@ model User {
   conversations             Conversation[]
   tokens                    UserToken[]
   linkedCalendarAccounts    LinkedCalendarAccount[]
+  linkedInboxAccounts       LinkedInboxAccount[]
   tasks                     Task[]
   notes                     Note[]
   reminders                 Reminder[]
@@ -202,6 +203,30 @@ model LinkedCalendarAccount {
   expiresAt    DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, email])
+}
+
+// A SECONDARY Google account linked for FULL INBOX access (gmail read/send/
+// modify) so the firewall runs across more than the primary login account.
+// Kept deliberately SEPARATE from UserToken — whose @@unique([userId, provider])
+// is single-account-per-provider and load-bearing for the primary mail path —
+// so multi-account never destabilizes the primary inbox. Pro/Enterprise only
+// (the multi_account feature). watch/history/sync fields are for the later
+// real-time + incremental-sync phases and are unused until then.
+model LinkedInboxAccount {
+  id                  String    @id @default(uuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email               String // the linked Google account address — label + dedup key
+  accessToken         String
+  refreshToken        String?
+  expiresAt           DateTime?
+  gmailWatchExpiresAt DateTime?
+  historyId           String?
+  lastSyncedAt        DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   @@unique([userId, email])
 }

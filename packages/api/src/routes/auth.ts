@@ -21,6 +21,7 @@ import {
   getGoogleConnectionStatus,
   getGoogleUserInfo,
   getLinkCalendarAuthUrl,
+  getLinkInboxAuthUrl,
   getLoginAuthUrl,
   getOAuth2Client,
   isGoogleAuthError,
@@ -684,6 +685,30 @@ export function authRoutes(app: FastifyInstance) {
     },
   );
 
+  // POST /api/auth/google/link-inbox — Start OAuth to link a SECONDARY Google
+  // account as a FULL INBOX (gmail read/send/modify) so the firewall runs across
+  // it too. Pro-gated (multi_account). Mirrors /google/link-calendar exactly —
+  // short-lived signed state so an intercepted URL can't be replayed for the
+  // default 7-day token window; the session JWT never enters the redirect.
+  app.post(
+    "/google/link-inbox",
+    {
+      preHandler: [requireAuth, requireEntitled],
+      // OAuth-start endpoint on a public repo: cap starts so a valid token
+      // can't spam consent redirects. (Calendar link lacks this today — worth a
+      // follow-up to add there too; adding it to the new surface regardless.)
+      config: { rateLimit: { max: 10, timeWindow: "15 minutes" } },
+    },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      if (isDemoUser(userId)) {
+        return reply.code(403).send({ error: "Authentication required to link an inbox" });
+      }
+      const signedState = signToken({ userId, email: "__link_inbox__" }, "10m");
+      return reply.send({ url: getLinkInboxAuthUrl(signedState) });
+    },
+  );
+
   // GET /api/auth/google/callback — OAuth callback (handles both login and integration)
   app.get("/google/callback", async (request, reply) => {
     const { code, state } = request.query as { code?: string; state?: string };
@@ -740,6 +765,41 @@ export function authRoutes(app: FastifyInstance) {
           },
         });
         return reply.redirect(`${webUrl}/calendar?linked=success`);
+      }
+
+      // --- Link secondary inbox flow (state marker __link_inbox__) ---
+      // A DIFFERENT Google account is attached to the ALREADY-logged-in user
+      // (statePayload.userId) as an additional mail source. We NEVER resolve or
+      // switch the session user by this Google email — the linked token only
+      // feeds this user's own firewall. verified_email is checked verbatim (as
+      // the calendar flow does) to block the confused-deputy vector of linking
+      // an unverified/spoofed address.
+      if (statePayload.email === "__link_inbox__") {
+        if (!tokens.access_token) {
+          return reply.redirect(`${webUrl}/settings?inbox=failed`);
+        }
+        const profile = await getGoogleUserInfo(tokens.access_token);
+        if (profile.verified_email !== true) {
+          return reply.redirect(`${webUrl}/settings?inbox=unverified`);
+        }
+        const linkedEmail = normalizeEmail(profile.email);
+        const expiresAt = tokens.expiry_date ? new Date(tokens.expiry_date) : null;
+        await prisma.linkedInboxAccount.upsert({
+          where: { userId_email: { userId: statePayload.userId, email: linkedEmail } },
+          update: {
+            accessToken: encryptToken(tokens.access_token),
+            refreshToken: encryptOptional(tokens.refresh_token),
+            expiresAt,
+          },
+          create: {
+            userId: statePayload.userId,
+            email: linkedEmail,
+            accessToken: encryptToken(tokens.access_token),
+            refreshToken: encryptOptional(tokens.refresh_token),
+            expiresAt,
+          },
+        });
+        return reply.redirect(`${webUrl}/settings?inbox=success`);
       }
 
       // --- Google Social Login flow (state signed with __google_login__ or __google_login_desktop__ marker) ---
@@ -1053,6 +1113,38 @@ export function authRoutes(app: FastifyInstance) {
       return { success: true };
     },
   );
+
+  // GET /api/auth/google/linked-inboxes — list the user's linked secondary
+  // inboxes (never returns tokens — id + email + connectedAt only). Pro-gated to
+  // match the connect route so a lapsed user can't read the paid feature's data.
+  app.get(
+    "/google/linked-inboxes",
+    { preHandler: [requireAuth, requireEntitled] },
+    async (request) => {
+      const userId = getUserId(request);
+      const accounts = await prisma.linkedInboxAccount.findMany({
+        where: { userId },
+        select: { id: true, email: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      });
+      return { accounts };
+    },
+  );
+
+  // DELETE /api/auth/google/linked-inboxes/:id — unlink one secondary inbox.
+  // Scoped by userId so a token can only remove its OWN linked accounts. Auth-only
+  // (not Pro-gated) so a downgraded user can always disconnect. Past synced mail
+  // is intentionally kept (AttentionItem/DecisionLabel reference it) — mirrors how
+  // disconnecting a calendar leaves past events intact.
+  app.delete("/google/linked-inboxes/:id", { preHandler: requireAuth }, async (request, reply) => {
+    const userId = getUserId(request);
+    const { id } = request.params as { id: string };
+    const result = await prisma.linkedInboxAccount.deleteMany({ where: { id, userId } });
+    if (result.count === 0) {
+      return reply.code(404).send({ error: "Linked inbox not found" });
+    }
+    return { success: true };
+  });
 
   // GET /api/auth/google/status — Check if Gmail is connected and token is valid
   app.get("/google/status", { preHandler: requireAuth }, async (request, reply) => {
