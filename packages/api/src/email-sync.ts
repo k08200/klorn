@@ -13,6 +13,7 @@ import { prisma } from "./db.js";
 import { persistGmailEmail } from "./email-firewall.js";
 import {
   getAuthedClient,
+  getAuthedInboxAccount,
   isGoogleAuthError,
   isGoogleNotFoundError,
   markGoogleTokenForReconnect,
@@ -62,11 +63,23 @@ export { type EmailThread, getEmailThreads } from "./email-threads.js";
 export async function syncEmailByGmailId(
   userId: string,
   gmailId: string,
+  // Set when re-syncing a message that belongs to a LINKED secondary inbox
+  // (undo after untrash/unarchive). Fetch + self-detection + the stored tag all
+  // use that account; omitted = primary (unchanged behavior).
+  linkedInboxAccountId?: string | null,
 ): Promise<{ synced: number; newCount: number; emailId: string; source: "gmail" }> {
-  const rawEmail = await fetchGmailEmailById(userId, gmailId);
+  const linked = linkedInboxAccountId
+    ? await getAuthedInboxAccount(userId, linkedInboxAccountId)
+    : null;
+  if (linkedInboxAccountId && !linked) throw new Error("Gmail not connected");
+
+  const rawEmail = await fetchGmailEmailById(userId, gmailId, linked?.client ?? null);
   if (!rawEmail) throw new Error("Gmail not connected");
 
-  const persisted = await persistGmailEmail(userId, rawEmail);
+  const persisted = await persistGmailEmail(userId, rawEmail, {
+    userEmail: linked?.email ?? null,
+    linkedInboxAccountId: linked?.id ?? null,
+  });
   return {
     synced: 1,
     newCount: persisted.isNew ? 1 : 0,
@@ -197,13 +210,21 @@ export async function reconcileEmails(
   // pathologically large INBOX a single NOT IN would exceed the 65535 bind-param
   // ceiling, so fall back to diffing stored gmailIds in Node and deleting the
   // (usually tiny) stale set by id, in chunks. No query exceeds INBOX_PARAM_CAP.
+  // CRITICAL: scope every reconcile query to PRIMARY-account rows only
+  // (linkedInboxAccountId: null). inboxIdList was built from the primary
+  // account's INBOX (getAuthedClient above), so linked-inbox rows — whose
+  // gmailIds come from a DIFFERENT account and are never in this list — would
+  // ALL match `gmailId notIn inboxIdList` and be wiped. The gap only bites once
+  // MULTI_INBOX_SYNC_ENABLED is on, but it would silently delete every linked
+  // inbox's mail on the first reconcile tick, so guard it before the flag flips.
+  const primaryScope = { userId, linkedInboxAccountId: null } as const;
   let removed = 0;
   if (inboxIdList.length <= INBOX_PARAM_CAP) {
     // Resolve the attention items of the rows we're about to delete BEFORE the
     // delete, so an archived/trashed email leaves the attention queue instead of
     // orphaning an OPEN item the priority amplifier keeps surfacing forever.
     const stale = await prisma.emailMessage.findMany({
-      where: { userId, gmailId: { notIn: inboxIdList } },
+      where: { ...primaryScope, gmailId: { notIn: inboxIdList } },
       select: { id: true },
     });
     await resolveAttentionForDeletedEmails(
@@ -211,12 +232,12 @@ export async function reconcileEmails(
       stale.map((r) => r.id),
     );
     const res = await prisma.emailMessage.deleteMany({
-      where: { userId, gmailId: { notIn: inboxIdList } },
+      where: { ...primaryScope, gmailId: { notIn: inboxIdList } },
     });
     removed = res.count;
   } else {
     const stored = await prisma.emailMessage.findMany({
-      where: { userId },
+      where: primaryScope,
       select: { id: true, gmailId: true },
     });
     const staleIds = stored.filter((e) => !inboxIds.has(e.gmailId)).map((e) => e.id);
@@ -236,8 +257,11 @@ export async function reconcileEmails(
   // delete above, every remaining row for the user is in INBOX, so the
   // most-recent N are exactly the rows worth re-checking — no INBOX-sized IN
   // clause needed, and the per-row Gmail get + updateMany cost stays capped at N.
+  // Same primary-only scope: these gmailIds are re-checked against the primary
+  // Gmail client below, so a linked-inbox gmailId would 404 there (wasted slot)
+  // or, on a cross-account id collision, mis-update the wrong row.
   const remaining = await prisma.emailMessage.findMany({
-    where: { userId },
+    where: primaryScope,
     select: { gmailId: true },
     orderBy: { receivedAt: "desc" },
     take: RECONCILE_REFRESH_CAP,

@@ -773,8 +773,15 @@ async function runAutomations() {
                 syncResult.newCount > 0 &&
                 planHasFeature(configUserPlan, "email_auto_reply", configUserRole)
               ) {
+                // PRIMARY-account rows only. sendAutoReplyViaFloor below always
+                // sends from the primary Gmail client, so auto-replying to a
+                // linked-inbox email would come from the WRONG address (the
+                // sender emailed the linked account, not the primary). Until
+                // per-account send routing exists, auto-reply is primary-only;
+                // this also keeps `take: newCount` from mixing in linked rows
+                // once MULTI_INBOX_SYNC_ENABLED is on.
                 const newEmails = await prisma.emailMessage.findMany({
-                  where: { userId: config.userId },
+                  where: { userId: config.userId, linkedInboxAccountId: null },
                   orderBy: { syncedAt: "desc" },
                   take: syncResult.newCount,
                 });

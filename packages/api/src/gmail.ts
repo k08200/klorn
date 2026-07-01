@@ -656,6 +656,25 @@ export async function getAuthedInboxClient(
 }
 
 /**
+ * Resolve ONE linked inbox's OAuth client together with its address and id, for
+ * a single-message re-sync (undo after untrash/unarchive) that must fetch from
+ * and stamp against the linked account — not the primary, where the message id
+ * does not exist. Returns null if the row is missing or its token is unusable.
+ */
+export async function getAuthedInboxAccount(
+  userId: string,
+  linkedInboxAccountId: string,
+): Promise<{ client: InstanceType<typeof google.auth.OAuth2>; id: string; email: string } | null> {
+  const row = await prisma.linkedInboxAccount.findFirst({
+    where: { id: linkedInboxAccountId, userId },
+  });
+  if (!row) return null;
+  const client = buildInboxOAuthClient(row, userId);
+  if (!client) return null;
+  return { client, id: row.id, email: row.email };
+}
+
+/**
  * Resolve the Gmail OAuth client to ACT on a message: the primary account by
  * default, or a specific linked secondary inbox when the message belongs to one
  * (EmailMessage.linkedInboxAccountId). This is what makes multi-account actions

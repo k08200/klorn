@@ -66,10 +66,35 @@ describe("reconcileEmails", () => {
 
     const result = await reconcileEmails("user-1");
 
+    // Scoped to PRIMARY-account rows (linkedInboxAccountId: null): inboxIdList
+    // came from the primary INBOX, so linked-inbox rows must be excluded from
+    // the notIn wipe or they would ALL match and be deleted.
     expect(m.deleteMany).toHaveBeenCalledWith({
-      where: { userId: "user-1", gmailId: { notIn: ["a", "b"] } },
+      where: { userId: "user-1", linkedInboxAccountId: null, gmailId: { notIn: ["a", "b"] } },
     });
     expect(result.removed).toBe(3);
+  });
+
+  it("never deletes linked-inbox rows: every reconcile query is scoped to linkedInboxAccountId: null", async () => {
+    m.listMock.mockResolvedValue(inboxListing(["a", "b"]));
+    m.findMany.mockResolvedValueOnce([{ id: "row-1" }] as never);
+    m.deleteMany.mockResolvedValue({ count: 1 });
+
+    await reconcileEmails("user-1");
+
+    // The stale-lookup, the delete, AND the read-status refresh must all carry
+    // linkedInboxAccountId: null — a single unscoped query would wipe or
+    // mis-refresh secondary-inbox mail once MULTI_INBOX_SYNC_ENABLED is on.
+    for (const call of m.findMany.mock.calls) {
+      expect((call[0] as { where: Record<string, unknown> }).where).toMatchObject({
+        linkedInboxAccountId: null,
+      });
+    }
+    for (const call of m.deleteMany.mock.calls) {
+      expect((call[0] as { where: Record<string, unknown> }).where).toMatchObject({
+        linkedInboxAccountId: null,
+      });
+    }
   });
 
   it("bounds the read-status refresh to the most recent RECONCILE_REFRESH_CAP rows", async () => {
@@ -81,7 +106,7 @@ describe("reconcileEmails", () => {
     // is a bounded most-recent-N query — no INBOX-sized IN clause.
     expect(m.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId: "user-1" },
+        where: { userId: "user-1", linkedInboxAccountId: null },
         orderBy: { receivedAt: "desc" },
         take: 500,
       }),
