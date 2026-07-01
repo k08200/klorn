@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ProposalCandidate } from "../ontology-proposals.js";
-import { type ProposalStore, persistProposals } from "../ontology-proposals-store.js";
+import {
+  type ProposalStore,
+  persistProposals,
+  toAutoScoredOutcomes,
+} from "../ontology-proposals-store.js";
 
 function candidate(knob: string): ProposalCandidate {
   return {
@@ -75,5 +79,36 @@ describe("persistProposals", () => {
     expect(store.created).toHaveLength(0);
     expect(store.dismissedExcept).toEqual([[]]);
     expect(res.written).toBe(0);
+  });
+});
+
+describe("toAutoScoredOutcomes", () => {
+  it("drops unconfirmed (null-outcome) rows — honest-by-design", () => {
+    const rows = [
+      { features: { confidence: 0.9 }, outcome: null },
+      { features: { confidence: 0.8 }, outcome: "DISMISSED" },
+    ];
+    expect(toAutoScoredOutcomes(rows)).toEqual([{ confidence: 0.8, correct: true }]);
+  });
+
+  it("marks OVERRIDE:* outcomes as incorrect, terminal outcomes as correct", () => {
+    const rows = [
+      { features: { confidence: 0.7 }, outcome: "OVERRIDE:QUEUE" },
+      { features: { confidence: 0.95 }, outcome: "OPENED" },
+    ];
+    expect(toAutoScoredOutcomes(rows)).toEqual([
+      { confidence: 0.7, correct: false },
+      { confidence: 0.95, correct: true },
+    ]);
+  });
+
+  it("skips rows without a numeric confidence feature", () => {
+    const rows = [
+      { features: null, outcome: "DISMISSED" },
+      { features: { confidence: "high" }, outcome: "DISMISSED" },
+      { features: {}, outcome: "DISMISSED" },
+      { features: { confidence: 0.6 }, outcome: "DISMISSED" },
+    ];
+    expect(toAutoScoredOutcomes(rows)).toEqual([{ confidence: 0.6, correct: true }]);
   });
 });

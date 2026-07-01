@@ -13,10 +13,35 @@ import { getDecisionMetrics } from "./decision-metrics.js";
 import { getEffectiveThresholds } from "./ontology-overrides.js";
 import {
   type ProposalCandidate,
+  proposeAutoConfidenceAdjustment,
   proposeThresholdAdjustments,
   signalsFromMetrics,
 } from "./ontology-proposals.js";
+import type { ScoredOutcome } from "./selective-threshold.js";
 import { captureError } from "./sentry.js";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Map raw AUTO DecisionLabel rows to (confidence, correct) for the risk-coverage
+ * calibrator. Pure. Unconfirmed rows (no outcome) are dropped — honest-by-design:
+ * a null outcome is never counted as agreement. `correct` = the user did NOT
+ * override the AUTO decision. Rows without a numeric confidence feature are
+ * skipped rather than coerced.
+ */
+export function toAutoScoredOutcomes(
+  rows: ReadonlyArray<{ features: unknown; outcome: string | null }>,
+): ScoredOutcome[] {
+  const out: ScoredOutcome[] = [];
+  for (const row of rows) {
+    if (!row.outcome) continue;
+    const features = row.features as { confidence?: unknown } | null;
+    const confidence = features?.confidence;
+    if (typeof confidence !== "number" || !Number.isFinite(confidence)) continue;
+    out.push({ confidence, correct: !row.outcome.startsWith("OVERRIDE:") });
+  }
+  return out;
+}
 
 /** Minimal persistence surface, so persistProposals can be tested with a fake. */
 export interface ProposalStore {
@@ -100,6 +125,28 @@ export const prismaProposalStore: ProposalStore = {
 };
 
 /**
+ * Read confirmed AUTO decisions (outcome stamped) with their judge features,
+ * windowed like the metrics reader. Bounded to a recent sample so calibration
+ * tracks current behaviour, not ancient history.
+ */
+async function readAutoDecisionRows(
+  sinceDays?: number,
+): Promise<Array<{ features: unknown; outcome: string | null }>> {
+  const where: { shownTier: string; outcome: { not: null }; judgedAt?: { gte: Date } } = {
+    shownTier: "AUTO",
+    outcome: { not: null },
+  };
+  if (sinceDays && sinceDays > 0) {
+    where.judgedAt = { gte: new Date(Date.now() - sinceDays * DAY_MS) };
+  }
+  return prisma.decisionLabel.findMany({
+    where: where as unknown as Prisma.DecisionLabelWhereInput,
+    select: { features: true, outcome: true },
+    take: 5000,
+  });
+}
+
+/**
  * Read the override ledger, compute proposals, and persist them. Returns the
  * computed candidates plus the write counts. Safe to call from the daily
  * calibration job or an admin recompute endpoint.
@@ -112,10 +159,22 @@ export async function recomputeOntologyProposals(
   // Propose against the LIVE effective thresholds, not the git base const: once
   // an override is approved, currentValue must reflect what the classifier
   // actually runs on, or the proposal re-suggests an already-applied change.
+  const thresholds = getEffectiveThresholds();
   const candidates = proposeThresholdAdjustments(signals, {
-    thresholds: getEffectiveThresholds(),
+    thresholds,
     windowDays: report.windowDays,
   });
+
+  // AUTO confidence is calibrated separately, per-row (risk-coverage over the
+  // AUTO decisions' confidence + override outcome) — the aggregate metrics above
+  // don't carry the per-decision scores it needs.
+  const autoRows = toAutoScoredOutcomes(await readAutoDecisionRows(opts.sinceDays));
+  const autoProposal = proposeAutoConfidenceAdjustment(autoRows, {
+    thresholds,
+    windowDays: report.windowDays,
+  });
+  if (autoProposal) candidates.push(autoProposal);
+
   const result = await persistProposals(candidates, prismaProposalStore);
   return { candidates, result };
 }
