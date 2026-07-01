@@ -157,7 +157,11 @@ export async function persistGmailEmail(
       // silently marked read while ALSO firing a notification. Gmail-only by
       // construction (this is the Gmail ingest path). Fire-and-forget.
       if (tier === "SILENT" && isClearMarketing({ labels: email.labels, subject: email.subject })) {
-        void markPromotionalEmailRead(userId, { id: createdEmail.id, gmailId: email.gmailId });
+        void markPromotionalEmailRead(userId, {
+          id: createdEmail.id,
+          gmailId: email.gmailId,
+          linkedInboxAccountId: options.linkedInboxAccountId ?? null,
+        });
       }
     })
     .catch((err) => {
@@ -188,10 +192,10 @@ export async function persistGmailEmail(
  */
 async function markPromotionalEmailRead(
   userId: string,
-  email: { id: string; gmailId: string },
+  email: { id: string; gmailId: string; linkedInboxAccountId?: string | null },
 ): Promise<void> {
   try {
-    const result = await markAsRead(userId, email.gmailId);
+    const result = await markAsRead(userId, email.gmailId, email.linkedInboxAccountId);
     if ("error" in result && result.error) {
       // Gmail not connected / token expired — an expected, benign state (the
       // user simply hasn't linked Gmail). Log it but do NOT captureError: this

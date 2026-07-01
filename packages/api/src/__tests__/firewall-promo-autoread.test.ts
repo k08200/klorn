@@ -87,7 +87,7 @@ describe("persistGmailEmail — promotional auto mark-read", () => {
   it("marks a CATEGORY_PROMOTIONS email read in Gmail", async () => {
     await persistGmailEmail("u1", rawEmail({ labels: ["CATEGORY_PROMOTIONS"] }));
     await vi.waitFor(() => expect(markAsRead).toHaveBeenCalledTimes(1));
-    expect(markAsRead).toHaveBeenCalledWith("u1", "g-1");
+    expect(markAsRead).toHaveBeenCalledWith("u1", "g-1", null);
   });
 
   it("marks an explicit marketing-subject email read (unsubscribe marker)", async () => {

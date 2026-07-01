@@ -1178,7 +1178,13 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                       gte: new Date(Date.now() - 48 * 60 * 60 * 1000),
                     },
                   },
-                  select: { id: true, gmailId: true, subject: true, from: true },
+                  select: {
+                    id: true,
+                    gmailId: true,
+                    subject: true,
+                    from: true,
+                    linkedInboxAccountId: true,
+                  },
                 });
                 for (const ue of unreadEmails) {
                   const ueSubject = (ue.subject || "")
@@ -1191,8 +1197,9 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                     (replyTo && ueFrom.includes(replyTo))
                   ) {
                     if (ue.gmailId) {
-                      await markAsRead(userId, ue.gmailId).catch((err: unknown) =>
-                        console.warn(`[AGENT] Failed to mark ${ue.gmailId} as read:`, err),
+                      await markAsRead(userId, ue.gmailId, ue.linkedInboxAccountId).catch(
+                        (err: unknown) =>
+                          console.warn(`[AGENT] Failed to mark ${ue.gmailId} as read:`, err),
                       );
                       console.log(
                         `[AGENT] Marked Gmail message as read: ${ue.gmailId} (${ue.subject})`,

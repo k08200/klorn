@@ -921,7 +921,7 @@ export async function emailRoutes(app: FastifyInstance) {
     if (dbEmail) {
       // Mark-as-read is explicit. Many users rely on unread as a work queue.
       if (markRead === "true" && !dbEmail.isRead) {
-        toggleReadGmail(uid, dbEmail.gmailId, true).catch((err) =>
+        toggleReadGmail(uid, dbEmail.gmailId, true, dbEmail.linkedInboxAccountId).catch((err) =>
           console.warn(`[EMAIL] toggleReadGmail failed for ${dbEmail.gmailId}`, err),
         );
         await prisma.emailMessage.update({ where: { id: dbEmail.id }, data: { isRead: true } });

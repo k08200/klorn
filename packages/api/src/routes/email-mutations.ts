@@ -38,6 +38,7 @@ const MAX_FIELD_BYTES = 2 * 1024 * 1024;
 
 interface EmailUndoBody {
   gmailId?: unknown;
+  linkedInboxAccountId?: unknown;
 }
 
 function resolveUndoGmailId(pathId: string, body: unknown): string {
@@ -46,6 +47,18 @@ function resolveUndoGmailId(pathId: string, body: unknown): string {
     return parsedBody.gmailId.trim();
   }
   return pathId;
+}
+
+// Undo happens AFTER the local row was deleted (archive/trash), so we can't look
+// up the account — the client that did the action passes it back for the undo so
+// the restore hits the right inbox. Absent = primary (multi-account off / linked
+// UI not yet wired).
+function resolveUndoLinkedInbox(body: unknown): string | null {
+  const parsedBody = (body || {}) as EmailUndoBody;
+  return typeof parsedBody.linkedInboxAccountId === "string" &&
+    parsedBody.linkedInboxAccountId.trim()
+    ? parsedBody.linkedInboxAccountId.trim()
+    : null;
 }
 
 export async function registerEmailMutationsRoutes(app: FastifyInstance) {
@@ -270,9 +283,10 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
     const gmailId = resolveUndoGmailId(id, request.body);
+    const linkedInboxAccountId = resolveUndoLinkedInbox(request.body);
 
     try {
-      const result = await untrashEmail(uid, gmailId);
+      const result = await untrashEmail(uid, gmailId, linkedInboxAccountId);
       if (result && "error" in result) {
         return reply.code(409).send({ error: result.error });
       }
@@ -314,9 +328,10 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
     const gmailId = resolveUndoGmailId(id, request.body);
+    const linkedInboxAccountId = resolveUndoLinkedInbox(request.body);
 
     try {
-      const result = await unarchiveEmail(uid, gmailId);
+      const result = await unarchiveEmail(uid, gmailId, linkedInboxAccountId);
       if (result && "error" in result) {
         return reply.code(409).send({ error: result.error });
       }
