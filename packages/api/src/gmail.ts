@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { MULTI_INBOX_SYNC_ENABLED } from "./config.js";
 import { decryptOptional, decryptToken, encryptOptional, encryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
 import { getUserLlmCredentials } from "./llm-credentials.js";
@@ -1362,7 +1363,95 @@ export async function renewExpiringGmailWatches(): Promise<{ renewed: number; fa
       renewed++;
     }
   }
+
+  // Multi-account: renew (and first-time register, when gmailWatchExpiresAt is
+  // null) real-time push watches for LINKED secondary inboxes too. Without this
+  // a linked inbox's watch silently expires after ~7 days and it degrades to
+  // polling-only with no signal. Gated on MULTI_INBOX_SYNC_ENABLED so no linked
+  // watches exist while the feature is off.
+  if (MULTI_INBOX_SYNC_ENABLED) {
+    const linked = await prisma.linkedInboxAccount.findMany({
+      where: { OR: [{ gmailWatchExpiresAt: null }, { gmailWatchExpiresAt: { lte: cutoff } }] },
+      select: { id: true, userId: true },
+    });
+    for (const row of linked) {
+      const result = await registerLinkedInboxWatch(row.userId, row.id);
+      if ("error" in result) {
+        console.warn(
+          `[GMAIL-WATCH] Linked renew failed for ${row.userId}/${row.id}: ${result.error}`,
+        );
+        captureError(new Error(`Linked inbox watch renew failed: ${result.error}`), {
+          tags: { scope: "gmail-watch.renew-linked" },
+          extra: { userId: row.userId, linkedInboxAccountId: row.id },
+        });
+        failed++;
+      } else {
+        renewed++;
+      }
+    }
+  }
+
   return { renewed, failed };
+}
+
+/**
+ * Register a Gmail push watch for ONE linked secondary inbox, storing the
+ * expiration on its LinkedInboxAccount row. Mirrors registerGmailWatch but via
+ * the linked account's own OAuth client. Idempotent (users.watch extends).
+ */
+export async function registerLinkedInboxWatch(
+  userId: string,
+  linkedInboxAccountId: string,
+): Promise<{ historyId: string; expiration: string } | { error: string }> {
+  const topic = process.env.GMAIL_PUBSUB_TOPIC;
+  if (!topic) return { error: "GMAIL_PUBSUB_TOPIC not configured" };
+
+  const auth = await getAuthedInboxClient(userId, linkedInboxAccountId);
+  if (!auth) return { error: "Linked inbox not connected" };
+
+  const gmail = google.gmail({ version: "v1", auth });
+  try {
+    const res = await gmail.users.watch({
+      userId: "me",
+      requestBody: { topicName: topic, labelIds: ["INBOX"], labelFilterBehavior: "INCLUDE" },
+    });
+    const expirationMs = res.data.expiration ? Number(res.data.expiration) : null;
+    if (expirationMs && !Number.isNaN(expirationMs)) {
+      await prisma.linkedInboxAccount.updateMany({
+        where: { id: linkedInboxAccountId, userId },
+        data: { gmailWatchExpiresAt: new Date(expirationMs) },
+      });
+    }
+    return {
+      historyId: String(res.data.historyId ?? ""),
+      expiration: String(res.data.expiration ?? ""),
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { error: `Linked inbox watch failed: ${msg}` };
+  }
+}
+
+/** Stop the Gmail push watch for one linked inbox. Idempotent. */
+export async function stopLinkedInboxWatch(
+  userId: string,
+  linkedInboxAccountId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const auth = await getAuthedInboxClient(userId, linkedInboxAccountId);
+  if (!auth) return { ok: false, error: "Linked inbox not connected" };
+
+  const gmail = google.gmail({ version: "v1", auth });
+  try {
+    await gmail.users.stop({ userId: "me" });
+    await prisma.linkedInboxAccount.updateMany({
+      where: { id: linkedInboxAccountId, userId },
+      data: { gmailWatchExpiresAt: null },
+    });
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
 }
 
 // ── Activity-driven watch self-heal ────────────────────────────────────────

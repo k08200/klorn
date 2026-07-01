@@ -22,9 +22,10 @@
 
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { MULTI_INBOX_SYNC_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
 import { syncEmails } from "../email-sync.js";
-import { registerGmailWatch, stopGmailWatch } from "../gmail.js";
+import { getAuthedInboxClient, registerGmailWatch, stopGmailWatch } from "../gmail.js";
 import { verifyGoogleOidcToken } from "../google-oidc.js";
 import { captureError } from "../sentry.js";
 import { timingSafeEqualStr } from "../timing-safe-equal.js";
@@ -131,44 +132,65 @@ export async function gmailPushRoutes(app: FastifyInstance) {
       return reply.code(204).send();
     }
 
-    const user = await prisma.user.findFirst({
-      where: { email: { equals: email, mode: "insensitive" } },
-      select: { id: true },
-    });
-    if (!user) {
-      // Unknown user — ack to drain the subscription.
-      return reply.code(204).send();
-    }
-
     // Fire-and-forget the sync so we return fast and Pub/Sub does not time out.
     // The 1-minute polling fallback will catch up, so this is non-fatal — but a
     // consistently failing sync (DB down, quota, expired auth) must still reach
     // error tracking, not just dyno logs. console.warn keeps a signal when
     // Sentry is not configured; captureError preserves the stack + context.
-    syncEmails(user.id, 30)
-      .then((result) => {
-        // Real-time auto-sync: new mail just landed in the DB, so tell every
-        // open client to refetch instead of making the user press "Sync".
-        // conversations-updated is the existing app-wide refresh signal
-        // (NotificationBell bridges the WS message to a window event).
-        if (result.newCount > 0) {
-          pushNotification(user.id, {
-            id: "mail-sync",
-            type: "system",
-            title: "conversations-updated",
-            message: "",
-            createdAt: new Date().toISOString(),
-          });
-        }
-      })
-      .catch((err) => {
-        console.warn(`[GMAIL-PUSH] sync failed for ${user.id}: ${String(err)}`);
-        captureError(err, {
-          tags: { scope: "gmail-push.sync" },
-          extra: { userId: user.id },
+    // On new mail, tell every open client to refetch (conversations-updated is
+    // the app-wide refresh signal that NotificationBell bridges to a window
+    // event) instead of making the user press "Sync".
+    const runSyncAndNotify = (uid: string, syncPromise: Promise<{ newCount: number }>) => {
+      syncPromise
+        .then((result) => {
+          if (result.newCount > 0) {
+            pushNotification(uid, {
+              id: "mail-sync",
+              type: "system",
+              title: "conversations-updated",
+              message: "",
+              createdAt: new Date().toISOString(),
+            });
+          }
+        })
+        .catch((err) => {
+          console.warn(`[GMAIL-PUSH] sync failed for ${uid}: ${String(err)}`);
+          captureError(err, { tags: { scope: "gmail-push.sync" }, extra: { userId: uid } });
         });
-      });
+    };
 
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (user) {
+      runSyncAndNotify(user.id, syncEmails(user.id, 30));
+      return reply.code(204).send();
+    }
+
+    // Multi-account: the pubsub address may be a LINKED secondary inbox, whose
+    // email is NOT a User.email. Route it to the owning user + account and sync
+    // through that inbox's own client. Gated so nothing routes while the feature
+    // is off. We NEVER resolve the session user by this address — only the
+    // pre-linked LinkedInboxAccount row's userId.
+    if (MULTI_INBOX_SYNC_ENABLED) {
+      const linked = await prisma.linkedInboxAccount.findFirst({
+        where: { email: { equals: email, mode: "insensitive" } },
+        select: { id: true, userId: true },
+      });
+      if (linked) {
+        const client = await getAuthedInboxClient(linked.userId, linked.id);
+        if (client) {
+          runSyncAndNotify(
+            linked.userId,
+            syncEmails(linked.userId, 30, undefined, { id: linked.id, email, client }),
+          );
+        }
+        return reply.code(204).send();
+      }
+    }
+
+    // Unknown address — ack to drain the subscription.
     return reply.code(204).send();
   });
 
