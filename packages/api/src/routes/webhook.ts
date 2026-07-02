@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type Stripe from "stripe";
 import { prisma } from "../db.js";
 import { sendPushNotification } from "../push.js";
+import { captureError } from "../sentry.js";
 import { stripe } from "../stripe.js";
 import { pushNotification } from "../websocket.js";
 
@@ -147,5 +148,11 @@ async function notifyUser(
     createdAt: notification.createdAt.toISOString(),
   });
 
-  sendPushNotification(userId, { title, body: message, url });
+  // Fire-and-forget, but never let a rejected push escape as an unhandled
+  // rejection — on the single prod dyno that crashes the whole process. Every
+  // other sendPushNotification call site guards the same way.
+  sendPushNotification(userId, { title, body: message, url }).catch((err) => {
+    console.warn(`[WEBHOOK] push notification failed for ${userId}:`, err);
+    captureError(err, { tags: { scope: "webhook.push", userId } });
+  });
 }
