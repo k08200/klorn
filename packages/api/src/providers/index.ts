@@ -3,7 +3,10 @@
  *
  * Providers (in priority order):
  *   1. OpenRouter (primary)   — OpenAI-compatible proxy with :free models
- *   2. Gemini     (secondary) — Google AI Studio free tier (1500 req/day)
+ *   2. Gemini     (secondary) — Google AI Studio key. Hosted prod uses a PAID
+ *      Tier 1 (billing-linked) project: the free tier lets Google train on
+ *      request data, which would break the privacy policy's Limited Use
+ *      no-train commitment. Self-hosters may use a free-tier key — their call.
  *
  * Failover happens in createCompletion() when OpenRouter returns a 403/429
  * "Key limit exceeded" — the limit is per-KEY (daily, resets at UTC 00:00),

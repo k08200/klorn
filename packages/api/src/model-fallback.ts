@@ -15,6 +15,26 @@
 /** Free model used when paid credits run out (same provider) */
 export const FALLBACK_MODEL = process.env.FALLBACK_MODEL || "google/gemma-4-31b-it:free";
 
+/**
+ * Kill switch for every :free-model fallback (the 402 credit swap and the
+ * :free entries of the retirement chain). Hosted prod sets
+ * DISABLE_FREE_MODEL_FALLBACK=true: OpenRouter's :free endpoints route to
+ * hosts that may train on request data (verified 2026-07-03 —
+ * gemma-4-31b-it:free serves via Google AI Studio free tier + OpenInference),
+ * which would break the privacy policy's Limited Use no-train commitment.
+ * With the account-level "free endpoints that may train" toggle off those
+ * calls are refused by OpenRouter anyway; this switch skips the doomed round
+ * trips so a 402 fails over straight to the next provider (Gemini direct,
+ * paid tier). Self-host default (unset) keeps the $0 degradation net — the
+ * operator owns their data policy. Read at call time so tests can flip it
+ * without module resets.
+ */
+export function isFreeModelFallbackDisabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.DISABLE_FREE_MODEL_FALLBACK ?? "").trim().toLowerCase(),
+  );
+}
+
 /** How long to stay on a credit-exhausted state before retrying the paid model */
 const CREDIT_RETRY_AFTER_MS = 5 * 60 * 1000; // 5 minutes
 

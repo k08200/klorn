@@ -34,10 +34,17 @@ services:
       # credit). Prod runs on a funded OpenRouter key, so every user-facing
       # surface is unified on the reliable paid flash model; per-user load is
       # billed to each user's own key when set (BYOK), and the per-user cost cap
-      # (DAILY_COST_CAP_CENTS) backstops the shared key. FALLBACK_MODEL stays
-      # :free on purpose — it is the $0 degradation net that only activates when
-      # paid credit is exhausted (402), so the service degrades instead of
-      # hard-failing. Model names are public, not secrets — pinned in-repo.
+      # (DAILY_COST_CAP_CENTS) backstops the shared key. Model names are public,
+      # not secrets — pinned in-repo.
+      #
+      # Privacy (Limited Use / no-train): hosted prod NEVER degrades onto :free
+      # OpenRouter endpoints — their hosts may train on request data (verified
+      # 2026-07-03: gemma-4-31b-it:free routes via Google AI Studio free tier +
+      # OpenInference). On 402 the chain fails over to GEMINI_API_KEY (paid
+      # Tier 1 project = no-train) instead. The account-level OpenRouter toggle
+      # "Free endpoints that may train on request data" must ALSO stay off.
+      # Self-host keeps the :free net by default (operator's own data-policy
+      # choice).
       - key: CHAT_MODEL
         value: "google/gemini-2.5-flash"
       - key: AGENT_MODEL
@@ -46,8 +53,8 @@ services:
         value: "google/gemini-2.5-flash"
       - key: VISION_MODEL
         value: "google/gemini-2.5-flash"
-      - key: FALLBACK_MODEL
-        value: "google/gemma-4-31b-it:free"
+      - key: DISABLE_FREE_MODEL_FALLBACK
+        value: "true"
       - key: FRONTEND_URL
         sync: false
       - key: WEB_URL
