@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken, verifyToken } from "../auth.js";
@@ -259,6 +260,58 @@ describe("GET /api/auth/google/callback — error handling", () => {
     expect(res.json().error).toBe(GENERIC);
     expect(JSON.stringify(res.json())).not.toContain("ENOTFOUND");
     await app.close();
+  });
+});
+
+describe("desktop-token PKCE verifier gate", () => {
+  beforeEach(resetStores);
+
+  const verifier = "on-device-verifier-abc123";
+  // Matches the server's crypto.createHash("sha256").update(v).digest("base64url").
+  const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
+
+  async function getNonce(app: ReturnType<typeof Fastify>, withChallenge: boolean) {
+    const url = withChallenge
+      ? `/api/auth/desktop-nonce?challenge=${encodeURIComponent(challenge)}`
+      : "/api/auth/desktop-nonce";
+    const res = await app.inject({ method: "GET", url });
+    return res.json().nonce as string;
+  }
+
+  it("returns 403 when a challenge was registered but no verifier is presented", async () => {
+    const app = await buildApp();
+    const nonce = await getNonce(app, true);
+    const res = await app.inject({ method: "GET", url: `/api/auth/desktop-token/${nonce}` });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("returns 403 for a wrong verifier — an observer of the nonce cannot retrieve the token", async () => {
+    const app = await buildApp();
+    const nonce = await getNonce(app, true);
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/auth/desktop-token/${nonce}`,
+      headers: { "x-desktop-verifier": "attacker-guess" },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("accepts the correct verifier and falls through to pending (202) until the JWT is issued", async () => {
+    const app = await buildApp();
+    const nonce = await getNonce(app, true);
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/auth/desktop-token/${nonce}`,
+      headers: { "x-desktop-verifier": verifier },
+    });
+    expect(res.statusCode).toBe(202);
+  });
+
+  it("stays backward-compatible: a nonce with no challenge needs no verifier (202)", async () => {
+    const app = await buildApp();
+    const nonce = await getNonce(app, false);
+    const res = await app.inject({ method: "GET", url: `/api/auth/desktop-token/${nonce}` });
+    expect(res.statusCode).toBe(202);
   });
 });
 
