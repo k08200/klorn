@@ -75,7 +75,7 @@ export function isTokenRevokedByEpoch(
 }
 
 /** Load the user's session epoch and decide whether this token is revoked. */
-async function sessionRevokedForToken(payload: JwtPayload): Promise<boolean> {
+export async function sessionRevokedForToken(payload: JwtPayload): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
     select: { sessionsInvalidatedAt: true },

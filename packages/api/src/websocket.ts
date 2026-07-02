@@ -10,7 +10,7 @@
 
 import type { Server } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
-import { verifyToken } from "./auth.js";
+import { isDeviceSessionValid, sessionRevokedForToken, verifyToken } from "./auth.js";
 
 interface WsClient {
   ws: WebSocket;
@@ -34,7 +34,7 @@ let wss: WebSocketServer | null = null;
 export function initWebSocket(server: Server): WebSocketServer {
   wss = new WebSocketServer({ server, path: "/ws" });
 
-  wss.on("connection", (ws, req) => {
+  wss.on("connection", async (ws, req) => {
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
     const clientType = (url.searchParams.get("type") || "web") as WsClient["type"];
 
@@ -44,8 +44,24 @@ export function initWebSocket(server: Server): WebSocketServer {
     if (token) {
       try {
         const payload = verifyToken(token);
+        // Mirror requireAuth: a bare verifyToken only checks signature+expiry.
+        // Also reject a token invalidated by a device-kick (another login) or a
+        // global revocation (password reset), else a revoked token keeps
+        // streaming the user's real-time notification payloads.
+        const [deviceValid, revoked] = await Promise.all([
+          isDeviceSessionValid(token),
+          sessionRevokedForToken(payload),
+        ]);
+        if (!deviceValid || revoked) {
+          ws.close(4001, "Session expired. Please log in again.");
+          return;
+        }
         userId = payload.userId;
-      } catch {
+      } catch (err) {
+        // Log a signal: this now also covers two DB-backed checks (device
+        // session + revocation), so a DB blip must not be indistinguishable
+        // from routine invalid-token noise with zero trace.
+        console.warn("[WS] auth check failed — closing socket:", err);
         ws.close(4001, "Invalid or expired token");
         return;
       }
