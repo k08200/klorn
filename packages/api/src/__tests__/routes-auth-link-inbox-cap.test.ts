@@ -42,6 +42,10 @@ vi.mock("../crypto-tokens.js", () => ({
 const linkedFindUnique = vi.hoisted(() => vi.fn());
 const linkedCount = vi.hoisted(() => vi.fn());
 const linkedUpsert = vi.hoisted(() => vi.fn());
+// The callback now re-checks entitlement (isEntitled) before the cap, so it looks
+// up the linking user. Default to an entitled user; PAYWALL is off in tests so
+// isEntitled is true regardless of plan, but the row must exist (non-null).
+const userFindUnique = vi.hoisted(() => vi.fn());
 
 vi.mock("../db.js", () => {
   const prisma = {
@@ -50,6 +54,7 @@ vi.mock("../db.js", () => {
       count: linkedCount,
       upsert: linkedUpsert,
     },
+    user: { findUnique: userFindUnique },
   };
   return { prisma, db: prisma };
 });
@@ -76,6 +81,8 @@ beforeEach(() => {
   linkedCount.mockReset();
   linkedUpsert.mockReset();
   linkedUpsert.mockResolvedValue({});
+  userFindUnique.mockReset();
+  userFindUnique.mockResolvedValue({ plan: "PRO", role: "USER" });
 });
 
 describe("__link_inbox__ cap", () => {
@@ -116,6 +123,22 @@ describe("__link_inbox__ cap", () => {
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toContain("inbox=success");
     expect(linkedUpsert).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it("rejects the link (TOCTOU) when the linking user is no longer entitled", async () => {
+    // The callback re-checks entitlement; a null/unentitled user (e.g. downgraded
+    // during the 10-min OAuth window) must be rejected before any upsert.
+    userFindUnique.mockResolvedValue(null);
+    linkedFindUnique.mockResolvedValue(null);
+    linkedCount.mockResolvedValue(0);
+    const app = await buildApp();
+
+    const res = await linkInbox(app);
+
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toContain("inbox=failed");
+    expect(linkedUpsert).not.toHaveBeenCalled();
     await app.close();
   });
 });
