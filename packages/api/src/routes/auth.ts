@@ -28,6 +28,22 @@ import { mapGoogleEventTimes } from "../google-calendar-time.js";
 import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
 import { maybeSendWelcomeEmail } from "../welcome-email.js";
 
+// Allowlisted native app URL schemes for the OAuth deep-link relay. The token is
+// delivered by redirecting the browser to `<scheme>://oauth-callback?code=…`,
+// which the OS routes to the app holding that scheme on the user's OWN device —
+// so an attacker who merely knows a login nonce cannot receive the token (it is
+// never parked in a pollable server slot). Only these fixed schemes are valid
+// targets, so an attacker cannot redirect the token to a scheme they control.
+// Configurable so a new build's scheme can be added without a code change.
+const NATIVE_OAUTH_SCHEMES = (process.env.NATIVE_OAUTH_SCHEMES ?? "ai.klorn.app,klorn")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+export function isAllowedNativeScheme(scheme: unknown): scheme is string {
+  return typeof scheme === "string" && NATIVE_OAUTH_SCHEMES.includes(scheme);
+}
+
 const authHeaderSchema = {
   type: "object",
   additionalProperties: true,
@@ -548,7 +564,11 @@ export function authRoutes(app: FastifyInstance) {
   // GET /api/auth/google/login — Start Google social login flow
   // Desktop flow: call /desktop-nonce first, then open this URL with ?source=desktop&nonce=
   app.get("/google/login", async (request, reply) => {
-    const { source, nonce } = request.query as { source?: string; nonce?: string };
+    const { source, nonce, appScheme } = request.query as {
+      source?: string;
+      nonce?: string;
+      appScheme?: string;
+    };
     const isDesktop = source === "desktop" && nonce;
     if (isDesktop) {
       const entry = desktopLoginTokens.get(nonce as string);
@@ -561,6 +581,9 @@ export function authRoutes(app: FastifyInstance) {
     const loginState = signToken({
       userId: isDesktop ? nonce : "__login__",
       email: isDesktop ? "__google_login_desktop__" : "__google_login__",
+      // Carry an allowlisted native scheme so the callback can deep-link the
+      // token back to the user's own app instead of parking it for polling.
+      ...(isDesktop && isAllowedNativeScheme(appScheme) ? { appScheme } : {}),
     });
     const url = getLoginAuthUrl(loginState);
     return reply.redirect(url);
@@ -649,7 +672,7 @@ export function authRoutes(app: FastifyInstance) {
     if (!state) {
       return reply.code(400).send({ error: "Missing state parameter" });
     }
-    let statePayload: { userId: string; email: string };
+    let statePayload: { userId: string; email: string; appScheme?: string };
     try {
       statePayload = verifyToken(state);
     } catch {
@@ -811,6 +834,19 @@ export function authRoutes(app: FastifyInstance) {
         // Desktop app: update the server-side nonce entry with the JWT
         if (isDesktopLogin) {
           const nonce = statePayload.userId; // nonce was stored in userId field
+          // App-scheme relay (RFC 8252): when the client registered an
+          // allowlisted native scheme, deliver the JWT via a one-time exchange
+          // code deep-linked to THAT app on the user's device. This closes
+          // login-CSRF — the token reaches whoever holds the app on the device
+          // that completed OAuth, not whoever polls the nonce. No scheme → the
+          // legacy poll flow (kept for clients that haven't adopted the relay).
+          if (isAllowedNativeScheme(statePayload.appScheme)) {
+            const relayCode = crypto.randomBytes(20).toString("hex");
+            exchangeCodes.set(relayCode, { jwt: token, expiresAt: Date.now() + 60_000 });
+            setTimeout(() => exchangeCodes.delete(relayCode), 60_000);
+            desktopLoginTokens.delete(nonce); // relay never parks the JWT for polling
+            return reply.redirect(`${statePayload.appScheme}://oauth-callback?code=${relayCode}`);
+          }
           const existing = desktopLoginTokens.get(nonce);
           if (existing) {
             desktopLoginTokens.set(nonce, { ...existing, jwt: token });

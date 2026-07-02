@@ -35,6 +35,8 @@ export interface JwtPayload {
   userId: string;
   email: string;
   sessionId?: string;
+  /** Native deep-link relay target — set only on desktop/native login-state tokens. */
+  appScheme?: string;
 }
 
 export function signToken(payload: JwtPayload): string {

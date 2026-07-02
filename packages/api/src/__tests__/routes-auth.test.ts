@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken, verifyToken } from "../auth.js";
+import { getLoginAuthUrl } from "../gmail.js";
+import { isAllowedNativeScheme } from "../routes/auth.js";
 
 // Stub email sender — auth register fires it non-blocking and swallows errors,
 // but we want to assert it was called with the right token.
@@ -260,6 +262,56 @@ describe("desktop-token PKCE verifier gate", () => {
     const nonce = await getNonce(app, false);
     const res = await app.inject({ method: "GET", url: `/api/auth/desktop-token/${nonce}` });
     expect(res.statusCode).toBe(202);
+  });
+});
+
+describe("isAllowedNativeScheme — OAuth relay allowlist", () => {
+  it("accepts the fixed native app schemes", () => {
+    expect(isAllowedNativeScheme("ai.klorn.app")).toBe(true);
+    expect(isAllowedNativeScheme("klorn")).toBe(true);
+  });
+
+  it("rejects attacker-controlled schemes and non-strings", () => {
+    // The token is deep-linked to `<scheme>://oauth-callback` — only fixed Klorn
+    // schemes may be a target, so an attacker cannot redirect it to their own app.
+    expect(isAllowedNativeScheme("evil.app")).toBe(false);
+    expect(isAllowedNativeScheme("https://evil.com")).toBe(false);
+    expect(isAllowedNativeScheme("")).toBe(false);
+    expect(isAllowedNativeScheme(undefined)).toBe(false);
+    expect(isAllowedNativeScheme(42)).toBe(false);
+  });
+});
+
+describe("desktop /google/login — appScheme relay binding", () => {
+  beforeEach(resetStores);
+
+  async function issueNonce(app: ReturnType<typeof Fastify>): Promise<string> {
+    const res = await app.inject({ method: "GET", url: "/api/auth/desktop-nonce" });
+    return res.json().nonce as string;
+  }
+
+  it("carries an allowlisted appScheme into the signed OAuth state", async () => {
+    const app = await buildApp();
+    const nonce = await issueNonce(app);
+    vi.mocked(getLoginAuthUrl).mockClear();
+    await app.inject({
+      method: "GET",
+      url: `/api/auth/google/login?source=desktop&nonce=${nonce}&appScheme=ai.klorn.app`,
+    });
+    const state = vi.mocked(getLoginAuthUrl).mock.calls[0]?.[0] as string;
+    expect(verifyToken(state).appScheme).toBe("ai.klorn.app");
+  });
+
+  it("drops a non-allowlisted appScheme so it can never become a relay target", async () => {
+    const app = await buildApp();
+    const nonce = await issueNonce(app);
+    vi.mocked(getLoginAuthUrl).mockClear();
+    await app.inject({
+      method: "GET",
+      url: `/api/auth/google/login?source=desktop&nonce=${nonce}&appScheme=evil.app`,
+    });
+    const state = vi.mocked(getLoginAuthUrl).mock.calls[0]?.[0] as string;
+    expect(verifyToken(state).appScheme).toBeUndefined();
   });
 });
 
