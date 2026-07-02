@@ -291,9 +291,16 @@ model Note {
   title     String
   content   String
   category  String   @default("general")
+  // Local calendar day (YYYY-MM-DD) this note dedupes on. Set only for the
+  // daily briefing note; NULL for every other note. Postgres treats NULLs as
+  // DISTINCT in a unique index, so ordinary notes never collide — only the one
+  // briefing-per-user-per-day row is deduped, atomically closing the TOCTOU
+  // race in createDailyBriefingDelivery.
+  dayKey    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([userId, dayKey])
   @@index([userId, updatedAt])
   @@index([userId, category])
 }
@@ -441,8 +448,14 @@ model Notification {
   sourceEmailId   String? // EmailMessage.id for email-originated notifications
   pendingActionId String?        @unique // FK to PendingAction for inline approve/reject in drawer
   pendingAction   PendingAction? @relation(fields: [pendingActionId], references: [id], onDelete: SetNull)
+  // Idempotency key for at-most-once notifications (e.g. "briefing:2026-07-01").
+  // Set only where a duplicate would double-push the user; NULL otherwise.
+  // NULLs are DISTINCT in the unique index, so ordinary notifications never
+  // collide — the winner of the create is the only caller that sends the push.
+  dedupeKey       String?
   createdAt       DateTime       @default(now())
 
+  @@unique([userId, dedupeKey])
   @@index([userId, createdAt])
   @@index([userId, isRead])
   @@index([pendingActionId])

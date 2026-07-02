@@ -15,6 +15,7 @@
     "backfill:from-address": "tsx scripts/backfill-from-address.ts",
     "calibration": "tsx scripts/calibration.ts",
     "decision-metrics": "tsx scripts/decision-metrics.ts",
+    "prune:push-logs": "tsx scripts/prune-push-logs.ts",
     "eval:judge": "tsx scripts/poc-accuracy.ts --in=eval/judge-eval-set.json --concurrency=1 --delay=4500",
     "eval:judge:body": "tsx scripts/poc-accuracy.ts --in=eval/judge-body-eval-set.json --compare-body --concurrency=1 --delay=4500"
   },

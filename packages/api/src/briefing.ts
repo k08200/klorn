@@ -463,24 +463,29 @@ export function buildSignalOnlyBriefing(signals: BriefingSignals): string {
   return lines.join("\n").trim();
 }
 
+/**
+ * Deliver today's briefing at most once per user per local day.
+ *
+ * The dedup is ATOMIC: a `(userId, dayKey)` unique on Note plus a
+ * create-catch-P2002 recovery closes the check-then-create (TOCTOU) race. Four
+ * callers can fire concurrently — the scheduler, the agent tool-executor, cron,
+ * and post-login auth — but only the create winner generates + pushes; every
+ * other caller reuses the winner's note and gets `notification: null` (no push).
+ */
 export async function createDailyBriefingDelivery(userId: string): Promise<{
   briefing: string;
   note: { id: string; createdAt: Date };
   notification: { id: string; createdAt: Date } | null;
   reused: boolean;
 }> {
-  const today = await todayRangeForUser(userId);
-  const existing = await prisma.note.findFirst({
-    where: {
-      userId,
-      title: { startsWith: "Daily Briefing" },
-      createdAt: today,
-    },
-    orderBy: { createdAt: "desc" },
+  const dayKey = await briefingDayKeyForUser(userId);
+
+  const existing = await prisma.note.findUnique({
+    where: { userId_dayKey: { userId, dayKey } },
     select: { id: true, content: true, createdAt: true },
   });
   if (existing) {
-    const notification = await ensureDailyBriefingNotification(userId, existing.content);
+    const notification = await ensureDailyBriefingNotification(userId, existing.content, dayKey);
     return {
       briefing: existing.content,
       note: { id: existing.id, createdAt: existing.createdAt },
@@ -491,47 +496,77 @@ export async function createDailyBriefingDelivery(userId: string): Promise<{
 
   const briefing = await generateBriefing(userId);
 
-  const note = await prisma.note.create({
-    data: {
-      userId,
-      title: `Daily Briefing — ${new Date().toLocaleDateString("en-US")}`,
-      content: briefing,
-    },
-    select: { id: true, createdAt: true },
-  });
+  let note: { id: string; createdAt: Date };
+  try {
+    note = await prisma.note.create({
+      data: {
+        userId,
+        dayKey,
+        title: `Daily Briefing — ${new Date().toLocaleDateString("en-US")}`,
+        content: briefing,
+      },
+      select: { id: true, createdAt: true },
+    });
+  } catch (err) {
+    // A concurrent caller won the (userId, dayKey) race between our findUnique
+    // miss and this create. Recover by reading the winner's note and reusing it
+    // — matches the WebhookEvent P2002-dedup idiom (routes/webhook.ts).
+    if ((err as { code?: string })?.code !== "P2002") throw err;
+    const winner = await prisma.note.findUnique({
+      where: { userId_dayKey: { userId, dayKey } },
+      select: { id: true, content: true, createdAt: true },
+    });
+    if (!winner) throw err; // P2002 but no row — genuinely unexpected, surface it
+    const notification = await ensureDailyBriefingNotification(userId, winner.content, dayKey);
+    return {
+      briefing: winner.content,
+      note: { id: winner.id, createdAt: winner.createdAt },
+      notification,
+      reused: true,
+    };
+  }
 
-  const notification = await ensureDailyBriefingNotification(userId, briefing);
+  const notification = await ensureDailyBriefingNotification(userId, briefing, dayKey);
 
   return { briefing, note, notification, reused: false };
 }
 
-async function ensureDailyBriefingNotification(
+/**
+ * Create the briefing notification and push it — WINNER-ONLY and atomic.
+ *
+ * A `(userId, dedupeKey)` unique on Notification (dedupeKey = "briefing:<dayKey>")
+ * means exactly one caller's create succeeds. The winner does both pushes and
+ * returns the notification; a concurrent loser gets P2002 → returns null WITHOUT
+ * pushing, so the user can never receive a duplicate briefing web-push. Matches
+ * the WebhookEvent P2002-dedup idiom (routes/webhook.ts).
+ */
+export async function ensureDailyBriefingNotification(
   userId: string,
   briefing: string,
+  dayKey: string,
 ): Promise<{ id: string; createdAt: Date } | null> {
-  const today = await todayRangeForUser(userId);
-  const existing = await prisma.notification.findFirst({
-    where: {
-      userId,
-      type: "briefing",
-      createdAt: today,
-    },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, createdAt: true },
-  });
-  if (existing) return null;
-
   const briefingMsg = briefing.slice(0, 200) + (briefing.length > 200 ? "..." : "");
-  const notification = await prisma.notification.create({
-    data: {
-      userId,
-      type: "briefing",
-      title: "Daily Briefing Ready",
-      message: briefingMsg,
-      link: "/briefing",
-    },
-    select: { id: true, createdAt: true },
-  });
+  const dedupeKey = `briefing:${dayKey}`;
+
+  let notification: { id: string; createdAt: Date };
+  try {
+    notification = await prisma.notification.create({
+      data: {
+        userId,
+        type: "briefing",
+        dedupeKey,
+        title: "Daily Briefing Ready",
+        message: briefingMsg,
+        link: "/briefing",
+      },
+      select: { id: true, createdAt: true },
+    });
+  } catch (err) {
+    // Someone already created + pushed this briefing for the day. Do NOT push
+    // again — this is exactly the duplicate-push hole being closed.
+    if ((err as { code?: string })?.code === "P2002") return null;
+    throw err;
+  }
 
   pushNotification(userId, {
     id: notification.id,
@@ -731,6 +766,20 @@ async function todayRangeForUser(userId: string): Promise<{ gte: Date; lt: Date 
   });
   const { gte, lt } = localDayUtcRange(new Date(), normalizeTimeZone(config?.timezone));
   return { gte, lt };
+}
+
+/**
+ * The user's LOCAL calendar day as YYYY-MM-DD, using the SAME timezone
+ * resolution as todayRangeForUser (localDayUtcRange returns this exact key as
+ * `dateKey`). Sharing the resolution keeps dayKey aligned with the "today"
+ * window and stable across a local day — the dedup key for the daily briefing.
+ */
+async function briefingDayKeyForUser(userId: string): Promise<string> {
+  const config = await prisma.automationConfig.findUnique({
+    where: { userId },
+    select: { timezone: true },
+  });
+  return localDayUtcRange(new Date(), normalizeTimeZone(config?.timezone)).dateKey;
 }
 
 // Tool for Klorn to generate briefing on demand

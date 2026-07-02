@@ -50,6 +50,7 @@ import {
 } from "./time-zone.js";
 import { buildUrgentDedupMessage, parseNotifiedGmailIds } from "./urgent-dedup.js";
 import { pushNotification } from "./websocket.js";
+import { withTimeout } from "./with-timeout.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 // Self-overlap guard: true while a tick is mid-flight. The pg advisory lock is
@@ -61,6 +62,18 @@ let schedulerInFlight = false;
 
 const CHECK_INTERVAL_MS = SCHEDULER_CHECK_INTERVAL_MS;
 const WATCH_RENEWAL_INTERVAL_MS = SCHEDULER_WATCH_RENEWAL_INTERVAL_MS;
+
+// Wall-clock bound on ONE user's per-tick work (calendar/email sync, reconcile,
+// etc.). The scheduler processes users serially and awaits per-user work that
+// calls Gmail via googleapis with no request timeout — a single hung call
+// (network partition / Google-side stall) would otherwise stall the ENTIRE tick
+// until an OS-level TCP timeout, starving every later user (fleet-wide outage
+// from one bad account). Bounding each user isolates that hang so the loop moves
+// on. Kept well under the 60s tick interval so a timed-out user can't overrun
+// into the next tick. See withTimeout: this unblocks the loop but does not
+// cancel the underlying hung call (AbortController into googleapis is a
+// follow-up).
+const PER_USER_AUTOMATION_TIMEOUT_MS = 30_000;
 const DB_HEARTBEAT_ENABLED = process.env.DB_HEARTBEAT_ENABLED === "true";
 const PROACTIVE_ACTIONS_ENABLED = process.env.PROACTIVE_ACTIONS_ENABLED === "true";
 const PHONE_ESCALATION_ENABLED = process.env.PHONE_ESCALATION_ENABLED === "true";
@@ -390,6 +403,138 @@ export async function maybeNudgeFreeDailyLimit(
   }
 }
 
+/**
+ * Detect the Prisma unique-violation used as an atomic at-most-once gate. Matches
+ * the create-catch-P2002 idiom in briefing.ts / routes/webhook.ts: on P2002 the
+ * create lost the race to a concurrent tick, so the loser skips its push.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  return (err as { code?: string })?.code === "P2002";
+}
+
+/**
+ * "Google disconnected" calendar alert — WINNER-ONLY and atomic, at most once per
+ * user per local day. A `(userId, dedupeKey)` unique on Notification
+ * (dedupeKey = "calendar-disconnect:<dayKey>") replaces the previous
+ * findFirst-then-create (TOCTOU) so concurrent ticks can't double-create the alert
+ * or double-push. The create is the gate: the P2002 loser returns null WITHOUT
+ * pushing.
+ */
+export async function ensureCalendarDisconnectNotification(
+  userId: string,
+  dayKey: string,
+): Promise<{ id: string; createdAt: Date } | null> {
+  let notification: { id: string; createdAt: Date };
+  try {
+    notification = await prisma.notification.create({
+      data: {
+        userId,
+        type: "calendar",
+        dedupeKey: `calendar-disconnect:${dayKey}`,
+        title: "Google disconnected",
+        message: "Calendar sync stopped. Reconnect your Google account in settings.",
+        link: "/settings",
+      },
+      select: { id: true, createdAt: true },
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) return null; // already alerted today → no re-push
+    throw err;
+  }
+
+  pushNotification(userId, {
+    id: notification.id,
+    type: "calendar",
+    title: "Google disconnected",
+    message: "Reconnect your Google account in settings.",
+    link: "/settings",
+  });
+  return notification;
+}
+
+/**
+ * "Auto-reply sent" alert — WINNER-ONLY and atomic, at most once per replied
+ * message. A `(userId, dedupeKey)` unique (dedupeKey = "auto-reply:<gmailId>")
+ * replaces the findFirst-then-create (TOCTOU) so concurrent ticks can't
+ * double-create/double-push the same auto-reply alert. The reply SEND itself is
+ * unchanged and stays at the call site; only the alert dedup moves here.
+ */
+export async function ensureAutoReplyNotification(
+  userId: string,
+  gmailId: string,
+  toAddr: string,
+  ruleName: string,
+): Promise<{ id: string; createdAt: Date } | null> {
+  let notification: { id: string; createdAt: Date };
+  try {
+    notification = await prisma.notification.create({
+      data: {
+        userId,
+        type: "email",
+        dedupeKey: `auto-reply:${gmailId}`,
+        title: "Auto-reply sent",
+        message: `Auto-replied to ${toAddr} (rule: "${ruleName}") [${gmailId}]`,
+      },
+      select: { id: true, createdAt: true },
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) return null; // already alerted for this email
+    throw err;
+  }
+
+  pushNotification(userId, {
+    id: notification.id,
+    type: "email",
+    title: "Auto-reply sent",
+    message: `Auto-replied to ${toAddr}`,
+    createdAt: notification.createdAt.toISOString(),
+  });
+  return notification;
+}
+
+/**
+ * Urgent-email bell notification — WINNER-ONLY and atomic. The read-based
+ * notifiedGmailIds filter (parseNotifiedGmailIds) still does the primary
+ * per-message dedup; this closes the residual concurrent-tick race on a single
+ * batch via a `(userId, dedupeKey)` unique (dedupeKey = "urgent:<leadGmailId>").
+ * `dbMessage` KEEPS the trailing `[id1,id2,…]` marker so every notified id is
+ * recorded for the next tick's read-back — the accumulation logic is preserved.
+ * The winner returns its notification so the CALLER runs the follow-on web-push /
+ * SMS side-effects; a P2002 loser returns null and the caller skips them.
+ */
+export async function ensureUrgentEmailNotification(
+  userId: string,
+  leadGmailId: string,
+  dbMessage: string,
+  userBody: string,
+): Promise<{ id: string; createdAt: Date } | null> {
+  let notification: { id: string; createdAt: Date };
+  try {
+    notification = await prisma.notification.create({
+      data: {
+        userId,
+        type: "email",
+        dedupeKey: `urgent:${leadGmailId}`,
+        title: "Urgent email",
+        message: dbMessage,
+      },
+      select: { id: true, createdAt: true },
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) return null; // another tick already notified this batch
+    throw err;
+  }
+
+  pushNotification(userId, {
+    id: notification.id,
+    type: "email",
+    title: "Urgent email",
+    message: userBody,
+    createdAt: notification.createdAt.toISOString(),
+  });
+  return notification;
+}
+
 async function runAutomations() {
   // Skip if this process is still running the previous tick (see schedulerInFlight).
   if (schedulerInFlight) return;
@@ -493,578 +638,32 @@ async function runAutomations() {
       });
       const googleConnectedUserIds = new Set(googleTokens.map((t) => t.userId));
 
+      const ctx: UserCycleContext = { automationPlanMap, googleConnectedUserIds };
+
       for (const config of configs) {
-        const configUserEntry = automationPlanMap.get(config.userId);
-        const configUserPlan = configUserEntry?.plan || "FREE";
-        const configUserRole = configUserEntry?.role;
-        const timeZone = normalizeTimeZone((config as unknown as { timezone?: string }).timezone);
-        const today = localDateKey(new Date(), timeZone);
-
-        // --- Daily Briefing ---
-        if (
-          config.dailyBriefing &&
-          briefingSentToday.get(config.userId) !== today &&
-          planHasFeature(configUserPlan, "daily_briefing", configUserRole)
-        ) {
-          if (isBriefingDue(config.briefingTime, timeZone)) {
-            // DB-based dedup: check if briefing was already sent today (survives restarts)
-            const alreadySent = await hasBriefingBeenSentToday(config.userId, timeZone);
-            // Skip ONLY the briefing send when already-sent or cost-capped,
-            // then fall through to the rest of this user's tick (calendar +
-            // email sync). These branches used to `continue`, skipping the whole
-            // tick for the user — one stale cycle after a restart cleared the
-            // in-memory map.
-            if (alreadySent) {
-              briefingSentToday.set(config.userId, today);
-            } else {
-              try {
-                console.log(`[AUTOMATION] Generating daily briefing for ${config.userId}`);
-                await createDailyBriefingDelivery(config.userId);
-                briefingSentToday.set(config.userId, today);
-                console.log(`[AUTOMATION] Briefing delivered to ${config.userId}`);
-              } catch (err) {
-                const errName = err instanceof Error ? err.name : "";
-                // Daily cost-cap hits are expected back-pressure, not bugs.
-                if (errName === "DailyCostCapExceededError") {
-                  console.log(
-                    `[AUTOMATION] Briefing skipped for ${config.userId} — daily cost cap`,
-                  );
-                  briefingSentToday.set(config.userId, today);
-                } else {
-                  console.error(`[AUTOMATION] Briefing failed for ${config.userId}:`, err);
-                  captureError(err, {
-                    tags: { scope: "automation.briefing", userId: config.userId },
-                    extra: { briefingTime: config.briefingTime, timeZone },
-                  });
-                }
-              }
-            }
-          }
-        }
-
-        // --- Calendar Auto-Sync (every 15 minutes) ---
-        if (isCalendarSyncDue(config.userId) && googleConnectedUserIds.has(config.userId)) {
-          lastCalendarSyncAt.set(config.userId, Date.now());
-          try {
-            const auth = await getAuthedClient(config.userId);
-            if (auth) {
-              const { google } = await import("googleapis");
-              const calendar = google.calendar({ version: "v3", auth });
-              const now = new Date();
-              const later = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-              const userRow = (await prisma.user.findUnique({
-                where: { id: config.userId },
-              })) as { timezone?: string | null } | null;
-              const userTimezone = normalizeTimeZone(userRow?.timezone);
-
-              const response = await calendar.events.list({
-                calendarId: "primary",
-                timeMin: now.toISOString(),
-                timeMax: later.toISOString(),
-                singleEvents: true,
-                orderBy: "startTime",
-                maxResults: 100,
-                // See note in routes/calendar.ts /sync — pass timeZone so
-                // Google canonicalizes the response, and the defensive
-                // parseGoogleDateTime below handles any stray naive strings.
-                timeZone: userTimezone,
-              });
-
-              for (const item of response.data.items || []) {
-                const googleId = item.id || "";
-                if (!googleId) continue;
-                const startTime = item.start?.dateTime || item.start?.date || "";
-                const endTime = item.end?.dateTime || item.end?.date || "";
-                if (!startTime || !endTime) continue;
-
-                let meetingLink: string | null = null;
-                if (item.conferenceData?.entryPoints) {
-                  const video = item.conferenceData.entryPoints.find(
-                    (e) => e.entryPointType === "video",
-                  );
-                  if (video) meetingLink = video.uri || null;
-                }
-                if (!meetingLink && item.hangoutLink) meetingLink = item.hangoutLink;
-
-                const isTimed = Boolean(item.start?.dateTime);
-                const parsedStart = isTimed
-                  ? parseGoogleDateTime(startTime, item.start?.timeZone ?? null, userTimezone)
-                  : new Date(startTime);
-                const parsedEnd = isTimed
-                  ? parseGoogleDateTime(endTime, item.end?.timeZone ?? null, userTimezone)
-                  : new Date(endTime);
-                await prisma.calendarEvent.upsert({
-                  where: { userId_googleId: { userId: config.userId, googleId } },
-                  create: {
-                    userId: config.userId,
-                    title: item.summary || "Untitled",
-                    description: item.description || null,
-                    startTime: parsedStart,
-                    endTime: parsedEnd,
-                    location: item.location || null,
-                    meetingLink,
-                    allDay: !isTimed,
-                    googleId,
-                  },
-                  update: {
-                    title: item.summary || "Untitled",
-                    description: item.description || null,
-                    startTime: parsedStart,
-                    endTime: parsedEnd,
-                    location: item.location || null,
-                    meetingLink,
-                    allDay: !isTimed,
-                  },
-                });
-              }
-            }
-          } catch (err) {
-            const gaxiosErr = err as {
-              response?: { status?: number; data?: { error?: { message?: string } } };
-              message?: string;
-            };
-            const status = gaxiosErr.response?.status;
-            console.error(
-              `[AUTOMATION] Calendar sync failed for ${config.userId} (HTTP ${status}):`,
-              gaxiosErr.response?.data?.error?.message || gaxiosErr.message || err,
-            );
-
-            // 401/403 = token invalid — notify user to reconnect
-            if (status === 401 || status === 403) {
-              const existingAlert = await prisma.notification.findFirst({
-                where: {
-                  userId: config.userId,
-                  type: "calendar",
-                  OR: [
-                    { title: { contains: "Google disconnected" } },
-                    { title: { contains: "Google 연결 끊김" } },
-                  ],
-                  createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-                },
-              });
-              if (!existingAlert) {
-                await prisma.notification.create({
-                  data: {
-                    userId: config.userId,
-                    type: "calendar",
-                    title: "Google disconnected",
-                    message: "Calendar sync stopped. Reconnect your Google account in settings.",
-                    link: "/settings",
-                  },
-                });
-                pushNotification(config.userId, {
-                  id: crypto.randomUUID(),
-                  type: "calendar",
-                  title: "Google disconnected",
-                  message: "Reconnect your Google account in settings.",
-                  link: "/settings",
-                });
-              }
-            }
-          }
-        }
-
-        // --- Email Sync + AI Classify (requires PRO+ for classify, TEAM+ for auto-reply) ---
-        // emailAutoClassify now defaults to true in schema — we still honor an
-        // explicit opt-out, but for the vast majority of users sync runs on
-        // its own interval without any config step.
-        if (
-          config.emailAutoClassify &&
-          planHasFeature(configUserPlan, "email_auto_classify", configUserRole) &&
-          googleConnectedUserIds.has(config.userId)
-        ) {
-          if (isEmailSyncDue(config.userId)) {
-            lastEmailSyncAt.set(config.userId, Date.now());
-            try {
-              // Sync from Gmail → DB
-              const syncResult = await syncEmails(config.userId, 20);
-
-              // AI summarize new emails
-              if (syncResult.newCount > 0) {
-                await summarizeUnsummarizedEmails(config.userId, syncResult.newCount);
-              }
-              await syncRecentCandidateIntakes(config.userId, Math.max(syncResult.newCount, 10));
-              await notifyCandidateEmails(config.userId);
-
-              // Multi-account (Pro): also sync each LINKED secondary inbox via
-              // its own OAuth client so the firewall classifies its mail too.
-              // Flag-gated (default off) so this path stays dark in production
-              // until verified against real accounts — it can never touch the
-              // primary sync above. Per-account isolation: one bad linked inbox
-              // (revoked token, quota) is logged and skipped, never aborting the
-              // others or the tick. The per-user daily cost cap covers all
-              // inboxes, so on a cap hit we stop the rest of the fan-out.
-              if (
-                MULTI_INBOX_SYNC_ENABLED &&
-                planHasFeature(configUserPlan, "multi_account", configUserRole)
-              ) {
-                // The lookup itself is wrapped so a DB blip degrades to "skip the
-                // fan-out this tick" — never escaping to the outer catch and
-                // silently skipping the primary account's backfill/auto-reply/
-                // reconcile below.
-                let linkedInboxes: Awaited<ReturnType<typeof getLinkedInboxClients>> = [];
-                try {
-                  linkedInboxes = await getLinkedInboxClients(config.userId);
-                } catch (err) {
-                  console.warn(
-                    `[AUTOMATION] Linked-inbox lookup failed for ${config.userId} — skipping fan-out this tick:`,
-                    err,
-                  );
-                  captureError(err, {
-                    tags: { scope: "automation.linked-inbox-lookup", userId: config.userId },
-                  });
-                }
-                for (const inbox of linkedInboxes) {
-                  try {
-                    const linkedResult = await syncEmails(config.userId, 20, undefined, {
-                      id: inbox.id,
-                      email: inbox.email,
-                      client: inbox.client,
-                    });
-                    if (linkedResult.newCount > 0) {
-                      await summarizeUnsummarizedEmails(config.userId, linkedResult.newCount);
-                    }
-                  } catch (err) {
-                    const errName = err instanceof Error ? err.name : "";
-                    if (errName === "DailyCostCapExceededError") {
-                      console.log(
-                        `[AUTOMATION] Linked-inbox sync stopped for ${config.userId} — daily cost cap`,
-                      );
-                      break;
-                    }
-                    if (err instanceof Error && err.message === "Gmail not connected") {
-                      console.warn(
-                        `[AUTOMATION] Linked inbox ${inbox.email} not connected (revoked?) for ${config.userId}`,
-                      );
-                      continue;
-                    }
-                    console.warn(
-                      `[AUTOMATION] Linked-inbox sync failed for ${config.userId} / ${inbox.email}:`,
-                      err,
-                    );
-                    captureError(err, {
-                      tags: { scope: "automation.linked-inbox-sync", userId: config.userId },
-                      extra: { linkedInboxAccountId: inbox.id },
-                    });
-                  }
-                }
-              }
-
-              // Backfill: re-judge recently-synced emails that never got an
-              // AttentionItem (the inline judge is fire-and-forget; a transient
-              // failure or a dyno killed mid-flight strands the email out of
-              // the firewall). Runs every sync cycle regardless of newCount so
-              // mail that arrived while the instance slept gets tiered on wake.
-              // Bounded per call; no-op once caught up.
-              const backfilled = await backfillEmailAttentionItems(config.userId);
-              if (backfilled > 0) {
-                console.log(
-                  `[EMAIL-BACKFILL] re-judged ${backfilled} stranded email(s) for ${config.userId}`,
-                );
-              }
-
-              // LOW-priority mail is a quarantine signal, not a destructive
-              // action. Keep the local/Gmail records intact so the user can audit
-              // EVE's classification and approve any cleanup later.
-
-              // Auto-reply: check rules for newly synced emails (dedup by gmailId)
-              // Requires TEAM+ plan for auto-reply
-              if (
-                syncResult.newCount > 0 &&
-                planHasFeature(configUserPlan, "email_auto_reply", configUserRole)
-              ) {
-                // PRIMARY-account rows only. sendAutoReplyViaFloor below always
-                // sends from the primary Gmail client, so auto-replying to a
-                // linked-inbox email would come from the WRONG address (the
-                // sender emailed the linked account, not the primary). Until
-                // per-account send routing exists, auto-reply is primary-only;
-                // this also keeps `take: newCount` from mixing in linked rows
-                // once MULTI_INBOX_SYNC_ENABLED is on.
-                const newEmails = await prisma.emailMessage.findMany({
-                  where: { userId: config.userId, linkedInboxAccountId: null },
-                  orderBy: { syncedAt: "desc" },
-                  take: syncResult.newCount,
-                });
-                for (const email of newEmails) {
-                  try {
-                    // Skip if we already sent an auto-reply notification for this email
-                    const alreadyReplied = await prisma.notification.findFirst({
-                      where: {
-                        userId: config.userId,
-                        type: "email",
-                        title: "Auto-reply sent",
-                        message: { contains: email.gmailId },
-                      },
-                    });
-                    if (alreadyReplied) continue;
-
-                    const matched = await checkAutoReplyRules(config.userId, email);
-                    if (
-                      matched &&
-                      (matched.actionType === "AUTO_REPLY" || matched.actionType === "DRAFT_REPLY")
-                    ) {
-                      const replyBody = await generateSmartReply(
-                        matched.actionValue,
-                        {
-                          from: email.from,
-                          subject: email.subject,
-                          body: email.body || "",
-                        },
-                        config.userId,
-                      );
-                      if (matched.actionType === "AUTO_REPLY") {
-                        const emailMatch = email.from.match(/<([^>]+)>/) || [null, email.from];
-                        const toAddr = emailMatch[1] || email.from;
-                        // Route the autonomous send through the deterministic
-                        // floor (mint receipt → executeToolCall re-verifies the
-                        // payloadHash) instead of calling gmail.sendEmail
-                        // directly, so every send stays on the single gated,
-                        // audited path (W1).
-                        await sendAutoReplyViaFloor(
-                          config.userId,
-                          toAddr,
-                          `Re: ${email.subject}`,
-                          replyBody,
-                        );
-                        const notification = await prisma.notification.create({
-                          data: {
-                            userId: config.userId,
-                            type: "email",
-                            title: "Auto-reply sent",
-                            message: `Auto-replied to ${toAddr} (rule: "${matched.ruleName}") [${email.gmailId}]`,
-                          },
-                        });
-                        pushNotification(config.userId, {
-                          id: notification.id,
-                          type: "email",
-                          title: "Auto-reply sent",
-                          message: `Auto-replied to ${toAddr}`,
-                          createdAt: notification.createdAt.toISOString(),
-                        });
-                      }
-                    }
-                  } catch (err) {
-                    // Auto-reply touches an outbound send — a silent failure
-                    // here means a configured rule fired nothing with no trace,
-                    // and the next tick silently retries. console first:
-                    // captureError is a no-op without a Sentry DSN.
-                    console.warn(
-                      `[AUTOMATION] auto-reply failed for ${email.gmailId} (user ${config.userId})`,
-                      err,
-                    );
-                    captureError(err, {
-                      tags: { scope: "automation.auto-reply" },
-                      extra: { userId: config.userId, gmailId: email.gmailId },
-                    });
-                  }
-                }
-              }
-
-              // Reconcile DB with Gmail (remove deleted/archived emails).
-              // Runs at most once every 30 minutes per user, independent of
-              // wall-clock minute so a slipped tick doesn't skip the window.
-              if (isReconcileDue(config.userId)) {
-                lastReconcileAt.set(config.userId, Date.now());
-                try {
-                  await reconcileEmails(config.userId);
-                } catch (err) {
-                  console.error(`[AUTOMATION] Reconcile failed for ${config.userId}:`, err);
-                  captureError(err, {
-                    tags: { scope: "automation.reconcile", userId: config.userId },
-                  });
-                }
-                // Reconcile linked secondary inboxes too (each against its own
-                // client). Gated + isolated from the primary reconcile so a
-                // linked failure never masks a primary success. Off unless the
-                // flag is on, matching the sync fan-out above.
-                if (MULTI_INBOX_SYNC_ENABLED) {
-                  try {
-                    await reconcileLinkedInboxes(config.userId);
-                  } catch (err) {
-                    console.error(
-                      `[AUTOMATION] Linked-inbox reconcile failed for ${config.userId}:`,
-                      err,
-                    );
-                    captureError(err, {
-                      tags: { scope: "automation.reconcile.linked", userId: config.userId },
-                    });
-                  }
-                }
-              }
-
-              // Check for urgent unread emails — notify only for NEW urgent emails
-              // Only check truly new emails (synced in last hour) to avoid re-notifying old unread emails
-              const urgentEmails = await prisma.emailMessage.findMany({
-                where: {
-                  userId: config.userId,
-                  priority: "URGENT",
-                  isRead: false,
-                  syncedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
-                },
-                orderBy: { receivedAt: "desc" },
-                select: { id: true, gmailId: true, subject: true, from: true, summary: true },
-              });
-
-              if (urgentEmails.length > 0) {
-                // Check which urgent emails we already notified about (by gmailId in message, last 7 days)
-                const recentUrgentNotifs = await prisma.notification.findMany({
-                  where: {
-                    userId: config.userId,
-                    type: "email",
-                    OR: [{ title: "Urgent email" }, { title: "긴급 이메일" }],
-                    createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-                  },
-                  select: { message: true },
-                });
-                const notifiedGmailIds = parseNotifiedGmailIds(
-                  recentUrgentNotifs.map((n) => n.message),
-                );
-
-                // Only notify for urgent emails we haven't notified about yet
-                const newUrgent = urgentEmails.filter((e) => !notifiedGmailIds.has(e.gmailId));
-
-                if (newUrgent.length > 0) {
-                  // User-visible body: who + what, no internal IDs.
-                  // DB message keeps a trailing [id1,id2,…] marker for EVERY
-                  // notified email so the dedup read above records all of them
-                  // (not just the first) and they aren't re-notified next tick.
-                  const userBody = formatUrgentEmailBody(newUrgent);
-                  const dbMessage = buildUrgentDedupMessage(
-                    userBody,
-                    newUrgent.map((e) => e.gmailId),
-                  );
-
-                  const notification = await prisma.notification.create({
-                    data: {
-                      userId: config.userId,
-                      type: "email",
-                      title: "Urgent email",
-                      message: dbMessage,
-                    },
-                  });
-
-                  pushNotification(config.userId, {
-                    id: notification.id,
-                    type: "email",
-                    title: "Urgent email",
-                    message: userBody,
-                    createdAt: notification.createdAt.toISOString(),
-                  });
-
-                  // Best-effort AttentionItem lookup for the lead urgent email
-                  // (source=EMAIL, sourceId=EmailMessage.id, set by poc-judge).
-                  // Lets the Telegram channel attach tier-override buttons;
-                  // null just means the message ships without them.
-                  const attentionItemId = await findOpenEmailAttentionItemId(
-                    config.userId,
-                    newUrgent[0].id,
-                  );
-
-                  sendPushNotification(
-                    config.userId,
-                    {
-                      title: "Urgent mail",
-                      body: userBody,
-                      url: "/briefing",
-                      attentionItemId: attentionItemId ?? undefined,
-                    },
-                    "email_urgent",
-                    // Unawaited (don't block the tick) but guarded: an
-                    // unhandled rejection from the push internals would
-                    // otherwise crash the single dyno. Matches the candidate
-                    // push path above.
-                  ).catch((err) => {
-                    console.warn(
-                      `[AUTOMATION] Urgent email push failed for ${config.userId}:`,
-                      err,
-                    );
-                    captureError(err, {
-                      tags: { scope: "automation.urgent-push", userId: config.userId },
-                    });
-                  });
-
-                  // Admin-only SMS escalation. Gated inside sendSms (admin +
-                  // phone + daily cap). Best-effort: never throws, never
-                  // blocks the scheduler. Body covers the first urgent email;
-                  // if many landed at once the user still gets the bell + push
-                  // for the rest via the existing notification record.
-                  const lead = newUrgent[0];
-                  const smsBody = `Urgent: ${lead.subject || "(no subject)"} — from ${senderName(lead.from)}`;
-                  sendSms(config.userId, smsBody).catch((err) => {
-                    console.warn(`[AUTOMATION] Urgent email SMS failed for ${config.userId}:`, err);
-                    captureError(err, {
-                      tags: { scope: "automation.urgent-sms", userId: config.userId },
-                    });
-                  });
-                }
-              }
-            } catch (err) {
-              const errName = err instanceof Error ? err.name : "";
-              // "Gmail not connected" is an expected state: the pre-filter
-              // catches it before we even try, but a token can be revoked
-              // mid-tick (race). Warn without Sentry to avoid noise.
-              if (err instanceof Error && err.message === "Gmail not connected") {
-                console.warn(
-                  `[AUTOMATION] Email sync skipped for ${config.userId}: Gmail not connected`,
-                );
-              } else if (errName === "DailyCostCapExceededError") {
-                // Expected back-pressure, not an outage — don't Sentry-spam it
-                // (mirrors the briefing handler above). For a FREE user this is
-                // their daily limit; nudge them toward Pro at most once a day.
-                console.log(`[AUTOMATION] Classify skipped for ${config.userId} — daily cost cap`);
-                // .catch() isolates the blast radius to this one user: the helper
-                // already self-catches, but if its own catch ever threw the await
-                // would abort the rest of this tick's users. Belt and suspenders.
-                await maybeNudgeFreeDailyLimit(config.userId, configUserPlan, configUserRole).catch(
-                  (nudgeErr) => {
-                    console.warn(
-                      `[AUTOMATION] free-limit nudge threw unexpectedly for ${config.userId}:`,
-                      nudgeErr,
-                    );
-                  },
-                );
-              } else {
-                // Token expired, rate-limited, or network flake — log +
-                // capture so "Eve stopped reading email" doesn't become an
-                // invisible outage. Returns early so the next tick still tries.
-                console.error(`[AUTOMATION] Email sync failed for ${config.userId}:`, err);
-                captureError(err, {
-                  tags: { scope: "automation.email-sync", userId: config.userId },
-                });
-              }
-            }
-          }
-        }
-
-        // --- Proactive Actions (rule-based, no LLM cost) ---
-        // Enabled either via global env flag (PROACTIVE_ACTIONS_ENABLED=true for all users)
-        // or per-user toggle (proactiveActions: true in automationConfig JSON field).
-        const perUserProactive =
-          (config as unknown as Record<string, unknown>).proactiveActions === true;
-        if (PROACTIVE_ACTIONS_ENABLED || perUserProactive) {
-          runProactiveActions(config.userId).catch((err) => {
-            console.error(`[PROACTIVE] Failed for ${config.userId}:`, err);
-            captureError(err, {
-              tags: { scope: "automation.proactive", userId: config.userId },
-            });
-          });
-        }
-
-        // --- Phone escalation v0 (opt-in delivery channel for PUSH, not a tier) ---
-        // Doubly gated: global PHONE_ESCALATION_ENABLED flag AND the per-user
-        // AutomationConfig.phoneEscalationEnabled opt-in. All hard rails
-        // (1-call-per-notification, daily cap, cooldown, quiet hours) live
-        // inside escalateUnackedPush/placeEscalationCall. Best-effort: never
-        // blocks or crashes the tick.
-        const phoneOptIn =
-          (config as unknown as Record<string, unknown>).phoneEscalationEnabled === true;
-        if (PHONE_ESCALATION_ENABLED && phoneOptIn) {
-          escalateUnackedPush(config.userId).catch((err) => {
-            console.warn(`[PHONE] Escalation sweep failed for ${config.userId}:`, err);
-            captureError(err, {
-              tags: { scope: "automation.phone-escalation", userId: config.userId },
-            });
+        // Bound each user's per-tick work by wall-clock time. One hung Gmail
+        // call (no request timeout in googleapis) would otherwise block every
+        // later user in this serial loop until an OS-level TCP timeout — a
+        // fleet-wide stall from a single bad account. On timeout/throw we log a
+        // signal (console + Sentry) and CONTINUE to the next user. The NORMAL
+        // fast path is unchanged: runUserCycle resolves well under the bound.
+        // runUserCycle already isolates each sub-step (briefing/calendar/email)
+        // in its own try/catch, so this wrapper only catches a top-level hang or
+        // an unexpected escape — never double-logs a benign per-step error.
+        try {
+          await withTimeout(
+            runUserCycle(config, ctx),
+            PER_USER_AUTOMATION_TIMEOUT_MS,
+            config.userId,
+          );
+        } catch (err) {
+          console.warn(
+            `[scheduler] user cycle skipped (timeout or error) for ${config.userId}:`,
+            err instanceof Error ? err.message : String(err),
+          );
+          captureError(err, {
+            tags: { scope: "scheduler.user-cycle" },
+            extra: { userId: config.userId },
           });
         }
       }
@@ -1177,6 +776,566 @@ async function runAutomations() {
   } finally {
     await releaseSchedulerLock();
     schedulerInFlight = false;
+  }
+}
+
+// The plan/role value cached per user for feature gating. Element type of the
+// `prisma.user.findMany({ select: { plan, role } })` result so `role` stays the
+// Prisma `UserRole` enum (planHasFeature's ADMIN bypass) rather than a widened
+// `string | null` — matching the inline map this cycle was extracted from.
+type PlanRole = Pick<Awaited<ReturnType<typeof prisma.user.findMany>>[number], "plan" | "role">;
+
+/**
+ * Per-batch locals a user cycle closes over. Bundled so `runUserCycle` can be
+ * extracted from the loop without changing behavior: `automationPlanMap` gates
+ * features by plan/role, `googleConnectedUserIds` pre-filters users who never
+ * OAuth-connected Google.
+ */
+interface UserCycleContext {
+  automationPlanMap: Map<string, PlanRole>;
+  googleConnectedUserIds: Set<string>;
+}
+
+/**
+ * Runs ONE user's per-tick automation work (briefing, calendar sync, email
+ * sync + classify + auto-reply, reconcile, urgent notify, proactive, phone
+ * escalation) — the exact body that previously lived inline in the
+ * `for (const config of configs)` loop, extracted verbatim so it can be bounded
+ * by {@link withTimeout}. Each sub-step keeps its own try/catch; a hang or an
+ * unexpected escape is isolated by the caller's timeout wrapper.
+ */
+async function runUserCycle(
+  config: Awaited<ReturnType<typeof prisma.automationConfig.findMany>>[number],
+  ctx: UserCycleContext,
+): Promise<void> {
+  const { automationPlanMap, googleConnectedUserIds } = ctx;
+  const configUserEntry = automationPlanMap.get(config.userId);
+  const configUserPlan = configUserEntry?.plan || "FREE";
+  const configUserRole = configUserEntry?.role;
+  const timeZone = normalizeTimeZone((config as unknown as { timezone?: string }).timezone);
+  const today = localDateKey(new Date(), timeZone);
+
+  // --- Daily Briefing ---
+  if (
+    config.dailyBriefing &&
+    briefingSentToday.get(config.userId) !== today &&
+    planHasFeature(configUserPlan, "daily_briefing", configUserRole)
+  ) {
+    if (isBriefingDue(config.briefingTime, timeZone)) {
+      // DB-based dedup: check if briefing was already sent today (survives restarts)
+      const alreadySent = await hasBriefingBeenSentToday(config.userId, timeZone);
+      // Skip ONLY the briefing send when already-sent or cost-capped,
+      // then fall through to the rest of this user's tick (calendar +
+      // email sync). These branches used to `continue`, skipping the whole
+      // tick for the user — one stale cycle after a restart cleared the
+      // in-memory map.
+      if (alreadySent) {
+        briefingSentToday.set(config.userId, today);
+      } else {
+        try {
+          console.log(`[AUTOMATION] Generating daily briefing for ${config.userId}`);
+          await createDailyBriefingDelivery(config.userId);
+          briefingSentToday.set(config.userId, today);
+          console.log(`[AUTOMATION] Briefing delivered to ${config.userId}`);
+        } catch (err) {
+          const errName = err instanceof Error ? err.name : "";
+          // Daily cost-cap hits are expected back-pressure, not bugs.
+          if (errName === "DailyCostCapExceededError") {
+            console.log(`[AUTOMATION] Briefing skipped for ${config.userId} — daily cost cap`);
+            briefingSentToday.set(config.userId, today);
+          } else {
+            console.error(`[AUTOMATION] Briefing failed for ${config.userId}:`, err);
+            captureError(err, {
+              tags: { scope: "automation.briefing", userId: config.userId },
+              extra: { briefingTime: config.briefingTime, timeZone },
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // --- Calendar Auto-Sync (every 15 minutes) ---
+  if (isCalendarSyncDue(config.userId) && googleConnectedUserIds.has(config.userId)) {
+    lastCalendarSyncAt.set(config.userId, Date.now());
+    try {
+      const auth = await getAuthedClient(config.userId);
+      if (auth) {
+        const { google } = await import("googleapis");
+        const calendar = google.calendar({ version: "v3", auth });
+        const now = new Date();
+        const later = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+        const userRow = (await prisma.user.findUnique({
+          where: { id: config.userId },
+        })) as { timezone?: string | null } | null;
+        const userTimezone = normalizeTimeZone(userRow?.timezone);
+
+        const response = await calendar.events.list({
+          calendarId: "primary",
+          timeMin: now.toISOString(),
+          timeMax: later.toISOString(),
+          singleEvents: true,
+          orderBy: "startTime",
+          maxResults: 100,
+          // See note in routes/calendar.ts /sync — pass timeZone so
+          // Google canonicalizes the response, and the defensive
+          // parseGoogleDateTime below handles any stray naive strings.
+          timeZone: userTimezone,
+        });
+
+        for (const item of response.data.items || []) {
+          const googleId = item.id || "";
+          if (!googleId) continue;
+          const startTime = item.start?.dateTime || item.start?.date || "";
+          const endTime = item.end?.dateTime || item.end?.date || "";
+          if (!startTime || !endTime) continue;
+
+          let meetingLink: string | null = null;
+          if (item.conferenceData?.entryPoints) {
+            const video = item.conferenceData.entryPoints.find((e) => e.entryPointType === "video");
+            if (video) meetingLink = video.uri || null;
+          }
+          if (!meetingLink && item.hangoutLink) meetingLink = item.hangoutLink;
+
+          const isTimed = Boolean(item.start?.dateTime);
+          const parsedStart = isTimed
+            ? parseGoogleDateTime(startTime, item.start?.timeZone ?? null, userTimezone)
+            : new Date(startTime);
+          const parsedEnd = isTimed
+            ? parseGoogleDateTime(endTime, item.end?.timeZone ?? null, userTimezone)
+            : new Date(endTime);
+          await prisma.calendarEvent.upsert({
+            where: { userId_googleId: { userId: config.userId, googleId } },
+            create: {
+              userId: config.userId,
+              title: item.summary || "Untitled",
+              description: item.description || null,
+              startTime: parsedStart,
+              endTime: parsedEnd,
+              location: item.location || null,
+              meetingLink,
+              allDay: !isTimed,
+              googleId,
+            },
+            update: {
+              title: item.summary || "Untitled",
+              description: item.description || null,
+              startTime: parsedStart,
+              endTime: parsedEnd,
+              location: item.location || null,
+              meetingLink,
+              allDay: !isTimed,
+            },
+          });
+        }
+      }
+    } catch (err) {
+      const gaxiosErr = err as {
+        response?: { status?: number; data?: { error?: { message?: string } } };
+        message?: string;
+      };
+      const status = gaxiosErr.response?.status;
+      console.error(
+        `[AUTOMATION] Calendar sync failed for ${config.userId} (HTTP ${status}):`,
+        gaxiosErr.response?.data?.error?.message || gaxiosErr.message || err,
+      );
+
+      // 401/403 = token invalid — notify user to reconnect. Atomic + winner-only
+      // (dedupeKey = "calendar-disconnect:<dayKey>") so concurrent ticks can't
+      // double-alert; at most once per user per local day.
+      if (status === 401 || status === 403) {
+        await ensureCalendarDisconnectNotification(config.userId, today);
+      }
+    }
+  }
+
+  // --- Email Sync + AI Classify (requires PRO+ for classify, TEAM+ for auto-reply) ---
+  // emailAutoClassify now defaults to true in schema — we still honor an
+  // explicit opt-out, but for the vast majority of users sync runs on
+  // its own interval without any config step.
+  if (
+    config.emailAutoClassify &&
+    planHasFeature(configUserPlan, "email_auto_classify", configUserRole) &&
+    googleConnectedUserIds.has(config.userId)
+  ) {
+    if (isEmailSyncDue(config.userId)) {
+      lastEmailSyncAt.set(config.userId, Date.now());
+      try {
+        // Sync from Gmail → DB
+        const syncResult = await syncEmails(config.userId, 20);
+
+        // AI summarize new emails
+        if (syncResult.newCount > 0) {
+          await summarizeUnsummarizedEmails(config.userId, syncResult.newCount);
+        }
+        await syncRecentCandidateIntakes(config.userId, Math.max(syncResult.newCount, 10));
+        await notifyCandidateEmails(config.userId);
+
+        // Multi-account (Pro): also sync each LINKED secondary inbox via
+        // its own OAuth client so the firewall classifies its mail too.
+        // Flag-gated (default off) so this path stays dark in production
+        // until verified against real accounts — it can never touch the
+        // primary sync above. Per-account isolation: one bad linked inbox
+        // (revoked token, quota) is logged and skipped, never aborting the
+        // others or the tick. The per-user daily cost cap covers all
+        // inboxes, so on a cap hit we stop the rest of the fan-out.
+        if (
+          MULTI_INBOX_SYNC_ENABLED &&
+          planHasFeature(configUserPlan, "multi_account", configUserRole)
+        ) {
+          // The lookup itself is wrapped so a DB blip degrades to "skip the
+          // fan-out this tick" — never escaping to the outer catch and
+          // silently skipping the primary account's backfill/auto-reply/
+          // reconcile below.
+          let linkedInboxes: Awaited<ReturnType<typeof getLinkedInboxClients>> = [];
+          try {
+            linkedInboxes = await getLinkedInboxClients(config.userId);
+          } catch (err) {
+            console.warn(
+              `[AUTOMATION] Linked-inbox lookup failed for ${config.userId} — skipping fan-out this tick:`,
+              err,
+            );
+            captureError(err, {
+              tags: { scope: "automation.linked-inbox-lookup", userId: config.userId },
+            });
+          }
+          for (const inbox of linkedInboxes) {
+            try {
+              const linkedResult = await syncEmails(config.userId, 20, undefined, {
+                id: inbox.id,
+                email: inbox.email,
+                client: inbox.client,
+              });
+              if (linkedResult.newCount > 0) {
+                await summarizeUnsummarizedEmails(config.userId, linkedResult.newCount);
+              }
+            } catch (err) {
+              const errName = err instanceof Error ? err.name : "";
+              if (errName === "DailyCostCapExceededError") {
+                console.log(
+                  `[AUTOMATION] Linked-inbox sync stopped for ${config.userId} — daily cost cap`,
+                );
+                break;
+              }
+              if (err instanceof Error && err.message === "Gmail not connected") {
+                console.warn(
+                  `[AUTOMATION] Linked inbox ${inbox.email} not connected (revoked?) for ${config.userId}`,
+                );
+                continue;
+              }
+              console.warn(
+                `[AUTOMATION] Linked-inbox sync failed for ${config.userId} / ${inbox.email}:`,
+                err,
+              );
+              captureError(err, {
+                tags: { scope: "automation.linked-inbox-sync", userId: config.userId },
+                extra: { linkedInboxAccountId: inbox.id },
+              });
+            }
+          }
+        }
+
+        // Backfill: re-judge recently-synced emails that never got an
+        // AttentionItem (the inline judge is fire-and-forget; a transient
+        // failure or a dyno killed mid-flight strands the email out of
+        // the firewall). Runs every sync cycle regardless of newCount so
+        // mail that arrived while the instance slept gets tiered on wake.
+        // Bounded per call; no-op once caught up.
+        const backfilled = await backfillEmailAttentionItems(config.userId);
+        if (backfilled > 0) {
+          console.log(
+            `[EMAIL-BACKFILL] re-judged ${backfilled} stranded email(s) for ${config.userId}`,
+          );
+        }
+
+        // LOW-priority mail is a quarantine signal, not a destructive
+        // action. Keep the local/Gmail records intact so the user can audit
+        // EVE's classification and approve any cleanup later.
+
+        // Auto-reply: check rules for newly synced emails (dedup by gmailId)
+        // Requires TEAM+ plan for auto-reply
+        if (
+          syncResult.newCount > 0 &&
+          planHasFeature(configUserPlan, "email_auto_reply", configUserRole)
+        ) {
+          // PRIMARY-account rows only. sendAutoReplyViaFloor below always
+          // sends from the primary Gmail client, so auto-replying to a
+          // linked-inbox email would come from the WRONG address (the
+          // sender emailed the linked account, not the primary). Until
+          // per-account send routing exists, auto-reply is primary-only;
+          // this also keeps `take: newCount` from mixing in linked rows
+          // once MULTI_INBOX_SYNC_ENABLED is on.
+          const newEmails = await prisma.emailMessage.findMany({
+            where: { userId: config.userId, linkedInboxAccountId: null },
+            orderBy: { syncedAt: "desc" },
+            take: syncResult.newCount,
+          });
+          for (const email of newEmails) {
+            try {
+              // Skip if we already sent an auto-reply notification for this email
+              const alreadyReplied = await prisma.notification.findFirst({
+                where: {
+                  userId: config.userId,
+                  type: "email",
+                  title: "Auto-reply sent",
+                  message: { contains: email.gmailId },
+                },
+              });
+              if (alreadyReplied) continue;
+
+              const matched = await checkAutoReplyRules(config.userId, email);
+              if (
+                matched &&
+                (matched.actionType === "AUTO_REPLY" || matched.actionType === "DRAFT_REPLY")
+              ) {
+                const replyBody = await generateSmartReply(
+                  matched.actionValue,
+                  {
+                    from: email.from,
+                    subject: email.subject,
+                    body: email.body || "",
+                  },
+                  config.userId,
+                );
+                if (matched.actionType === "AUTO_REPLY") {
+                  const emailMatch = email.from.match(/<([^>]+)>/) || [null, email.from];
+                  const toAddr = emailMatch[1] || email.from;
+                  // Route the autonomous send through the deterministic
+                  // floor (mint receipt → executeToolCall re-verifies the
+                  // payloadHash) instead of calling gmail.sendEmail
+                  // directly, so every send stays on the single gated,
+                  // audited path (W1).
+                  await sendAutoReplyViaFloor(
+                    config.userId,
+                    toAddr,
+                    `Re: ${email.subject}`,
+                    replyBody,
+                  );
+                  // Atomic + winner-only alert (dedupeKey = "auto-reply:<gmailId>"):
+                  // the findFirst pre-filter above is a cheap best-effort skip, but
+                  // the create is the real gate — a concurrent tick loses on P2002
+                  // and neither re-creates the alert nor re-pushes.
+                  await ensureAutoReplyNotification(
+                    config.userId,
+                    email.gmailId,
+                    toAddr,
+                    matched.ruleName,
+                  );
+                }
+              }
+            } catch (err) {
+              // Auto-reply touches an outbound send — a silent failure
+              // here means a configured rule fired nothing with no trace,
+              // and the next tick silently retries. console first:
+              // captureError is a no-op without a Sentry DSN.
+              console.warn(
+                `[AUTOMATION] auto-reply failed for ${email.gmailId} (user ${config.userId})`,
+                err,
+              );
+              captureError(err, {
+                tags: { scope: "automation.auto-reply" },
+                extra: { userId: config.userId, gmailId: email.gmailId },
+              });
+            }
+          }
+        }
+
+        // Reconcile DB with Gmail (remove deleted/archived emails).
+        // Runs at most once every 30 minutes per user, independent of
+        // wall-clock minute so a slipped tick doesn't skip the window.
+        if (isReconcileDue(config.userId)) {
+          lastReconcileAt.set(config.userId, Date.now());
+          try {
+            await reconcileEmails(config.userId);
+          } catch (err) {
+            console.error(`[AUTOMATION] Reconcile failed for ${config.userId}:`, err);
+            captureError(err, {
+              tags: { scope: "automation.reconcile", userId: config.userId },
+            });
+          }
+          // Reconcile linked secondary inboxes too (each against its own
+          // client). Gated + isolated from the primary reconcile so a
+          // linked failure never masks a primary success. Off unless the
+          // flag is on, matching the sync fan-out above.
+          if (MULTI_INBOX_SYNC_ENABLED) {
+            try {
+              await reconcileLinkedInboxes(config.userId);
+            } catch (err) {
+              console.error(
+                `[AUTOMATION] Linked-inbox reconcile failed for ${config.userId}:`,
+                err,
+              );
+              captureError(err, {
+                tags: { scope: "automation.reconcile.linked", userId: config.userId },
+              });
+            }
+          }
+        }
+
+        // Check for urgent unread emails — notify only for NEW urgent emails
+        // Only check truly new emails (synced in last hour) to avoid re-notifying old unread emails
+        const urgentEmails = await prisma.emailMessage.findMany({
+          where: {
+            userId: config.userId,
+            priority: "URGENT",
+            isRead: false,
+            syncedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+          },
+          orderBy: { receivedAt: "desc" },
+          select: { id: true, gmailId: true, subject: true, from: true, summary: true },
+        });
+
+        if (urgentEmails.length > 0) {
+          // Check which urgent emails we already notified about (by gmailId in message, last 7 days)
+          const recentUrgentNotifs = await prisma.notification.findMany({
+            where: {
+              userId: config.userId,
+              type: "email",
+              OR: [{ title: "Urgent email" }, { title: "긴급 이메일" }],
+              createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+            },
+            select: { message: true },
+          });
+          const notifiedGmailIds = parseNotifiedGmailIds(recentUrgentNotifs.map((n) => n.message));
+
+          // Only notify for urgent emails we haven't notified about yet
+          const newUrgent = urgentEmails.filter((e) => !notifiedGmailIds.has(e.gmailId));
+
+          if (newUrgent.length > 0) {
+            // User-visible body: who + what, no internal IDs.
+            // DB message keeps a trailing [id1,id2,…] marker for EVERY
+            // notified email so the dedup read above records all of them
+            // (not just the first) and they aren't re-notified next tick.
+            const userBody = formatUrgentEmailBody(newUrgent);
+            const dbMessage = buildUrgentDedupMessage(
+              userBody,
+              newUrgent.map((e) => e.gmailId),
+            );
+
+            // Atomic + winner-only (dedupeKey = "urgent:<leadGmailId>"): the
+            // read-based notifiedGmailIds filter above is the primary per-message
+            // dedup; this closes the residual concurrent-tick race on one batch so
+            // the bell + web-push + SMS fire at most once. A P2002 loser returns
+            // null and we skip ALL follow-on side-effects below.
+            const notification = await ensureUrgentEmailNotification(
+              config.userId,
+              newUrgent[0].gmailId,
+              dbMessage,
+              userBody,
+            );
+
+            // WINNER-ONLY: a concurrent tick lost the create (null) and must NOT
+            // re-fire the web-push / SMS side-effects for the same batch.
+            if (notification) {
+              // Best-effort AttentionItem lookup for the lead urgent email
+              // (source=EMAIL, sourceId=EmailMessage.id, set by poc-judge).
+              // Lets the Telegram channel attach tier-override buttons;
+              // null just means the message ships without them.
+              const attentionItemId = await findOpenEmailAttentionItemId(
+                config.userId,
+                newUrgent[0].id,
+              );
+
+              sendPushNotification(
+                config.userId,
+                {
+                  title: "Urgent mail",
+                  body: userBody,
+                  url: "/briefing",
+                  attentionItemId: attentionItemId ?? undefined,
+                },
+                "email_urgent",
+                // Unawaited (don't block the tick) but guarded: an
+                // unhandled rejection from the push internals would
+                // otherwise crash the single dyno. Matches the candidate
+                // push path above.
+              ).catch((err) => {
+                console.warn(`[AUTOMATION] Urgent email push failed for ${config.userId}:`, err);
+                captureError(err, {
+                  tags: { scope: "automation.urgent-push", userId: config.userId },
+                });
+              });
+
+              // Admin-only SMS escalation. Gated inside sendSms (admin +
+              // phone + daily cap). Best-effort: never throws, never
+              // blocks the scheduler. Body covers the first urgent email;
+              // if many landed at once the user still gets the bell + push
+              // for the rest via the existing notification record.
+              const lead = newUrgent[0];
+              const smsBody = `Urgent: ${lead.subject || "(no subject)"} — from ${senderName(lead.from)}`;
+              sendSms(config.userId, smsBody).catch((err) => {
+                console.warn(`[AUTOMATION] Urgent email SMS failed for ${config.userId}:`, err);
+                captureError(err, {
+                  tags: { scope: "automation.urgent-sms", userId: config.userId },
+                });
+              });
+            }
+          }
+        }
+      } catch (err) {
+        const errName = err instanceof Error ? err.name : "";
+        // "Gmail not connected" is an expected state: the pre-filter
+        // catches it before we even try, but a token can be revoked
+        // mid-tick (race). Warn without Sentry to avoid noise.
+        if (err instanceof Error && err.message === "Gmail not connected") {
+          console.warn(`[AUTOMATION] Email sync skipped for ${config.userId}: Gmail not connected`);
+        } else if (errName === "DailyCostCapExceededError") {
+          // Expected back-pressure, not an outage — don't Sentry-spam it
+          // (mirrors the briefing handler above). For a FREE user this is
+          // their daily limit; nudge them toward Pro at most once a day.
+          console.log(`[AUTOMATION] Classify skipped for ${config.userId} — daily cost cap`);
+          // .catch() isolates the blast radius to this one user: the helper
+          // already self-catches, but if its own catch ever threw the await
+          // would abort the rest of this tick's users. Belt and suspenders.
+          await maybeNudgeFreeDailyLimit(config.userId, configUserPlan, configUserRole).catch(
+            (nudgeErr) => {
+              console.warn(
+                `[AUTOMATION] free-limit nudge threw unexpectedly for ${config.userId}:`,
+                nudgeErr,
+              );
+            },
+          );
+        } else {
+          // Token expired, rate-limited, or network flake — log +
+          // capture so "Eve stopped reading email" doesn't become an
+          // invisible outage. Returns early so the next tick still tries.
+          console.error(`[AUTOMATION] Email sync failed for ${config.userId}:`, err);
+          captureError(err, {
+            tags: { scope: "automation.email-sync", userId: config.userId },
+          });
+        }
+      }
+    }
+  }
+
+  // --- Proactive Actions (rule-based, no LLM cost) ---
+  // Enabled either via global env flag (PROACTIVE_ACTIONS_ENABLED=true for all users)
+  // or per-user toggle (proactiveActions: true in automationConfig JSON field).
+  const perUserProactive = (config as unknown as Record<string, unknown>).proactiveActions === true;
+  if (PROACTIVE_ACTIONS_ENABLED || perUserProactive) {
+    runProactiveActions(config.userId).catch((err) => {
+      console.error(`[PROACTIVE] Failed for ${config.userId}:`, err);
+      captureError(err, {
+        tags: { scope: "automation.proactive", userId: config.userId },
+      });
+    });
+  }
+
+  // --- Phone escalation v0 (opt-in delivery channel for PUSH, not a tier) ---
+  // Doubly gated: global PHONE_ESCALATION_ENABLED flag AND the per-user
+  // AutomationConfig.phoneEscalationEnabled opt-in. All hard rails
+  // (1-call-per-notification, daily cap, cooldown, quiet hours) live
+  // inside escalateUnackedPush/placeEscalationCall. Best-effort: never
+  // blocks or crashes the tick.
+  const phoneOptIn = (config as unknown as Record<string, unknown>).phoneEscalationEnabled === true;
+  if (PHONE_ESCALATION_ENABLED && phoneOptIn) {
+    escalateUnackedPush(config.userId).catch((err) => {
+      console.warn(`[PHONE] Escalation sweep failed for ${config.userId}:`, err);
+      captureError(err, {
+        tags: { scope: "automation.phone-escalation", userId: config.userId },
+      });
+    });
   }
 }
 
