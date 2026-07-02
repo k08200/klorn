@@ -30,7 +30,12 @@ import {
   summarizeUnsummarizedEmails,
   syncEmails,
 } from "./email-sync.js";
-import { getAuthedClient, renewExpiringGmailWatches, sendEmail } from "./gmail.js";
+import {
+  createEmailDraft,
+  getAuthedClient,
+  renewExpiringGmailWatches,
+  sendEmail,
+} from "./gmail.js";
 import { parseGoogleDateTime } from "./google-calendar-time.js";
 import { formatUrgentEmailBody, senderName } from "./notification-format.js";
 import { escalateUnackedPush } from "./phone-escalation.js";
@@ -120,6 +125,11 @@ let lastWatchRenewalAt = 0;
 // UTC date ("YYYY-MM-DD") of the last OpenRouter catalog check. In-memory is
 // fine — a restart re-running the check the same day is harmless (read-only).
 let lastCatalogCheckDate = "";
+// Weekly sender-trait extraction runs on the Sunday tick, but runAutomations
+// fires every SCHEDULER_CHECK_INTERVAL_MS (~60s) — so the bare getDay()===0 gate
+// would relaunch the whole per-user LLM extraction ~1,440× across a Sunday.
+// This once-per-UTC-day latch collapses that to a single run.
+let lastSenderTraitRunDate = "";
 // UTC date of the last calibration snapshot run. Same trade-off: the daily
 // job upserts on (userId, dayKey), so a restart re-running it is idempotent.
 let lastCalibrationSnapshotDate = "";
@@ -634,7 +644,10 @@ async function runAutomations() {
                       where: {
                         userId: config.userId,
                         type: "email",
-                        title: "Auto-reply sent",
+                        // Dedup covers both AUTO_REPLY ("Auto-reply sent") and
+                        // DRAFT_REPLY ("Draft prepared") so neither re-fires the
+                        // paid LLM on the same email on every sync tick.
+                        title: { in: ["Auto-reply sent", "Draft prepared"] },
                         message: { contains: email.gmailId },
                       },
                     });
@@ -673,6 +686,49 @@ async function runAutomations() {
                           message: `Auto-replied to ${toAddr}`,
                           createdAt: notification.createdAt.toISOString(),
                         });
+                      } else if (matched.actionType === "DRAFT_REPLY") {
+                        // Persist a Gmail draft instead of sending. Previously
+                        // this path ran the paid generateSmartReply and then
+                        // discarded the result — a configured rule that produced
+                        // nothing and silently re-billed on every sync tick.
+                        const emailMatch = email.from.match(/<([^>]+)>/) || [null, email.from];
+                        const toAddr = emailMatch[1] || email.from;
+                        const draft = await createEmailDraft(
+                          config.userId,
+                          toAddr,
+                          `Re: ${email.subject}`,
+                          replyBody,
+                          email.threadId,
+                        );
+                        if (!("error" in draft)) {
+                          const notification = await prisma.notification.create({
+                            data: {
+                              userId: config.userId,
+                              type: "email",
+                              title: "Draft prepared",
+                              message: `Drafted a reply to ${toAddr} (rule: "${matched.ruleName}") [${email.gmailId}]`,
+                            },
+                          });
+                          pushNotification(config.userId, {
+                            id: notification.id,
+                            type: "email",
+                            title: "Draft prepared",
+                            message: `Drafted a reply to ${toAddr}`,
+                            createdAt: notification.createdAt.toISOString(),
+                          });
+                        } else {
+                          // createEmailDraft returns {error} (never throws) for
+                          // bad-recipient / no-reply / not-connected / expired-auth.
+                          // Leave a trace so a silently non-drafting rule is
+                          // diagnosable — the surrounding catch never sees this.
+                          console.warn(
+                            `[AUTOMATION] draft-reply createEmailDraft failed for ${email.gmailId} (user ${config.userId}): ${draft.error}`,
+                          );
+                          captureError(new Error(draft.error), {
+                            tags: { scope: "automation.draft-reply" },
+                            extra: { userId: config.userId, gmailId: email.gmailId },
+                          });
+                        }
                       }
                     }
                   } catch (err) {
@@ -884,13 +940,19 @@ async function runAutomations() {
     // --- Weekly: Sender Trait Extraction (Sunday only) ---
     // Off-hot-path per-user extraction of relationship/recurring_intent facts.
     // The judge does NOT read these in v0 — they are measured first (Phase 3/B2).
-    if (new Date().getDay() === 0) {
-      import("./sender-trait-extractor.js")
-        .then(({ extractSenderTraitsForAllUsers }) => extractSenderTraitsForAllUsers())
-        .catch((err) => {
-          console.error("[AUTOMATION] Sender trait extraction failed:", err);
-          captureError(err, { tags: { scope: "automation.sender-traits" } });
-        });
+    // Latched to once per UTC day so the ~60s tick cannot relaunch it ~1,440×.
+    const now = new Date();
+    if (now.getDay() === 0) {
+      const todayUtc = now.toISOString().slice(0, 10);
+      if (lastSenderTraitRunDate !== todayUtc) {
+        lastSenderTraitRunDate = todayUtc;
+        import("./sender-trait-extractor.js")
+          .then(({ extractSenderTraitsForAllUsers }) => extractSenderTraitsForAllUsers())
+          .catch((err) => {
+            console.error("[AUTOMATION] Sender trait extraction failed:", err);
+            captureError(err, { tags: { scope: "automation.sender-traits" } });
+          });
+      }
     }
 
     // --- Daily: OpenRouter catalog check ---

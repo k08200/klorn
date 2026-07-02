@@ -5,11 +5,14 @@ export interface IncumbentTrait {
   factValue: string;
   observedCount: number;
   status: "active" | "superseded" | "conflicted";
+  /** Signature of the sample that last produced this trait, if recorded. */
+  sourceSig?: string | null;
 }
 
 export type UpsertAction =
   | { type: "create"; sourceSig: string }
   | { type: "strengthen"; observedCount: number; sourceSig: string }
+  | { type: "unchanged" }
   | { type: "conflict"; keepValue: string; conflictValue: string };
 
 /**
@@ -17,6 +20,10 @@ export type UpsertAction =
  * flips the row to `conflicted`, keeps the incumbent value, and stashes the
  * challenger (the AutoBE detectDecisionConflicts pattern). Resolution (who
  * wins) is deferred to the fast-follow.
+ *
+ * Idempotency: when the incumbent value AND its recorded sourceSig both match,
+ * the evidence is unchanged since the last run — a no-op, so re-processing the
+ * same sample never re-increments observedCount.
  */
 export function resolveTraitUpsert(
   incumbent: IncumbentTrait | null,
@@ -25,6 +32,9 @@ export function resolveTraitUpsert(
 ): UpsertAction {
   if (incumbent === null) return { type: "create", sourceSig };
   if (incumbent.factValue === challenger.factValue) {
+    if (incumbent.sourceSig != null && incumbent.sourceSig === sourceSig) {
+      return { type: "unchanged" };
+    }
     return { type: "strengthen", observedCount: incumbent.observedCount + 1, sourceSig };
   }
   return { type: "conflict", keepValue: incumbent.factValue, conflictValue: challenger.factValue };
@@ -49,11 +59,22 @@ export async function upsertSenderTrait(props: {
 
   const action = resolveTraitUpsert(
     existing
-      ? { factValue: existing.factValue, observedCount: existing.observedCount, status: existing.status }
+      ? {
+          factValue: existing.factValue,
+          observedCount: existing.observedCount,
+          status: existing.status,
+          sourceSig: existing.sourceSig,
+        }
       : null,
     candidate,
     sourceSig,
   );
+
+  if (action.type === "unchanged") {
+    // Same value, same sample signature — nothing to write. This is the
+    // idempotency guard that stops repeat runs inflating observedCount.
+    return action.type;
+  }
 
   if (action.type === "create") {
     await prisma.senderTrait.create({
