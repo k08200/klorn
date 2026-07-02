@@ -28,6 +28,7 @@ import {
   reconcileEmails,
   summarizeUnsummarizedEmails,
   syncEmails,
+  syncLinkedInboxesForUser,
 } from "../email-sync.js";
 import { requireAppAccess } from "../entitlement-guard.js";
 import { toggleReadGmail } from "../gmail.js";
@@ -1000,6 +1001,15 @@ export async function emailRoutes(app: FastifyInstance) {
 
     try {
       const result = await syncEmails(uid, maxResults || 30, query);
+
+      // Also fan out to LINKED secondary inboxes (gated by MULTI_INBOX_SYNC_ENABLED
+      // + the multi_account feature). Without this, a manual sync / opening Mail
+      // only refreshed the primary account and linked inboxes stayed
+      // "Not yet synced" until a scheduler tick (which needs automation enabled).
+      await syncLinkedInboxesForUser(uid).catch((err) => {
+        console.warn(`[EMAIL-SYNC] on-demand linked fan-out failed for user ${uid}`, err);
+        captureError(err, { tags: { scope: "email.sync.linked" }, extra: { userId: uid } });
+      });
 
       // Reconcile (remove archived/deleted, refresh read-status) makes one Gmail
       // call per stored email, which used to block this response by tens of

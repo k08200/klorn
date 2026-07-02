@@ -27,6 +27,7 @@ vi.mock("../email-sync.js", () => ({
     source: "gmail",
   })),
   reconcileEmails: vi.fn(async () => ({ removed: 0, updated: 0 })),
+  syncLinkedInboxesForUser: vi.fn(async () => ({ newCount: 0 })),
   summarizeUnsummarizedEmails: vi.fn(async () => 0),
   generateSmartReply: vi.fn(async () => "Reply"),
   classifyPriorityDetailed: vi.fn((from: string, subject: string, labels: string[] = []) => ({
