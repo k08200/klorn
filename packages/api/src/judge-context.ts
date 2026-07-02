@@ -225,13 +225,47 @@ function buildPrior(items: SenderItemRow[]): SenderPrior | null {
   return { tier, count: recent.length, kind: "history" };
 }
 
-async function fetchSenderItems(
+/**
+ * Feature flag (default OFF): when enabled, fetchSenderItems reads the indexed
+ * `fromAddress` equality column instead of the unindexable `from` ILIKE
+ * substring scan. Read dynamically per call (mirrors poc-judge.isJudgeBodyEnabled)
+ * so the founder can flip it via env without a redeploy. MUST stay off until the
+ * column is deployed AND `pnpm backfill:from-address` has populated existing rows
+ * — an unbackfilled row has fromAddress=null and would silently drop from the
+ * equality path, so the flag is the correctness gate.
+ */
+function isSenderAddressIndexEnabled(): boolean {
+  const v = process.env.SENDER_ADDRESS_INDEX_ENABLED?.toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+/** Sender-history email ids for this sender, via the indexed fromAddress column. */
+async function fetchSenderEmailIdsIndexed(
   userId: string,
   senderAddress: string,
   excludeEmailId?: string,
-): Promise<SenderItemRow[]> {
-  if (!senderAddress) return [];
+): Promise<string[]> {
+  // Equality on the normalized column (senderAddress is already lowercased, as
+  // is the persisted fromAddress) — exact, so no JS re-check is needed.
+  const emails = (await db.emailMessage.findMany({
+    where: {
+      userId,
+      fromAddress: senderAddress,
+      ...(excludeEmailId ? { id: { not: excludeEmailId } } : {}),
+    },
+    orderBy: { receivedAt: "desc" },
+    take: SENDER_HISTORY_SAMPLE,
+    select: { id: true },
+  })) as Array<{ id: string }>;
+  return emails.map((e) => e.id);
+}
 
+/** Sender-history email ids via the legacy `from` ILIKE substring scan. */
+async function fetchSenderEmailIdsLegacy(
+  userId: string,
+  senderAddress: string,
+  excludeEmailId?: string,
+): Promise<string[]> {
   const emails = (await db.emailMessage.findMany({
     where: {
       userId,
@@ -246,9 +280,19 @@ async function fetchSenderItems(
   // "malice@corp.com". Re-check the parsed address (extractEmailAddress is
   // lowercased, as is senderAddress) so a different sender that merely shares
   // an address suffix can't contaminate this sender's prior / tier history.
-  const ownIds = emails
-    .filter((e) => extractEmailAddress(e.from) === senderAddress)
-    .map((e) => e.id);
+  return emails.filter((e) => extractEmailAddress(e.from) === senderAddress).map((e) => e.id);
+}
+
+async function fetchSenderItems(
+  userId: string,
+  senderAddress: string,
+  excludeEmailId?: string,
+): Promise<SenderItemRow[]> {
+  if (!senderAddress) return [];
+
+  const ownIds = isSenderAddressIndexEnabled()
+    ? await fetchSenderEmailIdsIndexed(userId, senderAddress, excludeEmailId)
+    : await fetchSenderEmailIdsLegacy(userId, senderAddress, excludeEmailId);
   if (ownIds.length === 0) return [];
 
   return (await db.attentionItem.findMany({

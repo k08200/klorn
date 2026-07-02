@@ -12,6 +12,7 @@ import { upsertAttentionForEmailJudgement } from "./attention-mirror.js";
 import { extractAndUpsertCommitmentsFromText } from "./commitment-ingestion.js";
 import { prisma } from "./db.js";
 import { scheduleAgentForActionableEmail } from "./email-action-trigger.js";
+import { extractEmailAddress } from "./email-address.js";
 import { analyzePendingEmailAttachments, upsertEmailAttachments } from "./email-attachments.js";
 import { classifyNeedsReplyFromSignals, classifyPriority } from "./email-priority.js";
 import { markAsRead } from "./gmail.js";
@@ -24,6 +25,15 @@ import { judgeEmail, type PocTier } from "./poc-judge.js";
 import type { ProviderCredentials } from "./providers/index.js";
 import { resolveUserEmail } from "./resolve-user-email.js";
 import { captureError } from "./sentry.js";
+
+/**
+ * Normalized sender address for the `fromAddress` column — the SINGLE source of
+ * truth shared with the judge sender-history query (extractEmailAddress is
+ * lowercased). Empty input maps to null so the column never stores "".
+ */
+function normalizedFromAddress(from: string): string | null {
+  return extractEmailAddress(from) || null;
+}
 
 export async function persistGmailEmail(
   userId: string,
@@ -41,6 +51,9 @@ export async function persistGmailEmail(
         isRead: email.isRead,
         isStarred: email.isStarred,
         labels: email.labels,
+        // Backfill the normalized address on re-sync so already-persisted mail
+        // gets an indexed fromAddress without a separate backfill pass.
+        fromAddress: normalizedFromAddress(email.from),
       },
     });
     if (email.attachments.length > 0) {
@@ -70,6 +83,7 @@ export async function persistGmailEmail(
       linkedInboxAccountId: options.linkedInboxAccountId ?? null,
       threadId: email.threadId,
       from: email.from,
+      fromAddress: normalizedFromAddress(email.from),
       to: email.to,
       cc: email.cc || null,
       subject: email.subject,

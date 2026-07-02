@@ -753,6 +753,12 @@ model EmailMessage {
   linkedInboxAccountId String?
   threadId             String? // Gmail thread ID for conversation grouping
   from                 String
+  // Normalized sender address (extractEmailAddress(from): lowercased, display
+  // name stripped) for an indexed equality lookup in the judge sender-history
+  // query. NULL until backfilled — the query only reads it under the
+  // SENDER_ADDRESS_INDEX_ENABLED flag (default off), so existing null rows are
+  // never consulted until `pnpm backfill:from-address` has populated them.
+  fromAddress          String?
   to                   String
   cc                   String?
   subject              String
@@ -783,6 +789,10 @@ model EmailMessage {
 
   @@unique([userId, gmailId])
   @@index([userId, receivedAt])
+  // Serves fetchSenderItems under SENDER_ADDRESS_INDEX_ENABLED: equality on
+  // (userId, fromAddress) + receivedAt-desc ordering, replacing the
+  // unindexable `from` ILIKE substring scan.
+  @@index([userId, fromAddress, receivedAt])
   @@index([userId, threadId])
   @@index([userId, priority])
   @@index([userId, category])
