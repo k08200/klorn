@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Apple Privacy Manifest. Backs the App Privacy "nutrition label" and
+	     declares Required-Reason API usage so uploads don't hit ITMS-91053.
+
+	     NOTE (founder / Xcode): this file must be added to the App target's
+	     membership (drag into the project navigator → check "App" target, or
+	     it will not be copied into the bundle). Also complete the matching App
+	     Privacy questionnaire in App Store Connect — the manifest and the
+	     questionnaire must agree.
+
+	     If a future upload still reports ITMS-91053 for another Required-Reason
+	     API (a Capacitor plugin using file-timestamp / system-boot-time / disk-
+	     space APIs), add that category to NSPrivacyAccessedAPITypes below with
+	     the reason code Apple lists in the warning. -->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<dict>
+			<!-- Email address — used to sign in and to run the mail firewall;
+			     linked to the user's identity; not used for tracking. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeEmailAddress</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<!-- Capacitor and its plugins read/write the app's own UserDefaults
+			     (e.g. stored preferences). Reason CA92.1 = access to defaults
+			     for the app itself. -->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

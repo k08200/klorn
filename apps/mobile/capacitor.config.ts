@@ -2,17 +2,18 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 // Two run modes (see apps/mobile/README.md):
 //
-//  • PROBE (default) — loads the bundled www/ Samsung-calendar probe. No
-//    backend, login, or Firebase needed. `npx cap run android` tests whether
-//    Samsung Calendar surfaces via the standard provider, immediately.
+//  • SHELL (default, product) — loads the hosted web app (app.klorn.ai), which
+//    carries all native-aware JS guarded by Capacitor.isNativePlatform(). This
+//    is what store builds MUST ship, so it is the default: a plain
+//    `npx cap sync` can never accidentally package the throwaway probe.
 //
-//  • SHELL (product) — loads the hosted web app (app.klorn.ai), which carries
-//    all native-aware JS guarded by Capacitor.isNativePlatform(). Enable once
-//    packages/web is deployed with the native code:
-//        KLORN_SHELL=1 npx cap sync && npx cap run android
+//  • PROBE (opt-in) — loads the bundled www/ Samsung-calendar diagnostic. No
+//    backend, login, or Firebase needed. Only for local device testing:
+//        KLORN_PROBE=1 npx cap sync && npx cap run android
 //
 // Env-driven so there is no config to hand-edit when switching.
-const shell = process.env.KLORN_SHELL === "1";
+const probe = process.env.KLORN_PROBE === "1";
+const shell = !probe;
 
 const config: CapacitorConfig = {
   appId: "ai.klorn.app",
