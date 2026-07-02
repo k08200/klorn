@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { authHeaders, getStoredAuthToken } from "../lib/api";
-import { probeDeviceCalendars } from "../lib/native/calendar-probe";
 import { isNativePlatform } from "../lib/native/capacitor";
 import { registerNativePush } from "../lib/native/native-push";
 import {
@@ -19,10 +18,11 @@ export default function PushRegister() {
 
     // Native shell: register for FCM/APNs (native push), not Web Push — iOS
     // WKWebView has no usable Web Push and on Android a web subscription would
-    // just be a redundant channel. Also run the Phase 0 Samsung calendar probe.
+    // just be a redundant channel. (The on-device calendar probe was removed:
+    // requesting calendar permission with no user-facing feature is an App
+    // Store 5.1.1 risk. It returns with the native calendar feature.)
     if (isNativePlatform()) {
       void registerNativePush();
-      void probeDeviceCalendars();
       return;
     }
 

@@ -47,13 +47,10 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	<!-- On-device calendar (EventKit) via @ebarooni/capacitor-calendar.
-	     Pre-iOS 17 uses NSCalendarsUsageDescription; iOS 17+ read access maps to
-	     full-access and requires NSCalendarsFullAccessUsageDescription. -->
-	<key>NSCalendarsUsageDescription</key>
-	<string>Klorn reads your calendar to surface meetings alongside the mail and signals worth acting on.</string>
-	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Klorn reads your calendar to surface meetings alongside the mail and signals worth acting on.</string>
+	<!-- Export compliance: the app uses only standard HTTPS/TLS, which is exempt.
+	     Declaring this here removes the manual prompt on every App Store upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<!-- Native push: allow the app to be woken by a remote notification. The
 	     "Push Notifications" + "Background Modes" capabilities must also be added
 	     in Xcode (they write the aps-environment entitlement, which needs signing). -->
