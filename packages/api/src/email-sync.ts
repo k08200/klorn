@@ -9,8 +9,10 @@
  */
 
 import { type gmail_v1, google } from "googleapis";
+import { MULTI_INBOX_SYNC_ENABLED } from "./config.js";
 import { prisma } from "./db.js";
 import { persistGmailEmail } from "./email-firewall.js";
+import { summarizeUnsummarizedEmails } from "./email-summarize.js";
 import {
   getAuthedClient,
   getAuthedInboxAccount,
@@ -30,6 +32,7 @@ import {
 import { resolveUserEmail } from "./resolve-user-email.js";
 import { Semaphore } from "./semaphore.js";
 import { captureError } from "./sentry.js";
+import { planHasFeature } from "./stripe.js";
 
 // Reconcile refreshes read/star status with one messages.get per stored email.
 // Bound concurrency so a few-hundred-email mailbox doesn't serialize hundreds of
@@ -303,6 +306,56 @@ async function resolveAttentionForDeletedEmails(userId: string, emailIds: string
       data: { status: "RESOLVED", resolvedAt: new Date() },
     });
   }
+}
+
+/**
+ * On-demand fan-out: sync every LINKED secondary inbox for a user, gated exactly
+ * like the scheduler's fan-out (MULTI_INBOX_SYNC_ENABLED + the multi_account
+ * feature). This exists so the manual "Force Sync" / open-Mail path syncs linked
+ * inboxes too — before, linked mail ONLY synced on a scheduler tick (which needs
+ * automation enabled), so a user who opened Mail saw their primary account
+ * refresh but the linked inbox stayed "Not yet synced". Per-account isolation +
+ * stamps lastSyncedAt so the UI reflects it. Returns total new count.
+ */
+export async function syncLinkedInboxesForUser(userId: string): Promise<{ newCount: number }> {
+  if (!MULTI_INBOX_SYNC_ENABLED) return { newCount: 0 };
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { plan: true, role: true },
+  });
+  if (!user || !planHasFeature(user.plan, "multi_account", user.role)) {
+    return { newCount: 0 };
+  }
+  const linked = await getLinkedInboxClients(userId);
+  let newCount = 0;
+  for (const inbox of linked) {
+    try {
+      const r = await syncEmails(userId, 20, undefined, {
+        id: inbox.id,
+        email: inbox.email,
+        client: inbox.client,
+      });
+      newCount += r.newCount;
+      if (r.newCount > 0) await summarizeUnsummarizedEmails(userId, r.newCount);
+      await prisma.linkedInboxAccount.updateMany({
+        where: { id: inbox.id, userId },
+        data: { lastSyncedAt: new Date() },
+      });
+    } catch (err) {
+      // Isolate per-account failures — one revoked/erroring linked inbox must not
+      // sink the others or the request. Never silent (captureError is a no-op
+      // without a Sentry DSN).
+      console.warn(
+        `[EMAIL-SYNC] on-demand linked sync failed for ${userId} (account ${inbox.id}):`,
+        err instanceof Error ? err.message : String(err),
+      );
+      captureError(err, {
+        tags: { scope: "email.sync.linked-ondemand", userId },
+        extra: { linkedInboxAccountId: inbox.id },
+      });
+    }
+  }
+  return { newCount };
 }
 
 /**
