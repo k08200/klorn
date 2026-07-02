@@ -84,7 +84,17 @@ export const PAYWALL_ENABLED = process.env.PAYWALL_ENABLED === "true";
 // inboxes (Pro), not just the primary Google account. Default OFF — the linked
 // sync path is built but stays dark until real-account testing flips it, so a
 // bug in it can never touch the primary mail path in production.
-export const MULTI_INBOX_SYNC_ENABLED = process.env.MULTI_INBOX_SYNC_ENABLED === "true";
+// Lenient parse: a strict `=== "true"` silently treats "True", "TRUE", "1", or a
+// value with a stray space as OFF — a classic dashboard-env footgun that makes
+// the whole feature look dead despite the operator "setting it to true". Accept
+// the common truthy spellings, and log BOTH the parsed boolean and the raw value
+// on startup so a misconfig is visible in the deploy logs instead of a silent no-op.
+export const MULTI_INBOX_SYNC_ENABLED = ["true", "1", "yes", "on"].includes(
+  (process.env.MULTI_INBOX_SYNC_ENABLED ?? "").trim().toLowerCase(),
+);
+console.log(
+  `[CONFIG] MULTI_INBOX_SYNC_ENABLED=${MULTI_INBOX_SYNC_ENABLED} (raw=${JSON.stringify(process.env.MULTI_INBOX_SYNC_ENABLED)})`,
+);
 // Fail-open is intentional pre-launch, but a lost/typo'd env var in production
 // silently makes every paid feature free. Emit a loud startup signal so the
 // operator notices a misconfigured deploy rather than discovering it via revenue.
