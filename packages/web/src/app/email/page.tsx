@@ -1,6 +1,6 @@
 "use client";
 
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -41,6 +41,9 @@ interface CandidateProfilePreview {
 interface EmailRow {
   id: string;
   gmailId: string;
+  // null = the primary Google inbox; a string = the linked secondary inbox this
+  // message arrived in. Used to render a per-message inbox badge.
+  linkedInboxAccountId?: string | null;
   from: string;
   senderEmail?: string | null;
   trust?: TrustScoreData | null;
@@ -59,6 +62,20 @@ interface EmailRow {
   attachmentUnsupportedCount?: number;
   attachmentCategories?: string[];
   candidateProfilePreview?: CandidateProfilePreview | null;
+}
+
+// A mailbox the user can scope the list to. `id === null` is the primary Google
+// inbox; a string id is a linked secondary inbox. Populated from GET
+// /api/email/inboxes — never hardcoded, so every user sees their own addresses.
+interface InboxOption {
+  id: string | null;
+  email: string | null;
+  kind: "primary" | "linked";
+  needsReconnect: boolean;
+}
+
+interface InboxesResponse {
+  inboxes: InboxOption[];
 }
 
 interface ThreadRow {
@@ -233,6 +250,9 @@ function EmailView() {
   // headline. A user with no reply-needed mail still has every other tab
   // available one click away.
   const [filter, setFilter] = useState<Filter>("reply-needed");
+  // Which mailbox the list is scoped to: "all" (default), "primary", or a linked
+  // inbox id. Only surfaced once the user actually has more than one inbox.
+  const [inbox, setInbox] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [syncing, setSyncing] = useState(false);
@@ -254,13 +274,42 @@ function EmailView() {
   // Match the API pageSize bump. Heavy-email users were clicking through
   // /api/email pages of 20 ten times to see one morning's intake.
   const PAGE_SIZE = 50;
+  // The user's mailboxes for the inbox selector + per-message badges. Cheap,
+  // rarely changes, and read-only — never blocks the list.
+  const inboxesQuery = useQuery({
+    queryKey: queryKeys.email.inboxes(),
+    queryFn: () => apiFetch<InboxesResponse>("/api/email/inboxes"),
+    staleTime: 5 * 60 * 1000,
+  });
+  const inboxes = inboxesQuery.data?.inboxes ?? [];
+  const linkedInboxes = inboxes.filter((i) => i.kind === "linked");
+  // Map linkedInboxAccountId → address so a row can show which inbox it hit.
+  const inboxLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const i of inboxes) {
+      if (i.id && i.email) map.set(i.id, i.email);
+    }
+    return map;
+  }, [inboxes]);
+  const primaryLabel = inboxes.find((i) => i.kind === "primary")?.email ?? null;
+  // Only show inbox badges/selector once there is more than one mailbox — a
+  // single-inbox user gets no extra chrome.
+  const showInboxBadges = linkedInboxes.length > 0;
+  const resolveInboxLabel = (row: EmailRow): string | null => {
+    if (!showInboxBadges) return null;
+    if (row.linkedInboxAccountId)
+      return inboxLabelById.get(row.linkedInboxAccountId) ?? "Linked inbox";
+    return primaryLabel;
+  };
+
   const listQuery = useInfiniteQuery({
-    queryKey: queryKeys.email.list({ filter, search: appliedSearch }),
+    queryKey: queryKeys.email.list({ filter, search: appliedSearch, inbox }),
     initialPageParam: 1,
     queryFn: async ({ pageParam }) => {
       const q = FILTERS.find((x) => x.key === filter)?.query || "";
       const params = new URLSearchParams(q);
       if (appliedSearch.trim()) params.set("search", appliedSearch.trim());
+      if (inbox !== "all") params.set("inbox", inbox);
       const pageNum = typeof pageParam === "number" ? pageParam : 1;
       params.set("page", String(pageNum));
       try {
@@ -314,15 +363,14 @@ function EmailView() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.email.all });
   };
 
-  // Reset selection whenever the filter / applied search changes (the keyed
-  // query already refetches automatically). The deps MUST list the real
-  // filter + applied-search state that drives the query (appliedSearch, not the
-  // raw input): with an empty dep array this only ran on mount, so a stale
-  // selection could survive a filter change and a bulk action would then
-  // archive/delete rows no longer visible in the list (data-loss adjacent).
+  // Reset selection whenever the filter / applied search / inbox changes (the
+  // keyed query already refetches automatically). The deps MUST list every
+  // dimension that drives the visible row set — filter, appliedSearch, AND inbox
+  // — otherwise a stale selection could survive the change and a bulk action
+  // would archive/delete rows no longer visible in the list (data-loss adjacent).
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [filter, appliedSearch]);
+  }, [filter, appliedSearch, inbox]);
 
   // Real-time auto-sync: when new mail lands, gmail-push emits
   // conversations-updated (NotificationBell bridges the WS message to this
@@ -427,10 +475,12 @@ function EmailView() {
         method: "POST",
         body: JSON.stringify({ ids, action, priority: options.priority }),
       });
-      // Update each cached page optimistically for the current filter,
-      // then invalidate so a background refetch pulls truth.
+      // Update each cached page optimistically for the current view, then
+      // invalidate so a background refetch pulls truth. The key MUST match the
+      // live list query exactly (filter + search + inbox) or setQueryData writes
+      // to a bucket nothing renders and the optimistic update is silently lost.
       queryClient.setQueryData<typeof listQuery.data>(
-        queryKeys.email.list({ filter, search: appliedSearch }),
+        queryKeys.email.list({ filter, search: appliedSearch, inbox }),
         (prev) => {
           if (!prev) return prev;
           return {
@@ -668,6 +718,7 @@ function EmailView() {
           )}
         </form>
 
+        <InboxSelector inboxes={inboxes} current={inbox} onChange={setInbox} />
         <FilterTabs current={filter} onChange={setFilter} />
 
         {loading && (
@@ -708,7 +759,12 @@ function EmailView() {
         {!loading && filter !== "threads" && emails.length > 0 && (
           <ul className="mt-3 space-y-2">
             {emails.map((e) => (
-              <MobileEmailRow key={e.id} email={e} queue={filter} />
+              <MobileEmailRow
+                key={e.id}
+                email={e}
+                queue={filter}
+                inboxLabel={resolveInboxLabel(e)}
+              />
             ))}
           </ul>
         )}
@@ -827,6 +883,7 @@ function EmailView() {
           )}
         </form>
 
+        <InboxSelector inboxes={inboxes} current={inbox} onChange={setInbox} />
         <FilterTabs current={filter} onChange={setFilter} />
 
         {/* Work queues: on phones these stack into 4 tall cards that bury the mail
@@ -949,6 +1006,7 @@ function EmailView() {
                 queue={filter}
                 reminderBusyKey={rowReminderBusy}
                 selected={selectedIds.has(e.id)}
+                inboxLabel={resolveInboxLabel(e)}
                 onCreateReminder={createRowReminder}
                 onToggleSelected={toggleSelected}
               />
@@ -1197,6 +1255,63 @@ function SignalStat({ label, value }: { label: string; value: number }) {
   );
 }
 
+// Per-inbox scope selector — only rendered when the user actually has more than
+// one mailbox. Values: "all", "primary" (the primary Google inbox), or a linked
+// inbox id. Addresses come straight from the API, never hardcoded.
+function InboxSelector({
+  inboxes,
+  current,
+  onChange,
+}: {
+  inboxes: InboxOption[];
+  current: string;
+  onChange: (value: string) => void;
+}) {
+  if (inboxes.length < 2) return null;
+  const options = [
+    { value: "all", label: "All inboxes", needsReconnect: false },
+    ...inboxes.map((i) => ({
+      value: i.id ?? "primary",
+      label: i.email ?? (i.kind === "primary" ? "Primary" : "Linked inbox"),
+      needsReconnect: i.needsReconnect,
+    })),
+  ];
+  return (
+    <div
+      role="group"
+      aria-label="Filter by inbox"
+      className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {options.map((o) => {
+        const active = o.value === current;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(o.value)}
+            className={`inline-flex min-h-[32px] shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+              active
+                ? "bg-accent/90 text-stone-950"
+                : "border border-white/10 bg-stone-900/40 text-stone-400 hover:bg-white/6 hover:text-stone-200"
+            }`}
+          >
+            <span className="max-w-[168px] truncate">{o.label}</span>
+            {o.needsReconnect && (
+              <span
+                role="img"
+                aria-label="Reconnect needed"
+                title="Reconnect needed"
+                className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400"
+              />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // On mobile only the essential mail filters show; the rest (attachments,
 // candidates, threads, automated) stay desktop-only to keep the chip row short.
 const MOBILE_FILTERS = new Set<Filter>(["all", "reply-needed", "urgent", "unread"]);
@@ -1298,6 +1413,7 @@ function EmailRowItem({
   reminderBusyKey,
   queue,
   selected,
+  inboxLabel,
   onCreateReminder,
   onToggleSelected,
 }: {
@@ -1305,6 +1421,7 @@ function EmailRowItem({
   reminderBusyKey: string | null;
   queue: Filter;
   selected: boolean;
+  inboxLabel?: string | null;
   onCreateReminder: (email: EmailRow, option: EmailReminderOption) => void;
   onToggleSelected: (id: string) => void;
 }) {
@@ -1336,6 +1453,15 @@ function EmailRowItem({
               >
                 <TrustDot trust={email.trust} />
                 <span className="truncate">{senderName(email.from)}</span>
+                {inboxLabel && (
+                  <span className="inline-flex max-w-[45%] shrink-0 items-center gap-1 truncate rounded-full bg-stone-800/70 px-2 py-0.5 text-[10px] font-medium text-stone-400">
+                    <span
+                      aria-hidden="true"
+                      className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/70"
+                    />
+                    <span className="truncate">{inboxLabel}</span>
+                  </span>
+                )}
               </div>
               <p className="mt-1 truncate text-[13px] text-stone-400">
                 {email.subject || "No subject"}
@@ -1613,7 +1739,15 @@ function senderName(raw: string): string {
 // A clean phone list row (not the desktop card with checkbox + reminder band).
 // Bulk-select, threads, and per-row reminders stay desktop-only.
 
-function MobileEmailRow({ email, queue }: { email: EmailRow; queue: Filter }) {
+function MobileEmailRow({
+  email,
+  queue,
+  inboxLabel,
+}: {
+  email: EmailRow;
+  queue: Filter;
+  inboxLabel?: string | null;
+}) {
   const unread = !email.isRead;
   const params = new URLSearchParams({ markRead: "false", queue });
   const preview = email.summary || email.snippet;
@@ -1648,9 +1782,22 @@ function MobileEmailRow({ email, queue }: { email: EmailRow; queue: Filter }) {
               {preview}
             </span>
           )}
-          {email.priority === "URGENT" && (
-            <span className="mt-1.5 inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-300">
-              Urgent
+          {(email.priority === "URGENT" || inboxLabel) && (
+            <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {email.priority === "URGENT" && (
+                <span className="inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-300">
+                  Urgent
+                </span>
+              )}
+              {inboxLabel && (
+                <span className="inline-flex max-w-[60%] items-center gap-1 truncate rounded-full bg-stone-800/70 px-2 py-0.5 text-[10px] font-medium text-stone-400">
+                  <span
+                    aria-hidden="true"
+                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/70"
+                  />
+                  <span className="truncate">{inboxLabel}</span>
+                </span>
+              )}
             </span>
           )}
         </span>
