@@ -17,16 +17,24 @@ import type { Tier } from "../tiers.js";
 
 export async function notificationRoutes(app: FastifyInstance) {
   // POST /api/notifications/push/receipts/:deliveryId — public, high-entropy
-  // receipt from the service worker. It returns no user data.
-  app.post("/push/receipts/:deliveryId", async (request, reply) => {
-    const { deliveryId } = request.params as { deliveryId: string };
-    const { event } = (request.body || {}) as { event?: "received" | "clicked" };
-    if (event !== "received" && event !== "clicked") {
-      return reply.code(400).send({ error: "Invalid receipt event" });
-    }
-    await recordPushReceipt(deliveryId, event);
-    return reply.code(204).send();
-  });
+  // receipt from the service worker (which has no session cookie). The 128-bit
+  // deliveryId IS the capability: it is only ever delivered inside the recipient's
+  // own push payload, and the write is a one-way, idempotent flag flip (received/
+  // clicked) that returns no user data. Rate-limited like the sibling
+  // tier-override endpoint so a leaked id can't be used to hammer receipt writes.
+  app.post(
+    "/push/receipts/:deliveryId",
+    { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { deliveryId } = request.params as { deliveryId: string };
+      const { event } = (request.body || {}) as { event?: "received" | "clicked" };
+      if (event !== "received" && event !== "clicked") {
+        return reply.code(400).send({ error: "Invalid receipt event" });
+      }
+      await recordPushReceipt(deliveryId, event);
+      return reply.code(204).send();
+    },
+  );
 
   // POST /api/notifications/push/tier-override — public, capability-authenticated
   // one-tap retier from a push notification action button ("Later" → QUEUE,

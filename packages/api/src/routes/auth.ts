@@ -747,6 +747,18 @@ export function authRoutes(app: FastifyInstance) {
         if (profile.verified_email !== true) {
           return reply.redirect(`${webUrl}/calendar?linked=unverified`);
         }
+        // Re-verify entitlement at callback time. The initiate endpoint gates on
+        // requireEntitled, but the user could downgrade during the 10-min OAuth
+        // window — without this the lapsed user still links a Pro-only secondary
+        // calendar (TOCTOU). Inert while PAYWALL is off (entitled always true),
+        // load-bearing the moment it flips.
+        const calLinker = await prisma.user.findUnique({
+          where: { id: statePayload.userId },
+          select: { plan: true, role: true },
+        });
+        if (!calLinker || !isEntitled(calLinker.plan, calLinker.role)) {
+          return reply.redirect(`${webUrl}/calendar?linked=failed`);
+        }
         const linkedEmail = normalizeEmail(profile.email);
         const expiresAt = tokens.expiry_date ? new Date(tokens.expiry_date) : null;
         await prisma.linkedCalendarAccount.upsert({
@@ -783,6 +795,16 @@ export function authRoutes(app: FastifyInstance) {
         const profile = await getGoogleUserInfo(tokens.access_token);
         if (profile.verified_email !== true) {
           return reply.redirect(`${webUrl}/settings?inbox=unverified`);
+        }
+        // Re-verify entitlement at callback time (TOCTOU): a Pro user who
+        // downgraded during the 10-min OAuth window must not complete a Pro-only
+        // inbox link. Inert while PAYWALL is off; load-bearing once it flips.
+        const inboxLinker = await prisma.user.findUnique({
+          where: { id: statePayload.userId },
+          select: { plan: true, role: true },
+        });
+        if (!inboxLinker || !isEntitled(inboxLinker.plan, inboxLinker.role)) {
+          return reply.redirect(`${webUrl}/settings?inbox=failed`);
         }
         const linkedEmail = normalizeEmail(profile.email);
         const expiresAt = tokens.expiry_date ? new Date(tokens.expiry_date) : null;
