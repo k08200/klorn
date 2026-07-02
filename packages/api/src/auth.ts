@@ -15,7 +15,7 @@ if (!JWT_SECRET) {
 const EFFECTIVE_SECRET = JWT_SECRET || "klorn-dev-secret-do-not-use-in-production";
 const TOKEN_EXPIRY = "7d";
 
-function isAdminEmail(email: string | null | undefined): boolean {
+export function isAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false;
   const adminEmails = (process.env.ADMIN_EMAILS || "")
     .split(",")

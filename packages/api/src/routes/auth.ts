@@ -4,6 +4,7 @@ import {
   comparePassword,
   getUserId,
   hashPassword,
+  isAdminEmail,
   registerDevice,
   removeDeviceSession,
   requireAuth,
@@ -382,6 +383,24 @@ export function authRoutes(app: FastifyInstance) {
       const payload = verifyToken(auth.slice(7));
       const user = await prisma.user.findUnique({ where: { id: payload.userId } });
       if (!user) return reply.code(404).send({ error: "User not found" });
+
+      // Keep an ADMIN_EMAILS operator's DB role in sync. Admin-ness was split:
+      // ADMIN_EMAILS granted admin ROUTES, but feature gates (planHasFeature,
+      // isEntitled) read User.role — which stayed "USER", so an env-admin was
+      // silently gated as a free user (e.g. multi-inbox sync skipped). Promote
+      // once on session bootstrap so User.role is the single source of truth.
+      if (user.role !== "ADMIN" && isAdminEmail(user.email)) {
+        await prisma.user
+          .update({ where: { id: user.id }, data: { role: "ADMIN" } })
+          .catch((err) => {
+            console.error(
+              `[AUTH] Failed to promote ADMIN_EMAILS user ${user.id} to role ADMIN:`,
+              err,
+            );
+            captureError(err, { tags: { scope: "auth.admin-promote", userId: user.id } });
+          });
+        user.role = "ADMIN";
+      }
 
       const googleStatus = await getGoogleConnectionStatus(user.id);
 
