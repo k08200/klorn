@@ -1,12 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Gmail client surface: list returns ids, get returns per-message detail.
+// Gmail client surface: list returns ids, get returns per-message detail,
+// history.list returns incremental changes, getProfile returns the watermark.
 const listMock = vi.fn();
 const getMock = vi.fn();
+const historyListMock = vi.fn();
+const getProfileMock = vi.fn();
 
 vi.mock("googleapis", () => ({
   google: {
-    gmail: vi.fn(() => ({ users: { messages: { list: listMock, get: getMock } } })),
+    gmail: vi.fn(() => ({
+      users: {
+        messages: { list: listMock, get: getMock },
+        history: { list: historyListMock },
+        getProfile: getProfileMock,
+      },
+    })),
   },
 }));
 
@@ -54,6 +63,28 @@ function detailFor(id: string) {
 function httpError(status: number) {
   return { response: { status } };
 }
+
+// A history.list page: `startHistoryId` echoes the caller, `historyId` is the
+// account's current watermark, and each history record adds one message id.
+function historyPage(
+  addedIds: string[],
+  historyId: string,
+  nextPageToken?: string,
+): { data: gmailHistoryData } {
+  return {
+    data: {
+      historyId,
+      nextPageToken,
+      history: addedIds.map((id) => ({ messagesAdded: [{ message: { id } }] })),
+    },
+  };
+}
+
+type gmailHistoryData = {
+  historyId?: string;
+  nextPageToken?: string;
+  history?: Array<{ messagesAdded?: Array<{ message?: { id?: string } }> }>;
+};
 
 describe("fetchGmailEmails — parallel fetch with per-message isolation", () => {
   beforeEach(() => {
@@ -124,6 +155,117 @@ describe("fetchGmailEmails — parallel fetch with per-message isolation", () =>
     // Auth failure must surface as a reconnect signal, not a partial result.
     expect(result).toBeNull();
     expect(markGoogleTokenForReconnect).toHaveBeenCalledWith("user-1");
+  });
+});
+
+describe("fetchGmailHistory — incremental gap-fill via the History API", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  it("paginates history.list and returns parsed details for every added id", async () => {
+    // Two pages of messagesAdded; the fetch must follow nextPageToken and pull a
+    // full detail for each unique id — exactly the messages a top-30 snapshot
+    // would have dropped when >30 arrived between syncs.
+    historyListMock
+      .mockResolvedValueOnce(historyPage(["h1", "h2"], "1010", "PAGE2"))
+      .mockResolvedValueOnce(historyPage(["h3"], "1020"));
+    getMock.mockImplementation(async ({ id }: { id: string }) => detailFor(id));
+
+    const { fetchGmailHistory } = await import("../gmail-fetch.js");
+    const result = await fetchGmailHistory("user-1", "1000");
+
+    expect(historyListMock).toHaveBeenCalledTimes(2);
+    expect(historyListMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        userId: "me",
+        startHistoryId: "1000",
+        historyTypes: ["messageAdded"],
+        labelId: "INBOX",
+      }),
+    );
+    expect(historyListMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ pageToken: "PAGE2" }),
+    );
+    expect(result?.expired).toBe(false);
+    expect(result?.newHistoryId).toBe("1020");
+    expect(result?.emails.map((e) => e.gmailId).sort()).toEqual(["h1", "h2", "h3"]);
+  });
+
+  it("dedupes a message id repeated across history records", async () => {
+    historyListMock.mockResolvedValueOnce(historyPage(["dup", "dup", "other"], "2000"));
+    getMock.mockImplementation(async ({ id }: { id: string }) => detailFor(id));
+
+    const { fetchGmailHistory } = await import("../gmail-fetch.js");
+    const result = await fetchGmailHistory("user-1", "1999");
+
+    // Each unique id is fetched exactly once.
+    expect(getMock).toHaveBeenCalledTimes(2);
+    expect(result?.emails.map((e) => e.gmailId).sort()).toEqual(["dup", "other"]);
+  });
+
+  it("returns { expired, emails: [] } when startHistoryId aged out (404)", async () => {
+    historyListMock.mockRejectedValue(httpError(404));
+
+    const { fetchGmailHistory } = await import("../gmail-fetch.js");
+    const result = await fetchGmailHistory("user-1", "old-id");
+
+    expect(result).toEqual({ emails: [], newHistoryId: null, expired: true });
+    // An aged-out watermark is expected (Gmail's ~7-day retention) — never an error.
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("returns null and flags reconnect on an auth error (primary account)", async () => {
+    historyListMock.mockRejectedValue(httpError(401));
+
+    const { fetchGmailHistory } = await import("../gmail-fetch.js");
+    const result = await fetchGmailHistory("user-1", "1000");
+
+    expect(result).toBeNull();
+    expect(markGoogleTokenForReconnect).toHaveBeenCalledWith("user-1");
+  });
+
+  it("does NOT touch the primary token on an auth error when a linked authClient is passed", async () => {
+    historyListMock.mockRejectedValue(httpError(401));
+
+    const { fetchGmailHistory } = await import("../gmail-fetch.js");
+    const result = await fetchGmailHistory("user-1", "1000", {} as never);
+
+    expect(result).toBeNull();
+    expect(markGoogleTokenForReconnect).not.toHaveBeenCalled();
+  });
+});
+
+describe("fetchCurrentHistoryId — baseline the watermark via getProfile", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  it("returns the profile historyId as a string", async () => {
+    getProfileMock.mockResolvedValue({ data: { historyId: "5000" } });
+
+    const { fetchCurrentHistoryId } = await import("../gmail-fetch.js");
+    const id = await fetchCurrentHistoryId("user-1");
+
+    expect(id).toBe("5000");
+  });
+
+  it("returns null when the profile has no historyId", async () => {
+    getProfileMock.mockResolvedValue({ data: {} });
+
+    const { fetchCurrentHistoryId } = await import("../gmail-fetch.js");
+    expect(await fetchCurrentHistoryId("user-1")).toBeNull();
+  });
+
+  it("returns null on an auth error", async () => {
+    getProfileMock.mockRejectedValue(httpError(401));
+
+    const { fetchCurrentHistoryId } = await import("../gmail-fetch.js");
+    expect(await fetchCurrentHistoryId("user-1")).toBeNull();
   });
 });
 

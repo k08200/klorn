@@ -8,7 +8,7 @@
  */
 
 import { prisma } from "./db.js";
-import { stampDecisionOutcome } from "./decision-label.js";
+import type { AttentionSourceName } from "./decision-label.js";
 import { manualOverrideReason, type Tier } from "./tiers.js";
 
 export type AttentionOverrideResult = { ok: true; tier: Tier } | { ok: false; reason: "not_found" };
@@ -33,29 +33,35 @@ export async function overrideAttentionTier(
 
   if (!existing) return { ok: false, reason: "not_found" };
 
-  await (
-    prisma.attentionItem as unknown as {
-      update: (args: unknown) => Promise<unknown>;
-    }
-  ).update({
-    where: { id: itemId },
-    data: {
-      tier,
-      // Built via the tiers.ts helper so the ground-truth marker that
-      // judge-context.ts mines (MANUAL_OVERRIDE_PREFIX) can never drift.
-      tierReason: manualOverrideReason(tier),
-    },
-  });
+  // Atomic: the visible tier write and the ground-truth ledger stamp land in ONE
+  // transaction. Previously they were two separate awaits — a crash or DB blip
+  // between them left AttentionItem.tier corrected but DecisionLabel.outcome
+  // null, silently dropping the override from every recall/over-suppression/
+  // proposal metric. That undercount grows with volume and skews all downstream
+  // numbers optimistically. Now either both land or neither does; a non-EMAIL
+  // source simply matches 0 ledger rows (not an error) and commits cleanly. A
+  // stamp failure now rolls back the tier write and surfaces (caller retries)
+  // rather than being swallowed into a silent ledger loss.
+  await prisma.$transaction(async (tx) => {
+    await (tx.attentionItem as unknown as { update: (args: unknown) => Promise<unknown> }).update({
+      where: { id: itemId },
+      // manualOverrideReason keeps the MANUAL_OVERRIDE_PREFIX marker that
+      // judge-context.ts mines from ever drifting.
+      data: { tier, tierReason: manualOverrideReason(tier) },
+    });
 
-  // Stamp the decision ledger with the user's correction before the in-place
-  // tier overwrite above erases the shown tier from AttentionItem. Best-effort;
-  // only EMAIL-source decisions have a ledger row today (no-op otherwise).
-  await stampDecisionOutcome(
-    userId,
-    existing.source as "EMAIL",
-    existing.sourceId,
-    `OVERRIDE:${tier}`,
-  );
+    await tx.decisionLabel.updateMany({
+      // userId scopes the stamp to the acting user's own row; outcome:null makes
+      // the first action win (only an unstamped row is touched).
+      where: {
+        userId,
+        source: existing.source as AttentionSourceName,
+        sourceId: existing.sourceId,
+        outcome: null,
+      },
+      data: { outcome: `OVERRIDE:${tier}`, outcomeAt: new Date() },
+    });
+  });
 
   return { ok: true, tier };
 }

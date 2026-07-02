@@ -226,6 +226,13 @@ export interface DecisionMetricsReport {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_WINDOW_DAYS = 90;
 const MAX_WINDOW_DAYS = 365;
+// Hard cap on rows pulled into memory per metrics read. The trailing window
+// bounds the DATE range but NOT the row count — at high fleet override volume a
+// 90-day window can be 100k+ labels, which this path (HTTP-reachable AND run
+// unattended daily, then duplicated per-user by summarizePerUser) would
+// otherwise materialize whole. Cap to the most recent N; a metrics window is a
+// diagnostic, not an exact audit, so "recent N" is the right bound.
+const FLEET_METRICS_ROW_CAP = 50_000;
 
 type LedgerRow = DecisionRow & { userId: string };
 
@@ -344,9 +351,10 @@ export async function getDecisionDailySummary(
 
 /**
  * Read one source's ledger (default EMAIL) and compute metrics, optionally for
- * one user. Read-only; safe to call from an admin route. Bounded to a trailing
- * window (default 90d, capped 365d) so the query stays index-served and can't
- * scan an unbounded table as the ledger grows.
+ * one user. Read-only; safe to call from an admin route. Bounded BOTH by a
+ * trailing window (default 90d, capped 365d) AND a hard row cap
+ * (FLEET_METRICS_ROW_CAP): the window alone bounds the date range but not the
+ * row count, so the cap keeps memory bounded (most-recent-N) as the ledger grows.
  */
 export async function getDecisionMetrics(
   opts: { userId?: string; sinceDays?: number; source?: AttentionSourceName } = {},
@@ -363,7 +371,19 @@ export async function getDecisionMetrics(
       ...(opts.userId ? { userId: opts.userId } : {}),
     },
     select: { userId: true, shownTier: true, outcome: true, decidedBy: true },
+    // Most-recent-first + a hard row cap so memory is bounded by the cap, not by
+    // ledger volume. Served by @@index([source, judgedAt]) (userId-less) and
+    // @@index([userId, shownTier, judgedAt]) (per-user).
+    orderBy: { judgedAt: "desc" },
+    take: FLEET_METRICS_ROW_CAP,
   })) as LedgerRow[];
+
+  if (rows.length === FLEET_METRICS_ROW_CAP) {
+    console.warn(
+      `[decision-metrics] hit the ${FLEET_METRICS_ROW_CAP}-row cap in a ${windowDays}d window` +
+        `${opts.userId ? ` (user ${opts.userId})` : " (fleet-wide)"} — metrics reflect only the most recent ${FLEET_METRICS_ROW_CAP} labels`,
+    );
+  }
 
   return {
     windowDays,

@@ -183,6 +183,9 @@ model UserToken {
   // Gmail push watch (users.watch) expires ~7 days after registration.
   // Null means the user has not enabled real-time push.
   gmailWatchExpiresAt DateTime?
+  // Last-synced Gmail historyId watermark for incremental (History API) sync.
+  // Null = never baselined; the next sync snapshots then records the current id.
+  historyId           String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -197,15 +200,20 @@ model UserToken {
 // email + the main calendar) so the email path stays single-account; this table
 // is read only by checkConflicts. Scope granted is calendar.readonly, nothing else.
 model LinkedCalendarAccount {
-  id           String    @id @default(uuid())
-  userId       String
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  email        String // the linked Google account address — label + dedup key
-  accessToken  String
-  refreshToken String?
-  expiresAt    DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email          String // the linked Google account address — label + dedup key
+  accessToken    String
+  refreshToken   String?
+  expiresAt      DateTime?
+  // Set true when this linked calendar's token is found revoked/undecryptable so
+  // the UI can prompt a re-link instead of the account silently dropping out of
+  // free/busy; cleared on a successful token refresh or re-link. Mirrors
+  // LinkedInboxAccount.needsReconnect.
+  needsReconnect Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@unique([userId, email])
 }
@@ -745,6 +753,12 @@ model EmailMessage {
   linkedInboxAccountId String?
   threadId             String? // Gmail thread ID for conversation grouping
   from                 String
+  // Normalized sender address (extractEmailAddress(from): lowercased, display
+  // name stripped) for an indexed equality lookup in the judge sender-history
+  // query. NULL until backfilled — the query only reads it under the
+  // SENDER_ADDRESS_INDEX_ENABLED flag (default off), so existing null rows are
+  // never consulted until `pnpm backfill:from-address` has populated them.
+  fromAddress          String?
   to                   String
   cc                   String?
   subject              String
@@ -775,6 +789,10 @@ model EmailMessage {
 
   @@unique([userId, gmailId])
   @@index([userId, receivedAt])
+  // Serves fetchSenderItems under SENDER_ADDRESS_INDEX_ENABLED: equality on
+  // (userId, fromAddress) + receivedAt-desc ordering, replacing the
+  // unindexable `from` ILIKE substring scan.
+  @@index([userId, fromAddress, receivedAt])
   @@index([userId, threadId])
   @@index([userId, priority])
   @@index([userId, category])
