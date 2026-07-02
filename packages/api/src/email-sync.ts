@@ -308,7 +308,11 @@ async function reconcileInboxScope(
     await resolveAttentionForDeletedEmails(userId, staleIds);
     for (let i = 0; i < staleIds.length; i += INBOX_PARAM_CAP) {
       const res = await prisma.emailMessage.deleteMany({
-        where: { userId, id: { in: staleIds.slice(i, i + INBOX_PARAM_CAP) } },
+        // ...scope (not just userId): staleIds already come from scope-filtered
+        // rows so this can't cross accounts today, but carrying the account
+        // boundary on the delete itself keeps the "every reconcile query is
+        // account-scoped" invariant true on every path.
+        where: { ...scope, id: { in: staleIds.slice(i, i + INBOX_PARAM_CAP) } },
       });
       removed += res.count;
     }

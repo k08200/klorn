@@ -190,6 +190,18 @@ export async function gmailPushRoutes(app: FastifyInstance) {
             linked.userId,
             syncEmails(linked.userId, 30, undefined, { id: linked.id, email, client }),
           );
+        } else {
+          // Known linked inbox but its token is unusable (revoked/undecryptable):
+          // getAuthedInboxClient already flags it needsReconnect, but the push
+          // sync is silently skipped here — surface it so a stalled real-time
+          // inbox is observable, not just drained to 204.
+          console.warn(
+            `[GMAIL-PUSH] Skipped real-time sync for linked inbox ${linked.id} — client unavailable (needs reconnect)`,
+          );
+          captureError(new Error("Linked inbox client unavailable on push"), {
+            tags: { scope: "gmail-push.linked-inbox" },
+            extra: { linkedInboxAccountId: linked.id, userId: linked.userId },
+          });
         }
         return reply.code(204).send();
       }
