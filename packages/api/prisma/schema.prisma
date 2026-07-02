@@ -241,6 +241,11 @@ model LinkedInboxAccount {
   // every tick — including the `gmailWatchExpiresAt IS NULL` first-register case,
   // which a btree serves too. Without this it seq-scans every linked inbox.
   @@index([gmailWatchExpiresAt])
+  // The gmail-push webhook resolves a pubsub address to its owning linked inbox
+  // by email ALONE (no userId — the webhook only knows the address). The
+  // (userId, email) unique above is userId-leading and can't serve that lookup,
+  // so without this it seq-scans every linked inbox on each linked-inbox push.
+  @@index([email])
 }
 
 model Task {
