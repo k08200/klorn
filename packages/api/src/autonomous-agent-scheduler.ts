@@ -26,6 +26,47 @@ const PENDING_ACTION_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours — expire faster t
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let firstRunTimer: ReturnType<typeof setTimeout> | null = null;
 
+// In-process re-entrancy guard: a tick that outruns AGENT_CHECK_INTERVAL_MS must
+// not overlap the next tick (duplicate concurrent LLM runs for the same users).
+let agentTickInFlight = false;
+
+// Distinct advisory-lock key from automation-scheduler's SCHEDULER_LOCK_KEY so
+// the two loops never block each other, while still ensuring only one dyno runs
+// the agent loop per tick once prod scales past a single dyno.
+const AGENT_LOCK_KEY = 0x4147_4e54; // "AGNT" reduced; arbitrary stable int
+
+async function tryAcquireAgentLock(): Promise<boolean> {
+  try {
+    const rows = await prisma.$queryRawUnsafe<{ locked: boolean }[]>(
+      `SELECT pg_try_advisory_lock($1) AS locked`,
+      AGENT_LOCK_KEY,
+    );
+    return rows[0]?.locked === true;
+  } catch (err) {
+    console.warn("[AGENT] advisory lock acquire failed:", err);
+    return false;
+  }
+}
+
+async function releaseAgentLock(): Promise<void> {
+  try {
+    // pg_advisory_unlock returns false (not an error) when this pooled
+    // connection doesn't hold the lock — surface it instead of swallowing, so a
+    // leaked lock is visible rather than a silent stall.
+    const rows = await prisma.$queryRawUnsafe<{ unlocked: boolean }[]>(
+      `SELECT pg_advisory_unlock($1) AS unlocked`,
+      AGENT_LOCK_KEY,
+    );
+    if (rows[0]?.unlocked !== true) {
+      console.warn(
+        "[AGENT] advisory unlock returned false — lock may have leaked to another connection",
+      );
+    }
+  } catch (err) {
+    console.warn("[AGENT] advisory unlock failed:", err);
+  }
+}
+
 // Track last run per user to respect per-user interval. Module-local so the
 // schedule survives across ticks but resets on process restart, which is
 // fine because the per-user agentIntervalMin is the actual policy.
@@ -86,8 +127,35 @@ async function expireStalePendingActions() {
   }
 }
 
-/** Main scheduler loop — checks all users, respects per-user interval */
+/**
+ * Tick entry point. Wraps the actual work in two guards: an in-process latch so
+ * a tick that outruns the interval never overlaps the next one, and a Postgres
+ * advisory lock so only one dyno runs the loop per tick under N>1 dynos.
+ */
 async function runAutonomousAgent() {
+  if (agentTickInFlight) {
+    console.log("[AGENT] Previous tick still in flight — skipping this tick");
+    return;
+  }
+  agentTickInFlight = true;
+  try {
+    const locked = await tryAcquireAgentLock();
+    if (!locked) {
+      console.log("[AGENT] Another worker holds the agent lock — skipping tick");
+      return;
+    }
+    try {
+      await runAgentTick();
+    } finally {
+      await releaseAgentLock();
+    }
+  } finally {
+    agentTickInFlight = false;
+  }
+}
+
+/** Main scheduler loop — checks all users, respects per-user interval */
+async function runAgentTick() {
   // Expire stale pending actions before running new cycles
   await expireStalePendingActions();
 
