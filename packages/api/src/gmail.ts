@@ -480,7 +480,17 @@ export async function getLinkedCalendarClients(
       });
       continue;
     }
-    if (!accessTokenPlain && !refreshTokenPlain) continue;
+    if (!accessTokenPlain && !refreshTokenPlain) {
+      // Empty tokens (corruption / prior invalidation): flag for reconnect so the
+      // calendar surfaces a re-link prompt instead of silently dropping out of
+      // free/busy (mirror of the decrypt-failure branch above).
+      console.warn(`[GOOGLE] Linked calendar ${row.id} has empty tokens — flagging for reconnect`);
+      void markLinkedCalendarForReconnect(userId, row.id).catch((markErr) => {
+        console.error(`[GOOGLE] Failed to flag linked calendar ${row.id} for reconnect:`, markErr);
+        captureError(markErr, { tags: { scope: "gmail.linked-calendar.mark-reconnect" } });
+      });
+      continue;
+    }
 
     const oauth2 = getOAuth2Client();
     oauth2.setCredentials({
@@ -513,7 +523,23 @@ async function persistRefreshedLinkedToken(
   },
 ): Promise<void> {
   const decision = decideRefreshTokenWrite(newTokens);
-  if (!decision.write) return;
+  if (!decision.write) {
+    // A "tokens" callback with a usable access_token means the token is healthy
+    // again even when we skip the DB persist (no expiry to reason about
+    // staleness). Clear any stale needsReconnect so a re-authorized calendar
+    // doesn't stay stuck showing "Reconnect needed". Best-effort.
+    if (newTokens.access_token) {
+      await prisma.linkedCalendarAccount
+        .updateMany({ where: { id: rowId, userId }, data: { needsReconnect: false } })
+        .catch((err) => {
+          console.error(
+            `[GOOGLE] Failed to clear reconnect flag for linked calendar ${rowId}:`,
+            err instanceof Error ? err.message : err,
+          );
+        });
+    }
+    return;
+  }
 
   // Both writes are scoped by { id, userId } (not id alone): the row id is a
   // UUID already filtered by userId in getLinkedCalendarClients, but scoping the
@@ -566,7 +592,22 @@ async function persistRefreshedInboxToken(
   },
 ): Promise<void> {
   const decision = decideRefreshTokenWrite(newTokens);
-  if (!decision.write) return;
+  if (!decision.write) {
+    // A "tokens" callback with a usable access_token means the token is healthy
+    // again even when we skip the DB persist. Clear any stale needsReconnect so a
+    // re-authorized inbox doesn't stay stuck showing "Reconnect needed".
+    if (newTokens.access_token) {
+      await prisma.linkedInboxAccount
+        .updateMany({ where: { id: rowId, userId }, data: { needsReconnect: false } })
+        .catch((err) => {
+          console.error(
+            `[GOOGLE] Failed to clear reconnect flag for linked inbox ${rowId}:`,
+            err instanceof Error ? err.message : err,
+          );
+        });
+    }
+    return;
+  }
   // A successful refresh means the token is healthy again — clear any stale
   // needsReconnect flag so a previously-revoked inbox that the user re-authorized
   // stops showing the reconnect prompt without needing a full re-link.
@@ -624,7 +665,18 @@ function buildInboxOAuthClient(
     });
     return null;
   }
-  if (!accessTokenPlain && !refreshTokenPlain) return null;
+  if (!accessTokenPlain && !refreshTokenPlain) {
+    // Both tokens decrypted to empty (at-rest corruption / prior invalidation):
+    // the inbox can't sync and only a re-link fixes it. Flag it so the UI prompts
+    // a reconnect instead of the inbox silently vanishing from the sync fan-out
+    // (mirror of the decrypt-failure branch above).
+    console.warn(`[GOOGLE] Linked inbox ${row.id} has empty tokens — flagging for reconnect`);
+    void markLinkedInboxForReconnect(userId, row.id).catch((markErr) => {
+      console.error(`[GOOGLE] Failed to flag linked inbox ${row.id} for reconnect:`, markErr);
+      captureError(markErr, { tags: { scope: "gmail.linked-inbox.mark-reconnect" } });
+    });
+    return null;
+  }
 
   const oauth2 = getOAuth2Client();
   oauth2.setCredentials({

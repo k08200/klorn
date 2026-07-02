@@ -130,9 +130,11 @@ describe("reconcileEmails", () => {
 
     const result = await reconcileEmails("user-1");
 
-    // Deleted by id (chunked), never via a 10k-param gmailId NOT IN.
+    // Deleted by id (chunked), never via a 10k-param gmailId NOT IN — and still
+    // account-scoped (linkedInboxAccountId: null on the primary path) so the
+    // large-mailbox fallback can't cross accounts either.
     expect(m.deleteMany).toHaveBeenCalledWith({
-      where: { userId: "user-1", id: { in: ["row-x"] } },
+      where: { userId: "user-1", linkedInboxAccountId: null, id: { in: ["row-x"] } },
     });
     expect(m.deleteMany).not.toHaveBeenCalledWith(
       expect.objectContaining({

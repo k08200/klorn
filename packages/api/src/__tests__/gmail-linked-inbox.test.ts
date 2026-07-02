@@ -72,11 +72,18 @@ describe("getLinkedInboxClients", () => {
     expect(clients.map((c) => c.id)).toEqual(["ok"]);
   });
 
-  it("skips a row with no usable tokens", async () => {
+  it("skips a row with no usable tokens AND flags it for reconnect (not silent rot)", async () => {
     m.findMany.mockResolvedValue([
       { id: "empty", email: "e@x.com", accessToken: "", refreshToken: null, expiresAt: null },
     ]);
     expect(await getLinkedInboxClients("u1")).toEqual([]);
+    // Empty tokens => flag for reconnect so the inbox surfaces a re-link prompt
+    // instead of silently vanishing from the sync fan-out (fire-and-forget).
+    await Promise.resolve();
+    expect(m.updateMany).toHaveBeenCalledWith({
+      where: { id: "empty", userId: "u1" },
+      data: { needsReconnect: true },
+    });
   });
 
   it("returns [] when the user has no linked inboxes", async () => {
