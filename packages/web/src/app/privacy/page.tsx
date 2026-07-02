@@ -167,10 +167,14 @@ export default function PrivacyPage() {
               , including the Limited Use requirements. Specifically: Klorn does not transfer Google
               user data to third parties except as necessary to provide or improve user-facing
               features, comply with applicable law, or as part of a merger or acquisition; Klorn
-              does not use Google user data for serving ads; and Klorn does not allow humans to read
+              does not use Google user data for serving ads; Klorn does not allow humans to read
               Google user data unless we obtain affirmative agreement from the user, it is necessary
               for security purposes, to comply with applicable law, or the data is aggregated and
-              used for internal operations in accordance with the Limited Use requirements.
+              used for internal operations in accordance with the Limited Use requirements; and
+              Klorn does not use Google user data to develop, improve, or train generalized or
+              non-personalized AI and/or ML models. Any AI processing of Google user data is
+              performed only to provide the user-facing features you request, on a per-message
+              basis, and is not used to train the AI providers' models.
             </p>
             <p>
               <strong className="text-white">Scopes Klorn requests and why.</strong>
@@ -221,6 +225,10 @@ export default function PrivacyPage() {
               Klorn may send relevant work context such as email snippets, bodies, calendar details,
               tasks, and notes to AI model providers for summarization, classification, drafting,
               and prioritization. We send only the context needed for the feature you are using.
+              This processing happens per request to produce the result you asked for; your Google
+              user data is never used to develop, improve, or train generalized or non-personalized
+              AI or ML models, and we configure our AI providers under API terms that do not train
+              their models on the data we send.
             </p>
           </Section>
 
