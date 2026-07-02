@@ -811,6 +811,11 @@ model EmailMessage {
   @@index([userId, category])
   @@index([userId, isRead])
   @@index([userId, needsReply])
+  // GET /inbox/reply-needed filters (userId, needsReply=true) then ORDER BY
+  // needsReplyConfidence DESC, receivedAt DESC. The (userId, needsReply) index
+  // above covers only the filter, forcing an in-memory sort; this composite lets
+  // the planner return rows already ordered (backward index scan for the DESC).
+  @@index([userId, needsReply, needsReplyConfidence, receivedAt], map: "EmailMessage_reply_needed_idx")
   // The multi-inbox sync/reconcile queries filter by (userId, linkedInboxAccountId)
   // — with receivedAt for the bounded read-status refresh. Without this the linked
   // scope is a residual filter over all of the user's rows, which degrades as a
