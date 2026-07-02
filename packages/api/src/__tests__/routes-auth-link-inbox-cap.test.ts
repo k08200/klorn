@@ -34,6 +34,12 @@ vi.mock("../email.js", () => ({
   sendBetaInviteEmail: vi.fn(async () => true),
 }));
 
+// init-sync's linked-inbox fan-out is a no-op here (also avoids mocking
+// email-sync's transitive gmail.js imports).
+vi.mock("../email-sync.js", () => ({
+  syncLinkedInboxesForUser: vi.fn(async () => ({ newCount: 0 })),
+}));
+
 vi.mock("../crypto-tokens.js", () => ({
   encryptToken: (t: string) => `enc:${t}`,
   encryptOptional: (t?: string | null) => (t ? `enc:${t}` : null),
