@@ -61,5 +61,19 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<!-- OAuth deep-link relay (login-CSRF fix): lets the app receive the
+	     ai.klorn.app://oauth-callback redirect. Dormant until the web build sets
+	     NEXT_PUBLIC_NATIVE_OAUTH_SCHEME. See apps/mobile/OAUTH_RELAY.md. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>ai.klorn.app.oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ai.klorn.app</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

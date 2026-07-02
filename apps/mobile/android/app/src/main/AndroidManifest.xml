@@ -22,6 +22,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- OAuth deep-link relay (login-CSRF fix): routes the
+                 ai.klorn.app://oauth-callback redirect back to the app. Dormant
+                 until the web build sets NEXT_PUBLIC_NATIVE_OAUTH_SCHEME.
+                 See apps/mobile/OAUTH_RELAY.md. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="ai.klorn.app" android:host="oauth-callback" />
+            </intent-filter>
+
         </activity>
 
         <provider
