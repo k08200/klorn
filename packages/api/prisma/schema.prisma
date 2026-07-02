@@ -190,6 +190,9 @@ model UserToken {
   updatedAt           DateTime  @updatedAt
 
   @@unique([userId, provider])
+  // renewExpiringGmailWatches scans all tokens by expiry (no userId) every tick;
+  // without this it seq-scans the whole table as the user base grows.
+  @@index([gmailWatchExpiresAt])
 }
 
 // A secondary Google account (e.g. work) linked ONLY for cross-account calendar
@@ -197,15 +200,20 @@ model UserToken {
 // email + the main calendar) so the email path stays single-account; this table
 // is read only by checkConflicts. Scope granted is calendar.readonly, nothing else.
 model LinkedCalendarAccount {
-  id           String    @id @default(uuid())
-  userId       String
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  email        String // the linked Google account address — label + dedup key
-  accessToken  String
-  refreshToken String?
-  expiresAt    DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email          String // the linked Google account address — label + dedup key
+  accessToken    String
+  refreshToken   String?
+  expiresAt      DateTime?
+  // Set true when this linked calendar's token is found revoked/undecryptable so
+  // the UI can prompt a re-link instead of the account silently dropping out of
+  // free/busy; cleared on a successful token refresh or re-link. Mirrors
+  // LinkedInboxAccount.needsReconnect.
+  needsReconnect Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@unique([userId, email])
 }
@@ -228,10 +236,24 @@ model LinkedInboxAccount {
   gmailWatchExpiresAt DateTime?
   historyId           String?
   lastSyncedAt        DateTime?
+  // Set true when this linked inbox's token is found revoked/undecryptable so the
+  // UI can prompt a re-link instead of the inbox silently rotting; cleared on a
+  // successful token refresh or re-link. Durable so a revoked inbox stays flagged
+  // across restarts (at scale, revoked linked tokens are the norm, not the edge).
+  needsReconnect      Boolean   @default(false)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
   @@unique([userId, email])
+  // renewExpiringGmailWatches scans linked inboxes by watch expiry (no userId)
+  // every tick — including the `gmailWatchExpiresAt IS NULL` first-register case,
+  // which a btree serves too. Without this it seq-scans every linked inbox.
+  @@index([gmailWatchExpiresAt])
+  // The gmail-push webhook resolves a pubsub address to its owning linked inbox
+  // by email ALONE (no userId — the webhook only knows the address). The
+  // (userId, email) unique above is userId-leading and can't serve that lookup,
+  // so without this it seq-scans every linked inbox on each linked-inbox push.
+  @@index([email])
 }
 
 model Task {
@@ -766,6 +788,11 @@ model EmailMessage {
   @@index([userId, category])
   @@index([userId, isRead])
   @@index([userId, needsReply])
+  // The multi-inbox sync/reconcile queries filter by (userId, linkedInboxAccountId)
+  // — with receivedAt for the bounded read-status refresh. Without this the linked
+  // scope is a residual filter over all of the user's rows, which degrades as a
+  // heavy user's mailbox grows across accounts.
+  @@index([userId, linkedInboxAccountId, receivedAt])
 }
 
 model EmailAttachment {
@@ -1066,11 +1093,11 @@ model LearnedRule {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  pattern         String   // "sender-domain" | "subject-keyword" (matched in learned-rules.ts)
-  value           String   // normalised domain or subject token
-  tier            String   // target Tier the rule assigns
-  evidenceCount   Int      // overrides backing this rule at mine time
-  distinctSenders Int      // distinct senders spanned — the generalisation guard
+  pattern         String // "sender-domain" | "subject-keyword" (matched in learned-rules.ts)
+  value           String // normalised domain or subject token
+  tier            String // target Tier the rule assigns
+  evidenceCount   Int // overrides backing this rule at mine time
+  distinctSenders Int // distinct senders spanned — the generalisation guard
   sourceIds       String[] // provenance: the override sourceIds this was mined from
 
   status    ProposalStatus @default(OPEN)
@@ -1101,17 +1128,17 @@ model SenderTrait {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  sender        String          // sender address — same key as sender-policy.ts
+  sender        String // sender address — same key as sender-policy.ts
   factKind      SenderTraitKind
-  factValue     String          // validated per-kind in code (sender-trait-policy.ts)
+  factValue     String // validated per-kind in code (sender-trait-policy.ts)
   confidence    Float
   evidenceText  String          @db.VarChar(300) // capped; extractor truncates to 200
-  sourceSig     String          // attention-input-hash-style signature of the sample
+  sourceSig     String // attention-input-hash-style signature of the sample
   observedCount Int             @default(1)
 
   // Write-time contradiction capture — never a silent overwrite.
   conflictValue    String?
-  conflictEvidence String? @db.VarChar(300)
+  conflictEvidence String?   @db.VarChar(300)
   conflictedAt     DateTime?
 
   status SenderTraitStatus @default(active)

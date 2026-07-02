@@ -10,6 +10,7 @@
  * - VAPID_EMAIL (mailto: contact email)
  */
 
+import crypto from "node:crypto";
 import webPush from "web-push";
 import { prisma } from "./db.js";
 import { isSafePushEndpoint } from "./is-safe-push-endpoint.js";
@@ -25,6 +26,7 @@ import {
 import { sendDevicePush } from "./push-device.js";
 import { isAllowedPushOrigin } from "./push-origin-allowlist.js";
 import { recordPushAttempt } from "./push-rate-limit.js";
+import { Semaphore } from "./semaphore.js";
 import { sendTelegramForPush } from "./telegram-notify.js";
 import { mintTierOverrideToken } from "./tier-override-token.js";
 
@@ -43,6 +45,12 @@ const AGENT_PROPOSAL_PUSH_COOLDOWN_HOURS = 6;
 // project_eve_dogfood_pain).
 const PUSH_RETRY_DELAYS_MS = [3_000, 9_000]; // total ≤12s — bounded so the
 // caller's tick doesn't stall.
+
+// Fan-out concurrency: how many of a user's subscriptions we deliver to in
+// parallel. Bounded so a user with many subscriptions during an upstream blip
+// no longer serializes to N×(retry budget); one subscription's `await sleep`
+// retry no longer blocks the others in the fire-and-forget judge path.
+const PUSH_FANOUT_CONCURRENCY = 6;
 
 export function shouldRetryPushError(statusCode: number | undefined): boolean {
   if (statusCode === undefined) return true; // network / no response
@@ -263,109 +271,19 @@ export async function sendPushNotification(
     `[PUSH] Sending to ${subscriptions.length} subscription(s) for ${userId}: "${payload.title}"`,
   );
 
-  let accepted = 0;
-  let failed = 0;
-  let attempted = 0;
-  for (const sub of subscriptions) {
-    if (!isSafePushEndpoint(sub.endpoint)) {
-      await recordSkipped(userId, payload.title, category, "unsafe_endpoint");
-      continue;
-    }
-    attempted++;
-    const deliveryId = await createPushDeliveryAttempt({
-      userId,
-      subscriptionId: sub.id,
-      endpoint: sub.endpoint,
-      notificationId: payload.notificationId ?? null,
-      category,
-      title: payload.title,
-    });
+  // Fan out with bounded concurrency (same Semaphore util gmail-fetch.ts uses).
+  // sem.all preserves per-thunk isolation as long as no thunk throws — and
+  // deliverToSubscription is total (it catches per-attempt), so one sub's
+  // failure or retry-sleep never sinks or blocks the others, mirroring the old
+  // serial loop's `continue`.
+  const sem = new Semaphore(PUSH_FANOUT_CONCURRENCY);
+  const results = await sem.all(
+    subscriptions.map((sub) => () => deliverToSubscription(userId, sub, payload, category)),
+  );
+  const attempted = results.filter((r) => r.attempted).length;
+  const accepted = results.filter((r) => r.delivered).length;
+  const failed = attempted - accepted;
 
-    let lastStatusCode: number | undefined;
-    let lastBody: string | undefined;
-    let lastError: unknown;
-    let delivered = false;
-    const maxAttempts = 1 + PUSH_RETRY_DELAYS_MS.length;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        await webPush.sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth },
-          },
-          JSON.stringify({
-            ...payload,
-            ...tierOverrideFields(userId, payload.attentionItemId),
-            deliveryId,
-            receiptUrl: pushReceiptUrl(deliveryId),
-          }),
-        );
-        delivered = true;
-        if (attempt > 0) {
-          console.log(`[PUSH] Recovered on retry ${attempt} for subscription ${sub.id}`);
-        }
-        break;
-      } catch (err) {
-        lastError = err;
-        lastStatusCode = (err as { statusCode?: number })?.statusCode;
-        lastBody = (err as { body?: string })?.body;
-        // Permanent failures: stop retrying so we can clean up below.
-        if (!shouldRetryPushError(lastStatusCode)) break;
-        const nextDelay = PUSH_RETRY_DELAYS_MS[attempt];
-        if (nextDelay === undefined) break;
-        console.warn(
-          `[PUSH] Transient failure status=${lastStatusCode ?? "network"} for ${sub.id}; retrying in ${nextDelay}ms`,
-        );
-        await sleep(nextDelay);
-      }
-    }
-
-    if (delivered) {
-      await markPushAccepted(deliveryId);
-      accepted++;
-      // Recovered: clear the consecutive-failure tally so a sub that had a
-      // transient bad spell isn't evicted on a later push.
-      if (sub.failureCount > 0) {
-        await prisma.pushSubscription.update({
-          where: { id: sub.id },
-          data: { failureCount: 0, lastFailedAt: null },
-        });
-      }
-    } else {
-      failed++;
-      await markPushFailed(deliveryId, { statusCode: lastStatusCode, body: lastBody });
-      console.error(
-        `[PUSH] Failed to send to subscription ${sub.id} after ${maxAttempts} attempts: status=${lastStatusCode}, body=${lastBody}, error=${lastError}`,
-      );
-      // Budgeted eviction: 410/404 → delete now; otherwise count the consecutive
-      // failure and delete once it crosses the threshold (stops a dead endpoint
-      // from burning the retry budget every tick).
-      const action = decidePushFailureAction(sub.failureCount, lastStatusCode);
-      if (action.kind === "delete") {
-        await prisma.pushSubscription.delete({ where: { id: sub.id } });
-        console.log(
-          `[PUSH] Removed ${action.reason} subscription ${sub.id} (failureCount=${sub.failureCount})`,
-        );
-      } else {
-        // Increment ATOMICALLY — sub.failureCount is from a findMany snapshot, so
-        // two pushes to the same sub in one tick would otherwise both write the
-        // same absolute value and lose a failure. Re-check the threshold on the
-        // fresh value so eviction can't be delayed by a stale read.
-        const updated = await prisma.pushSubscription.update({
-          where: { id: sub.id },
-          data: { failureCount: { increment: 1 }, lastFailedAt: new Date() },
-          select: { failureCount: true },
-        });
-        if (updated.failureCount >= MAX_CONSECUTIVE_PUSH_FAILURES) {
-          await prisma.pushSubscription.delete({ where: { id: sub.id } });
-          console.log(
-            `[PUSH] Evicted subscription ${sub.id} after ${updated.failureCount} consecutive failures`,
-          );
-        }
-      }
-    }
-  }
   console.log(`[PUSH] Sent ${accepted}/${attempted} push notifications successfully`);
   return {
     status: "sent",
@@ -374,6 +292,136 @@ export async function sendPushNotification(
     accepted,
     failed,
   };
+}
+
+/**
+ * Deliver one push to one subscription: unsafe-endpoint skip, delivery-attempt
+ * log, bounded in-process retry, accept/fail marking, failure-count reset on
+ * recover, and budgeted eviction (410/404 delete + atomic increment + threshold
+ * evict). Total by design — never throws — so a bounded-concurrency fan-out over
+ * these stays failure-isolated like the old serial loop's `continue`.
+ *
+ * (Slightly over the 50-line guideline: this is the extracted per-subscription
+ * body kept verbatim rather than over-split, to preserve behavior exactly.)
+ */
+async function deliverToSubscription(
+  userId: string,
+  sub: PushSubscriptionRow,
+  payload: {
+    title: string;
+    body: string;
+    url?: string;
+    notificationId?: string;
+    attentionItemId?: string;
+  },
+  category: NotifCategory,
+): Promise<{ attempted: boolean; delivered: boolean }> {
+  if (!isSafePushEndpoint(sub.endpoint)) {
+    await recordSkipped(userId, payload.title, category, "unsafe_endpoint");
+    return { attempted: false, delivered: false };
+  }
+  const deliveryId = await createPushDeliveryAttempt({
+    userId,
+    subscriptionId: sub.id,
+    endpoint: sub.endpoint,
+    notificationId: payload.notificationId ?? null,
+    category,
+    title: payload.title,
+  });
+
+  // Stable, ≤32-char, URL/filename-safe topic derived from deliveryId. Constant
+  // across this subscription's retries, so after an AMBIGUOUS failure (e.g. a
+  // network timeout where the message was actually delivered) the push service
+  // REPLACES the still-pending message instead of stacking a duplicate. This
+  // only dedupes within the service's pending-delivery window — not a full
+  // guarantee — and complements the app-level dedup done elsewhere.
+  const topic = crypto.createHash("sha256").update(deliveryId).digest("base64url").slice(0, 32);
+
+  let lastStatusCode: number | undefined;
+  let lastBody: string | undefined;
+  let lastError: unknown;
+  let delivered = false;
+  const maxAttempts = 1 + PUSH_RETRY_DELAYS_MS.length;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await webPush.sendNotification(
+        {
+          endpoint: sub.endpoint,
+          keys: { p256dh: sub.p256dh, auth: sub.auth },
+        },
+        JSON.stringify({
+          ...payload,
+          ...tierOverrideFields(userId, payload.attentionItemId),
+          deliveryId,
+          receiptUrl: pushReceiptUrl(deliveryId),
+        }),
+        { topic },
+      );
+      delivered = true;
+      if (attempt > 0) {
+        console.log(`[PUSH] Recovered on retry ${attempt} for subscription ${sub.id}`);
+      }
+      break;
+    } catch (err) {
+      lastError = err;
+      lastStatusCode = (err as { statusCode?: number })?.statusCode;
+      lastBody = (err as { body?: string })?.body;
+      // Permanent failures: stop retrying so we can clean up below.
+      if (!shouldRetryPushError(lastStatusCode)) break;
+      const nextDelay = PUSH_RETRY_DELAYS_MS[attempt];
+      if (nextDelay === undefined) break;
+      console.warn(
+        `[PUSH] Transient failure status=${lastStatusCode ?? "network"} for ${sub.id}; retrying in ${nextDelay}ms`,
+      );
+      await sleep(nextDelay);
+    }
+  }
+
+  if (delivered) {
+    await markPushAccepted(deliveryId);
+    // Recovered: clear the consecutive-failure tally so a sub that had a
+    // transient bad spell isn't evicted on a later push.
+    if (sub.failureCount > 0) {
+      await prisma.pushSubscription.update({
+        where: { id: sub.id },
+        data: { failureCount: 0, lastFailedAt: null },
+      });
+    }
+    return { attempted: true, delivered: true };
+  }
+
+  await markPushFailed(deliveryId, { statusCode: lastStatusCode, body: lastBody });
+  console.error(
+    `[PUSH] Failed to send to subscription ${sub.id} after ${maxAttempts} attempts: status=${lastStatusCode}, body=${lastBody}, error=${lastError}`,
+  );
+  // Budgeted eviction: 410/404 → delete now; otherwise count the consecutive
+  // failure and delete once it crosses the threshold (stops a dead endpoint
+  // from burning the retry budget every tick).
+  const action = decidePushFailureAction(sub.failureCount, lastStatusCode);
+  if (action.kind === "delete") {
+    await prisma.pushSubscription.delete({ where: { id: sub.id } });
+    console.log(
+      `[PUSH] Removed ${action.reason} subscription ${sub.id} (failureCount=${sub.failureCount})`,
+    );
+  } else {
+    // Increment ATOMICALLY — sub.failureCount is from a findMany snapshot, so
+    // two pushes to the same sub in one tick would otherwise both write the
+    // same absolute value and lose a failure. Re-check the threshold on the
+    // fresh value so eviction can't be delayed by a stale read.
+    const updated = await prisma.pushSubscription.update({
+      where: { id: sub.id },
+      data: { failureCount: { increment: 1 }, lastFailedAt: new Date() },
+      select: { failureCount: true },
+    });
+    if (updated.failureCount >= MAX_CONSECUTIVE_PUSH_FAILURES) {
+      await prisma.pushSubscription.delete({ where: { id: sub.id } });
+      console.log(
+        `[PUSH] Evicted subscription ${sub.id} after ${updated.failureCount} consecutive failures`,
+      );
+    }
+  }
+  return { attempted: true, delivered: false };
 }
 
 /** Get the public VAPID key for client-side subscription */

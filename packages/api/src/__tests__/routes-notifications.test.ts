@@ -90,6 +90,9 @@ vi.mock("../db.js", () => {
       update: vi.fn(async () => ({})),
     },
     decisionLabel: { updateMany: vi.fn(async () => ({ count: 1 })) },
+    // overrideAttentionTier now wraps the tier write + ledger stamp in one
+    // prisma.$transaction; run the callback with this mock as the tx client.
+    $transaction: vi.fn(async (cb: (tx: unknown) => unknown) => cb(prisma)),
   };
   return { prisma, db: prisma };
 });

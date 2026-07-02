@@ -12,6 +12,11 @@ const m = vi.hoisted(() => ({
   findMany: vi.fn(async () => [] as { gmailId: string }[]),
   updateMany: vi.fn(async () => ({ count: 0 })),
   attentionUpdateMany: vi.fn(async () => ({ count: 0 })),
+  getLinkedInboxClients: vi.fn(async () => [] as { client: object; id: string; email: string }[]),
+  captureError: vi.fn(),
+  isGoogleAuthError: vi.fn(() => false),
+  markGoogleReconnect: vi.fn(async () => {}),
+  markLinkedReconnect: vi.fn(async () => {}),
 }));
 
 vi.mock("googleapis", () => ({
@@ -21,11 +26,13 @@ vi.mock("googleapis", () => ({
 }));
 vi.mock("../gmail.js", () => ({
   getAuthedClient: vi.fn(async () => ({})),
-  isGoogleAuthError: () => false,
+  getLinkedInboxClients: m.getLinkedInboxClients,
+  isGoogleAuthError: m.isGoogleAuthError,
   isGoogleNotFoundError: () => false,
-  markGoogleTokenForReconnect: vi.fn(async () => {}),
+  markGoogleTokenForReconnect: m.markGoogleReconnect,
+  markLinkedInboxForReconnect: m.markLinkedReconnect,
 }));
-vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
 // Stub heavy import chains pulled in by email-sync.ts but unused by reconcileEmails.
 vi.mock("../email-firewall.js", () => ({ persistGmailEmail: vi.fn() }));
 vi.mock("../gmail-fetch.js", () => ({ fetchGmailEmails: vi.fn(), fetchGmailEmailById: vi.fn() }));
@@ -37,7 +44,7 @@ vi.mock("../db.js", () => ({
   },
 }));
 
-import { reconcileEmails } from "../email-sync.js";
+import { reconcileEmails, reconcileLinkedInboxes } from "../email-sync.js";
 
 function inboxListing(ids: string[]) {
   return { data: { messages: ids.map((id) => ({ id })), nextPageToken: undefined } };
@@ -66,10 +73,35 @@ describe("reconcileEmails", () => {
 
     const result = await reconcileEmails("user-1");
 
+    // Scoped to PRIMARY-account rows (linkedInboxAccountId: null): inboxIdList
+    // came from the primary INBOX, so linked-inbox rows must be excluded from
+    // the notIn wipe or they would ALL match and be deleted.
     expect(m.deleteMany).toHaveBeenCalledWith({
-      where: { userId: "user-1", gmailId: { notIn: ["a", "b"] } },
+      where: { userId: "user-1", linkedInboxAccountId: null, gmailId: { notIn: ["a", "b"] } },
     });
     expect(result.removed).toBe(3);
+  });
+
+  it("never deletes linked-inbox rows: every reconcile query is scoped to linkedInboxAccountId: null", async () => {
+    m.listMock.mockResolvedValue(inboxListing(["a", "b"]));
+    m.findMany.mockResolvedValueOnce([{ id: "row-1" }] as never);
+    m.deleteMany.mockResolvedValue({ count: 1 });
+
+    await reconcileEmails("user-1");
+
+    // The stale-lookup, the delete, AND the read-status refresh must all carry
+    // linkedInboxAccountId: null — a single unscoped query would wipe or
+    // mis-refresh secondary-inbox mail once MULTI_INBOX_SYNC_ENABLED is on.
+    for (const call of m.findMany.mock.calls) {
+      expect((call[0] as { where: Record<string, unknown> }).where).toMatchObject({
+        linkedInboxAccountId: null,
+      });
+    }
+    for (const call of m.deleteMany.mock.calls) {
+      expect((call[0] as { where: Record<string, unknown> }).where).toMatchObject({
+        linkedInboxAccountId: null,
+      });
+    }
   });
 
   it("bounds the read-status refresh to the most recent RECONCILE_REFRESH_CAP rows", async () => {
@@ -81,7 +113,7 @@ describe("reconcileEmails", () => {
     // is a bounded most-recent-N query — no INBOX-sized IN clause.
     expect(m.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId: "user-1" },
+        where: { userId: "user-1", linkedInboxAccountId: null },
         orderBy: { receivedAt: "desc" },
         take: 500,
       }),
@@ -129,5 +161,77 @@ describe("reconcileEmails", () => {
       },
       data: expect.objectContaining({ status: "RESOLVED" }),
     });
+  });
+});
+
+describe("reconcileLinkedInboxes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    m.findMany.mockResolvedValue([]);
+    m.deleteMany.mockResolvedValue({ count: 0 });
+    m.getLinkedInboxClients.mockResolvedValue([]);
+  });
+
+  it("reconciles each linked inbox scoped to ITS OWN account id (never null/primary)", async () => {
+    m.getLinkedInboxClients.mockResolvedValue([{ client: {}, id: "link-1", email: "a@b.com" }]);
+    m.listMock.mockResolvedValue(inboxListing(["a", "b"]));
+    m.deleteMany.mockResolvedValue({ count: 2 });
+
+    const result = await reconcileLinkedInboxes("user-1");
+
+    // The delete must be scoped to this linked account — NOT linkedInboxAccountId:
+    // null (that is the primary reconcile's job) and NOT unscoped.
+    expect(m.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", linkedInboxAccountId: "link-1", gmailId: { notIn: ["a", "b"] } },
+    });
+    expect(result.removed).toBe(2);
+  });
+
+  it("isolates a failing linked inbox so the others still reconcile, and reports it", async () => {
+    m.getLinkedInboxClients.mockResolvedValue([
+      { client: {}, id: "link-bad", email: "bad@b.com" },
+      { client: {}, id: "link-ok", email: "ok@b.com" },
+    ]);
+    // First account's INBOX list throws; second returns a normal listing.
+    m.listMock.mockRejectedValueOnce(new Error("revoked")).mockResolvedValue(inboxListing(["a"]));
+    m.deleteMany.mockResolvedValue({ count: 1 });
+
+    const result = await reconcileLinkedInboxes("user-1");
+
+    // The bad inbox is captured, not swallowed silently...
+    expect(m.captureError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ extra: { linkedInboxAccountId: "link-bad" } }),
+    );
+    // ...and the healthy inbox still reconciled.
+    expect(m.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", linkedInboxAccountId: "link-ok", gmailId: { notIn: ["a"] } },
+    });
+    expect(result.removed).toBe(1);
+  });
+
+  it("is a no-op when the user has no linked inboxes", async () => {
+    m.getLinkedInboxClients.mockResolvedValue([]);
+
+    const result = await reconcileLinkedInboxes("user-1");
+
+    expect(result).toEqual({ removed: 0, updated: 0 });
+    expect(m.listMock).not.toHaveBeenCalled();
+    expect(m.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("flags a revoked linked inbox for reconnect on auth error — never poisons the primary token", async () => {
+    m.getLinkedInboxClients.mockResolvedValue([{ client: {}, id: "link-1", email: "a@b.com" }]);
+    m.listMock.mockRejectedValue({ response: { status: 401 } });
+    m.isGoogleAuthError.mockReturnValueOnce(true);
+
+    // Per-account isolation swallows the throw at the reconcileLinkedInboxes level.
+    const result = await reconcileLinkedInboxes("user-1");
+
+    // The linked row is durably flagged for reconnect...
+    expect(m.markLinkedReconnect).toHaveBeenCalledWith("user-1", "link-1");
+    // ...and the primary token is NEVER touched by a linked failure.
+    expect(m.markGoogleReconnect).not.toHaveBeenCalled();
+    expect(result).toEqual({ removed: 0, updated: 0 });
   });
 });

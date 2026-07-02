@@ -290,7 +290,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       if (result && "error" in result) {
         return reply.code(409).send({ error: result.error });
       }
-      const synced = await syncEmailByGmailId(uid, gmailId);
+      const synced = await syncEmailByGmailId(uid, gmailId, linkedInboxAccountId);
       return { success: true, gmailId, emailId: synced.emailId };
     } catch (err) {
       const gErr = err as { message?: string };
@@ -335,7 +335,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       if (result && "error" in result) {
         return reply.code(409).send({ error: result.error });
       }
-      const synced = await syncEmailByGmailId(uid, gmailId);
+      const synced = await syncEmailByGmailId(uid, gmailId, linkedInboxAccountId);
       return { success: true, gmailId, emailId: synced.emailId };
     } catch (err) {
       const gErr = err as { message?: string };

@@ -476,7 +476,12 @@ function FirewallCard({
   const subject = item.email?.subject || toolSubject(item) || item.title;
   const sender = item.email?.from || toolRecipient(item);
   const snippet = item.email?.snippet || toolBodyPreview(item);
+  // opacity marks the ONE card being moved; the buttons disable while ANY
+  // override is in flight, because override() has a single-flight guard
+  // (`if (overriding) return`) — without this, other cards' buttons look
+  // clickable but silently no-op mid-override.
   const busy = overrideId === item.id;
+  const anyOverriding = overrideId !== null;
 
   return (
     <li
@@ -534,7 +539,7 @@ function FirewallCard({
           <button
             key={target}
             type="button"
-            disabled={busy}
+            disabled={anyOverriding}
             onClick={() => onOverride(item, target)}
             className={`inline-flex min-h-7 items-center rounded-full border border-stone-700/80 px-2.5 text-[10px] font-medium uppercase tracking-wider text-stone-400 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 ${TARGET_BUTTON[target]}`}
           >

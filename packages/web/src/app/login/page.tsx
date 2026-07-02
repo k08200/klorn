@@ -102,11 +102,13 @@ function LoginForm() {
       const message =
         error === "google_failed"
           ? "Google sign-in could not be completed. Please try again."
-          : error === "session_expired"
-            ? "Your session expired. Please sign in again."
-            : error === "invite_only"
-              ? "Klorn is invite-only right now. Request access from the early access page."
-              : error;
+          : error === "google_unverified"
+            ? "Google hasn't finished verifying Klorn for your account yet. Approved testers can retry shortly; otherwise request early access."
+            : error === "session_expired"
+              ? "Your session expired. Please sign in again."
+              : error === "invite_only"
+                ? "Klorn is invite-only right now. Request access from the early access page."
+                : error;
       toast(message, "error");
     }
     if (verified) {
@@ -133,7 +135,6 @@ function LoginForm() {
       } else {
         await register(email, password, name || undefined, nextPath);
         toast("Account created.", "success");
-        return;
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong.";
@@ -162,8 +163,13 @@ function LoginForm() {
       } else {
         setEmailError(parsed);
       }
+    } finally {
+      // Reset on EVERY path. The register branch previously `return`ed before
+      // this reset, leaving the submit button stuck spinning "Creating
+      // account..." whenever the post-register redirect didn't immediately
+      // unmount the form (e.g. auth state not yet populated).
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

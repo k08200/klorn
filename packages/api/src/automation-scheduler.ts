@@ -29,6 +29,7 @@ import {
   checkAutoReplyRules,
   generateSmartReply,
   reconcileEmails,
+  reconcileLinkedInboxes,
   summarizeUnsummarizedEmails,
   syncEmails,
 } from "./email-sync.js";
@@ -773,8 +774,15 @@ async function runAutomations() {
                 syncResult.newCount > 0 &&
                 planHasFeature(configUserPlan, "email_auto_reply", configUserRole)
               ) {
+                // PRIMARY-account rows only. sendAutoReplyViaFloor below always
+                // sends from the primary Gmail client, so auto-replying to a
+                // linked-inbox email would come from the WRONG address (the
+                // sender emailed the linked account, not the primary). Until
+                // per-account send routing exists, auto-reply is primary-only;
+                // this also keeps `take: newCount` from mixing in linked rows
+                // once MULTI_INBOX_SYNC_ENABLED is on.
                 const newEmails = await prisma.emailMessage.findMany({
-                  where: { userId: config.userId },
+                  where: { userId: config.userId, linkedInboxAccountId: null },
                   orderBy: { syncedAt: "desc" },
                   take: syncResult.newCount,
                 });
@@ -865,6 +873,23 @@ async function runAutomations() {
                   captureError(err, {
                     tags: { scope: "automation.reconcile", userId: config.userId },
                   });
+                }
+                // Reconcile linked secondary inboxes too (each against its own
+                // client). Gated + isolated from the primary reconcile so a
+                // linked failure never masks a primary success. Off unless the
+                // flag is on, matching the sync fan-out above.
+                if (MULTI_INBOX_SYNC_ENABLED) {
+                  try {
+                    await reconcileLinkedInboxes(config.userId);
+                  } catch (err) {
+                    console.error(
+                      `[AUTOMATION] Linked-inbox reconcile failed for ${config.userId}:`,
+                      err,
+                    );
+                    captureError(err, {
+                      tags: { scope: "automation.reconcile.linked", userId: config.userId },
+                    });
+                  }
                 }
               }
 

@@ -286,8 +286,12 @@ export async function fetchGmailEmails(
 export async function fetchGmailEmailById(
   userId: string,
   gmailId: string,
+  // When set, fetch from a specific LINKED inbox's client instead of the primary
+  // account. Required for undo-after-untrash/unarchive on a linked inbox: the id
+  // only exists in that account, so a primary fetch would 404.
+  authClient?: InstanceType<typeof google.auth.OAuth2> | null,
 ): Promise<GmailRawEmail | null> {
-  const auth = await getAuthedClient(userId);
+  const auth = authClient ?? (await getAuthedClient(userId));
   if (!auth) return null;
 
   const gmail = google.gmail({ version: "v1", auth });
@@ -301,7 +305,22 @@ export async function fetchGmailEmailById(
     return parseGmailMessageDetail(gmail, gmailId, detail.data);
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markGoogleTokenForReconnect(userId);
+      if (authClient) {
+        // Linked-inbox auth error: must NOT invalidate the primary token
+        // (markGoogleTokenForReconnect keys on userId alone). Unlike the batch
+        // fan-out — whose caller logs the linked "Gmail not connected" — this
+        // single-message undo path returns a bare 502 with no operator signal,
+        // so leave the trace here (tagged by account) instead of vanishing.
+        console.warn(
+          `[GMAIL-FETCH] linked-inbox auth error for user ${userId} (gmailId ${gmailId}); primary token left intact`,
+        );
+        captureError(err, {
+          tags: { scope: "gmail.fetch.by-id.linked-auth" },
+          extra: { userId, gmailId },
+        });
+      } else {
+        await markGoogleTokenForReconnect(userId);
+      }
       return null;
     }
     throw err;
