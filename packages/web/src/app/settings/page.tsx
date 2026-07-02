@@ -1545,7 +1545,7 @@ export default function SettingsPage() {
                   {gmailPushConfigured
                     ? gmailPushEnabled
                       ? gmailPushExpiresAt
-                        ? `Gmail push is active until ${new Date(gmailPushExpiresAt).toLocaleString()}. It renews automatically before expiration.`
+                        ? `Gmail push is active until ${new Date(gmailPushExpiresAt).toLocaleString("en-US")}. It renews automatically before expiration.`
                         : "Gmail push is active and renews automatically before expiration."
                       : "Subscribe to Gmail push so mail signals arrive immediately. If off, Klorn checks every minute."
                     : "The server Pub/Sub topic is not configured yet. Ask an admin to enable it."}

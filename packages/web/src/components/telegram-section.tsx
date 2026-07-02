@@ -169,7 +169,7 @@ export function TelegramSection() {
           )}
           <p className="text-xs text-stone-500">
             Code: <span className="font-mono text-stone-300">{linkCode.code}</span> · expires at{" "}
-            {new Date(linkCode.expiresAt).toLocaleTimeString()}.
+            {new Date(linkCode.expiresAt).toLocaleTimeString("en-US")}.
           </p>
           <div className="flex items-center gap-2 pt-1">
             <Button

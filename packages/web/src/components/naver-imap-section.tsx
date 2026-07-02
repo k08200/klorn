@@ -137,7 +137,7 @@ export function NaverImapSection() {
                 <p className="font-medium">{status.email}</p>
                 <p className="text-[11px] text-stone-500">
                   Host: {status.host} · since{" "}
-                  {status.connectedAt ? new Date(status.connectedAt).toLocaleString() : "—"}
+                  {status.connectedAt ? new Date(status.connectedAt).toLocaleString("en-US") : "—"}
                 </p>
               </div>
               <Button

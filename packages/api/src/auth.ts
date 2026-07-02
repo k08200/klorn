@@ -35,6 +35,8 @@ export interface JwtPayload {
   userId: string;
   email: string;
   sessionId?: string;
+  /** Native deep-link relay target — set only on desktop/native login-state tokens. */
+  appScheme?: string;
 }
 
 export function signToken(
@@ -78,7 +80,7 @@ export function isTokenRevokedByEpoch(
 }
 
 /** Load the user's session epoch and decide whether this token is revoked. */
-async function sessionRevokedForToken(payload: JwtPayload): Promise<boolean> {
+export async function sessionRevokedForToken(payload: JwtPayload): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
     select: { sessionsInvalidatedAt: true },
