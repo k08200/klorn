@@ -950,6 +950,11 @@ model DecisionLabel {
   // user's row even if a non-uuid sourceId (e.g. GITHUB) ever collides.
   @@unique([userId, source, sourceId])
   @@index([userId, shownTier, judgedAt])
+  // Serves the admin/scheduler-wide metrics query (getDecisionMetrics with no
+  // userId), which filters on source + judgedAt only. The userId-leading index
+  // above cannot serve it, so without this it sequentially scans the whole
+  // append-only ledger every daily calibration run.
+  @@index([source, judgedAt])
 }
 
 // Ontology write-side v0 — a proposed adjustment to a deterministic-core
