@@ -238,6 +238,51 @@ describe("runDailyCalibrationSnapshots", () => {
     await runDailyCalibrationSnapshots(NOW);
     expect(snapshotUpsert).not.toHaveBeenCalled();
   });
+
+  it("paginates the user groupBy — processes every page and advances skip", async () => {
+    attentionFindMany.mockResolvedValue([]);
+    // Page 1: a full batch (500) → the loop must fetch a second page.
+    const page1 = Array.from({ length: 500 }, (_, i) => ({ userId: `u${i}` }));
+    // Page 2: a partial page (< batch) → the loop stops after this.
+    const page2 = [{ userId: "u500" }, { userId: "u501" }];
+    attentionGroupBy.mockResolvedValueOnce(page1).mockResolvedValueOnce(page2);
+
+    await runDailyCalibrationSnapshots(NOW);
+
+    // Two pages fetched, then the loop stops (partial page).
+    expect(attentionGroupBy).toHaveBeenCalledTimes(2);
+    // skip advanced by the batch size between the two page fetches.
+    expect(attentionGroupBy.mock.calls[0][0]).toMatchObject({
+      by: ["userId"],
+      orderBy: { userId: "asc" },
+      take: 500,
+      skip: 0,
+    });
+    expect(attentionGroupBy.mock.calls[1][0]).toMatchObject({ take: 500, skip: 500 });
+    // Every user across both pages was snapshotted (500 + 2 = 502).
+    expect(snapshotUpsert).toHaveBeenCalledTimes(502);
+  });
+
+  it("stops after a single partial page without a second fetch", async () => {
+    attentionFindMany.mockResolvedValue([]);
+    attentionGroupBy.mockResolvedValueOnce([{ userId: "u1" }, { userId: "u2" }]);
+
+    await runDailyCalibrationSnapshots(NOW);
+
+    expect(attentionGroupBy).toHaveBeenCalledTimes(1);
+    expect(snapshotUpsert).toHaveBeenCalledTimes(2);
+  });
+
+  it("isolates a per-user failure within a page and still processes the rest", async () => {
+    attentionFindMany.mockResolvedValue([]);
+    attentionGroupBy.mockResolvedValueOnce([{ userId: "u1" }, { userId: "u2" }]);
+    snapshotUpsert.mockRejectedValueOnce(new Error("u1 write failed")).mockResolvedValueOnce({});
+
+    await runDailyCalibrationSnapshots(NOW);
+
+    expect(snapshotUpsert).toHaveBeenCalledTimes(2);
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("weekly correction eval merge", () => {

@@ -47,6 +47,9 @@ const authHeaderSchema = {
  */
 const DEMO_USER_ID = "demo-user";
 
+/** Ceiling on linked secondary inboxes per user (unbounded-growth guard). */
+const MAX_LINKED_INBOXES = 10;
+
 function isDemoUser(userId: string): boolean {
   return userId === DEMO_USER_ID;
 }
@@ -755,6 +758,8 @@ export function authRoutes(app: FastifyInstance) {
             accessToken: encryptToken(tokens.access_token),
             refreshToken: encryptOptional(tokens.refresh_token),
             expiresAt,
+            // Re-linking a previously-revoked calendar clears the reconnect prompt.
+            needsReconnect: false,
           },
           create: {
             userId: statePayload.userId,
@@ -784,12 +789,29 @@ export function authRoutes(app: FastifyInstance) {
         }
         const linkedEmail = normalizeEmail(profile.email);
         const expiresAt = tokens.expiry_date ? new Date(tokens.expiry_date) : null;
+        // Cap NEW links only: a re-link (existing row → update path) must always
+        // be allowed so a user can never lock themselves out of reconnecting an
+        // inbox they already have.
+        const existingLink = await prisma.linkedInboxAccount.findUnique({
+          where: { userId_email: { userId: statePayload.userId, email: linkedEmail } },
+          select: { id: true },
+        });
+        if (!existingLink) {
+          const linkedCount = await prisma.linkedInboxAccount.count({
+            where: { userId: statePayload.userId },
+          });
+          if (linkedCount >= MAX_LINKED_INBOXES) {
+            return reply.redirect(`${webUrl}/settings?inbox=limit`);
+          }
+        }
         await prisma.linkedInboxAccount.upsert({
           where: { userId_email: { userId: statePayload.userId, email: linkedEmail } },
           update: {
             accessToken: encryptToken(tokens.access_token),
             refreshToken: encryptOptional(tokens.refresh_token),
             expiresAt,
+            // Re-linking a previously-revoked inbox clears the reconnect prompt.
+            needsReconnect: false,
           },
           create: {
             userId: statePayload.userId,
@@ -1090,7 +1112,7 @@ export function authRoutes(app: FastifyInstance) {
       const userId = getUserId(request);
       const accounts = await prisma.linkedCalendarAccount.findMany({
         where: { userId },
-        select: { id: true, email: true, createdAt: true },
+        select: { id: true, email: true, createdAt: true, needsReconnect: true },
         orderBy: { createdAt: "asc" },
       });
       return { accounts };
@@ -1115,8 +1137,10 @@ export function authRoutes(app: FastifyInstance) {
   );
 
   // GET /api/auth/google/linked-inboxes — list the user's linked secondary
-  // inboxes (never returns tokens — id + email + connectedAt only). Pro-gated to
-  // match the connect route so a lapsed user can't read the paid feature's data.
+  // inboxes (never returns tokens — id + email + connectedAt + last-sync only).
+  // Pro-gated to match the connect route so a lapsed user can't read the paid
+  // feature's data. lastSyncedAt lets the UI confirm an inbox is actually syncing
+  // after MULTI_INBOX_SYNC_ENABLED flips (null until the first sync tick).
   app.get(
     "/google/linked-inboxes",
     { preHandler: [requireAuth, requireEntitled] },
@@ -1124,7 +1148,13 @@ export function authRoutes(app: FastifyInstance) {
       const userId = getUserId(request);
       const accounts = await prisma.linkedInboxAccount.findMany({
         where: { userId },
-        select: { id: true, email: true, createdAt: true },
+        select: {
+          id: true,
+          email: true,
+          createdAt: true,
+          lastSyncedAt: true,
+          needsReconnect: true,
+        },
         orderBy: { createdAt: "asc" },
       });
       return { accounts };

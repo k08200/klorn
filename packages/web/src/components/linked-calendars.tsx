@@ -12,6 +12,9 @@ interface LinkedAccount {
   id: string;
   email: string;
   createdAt: string;
+  // true once this calendar's token was found revoked/undecryptable — the user
+  // must re-link to resume free/busy (server clears it on a refresh/re-link).
+  needsReconnect: boolean;
 }
 
 /**
@@ -70,14 +73,15 @@ export function LinkedCalendars() {
     },
   });
 
-  const connect = async () => {
-    try {
-      await startLinkCalendar();
-    } catch (err) {
+  // useMutation (not a bare async fn) so isPending disables the buttons — a
+  // double-click would otherwise start two OAuth flows before the redirect.
+  const connect = useMutation({
+    mutationFn: () => startLinkCalendar(),
+    onError: (err) => {
       captureClientError(err, { scope: "calendar.linked.connect" });
       toast("Connecting another calendar needs a Pro subscription.", "error");
-    }
-  };
+    },
+  });
 
   return (
     <section className="rounded-lg border border-stone-700/45 bg-stone-950/55 p-4 text-stone-300">
@@ -92,17 +96,36 @@ export function LinkedCalendars() {
           {accounts.map((account) => (
             <li
               key={account.id}
-              className="flex items-center justify-between rounded-md border border-stone-800 bg-black/20 px-3 py-2 text-sm"
+              className="flex items-center justify-between gap-3 rounded-md border border-stone-800 bg-black/20 px-3 py-2 text-sm"
             >
-              <span className="truncate text-stone-200">{account.email}</span>
-              <button
-                type="button"
-                onClick={() => disconnect.mutate(account.id)}
-                disabled={disconnect.isPending}
-                className="ml-3 shrink-0 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 transition hover:bg-stone-800 disabled:opacity-50"
-              >
-                Disconnect
-              </button>
+              <div className="min-w-0">
+                <span className="block truncate text-stone-200">{account.email}</span>
+                {account.needsReconnect && (
+                  <span className="block truncate text-[11px] text-amber-400">
+                    Reconnect needed — access was revoked
+                  </span>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {account.needsReconnect && (
+                  <button
+                    type="button"
+                    onClick={() => connect.mutate()}
+                    disabled={connect.isPending}
+                    className="rounded-md border border-amber-400/50 bg-amber-400/10 px-2 py-1 text-xs text-amber-200 transition hover:bg-amber-400/20 disabled:opacity-50"
+                  >
+                    Reconnect
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => disconnect.mutate(account.id)}
+                  disabled={disconnect.isPending}
+                  className="rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 transition hover:bg-stone-800 disabled:opacity-50"
+                >
+                  Disconnect
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -110,8 +133,9 @@ export function LinkedCalendars() {
 
       <button
         type="button"
-        onClick={() => void connect()}
-        className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200"
+        onClick={() => connect.mutate()}
+        disabled={connect.isPending}
+        className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
       >
         Connect work calendar
       </button>

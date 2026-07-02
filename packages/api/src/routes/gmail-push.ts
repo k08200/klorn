@@ -159,8 +159,13 @@ export async function gmailPushRoutes(app: FastifyInstance) {
         });
     };
 
+    // `email` is already lowercased (above), and every write path stores
+    // User.email / LinkedInboxAccount.email via normalizeEmail (lowercased), so
+    // an EXACT match is equivalent to the old case-insensitive one for all stored
+    // rows — but it can use the indexes (User.email @unique, LinkedInboxAccount's
+    // email index) instead of seq-scanning on every push (the hottest path).
     const user = await prisma.user.findFirst({
-      where: { email: { equals: email, mode: "insensitive" } },
+      where: { email },
       select: { id: true },
     });
     if (user) {
@@ -175,7 +180,7 @@ export async function gmailPushRoutes(app: FastifyInstance) {
     // pre-linked LinkedInboxAccount row's userId.
     if (MULTI_INBOX_SYNC_ENABLED) {
       const linked = await prisma.linkedInboxAccount.findFirst({
-        where: { email: { equals: email, mode: "insensitive" } },
+        where: { email },
         select: { id: true, userId: true },
       });
       if (linked) {
@@ -185,6 +190,18 @@ export async function gmailPushRoutes(app: FastifyInstance) {
             linked.userId,
             syncEmails(linked.userId, 30, undefined, { id: linked.id, email, client }),
           );
+        } else {
+          // Known linked inbox but its token is unusable (revoked/undecryptable):
+          // getAuthedInboxClient already flags it needsReconnect, but the push
+          // sync is silently skipped here — surface it so a stalled real-time
+          // inbox is observable, not just drained to 204.
+          console.warn(
+            `[GMAIL-PUSH] Skipped real-time sync for linked inbox ${linked.id} — client unavailable (needs reconnect)`,
+          );
+          captureError(new Error("Linked inbox client unavailable on push"), {
+            tags: { scope: "gmail-push.linked-inbox" },
+            extra: { linkedInboxAccountId: linked.id, userId: linked.userId },
+          });
         }
         return reply.code(204).send();
       }

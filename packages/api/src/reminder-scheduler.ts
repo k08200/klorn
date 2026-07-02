@@ -150,6 +150,7 @@ async function checkDueReminders() {
     await deliverDueReminders();
   } catch (err) {
     console.error("[REMINDER] Scheduler error:", err);
+    captureError(err, { tags: { scope: "reminder.scheduler" } });
   }
 }
 

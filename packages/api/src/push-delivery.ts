@@ -72,6 +72,40 @@ const DEFAULT_LOOKBACK_HOURS = 24;
 const MAX_LOOKBACK_HOURS = 24 * 14;
 const DEFAULT_RECENT_LIMIT = 20;
 const MAX_RECENT_LIMIT = 100;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Retention: delete PushDeliveryLog rows older than `olderThanDays`.
+ *
+ * The table only ever shrank on account deletion, so at fleet scale it grows
+ * unbounded. This is an ops/cron job (scripts/prune-push-logs.ts) — it is NOT
+ * wired into the automation scheduler.
+ *
+ * Prisma's deleteMany has no LIMIT, so a single unbounded delete would lock a
+ * huge row set. Instead we page ids via findMany(take: batchSize) and delete
+ * them by id-set until a page comes back empty. Returns the total deleted and
+ * logs the count only (no PII).
+ */
+export async function pruneOldPushDeliveryLogs(
+  olderThanDays = 90,
+  batchSize = 5000,
+): Promise<number> {
+  const cutoff = new Date(Date.now() - olderThanDays * DAY_MS);
+  let deleted = 0;
+  for (;;) {
+    const rows = await prisma.pushDeliveryLog.findMany({
+      where: { createdAt: { lt: cutoff } },
+      select: { id: true },
+      take: batchSize,
+    });
+    if (rows.length === 0) break;
+    const ids = rows.map((row) => row.id);
+    const result = await prisma.pushDeliveryLog.deleteMany({ where: { id: { in: ids } } });
+    deleted += result.count;
+  }
+  console.log(`[push-delivery] pruned ${deleted} log(s) older than ${olderThanDays}d`);
+  return deleted;
+}
 
 export async function createPushDeliveryAttempt(input: PushDeliveryAttemptInput): Promise<string> {
   const row = await prisma.pushDeliveryLog.create({

@@ -92,4 +92,48 @@ describe("renewExpiringGmailWatches — linked inboxes", () => {
     expect(m.linkedFindMany).not.toHaveBeenCalled();
     expect(m.watch).not.toHaveBeenCalled();
   });
+
+  it("skips inboxes already flagged needsReconnect (no hourly retry storm on revoked tokens)", async () => {
+    process.env.MULTI_INBOX_SYNC_ENABLED = "true";
+    process.env.GMAIL_PUBSUB_TOPIC = "projects/p/topics/t";
+    m.userTokenFindMany.mockResolvedValue([]);
+    m.linkedFindMany.mockResolvedValue([]);
+    vi.resetModules();
+    const { renewExpiringGmailWatches } = await import("../gmail.js");
+    await renewExpiringGmailWatches();
+
+    // The renewal query must exclude reconnect-flagged inboxes — otherwise a
+    // revoked linked token retries watch registration every tick forever.
+    expect(m.linkedFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ needsReconnect: false }),
+      }),
+    );
+  });
+
+  it("flags a linked inbox for reconnect when its watch registration hits an auth error", async () => {
+    process.env.MULTI_INBOX_SYNC_ENABLED = "true";
+    process.env.GMAIL_PUBSUB_TOPIC = "projects/p/topics/t";
+    m.userTokenFindMany.mockResolvedValue([]);
+    m.linkedFindMany.mockResolvedValue([{ id: "acc1", userId: "u1" }]);
+    m.linkedFindFirst.mockResolvedValue({
+      id: "acc1",
+      email: "w@x.com",
+      accessToken: "AT",
+      refreshToken: "RT",
+      expiresAt: null,
+    });
+    m.watch.mockRejectedValueOnce({ response: { status: 401 } });
+    vi.resetModules();
+    const { renewExpiringGmailWatches } = await import("../gmail.js");
+    const result = await renewExpiringGmailWatches();
+
+    // A 401 on renewal durably flags the inbox (so the UI prompts a re-link and
+    // the next tick skips it), rather than silently failing every hour.
+    expect(m.linkedUpdateMany).toHaveBeenCalledWith({
+      where: { id: "acc1", userId: "u1" },
+      data: { needsReconnect: true },
+    });
+    expect(result.failed).toBe(1);
+  });
 });
