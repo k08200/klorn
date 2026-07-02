@@ -407,6 +407,20 @@
       justify-content: space-between;
       padding: 20px;
     }
+    /* Full-width divider under the nav — the bar itself is max-width/centered,
+       so a plain bottom-border would stop short; this pseudo-element spans the
+       whole viewport and fades at the edges so the header reads as its own
+       band instead of floating on a flat hero. */
+    .hero-nav::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100vw;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.14) 18%, rgba(216,164,93,0.28) 50%, rgba(255,255,255,0.14) 82%, transparent);
+    }
     @media (min-width: 768px) { .hero-nav { padding: 20px 32px; } }
     .hero-nav .brand {
       display: flex;
