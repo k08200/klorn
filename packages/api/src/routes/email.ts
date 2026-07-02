@@ -547,11 +547,15 @@ export async function emailRoutes(app: FastifyInstance) {
   // ─── Sync & List Emails ───────────────────────────────────────────────
   // GET /api/email?filter=unread|urgent|reply-needed|attachments|candidates&search=keyword&category=billing&page=1
   app.get("/", async (request) => {
-    const { filter, search, category, page } = request.query as {
+    const { filter, search, category, page, inbox } = request.query as {
       filter?: string;
       search?: string;
       category?: string;
       page?: string;
+      // Multi-account: "all"/absent = every inbox, "primary" = the user's own
+      // Google inbox, or a specific LinkedInboxAccount id. Always userId-scoped
+      // below, so a foreign/garbage id yields zero rows — never a cross-user leak.
+      inbox?: string;
     };
     const uid = getUserId(request);
     const pageNum = parseInt(page || "1", 10);
@@ -666,6 +670,14 @@ export async function emailRoutes(app: FastifyInstance) {
     if (search) {
       where.OR = emailSearchOr(search);
     }
+    // Per-inbox scoping. `where.userId` is always set, so even a foreign or
+    // malformed id can only ever match the caller's own rows (zero) — the userId
+    // scope is the IDOR guard, no separate ownership check needed.
+    if (inbox === "primary") {
+      where.linkedInboxAccountId = null;
+    } else if (inbox && inbox !== "all") {
+      where.linkedInboxAccountId = inbox;
+    }
 
     const [emails, total, unreadCount] = await Promise.all([
       prisma.emailMessage.findMany({
@@ -704,6 +716,9 @@ export async function emailRoutes(app: FastifyInstance) {
         id: e.id,
         gmailId: e.gmailId,
         threadId: e.threadId,
+        // null = the primary Google inbox; a string = the LinkedInboxAccount the
+        // message belongs to. The client maps this to an inbox label/badge.
+        linkedInboxAccountId: e.linkedInboxAccountId,
         from: e.from,
         senderEmail: addr || null,
         trust: trustToWire(addr ? trustMap.get(addr) : null),
@@ -1073,6 +1088,39 @@ export async function emailRoutes(app: FastifyInstance) {
       hasMultiAccountFeature: user ? planHasFeature(user.plan, "multi_account", user.role) : false,
       linkedInboxes: rows.map((r) => ({ ...r, tokenLoads: loadableIds.has(r.id) })),
       persistedLinkedEmailCount,
+    };
+  });
+
+  // GET /api/email/inboxes — the caller's mailboxes for the per-inbox selector:
+  // the primary Google account + every linked secondary inbox. Read-only,
+  // self-scoped (userId from the JWT), and NO tokens are returned. Built entirely
+  // from the user's own rows — nothing about any specific address is hardcoded.
+  app.get("/inboxes", async (request) => {
+    const uid = getUserId(request);
+    const user = await prisma.user.findUnique({
+      where: { id: uid },
+      select: { email: true },
+    });
+    const linked = await prisma.linkedInboxAccount.findMany({
+      where: { userId: uid },
+      select: { id: true, email: true, needsReconnect: true },
+      orderBy: { email: "asc" },
+    });
+    return {
+      inboxes: [
+        {
+          id: null as string | null,
+          email: user?.email ?? null,
+          kind: "primary" as const,
+          needsReconnect: false,
+        },
+        ...linked.map((l) => ({
+          id: l.id,
+          email: l.email,
+          kind: "linked" as const,
+          needsReconnect: l.needsReconnect,
+        })),
+      ],
     };
   });
 

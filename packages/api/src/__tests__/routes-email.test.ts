@@ -80,6 +80,7 @@ vi.mock("../db.js", () => {
       })),
     },
     attentionItem: { upsert: vi.fn(async () => ({})) },
+    linkedInboxAccount: { findMany: vi.fn(async () => []) },
     user: { findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })) },
     device: {
       findUnique: vi.fn(async () => ({ id: "d1" })),
@@ -160,6 +161,109 @@ describe("email routes (demo mode)", () => {
       expect.objectContaining({
         where: expect.objectContaining({ userId: "user-1", needsReply: true }),
       }),
+    );
+    await app.close();
+  });
+
+  it("scopes the list to the primary inbox when inbox=primary", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.userToken.findFirst).mockResolvedValueOnce({
+      id: "token-1",
+      userId: "user-1",
+      provider: "google",
+      accessToken: "token",
+      refreshToken: null,
+      expiresAt: null,
+      gmailWatchHistoryId: null,
+      gmailWatchExpiresAt: null,
+      createdAt: new Date("2026-05-03T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-03T00:00:00.000Z"),
+    });
+    vi.mocked(prisma.emailMessage.findMany).mockClear();
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email?inbox=primary",
+      headers: auth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.emailMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: "user-1", linkedInboxAccountId: null }),
+      }),
+    );
+    await app.close();
+  });
+
+  it("scopes the list to a linked inbox id (userId still enforced = IDOR-safe)", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.userToken.findFirst).mockResolvedValueOnce({
+      id: "token-1",
+      userId: "user-1",
+      provider: "google",
+      accessToken: "token",
+      refreshToken: null,
+      expiresAt: null,
+      gmailWatchHistoryId: null,
+      gmailWatchExpiresAt: null,
+      createdAt: new Date("2026-05-03T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-03T00:00:00.000Z"),
+    });
+    vi.mocked(prisma.emailMessage.findMany).mockClear();
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email?inbox=linked-42",
+      headers: auth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.emailMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: "user-1", linkedInboxAccountId: "linked-42" }),
+      }),
+    );
+    await app.close();
+  });
+
+  it("GET /inboxes returns the primary account plus linked inboxes (no hardcoding)", async () => {
+    const { prisma } = await import("../db.js");
+    // The email routes run requireAppAccess (a preHandler that also reads the
+    // user) before the handler, so seed two lookups: both return the primary
+    // with its email + an entitled plan.
+    const primaryUser = {
+      id: "user-1",
+      email: "primary@example.com",
+      plan: "PRO",
+      role: "USER",
+    } as never;
+    vi.mocked(prisma.user.findUnique)
+      .mockResolvedValueOnce(primaryUser)
+      .mockResolvedValueOnce(primaryUser);
+    vi.mocked(prisma.linkedInboxAccount.findMany).mockResolvedValueOnce([
+      { id: "linked-1", email: "second@school.edu", needsReconnect: false },
+    ] as never);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email/inboxes",
+      headers: auth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      inboxes: [
+        { id: null, email: "primary@example.com", kind: "primary", needsReconnect: false },
+        { id: "linked-1", email: "second@school.edu", kind: "linked", needsReconnect: false },
+      ],
+    });
+    // Self-scoped: linked lookup keyed by the caller's userId.
+    expect(prisma.linkedInboxAccount.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: "user-1" } }),
     );
     await app.close();
   });
