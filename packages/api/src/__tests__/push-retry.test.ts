@@ -50,6 +50,14 @@ describe("authoredSurface — which push categories bypass the noise heuristic",
     expect(authoredSurface("email_candidate")).toBe("firewall");
   });
 
+  it("maps the imminent-meeting push to the 'firewall' surface", () => {
+    // A pre-meeting alert is a first-party calendar interrupt, not inbound
+    // mail. Without this, a meeting whose summary collides with a noise keyword
+    // ("confirm your…", "sale", "welcome to") is silently dropped at the push
+    // gate and the phone never rings for a meeting starting in N minutes.
+    expect(authoredSurface("meeting")).toBe("firewall");
+  });
+
   it("leaves all other categories subject to the noise + housekeeping filters", () => {
     expect(authoredSurface("system")).toBeNull();
     expect(authoredSurface("agent_proposal")).toBeNull();
