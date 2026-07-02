@@ -1,15 +1,15 @@
+import { prisma } from "./db.js";
 import { asString, asUnitInterval } from "./llm-coerce.js";
+import { getUserLlmCredentials } from "./llm-credentials.js";
 import { parseLlmJson } from "./llm-json.js";
 import { createCompletion, JUDGE_MODEL } from "./openai.js";
 import type { ProviderCredentials } from "./providers/index.js";
-import { captureError } from "./sentry.js";
 import type { CandidateTrait } from "./sender-trait-policy.js";
 import { TRAIT_KINDS, validateTraitValue } from "./sender-trait-policy.js";
 import type { TraitSourceEmail } from "./sender-trait-signature.js";
-import { prisma } from "./db.js";
-import { getUserLlmCredentials } from "./llm-credentials.js";
 import { computeTraitSourceSig } from "./sender-trait-signature.js";
 import { upsertSenderTrait } from "./sender-trait-store.js";
+import { captureError } from "./sentry.js";
 
 interface RawTrait {
   value?: unknown;
@@ -19,9 +19,7 @@ interface RawTrait {
 type RawResponse = Partial<Record<string, RawTrait>>;
 
 function buildPrompt(emails: TraitSourceEmail[]): string {
-  const lines = emails.map(
-    (e, i) => `${i}. from=${e.from} | subject=${e.subject} | ${e.snippet}`,
-  );
+  const lines = emails.map((e, i) => `${i}. from=${e.from} | subject=${e.subject} | ${e.snippet}`);
   return `You profile an email SENDER from their recent messages. Return JSON only, shape:
 {"relationship":{"value":"investor","confidence":0.0-1.0,"evidence":"short quote"},
  "recurring_intent":{"value":"billing","confidence":0.0-1.0,"evidence":"short quote"}}
@@ -47,7 +45,10 @@ export async function extractTraitsFromEmails(
       {
         model: JUDGE_MODEL,
         messages: [
-          { role: "system", content: "You are a strict JSON sender profiler. JSON only, no fences." },
+          {
+            role: "system",
+            content: "You are a strict JSON sender profiler. JSON only, no fences.",
+          },
           { role: "user", content: buildPrompt(emails) },
         ],
         response_format: { type: "json_object" },
@@ -77,7 +78,10 @@ export async function extractTraitsFromEmails(
     }
     return out;
   } catch (err) {
-    console.warn("[TRAITS] extraction failed — skipping sender:", err instanceof Error ? err.message : String(err));
+    console.warn(
+      "[TRAITS] extraction failed — skipping sender:",
+      err instanceof Error ? err.message : String(err),
+    );
     captureError(err, { tags: { scope: "sender-traits.extract" } });
     return [];
   }
@@ -89,6 +93,8 @@ const MAX_SENDERS_PER_RUN = 50;
 export interface TraitRunSummary {
   sendersProcessed: number;
   sendersFailed: number;
+  /** Senders whose sample was unchanged since the last run (LLM call skipped). */
+  sendersSkipped: number;
   traitsWritten: number;
 }
 
@@ -119,6 +125,24 @@ export async function extractSenderTraitsForUser(userId: string): Promise<TraitR
         labels: e.labels ?? [],
       }));
       const sourceSig = computeTraitSourceSig(sample);
+      // Idempotency / cost guard: skip the paid LLM call when every stored row
+      // for this sender already carries this exact sample signature — the same
+      // evidence has already been through the LLM, so re-running it would only
+      // reproduce the same result. A genuinely new sample changes the signature
+      // (new mail arrived) and forces a re-run. Deliberate trade-off: a kind the
+      // LLM legitimately omitted for this sample (no row) is NOT retried until
+      // the evidence changes — retrying identical evidence weekly is exactly the
+      // cost the signature contract exists to avoid. If any existing row's sig
+      // has diverged (e.g. a conflict row that never advanced its sig), `every`
+      // is false and we re-run; per-kind correctness is still enforced by
+      // resolveTraitUpsert on the write path.
+      const priorRows = await prisma.senderTrait.findMany({
+        where: { userId, sender },
+        select: { sourceSig: true },
+      });
+      if (priorRows.length > 0 && priorRows.every((r) => r.sourceSig === sourceSig)) {
+        return { written: 0, skipped: true };
+      }
       const candidates = await extractTraitsFromEmails(sample, {
         userId,
         ...(credentials ? { credentials } : {}),
@@ -128,21 +152,24 @@ export async function extractSenderTraitsForUser(userId: string): Promise<TraitR
         await upsertSenderTrait({ userId, sender, candidate, sourceSig });
         written++;
       }
-      return written;
+      return { written, skipped: false };
     }),
   );
 
   let traitsWritten = 0;
   let sendersFailed = 0;
+  let sendersSkipped = 0;
   results.forEach((r) => {
-    if (r.status === "fulfilled") traitsWritten += r.value;
-    else {
+    if (r.status === "fulfilled") {
+      traitsWritten += r.value.written;
+      if (r.value.skipped) sendersSkipped++;
+    } else {
       sendersFailed++;
       console.warn("[TRAITS] sender failed for", userId, ":", r.reason);
       captureError(r.reason, { tags: { scope: "sender-traits.sender", userId } });
     }
   });
-  return { sendersProcessed: senders.length, sendersFailed, traitsWritten };
+  return { sendersProcessed: senders.length, sendersFailed, sendersSkipped, traitsWritten };
 }
 
 /** Batch entry point for the scheduler — every user with mail. */
