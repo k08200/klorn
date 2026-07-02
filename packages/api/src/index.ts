@@ -73,12 +73,22 @@ const app = Fastify({
 // Attach per-request performance tracking (p50/p95/p99 per route)
 attachPerfMonitor(app);
 
-const ALLOWED_ORIGINS = (
-  process.env.CORS_ORIGINS ||
-  "http://localhost:8001,http://127.0.0.1:8001,http://127.0.2.2:8001,http://127.0.2.3:8001,http://localhost:3000,http://127.0.0.1:3000,tauri://localhost,https://tauri.localhost,http://tauri.localhost"
-)
-  .split(",")
-  .map((o) => o.trim());
+// First-party surfaces that call the API from a browser. Always allowed —
+// independent of CORS_ORIGINS — so the public marketing site's login-free
+// playground classifier works in production. These are our own domains, so
+// permitting them (even with credentials) carries no cross-origin trust risk.
+const FIRST_PARTY_ORIGINS = ["https://klorn.ai", "https://www.klorn.ai"];
+
+const ALLOWED_ORIGINS = [
+  ...(
+    process.env.CORS_ORIGINS ||
+    "http://localhost:8001,http://127.0.0.1:8001,http://127.0.2.2:8001,http://127.0.2.3:8001,http://localhost:3000,http://127.0.0.1:3000,tauri://localhost,https://tauri.localhost,http://tauri.localhost"
+  )
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
+  ...FIRST_PARTY_ORIGINS,
+];
 
 function isAllowedDevOrigin(origin: string): boolean {
   if (process.env.NODE_ENV === "production") return false;
