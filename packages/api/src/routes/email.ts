@@ -9,6 +9,7 @@
 import type { EmailMessage, FeedbackSignal, Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { MULTI_INBOX_SYNC_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
 import {
   analyzePendingEmailAttachments,
@@ -31,9 +32,10 @@ import {
   syncLinkedInboxesForUser,
 } from "../email-sync.js";
 import { requireAppAccess } from "../entitlement-guard.js";
-import { toggleReadGmail } from "../gmail.js";
+import { getLinkedInboxClients, toggleReadGmail } from "../gmail.js";
 import { senderEmail } from "../notification-format.js";
 import { captureError } from "../sentry.js";
+import { planHasFeature } from "../stripe.js";
 import { createTask } from "../tasks.js";
 import { getTrustScore, getTrustScoresBulk, type TrustScoreResult } from "../trust-score.js";
 import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
@@ -1042,6 +1044,36 @@ export async function emailRoutes(app: FastifyInstance) {
     } catch (err) {
       return { error: err instanceof Error ? err.message : "Sync failed" };
     }
+  });
+
+  // ─── Multi-inbox diagnostics ──────────────────────────────────────────
+  // GET /api/email/multi-inbox-debug — self-scoped: report exactly which gate a
+  // linked inbox is stuck on (flag / plan / token / persistence), so a "connected
+  // but not syncing" report is diagnosed in one call instead of guessing.
+  app.get("/multi-inbox-debug", async (request) => {
+    const uid = getUserId(request);
+    const user = await prisma.user.findUnique({
+      where: { id: uid },
+      select: { plan: true, role: true, email: true },
+    });
+    const rows = await prisma.linkedInboxAccount.findMany({
+      where: { userId: uid },
+      select: { id: true, email: true, needsReconnect: true, lastSyncedAt: true, historyId: true },
+    });
+    // getLinkedInboxClients only returns rows whose token actually decrypts/builds
+    // — so comparing its ids against the raw rows shows which tokens are unusable.
+    const loadable = await getLinkedInboxClients(uid).catch(() => []);
+    const loadableIds = new Set(loadable.map((c) => c.id));
+    const persistedLinkedEmailCount = await prisma.emailMessage.count({
+      where: { userId: uid, linkedInboxAccountId: { not: null } },
+    });
+    return {
+      flagEnabled: MULTI_INBOX_SYNC_ENABLED,
+      account: { email: user?.email, plan: user?.plan, role: user?.role },
+      hasMultiAccountFeature: user ? planHasFeature(user.plan, "multi_account", user.role) : false,
+      linkedInboxes: rows.map((r) => ({ ...r, tokenLoads: loadableIds.has(r.id) })),
+      persistedLinkedEmailCount,
+    };
   });
 
   // ─── Reconcile (remove stale emails from DB) ──────────────────────────
