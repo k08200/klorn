@@ -1010,6 +1010,14 @@ async function runUserCycle(
               if (linkedResult.newCount > 0) {
                 await summarizeUnsummarizedEmails(config.userId, linkedResult.newCount);
               }
+              // Stamp the last successful sync so the UI's "Synced Xm ago" is real
+              // (the column had a reader but no writer — it showed "Not yet synced"
+              // forever even while syncing). Runs on every successful tick, incl.
+              // 0-new, so it reflects the last CHECK, not just the last new mail.
+              await prisma.linkedInboxAccount.updateMany({
+                where: { id: inbox.id, userId: config.userId },
+                data: { lastSyncedAt: new Date() },
+              });
             } catch (err) {
               const errName = err instanceof Error ? err.name : "";
               if (errName === "DailyCostCapExceededError") {
