@@ -15,6 +15,7 @@ import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../email.js";
+import { syncLinkedInboxesForUser } from "../email-sync.js";
 import { requireEntitled } from "../entitlement-guard.js";
 import {
   getAuthedClient,
@@ -1441,6 +1442,16 @@ export function authRoutes(app: FastifyInstance) {
       triggerDueLoginBriefing(userId);
       return { synced: false, reason: "google_not_connected" };
     }
+
+    // Sync the user's LINKED secondary inboxes on this bootstrap call. The app
+    // hits init-sync on every login/reload but never POST /email/sync, and the
+    // scheduler can lag on the free tier (the service hibernates), so this is the
+    // reliable app-triggered path for linked mail to appear. Gated + per-account
+    // isolated inside the helper; a failure is logged (and surfaces here), never fatal.
+    await syncLinkedInboxesForUser(userId).catch((err) => {
+      console.warn(`[INIT-SYNC] linked inbox fan-out failed for ${userId}:`, err);
+      captureError(err, { tags: { scope: "auth.init-sync.linked" }, extra: { userId } });
+    });
 
     // 1. Sync Google Calendar events (next 30 days)
     try {
