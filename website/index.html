@@ -56,7 +56,10 @@
       --max-w-narrow: 1120px;
     }
 
-    html { scroll-behavior: smooth; }
+    /* scroll-snap-type below needs html to be the one unambiguous root
+       scroll container — overflow-x lives here, not on body, so nothing
+       makes body a competing scroller that swallows the snap. */
+    html { scroll-behavior: smooth; overflow-x: hidden; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
@@ -66,7 +69,6 @@
       -webkit-font-smoothing: antialiased;
       word-break: keep-all;
       overflow-wrap: anywhere;
-      overflow-x: hidden;
     }
 
     a { color: inherit; text-decoration: none; }
@@ -123,6 +125,7 @@
       margin-top: 24px;
       display: flex;
       flex-wrap: wrap;
+      justify-content: center;
       gap: 8px;
     }
     .hero-badge {
@@ -147,8 +150,8 @@
     /* ── Hero ─────────────────────────────────── */
     .hero {
       position: relative;
-      min-height: 84svh;
       overflow: hidden;
+      padding-bottom: 80px;
     }
 
     .hero-scene {
@@ -160,25 +163,83 @@
       position: absolute;
       inset: 0;
       background:
-        radial-gradient(ellipse 1000px 640px at 76% 16%, rgba(216,164,93,0.10), transparent 65%),
+        radial-gradient(ellipse 1200px 800px at 50% 68%, rgba(216,164,93,0.14), transparent 60%),
         var(--surface-canvas);
     }
-    .hero-product {
+    .hero-3d {
       position: absolute;
-      top: 72px;
-      right: -42px;
-      width: 900px;
-      height: 548px;
-      transform: rotate(-1deg);
-      border: 1px solid rgba(216,164,93,0.28);
-      border-radius: 12px;
-      background: var(--surface-elevated);
-      box-shadow:
-        0 25px 50px -12px rgba(0,0,0,0.5),
-        0 0 90px -20px rgba(216,164,93,0.22);
+      inset: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      transition: opacity 1.4s ease;
+      z-index: 1;
+    }
+    .hero-3d.ready { opacity: 1; }
+    .hero-scrim {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background: linear-gradient(to bottom, var(--surface-canvas) 0%, rgba(15,17,21,0.55) 22%, rgba(15,17,21,0.1) 42%, transparent 58%);
+    }
+    .hero-float-chips {
+      position: absolute;
+      inset: -40px -20px;
+      z-index: 3;
+      display: none;
+      pointer-events: none;
+    }
+    @media (min-width: 1024px) { .hero-float-chips { display: block; } }
+    .hero-float-chip {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 9999px;
+      border: 1px solid rgba(216,164,93,0.35);
+      background: rgba(21,25,34,0.65);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--stone-100);
+      box-shadow: 0 8px 24px -8px rgba(0,0,0,0.5);
+      opacity: 0;
+      animation: hero-chip-in 1s ease forwards, hero-chip-float 6s ease-in-out infinite;
+    }
+    .hero-float-chip .dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--brand-gold-bright); flex-shrink: 0; }
+    .hero-float-chip.c1 { top: -3%; left: 6%; animation-delay: 0.2s, 0.2s; }
+    .hero-float-chip.c2 { top: -3%; right: 4%; animation-delay: 0.6s, 0.6s; }
+    .hero-float-chip.c3 { bottom: -2%; left: 12%; animation-delay: 1s, 1s; }
+    @keyframes hero-chip-in { to { opacity: 1; } }
+    @keyframes hero-chip-float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    .hero-frame-wrap {
+      position: relative;
+      z-index: 10;
+      margin: 56px auto 0;
+      max-width: 1120px;
+      padding: 0 20px;
       display: none;
     }
-    @media (min-width: 1024px) { .hero-product { display: block; } }
+    @media (min-width: 1024px) { .hero-frame-wrap { display: block; } }
+    .hero-product {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 560px;
+      border: 1px solid rgba(216,164,93,0.3);
+      border-radius: 14px;
+      background: var(--surface-elevated);
+      box-shadow:
+        0 30px 70px -20px rgba(0,0,0,0.6),
+        0 0 120px -30px rgba(216,164,93,0.3);
+    }
 
     .hero-titlebar {
       display: flex;
@@ -199,6 +260,30 @@
       font-size: 12px;
       font-weight: 500;
       color: var(--stone-500);
+    }
+    .hero-live {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--brand-gold-bright);
+    }
+    .hero-live-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 9999px;
+      background: var(--brand-gold-bright);
+      box-shadow: 0 0 0 0 rgba(247,213,156,0.6);
+      animation: hero-live-pulse 1.8s ease-out infinite;
+    }
+    @keyframes hero-live-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(247,213,156,0.55); }
+      70% { box-shadow: 0 0 0 7px rgba(247,213,156,0); }
+      100% { box-shadow: 0 0 0 0 rgba(247,213,156,0); }
     }
 
     .hero-shell {
@@ -226,10 +311,22 @@
       border-radius: 6px;
       font-size: 14px;
       color: var(--stone-500);
+      cursor: pointer;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      font-family: inherit;
+      transition: background 0.15s ease, color 0.15s ease;
     }
+    .hero-nav-item:hover { color: var(--stone-200); background: rgba(255,255,255,0.04); }
     .hero-nav-item.active { background: var(--stone-800); color: var(--stone-100); }
 
     .hero-main { padding: 24px; }
+    .hero-main-fade {
+      transition: opacity 0.18s ease;
+    }
+    .hero-main-fade.switching { opacity: 0; }
     .hero-main-head {
       display: flex;
       align-items: flex-end;
@@ -269,7 +366,19 @@
       border: 1px solid var(--stone-800);
       border-radius: 8px;
       background: var(--surface-panel);
+      cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
     }
+    .hero-row:hover {
+      border-color: rgba(216,164,93,0.4);
+      background: var(--surface-elevated);
+    }
+    .hero-row.selected {
+      border-color: var(--brand-gold);
+      background: rgba(216,164,93,0.08);
+      box-shadow: 0 0 0 1px rgba(216,164,93,0.35), 0 8px 24px -12px rgba(216,164,93,0.4);
+    }
+    .hero-row.selected .hero-row-sender { color: var(--brand-gold-bright); }
     .hero-row-meta {
       display: flex;
       justify-content: space-between;
@@ -287,18 +396,6 @@
     .hero-row-time { font-size: 12px; color: var(--stone-600); }
     .hero-row-sender { font-size: 14px; font-weight: 500; color: var(--stone-100); }
     .hero-row-subject { margin-top: 4px; font-size: 14px; color: var(--stone-500); }
-
-    .hero-overlay {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(90deg, #0f1115 0%, rgba(15,17,21,0.92) 42%, rgba(15,17,21,0.16) 78%, rgba(15,17,21,0.02) 100%);
-    }
-    .hero-fade {
-      position: absolute;
-      left: 0; right: 0; bottom: 0;
-      height: 144px;
-      background: linear-gradient(to top, var(--surface-canvas), transparent);
-    }
 
     .hero-nav {
       position: relative;
@@ -353,37 +450,51 @@
       z-index: 20;
       margin: 0 auto;
       max-width: var(--max-w);
+      padding: 96px 20px 0;
+    }
+    @media (min-width: 768px) { .hero-body { padding: 120px 32px 0; } }
+
+    .hero-content {
+      max-width: 760px;
+      margin: 0 auto;
       display: flex;
       flex-direction: column;
-      justify-content: center;
-      min-height: calc(84svh - 82px);
-      padding: 48px 20px 64px;
+      align-items: center;
+      text-align: center;
     }
-    @media (min-width: 768px) { .hero-body { padding: 48px 32px 64px; } }
 
     .eyebrow {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid rgba(216,164,93,0.5);
-      color: var(--brand-gold);
-      margin-bottom: 20px;
+      padding: 7px 16px;
+      border-radius: 9999px;
+      border: 1px solid rgba(216,164,93,0.4);
+      background: rgba(216,164,93,0.08);
+      box-shadow: 0 0 24px -6px rgba(216,164,93,0.5);
+      color: var(--brand-gold-bright);
+      margin-bottom: 28px;
     }
 
     .hero-headline {
-      max-width: 768px;
-      font-size: 40px;
-      font-weight: 600;
-      line-height: 1.04;
-      letter-spacing: -0.025em;
+      max-width: 820px;
+      font-size: 44px;
+      font-weight: 700;
+      line-height: 1.0;
+      letter-spacing: -0.03em;
       color: #fff;
       text-wrap: balance;
       text-shadow: 0 2px 28px rgba(15,17,21,0.85);
     }
-    @media (min-width: 640px) { .hero-headline { font-size: 48px; } }
-    @media (min-width: 768px) { .hero-headline { font-size: 60px; line-height: 1.02; } }
-    @media (min-width: 1024px) { .hero-headline { font-size: 72px; } }
+    .hero-headline .grad {
+      background: linear-gradient(90deg, var(--brand-gold-bright), #fff 55%, var(--brand-gold-bright));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    @media (min-width: 640px) { .hero-headline { font-size: 56px; } }
+    @media (min-width: 768px) { .hero-headline { font-size: 68px; line-height: 0.98; } }
+    @media (min-width: 1024px) { .hero-headline { font-size: 84px; } }
 
     .hero-sub {
       margin-top: 24px;
@@ -398,6 +509,8 @@
       margin-top: 36px;
       display: flex;
       flex-direction: column;
+      align-items: center;
+      justify-content: center;
       gap: 12px;
     }
     @media (min-width: 640px) { .hero-ctas { flex-direction: row; } }
@@ -420,6 +533,8 @@
     .invite-banner {
       margin-top: 28px;
       max-width: 560px;
+      width: 100%;
+      text-align: left;
       padding: 16px 18px;
       border-radius: 10px;
       border: 1px solid rgba(216, 164, 93, 0.32);
@@ -586,6 +701,12 @@
       border-radius: 4px;
       font-size: 12px;
       font-weight: 500;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+    .approval-pill.is-approved {
+      border-color: rgba(167,243,208,0.3);
+      background: rgba(167,243,208,0.12);
+      color: var(--emerald-200);
     }
     .decision-rows { display: grid; gap: 12px; }
     .decision-row {
@@ -648,6 +769,8 @@
       color: var(--stone-500);
       font-weight: 500;
     }
+    .act-btn { transition: opacity 0.2s ease, transform 0.2s ease; }
+    .act-btn.is-selected { transform: scale(0.97); opacity: 0.85; }
 
     /* ── Pillars strip ───────────────────────── */
     .pillars-strip {
@@ -817,12 +940,35 @@
     /* ── Reveal animation ────────────────────── */
     .reveal {
       opacity: 0;
-      transform: translateY(16px);
-      transition: opacity 0.5s ease, transform 0.5s ease;
+      transform: translateY(44px);
+      transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .reveal.in { opacity: 1; transform: translateY(0); }
-    /* Reveal depends on IntersectionObserver — without JS the sections must
-       still render, so noscript disables the hidden initial state. */
+    .pillars-grid .pillar.reveal:nth-child(2) { transition-delay: 0.12s; }
+    .pillars-grid .pillar.reveal:nth-child(3) { transition-delay: 0.24s; }
+    .principle-step.reveal:nth-child(2) { transition-delay: 0.1s; }
+    .principle-step.reveal:nth-child(3) { transition-delay: 0.2s; }
+    .principle-step.reveal:nth-child(4) { transition-delay: 0.3s; }
+    .demo-legend .demo-tier.reveal:nth-child(2) { transition-delay: 0.1s; }
+    .demo-legend .demo-tier.reveal:nth-child(3) { transition-delay: 0.2s; }
+    .demo-legend .demo-tier.reveal:nth-child(4) { transition-delay: 0.3s; }
+
+    /* ── Section rhythm ──────────────────────────
+       Sections hug their own content (their padding sets the breathing room)
+       instead of being forced to 100vh. Forcing full-viewport height with
+       centered content left big empty bands above/below each block, and at a
+       boundary you'd stare straight into two of those empty bands stacked —
+       that was the "black gap." Content-height sections sit back-to-back, so
+       the JS crossfade below hands off content-to-content with nothing dark
+       in between. A gentle min-height keeps short sections feeling substantial
+       without reintroducing a large void. */
+    .snap-section {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .hero.snap-section { display: block; min-height: 0; }
 
     /* ── Walkthrough demo section ─────────────── */
     .demo-section { max-width: var(--max-w-narrow); }
@@ -891,78 +1037,127 @@
     .demo-tier.queue .tier-name { color: var(--sky-200); }
     .demo-tier.silent .tier-name { color: var(--stone-300); }
     .demo-tier.auto .tier-name { color: var(--emerald-200); }
+
+    /* ── Hero live classifier (real /api/playground/classify) ── */
+    .klassify {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      height: 512px;
+    }
+    .klassify-input {
+      padding: 22px 24px;
+      border-right: 1px solid var(--stone-800);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+    }
+    .klassify-eyebrow {
+      color: var(--brand-gold);
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      margin-bottom: 2px;
+    }
+    .kf-field, .klassify-keyrow select, .klassify-keyrow input {
+      width: 100%;
+      background: var(--surface-panel);
+      border: 1px solid var(--stone-800);
+      border-radius: 7px;
+      padding: 9px 11px;
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--stone-100);
+      transition: border-color 0.15s ease;
+    }
+    .kf-field::placeholder { color: var(--stone-600); }
+    .kf-field:focus, .klassify-keyrow select:focus, .klassify-keyrow input:focus {
+      outline: none;
+      border-color: rgba(216,164,93,0.5);
+    }
+    textarea.kf-field { resize: none; min-height: 60px; line-height: 1.5; }
+    .klassify-keyrow { display: flex; gap: 8px; }
+    .klassify-keyrow select { width: 118px; flex-shrink: 0; cursor: pointer; }
+    .klassify-keyrow input { flex: 1; }
+    .klassify-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+    .klassify-preset {
+      padding: 5px 10px;
+      border-radius: 9999px;
+      border: 1px solid var(--stone-700);
+      background: transparent;
+      color: var(--stone-400);
+      font-size: 11px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: border-color 0.15s ease, color 0.15s ease;
+    }
+    .klassify-preset:hover { border-color: rgba(216,164,93,0.5); color: var(--stone-100); }
+    .klassify-run {
+      width: 100%;
+      height: 42px;
+      margin-top: 4px;
+      border-radius: 7px;
+    }
+    .klassify-run:disabled { opacity: 0.6; cursor: default; }
+    .klassify-note { font-size: 10px; color: var(--stone-600); line-height: 1.5; }
+    .klassify-note a { color: var(--brand-gold); text-decoration: underline; }
+
+    .klassify-result {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .klassify-tier {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .klassify-tier-badge {
+      display: inline-flex;
+      align-items: center;
+      align-self: flex-start;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      border: 1px solid var(--stone-700);
+      color: var(--stone-400);
+      background: var(--surface-panel);
+    }
+    .klassify-tier-badge[data-tier="PUSH"]   { color: var(--brand-gold-bright); border-color: rgba(240,201,130,0.4); background: rgba(240,201,130,0.1); }
+    .klassify-tier-badge[data-tier="QUEUE"]  { color: var(--sky-200); border-color: rgba(186,230,253,0.35); background: rgba(186,230,253,0.08); }
+    .klassify-tier-badge[data-tier="SILENT"] { color: var(--stone-300); border-color: var(--stone-700); background: rgba(255,255,255,0.03); }
+    .klassify-tier-badge[data-tier="AUTO"]   { color: var(--emerald-200); border-color: rgba(167,243,208,0.35); background: rgba(167,243,208,0.08); }
+    .klassify-tier-desc { font-size: 13px; line-height: 1.6; color: var(--stone-400); }
+    .klassify-reason {
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--stone-200);
+      border-left: 2px solid rgba(216,164,93,0.4);
+      padding-left: 12px;
+    }
+    .klassify-reason:empty { display: none; }
+    .klassify-features { display: flex; flex-direction: column; gap: 10px; }
+    .klassify-feature { display: grid; grid-template-columns: 92px 1fr 34px; align-items: center; gap: 10px; }
+    .klassify-feature .kf-label { font-size: 11px; color: var(--stone-500); text-transform: capitalize; }
+    .klassify-feature .kf-bar { height: 5px; border-radius: 9999px; background: var(--stone-800); overflow: hidden; }
+    .klassify-feature .kf-bar span { display: block; height: 100%; border-radius: 9999px; background: linear-gradient(90deg, var(--brand-gold), var(--brand-gold-bright)); transition: width 0.5s ease; }
+    .klassify-feature .kf-val { font-size: 11px; color: var(--stone-400); text-align: right; font-family: ui-monospace, Menlo, monospace; }
+    .klassify-error { font-size: 12px; line-height: 1.6; color: #f5b8a8; }
+    @media (max-width: 1023px) { .klassify { grid-template-columns: 1fr; height: auto; } .klassify-input { border-right: none; border-bottom: 1px solid var(--stone-800); } }
   </style>
 </head>
 <body>
 
   <!-- ── Hero ────────────────────────────────── -->
-  <section class="hero">
+  <section class="hero snap-section">
     <div class="hero-scene" aria-hidden="true">
       <div class="hero-scene-bg"></div>
-      <div class="hero-product">
-        <div class="hero-titlebar">
-          <span class="dot"></span>
-          <span class="dot"></span>
-          <span class="dot"></span>
-          <span class="crumb">Klorn / Today</span>
-        </div>
-        <div class="hero-shell">
-          <aside class="hero-aside">
-            <div class="hero-aside-brand">
-              <img src="/brand/mark.svg?v=matte2" alt="">
-              <div>
-                <p class="name">Klorn</p>
-                <p class="tag">The clear signal</p>
-              </div>
-            </div>
-            <div class="hero-nav-item active">Decision queue</div>
-            <div class="hero-nav-item">Mail</div>
-            <div class="hero-nav-item">Calendar</div>
-            <div class="hero-nav-item">Briefing</div>
-          </aside>
-          <main class="hero-main">
-            <div class="hero-main-head">
-              <div>
-                <p class="mono label">Decision queue</p>
-                <h2>Today's next actions</h2>
-              </div>
-              <div class="hero-counts">
-                <div><p class="num">7</p><p class="sub">Signals</p></div>
-                <div><p class="num">3</p><p class="sub">Replies</p></div>
-                <div><p class="num">1</p><p class="sub">Approvals</p></div>
-              </div>
-            </div>
-            <div class="hero-rows">
-              <div class="hero-row">
-                <div class="hero-row-meta">
-                  <span class="hero-row-tag">Reply</span>
-                  <span class="hero-row-time">2m</span>
-                </div>
-                <p class="hero-row-sender">OpenRouter Team</p>
-                <p class="hero-row-subject">Model update email needs a response</p>
-              </div>
-              <div class="hero-row">
-                <div class="hero-row-meta">
-                  <span class="hero-row-tag">Security</span>
-                  <span class="hero-row-time">18m</span>
-                </div>
-                <p class="hero-row-sender">Vercel Security</p>
-                <p class="hero-row-subject">Review env vars before deploy</p>
-              </div>
-              <div class="hero-row">
-                <div class="hero-row-meta">
-                  <span class="hero-row-tag">Meeting</span>
-                  <span class="hero-row-time">1h</span>
-                </div>
-                <p class="hero-row-sender">Mina Kim</p>
-                <p class="hero-row-subject">Prep questions for partner call</p>
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
-      <div class="hero-overlay"></div>
-      <div class="hero-fade"></div>
+      <canvas id="hero-3d" class="hero-3d"></canvas>
+      <div class="hero-scrim"></div>
     </div>
 
     <nav class="hero-nav">
@@ -972,14 +1167,14 @@
       </a>
       <div class="hero-nav-actions">
         <a href="#pricing" class="nav-link">Pricing</a>
-        <a href="https://app.klorn.ai/playground" class="nav-link">Live demo</a>
+        <a href="#live-classifier" class="nav-link">Live demo</a>
         <a href="https://app.klorn.ai/login" class="nav-link">Log in</a>
         <a href="https://app.klorn.ai/early-access" class="nav-cta">Early access</a>
       </div>
     </nav>
 
     <div class="hero-body">
-      <div style="max-width: 768px;">
+      <div class="hero-content">
         <p class="mono eyebrow">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="9"></circle>
@@ -987,7 +1182,7 @@
           </svg>
           Decision queue
         </p>
-        <h1 class="hero-headline">The clear signal worth acting on.</h1>
+        <h1 class="hero-headline">The clear signal<br><span class="grad">worth acting on.</span></h1>
         <p class="hero-sub">
           Other AI agents act. Klorn helps you decide what's worth acting on. Mail, calendar, and AI signals filtered into one clear decision queue — with evidence and approval before anything leaves your hands.
         </p>
@@ -1012,7 +1207,7 @@
               <path d="M5 12h14M13 6l6 6-6 6"></path>
             </svg>
           </a>
-          <a href="https://app.klorn.ai/playground" class="btn btn-ghost" aria-label="Try the live classifier — no sign-up, bring your own LLM key">
+          <a href="#live-classifier" class="btn btn-ghost" aria-label="Try the live classifier below — bring your own LLM key">
             Try the live demo
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M5 12h14M13 6l6 6-6 6"></path>
@@ -1055,33 +1250,80 @@
           </div>
         </div>
       </div>
+
+      <div class="hero-frame-wrap" id="live-classifier" style="scroll-margin-top: 90px;">
+        <div class="hero-float-chips">
+          <span class="hero-float-chip c1"><span class="dot"></span>Reply · OpenRouter Team</span>
+          <span class="hero-float-chip c2"><span class="dot"></span>Security · Vercel</span>
+          <span class="hero-float-chip c3"><span class="dot"></span>Approval ready</span>
+        </div>
+        <div class="hero-product">
+          <div class="hero-titlebar">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="crumb">Klorn / Today</span>
+            <span class="hero-live"><span class="hero-live-dot"></span>Live</span>
+          </div>
+          <div class="klassify">
+            <div class="klassify-input">
+              <p class="mono klassify-eyebrow">Live classifier · bring your own key</p>
+              <div class="klassify-keyrow">
+                <select id="kf-provider" class="kf-field" aria-label="LLM provider">
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="openai">OpenAI</option>
+                </select>
+                <input id="kf-key" class="kf-field" type="password" placeholder="Your API key" autocomplete="off" spellcheck="false">
+              </div>
+              <input id="kf-model" class="kf-field" placeholder="Model — optional (e.g. google/gemini-2.0-flash-001)" spellcheck="false">
+              <input id="kf-from" class="kf-field" placeholder="From — sender@example.com" spellcheck="false">
+              <input id="kf-subject" class="kf-field" placeholder="Subject line" spellcheck="false">
+              <textarea id="kf-snippet" class="kf-field" placeholder="Preview / first line (optional)"></textarea>
+              <div class="klassify-presets" id="kf-presets"></div>
+              <button type="button" id="kf-run" class="btn btn-gold klassify-run">Classify this email</button>
+              <p class="klassify-note">Runs the real 4-tier model. Your key is sent once for this call and is never stored on Klorn's servers. No key yet? <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer noopener">Get an OpenRouter key</a>.</p>
+            </div>
+            <div class="klassify-result">
+              <div class="klassify-tier">
+                <span class="klassify-tier-badge" id="kf-badge" data-tier="">READY</span>
+                <span class="klassify-tier-desc" id="kf-desc">Pick an example (or paste an email), add your key, then Classify to see the exact tier Klorn's model assigns — PUSH, QUEUE, SILENT, or AUTO.</span>
+              </div>
+              <p class="klassify-reason" id="kf-reason"></p>
+              <div class="klassify-features" id="kf-features"></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
   <!-- ── Walkthrough demo section ─────────────── -->
-  <section class="section demo-section" aria-label="Klorn walkthrough">
-    <p class="mono section-eyebrow">See it in action</p>
-    <h2 class="section-h">One minute. Inbox to decision queue.</h2>
-    <p class="section-lead">Every signal sorts into one of four tiers, then the ones that matter become decision cards you approve with one click. Nothing leaves your hands without that approval, and a daily receipt logs every action.</p>
-    <div class="demo-frame">
+  <section class="section demo-section snap-section" aria-label="Klorn walkthrough">
+    <div class="reveal">
+      <p class="mono section-eyebrow">See it in action</p>
+      <h2 class="section-h">One minute. Inbox to decision queue.</h2>
+      <p class="section-lead">Every signal sorts into one of four tiers, then the ones that matter become decision cards you approve with one click. Nothing leaves your hands without that approval, and a daily receipt logs every action.</p>
+    </div>
+    <div class="demo-frame reveal">
       <video controls autoplay muted loop playsinline preload="metadata" poster="/demo-poster.jpg">
         <source src="/demo.webm" type="video/webm">
       </video>
     </div>
     <div class="demo-legend">
-      <div class="demo-tier push">
+      <div class="demo-tier push reveal">
         <p class="mono tier-name">Push</p>
         <p class="tier-desc">Time-sensitive and high-stakes. Surfaced the moment it lands.</p>
       </div>
-      <div class="demo-tier queue">
+      <div class="demo-tier queue reveal">
         <p class="mono tier-name">Queue</p>
         <p class="tier-desc">Worth a look, not urgent. Batched into the decision queue.</p>
       </div>
-      <div class="demo-tier silent">
+      <div class="demo-tier silent reveal">
         <p class="mono tier-name">Silent</p>
         <p class="tier-desc">Noise and FYIs. Filed quietly so they never interrupt.</p>
       </div>
-      <div class="demo-tier auto">
+      <div class="demo-tier auto reveal">
         <p class="mono tier-name">Auto</p>
         <p class="tier-desc">Routine items pre-sorted for you — still staged, never sent on their own.</p>
       </div>
@@ -1089,9 +1331,9 @@
   </section>
 
   <!-- ── Decision card section ───────────────── -->
-  <section class="section">
+  <section class="section snap-section">
     <div class="decision-grid">
-      <div>
+      <div class="reveal">
         <p class="mono section-eyebrow">Decision queue</p>
         <h2 class="section-h">The important work fits on one card.</h2>
         <p class="section-lead">Not another inbox. Just the decisions that have enough context to move.</p>
@@ -1148,7 +1390,7 @@
   </section>
 
   <!-- ── Pillars ─────────────────────────────── -->
-  <section class="pillars-strip">
+  <section class="pillars-strip snap-section">
     <div class="pillars-grid">
       <article class="pillar reveal">
         <div class="pillar-icon">
@@ -1192,9 +1434,9 @@
   </section>
 
   <!-- ── Operating principle ─────────────────── -->
-  <section class="section section-narrow">
+  <section class="section section-narrow snap-section">
     <div class="principle-grid">
-      <div>
+      <div class="reveal">
         <p class="mono section-eyebrow">Operating principle</p>
         <h2 class="section-h">Prepare quietly. Confirm clearly.</h2>
       </div>
@@ -1224,11 +1466,13 @@
   </section>
 
   <!-- ── Pricing ─────────────────────────────── -->
-  <section class="section section-narrow" id="pricing" aria-label="Pricing">
-    <p class="mono section-eyebrow" style="text-align:center;color:var(--brand-gold)">Pricing</p>
-    <h2 class="section-h" style="text-align:center">One plan. Seven days free.</h2>
-    <p class="section-lead" style="text-align:center;max-width:36rem;margin-left:auto;margin-right:auto">Klorn runs on real AI, so there's no ad-supported free tier — try everything free for 7 days, then keep it for the price of a couple of coffees.</p>
-    <div style="max-width:26rem;margin:2.5rem auto 0;border:1px solid rgba(216,164,93,0.3);border-radius:18px;overflow:hidden;background:rgba(255,255,255,0.03)">
+  <section class="section section-narrow snap-section" id="pricing" aria-label="Pricing">
+    <div class="reveal">
+      <p class="mono section-eyebrow" style="text-align:center;color:var(--brand-gold)">Pricing</p>
+      <h2 class="section-h" style="text-align:center">One plan. Seven days free.</h2>
+      <p class="section-lead" style="text-align:center;max-width:36rem;margin-left:auto;margin-right:auto">Klorn runs on real AI, so there's no ad-supported free tier — try everything free for 7 days, then keep it for the price of a couple of coffees.</p>
+    </div>
+    <div class="reveal" style="max-width:26rem;margin:2.5rem auto 0;border:1px solid rgba(216,164,93,0.3);border-radius:18px;overflow:hidden;background:rgba(255,255,255,0.03)">
       <div style="height:4px;background:linear-gradient(90deg, var(--brand-gold), transparent)"></div>
       <div style="padding:28px">
         <div style="display:flex;align-items:center;justify-content:space-between">
@@ -1256,7 +1500,7 @@
   </section>
 
   <!-- ── Final CTA ───────────────────────────── -->
-  <section class="final-cta">
+  <section class="final-cta reveal snap-section">
     <p class="mono section-eyebrow">Built for decisions</p>
     <h2 class="final-cta-h">The next inbox is a decision queue.</h2>
     <p class="final-cta-p">Before the day gets noisy, align context, evidence, and action in one clean line.</p>
@@ -1299,16 +1543,270 @@
   </footer>
 
   <script>
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('in');
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+    // Fade-in + slide-up on scroll — plain IntersectionObserver.
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
+    if (reduceMotion) {
+      document.querySelectorAll('.reveal').forEach((el) => el.classList.add('in'));
+    } else {
+      const revealObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('in');
+            revealObserver.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.15, rootMargin: '0px 0px -10% 0px' });
+
+      document.querySelectorAll('.reveal').forEach((el) => revealObserver.observe(el));
+    }
+
+    // ── Section-level fade in/out, scrubbed exactly to scroll position ──
+    // Whichever full-height section sits centered in the viewport is fully
+    // opaque; the ones above/below fade out as they move away from center,
+    // so scrolling reads as one section dissolving into the next.
+    if (!reduceMotion) {
+      const fadePanels = Array.from(document.querySelectorAll('.snap-section'));
+
+      // Opacity is driven by how close a section's CENTER is to the viewport
+      // center — not by whether it fills the screen. The old "must fill the
+      // viewport" test made BOTH sections drop to ~0 right at a boundary
+      // (each only covers half), which read as a full-black gap. With the
+      // center-distance model the two sections meet at 0.5/0.5 exactly at the
+      // handoff, so the screen never goes dark between them.
+      // FADE_PX = length of the ramp on each side; BOUNDARY_MIN = the opacity
+      // each of two adjacent sections holds exactly at their shared boundary.
+      // Keeping it high (0.7) means the handoff is a bright cross-dissolve —
+      // outgoing content fading near the top edge, incoming near the bottom —
+      // instead of both dropping toward black in the middle.
+      const FADE_PX = 320;
+      const BOUNDARY_MIN = 0.7;
+      const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+      const updateFades = () => {
+        const vh = window.innerHeight;
+        const viewCenter = vh / 2;
+        const doc = document.documentElement;
+        const atTop = window.scrollY <= 2;
+        const atBottom = window.scrollY + vh >= doc.scrollHeight - 2;
+        const last = fadePanels.length - 1;
+
+        fadePanels.forEach((panel, i) => {
+          const r = panel.getBoundingClientRect();
+          const center = r.top + r.height / 2;
+          const half = r.height / 2;
+          const dist = Math.abs(center - viewCenter);
+          // At dist == half (the section's edge sitting on viewport center,
+          // i.e. a boundary) opacity == BOUNDARY_MIN; it climbs to 1 as the
+          // section centers up and falls to 0 once it's well past.
+          let opacity = clamp01((half - dist) / FADE_PX + BOUNDARY_MIN);
+          // First/last section has nothing on the far side to hand off to,
+          // so pin it solid while the page is scrolled hard against that end.
+          if (atTop && i === 0) opacity = 1;
+          if (atBottom && i === last) opacity = 1;
+          panel.style.opacity = opacity;
+          panel.style.pointerEvents = opacity < 0.05 ? 'none' : '';
+        });
+      };
+
+      // Run directly on every scroll (7 rect reads — cheap, and guarantees the
+      // opacities always match the exact current scroll position rather than
+      // lagging a frame or getting skipped).
+      window.addEventListener('scroll', updateFades, { passive: true });
+      window.addEventListener('resize', updateFades);
+      updateFades();
+      // Layout (fonts, the 3D canvas, images) can still be settling right
+      // after load, which would bake a stale viewport/rect into the very
+      // first pass — recheck once things have definitely finished.
+      requestAnimationFrame(updateFades);
+      window.addEventListener('load', updateFades);
+      setTimeout(updateFades, 500);
+    }
+
+    // ── Hero live classifier — calls the real /api/playground/classify ──
+    // This is the actual `judgeEmail` 4-tier model (bring your own LLM key).
+    //  - Deployed klorn.ai → the production API (allowed via first-party CORS).
+    //  - Local dev → a locally-running API on :3001 (allowed via the dev-origin
+    //    rule when NODE_ENV isn't production). Start the API to test locally.
+    const IS_LOCAL = /^(localhost|127\.|0\.0\.0\.0)/.test(location.hostname) || location.hostname === '';
+    const CLASSIFY_URL = IS_LOCAL
+      ? 'http://localhost:3001/api/playground/classify'
+      : 'https://app.klorn.ai/api/playground/classify';
+    const kfEl = (id) => document.getElementById(id);
+    const kfRun = kfEl('kf-run');
+
+    if (kfRun) {
+      const kfProvider = kfEl('kf-provider');
+      const kfKey = kfEl('kf-key');
+      const kfModel = kfEl('kf-model');
+      const kfFrom = kfEl('kf-from');
+      const kfSubject = kfEl('kf-subject');
+      const kfSnippet = kfEl('kf-snippet');
+      const kfBadge = kfEl('kf-badge');
+      const kfDesc = kfEl('kf-desc');
+      const kfReason = kfEl('kf-reason');
+      const kfFeatures = kfEl('kf-features');
+
+      const TIER_DESC = {
+        PUSH: 'Time-sensitive and high-stakes — Klorn surfaces this the moment it lands.',
+        QUEUE: 'Worth a look, not urgent — batched into the decision queue.',
+        SILENT: 'Noise or an FYI — filed quietly so it never interrupts you.',
+        AUTO: 'Routine and low-risk — pre-handled for you, still staged for approval.',
+      };
+
+      // Example emails — one per tier, so a visitor sees the model separate them.
+      const PRESETS = [
+        { name: 'Investor ask', from: 'Mina Kim <mina@sequoia.com>', subject: 'Revised metrics before tomorrow 3pm?', snippet: "Can you send the updated ARR and burn before our partner call tomorrow at 3? Need it to finalize the memo." },
+        { name: 'Newsletter', from: 'Morning Brew <crew@morningbrew.com>', subject: '☕ Nvidia earnings, and a $2 coffee war', snippet: 'Your daily roundup of business news. Unsubscribe anytime.' },
+        { name: 'Deploy failed', from: 'Vercel <notifications@vercel.com>', subject: 'Deployment to production failed', snippet: 'Build error in api route. Review env vars and redeploy.' },
+        { name: 'Receipt', from: 'Stripe <receipts@stripe.com>', subject: 'Your invoice #4021 was paid', snippet: 'No action needed. View invoice in your dashboard.' },
+      ];
+
+      // Presets
+      const presetsWrap = kfEl('kf-presets');
+      PRESETS.forEach((p) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'klassify-preset';
+        b.textContent = p.name;
+        b.addEventListener('click', () => {
+          kfFrom.value = p.from;
+          kfSubject.value = p.subject;
+          kfSnippet.value = p.snippet;
+        });
+        presetsWrap.appendChild(b);
+      });
+      // Prefill the first example so the panel looks alive on load.
+      kfFrom.value = PRESETS[0].from;
+      kfSubject.value = PRESETS[0].subject;
+      kfSnippet.value = PRESETS[0].snippet;
+
+      // Restore a previously used key/provider (visitor's own machine only).
+      try {
+        const savedKey = localStorage.getItem('klorn_pg_key');
+        const savedProvider = localStorage.getItem('klorn_pg_provider');
+        const savedModel = localStorage.getItem('klorn_pg_model');
+        if (savedKey) kfKey.value = savedKey;
+        if (savedProvider) kfProvider.value = savedProvider;
+        if (savedModel) kfModel.value = savedModel;
+      } catch (_) { /* storage blocked — fine */ }
+
+      const setBadge = (tier, text) => {
+        kfBadge.dataset.tier = tier || '';
+        kfBadge.textContent = text;
+      };
+
+      const renderFeatures = (features) => {
+        if (!features) { kfFeatures.innerHTML = ''; return; }
+        const order = ['urgency', 'senderTrust', 'reversibility', 'confidence'];
+        kfFeatures.innerHTML = order
+          .filter((k) => typeof features[k] === 'number')
+          .map((k) => {
+            const pct = Math.round(Math.max(0, Math.min(1, features[k])) * 100);
+            const label = k.replace(/([A-Z])/g, ' $1');
+            return `<div class="klassify-feature">
+              <span class="kf-label">${label}</span>
+              <span class="kf-bar"><span style="width:${pct}%"></span></span>
+              <span class="kf-val">${(features[k]).toFixed(2)}</span>
+            </div>`;
+          })
+          .join('');
+      };
+
+      const showError = (msg) => {
+        setBadge('', 'ERROR');
+        kfDesc.innerHTML = `<span class="klassify-error">${msg}</span>`;
+        kfReason.textContent = '';
+        renderFeatures(null);
+      };
+
+      const classify = async () => {
+        const provider = kfProvider.value;
+        const apiKey = kfKey.value.trim();
+        const from = kfFrom.value.trim();
+        const subject = kfSubject.value.trim();
+        const snippet = kfSnippet.value.trim();
+        const model = kfModel.value.trim();
+
+        if (!apiKey) { showError('Add your API key first — it runs one classification on your own key.'); kfKey.focus(); return; }
+        if (!from || !subject) { showError('Fill in at least a From address and a Subject.'); return; }
+
+        try {
+          localStorage.setItem('klorn_pg_key', apiKey);
+          localStorage.setItem('klorn_pg_provider', provider);
+          if (model) localStorage.setItem('klorn_pg_model', model);
+        } catch (_) { /* ignore */ }
+
+        kfRun.disabled = true;
+        kfRun.textContent = 'Classifying…';
+        setBadge('', '···');
+        kfDesc.textContent = 'Running the model on your email…';
+        kfReason.textContent = '';
+        renderFeatures(null);
+
+        const body = { from, subject, provider, apiKey };
+        if (snippet) body.snippet = snippet;
+        if (model) body.model = model;
+
+        try {
+          const res = await fetch(CLASSIFY_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            let msg = data.error || `Request failed (${res.status}).`;
+            if (res.status === 429) msg = 'Rate limit hit (8/min). Wait a moment and try again.';
+            if (data.detail) msg += ` — ${data.detail}`;
+            showError(msg);
+            return;
+          }
+          const tier = data.tier;
+          setBadge(tier, tier);
+          kfDesc.textContent = TIER_DESC[tier] || '';
+          kfReason.textContent = data.reason || '';
+          renderFeatures(data.features);
+        } catch (err) {
+          showError('Couldn\'t reach the classifier. If you\'re the site owner, add this origin to the API\'s CORS_ORIGINS. Otherwise check your connection and retry.');
+        } finally {
+          kfRun.disabled = false;
+          kfRun.textContent = 'Classify this email';
+        }
+      };
+
+      kfRun.addEventListener('click', classify);
+    }
+
+    // ── Decision card: Approve / Edit first / Hold actually respond ──
+    const decisionCard = document.querySelector('.decision-card');
+    if (decisionCard) {
+      const pill = decisionCard.querySelector('.approval-pill');
+      const actions = decisionCard.querySelectorAll('.act-btn');
+      const pillDefault = pill ? pill.textContent : '';
+      actions.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (!pill) return;
+          if (btn.classList.contains('primary')) {
+            pill.textContent = 'Approved ✓';
+            pill.classList.add('is-approved');
+          } else if (btn.classList.contains('plain')) {
+            pill.textContent = 'On hold';
+            pill.classList.remove('is-approved');
+          } else {
+            pill.textContent = 'Editing…';
+            pill.classList.remove('is-approved');
+          }
+          actions.forEach((b) => b.classList.toggle('is-selected', b === btn));
+          clearTimeout(decisionCard._resetTimer);
+          decisionCard._resetTimer = setTimeout(() => {
+            pill.textContent = pillDefault;
+            pill.classList.remove('is-approved');
+            actions.forEach((b) => b.classList.remove('is-selected'));
+          }, 2600);
+        });
+      });
+    }
 
     fetch('https://api.github.com/repos/k08200/klorn')
       .then((res) => (res.ok ? res.json() : null))
@@ -1321,6 +1819,157 @@
         });
       })
       .catch(() => {});
+  </script>
+
+  <script type="module">
+    const canvas = document.getElementById('hero-3d');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const isDesktop = window.matchMedia('(min-width: 1024px)').matches;
+
+    if (canvas && isDesktop && window.WebGLRenderingContext) {
+      import('https://unpkg.com/three@0.160.0/build/three.module.js')
+        .then((THREE) => initHero3D(THREE))
+        .catch((e) => { console.error('hero3d init failed', e); });
+    }
+
+    function initHero3D(THREE) {
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+      camera.position.set(0, 0, 11);
+
+      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+      const gold = new THREE.Color(0xd8a45d);
+      const goldBright = new THREE.Color(0xf7d59c);
+      const goldDim = new THREE.Color(0x8a6a3f);
+
+      // Soft radial-gradient sprite texture — cheap bloom substitute so nodes read as
+      // glowing points of light instead of flat, hard-edged polygons
+      const glowCanvas = document.createElement('canvas');
+      glowCanvas.width = glowCanvas.height = 128;
+      const gctx = glowCanvas.getContext('2d');
+      const grad = gctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(0.35, 'rgba(247,213,156,0.9)');
+      grad.addColorStop(1, 'rgba(216,164,93,0)');
+      gctx.fillStyle = grad;
+      gctx.fillRect(0, 0, 128, 128);
+      const glowTexture = new THREE.CanvasTexture(glowCanvas);
+      const makeGlowSprite = (scale, opacity) => {
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: glowTexture, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending,
+        }));
+        sprite.scale.set(scale, scale, 1);
+        return sprite;
+      };
+
+      // Ambient particle field — signals scattered across the whole hero before they're sorted
+      const particleCount = 260;
+      const particlePositions = new Float32Array(particleCount * 3);
+      for (let i = 0; i < particleCount; i++) {
+        particlePositions[i * 3] = (Math.random() - 0.5) * 20;
+        particlePositions[i * 3 + 1] = (Math.random() - 0.5) * 16;
+        particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 10 - 4;
+      }
+      const particleGeo = new THREE.BufferGeometry();
+      particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+      const particles = new THREE.Points(
+        particleGeo,
+        new THREE.PointsMaterial({ color: gold, size: 0.045, transparent: true, opacity: 0.45, sizeAttenuation: true })
+      );
+      scene.add(particles);
+
+      // Main cluster — centered behind the demo frame lower in the hero, large enough
+      // to read as the hero's core visual (like an interactive product canvas), not a corner sticker
+      const group = new THREE.Group();
+      group.position.set(0, -2.7, -1);
+      scene.add(group);
+
+      // Core — the single clear signal everything resolves to. Layered glow sprites (soft,
+      // camera-facing) plus a tiny bright wireframe icosahedron for a crisp hot center.
+      const core = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(0.22, 1),
+        new THREE.MeshBasicMaterial({ color: goldBright, transparent: true, opacity: 0.9 })
+      );
+      const coreGlow = [makeGlowSprite(1.4, 1), makeGlowSprite(2.6, 0.5), makeGlowSprite(4.2, 0.22)];
+      group.add(core, ...coreGlow);
+
+      // Outer wireframe shell — the filter boundary raw signals pass through
+      const shell = new THREE.LineSegments(
+        new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(5.6, 1)),
+        new THREE.LineBasicMaterial({ color: goldBright, transparent: true, opacity: 0.16 })
+      );
+      group.add(shell);
+
+      // Orbiting signal nodes — mail / calendar / approvals converging on the core,
+      // each trailed by a line back to center so the "many signals, one decision" read is explicit
+      const orbits = [
+        { radius: 3.0, speed: 0.5, tilt: 0.6, phase: 0 },
+        { radius: 3.8, speed: -0.38, tilt: -0.9, phase: 2.1 },
+        { radius: 2.3, speed: 0.7, tilt: 1.2, phase: 4.2 },
+        { radius: 4.3, speed: 0.3, tilt: -0.45, phase: 1.4 },
+        { radius: 3.4, speed: -0.55, tilt: 1.0, phase: 3.3 },
+        { radius: 5.0, speed: 0.42, tilt: 0.3, phase: 0.7 },
+      ].map((cfg) => {
+        const node = new THREE.Group();
+        node.add(makeGlowSprite(0.4, 1), makeGlowSprite(0.9, 0.35));
+        const line = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)]),
+          new THREE.LineBasicMaterial({ color: goldDim, transparent: true, opacity: 0.3 })
+        );
+        group.add(node, line);
+        return { ...cfg, node, line };
+      });
+
+      const target = { x: 0, y: 0 };
+      window.addEventListener('pointermove', (e) => {
+        target.x = (e.clientX / window.innerWidth - 0.5) * 0.8;
+        target.y = (e.clientY / window.innerHeight - 0.5) * 0.5;
+      });
+
+      const resize = () => {
+        const parent = canvas.parentElement;
+        const width = parent.clientWidth;
+        const height = parent.clientHeight;
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      };
+      const resizeObserver = new ResizeObserver(resize);
+      resizeObserver.observe(canvas.parentElement);
+      resize();
+
+      let frame = 0;
+      const animate = () => {
+        frame += 1;
+        const t = frame * 0.01;
+        group.rotation.y += 0.0025;
+        group.rotation.x = 0.35 + Math.sin(frame * 0.005) * 0.08;
+        particles.rotation.y += 0.0004;
+
+        orbits.forEach(({ radius, speed, tilt, phase, node, line }) => {
+          const a = t * speed + phase;
+          const x = Math.cos(a) * radius;
+          const z = Math.sin(a) * radius;
+          const y = Math.sin(a * 0.7 + phase) * tilt;
+          node.position.set(x, y, z);
+          const positions = line.geometry.attributes.position;
+          positions.setXYZ(1, x, y, z);
+          positions.needsUpdate = true;
+        });
+
+        camera.position.x += (target.x - camera.position.x) * 0.04;
+        camera.position.y += (-target.y - camera.position.y) * 0.04;
+        camera.lookAt(0, 0, 0);
+        renderer.render(scene, camera);
+        if (!reduceMotion) requestAnimationFrame(animate);
+      };
+
+      renderer.render(scene, camera);
+      canvas.classList.add('ready');
+      if (!reduceMotion) requestAnimationFrame(animate);
+    }
   </script>
 
 </body>
