@@ -97,14 +97,15 @@ export function LinkedInboxesSection() {
     },
   });
 
-  const connect = async () => {
-    try {
-      await startLinkInbox();
-    } catch (err) {
+  // useMutation (not a bare async fn) so isPending disables the buttons — a
+  // double-click would otherwise start two OAuth flows before the redirect.
+  const connect = useMutation({
+    mutationFn: () => startLinkInbox(),
+    onError: (err) => {
       captureClientError(err, { scope: "inbox.linked.connect" });
       toast("Connecting another inbox needs a Pro subscription.", "error");
-    }
-  };
+    },
+  });
 
   return (
     <section className="rounded-xl border border-stone-800 bg-stone-950/40 p-5">
@@ -137,8 +138,9 @@ export function LinkedInboxesSection() {
                 {account.needsReconnect && (
                   <button
                     type="button"
-                    onClick={() => void connect()}
-                    className="rounded-md border border-amber-400/50 bg-amber-400/10 px-2 py-1 text-xs text-amber-200 transition hover:bg-amber-400/20"
+                    onClick={() => connect.mutate()}
+                    disabled={connect.isPending}
+                    className="rounded-md border border-amber-400/50 bg-amber-400/10 px-2 py-1 text-xs text-amber-200 transition hover:bg-amber-400/20 disabled:opacity-50"
                   >
                     Reconnect
                   </button>
@@ -160,8 +162,9 @@ export function LinkedInboxesSection() {
       {entitled ? (
         <button
           type="button"
-          onClick={() => void connect()}
-          className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200"
+          onClick={() => connect.mutate()}
+          disabled={connect.isPending}
+          className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
         >
           Connect another inbox
         </button>

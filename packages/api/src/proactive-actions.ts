@@ -146,6 +146,7 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
     // inside sendSms (admin + phone + daily cap). Best-effort: never throws.
     sendSms(userId, `Urgent: ${event.title} starting at ${time}`).catch((err) => {
       console.warn(`[PROACTIVE] Meeting SMS failed for ${userId}:`, err);
+      captureError(err, { tags: { scope: "proactive.sms", userId } });
     });
   }
 }
