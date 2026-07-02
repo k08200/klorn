@@ -1,3 +1,5 @@
+import { isNativePlatform } from "./native/capacitor";
+
 // Keep SSR and client in sync: both must resolve to the same string so React
 // hydration does not mismatch (e.g. an <a href> rendered on the server must
 // equal the one rendered on the client). The previous SSR fallback was
@@ -105,16 +107,31 @@ export async function startGoogleConnect(): Promise<void> {
   }
 }
 
+// Open a Google OAuth URL the right way for the platform. The authenticated POST
+// that mints this URL already ran in the WebView (carrying the JWT) and baked the
+// userId into a signed state, so the URL itself needs no app session — we just
+// have to open it where Google ALLOWS OAuth. In the native shell that means the
+// SYSTEM browser: Google blocks OAuth inside embedded WebViews (RFC 8252
+// "disallowed_useragent"), which is why an in-WebView window.location bounced the
+// user back to the app login. On the web, a normal navigation is correct.
+async function openOAuthUrl(url: string): Promise<void> {
+  if (isNativePlatform()) {
+    const { Browser } = await import("@capacitor/browser");
+    await Browser.open({ url });
+    return;
+  }
+  if (typeof window !== "undefined") {
+    window.location.href = url;
+  }
+}
+
 // Start the OAuth flow to link a SECONDARY Google account for calendar
-// free/busy only (Pro-gated on the server). Mirrors startGoogleConnect —
-// returns a URL, then navigates. Throws (e.g. 403) if the API rejects.
+// free/busy only (Pro-gated on the server). Throws (e.g. 403) if the API rejects.
 export async function startLinkCalendar(): Promise<void> {
   const { url } = await apiFetch<{ url: string }>("/api/auth/google/link-calendar", {
     method: "POST",
   });
-  if (typeof window !== "undefined") {
-    window.location.href = url;
-  }
+  await openOAuthUrl(url);
 }
 
 /** Kick off the OAuth flow to link a secondary Google inbox (Pro feature). */
@@ -122,7 +139,5 @@ export async function startLinkInbox(): Promise<void> {
   const { url } = await apiFetch<{ url: string }>("/api/auth/google/link-inbox", {
     method: "POST",
   });
-  if (typeof window !== "undefined") {
-    window.location.href = url;
-  }
+  await openOAuthUrl(url);
 }
