@@ -281,12 +281,25 @@ function categoryForAgentNotification(category: unknown): NotifCategory {
 }
 
 /** Run the autonomous reasoning loop for a single user */
+// Per-user re-entrancy guard. The scheduler tick and the email-action fast-path
+// (email-action-trigger.ts) both call runAgentForUser through separate,
+// uncoordinated debounce maps, so an actionable email arriving during a
+// scheduler tick for the same user would otherwise run the agent twice
+// concurrently — double LLM spend and a race on proposal dedup. In-process only;
+// the cross-dyno guard is the advisory lock in autonomous-agent-scheduler.ts.
+const runningUsers = new Set<string>();
+
 export async function runAgentForUser(
   userId: string,
   mode: AgentMode | string = "SUGGEST",
 ): Promise<void> {
+  if (runningUsers.has(userId)) {
+    console.log(`[AGENT] ${userId} already in flight — skipping re-entrant run`);
+    return;
+  }
   const startTime = Date.now();
   const agentModePolicy = getAgentModePolicy(mode);
+  runningUsers.add(userId);
 
   try {
     // Load user plan and model for tool gating
@@ -1354,5 +1367,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
       tags: { area: "autonomous_agent" },
       extra: { userId, elapsedMs: elapsed },
     });
+  } finally {
+    runningUsers.delete(userId);
   }
 }
