@@ -1420,7 +1420,15 @@ export async function renewExpiringGmailWatches(): Promise<{ renewed: number; fa
   // watches exist while the feature is off.
   if (MULTI_INBOX_SYNC_ENABLED) {
     const linked = await prisma.linkedInboxAccount.findMany({
-      where: { OR: [{ gmailWatchExpiresAt: null }, { gmailWatchExpiresAt: { lte: cutoff } }] },
+      // Skip inboxes already flagged for reconnect: their token is revoked, so a
+      // watch call can only 401. Without this a revoked inbox retries every hour
+      // forever (the primary path self-limits because invalidateGoogleToken nulls
+      // its gmailWatchExpiresAt; a linked flag doesn't touch that column). They
+      // re-enter this query once a re-link clears needsReconnect.
+      where: {
+        needsReconnect: false,
+        OR: [{ gmailWatchExpiresAt: null }, { gmailWatchExpiresAt: { lte: cutoff } }],
+      },
       select: { id: true, userId: true },
     });
     for (const row of linked) {
@@ -1476,6 +1484,11 @@ export async function registerLinkedInboxWatch(
       expiration: String(res.data.expiration ?? ""),
     };
   } catch (err: unknown) {
+    // A revoked linked token 401s here. Flag it for reconnect so (a) the UI
+    // prompts a re-link and (b) renewExpiringGmailWatches skips it next tick —
+    // otherwise a revoked inbox retries watch registration every hour forever,
+    // spamming Sentry + burning Gmail quota as revoked inboxes accumulate.
+    if (isGoogleAuthError(err)) await markLinkedInboxForReconnect(userId, linkedInboxAccountId);
     const msg = err instanceof Error ? err.message : String(err);
     return { error: `Linked inbox watch failed: ${msg}` };
   }
