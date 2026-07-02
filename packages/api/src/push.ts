@@ -96,6 +96,10 @@ export function authoredSurface(category: NotifCategory): "briefing" | "firewall
   // materials), not inbound noise — author it as a firewall surface like the
   // other urgent surfaces, else the noise heuristic can suppress it.
   if (category === "email_candidate") return "firewall";
+  // meeting is a first-party calendar interrupt (a starting-in-N-min alert),
+  // not inbound mail — author it so a summary that collides with a noise
+  // keyword ("confirm your…", "sale") is not silently suppressed at the gate.
+  if (category === "meeting") return "firewall";
   return null;
 }
 
@@ -191,9 +195,11 @@ export async function sendPushNotification(
   // above so they inherit the same suppression/quiet-hours/rate-limit decisions.
   // Contained like Telegram: a device-channel fault must never sink web push.
   // Each is a no-op (logged skip) when its credentials/tokens are absent.
-  // FCM (Android) and APNs (iOS) are independent — run in parallel so one
-  // channel's network latency never stacks on the other's on the hot path.
-  await Promise.all([
+  // FCM (Android) and APNs (iOS) are independent — run in parallel. Fire them
+  // WITHOUT awaiting so a slow/stalled APNs http2 handshake (fresh session +
+  // 10s per-request timeout) never stacks latency onto the primary web-push
+  // path below. Each has its own .catch, so no unhandled rejection escapes.
+  void Promise.all([
     sendDevicePush(userId, payload, category).catch((err) => {
       console.warn(`[PUSH] FCM device channel threw for ${userId}:`, err);
     }),
