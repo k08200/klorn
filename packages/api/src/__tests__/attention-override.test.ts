@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../db.js", () => {
-  const prisma = {
+  const prisma: {
+    attentionItem: { findFirst: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
+    decisionLabel: { updateMany: ReturnType<typeof vi.fn> };
+    $transaction: ReturnType<typeof vi.fn>;
+  } = {
     attentionItem: {
       findFirst: vi.fn(async () => ({ id: "item-1", source: "EMAIL", sourceId: "email-1" })),
       update: vi.fn(async () => ({})),
@@ -9,7 +13,12 @@ vi.mock("../db.js", () => {
     decisionLabel: {
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
+    $transaction: vi.fn(),
   };
+  // Interactive-transaction shim: run the callback with the mock itself as the
+  // tx client, so tx.attentionItem / tx.decisionLabel resolve to the same spies
+  // and a callback rejection rejects the whole transaction (as real Prisma does).
+  prisma.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(prisma));
   return { prisma, db: prisma };
 });
 
@@ -26,6 +35,7 @@ const attentionItem = (prisma as unknown as { attentionItem: AttentionItemMock }
 const decisionLabel = (
   prisma as unknown as { decisionLabel: { updateMany: ReturnType<typeof vi.fn> } }
 ).decisionLabel;
+const $transaction = (prisma as unknown as { $transaction: ReturnType<typeof vi.fn> }).$transaction;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -69,6 +79,23 @@ describe("overrideAttentionTier", () => {
     const result = await overrideAttentionTier("user-1", "other-users-item", "QUEUE");
     expect(result).toEqual({ ok: false, reason: "not_found" });
     expect(attentionItem.update).not.toHaveBeenCalled();
+    expect($transaction).not.toHaveBeenCalled();
+  });
+
+  it("writes the visible tier and stamps the ledger in a single transaction", async () => {
+    await overrideAttentionTier("user-1", "item-1", "QUEUE");
+    // One transaction wraps both writes — no window where the tier is corrected
+    // but the ground-truth ledger row is left unstamped.
+    expect($transaction).toHaveBeenCalledTimes(1);
+    expect(attentionItem.update).toHaveBeenCalledTimes(1);
+    expect(decisionLabel.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("propagates a ledger-stamp failure instead of silently losing the override", async () => {
+    // A DB blip on the stamp must reject the whole override (rolling back the
+    // tier write) rather than leaving a corrected tier with a lost ledger row.
+    decisionLabel.updateMany.mockRejectedValueOnce(new Error("db blip"));
+    await expect(overrideAttentionTier("user-1", "item-1", "PUSH")).rejects.toThrow("db blip");
   });
 });
 
