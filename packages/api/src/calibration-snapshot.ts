@@ -43,6 +43,9 @@ import { isManualOverrideReason } from "./tiers.js";
 
 const WINDOW_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Fleet-scale guard: page the active-user groupBy so it never loads every
+ * userId into memory at once. */
+const CALIBRATION_USER_BATCH = 500;
 
 export const JUDGE_SOURCES = [
   "fast-path",
@@ -288,25 +291,37 @@ async function maybeMergeWeeklyCorrectionEval(userId: string, now: Date): Promis
  */
 export async function runDailyCalibrationSnapshots(now: Date = new Date()): Promise<void> {
   const since = new Date(now.getTime() - WINDOW_DAYS * DAY_MS);
-  const groups = (await (
-    prisma.attentionItem as unknown as {
-      groupBy: (args: unknown) => Promise<Array<{ userId: string }>>;
-    }
-  ).groupBy({
-    by: ["userId"],
-    where: { createdAt: { gte: since } },
-  })) as Array<{ userId: string }>;
+  // schema.tier/groupBy: unknown-cast so Prisma's generated types don't narrow
+  // the paginated groupBy args away (same pattern as fetchRows above).
+  const attentionItem = prisma.attentionItem as unknown as {
+    groupBy: (args: unknown) => Promise<Array<{ userId: string }>>;
+  };
 
   const isSundayUtc = now.getUTCDay() === 0;
-  for (const { userId } of groups) {
-    try {
-      await snapshotUserCalibration(userId, now);
-      if (isSundayUtc) await maybeMergeWeeklyCorrectionEval(userId, now);
-    } catch (err) {
-      captureError(err, { tags: { scope: "calibration-snapshot" }, extra: { userId } });
+  let processed = 0;
+  // Page the active-user set so fleet scale never loads every userId at once.
+  for (let skip = 0; ; skip += CALIBRATION_USER_BATCH) {
+    const page = (await attentionItem.groupBy({
+      by: ["userId"],
+      where: { createdAt: { gte: since } },
+      orderBy: { userId: "asc" },
+      take: CALIBRATION_USER_BATCH,
+      skip,
+    })) as Array<{ userId: string }>;
+
+    for (const { userId } of page) {
+      try {
+        await snapshotUserCalibration(userId, now);
+        if (isSundayUtc) await maybeMergeWeeklyCorrectionEval(userId, now);
+      } catch (err) {
+        captureError(err, { tags: { scope: "calibration-snapshot" }, extra: { userId } });
+      }
     }
+    processed += page.length;
+    if (page.length < CALIBRATION_USER_BATCH) break;
   }
-  if (groups.length > 0) {
-    console.log(`[CALIBRATION] Daily snapshots written for ${groups.length} user(s)`);
+
+  if (processed > 0) {
+    console.log(`[CALIBRATION] Daily snapshots written for ${processed} user(s)`);
   }
 }
