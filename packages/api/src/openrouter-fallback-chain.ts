@@ -16,7 +16,13 @@
  * react quickly to a fleet of retirements without a redeploy.
  */
 
-import { isCreditError, isKeyLimitError, isModelUnavailableError } from "./model-fallback.js";
+import {
+  isCreditError,
+  isFreeModel,
+  isFreeModelFallbackDisabled,
+  isKeyLimitError,
+  isModelUnavailableError,
+} from "./model-fallback.js";
 
 // Verified against the live catalog 2026-06-12 — three of the previous five
 // entries (deepseek-r1, qwen-2.5-72b, mistral-small) had already been retired
@@ -43,6 +49,19 @@ export function parseFallbackChain(envValue: string | undefined): string[] {
 export const OPENROUTER_FALLBACK_CHAIN: ReadonlyArray<string> = parseFallbackChain(
   process.env.OPENROUTER_FALLBACK_CHAIN,
 );
+
+/**
+ * The chain minus :free entries when the privacy kill switch is on
+ * (DISABLE_FREE_MODEL_FALLBACK — hosted prod). :free hosts may train on
+ * request data, and with the OpenRouter account's "free endpoints that may
+ * train" toggle off they are refused anyway — walking them is just doomed
+ * round trips before the next provider. PAID entries of a custom env chain
+ * are kept. Computed at call time so tests can flip the env freely.
+ */
+export function activeFallbackChain(): ReadonlyArray<string> {
+  if (!isFreeModelFallbackDisabled()) return OPENROUTER_FALLBACK_CHAIN;
+  return OPENROUTER_FALLBACK_CHAIN.filter((m) => !isFreeModel(m));
+}
 
 /**
  * Walk a fallback chain looking for a successful call.

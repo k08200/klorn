@@ -10,6 +10,7 @@ import {
   isConnectionError,
   isCreditError,
   isFreeModel,
+  isFreeModelFallbackDisabled,
   isKeyLimitError,
   isModelUnavailableError,
   isProviderUnavailable,
@@ -17,7 +18,7 @@ import {
   markKeyLimited,
 } from "./model-fallback.js";
 import { isModelKnownAbsent } from "./openrouter-catalog-cache.js";
-import { OPENROUTER_FALLBACK_CHAIN, walkFallbackChain } from "./openrouter-fallback-chain.js";
+import { activeFallbackChain, walkFallbackChain } from "./openrouter-fallback-chain.js";
 import {
   getProvider,
   getProviderChain,
@@ -399,7 +400,7 @@ export async function createCompletion(
     // recovery, just one wasted round-trip earlier, for the whole window
     // between a retirement and the env being updated.
     if (provider.name === "openrouter" && isModelKnownAbsent(model)) {
-      const result = await walkFallbackChain(OPENROUTER_FALLBACK_CHAIN, model, (m) =>
+      const result = await walkFallbackChain(activeFallbackChain(), model, (m) =>
         call(provider, m),
       );
       if (result !== null) return result;
@@ -419,6 +420,15 @@ export async function createCompletion(
       // 402: same provider, swap to :free model, retry once
       if (provider.name === "openrouter" && isCreditError(err) && !isFreeModel(model)) {
         markCreditExhausted(provider.quotaKey);
+        // Privacy kill switch (hosted prod): never degrade onto a :free model —
+        // its hosts may train on request data. Fail over to the next provider
+        // (env Gemini, paid tier) instead.
+        if (isFreeModelFallbackDisabled()) {
+          console.warn(
+            "[MODEL-FALLBACK] 402 with free fallback disabled — failing over to next provider",
+          );
+          continue;
+        }
         model = FALLBACK_MODEL;
         try {
           return await call(provider, model);
@@ -435,7 +445,7 @@ export async function createCompletion(
           // downstream — mirror the outer handler: walk the free-model chain on
           // OpenRouter, then fall through to the next provider.
           if (isModelUnavailableError(err2)) {
-            const result = await walkFallbackChain(OPENROUTER_FALLBACK_CHAIN, model, (m) =>
+            const result = await walkFallbackChain(activeFallbackChain(), model, (m) =>
               call(provider, m),
             );
             if (result !== null) return result;
@@ -475,7 +485,7 @@ export async function createCompletion(
       // then we move on to the next provider as a last resort.
       if (isModelUnavailableError(err)) {
         if (provider.name === "openrouter") {
-          const result = await walkFallbackChain(OPENROUTER_FALLBACK_CHAIN, model, (m) =>
+          const result = await walkFallbackChain(activeFallbackChain(), model, (m) =>
             call(provider, m),
           );
           if (result !== null) return result;
