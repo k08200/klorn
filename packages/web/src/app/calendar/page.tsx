@@ -7,6 +7,7 @@ import { Suspense, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { EveSignalField } from "../../components/brand-visuals";
 import { LinkedCalendars } from "../../components/linked-calendars";
+import { NewEventModal } from "../../components/new-event-modal";
 import { apiFetch, startGoogleConnect } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { queryKeys } from "../../lib/query-keys";
@@ -39,6 +40,7 @@ function CalendarView() {
   const userTimezone = user?.timezone ?? "Asia/Seoul";
   const [error, setError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [newEventOpen, setNewEventOpen] = useState(false);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
   // Month being viewed. Stored as a Date pinned to day 1 in user TZ so
   // prev/next navigation never falls into adjacent-month corners when
@@ -161,29 +163,51 @@ function CalendarView() {
             {nextEvent ? `Next: ${nextEvent.title || "Untitled"}` : "Your next 14 days"}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={syncNow}
-          disabled={syncing}
-          aria-label="Sync calendar"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-900/70 text-stone-300 transition active:bg-stone-800 disabled:opacity-50"
-        >
-          <svg
-            aria-hidden="true"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={syncing ? "animate-spin" : ""}
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setNewEventOpen(true)}
+            aria-label="New event"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-stone-950 transition active:bg-accent/90"
           >
-            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-            <polyline points="21 3 21 9 15 9" />
-          </svg>
-        </button>
+            <svg
+              aria-hidden="true"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+            >
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={syncNow}
+            disabled={syncing}
+            aria-label="Sync calendar"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-stone-900/70 text-stone-300 transition active:bg-stone-800 disabled:opacity-50"
+          >
+            <svg
+              aria-hidden="true"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={syncing ? "animate-spin" : ""}
+            >
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <polyline points="21 3 21 9 15 9" />
+            </svg>
+          </button>
+        </div>
       </header>
 
       {/* DESKTOP — unchanged */}
@@ -202,14 +226,23 @@ function CalendarView() {
                 <h1 className="text-lg font-semibold tracking-tight text-stone-50 md:text-2xl">
                   Meetings that need prep
                 </h1>
-                <button
-                  type="button"
-                  onClick={syncNow}
-                  disabled={syncing}
-                  className="min-h-9 shrink-0 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50 lg:hidden"
-                >
-                  {syncing ? "..." : "Sync"}
-                </button>
+                <div className="flex shrink-0 items-center gap-2 lg:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setNewEventOpen(true)}
+                    className="min-h-9 rounded-md bg-accent px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent/90"
+                  >
+                    New event
+                  </button>
+                  <button
+                    type="button"
+                    onClick={syncNow}
+                    disabled={syncing}
+                    className="min-h-9 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
+                  >
+                    {syncing ? "..." : "Sync"}
+                  </button>
+                </div>
               </div>
               <p className="mt-2 hidden max-w-xl text-sm leading-6 text-stone-400 md:block">
                 The next 14 days of events alongside the work signals that touch them.
@@ -217,14 +250,23 @@ function CalendarView() {
             </div>
             <div className="relative hidden min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20 lg:block">
               <EveSignalField className="absolute inset-0 border-0" />
-              <button
-                type="button"
-                onClick={syncNow}
-                disabled={syncing}
-                className="absolute right-3 top-3 inline-flex min-h-11 items-center rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
-              >
-                {syncing ? "Syncing..." : "Sync now"}
-              </button>
+              <div className="absolute right-3 top-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewEventOpen(true)}
+                  className="inline-flex min-h-11 items-center rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-stone-950 transition hover:bg-accent/90"
+                >
+                  New event
+                </button>
+                <button
+                  type="button"
+                  onClick={syncNow}
+                  disabled={syncing}
+                  className="inline-flex min-h-11 items-center rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
+                >
+                  {syncing ? "Syncing..." : "Sync now"}
+                </button>
+              </div>
             </div>
           </div>
           <div className="mt-5 hidden grid-cols-3 overflow-hidden rounded-lg border border-stone-800 bg-black/20 md:grid">
@@ -331,6 +373,15 @@ function CalendarView() {
           )}
         </>
       )}
+
+      <NewEventModal
+        open={newEventOpen}
+        onClose={() => setNewEventOpen(false)}
+        onCreated={(title) => {
+          setSyncMessage(`"${title}" created in your Google Calendar.`);
+          void queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all });
+        }}
+      />
     </div>
   );
 }
