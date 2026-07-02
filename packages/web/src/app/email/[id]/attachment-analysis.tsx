@@ -361,7 +361,10 @@ const ATTACHMENT_CONVERSION_TARGETS: Array<{ value: AttachmentConversionTarget; 
 
 function defaultConversionTarget(attachment: EmailAttachment): AttachmentConversionTarget {
   const name = attachment.filename.toLowerCase();
-  if (name.endsWith(".pdf") || attachment.mimeType.toLowerCase().includes("pdf")) return "dwg";
+  // Default PDFs to text extraction, not DWG — the backend's own recommender
+  // ranks pdf/docx/txt well above dwg (a niche CAD target). DWG stays selectable
+  // in the dropdown for the rare engineering-drawing PDF.
+  if (name.endsWith(".pdf") || attachment.mimeType.toLowerCase().includes("pdf")) return "txt";
   if (attachment.mimeType.toLowerCase().startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(name)) {
     return name.endsWith(".jpg") || name.endsWith(".jpeg")
       ? "jpg"

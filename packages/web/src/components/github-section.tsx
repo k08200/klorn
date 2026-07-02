@@ -138,7 +138,7 @@ export function GitHubSection() {
 
       {connected && connectedAt && (
         <p className="mt-2 text-xs text-stone-500">
-          Connected since {new Date(connectedAt).toLocaleString()}.
+          Connected since {new Date(connectedAt).toLocaleString("en-US")}.
         </p>
       )}
 
