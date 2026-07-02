@@ -433,7 +433,7 @@ function CommitmentPathPanel({
       </ol>
 
       <p className="mt-2 text-[10px] text-stone-400">
-        {pathData.model ?? "AI"} · {new Date(pathData.builtAt).toLocaleDateString()}
+        {pathData.model ?? "AI"} · {new Date(pathData.builtAt).toLocaleDateString("en-US")}
       </p>
     </div>
   );
