@@ -403,6 +403,138 @@ export async function maybeNudgeFreeDailyLimit(
   }
 }
 
+/**
+ * Detect the Prisma unique-violation used as an atomic at-most-once gate. Matches
+ * the create-catch-P2002 idiom in briefing.ts / routes/webhook.ts: on P2002 the
+ * create lost the race to a concurrent tick, so the loser skips its push.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  return (err as { code?: string })?.code === "P2002";
+}
+
+/**
+ * "Google disconnected" calendar alert — WINNER-ONLY and atomic, at most once per
+ * user per local day. A `(userId, dedupeKey)` unique on Notification
+ * (dedupeKey = "calendar-disconnect:<dayKey>") replaces the previous
+ * findFirst-then-create (TOCTOU) so concurrent ticks can't double-create the alert
+ * or double-push. The create is the gate: the P2002 loser returns null WITHOUT
+ * pushing.
+ */
+export async function ensureCalendarDisconnectNotification(
+  userId: string,
+  dayKey: string,
+): Promise<{ id: string; createdAt: Date } | null> {
+  let notification: { id: string; createdAt: Date };
+  try {
+    notification = await prisma.notification.create({
+      data: {
+        userId,
+        type: "calendar",
+        dedupeKey: `calendar-disconnect:${dayKey}`,
+        title: "Google disconnected",
+        message: "Calendar sync stopped. Reconnect your Google account in settings.",
+        link: "/settings",
+      },
+      select: { id: true, createdAt: true },
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) return null; // already alerted today → no re-push
+    throw err;
+  }
+
+  pushNotification(userId, {
+    id: notification.id,
+    type: "calendar",
+    title: "Google disconnected",
+    message: "Reconnect your Google account in settings.",
+    link: "/settings",
+  });
+  return notification;
+}
+
+/**
+ * "Auto-reply sent" alert — WINNER-ONLY and atomic, at most once per replied
+ * message. A `(userId, dedupeKey)` unique (dedupeKey = "auto-reply:<gmailId>")
+ * replaces the findFirst-then-create (TOCTOU) so concurrent ticks can't
+ * double-create/double-push the same auto-reply alert. The reply SEND itself is
+ * unchanged and stays at the call site; only the alert dedup moves here.
+ */
+export async function ensureAutoReplyNotification(
+  userId: string,
+  gmailId: string,
+  toAddr: string,
+  ruleName: string,
+): Promise<{ id: string; createdAt: Date } | null> {
+  let notification: { id: string; createdAt: Date };
+  try {
+    notification = await prisma.notification.create({
+      data: {
+        userId,
+        type: "email",
+        dedupeKey: `auto-reply:${gmailId}`,
+        title: "Auto-reply sent",
+        message: `Auto-replied to ${toAddr} (rule: "${ruleName}") [${gmailId}]`,
+      },
+      select: { id: true, createdAt: true },
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) return null; // already alerted for this email
+    throw err;
+  }
+
+  pushNotification(userId, {
+    id: notification.id,
+    type: "email",
+    title: "Auto-reply sent",
+    message: `Auto-replied to ${toAddr}`,
+    createdAt: notification.createdAt.toISOString(),
+  });
+  return notification;
+}
+
+/**
+ * Urgent-email bell notification — WINNER-ONLY and atomic. The read-based
+ * notifiedGmailIds filter (parseNotifiedGmailIds) still does the primary
+ * per-message dedup; this closes the residual concurrent-tick race on a single
+ * batch via a `(userId, dedupeKey)` unique (dedupeKey = "urgent:<leadGmailId>").
+ * `dbMessage` KEEPS the trailing `[id1,id2,…]` marker so every notified id is
+ * recorded for the next tick's read-back — the accumulation logic is preserved.
+ * The winner returns its notification so the CALLER runs the follow-on web-push /
+ * SMS side-effects; a P2002 loser returns null and the caller skips them.
+ */
+export async function ensureUrgentEmailNotification(
+  userId: string,
+  leadGmailId: string,
+  dbMessage: string,
+  userBody: string,
+): Promise<{ id: string; createdAt: Date } | null> {
+  let notification: { id: string; createdAt: Date };
+  try {
+    notification = await prisma.notification.create({
+      data: {
+        userId,
+        type: "email",
+        dedupeKey: `urgent:${leadGmailId}`,
+        title: "Urgent email",
+        message: dbMessage,
+      },
+      select: { id: true, createdAt: true },
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) return null; // another tick already notified this batch
+    throw err;
+  }
+
+  pushNotification(userId, {
+    id: notification.id,
+    type: "email",
+    title: "Urgent email",
+    message: userBody,
+    createdAt: notification.createdAt.toISOString(),
+  });
+  return notification;
+}
+
 async function runAutomations() {
   // Skip if this process is still running the previous tick (see schedulerInFlight).
   if (schedulerInFlight) return;
@@ -809,37 +941,11 @@ async function runUserCycle(
         gaxiosErr.response?.data?.error?.message || gaxiosErr.message || err,
       );
 
-      // 401/403 = token invalid — notify user to reconnect
+      // 401/403 = token invalid — notify user to reconnect. Atomic + winner-only
+      // (dedupeKey = "calendar-disconnect:<dayKey>") so concurrent ticks can't
+      // double-alert; at most once per user per local day.
       if (status === 401 || status === 403) {
-        const existingAlert = await prisma.notification.findFirst({
-          where: {
-            userId: config.userId,
-            type: "calendar",
-            OR: [
-              { title: { contains: "Google disconnected" } },
-              { title: { contains: "Google 연결 끊김" } },
-            ],
-            createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-          },
-        });
-        if (!existingAlert) {
-          await prisma.notification.create({
-            data: {
-              userId: config.userId,
-              type: "calendar",
-              title: "Google disconnected",
-              message: "Calendar sync stopped. Reconnect your Google account in settings.",
-              link: "/settings",
-            },
-          });
-          pushNotification(config.userId, {
-            id: crypto.randomUUID(),
-            type: "calendar",
-            title: "Google disconnected",
-            message: "Reconnect your Google account in settings.",
-            link: "/settings",
-          });
-        }
+        await ensureCalendarDisconnectNotification(config.userId, today);
       }
     }
   }
@@ -1006,21 +1112,16 @@ async function runUserCycle(
                     `Re: ${email.subject}`,
                     replyBody,
                   );
-                  const notification = await prisma.notification.create({
-                    data: {
-                      userId: config.userId,
-                      type: "email",
-                      title: "Auto-reply sent",
-                      message: `Auto-replied to ${toAddr} (rule: "${matched.ruleName}") [${email.gmailId}]`,
-                    },
-                  });
-                  pushNotification(config.userId, {
-                    id: notification.id,
-                    type: "email",
-                    title: "Auto-reply sent",
-                    message: `Auto-replied to ${toAddr}`,
-                    createdAt: notification.createdAt.toISOString(),
-                  });
+                  // Atomic + winner-only alert (dedupeKey = "auto-reply:<gmailId>"):
+                  // the findFirst pre-filter above is a cheap best-effort skip, but
+                  // the create is the real gate — a concurrent tick loses on P2002
+                  // and neither re-creates the alert nor re-pushes.
+                  await ensureAutoReplyNotification(
+                    config.userId,
+                    email.gmailId,
+                    toAddr,
+                    matched.ruleName,
+                  );
                 }
               }
             } catch (err) {
@@ -1112,65 +1213,64 @@ async function runUserCycle(
               newUrgent.map((e) => e.gmailId),
             );
 
-            const notification = await prisma.notification.create({
-              data: {
-                userId: config.userId,
-                type: "email",
-                title: "Urgent email",
-                message: dbMessage,
-              },
-            });
-
-            pushNotification(config.userId, {
-              id: notification.id,
-              type: "email",
-              title: "Urgent email",
-              message: userBody,
-              createdAt: notification.createdAt.toISOString(),
-            });
-
-            // Best-effort AttentionItem lookup for the lead urgent email
-            // (source=EMAIL, sourceId=EmailMessage.id, set by poc-judge).
-            // Lets the Telegram channel attach tier-override buttons;
-            // null just means the message ships without them.
-            const attentionItemId = await findOpenEmailAttentionItemId(
+            // Atomic + winner-only (dedupeKey = "urgent:<leadGmailId>"): the
+            // read-based notifiedGmailIds filter above is the primary per-message
+            // dedup; this closes the residual concurrent-tick race on one batch so
+            // the bell + web-push + SMS fire at most once. A P2002 loser returns
+            // null and we skip ALL follow-on side-effects below.
+            const notification = await ensureUrgentEmailNotification(
               config.userId,
-              newUrgent[0].id,
+              newUrgent[0].gmailId,
+              dbMessage,
+              userBody,
             );
 
-            sendPushNotification(
-              config.userId,
-              {
-                title: "Urgent mail",
-                body: userBody,
-                url: "/briefing",
-                attentionItemId: attentionItemId ?? undefined,
-              },
-              "email_urgent",
-              // Unawaited (don't block the tick) but guarded: an
-              // unhandled rejection from the push internals would
-              // otherwise crash the single dyno. Matches the candidate
-              // push path above.
-            ).catch((err) => {
-              console.warn(`[AUTOMATION] Urgent email push failed for ${config.userId}:`, err);
-              captureError(err, {
-                tags: { scope: "automation.urgent-push", userId: config.userId },
-              });
-            });
+            // WINNER-ONLY: a concurrent tick lost the create (null) and must NOT
+            // re-fire the web-push / SMS side-effects for the same batch.
+            if (notification) {
+              // Best-effort AttentionItem lookup for the lead urgent email
+              // (source=EMAIL, sourceId=EmailMessage.id, set by poc-judge).
+              // Lets the Telegram channel attach tier-override buttons;
+              // null just means the message ships without them.
+              const attentionItemId = await findOpenEmailAttentionItemId(
+                config.userId,
+                newUrgent[0].id,
+              );
 
-            // Admin-only SMS escalation. Gated inside sendSms (admin +
-            // phone + daily cap). Best-effort: never throws, never
-            // blocks the scheduler. Body covers the first urgent email;
-            // if many landed at once the user still gets the bell + push
-            // for the rest via the existing notification record.
-            const lead = newUrgent[0];
-            const smsBody = `Urgent: ${lead.subject || "(no subject)"} — from ${senderName(lead.from)}`;
-            sendSms(config.userId, smsBody).catch((err) => {
-              console.warn(`[AUTOMATION] Urgent email SMS failed for ${config.userId}:`, err);
-              captureError(err, {
-                tags: { scope: "automation.urgent-sms", userId: config.userId },
+              sendPushNotification(
+                config.userId,
+                {
+                  title: "Urgent mail",
+                  body: userBody,
+                  url: "/briefing",
+                  attentionItemId: attentionItemId ?? undefined,
+                },
+                "email_urgent",
+                // Unawaited (don't block the tick) but guarded: an
+                // unhandled rejection from the push internals would
+                // otherwise crash the single dyno. Matches the candidate
+                // push path above.
+              ).catch((err) => {
+                console.warn(`[AUTOMATION] Urgent email push failed for ${config.userId}:`, err);
+                captureError(err, {
+                  tags: { scope: "automation.urgent-push", userId: config.userId },
+                });
               });
-            });
+
+              // Admin-only SMS escalation. Gated inside sendSms (admin +
+              // phone + daily cap). Best-effort: never throws, never
+              // blocks the scheduler. Body covers the first urgent email;
+              // if many landed at once the user still gets the bell + push
+              // for the rest via the existing notification record.
+              const lead = newUrgent[0];
+              const smsBody = `Urgent: ${lead.subject || "(no subject)"} — from ${senderName(lead.from)}`;
+              sendSms(config.userId, smsBody).catch((err) => {
+                console.warn(`[AUTOMATION] Urgent email SMS failed for ${config.userId}:`, err);
+                captureError(err, {
+                  tags: { scope: "automation.urgent-sms", userId: config.userId },
+                });
+              });
+            }
           }
         }
       } catch (err) {
