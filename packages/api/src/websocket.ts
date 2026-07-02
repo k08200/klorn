@@ -66,9 +66,13 @@ export function initWebSocket(server: Server): WebSocketServer {
         return;
       }
     } else {
-      // Allow unauthenticated demo-user only for development
+      // Unauthenticated demo-user is OFF in production. Mirror getUserId's gate:
+      // NODE_ENV !== "production" AND ENABLE_DEMO_USER === "true". Without both,
+      // a tokenless client must not connect (closes the prod anon-WS gap).
+      const demoAllowed =
+        process.env.NODE_ENV !== "production" && process.env.ENABLE_DEMO_USER === "true";
       const rawUserId = url.searchParams.get("userId");
-      if (rawUserId && rawUserId !== "demo-user") {
+      if (!demoAllowed || (rawUserId && rawUserId !== "demo-user")) {
         ws.close(4001, "Authentication required — use token parameter");
         return;
       }
