@@ -457,9 +457,13 @@ async function persistRefreshedGoogleToken(
  */
 export async function getLinkedCalendarClients(
   userId: string,
-): Promise<Array<{ client: InstanceType<typeof google.auth.OAuth2>; email: string }>> {
+): Promise<Array<{ client: InstanceType<typeof google.auth.OAuth2>; id: string; email: string }>> {
   const rows = await prisma.linkedCalendarAccount.findMany({ where: { userId } });
-  const clients: Array<{ client: InstanceType<typeof google.auth.OAuth2>; email: string }> = [];
+  const clients: Array<{
+    client: InstanceType<typeof google.auth.OAuth2>;
+    id: string;
+    email: string;
+  }> = [];
   for (const row of rows) {
     let accessTokenPlain = "";
     let refreshTokenPlain: string | null = null;
@@ -467,7 +471,13 @@ export async function getLinkedCalendarClients(
       accessTokenPlain = row.accessToken ? decryptToken(row.accessToken) : "";
       refreshTokenPlain = decryptOptional(row.refreshToken);
     } catch {
+      // Undecryptable token can only be fixed by a re-link — flag it (fire-and-
+      // forget; this loop is sync) so the UI prompts a reconnect, then skip.
       console.warn(`[GOOGLE] Skipping linked calendar ${row.id} — token decrypt failed`);
+      void markLinkedCalendarForReconnect(userId, row.id).catch((markErr) => {
+        console.error(`[GOOGLE] Failed to flag linked calendar ${row.id} for reconnect:`, markErr);
+        captureError(markErr, { tags: { scope: "gmail.linked-calendar.mark-reconnect" } });
+      });
       continue;
     }
     if (!accessTokenPlain && !refreshTokenPlain) continue;
@@ -488,7 +498,7 @@ export async function getLinkedCalendarClients(
         );
       }
     });
-    clients.push({ client: oauth2, email: row.email });
+    clients.push({ client: oauth2, id: row.id, email: row.email });
   }
   return clients;
 }
@@ -509,6 +519,8 @@ async function persistRefreshedLinkedToken(
   // UUID already filtered by userId in getLinkedCalendarClients, but scoping the
   // write too makes this function safe to reuse from any future call site and
   // can never touch another user's row.
+  // A successful refresh means the token is healthy again — clear any stale
+  // needsReconnect flag (mirror of persistRefreshedInboxToken).
   if (decision.mode === "rotate") {
     await prisma.linkedCalendarAccount.updateMany({
       where: { id: rowId, userId },
@@ -516,6 +528,7 @@ async function persistRefreshedLinkedToken(
         accessToken: encryptToken(decision.accessTokenPlain),
         refreshToken: encryptOptional(decision.refreshTokenPlain),
         expiresAt: decision.expiresAt,
+        needsReconnect: false,
       },
     });
     return;
@@ -527,7 +540,11 @@ async function persistRefreshedLinkedToken(
       userId,
       OR: [{ expiresAt: null }, { expiresAt: { lt: decision.expiresAt } }],
     },
-    data: { accessToken: encryptToken(decision.accessTokenPlain), expiresAt: decision.expiresAt },
+    data: {
+      accessToken: encryptToken(decision.accessTokenPlain),
+      expiresAt: decision.expiresAt,
+      needsReconnect: false,
+    },
   });
   if (result.count === 0) {
     console.log(`[GOOGLE] Skipped stale linked-calendar token write for user ${userId}`);
@@ -714,6 +731,22 @@ export async function markLinkedInboxForReconnect(
 ): Promise<void> {
   await prisma.linkedInboxAccount.updateMany({
     where: { id: linkedInboxAccountId, userId },
+    data: { needsReconnect: true },
+  });
+}
+
+/**
+ * Durably flag ONE linked CALENDAR as needing a re-link (token revoked or
+ * undecryptable). Scoped by {id, userId}. Cleared on a successful token refresh
+ * or re-link. Mirror of markLinkedInboxForReconnect — a revoked linked calendar
+ * would otherwise silently drop out of free/busy with no user-visible signal.
+ */
+export async function markLinkedCalendarForReconnect(
+  userId: string,
+  linkedCalendarAccountId: string,
+): Promise<void> {
+  await prisma.linkedCalendarAccount.updateMany({
+    where: { id: linkedCalendarAccountId, userId },
     data: { needsReconnect: true },
   });
 }
@@ -1488,7 +1521,17 @@ export async function registerLinkedInboxWatch(
     // prompts a re-link and (b) renewExpiringGmailWatches skips it next tick —
     // otherwise a revoked inbox retries watch registration every hour forever,
     // spamming Sentry + burning Gmail quota as revoked inboxes accumulate.
-    if (isGoogleAuthError(err)) await markLinkedInboxForReconnect(userId, linkedInboxAccountId);
+    // Best-effort: a DB blip in the flag-write must not prevent the {error}
+    // return (the renewal loop reads it to count/continue per account).
+    if (isGoogleAuthError(err)) {
+      await markLinkedInboxForReconnect(userId, linkedInboxAccountId).catch((markErr) => {
+        console.error(
+          `[GMAIL-WATCH] Failed to flag linked inbox ${linkedInboxAccountId} for reconnect:`,
+          markErr,
+        );
+        captureError(markErr, { tags: { scope: "gmail-watch.mark-reconnect" } });
+      });
+    }
     const msg = err instanceof Error ? err.message : String(err);
     return { error: `Linked inbox watch failed: ${msg}` };
   }

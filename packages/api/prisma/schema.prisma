@@ -197,15 +197,20 @@ model UserToken {
 // email + the main calendar) so the email path stays single-account; this table
 // is read only by checkConflicts. Scope granted is calendar.readonly, nothing else.
 model LinkedCalendarAccount {
-  id           String    @id @default(uuid())
-  userId       String
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  email        String // the linked Google account address — label + dedup key
-  accessToken  String
-  refreshToken String?
-  expiresAt    DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email          String // the linked Google account address — label + dedup key
+  accessToken    String
+  refreshToken   String?
+  expiresAt      DateTime?
+  // Set true when this linked calendar's token is found revoked/undecryptable so
+  // the UI can prompt a re-link instead of the account silently dropping out of
+  // free/busy; cleared on a successful token refresh or re-link. Mirrors
+  // LinkedInboxAccount.needsReconnect.
+  needsReconnect Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@unique([userId, email])
 }

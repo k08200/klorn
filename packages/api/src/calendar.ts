@@ -5,6 +5,7 @@ import {
   getLinkedCalendarClients,
   isGoogleAuthError,
   markGoogleTokenForReconnect,
+  markLinkedCalendarForReconnect,
 } from "./gmail.js";
 import {
   type BusyConflict,
@@ -230,11 +231,22 @@ async function linkedAccountConflicts(
 ): Promise<{ conflicts: BusyConflict[]; accountsChecked: number }> {
   const linked = await getLinkedCalendarClients(userId);
   const conflicts: BusyConflict[] = [];
-  for (const { client, email } of linked) {
+  for (const { client, id, email } of linked) {
     try {
       const cal = google.calendar({ version: "v3", auth: client });
       conflicts.push(...(await freeBusyConflicts(cal, timeMin, timeMax)));
     } catch (err) {
+      // A revoked linked-calendar token 401s here. Flag it for reconnect so the
+      // UI prompts a re-link instead of the account silently dropping out of
+      // free/busy on every check. Only auth errors flag — a transient failure
+      // must not demand a re-link. Best-effort: a DB blip in the flag-write must
+      // NOT abort the loop or skip the error logging below (skip-and-continue).
+      if (isGoogleAuthError(err)) {
+        await markLinkedCalendarForReconnect(userId, id).catch((markErr) => {
+          console.error(`[CALENDAR] Failed to flag linked calendar ${id} for reconnect:`, markErr);
+          captureError(markErr, { tags: { scope: "calendar.linked.mark-reconnect" } });
+        });
+      }
       console.warn(
         `[CALENDAR] linked-account free/busy failed (skipped): ${err instanceof Error ? err.message : err}`,
       );

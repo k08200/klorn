@@ -7,9 +7,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * accounts.
  */
 
-const m = vi.hoisted(() => ({ findMany: vi.fn() }));
+const m = vi.hoisted(() => ({
+  findMany: vi.fn(),
+  updateMany: vi.fn(async () => ({ count: 1 })),
+}));
 
-vi.mock("../db.js", () => ({ prisma: { linkedCalendarAccount: { findMany: m.findMany } } }));
+vi.mock("../db.js", () => ({
+  prisma: { linkedCalendarAccount: { findMany: m.findMany, updateMany: m.updateMany } },
+}));
+vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 vi.mock("../crypto-tokens.js", () => ({
   decryptToken: (v: string) => {
     if (v === "BAD") throw new Error("decrypt fail");
@@ -30,7 +36,7 @@ vi.mock("googleapis", () => ({
   },
 }));
 
-import { getLinkedCalendarClients } from "../gmail.js";
+import { getLinkedCalendarClients, markLinkedCalendarForReconnect } from "../gmail.js";
 
 describe("getLinkedCalendarClients", () => {
   beforeEach(() => {
@@ -48,13 +54,28 @@ describe("getLinkedCalendarClients", () => {
     expect(clients[0]?.client).toBeTruthy();
   });
 
-  it("skips a row whose token fails to decrypt (corrupt row must not break the others)", async () => {
+  it("returns each client's id (needed to flag the right account for reconnect)", async () => {
+    m.findMany.mockResolvedValue([
+      { id: "a", email: "work@x.com", accessToken: "AT", refreshToken: "RT", expiresAt: null },
+    ]);
+    const clients = await getLinkedCalendarClients("u1");
+    expect(clients[0]?.id).toBe("a");
+  });
+
+  it("skips a row whose token fails to decrypt AND flags it for reconnect", async () => {
     m.findMany.mockResolvedValue([
       { id: "bad", email: "bad@x.com", accessToken: "BAD", refreshToken: null, expiresAt: null },
       { id: "ok", email: "ok@x.com", accessToken: "AT", refreshToken: "RT", expiresAt: null },
     ]);
     const clients = await getLinkedCalendarClients("u1");
     expect(clients.map((c) => c.email)).toEqual(["ok@x.com"]);
+    // The corrupt row is durably flagged so the UI prompts a re-link (fire-and-
+    // forget, so allow the microtask to settle before asserting).
+    await Promise.resolve();
+    expect(m.updateMany).toHaveBeenCalledWith({
+      where: { id: "bad", userId: "u1" },
+      data: { needsReconnect: true },
+    });
   });
 
   it("skips a row with no usable tokens", async () => {
@@ -67,5 +88,17 @@ describe("getLinkedCalendarClients", () => {
   it("returns [] when the user has no linked accounts", async () => {
     m.findMany.mockResolvedValue([]);
     expect(await getLinkedCalendarClients("u1")).toEqual([]);
+  });
+});
+
+describe("markLinkedCalendarForReconnect", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("durably flags ONE linked calendar scoped by (id, userId)", async () => {
+    await markLinkedCalendarForReconnect("u1", "cal-1");
+    expect(m.updateMany).toHaveBeenCalledWith({
+      where: { id: "cal-1", userId: "u1" },
+      data: { needsReconnect: true },
+    });
   });
 });
