@@ -141,3 +141,80 @@ export function evaluateTierFloors(pairs: TierPair[]): FloorReport {
   // not a gate. An empty run still fails via overall accuracy (overall = 0).
   return { checks, pass: checks.filter((c) => c.gating).every((c) => c.pass) };
 }
+
+/**
+ * Full per-tier precision/recall/support snapshot for the eval report (NOT a
+ * gate — the floors above are the gate). Diagnostic instrument for the
+ * body-eval and confusion-matrix readouts.
+ *
+ * "Measure not inject": a tier with zero support has an UNKNOWN metric, so
+ * precision/recall are `null` (never a fabricated 0 or 1). The reader is
+ * handed the raw support counts alongside so a null is legible as "vacuous",
+ * not "broken".
+ */
+export interface TierMetric {
+  tier: Tier;
+  /** correctForTier / predictedSupport; null when nothing was predicted this tier. */
+  precision: number | null;
+  /** correctForTier / truthSupport; null when nothing is truly this tier. */
+  recall: number | null;
+  /** count of items whose ground-truth tier is this tier. */
+  truthSupport: number;
+  /** count of items the judge predicted as this tier. */
+  predictedSupport: number;
+}
+
+/** Divide, or null when the denominator has no support (unknown, not 0). */
+function rateOrNull(numerator: number, denominator: number): number | null {
+  return denominator === 0 ? null : numerator / denominator;
+}
+
+/** One TierMetric per tier, in TIERS order. Pure — no I/O, no mutation. */
+export function computePerTierMetrics(
+  results: Array<{ truth: Tier; predicted: Tier }>,
+): TierMetric[] {
+  const valid = results.filter((r) => TIERS.includes(r.truth) && TIERS.includes(r.predicted));
+  return TIERS.map((tier) => {
+    const truthSupport = valid.filter((r) => r.truth === tier).length;
+    const predictedSupport = valid.filter((r) => r.predicted === tier).length;
+    const correct = valid.filter((r) => r.truth === tier && r.predicted === tier).length;
+    return {
+      tier,
+      precision: rateOrNull(correct, predictedSupport),
+      recall: rateOrNull(correct, truthSupport),
+      truthSupport,
+      predictedSupport,
+    };
+  });
+}
+
+export interface TierMetricDelta {
+  tier: Tier;
+  /** after.precision − before.precision; null if either side is null. */
+  precisionDelta: number | null;
+  /** after.recall − before.recall; null if either side is null. */
+  recallDelta: number | null;
+}
+
+/** Subtract two metrics; null propagates so a vacuous side never fakes a delta. */
+function delta(before: number | null, after: number | null): number | null {
+  return before === null || after === null ? null : after - before;
+}
+
+/**
+ * Per-tier change between two metric snapshots (e.g. body-off vs body-on).
+ * A null on either side yields a null delta — an unknown minus anything is
+ * still unknown, so we never report a confident change we didn't measure.
+ * Aligns both inputs by tier in TIERS order.
+ */
+export function diffTierMetrics(before: TierMetric[], after: TierMetric[]): TierMetricDelta[] {
+  return TIERS.map((tier) => {
+    const b = before.find((m) => m.tier === tier);
+    const a = after.find((m) => m.tier === tier);
+    return {
+      tier,
+      precisionDelta: delta(b?.precision ?? null, a?.precision ?? null),
+      recallDelta: delta(b?.recall ?? null, a?.recall ?? null),
+    };
+  });
+}
