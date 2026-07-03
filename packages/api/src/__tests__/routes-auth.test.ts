@@ -20,6 +20,8 @@ vi.mock("../email.js", () => ({
 // (and its transitive gmail.js imports don't need mocking here).
 vi.mock("../email-sync.js", () => ({
   syncLinkedInboxesForUser: vi.fn(async () => ({ newCount: 0 })),
+  syncEmails: vi.fn(async () => ({ synced: 0, newCount: 0, source: "gmail" })),
+  summarizeUnsummarizedEmails: vi.fn(async () => 0),
 }));
 
 // Stub gmail OAuth helpers so we don't hit googleapis in tests.

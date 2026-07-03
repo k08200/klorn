@@ -38,6 +38,8 @@ vi.mock("../email.js", () => ({
 // email-sync's transitive gmail.js imports).
 vi.mock("../email-sync.js", () => ({
   syncLinkedInboxesForUser: vi.fn(async () => ({ newCount: 0 })),
+  syncEmails: vi.fn(async () => ({ synced: 0, newCount: 0, source: "gmail" })),
+  summarizeUnsummarizedEmails: vi.fn(async () => 0),
 }));
 
 vi.mock("../crypto-tokens.js", () => ({

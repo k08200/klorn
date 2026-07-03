@@ -1041,7 +1041,10 @@ export async function emailRoutes(app: FastifyInstance) {
 
       // Trigger AI summarization (non-blocking, but never silent — the manual
       // /sync path must match the scheduler's console+Sentry discipline).
-      summarizeUnsummarizedEmails(uid, result.newCount).catch((err) => {
+      // Sweep a floor of 10, not just newCount: mail ingested earlier (e.g. by
+      // login init-sync) that never got summarized would otherwise be stranded
+      // as "not analyzed" forever — pressing Sync with 0 new mail summarized 0.
+      summarizeUnsummarizedEmails(uid, Math.max(result.newCount, 10)).catch((err) => {
         console.warn(`[EMAIL-SYNC] background summarize failed for user ${uid}`, err);
         captureError(err, { tags: { scope: "email.sync.summarize" }, extra: { userId: uid } });
       });
