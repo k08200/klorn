@@ -1641,9 +1641,17 @@ export function authRoutes(app: FastifyInstance) {
 
     // 3. Sync emails from Gmail (latest 30)
     try {
-      const { syncEmails } = await import("../email-sync.js");
+      const { syncEmails, summarizeUnsummarizedEmails } = await import("../email-sync.js");
       const emailResult = await syncEmails(userId, 30);
       results.emails = emailResult.newCount;
+      // Summarize in the background so freshly-synced mail doesn't sit as
+      // "Klorn has not analyzed this email yet" until the user finds the manual
+      // Sync button. Sweep a floor of 10 (not just newCount): mail ingested by
+      // an earlier login that never got summarized must not be stranded forever.
+      summarizeUnsummarizedEmails(userId, Math.max(emailResult.newCount, 10)).catch((err) => {
+        console.warn("[AUTH] init-sync background summarize failed:", err);
+        captureError(err, { tags: { scope: "auth.init-sync.summarize" }, extra: { userId } });
+      });
     } catch (err) {
       console.warn("[AUTH] init-sync email sync failed:", err);
       // Email sync failed — skip

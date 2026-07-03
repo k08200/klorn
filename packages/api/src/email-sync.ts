@@ -336,7 +336,10 @@ export async function syncLinkedInboxesForUser(userId: string): Promise<{ newCou
         client: inbox.client,
       });
       newCount += r.newCount;
-      if (r.newCount > 0) await summarizeUnsummarizedEmails(userId, r.newCount);
+      // Floor of 5 (not gated on newCount): linked mail ingested by an earlier
+      // pass that never got summarized must not stay "not analyzed" forever.
+      // The query only returns unsummarized rows, so a clean backlog costs 0 calls.
+      await summarizeUnsummarizedEmails(userId, Math.max(r.newCount, 5));
       await prisma.linkedInboxAccount.updateMany({
         where: { id: inbox.id, userId },
         data: { lastSyncedAt: new Date() },
