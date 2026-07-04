@@ -32,6 +32,20 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="ai.klorn.app" android:host="oauth-callback" />
             </intent-filter>
+            <!-- App Links hardening path (custom schemes are hijackable by a
+                 co-resident app; verified https links are not). Verified against
+                 https://klorn.ai/.well-known/assetlinks.json — currently carries
+                 the DEBUG cert fingerprint; add the release keystore's SHA256
+                 there before shipping. Dormant until the OAuth relay redirects
+                 to https://klorn.ai/oauth-native (a browser fallback page exists
+                 at that path). Failing verification is harmless: the scheme
+                 filter above keeps working. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="klorn.ai" android:pathPrefix="/oauth-native" />
+            </intent-filter>
 
         </activity>
 

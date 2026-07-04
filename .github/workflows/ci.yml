@@ -46,6 +46,13 @@ jobs:
       - name: Typecheck Core
         run: cd packages/core && npx tsc --noEmit
 
+      # Web was previously unchecked here — a broken packages/web tsc slipped
+      # through CI on 2026-07-03 (missing @capacitor/app types) because only
+      # api+core were gated. Next.js `build` type-checks too, but tsc is the
+      # cheap fast signal on every PR.
+      - name: Typecheck Web
+        run: cd packages/web && npx tsc --noEmit
+
   test:
     name: Test
     runs-on: ubuntu-latest

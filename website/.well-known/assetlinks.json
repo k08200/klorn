@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ai.klorn.app",
+      "sha256_cert_fingerprints": [
+        "E6:EA:59:5A:7C:EE:D2:5F:04:9B:BE:94:47:E9:40:CD:AD:5B:CA:56:9C:E4:A0:82:DB:2F:04:AF:6A:F5:4B:8C"
+      ]
+    }
+  }
+]

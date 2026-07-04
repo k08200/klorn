@@ -92,7 +92,10 @@ sign-in demonstrable at launch, the app moves from "thin wrapper" to defensible.
    `FIREBASE_SERVICE_ACCOUNT` on Render (Android FCM send path).
 2. **Play Console** app record: listing, **Data safety** form, content rating,
    privacy policy URL, target audience.
-3. **Upload keystore** (app signing) for the Play release.
+3. **Upload keystore** (app signing) for the Play release. Then add its
+   SHA256 to `website/.well-known/assetlinks.json` (currently debug-only):
+   `keytool -list -v -keystore <release.keystore> | grep SHA256` — this is
+   what activates verified App Links (OAuth hardening) in production.
 4. **Screenshots** + feature graphic.
 
 ### C. Payments (required by both stores)
