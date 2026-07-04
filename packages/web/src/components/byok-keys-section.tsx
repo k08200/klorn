@@ -234,14 +234,13 @@ export function ByokKeysSection() {
             );
           })}
           {(() => {
-            const anyKey = !!status?.hasOpenRouterApiKey || !!status?.hasGeminiApiKey;
             const options = status?.availableModels ?? [];
             return (
               <div className="rounded-md border border-stone-800 bg-stone-900/40 p-3">
                 <Select
                   id="byok-model"
-                  label="Model"
-                  disabled={!anyKey || savingModel}
+                  label="Assistant model"
+                  disabled={savingModel}
                   value={status?.selectedModel ?? options[0]?.id ?? ""}
                   onChange={(e) => void saveModel(e.target.value)}
                 >
@@ -251,11 +250,12 @@ export function ByokKeysSection() {
                     </option>
                   ))}
                 </Select>
-                {!anyKey && (
-                  <p className="mt-1 text-[11px] text-stone-400">
-                    Add a key above to choose a model.
-                  </p>
-                )}
+                <p className="mt-1 text-[11px] text-stone-500">
+                  Frontier models only — this is the model your Klorn assistant talks in. It works
+                  on your mail, calendar, and tasks and never searches the web. Runs under your
+                  daily AI quota; add your own key above to use your own quota instead. The mail
+                  firewall&apos;s classifier is tuned separately and is not affected.
+                </p>
               </div>
             );
           })()}

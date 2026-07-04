@@ -70,18 +70,24 @@ export async function getUserLlmCredentials(userId: string): Promise<ProviderCre
   }
   if (!user) return {};
 
+  // Model CHOICE is for everyone (frontier chat model = user trust; the
+  // per-user daily cost cap is the spend guard). Only a curated id counts —
+  // anything else (including the legacy schema default) is treated as unset
+  // and the chat surface falls back to its env default. Applied ONLY where a
+  // call site opts in via useUserModel (conversational surfaces), never the
+  // judge/summarize/draft/vision pins.
+  const chosenModel = isCuratedModel(user.chatModel) ? (user.chatModel as string) : undefined;
+
   // BYOK is a subscriber-only feature: bringing your own key must not be a way
   // to use Klorn for free. When the paywall is on, a non-entitled user's stored
   // key is ignored (resolves to the shared env key, which the locked FREE tier
   // can't reach anyway). Entitled users (paid/trial/comped/admin) keep BYOK.
+  // The model choice above survives either way.
   if (!isEntitled(user.plan ?? "FREE", user.role ?? undefined)) {
-    return {};
+    return { userModel: chosenModel };
   }
 
   const openRouterApiKey = safeDecrypt(user.openRouterApiKey, "openRouterApiKey", userId);
   const geminiApiKey = safeDecrypt(user.geminiApiKey, "geminiApiKey", userId);
-  const hasKey = Boolean(openRouterApiKey) || Boolean(geminiApiKey);
-  const userModel =
-    hasKey && isCuratedModel(user.chatModel) ? (user.chatModel as string) : undefined;
-  return { openRouterApiKey, geminiApiKey, quotaScope: userId, userModel };
+  return { openRouterApiKey, geminiApiKey, quotaScope: userId, userModel: chosenModel };
 }

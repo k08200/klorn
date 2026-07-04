@@ -137,20 +137,21 @@ describe("billing routes", () => {
     await app.close();
   });
 
-  it("GET /models includes availableModels with gemini-2.5-flash and selectedModel from user", async () => {
+  it("GET /models lists the frontier catalog and selectedModel from user", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/api/billing/models", headers: auth() });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(Array.isArray(body.availableModels)).toBe(true);
     expect(body.availableModels.map((m: { id: string }) => m.id)).toContain(
-      "google/gemini-2.5-flash",
+      "anthropic/claude-sonnet-5",
     );
-    expect(body.selectedModel).toBe("google/gemini-2.5-flash");
+    // Default mock user's stored model is a legacy id → treated as unset.
+    expect(body.selectedModel).toBeNull();
     await app.close();
   });
 
-  it("PATCH /models with a curated chatModel persists it when user has a key", async () => {
+  it("PATCH /models with a curated chatModel persists it", async () => {
     const { prisma } = await import("../db.js");
     const findMock = prisma.user.findUnique as ReturnType<typeof vi.fn>;
     // requireAuth → sessionRevokedForToken calls findUnique first (select: sessionsInvalidatedAt).
@@ -172,12 +173,12 @@ describe("billing routes", () => {
       method: "PATCH",
       url: "/api/billing/models",
       headers: auth(),
-      payload: { chatModel: "anthropic/claude-sonnet-4" },
+      payload: { chatModel: "anthropic/claude-sonnet-5" },
     });
     expect(res.statusCode).toBe(200);
     expect(
       (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls.some(
-        (call) => call[0]?.data?.chatModel === "anthropic/claude-sonnet-4",
+        (call) => call[0]?.data?.chatModel === "anthropic/claude-sonnet-5",
       ),
     ).toBe(true);
     await app.close();
@@ -199,7 +200,7 @@ describe("billing routes", () => {
     await app.close();
   });
 
-  it("PATCH /models chatModel without any provider key returns 400 and does not persist", async () => {
+  it("PATCH /models chatModel WITHOUT any provider key persists (choice is for everyone)", async () => {
     const { prisma } = await import("../db.js");
     const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
     updateMock.mockClear();
@@ -209,11 +210,14 @@ describe("billing routes", () => {
       method: "PATCH",
       url: "/api/billing/models",
       headers: auth(),
-      payload: { chatModel: "anthropic/claude-sonnet-4" },
+      payload: { chatModel: "anthropic/claude-sonnet-5" },
     });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toMatch(/provider key/i);
-    expect(updateMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(
+      updateMock.mock.calls.some(
+        (call) => call[0]?.data?.chatModel === "anthropic/claude-sonnet-5",
+      ),
+    ).toBe(true);
     await app.close();
   });
 

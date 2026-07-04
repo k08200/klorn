@@ -45,8 +45,10 @@ services:
       # "Free endpoints that may train on request data" must ALSO stay off.
       # Self-host keeps the :free net by default (operator's own data-policy
       # choice).
+      # Chat/assistant default = frontier (user-selectable in Settings from the
+      # curated catalog; this is the default for users who never picked).
       - key: CHAT_MODEL
-        value: "google/gemini-2.5-flash"
+        value: "anthropic/claude-sonnet-5"
       - key: AGENT_MODEL
         value: "google/gemini-2.5-flash"
       - key: JUDGE_MODEL

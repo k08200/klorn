@@ -32,19 +32,11 @@ import {
 } from "./gmail.js";
 import { getUpcomingMeetings, joinMeeting, MEETING_TOOLS, summarizeMeeting } from "./meeting.js";
 import { forget, MEMORY_TOOLS, recall, remember } from "./memory.js";
-import { SEARCH_TOOLS, webSearch } from "./search.js";
 import { captureError } from "./sentry.js";
 import { executeSkill, listUserSkills, SKILL_TOOLS } from "./skill-executor.js";
 import { planHasFeature, TOOL_FEATURE_MAP } from "./stripe.js";
 import { capToolResult } from "./tool-result-budget.js";
-import {
-  calculate,
-  convertCurrency,
-  generatePassword,
-  shortenUrl,
-  translate,
-  UTILITY_TOOLS,
-} from "./utilities.js";
+import { calculate, generatePassword, UTILITY_TOOLS } from "./utilities.js";
 
 const TIME_TOOL = {
   type: "function" as const,
@@ -57,11 +49,30 @@ const TIME_TOOL = {
 
 const GOOGLE_TOOLS = [...GMAIL_TOOLS, ...CALENDAR_TOOLS];
 
+// Trust boundary: the assistant works on the user's OWN mail/calendar/tasks
+// and never reaches the open web or third-party services. Tools that shipped
+// user-derived content to external endpoints (web_search → DuckDuckGo,
+// translate_text → mymemory, shorten_url → is.gd, convert_currency → CDN
+// rates) are removed from the LLM surface entirely — they contradicted both
+// the product promise ("email/calendar only") and the Limited Use commitment
+// that Google user data is not transferred to third parties. Only LOCAL
+// utilities stay exposed. executeToolCall also refuses the removed names
+// (defense in depth for a stale/cached tool list).
+const LOCAL_UTILITY_TOOLS = UTILITY_TOOLS.filter((t) =>
+  ["calculate", "generate_password"].includes(t.function.name),
+);
+
+const REMOVED_EXTERNAL_TOOLS = new Set([
+  "web_search",
+  "translate_text",
+  "shorten_url",
+  "convert_currency",
+]);
+
 export const ALWAYS_TOOLS = [
-  ...SEARCH_TOOLS,
   ...BRIEFING_TOOLS,
   ...MEETING_TOOLS,
-  ...UTILITY_TOOLS,
+  ...LOCAL_UTILITY_TOOLS,
   ...MEMORY_TOOLS,
   ...SKILL_TOOLS,
   TIME_TOOL,
@@ -161,6 +172,15 @@ async function executeToolCallInternal(
     // future case for them cannot ship a receipt-less side-effect path.
     if (isFloorAction(functionName) && !receipt) {
       throw new FloorReceiptRequiredError(functionName);
+    }
+
+    // Removed external tools — refuse even if a stale/cached tool list still
+    // offers them: user-derived content must never leave for third-party
+    // endpoints (see REMOVED_EXTERNAL_TOOLS above).
+    if (REMOVED_EXTERNAL_TOOLS.has(functionName)) {
+      return JSON.stringify({
+        error: `${functionName} is not available: Klorn's assistant works only on your mail, calendar, and tasks — it does not access the web or external services.`,
+      });
     }
     switch (functionName) {
       case "list_emails":
@@ -285,10 +305,6 @@ async function executeToolCallInternal(
         const { briefing, note, notification, reused } = await createDailyBriefingDelivery(userId);
         return JSON.stringify({ briefing, note, notification, reused });
       }
-      case "web_search":
-        return JSON.stringify(
-          await webSearch(requireString(args.query, "query"), safeInt(args.max_results, 5, 20)),
-        );
       case "get_current_time": {
         const now = new Date();
         const kstFmt = new Intl.DateTimeFormat("sv-SE", {
@@ -321,26 +337,8 @@ async function executeToolCallInternal(
             (args.attendees as string[]) || [],
           ),
         );
-      case "translate_text":
-        return JSON.stringify(
-          await translate(
-            requireString(args.text, "text"),
-            requireString(args.from, "from"),
-            requireString(args.to, "to"),
-          ),
-        );
-      case "shorten_url":
-        return JSON.stringify(await shortenUrl(requireString(args.url, "url")));
       case "calculate":
         return JSON.stringify(calculate(requireString(args.expression, "expression")));
-      case "convert_currency":
-        return JSON.stringify(
-          await convertCurrency(
-            typeof args.amount === "number" ? args.amount : Number(args.amount) || 0,
-            requireString(args.from, "from"),
-            requireString(args.to, "to"),
-          ),
-        );
       case "generate_password":
         return JSON.stringify(generatePassword(safeInt(args.length, 16, 64)));
       case "remember":

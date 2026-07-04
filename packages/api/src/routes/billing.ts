@@ -176,9 +176,8 @@ export async function billingRoutes(app: FastifyInstance) {
     };
   });
 
-  // PATCH /api/billing/models — Bring-your-own-key updates. The chat/agent
-  // model is no longer user-selectable; passing chatModel/agentModel is
-  // accepted but ignored to preserve old client compatibility.
+  // PATCH /api/billing/models — BYOK key updates + the user's chat/assistant
+  // model choice (curated frontier catalog, open to every user).
   app.patch(
     "/models",
     {
@@ -221,11 +220,11 @@ export async function billingRoutes(app: FastifyInstance) {
       // BYOK is a subscriber-only feature: don't even STORE a key for a
       // non-entitled user (the read path ignores it anyway, but storing it is
       // misleading + unnecessary PII). Clearing keys stays allowed so a
-      // downgraded user can remove theirs.
+      // downgraded user can remove theirs. The chat-model CHOICE is for
+      // everyone — the per-user daily cost cap is the spend guard.
       const isSettingKey =
         (typeof openRouterApiKey === "string" && openRouterApiKey.trim().length > 0) ||
-        (typeof geminiApiKey === "string" && geminiApiKey.trim().length > 0) ||
-        typeof chatModel === "string";
+        (typeof geminiApiKey === "string" && geminiApiKey.trim().length > 0);
       if (isSettingKey && !isEntitled(user.plan, user.role)) {
         return reply.code(403).send({ error: "BYOK requires an active subscription" });
       }
@@ -240,9 +239,9 @@ export async function billingRoutes(app: FastifyInstance) {
         if (!isCuratedModel(chatModel)) {
           return reply.code(400).send({ error: "Unsupported model" });
         }
-        if (!user.openRouterApiKey && !user.geminiApiKey) {
-          return reply.code(400).send({ error: "Add a provider key before choosing a model" });
-        }
+        // No key requirement: the choice applies to the chat/assistant surface
+        // for every user; without a BYOK key it runs on the shared providers
+        // under the daily cost cap.
         updateData.chatModel = chatModel;
       }
 
