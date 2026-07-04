@@ -15,7 +15,7 @@ Klorn does the opposite. Each inbound email gets exactly **one** classification 
 
 ![Klorn decision queue](packages/web/public/klorn-demo-poster.jpg)
 
-▶️ **[60-second walkthrough](packages/web/public/klorn-walkthrough.mp4)** · 📖 **[Editions / open-core boundary](docs/EDITIONS.md)** · 📋 **[CHANGELOG](CHANGELOG.md)**
+▶️ **[60-second walkthrough](packages/web/public/klorn-walkthrough.mp4)** ([한국어](packages/web/public/klorn-walkthrough-ko.mp4)) · 🌐 **[Live demo on klorn.ai](https://klorn.ai)** · 📖 **[Editions](docs/EDITIONS.md)** · 📋 **[CHANGELOG](CHANGELOG.md)**
 
 ## The four tiers
 
