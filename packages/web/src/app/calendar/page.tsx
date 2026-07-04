@@ -226,7 +226,10 @@ function CalendarView() {
                 <h1 className="text-lg font-semibold tracking-tight text-stone-50 md:text-2xl">
                   Meetings that need prep
                 </h1>
-                <div className="flex shrink-0 items-center gap-2 lg:hidden">
+                {/* One button pair for every breakpoint, anchored to the title
+                    row. (They used to be absolutely positioned over the signal
+                    panel on lg+, which covered the WORK SIGNALS header.) */}
+                <div className="flex shrink-0 items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setNewEventOpen(true)}
@@ -240,7 +243,7 @@ function CalendarView() {
                     disabled={syncing}
                     className="min-h-9 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
                   >
-                    {syncing ? "..." : "Sync"}
+                    {syncing ? "Syncing..." : "Sync now"}
                   </button>
                 </div>
               </div>
@@ -250,23 +253,6 @@ function CalendarView() {
             </div>
             <div className="relative hidden min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20 lg:block">
               <EveSignalField className="absolute inset-0 border-0" />
-              <div className="absolute right-3 top-3 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setNewEventOpen(true)}
-                  className="inline-flex min-h-11 items-center rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-stone-950 transition hover:bg-accent/90"
-                >
-                  New event
-                </button>
-                <button
-                  type="button"
-                  onClick={syncNow}
-                  disabled={syncing}
-                  className="inline-flex min-h-11 items-center rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
-                >
-                  {syncing ? "Syncing..." : "Sync now"}
-                </button>
-              </div>
             </div>
           </div>
           <div className="mt-5 hidden grid-cols-3 overflow-hidden rounded-lg border border-stone-800 bg-black/20 md:grid">
