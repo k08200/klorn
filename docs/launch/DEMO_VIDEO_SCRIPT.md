@@ -15,6 +15,9 @@ YouTube and paste the link into the OAuth verification form.
       Calendar.
 - [ ] Narrate in simple English, or record silently and add English captions —
       both are accepted. Lines below are ready to read.
+- [ ] **Revoke Klorn's access first** (myaccount.google.com → Security →
+      third-party access → remove Klorn), or the consent screen with the scope
+      checkboxes will NOT appear — Scene 1 dies. Re-revoke before any retake.
 - [ ] The "Google hasn't verified this app" warning is EXPECTED before
       verification — click *Advanced → Continue* on camera; do not cut it out.
 
@@ -40,9 +43,10 @@ on camera.
 
 ## Scene 2 — `gmail.readonly` (0:45–1:20)
 
-**Screen:** the mail/firewall view right after sign-in: the inbox classified
-into tiers. Open one email; point at the AI summary and the reply-needed
-signal.
+**Screen:** after sign-in you land on /inbox ("Decisions"). Click the
+**"Firewall board"** segment tab → show the PUSH / QUEUE / SILENT columns.
+Then sidebar **Mail** → the list rows show "Summary:"; open one email and
+point at the **"Klorn judgment"** block (summary + key points).
 
 > "Klorn reads message content to classify each email — interrupt now, review
 > later, silence, or auto-handle — and to generate this summary. Metadata
@@ -50,8 +54,9 @@ signal.
 
 ## Scene 3 — `gmail.modify` (1:20–1:45)
 
-**Screen:** in Klorn, archive (or mark read) one message → switch to the
-**Gmail tab** → show the same message is now archived/read there.
+**Screen:** open a promotional message → click **"Archive"** in the top
+toolbar of the detail page (Read · Star · Archive · Delete · Next) → switch
+to the **Gmail tab**, refresh → the message left the inbox.
 
 > "When the user triages a message in Klorn, we apply that decision in Gmail —
 > marking it read or archiving it. That is gmail.modify. Klorn never
@@ -59,18 +64,19 @@ signal.
 
 ## Scene 4 — `gmail.send` (1:45–2:15)
 
-**Screen:** open a mail that needs a reply → **Draft reply** → edit briefly →
-**Approve & send** → switch to the **Gmail Sent** folder → show the sent
-message.
+**Screen:** open a mail that needs a reply → scroll to **"Reply draft"** →
+click **"Draft reply"** → edit briefly → click **"Send this reply"** (the box
+collapsing = success; there is no toast) → switch to the **Gmail Sent**
+folder → show the sent message.
 
 > "Klorn drafts a reply. The user reviews and approves it, and only then does
 > Klorn send it from the user's own account — that is gmail.send."
 
 ## Scene 5 — `calendar.events` (+ `calendar.readonly`) (2:15–2:40)
 
-**Screen:** Klorn's calendar/briefing surface showing today's meetings → create
-an event from an email (or show a conflict warning when scheduling) → switch to
-the **Google Calendar tab** → show the created event.
+**Screen:** sidebar **Calendar** → today's events → click **"New event"** →
+fill title/time → **"Create event"** → switch to the **Google Calendar tab**,
+refresh → show the created event.
 
 > "Klorn reads the user's calendar to prepare meeting briefings and detect
 > conflicts, and creates the events the user confirms — calendar.events and
@@ -78,8 +84,9 @@ the **Google Calendar tab** → show the created event.
 
 ## Scene 6 — Revoke & deletion (2:40–3:00)
 
-**Screen:** Settings → the connected Google account → **Disconnect**. Then show
-`klorn.ai/privacy` briefly (scroll to the Limited Use section).
+**Screen:** Settings → **"Connections"** section → Google row →
+**"Disconnect"** → confirm. Then show **`app.klorn.ai/privacy`** briefly
+(scroll to the Limited Use section — NOT klorn.ai/privacy, which 404s).
 
 > "The user can disconnect Google at any time — Klorn deletes its tokens — and
 > can also revoke access at myaccount.google.com. Our privacy policy documents
