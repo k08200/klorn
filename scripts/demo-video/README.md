@@ -51,3 +51,22 @@ Prereqs: node + `playwright` (chromium installed), `ffmpeg`, `python3` + Pillow.
 Selector gotchas learned the hard way: use `:visible` (the responsive layout
 keeps a hidden mobile duplicate of list links) and exact-name matches where
 labels are substrings of other buttons ("All signals" vs "Show all signals").
+
+## Motion-graphics promo (Remotion)
+
+`promo-remotion/` is a code-defined 33-second promo (email-noise intro →
+4-tier count-up cards → Ken Burns product shots → outro), en/ko:
+
+```bash
+cd scripts/demo-video/promo-remotion
+npm install
+npx remotion render src/index.ts PromoEN out/promo-en.mp4
+npx remotion render src/index.ts PromoKO out/promo-ko.mp4
+```
+
+`public/shot-*.png` are stills from the latest demo recording; refresh them
+after a re-record with e.g.
+`ffmpeg -ss <t> -i ../videos/<take>.webm -frames:v 1 public/shot-firewall.png`
+(pick timestamps ~3s into the firewall / judgment / draft / new_event scenes
+from `scenes.txt`). Copy in real board numbers (`TIERS` in `src/Promo.tsx`)
+if they changed.

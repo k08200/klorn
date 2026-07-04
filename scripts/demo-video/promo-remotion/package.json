@@ -1,0 +1,11 @@
+{
+  "name": "klorn-promo-remotion",
+  "private": true,
+  "description": "Motion-graphics promo video (Remotion). Render: npx remotion render src/index.ts PromoEN out/promo-en.mp4",
+  "dependencies": {
+    "remotion": "^4",
+    "@remotion/cli": "^4",
+    "react": "^19",
+    "react-dom": "^19"
+  }
+}
