@@ -43,37 +43,46 @@ vi.mock("../llm-usage.js", () => ({
 
 import { createCompletion, createVisionCompletion, VISION_MODEL } from "../openai.js";
 
-describe("createCompletion — per-user model override", () => {
-  it("uses options.credentials.userModel for the provider call when set", async () => {
+describe("createCompletion — chat-surface model override (useUserModel)", () => {
+  it("applies credentials.userModel ONLY when the call opts in via useUserModel", async () => {
     create.mockClear();
     await createCompletion(
       { model: "google/gemma-4-31b-it:free", messages: [{ role: "user", content: "hi" }] },
-      { userId: "u1", credentials: { userModel: "openai/gpt-4o" } },
+      { userId: "u1", credentials: { userModel: "anthropic/claude-sonnet-5" }, useUserModel: true },
     );
-    expect(create.mock.calls[0]?.[0]?.model).toBe("openai/gpt-4o");
+    expect(create.mock.calls[0]?.[0]?.model).toBe("anthropic/claude-sonnet-5");
+  });
+
+  it("PINNED surfaces ignore userModel when useUserModel is absent (judge/summarize/draft)", async () => {
+    create.mockClear();
+    await createCompletion(
+      { model: "google/gemini-2.5-flash", messages: [{ role: "user", content: "hi" }] },
+      { userId: "u1", credentials: { userModel: "anthropic/claude-sonnet-5" } },
+    );
+    expect(create.mock.calls[0]?.[0]?.model).toBe("google/gemini-2.5-flash");
   });
 
   it("falls back to params.model when no userModel", async () => {
     create.mockClear();
     await createCompletion(
       { model: "google/gemini-2.5-flash", messages: [{ role: "user", content: "hi" }] },
-      { userId: "u1", credentials: {} },
+      { userId: "u1", credentials: {}, useUserModel: true },
     );
     expect(create.mock.calls[0]?.[0]?.model).toBe("google/gemini-2.5-flash");
   });
 });
 
-describe("createVisionCompletion — per-user model override", () => {
-  it("dispatches the user's chosen model when credentials.userModel is set", async () => {
+describe("createVisionCompletion — pinned, never steered by chat choice", () => {
+  it("ignores credentials.userModel entirely (a text pick may not be multimodal)", async () => {
     create.mockClear();
     await createVisionCompletion(
       { model: VISION_MODEL, messages: [{ role: "user", content: "describe this" }] },
-      { userId: "u1", credentials: { userModel: "openai/gpt-4o" } },
+      { userId: "u1", credentials: { userModel: "anthropic/claude-sonnet-5" } },
     );
-    expect(create.mock.calls[0]?.[0]?.model).toBe("openai/gpt-4o");
+    expect(create.mock.calls[0]?.[0]?.model).toBe(VISION_MODEL);
   });
 
-  it("falls back to VISION_MODEL when no userModel is set", async () => {
+  it("uses VISION_MODEL when no userModel is set", async () => {
     create.mockClear();
     await createVisionCompletion(
       { model: VISION_MODEL, messages: [{ role: "user", content: "describe this" }] },

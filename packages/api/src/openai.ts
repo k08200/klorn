@@ -98,6 +98,13 @@ export interface CompletionOptions {
    * MUST pass "background" so they can never starve chat.
    */
   priority?: CallPriority;
+  /**
+   * Conversational surfaces (agent conversations / chat) pass true so the
+   * user's chosen frontier chat model (credentials.userModel) is applied.
+   * Absent/false = pinned surfaces (judge/summarize/draft/vision) — the
+   * user's chat preference never touches those.
+   */
+  useUserModel?: boolean;
 }
 
 export class DailyCostCapExceededError extends Error {
@@ -288,9 +295,12 @@ export async function createCompletion(
   // fallthrough) — see enforceCostGates / trueUpCostLedgers.
   const userKeyAvailable = hasUserOwnedProvider(chain, playgroundOnly);
 
-  // BYOK users may steer the model (curated only — resolved in llm-credentials).
-  // Reassign once so the provider call + cost ledgers all use the chosen model.
-  if (options.credentials?.userModel) {
+  // The user's chosen chat model (curated frontier only — resolved in
+  // llm-credentials) applies ONLY to conversational surfaces that opt in via
+  // options.useUserModel. Judge/summarize/draft/vision keep their measured
+  // pins — a chat preference must never silently change classification
+  // quality. Reassign once so the provider call + cost ledgers agree.
+  if (options.useUserModel && options.credentials?.userModel) {
     params = { ...params, model: options.credentials.userModel };
   }
 
@@ -541,7 +551,9 @@ export async function createVisionCompletion(
     ...envProviders.filter((provider) => provider.name === "gemini"),
     ...envProviders.filter((provider) => provider.name !== "gemini"),
   ];
-  const visionModel = options.credentials?.userModel ?? VISION_MODEL;
+  // Vision stays on its measured pin — the user's CHAT model choice must not
+  // steer OCR/attachment analysis (a text-focused pick may not be multimodal).
+  const visionModel = VISION_MODEL;
 
   // One provider call + ledger settle. Extracted so the `:free`→paid retry
   // below records usage for whichever model actually served, exactly like the

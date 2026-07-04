@@ -279,7 +279,13 @@ export async function runAgentForUser(
     // gate too — without it an ADMIN on a FREE plan has every tool rejected
     // mid-loop once the paywall locks FREE (the scheduler already passes role).
     const userRole = agentUser?.role ?? undefined;
-    const agentModelForUser = AGENT_MODEL;
+    // The agent conversation is a CONVERSATIONAL surface: the user's chosen
+    // frontier chat model applies here (their agent talks in the model they
+    // trust). Unset → the pinned AGENT_MODEL. BYOK keys ride along so a
+    // key-holder's cycles bill their own account.
+    const { getUserLlmCredentials } = await import("./llm-credentials.js");
+    const agentCredentials = await getUserLlmCredentials(userId);
+    const agentModelForUser = agentCredentials.userModel ?? AGENT_MODEL;
 
     const { analyzePatterns } = await import("./pattern-learner.js");
     const { buildTrustHintForPrompt } = await import("./trust-score.js");
@@ -529,7 +535,7 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
           temperature: 0.3,
           max_tokens: 1000,
         },
-        { userId, priority: "background" },
+        { userId, priority: "background", credentials: agentCredentials, useUserModel: true },
       );
 
       // Track token usage for cost monitoring
