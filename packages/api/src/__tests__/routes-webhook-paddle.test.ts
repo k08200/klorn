@@ -191,6 +191,19 @@ describe("POST /api/webhook/paddle", () => {
     await app.close();
   });
 
+  it("acknowledges an unmapped subscription event without granting anything", async () => {
+    process.env.PADDLE_WEBHOOK_SECRET = SECRET;
+    userById = null;
+    userByCustomer = null;
+    const app = await buildApp();
+    const res = await post(app, subscriptionEvent());
+    // 200 (Paddle should not retry — the event is surfaced via captureError
+    // for a human instead), and no plan was touched.
+    expect(res.statusCode).toBe(200);
+    expect(userUpdates).toHaveLength(0);
+    await app.close();
+  });
+
   it("skips an already-processed event (idempotency via WebhookEvent)", async () => {
     process.env.PADDLE_WEBHOOK_SECRET = SECRET;
     processedEvent = { id: "evt_paddle_1" };
