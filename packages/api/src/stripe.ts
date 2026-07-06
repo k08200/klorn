@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { PAYWALL_ENABLED } from "./config.js";
+import { isPaddleConfigured } from "./paddle.js";
 
 if (!process.env.STRIPE_SECRET_KEY) {
   console.warn("STRIPE_SECRET_KEY not set — billing endpoints will fail");
@@ -45,13 +46,14 @@ export const PLANS = {
 } as const;
 
 /**
- * True when the web (Stripe) checkout path can actually complete: both the
- * secret key and the PRO price are configured. Surfaced to clients so the
- * web paywall degrades to a disabled state instead of a dead button when
- * only native IAP is live (e.g. a native-first launch without Stripe).
+ * True when a web checkout path can actually complete — either provider:
+ * Stripe (secret key + PRO price) or Paddle (API key + PRO price, the MoR
+ * used for the no-business-entity launch). Surfaced to clients so the web
+ * paywall degrades to a disabled state instead of a dead button when only
+ * native IAP is live.
  */
 export function isWebCheckoutAvailable(): boolean {
-  return Boolean(stripe && PLANS.PRO.priceId);
+  return Boolean((stripe && PLANS.PRO.priceId) || isPaddleConfigured());
 }
 
 /** Get the effective plan config for a user. ADMIN role always gets ENTERPRISE limits. */

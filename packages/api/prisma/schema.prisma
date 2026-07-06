@@ -46,6 +46,10 @@ model User {
   telegramLinkCode          String?                    @unique
   telegramLinkCodeExpiresAt DateTime?
   stripeId                  String?                    @unique
+  // Paddle Billing customer (ctm_…). Set by the paddle webhook on the first
+  // subscription event; used for the customer portal and as the fallback
+  // mapping for events that arrive without custom_data.userId.
+  paddleCustomerId          String?                    @unique
   emailVerified             Boolean                    @default(false)
   verifyToken               String?
   verifyTokenExp            DateTime?
