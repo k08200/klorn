@@ -18,6 +18,11 @@ interface User {
   // false with the usable free tier — free users get in, bounded by the free
   // daily cost cap. The client shows the full paywall only when this is true.
   paywalled?: boolean;
+  // Whether the web (Stripe) checkout can complete server-side (secret key +
+  // PRO price configured). When false the web paywall/subscription surfaces
+  // disable their subscribe button instead of firing a checkout that 400s
+  // (e.g. a native-IAP-only launch). Undefined (older API) = assume available.
+  webCheckoutAvailable?: boolean;
   // IANA timezone (e.g., "Asia/Seoul"). Always present — defaults server-side
   // to "Asia/Seoul" when the column is null. Used for date/time rendering so
   // the UI doesn't silently fall back to the browser timezone, which on iOS

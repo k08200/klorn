@@ -15,9 +15,10 @@ The only active billing mechanism today is the per-user daily LLM cost cap.
 
 | # | Decision | Where it lands |
 |---|----------|----------------|
-| D1 | **Final price.** UI copy is now consistent at the founding price — `$7.99` web / `$9.99` native (`packages/web/src/app/billing/page.tsx`, `components/paywall-screen.tsx:30`, `components/subscription-section.tsx:30`; the billing page's stale scaffold `$29` was removed 2026-07-06). Confirm founding pricing still stands vs the 2026-06-29 $12 web / $14.99 app list-price decision, then create the Stripe Price object and RevenueCat offering charging exactly what the UI says. | Stripe Dashboard price + RevenueCat offering (UI already aligned) |
+| D1 | **Final price — DECIDED 2026-07-06: founding `$7.99` web / `$9.99` native.** UI copy is consistent across `packages/web/src/app/billing/page.tsx`, `components/paywall-screen.tsx:30`, `components/subscription-section.tsx:30`. The payment provider price/offering must charge exactly these amounts. | Provider dashboard price/offering (UI already aligned) |
 | D2 | **Free-tier daily AI budget.** `FREE_DAILY_COST_CAP_CENTS` (default 10¢/day) bounds free-user COGS once the paywall is on. | Render env |
 | D3 | **Trial length.** `TRIAL_DAYS` (default 7). Stripe checkout and the paywall copy both derive from it. | Render env |
+| D4 | **Web payment provider.** The code implements Stripe, but Stripe does not onboard Korea-domiciled merchants without a foreign entity. Options for an individual founder (no 사업자등록): launch **native-IAP-only** (Apple/Google are the merchant; individual developer accounts suffice; RevenueCat webhook already built — the web surfaces now degrade to a disabled "coming soon" state automatically when Stripe is unconfigured), or add a **merchant-of-record** provider for web (Paddle / Lemon Squeezy / Creem — the MoR is the legal seller, so no business registration is required; needs a new webhook integration, ~1 day). Stripe Atlas (US LLC) is the only way to keep the existing Stripe code, at incorporation + tax-filing cost. | Founder decision; MoR integration is a code task if chosen |
 
 ## 1. Provider setup (no user impact — do any time before flip)
 

@@ -26,6 +26,10 @@ export default function PaywallScreen() {
   // Native IAP is live only once a RevenueCat key is configured; until then the
   // app shows a disabled state (the web build always uses the Stripe path).
   const iapReady = iapAvailable();
+  // Web checkout is live only when the server has Stripe fully configured;
+  // undefined (older API) is treated as available so the button never
+  // regresses on deploy skew.
+  const webCheckoutReady = user?.webCheckoutAvailable !== false;
   // Web is cheaper (no Apple cut). Founding price is locked in for early users.
   const price = native ? "$9.99" : "$7.99";
 
@@ -131,9 +135,10 @@ export default function PaywallScreen() {
         </ul>
 
         <div className="mt-8">
-          {native && !iapReady ? (
+          {(native && !iapReady) || (!native && !webCheckoutReady) ? (
             // Native build without a RevenueCat key yet — no web checkout/link
-            // here (App Store anti-steering 3.1.1).
+            // here (App Store anti-steering 3.1.1). Same disabled state on web
+            // while Stripe is unconfigured (native-IAP-only launch).
             <button
               type="button"
               disabled
