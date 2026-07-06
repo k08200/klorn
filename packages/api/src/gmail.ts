@@ -820,15 +820,17 @@ async function markInboxForReconnect(
 
 // Gmail tool functions for Eve
 
-export async function listEmails(userId: string, maxResults = 10) {
+export async function listEmails(userId: string, maxResults = 10, query?: string) {
   const auth = await getAuthedClient(userId);
   if (!auth) return { error: "Gmail not connected. Please connect your Gmail first." };
 
   const gmail = google.gmail({ version: "v1", auth });
+  const q = query?.trim();
   const res = await gmail.users.messages.list({
     userId: "me",
     maxResults,
     labelIds: ["INBOX"],
+    ...(q ? { q } : {}),
   });
 
   const messages = res.data.messages || [];
@@ -1669,13 +1671,18 @@ export const GMAIL_TOOLS: {
     type: "function" as const,
     function: {
       name: "list_emails",
-      description: "List recent emails from the user's Gmail inbox",
+      description: "List recent emails from the user's Gmail inbox, optionally filtered by search",
       parameters: {
         type: "object",
         properties: {
           max_results: {
             type: "number",
             description: "Number of emails to fetch (default 10, max 20)",
+          },
+          query: {
+            type: "string",
+            description:
+              "Optional Gmail search query to find specific mail (e.g. 'from:kim@x.com', 'subject:invoice newer_than:7d')",
           },
         },
         required: [],
