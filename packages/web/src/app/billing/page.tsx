@@ -43,7 +43,9 @@ const PLANS = [
   {
     key: "PRO",
     name: "Pro",
-    price: "$29",
+    // Founding price — must match paywall-screen.tsx / subscription-section.tsx
+    // (web $7.99; native shows $9.99 there) and the live Stripe Price object.
+    price: "$7.99",
     period: "/mo",
     limit: "2K decisions/mo · 10M tokens",
     features: [
