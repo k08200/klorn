@@ -62,7 +62,9 @@ function toolCallResponse(name: string, args: Record<string, unknown>, id = "cal
         message: {
           role: "assistant",
           content: null,
-          tool_calls: [{ id, type: "function", function: { name, arguments: JSON.stringify(args) } }],
+          tool_calls: [
+            { id, type: "function", function: { name, arguments: JSON.stringify(args) } },
+          ],
         },
       },
     ],
@@ -165,7 +167,11 @@ describe("runChatTurn", () => {
       )
       .mockResolvedValueOnce(textResponse("일정 초안을 확인해 주세요."));
 
-    const result = await runChatTurn({ userId: "u1", history: [], userText: "내일 3시 김대표 미팅" });
+    const result = await runChatTurn({
+      userId: "u1",
+      history: [],
+      userText: "내일 3시 김대표 미팅",
+    });
 
     expect(executeToolCall).not.toHaveBeenCalled();
     expect(result.eventDraft).toEqual({

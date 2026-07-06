@@ -73,7 +73,8 @@ function validateEventDraft(args: Record<string, unknown>): EventDraft | null {
   const endTime = typeof args.end_time === "string" ? args.end_time.trim() : "";
   if (!title || !startTime || !endTime) return null;
   if (Number.isNaN(Date.parse(startTime)) || Number.isNaN(Date.parse(endTime))) return null;
-  const location = typeof args.location === "string" && args.location.trim() ? args.location.trim() : undefined;
+  const location =
+    typeof args.location === "string" && args.location.trim() ? args.location.trim() : undefined;
   return { title, startTime, endTime, ...(location ? { location } : {}) };
 }
 

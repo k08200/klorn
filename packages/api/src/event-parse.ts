@@ -77,7 +77,10 @@ export async function parseEventText(
   try {
     parsed = parseLlmJson<Record<string, unknown>>(content);
   } catch (err) {
-    console.error(`[PARSE-EVENT] malformed model output for user ${userId}:`, content.slice(0, 200));
+    console.error(
+      `[PARSE-EVENT] malformed model output for user ${userId}:`,
+      content.slice(0, 200),
+    );
     captureError(err, { tags: { scope: "parse_event.json", userId } });
     return null;
   }
@@ -99,7 +102,9 @@ export async function parseEventText(
   }
 
   const location =
-    typeof parsed.location === "string" && parsed.location.trim() ? parsed.location.trim() : undefined;
+    typeof parsed.location === "string" && parsed.location.trim()
+      ? parsed.location.trim()
+      : undefined;
 
   return { title, startTime, endTime, ...(location ? { location } : {}) };
 }
