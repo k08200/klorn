@@ -304,6 +304,10 @@ function EmailView() {
 
   const listQuery = useInfiniteQuery({
     queryKey: queryKeys.email.list({ filter, search: appliedSearch, inbox }),
+    // Safety net for real-time: new mail is announced over the WebSocket, but
+    // a missed frame (socket blip, backgrounded tab) used to strand the list
+    // until manual Sync. Poll while the tab is visible.
+    refetchInterval: 30_000,
     initialPageParam: 1,
     queryFn: async ({ pageParam }) => {
       const q = FILTERS.find((x) => x.key === filter)?.query || "";

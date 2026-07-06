@@ -1,7 +1,7 @@
 // Klorn Service Worker — offline caching + push notification support
 // v8: icons regenerated to a bigger K on a full-white tile; flush the v7 cache
 // so the query-less push icon/badge (/icon-192.png, /badge-96.png) re-fetch.
-const CACHE_NAME = "klorn-v8";
+const CACHE_NAME = "klorn-v9";
 const PRECACHE_URLS = ["/", "/chat", "/briefing", "/manifest.json"];
 
 // Install: precache shell
@@ -80,7 +80,8 @@ self.addEventListener("push", (event) => {
   console.log("[SW] Push event received!", event.data ? "has data" : "no data");
   const rawText = event.data ? event.data.text() : null;
 
-  // Forward to all open tabs so user can see in browser console
+  // Forward to all open tabs: debug info + a refresh signal so an open page
+  // refetches its lists when a push lands while the WS was down/backgrounded.
   const debugPromise = self.clients.matchAll({ type: "window" }).then((clients) => {
     for (const c of clients) {
       c.postMessage({
@@ -88,6 +89,7 @@ self.addEventListener("push", (event) => {
         msg: "Push event fired!",
         data: rawText,
       });
+      c.postMessage({ type: "conversations-updated" });
     }
   });
 

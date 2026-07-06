@@ -86,6 +86,8 @@ function CommandCenterView() {
     queries: [
       {
         queryKey: [...queryKeys.inbox.pending(), filter] as const,
+        // Poll as the real-time safety net (missed WS frames strand the queue).
+        refetchInterval: 30_000,
         queryFn: async () => {
           const qs = filter === "all" ? "?status=all" : "";
           const data = await apiFetch<{ actions: PendingActionItem[] }>(
