@@ -128,7 +128,9 @@ export async function chatConversationRoutes(app: FastifyInstance) {
         },
       });
     } catch (err) {
-      console.error(`[CHAT] failed to persist turn for conversation ${id}:`, err);
+      // The id is a path param — keep user-provided values out of the format
+      // string (log-injection / tainted-format-string).
+      console.error("[CHAT] failed to persist chat turn:", { conversationId: id }, err);
       captureError(err, { tags: { scope: "chat.persist", userId, conversationId: id } });
     }
 

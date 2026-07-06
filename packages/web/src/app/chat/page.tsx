@@ -61,13 +61,11 @@ function ChatView() {
 
   const conversationsQuery = useQuery({
     queryKey: queryKeys.chat.conversations(),
-    queryFn: () =>
-      apiFetch<{ conversations: ConversationSummary[] }>("/api/chat/conversations"),
+    queryFn: () => apiFetch<{ conversations: ConversationSummary[] }>("/api/chat/conversations"),
   });
 
   // Latest conversation resumes by default; "New chat" resets to null.
-  const activeId =
-    conversationId ?? conversationsQuery.data?.conversations[0]?.id ?? null;
+  const activeId = conversationId ?? conversationsQuery.data?.conversations[0]?.id ?? null;
 
   const messagesQuery = useQuery({
     queryKey: queryKeys.chat.messages(activeId ?? "none"),
@@ -175,7 +173,7 @@ function ChatView() {
               </div>
             )}
             {sendMutation.isPending && (
-              <p className="text-sm text-stone-400" aria-label="Assistant is thinking">
+              <p role="status" className="text-sm text-stone-400">
                 Thinking…
               </p>
             )}
