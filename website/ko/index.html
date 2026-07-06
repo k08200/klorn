@@ -1726,12 +1726,12 @@
       kfSubject.value = PRESETS[0].subject;
       kfSnippet.value = PRESETS[0].snippet;
 
-      // Restore a previously used key/provider (visitor's own machine only).
+      // Restore provider/model only. The API key is NEVER persisted — a raw
+      // BYOK LLM key in localStorage is cleartext sensitive data; the visitor
+      // re-enters it each session for the one-shot demo call.
       try {
-        const savedKey = localStorage.getItem('klorn_pg_key');
         const savedProvider = localStorage.getItem('klorn_pg_provider');
         const savedModel = localStorage.getItem('klorn_pg_model');
-        if (savedKey) kfKey.value = savedKey;
         if (savedProvider) kfProvider.value = savedProvider;
         if (savedModel) kfModel.value = savedModel;
       } catch (_) { /* storage blocked — fine */ }
@@ -1777,7 +1777,8 @@
         if (!from || !subject) { showError('최소한 보낸 사람 주소와 제목은 입력해 주세요.'); return; }
 
         try {
-          localStorage.setItem('klorn_pg_key', apiKey);
+          // Never persist the API key (cleartext sensitive data). Provider and
+          // model are non-sensitive convenience only.
           localStorage.setItem('klorn_pg_provider', provider);
           if (model) localStorage.setItem('klorn_pg_model', model);
         } catch (_) { /* ignore */ }
