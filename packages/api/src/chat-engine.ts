@@ -170,7 +170,7 @@ export async function runChatTurn(opts: {
               // model so it can answer honestly.
               const msg = err instanceof Error ? err.message : String(err);
               console.error(`[CHAT] tool ${fn.name} failed for user ${userId}:`, msg);
-              captureError(err, { context: "chat_tool_call", userId, tool: fn.name });
+              captureError(err, { tags: { scope: "chat.tool", userId, tool: fn.name } });
               result = JSON.stringify({ error: `Tool failed: ${msg}` });
             }
           }
@@ -189,7 +189,7 @@ export async function runChatTurn(opts: {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[CHAT] turn failed for user ${userId}:`, msg);
-    captureError(err, { context: "chat_turn", userId });
+    captureError(err, { tags: { scope: "chat.turn", userId } });
     return {
       reply: "Sorry — I couldn't process that right now. Please try again in a moment.",
       eventDraft: null,

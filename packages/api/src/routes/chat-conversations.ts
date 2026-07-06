@@ -8,6 +8,7 @@
  * requireEntitled — chat only ever produces drafts.
  */
 
+import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { runChatTurn } from "../chat-engine.js";
@@ -108,9 +109,9 @@ export async function chatConversationRoutes(app: FastifyInstance) {
         content: result.reply,
         metadata: {
           source: "chat",
-          ...(result.eventDraft ? { eventDraft: result.eventDraft } : {}),
+          ...(result.eventDraft ? { eventDraft: { ...result.eventDraft } } : {}),
           ...(result.error ? { turnError: result.error } : {}),
-        },
+        } as Prisma.InputJsonValue,
       },
     });
 
