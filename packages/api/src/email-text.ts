@@ -32,12 +32,18 @@ function decodeEntities(text: string): string {
     .replace(/ /g, " ");
 }
 
+// Sanitizing is synchronous, event-loop-blocking work with no natural bound —
+// a multi-MB spam HTML must not stall the server on every read. 500KB keeps
+// every legitimate email intact.
+const MAX_HTML_INPUT = 500_000;
+
 export function htmlToPlainText(html: string): string {
   if (!html || !html.trim()) return "";
 
   // Insert line breaks after block-level closes and <br> so paragraphs don't
   // collapse into one blob. Tags themselves are stripped by sanitize-html.
   const withBreaks = html
+    .slice(0, MAX_HTML_INPUT)
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/(p|div|li|tr|h[1-6]|blockquote)\s*>/gi, "$&\n");
 

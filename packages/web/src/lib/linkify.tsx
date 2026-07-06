@@ -11,6 +11,7 @@
 
 import type { ReactNode } from "react";
 import { isNativePlatform } from "./native/capacitor";
+import { captureClientError } from "./sentry";
 
 // Match http(s) URLs and mailto addresses in free text. Conservative on
 // trailing punctuation so "…link: https://x.co/abc." doesn't eat the dot.
@@ -22,7 +23,13 @@ function openExternal(url: string, event: React.MouseEvent) {
   event.preventDefault();
   void import("@capacitor/browser")
     .then(({ Browser }) => Browser.open({ url }))
-    .catch((err) => console.error("[LINKIFY] system browser open failed:", err));
+    .catch((err) => {
+      // preventDefault already suppressed the anchor — without a fallback the
+      // tap would be a silent dead end on a broken plugin bridge.
+      console.error("[LINKIFY] system browser open failed:", err);
+      captureClientError(err, { context: "linkify.openExternal" });
+      window.open(url, "_blank", "noopener,noreferrer");
+    });
 }
 
 /** Split untrusted plain text into text nodes + safe clickable anchors. */
