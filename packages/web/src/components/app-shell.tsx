@@ -22,6 +22,7 @@ const APP_SHELL_ROUTES = [
   "/billing",
   "/briefing",
   "/calendar",
+  "/chat",
   "/email",
   "/graph",
   "/inbox",
@@ -38,6 +39,7 @@ function currentSectionLabel(pathname: string): string {
   if (pathname === "/email" || pathname.startsWith("/email/")) return "Mail";
   if (pathname === "/calendar" || pathname.startsWith("/calendar/")) return "Calendar";
   if (pathname === "/briefing" || pathname.startsWith("/briefing/")) return "Briefing";
+  if (pathname === "/chat" || pathname.startsWith("/chat/")) return "Assistant";
   if (pathname === "/billing" || pathname.startsWith("/billing/")) return "Plan and billing";
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return "Admin";
   if (pathname.startsWith("/settings")) return "Settings";

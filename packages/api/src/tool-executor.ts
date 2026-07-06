@@ -184,7 +184,13 @@ async function executeToolCallInternal(
     }
     switch (functionName) {
       case "list_emails":
-        return JSON.stringify(await listEmails(userId, safeInt(args.max_results, 10, 100)));
+        return JSON.stringify(
+          await listEmails(
+            userId,
+            safeInt(args.max_results, 10, 100),
+            typeof args.query === "string" ? args.query : undefined,
+          ),
+        );
       case "read_email":
         return JSON.stringify(await readEmail(userId, requireString(args.email_id, "email_id")));
       case "send_email": {

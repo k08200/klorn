@@ -42,15 +42,26 @@ function plusOneHour(time: string): string {
   return `${pad(((h ?? 0) + 1) % 24)}:${pad(m ?? 0)}`;
 }
 
+export interface NewEventInitial {
+  title?: string;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+  location?: string;
+}
+
 export function NewEventModal({
   open,
   onClose,
   onCreated,
+  initial,
 }: {
   open: boolean;
   onClose: () => void;
   /** Called after a successful create so the page can refetch/toast. */
   onCreated: (title: string) => void;
+  /** Prefill (e.g. from a parsed voice transcript). Applied each time the dialog opens. */
+  initial?: NewEventInitial | null;
 }) {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
@@ -65,19 +76,20 @@ export function NewEventModal({
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const headingId = useId();
 
-  // Seed defaults each time the dialog opens (today, next full hour).
+  // Seed each time the dialog opens: the voice-parsed prefill when provided,
+  // otherwise the defaults (today, next full hour).
   useEffect(() => {
     if (!open) return;
     const now = new Date();
-    const start = nextHourValue(now);
-    setTitle("");
-    setDate(localDateValue(now));
+    const start = initial?.startTime || nextHourValue(now);
+    setTitle(initial?.title ?? "");
+    setDate(initial?.date || localDateValue(now));
     setStartTime(start);
-    setEndTime(plusOneHour(start));
-    setLocation("");
+    setEndTime(initial?.endTime || plusOneHour(start));
+    setLocation(initial?.location ?? "");
     setError(null);
     setSaving(false);
-  }, [open]);
+  }, [open, initial]);
 
   // Focus/trap/restore — read `saving` through a ref so the effect keys on
   // [open] alone and its cleanup can't fire (yanking focus) mid-save.

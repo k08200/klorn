@@ -74,6 +74,29 @@ export async function calendarRoutes(app: FastifyInstance) {
     return event;
   });
 
+  // Parse free text (voice transcript) into an event draft — read-side, free
+  // tier included. The client prefills the New event modal; the SAVE still
+  // goes through the Pro-gated POST "/" below.
+  app.post("/parse-event", async (request, reply) => {
+    const userId = getUserId(request);
+    const body = (request.body ?? {}) as { text?: unknown };
+    const text = typeof body.text === "string" ? body.text.trim() : "";
+    if (!text) return reply.code(400).send({ error: "text is required" });
+    if (text.length > 500) {
+      return reply.code(400).send({ error: "text must be at most 500 characters" });
+    }
+
+    try {
+      const { parseEventText } = await import("../event-parse.js");
+      const event = await parseEventText(userId, text);
+      return { event };
+    } catch (err) {
+      console.error(`[CALENDAR] parse-event failed for user ${userId}:`, err);
+      captureError(err, { tags: { scope: "calendar.parse_event", userId } });
+      return reply.code(502).send({ error: "Could not parse the text right now" });
+    }
+  });
+
   // Create event (local + Google Calendar sync) — Pro (calendar_write)
   app.post("/", { preHandler: requireEntitled }, async (request) => {
     const userId = getUserId(request);

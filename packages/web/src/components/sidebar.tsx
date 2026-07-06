@@ -15,6 +15,7 @@ const NAV_ITEMS: { href: string; label: string; icon: NavIconType }[] = [
   { href: "/email", label: "Mail", icon: "mail" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/briefing", label: "Briefing", icon: "bell" },
+  { href: "/chat", label: "Assistant", icon: "chat" },
 ];
 
 export default function Sidebar() {

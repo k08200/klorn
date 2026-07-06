@@ -3,11 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { EveSignalField } from "../../components/brand-visuals";
 import { LinkedCalendars } from "../../components/linked-calendars";
-import { NewEventModal } from "../../components/new-event-modal";
+import { type NewEventInitial, NewEventModal } from "../../components/new-event-modal";
+import VoiceButton from "../../components/voice-button";
 import { apiFetch, startGoogleConnect } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { queryKeys } from "../../lib/query-keys";
@@ -32,6 +33,31 @@ export default function CalendarPage() {
   );
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** Parsed ISO timestamps → the dialog's local date/time input values. */
+function isoToInitial(event: {
+  title: string;
+  startTime: string;
+  endTime: string;
+  location?: string;
+}): NewEventInitial {
+  const start = new Date(event.startTime);
+  const end = new Date(event.endTime);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return { title: event.title, location: event.location };
+  }
+  return {
+    title: event.title,
+    date: `${start.getFullYear()}-${pad2(start.getMonth() + 1)}-${pad2(start.getDate())}`,
+    startTime: `${pad2(start.getHours())}:${pad2(start.getMinutes())}`,
+    endTime: `${pad2(end.getHours())}:${pad2(end.getMinutes())}`,
+    location: event.location,
+  };
+}
+
 function CalendarView() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -41,6 +67,39 @@ function CalendarView() {
   const [error, setError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [newEventOpen, setNewEventOpen] = useState(false);
+  // Voice-parsed prefill for the New event dialog; null = plain defaults.
+  const [voiceInitial, setVoiceInitial] = useState<NewEventInitial | null>(null);
+  const [voiceParsing, setVoiceParsing] = useState(false);
+  // Staleness guard: any manual open/close of the dialog (or a newer mic
+  // request) bumps this, so an in-flight parse can never clobber what the
+  // user is doing or reopen a dialog they dismissed.
+  const voiceRequestRef = useRef(0);
+
+  const invalidateVoiceRequests = () => {
+    voiceRequestRef.current++;
+    setVoiceParsing(false);
+  };
+
+  // Speak → parse → open the New event dialog prefilled. The dialog IS the
+  // confirm card; parse failure still opens it empty so speech never dead-ends.
+  const handleVoiceTranscript = async (text: string) => {
+    const requestId = ++voiceRequestRef.current;
+    setVoiceParsing(true);
+    let initial: NewEventInitial = { title: text };
+    try {
+      const { event } = await apiFetch<{
+        event: { title: string; startTime: string; endTime: string; location?: string } | null;
+      }>("/api/calendar/parse-event", { method: "POST", body: JSON.stringify({ text }) });
+      if (event) initial = isoToInitial(event);
+    } catch (err) {
+      console.error("[CALENDAR] voice parse failed:", err);
+      captureClientError(err);
+    }
+    if (voiceRequestRef.current !== requestId) return; // superseded by user action
+    setVoiceParsing(false);
+    setVoiceInitial(initial);
+    setNewEventOpen(true);
+  };
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
   // Month being viewed. Stored as a Date pinned to day 1 in user TZ so
   // prev/next navigation never falls into adjacent-month corners when
@@ -164,9 +223,17 @@ function CalendarView() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <VoiceButton
+            onTranscript={(text) => void handleVoiceTranscript(text)}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-stone-700"
+          />
           <button
             type="button"
-            onClick={() => setNewEventOpen(true)}
+            onClick={() => {
+              invalidateVoiceRequests();
+              setVoiceInitial(null);
+              setNewEventOpen(true);
+            }}
             aria-label="New event"
             className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-stone-950 transition active:bg-accent/90"
           >
@@ -230,9 +297,17 @@ function CalendarView() {
                     row. (They used to be absolutely positioned over the signal
                     panel on lg+, which covered the WORK SIGNALS header.) */}
                 <div className="flex shrink-0 items-center gap-2">
+                  <VoiceButton
+                    onTranscript={(text) => void handleVoiceTranscript(text)}
+                    className="flex min-h-9 w-9 items-center justify-center rounded-md border border-stone-700"
+                  />
                   <button
                     type="button"
-                    onClick={() => setNewEventOpen(true)}
+                    onClick={() => {
+                      invalidateVoiceRequests();
+                      setVoiceInitial(null);
+                      setNewEventOpen(true);
+                    }}
                     className="min-h-9 rounded-md bg-accent px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent/90"
                   >
                     New event
@@ -362,12 +437,22 @@ function CalendarView() {
 
       <NewEventModal
         open={newEventOpen}
-        onClose={() => setNewEventOpen(false)}
+        initial={voiceInitial}
+        onClose={() => {
+          invalidateVoiceRequests();
+          setNewEventOpen(false);
+          setVoiceInitial(null);
+        }}
         onCreated={(title) => {
           setSyncMessage(`"${title}" created in your Google Calendar.`);
           void queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all });
         }}
       />
+      {voiceParsing && (
+        <output className="fixed bottom-24 left-1/2 z-40 -translate-x-1/2 rounded-full border border-stone-700 bg-stone-900/95 px-4 py-2 text-xs text-stone-200 shadow-lg md:bottom-8">
+          Understanding your event…
+        </output>
+      )}
     </div>
   );
 }

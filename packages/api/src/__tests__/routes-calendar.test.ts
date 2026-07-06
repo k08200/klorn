@@ -17,6 +17,17 @@ vi.mock("../calendar.js", () => ({
   deleteEvent: vi.fn(async () => {}),
 }));
 
+const parseEventText = vi.fn(
+  async (): Promise<Record<string, unknown> | null> => ({
+    title: "김대표 미팅",
+    startTime: "2026-07-07T15:00:00+09:00",
+    endTime: "2026-07-07T16:00:00+09:00",
+  }),
+);
+vi.mock("../event-parse.js", () => ({
+  parseEventText: (...args: unknown[]) => parseEventText(...args),
+}));
+
 type Ev = {
   id: string;
   userId: string;
@@ -214,6 +225,81 @@ describe("calendar routes", () => {
       headers: auth(OTHER),
     });
     expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+});
+
+describe("POST /api/calendar/parse-event", () => {
+  it("rejects missing or blank text with 400", async () => {
+    const app = await buildApp();
+    for (const payload of [{}, { text: "" }, { text: "   " }]) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/calendar/parse-event",
+        headers: auth(),
+        payload,
+      });
+      expect(res.statusCode).toBe(400);
+    }
+    await app.close();
+  });
+
+  it("rejects oversized text with 400", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/calendar/parse-event",
+      headers: auth(),
+      payload: { text: "x".repeat(501) },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("returns the parsed draft for the caller", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/calendar/parse-event",
+      headers: auth(),
+      payload: { text: "내일 3시 김대표 미팅" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      event: {
+        title: "김대표 미팅",
+        startTime: "2026-07-07T15:00:00+09:00",
+        endTime: "2026-07-07T16:00:00+09:00",
+      },
+    });
+    expect(parseEventText).toHaveBeenCalledWith("user-1", "내일 3시 김대표 미팅");
+    await app.close();
+  });
+
+  it("returns event: null when nothing is extractable", async () => {
+    parseEventText.mockResolvedValueOnce(null);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/calendar/parse-event",
+      headers: auth(),
+      payload: { text: "으으음" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ event: null });
+    await app.close();
+  });
+
+  it("answers 502 when the parser transport fails", async () => {
+    parseEventText.mockRejectedValueOnce(new Error("provider down"));
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/calendar/parse-event",
+      headers: auth(),
+      payload: { text: "내일 미팅" },
+    });
+    expect(res.statusCode).toBe(502);
     await app.close();
   });
 });

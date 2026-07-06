@@ -17,6 +17,7 @@ const TABS: Tab[] = [
   { href: "/email", label: "Mail", icon: "mail" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/briefing", label: "Briefing", icon: "bell" },
+  { href: "/chat", label: "Assistant", icon: "chat" },
 ];
 
 // Routes the account sheet owns — the account tab reads as "active" on these so
@@ -48,7 +49,7 @@ export default function BottomTabs() {
         aria-label="Primary navigation"
         className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-stone-700/50 bg-[#10100d]/92 pb-safe shadow-[0_-16px_44px_rgba(0,0,0,0.35)] backdrop-blur-xl"
       >
-        <ul className="grid grid-cols-5">
+        <ul className="grid grid-cols-6">
           {TABS.map((tab) => {
             const active = isActive(pathname, tab.href);
             return (

@@ -72,5 +72,12 @@
 			</array>
 		</dict>
 	</array>
+	<!-- Voice input (@capacitor-community/speech-recognition): dictate chat
+	     messages and calendar events. Speech is handled by Apple's on-device /
+	     system speech APIs; the app receives only the transcribed text. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Klorn uses the microphone so you can dictate messages and calendar events by voice.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Klorn converts your speech to text to create calendar events and assistant messages. Audio is processed by Apple&apos;s speech recognition and is not stored by Klorn.</string>
 </dict>
 </plist>
