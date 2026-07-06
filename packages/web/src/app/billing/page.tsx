@@ -17,6 +17,10 @@ interface BillingStatus {
   tokenUsage: number;
   estimatedCost: number;
   stripeId: string | null;
+  // Whether the web (Stripe) checkout can complete server-side. When false
+  // the upgrade button shows a disabled state instead of firing a checkout
+  // that 400s. Undefined (older API) = assume available.
+  webCheckoutAvailable?: boolean;
 }
 
 function formatTokens(n: number): string {
@@ -318,6 +322,16 @@ function BillingContent() {
                 // iOS app: no Stripe checkout (anti-steering). The IAP purchase
                 // button takes this slot at launch.
                 <div aria-hidden="true" />
+              ) : status?.webCheckoutAvailable === false ? (
+                // Stripe not configured server-side (native-IAP-only launch) —
+                // a live button here would fire a checkout that 400s.
+                <button
+                  type="button"
+                  disabled
+                  className="rounded-lg bg-amber-300/60 py-2.5 text-sm font-semibold text-stone-950"
+                >
+                  Subscription coming soon
+                </button>
               ) : (
                 <button
                   type="button"

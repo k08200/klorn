@@ -44,6 +44,16 @@ export const PLANS = {
   },
 } as const;
 
+/**
+ * True when the web (Stripe) checkout path can actually complete: both the
+ * secret key and the PRO price are configured. Surfaced to clients so the
+ * web paywall degrades to a disabled state instead of a dead button when
+ * only native IAP is live (e.g. a native-first launch without Stripe).
+ */
+export function isWebCheckoutAvailable(): boolean {
+  return Boolean(stripe && PLANS.PRO.priceId);
+}
+
 /** Get the effective plan config for a user. ADMIN role always gets ENTERPRISE limits. */
 export function getEffectivePlan(plan: string, role?: string): (typeof PLANS)[keyof typeof PLANS] {
   if (role === "ADMIN") return PLANS.ENTERPRISE;

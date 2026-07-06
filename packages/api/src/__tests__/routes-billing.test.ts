@@ -31,6 +31,7 @@ vi.mock("../stripe.js", () => ({
   PLANS: { PRO: { priceId: "price_pro" }, TEAM: { priceId: "price_team" } },
   PLAN_FEATURES: { FREE: new Set(["basic"]) },
   isEntitled: vi.fn(() => true),
+  isWebCheckoutAvailable: vi.fn(() => true),
 }));
 
 vi.mock("../db.js", () => {
@@ -87,6 +88,8 @@ describe("billing routes", () => {
     expect(res.json()).toHaveProperty("plan");
     expect(res.json()).toHaveProperty("messageLimit");
     expect(res.json()).toHaveProperty("tokenUsage");
+    // Drives the web paywall's disabled state when Stripe is unconfigured.
+    expect(res.json()).toHaveProperty("webCheckoutAvailable", true);
     await app.close();
   });
 

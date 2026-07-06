@@ -31,7 +31,7 @@ import {
 } from "../gmail.js";
 import { mapGoogleEventTimes } from "../google-calendar-time.js";
 import { captureError } from "../sentry.js";
-import { isEntitled, isHardPaywalled } from "../stripe.js";
+import { isEntitled, isHardPaywalled, isWebCheckoutAvailable } from "../stripe.js";
 import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
 import { maybeSendWelcomeEmail } from "../welcome-email.js";
 
@@ -328,6 +328,10 @@ export function authRoutes(app: FastifyInstance) {
           // Hard-wall only pure subscriber-only mode; with the usable free tier
           // this is always false so free users get into the app.
           paywalled: isHardPaywalled(user.plan, user.role),
+          // Whether the web (Stripe) checkout can complete (key + PRO price
+          // configured). The web paywall disables its subscribe button when
+          // false so a native-IAP-only launch never shows a dead button.
+          webCheckoutAvailable: isWebCheckoutAvailable(),
         },
       });
     },
@@ -384,6 +388,10 @@ export function authRoutes(app: FastifyInstance) {
           // Hard-wall only pure subscriber-only mode; with the usable free tier
           // this is always false so free users get into the app.
           paywalled: isHardPaywalled(user.plan, user.role),
+          // Whether the web (Stripe) checkout can complete (key + PRO price
+          // configured). The web paywall disables its subscribe button when
+          // false so a native-IAP-only launch never shows a dead button.
+          webCheckoutAvailable: isWebCheckoutAvailable(),
         },
       });
     },
@@ -436,6 +444,10 @@ export function authRoutes(app: FastifyInstance) {
           // Always false with the usable free tier — free users get in and are
           // bounded by the free daily cost cap instead.
           paywalled: isHardPaywalled(user.plan, user.role),
+          // Whether the web (Stripe) checkout can complete (key + PRO price
+          // configured). The web paywall disables its subscribe button when
+          // false so a native-IAP-only launch never shows a dead button.
+          webCheckoutAvailable: isWebCheckoutAvailable(),
           // Stored IANA timezone (User.timezone, default "Asia/Seoul").
           // Surfaced so the web client can render calendar/briefing times
           // in the user's intended zone instead of the browser default
@@ -482,6 +494,10 @@ export function authRoutes(app: FastifyInstance) {
           // Hard-wall only pure subscriber-only mode; with the usable free tier
           // this is always false so free users get into the app.
           paywalled: isHardPaywalled(user.plan, user.role),
+          // Whether the web (Stripe) checkout can complete (key + PRO price
+          // configured). The web paywall disables its subscribe button when
+          // false so a native-IAP-only launch never shows a dead button.
+          webCheckoutAvailable: isWebCheckoutAvailable(),
         },
       });
     },

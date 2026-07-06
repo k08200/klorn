@@ -9,7 +9,14 @@ import { clearFallbackState } from "../model-fallback.js";
 import { MODEL } from "../openai.js";
 import { getUserUsage } from "../quota-limiter.js";
 import { captureError } from "../sentry.js";
-import { getEffectivePlan, isEntitled, PLAN_FEATURES, PLANS, stripe } from "../stripe.js";
+import {
+  getEffectivePlan,
+  isEntitled,
+  isWebCheckoutAvailable,
+  PLAN_FEATURES,
+  PLANS,
+  stripe,
+} from "../stripe.js";
 
 function keyHash(apiKey: string | null | undefined): string | null {
   if (!apiKey) return null;
@@ -130,6 +137,7 @@ export async function billingRoutes(app: FastifyInstance) {
       tokenUsage: tokenAgg._sum.totalTokens || 0,
       estimatedCost: Math.round((tokenAgg._sum.estimatedCost || 0) * 10000) / 10000,
       stripeId: user.stripeId,
+      webCheckoutAvailable: isWebCheckoutAvailable(),
     };
   });
 

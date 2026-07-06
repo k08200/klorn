@@ -27,6 +27,9 @@ export function SubscriptionSection() {
 
   if (!user) return null;
   const isPro = PRO_PLANS.has(user.plan) || user.role === "ADMIN";
+  // Web checkout is live only when the server has Stripe fully configured;
+  // undefined (older API) is treated as available (deploy-skew safe).
+  const webCheckoutReady = user.webCheckoutAvailable !== false;
   const price = native ? "$9.99" : "$7.99";
 
   const startWebTrial = async () => {
@@ -151,7 +154,7 @@ export function SubscriptionSection() {
                 </li>
               ))}
             </ul>
-            {native && !iapAvailable() ? (
+            {(native && !iapAvailable()) || (!native && !webCheckoutReady) ? (
               <button
                 type="button"
                 disabled
