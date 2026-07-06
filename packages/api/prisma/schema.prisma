@@ -163,6 +163,12 @@ model Message {
   pendingAction  PendingAction?
   createdAt      DateTime       @default(now())
 
+  // Loading a conversation (include: { messages: orderBy createdAt }) filters
+  // by conversationId and sorts by createdAt; Postgres does not auto-index FK
+  // columns, so without this the busiest child table seq-scans per load. The
+  // composite serves the filter and returns rows already ordered, and also
+  // makes Conversation-cascade deletes an index scan.
+  @@index([conversationId, createdAt])
   @@index([content(ops: raw("gin_trgm_ops"))], map: "Message_content_trgm_idx", type: Gin)
 }
 

@@ -29,6 +29,12 @@ export interface CostGateResult {
   remainingCents: number;
   usedCents: number;
   capCents: number;
+  /**
+   * True when the FREE-tier cap (paywall on, non-entitled user) is the cap in
+   * force. Callers use it to pick the upgrade nudge over the BYOK nudge when
+   * the gate blocks. Never true on the fail-open path (full cap applies there).
+   */
+  freeCapApplied?: boolean;
   reason?: string;
 }
 
@@ -41,15 +47,17 @@ function utcDayKey(now: Date = new Date()): string {
 // bounds free classification/AUTO volume. When the paywall is off, or the user
 // is entitled (paid/trial/admin), the normal cap applies and no extra lookup
 // happens.
-async function resolveCapCents(userId: string): Promise<number> {
-  if (!PAYWALL_ENABLED) return DAILY_COST_CAP_CENTS;
+async function resolveCapCents(
+  userId: string,
+): Promise<{ capCents: number; freeCapApplied: boolean }> {
+  if (!PAYWALL_ENABLED) return { capCents: DAILY_COST_CAP_CENTS, freeCapApplied: false };
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { plan: true, role: true },
     });
     if (user && !isEntitled(user.plan, user.role ?? undefined)) {
-      return FREE_DAILY_COST_CAP_CENTS;
+      return { capCents: FREE_DAILY_COST_CAP_CENTS, freeCapApplied: true };
     }
   } catch (err) {
     // Fail OPEN to the normal cap (not closed to the free cap) — a deliberate
@@ -64,7 +72,7 @@ async function resolveCapCents(userId: string): Promise<number> {
     console.warn("[cost-guard] plan lookup failed, using default cap:", err);
     captureError(err, { tags: { scope: "cost-guard.resolve-cap" }, extra: { userId } });
   }
-  return DAILY_COST_CAP_CENTS;
+  return { capCents: DAILY_COST_CAP_CENTS, freeCapApplied: false };
 }
 
 /**
@@ -72,9 +80,15 @@ async function resolveCapCents(userId: string): Promise<number> {
  * Reads but does not mutate. Cap = 0 disables the gate entirely.
  */
 export async function checkCostGate(userId: string): Promise<CostGateResult> {
-  const cap = await resolveCapCents(userId);
+  const { capCents: cap, freeCapApplied } = await resolveCapCents(userId);
   if (cap <= 0) {
-    return { allowed: true, remainingCents: Number.POSITIVE_INFINITY, usedCents: 0, capCents: 0 };
+    return {
+      allowed: true,
+      remainingCents: Number.POSITIVE_INFINITY,
+      usedCents: 0,
+      capCents: 0,
+      freeCapApplied,
+    };
   }
   const row = await prisma.llmCostLedger.findUnique({
     where: { userId_dayKey: { userId, dayKey: utcDayKey() } },
@@ -87,10 +101,17 @@ export async function checkCostGate(userId: string): Promise<CostGateResult> {
       remainingCents: 0,
       usedCents: used,
       capCents: cap,
+      freeCapApplied,
       reason: `Daily cap reached (${used}¢/${cap}¢)`,
     };
   }
-  return { allowed: true, remainingCents: cap - used, usedCents: used, capCents: cap };
+  return {
+    allowed: true,
+    remainingCents: cap - used,
+    usedCents: used,
+    capCents: cap,
+    freeCapApplied,
+  };
 }
 
 /**
@@ -126,7 +147,7 @@ export async function recordCostUsage(
       },
       select: { cents: true },
     });
-    const cap = await resolveCapCents(userId);
+    const { capCents: cap } = await resolveCapCents(userId);
     return { totalCents: row.cents, overCap: cap > 0 && row.cents > cap };
   } catch (err) {
     // The ledger is best-effort accounting; never fail the user-facing call

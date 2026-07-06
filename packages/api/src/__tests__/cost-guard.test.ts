@@ -202,6 +202,67 @@ describe("checkCostGate — free-tier plan-aware cap (paywall on)", () => {
   });
 });
 
+describe("checkCostGate — freeCapApplied signal (drives the upgrade-vs-BYOK cap message)", () => {
+  const enablePaywall = () => {
+    process.env.PAYWALL_ENABLED = "true";
+    process.env.DAILY_COST_CAP_CENTS = "100";
+    process.env.FREE_DAILY_COST_CAP_CENTS = "10";
+    vi.resetModules();
+  };
+
+  it("flags freeCapApplied when the free-tier cap gated a non-entitled user", async () => {
+    enablePaywall();
+    mockUser = { plan: "FREE", role: "USER" };
+    mockRow = { cents: 10 };
+    const { checkCostGate } = await import("../cost-guard.js");
+    const result = await checkCostGate("free-1");
+    expect(result.allowed).toBe(false);
+    expect(result.freeCapApplied).toBe(true);
+  });
+
+  it("flags freeCapApplied even while the free user is still under the cap", async () => {
+    enablePaywall();
+    mockUser = { plan: "FREE", role: "USER" };
+    mockRow = { cents: 3 };
+    const { checkCostGate } = await import("../cost-guard.js");
+    const result = await checkCostGate("free-1");
+    expect(result.allowed).toBe(true);
+    expect(result.freeCapApplied).toBe(true);
+  });
+
+  it("does not flag freeCapApplied for an entitled (PRO) user", async () => {
+    enablePaywall();
+    mockUser = { plan: "PRO", role: "USER" };
+    mockRow = { cents: 100 };
+    const { checkCostGate } = await import("../cost-guard.js");
+    const result = await checkCostGate("pro-1");
+    expect(result.freeCapApplied).toBe(false);
+  });
+
+  it("does not flag freeCapApplied when the paywall is off", async () => {
+    process.env.PAYWALL_ENABLED = "false";
+    process.env.DAILY_COST_CAP_CENTS = "100";
+    process.env.FREE_DAILY_COST_CAP_CENTS = "10";
+    vi.resetModules();
+    mockUser = { plan: "FREE", role: "USER" };
+    mockRow = { cents: 100 };
+    const { checkCostGate } = await import("../cost-guard.js");
+    const result = await checkCostGate("free-1");
+    expect(result.freeCapApplied).toBe(false);
+  });
+
+  it("does not flag freeCapApplied when the plan lookup fails (fail-open path)", async () => {
+    enablePaywall();
+    userLookupShouldThrow = true;
+    mockRow = { cents: 100 };
+    const { checkCostGate } = await import("../cost-guard.js");
+    const result = await checkCostGate("free-1");
+    // Fail-open resolves to the FULL cap, so the message must not claim a free
+    // quota was exhausted.
+    expect(result.freeCapApplied).toBe(false);
+  });
+});
+
 describe("recordCostUsage — atomic pre-bill with post-increment over-cap signal (M3/L)", () => {
   it("returns the post-increment total and flags overCap when the atomic increment crosses the cap", async () => {
     process.env.DAILY_COST_CAP_CENTS = "100";
