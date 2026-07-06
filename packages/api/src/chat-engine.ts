@@ -132,8 +132,18 @@ export async function runChatTurn(opts: {
       messages.push(message);
 
       for (const toolCall of toolCalls) {
-        const fn = (toolCall as { function: { name: string; arguments: string } }).function;
-        const callId = (toolCall as { id: string }).id;
+        // Narrow the SDK union: a non-function (custom) tool call gets a
+        // scoped error message instead of failing the whole turn.
+        if (toolCall.type !== "function") {
+          messages.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({ error: "Unsupported tool call type." }),
+          });
+          continue;
+        }
+        const fn = toolCall.function;
+        const callId = toolCall.id;
         toolCallCount++;
 
         let result: string;

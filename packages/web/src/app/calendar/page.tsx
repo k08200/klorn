@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { EveSignalField } from "../../components/brand-visuals";
 import { LinkedCalendars } from "../../components/linked-calendars";
@@ -70,24 +70,35 @@ function CalendarView() {
   // Voice-parsed prefill for the New event dialog; null = plain defaults.
   const [voiceInitial, setVoiceInitial] = useState<NewEventInitial | null>(null);
   const [voiceParsing, setVoiceParsing] = useState(false);
+  // Staleness guard: any manual open/close of the dialog (or a newer mic
+  // request) bumps this, so an in-flight parse can never clobber what the
+  // user is doing or reopen a dialog they dismissed.
+  const voiceRequestRef = useRef(0);
+
+  const invalidateVoiceRequests = () => {
+    voiceRequestRef.current++;
+    setVoiceParsing(false);
+  };
 
   // Speak → parse → open the New event dialog prefilled. The dialog IS the
   // confirm card; parse failure still opens it empty so speech never dead-ends.
   const handleVoiceTranscript = async (text: string) => {
+    const requestId = ++voiceRequestRef.current;
     setVoiceParsing(true);
+    let initial: NewEventInitial = { title: text };
     try {
       const { event } = await apiFetch<{
         event: { title: string; startTime: string; endTime: string; location?: string } | null;
       }>("/api/calendar/parse-event", { method: "POST", body: JSON.stringify({ text }) });
-      setVoiceInitial(event ? isoToInitial(event) : { title: text });
+      if (event) initial = isoToInitial(event);
     } catch (err) {
       console.error("[CALENDAR] voice parse failed:", err);
       captureClientError(err);
-      setVoiceInitial({ title: text });
-    } finally {
-      setVoiceParsing(false);
-      setNewEventOpen(true);
     }
+    if (voiceRequestRef.current !== requestId) return; // superseded by user action
+    setVoiceParsing(false);
+    setVoiceInitial(initial);
+    setNewEventOpen(true);
   };
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
   // Month being viewed. Stored as a Date pinned to day 1 in user TZ so
@@ -219,6 +230,7 @@ function CalendarView() {
           <button
             type="button"
             onClick={() => {
+              invalidateVoiceRequests();
               setVoiceInitial(null);
               setNewEventOpen(true);
             }}
@@ -292,6 +304,7 @@ function CalendarView() {
                   <button
                     type="button"
                     onClick={() => {
+                      invalidateVoiceRequests();
                       setVoiceInitial(null);
                       setNewEventOpen(true);
                     }}
@@ -426,6 +439,7 @@ function CalendarView() {
         open={newEventOpen}
         initial={voiceInitial}
         onClose={() => {
+          invalidateVoiceRequests();
           setNewEventOpen(false);
           setVoiceInitial(null);
         }}

@@ -82,6 +82,20 @@ export function useSpeechInput(onTranscript: (text: string) => void): {
     recognition.onerror = () => setListening(false);
     recognition.onend = () => setListening(false);
     webRecognitionRef.current = recognition;
+
+    // Unmounting mid-dictation must not leave the browser mic running with
+    // handlers firing into a dead component.
+    return () => {
+      recognition.onresult = null;
+      recognition.onerror = null;
+      recognition.onend = null;
+      try {
+        recognition.stop();
+      } catch {
+        // stop() on a recognizer that never started throws — nothing to clean.
+      }
+      webRecognitionRef.current = null;
+    };
   }, []);
 
   const toggleNative = useCallback(async () => {
