@@ -115,14 +115,26 @@ export class DailyCostCapExceededError extends Error {
 }
 
 /**
- * User-facing message when the daily cost cap is hit. Surfaced when
+ * User-facing messages when the daily cost cap is hit. Surfaced when
  * routes/chat.ts streams the error back to the browser. Background
  * workers (autonomous agent, briefing, classify) catch
  * `DailyCostCapExceededError` and silently skip the cycle so the cron
  * does not crash.
+ *
+ * Two variants: a FREE-tier user who exhausted the free cap (paywall on)
+ * is at the single highest-intent conversion moment we have, so they get
+ * the upgrade nudge; everyone else (paid user, paywall off, global cap)
+ * gets the BYOK nudge — upselling a user who already pays would be wrong.
  */
 export const DAILY_COST_CAP_MESSAGE =
   "You've used today's AI quota. It resets at 00:00 UTC. To unblock right now, add your own API key in Settings.";
+
+export const DAILY_COST_CAP_UPGRADE_MESSAGE =
+  "You've used today's free AI quota. It resets at 00:00 UTC. Upgrade to Pro for a much higher daily limit, or add your own API key in Settings.";
+
+export function dailyCostCapMessageFor(freeCapApplied: boolean): string {
+  return freeCapApplied ? DAILY_COST_CAP_UPGRADE_MESSAGE : DAILY_COST_CAP_MESSAGE;
+}
 
 /**
  * Enforce both cost gates before a call:
@@ -167,7 +179,7 @@ async function enforceCostGates(
   if (userId) {
     const gate = await checkCostGate(userId);
     if (!gate.allowed) {
-      throw new DailyCostCapExceededError(DAILY_COST_CAP_MESSAGE);
+      throw new DailyCostCapExceededError(dailyCostCapMessageFor(gate.freeCapApplied === true));
     }
     if (!userKeyAvailable) {
       // Await the pre-bill so the atomic increment lands before we return, and
@@ -176,7 +188,7 @@ async function enforceCostGates(
       // check-then-act TOCTOU under concurrency / multi-dyno).
       const usage = await recordCostUsage(userId, estCents, model);
       if (usage?.overCap) {
-        throw new DailyCostCapExceededError(DAILY_COST_CAP_MESSAGE);
+        throw new DailyCostCapExceededError(dailyCostCapMessageFor(gate.freeCapApplied === true));
       }
     }
   }
