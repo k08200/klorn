@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isNativePlatform } from "./native/capacitor";
+import { captureClientError } from "./sentry";
 
 interface SpeechRecognitionEvent extends Event {
   results: { [index: number]: { [index: number]: { transcript: string } } };
@@ -50,7 +51,16 @@ export function useSpeechInput(onTranscript: (text: string) => void): {
       // permission prompt belong to a user gesture); assume present in the
       // shell — the shell always ships the plugin.
       setSupported(true);
-      return;
+      // Unmounting mid-dictation must not leave the OS recognizer running
+      // with listeners firing into a dead component.
+      return () => {
+        void import("@capacitor-community/speech-recognition")
+          .then(({ SpeechRecognition }) => {
+            SpeechRecognition.stop().catch(() => {});
+            return SpeechRecognition.removeAllListeners();
+          })
+          .catch((err) => console.error("[SPEECH] unmount cleanup failed:", err));
+      };
     }
 
     const win = window as unknown as Record<string, unknown>;
@@ -90,11 +100,16 @@ export function useSpeechInput(onTranscript: (text: string) => void): {
     try {
       const { available } = await SpeechRecognition.available();
       if (!available) {
+        console.warn("[SPEECH] native recognizer not available on this device");
         setSupported(false);
         return;
       }
       const perm = await SpeechRecognition.requestPermissions();
       if (perm.speechRecognition !== "granted") {
+        // Distinct from "unavailable": the user denied the OS prompt. Leave a
+        // trace so "mic disappeared" reports are diagnosable.
+        console.warn("[SPEECH] microphone/speech permission denied by the user");
+        captureClientError(new Error("speech permission denied"), { scope: "speech.permission" });
         setSupported(false);
         return;
       }

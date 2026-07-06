@@ -217,6 +217,27 @@ describe("chat conversation routes", () => {
     await app.close();
   });
 
+  it("still delivers the reply when persisting the assistant message fails", async () => {
+    conversationFindFirst.mockResolvedValue({ id: "conv-1", userId: "user-1", title: "t" });
+    runChatTurn.mockResolvedValueOnce({ reply: "expensive answer", eventDraft: null });
+    // user message persists fine, assistant persist blows up (DB blip)
+    messageCreate
+      .mockResolvedValueOnce({ id: "msg-user" })
+      .mockRejectedValueOnce(new Error("db down"));
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/chat/conversations/conv-1/messages",
+      headers: auth(),
+      payload: { text: "hi" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ reply: "expensive answer" });
+    await app.close();
+  });
+
   it("still answers 200 with the engine's honest error reply", async () => {
     conversationFindFirst.mockResolvedValue({ id: "conv-1", userId: "user-1", title: "t" });
     runChatTurn.mockResolvedValueOnce({

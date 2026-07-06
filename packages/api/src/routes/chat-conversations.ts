@@ -14,6 +14,7 @@ import { getUserId, requireAuth } from "../auth.js";
 import { runChatTurn } from "../chat-engine.js";
 import { prisma } from "../db.js";
 import { requireAppAccess } from "../entitlement-guard.js";
+import { captureError } from "../sentry.js";
 
 const MAX_TEXT_LENGTH = 4000;
 const HISTORY_LIMIT = 20;
@@ -102,26 +103,34 @@ export async function chatConversationRoutes(app: FastifyInstance) {
 
     const result = await runChatTurn({ userId, history, userText: text });
 
-    await prisma.message.create({
-      data: {
-        conversationId: id,
-        role: "ASSISTANT",
-        content: result.reply,
-        metadata: {
-          source: "chat",
-          ...(result.eventDraft ? { eventDraft: { ...result.eventDraft } } : {}),
-          ...(result.error ? { turnError: result.error } : {}),
-        } as Prisma.InputJsonValue,
-      },
-    });
+    // The turn already spent (and billed) LLM tokens — a persistence failure
+    // must never eat the reply. Best-effort persist, loud signal, and the
+    // client still receives the answer it paid for.
+    try {
+      await prisma.message.create({
+        data: {
+          conversationId: id,
+          role: "ASSISTANT",
+          content: result.reply,
+          metadata: {
+            source: "chat",
+            ...(result.eventDraft ? { eventDraft: { ...result.eventDraft } } : {}),
+            ...(result.error ? { turnError: result.error } : {}),
+          } as Prisma.InputJsonValue,
+        },
+      });
 
-    await prisma.conversation.update({
-      where: { id },
-      data: {
-        updatedAt: new Date(),
-        ...(conversation.title ? {} : { title: text.slice(0, TITLE_LENGTH) }),
-      },
-    });
+      await prisma.conversation.update({
+        where: { id },
+        data: {
+          updatedAt: new Date(),
+          ...(conversation.title ? {} : { title: text.slice(0, TITLE_LENGTH) }),
+        },
+      });
+    } catch (err) {
+      console.error(`[CHAT] failed to persist turn for conversation ${id}:`, err);
+      captureError(err, { tags: { scope: "chat.persist", userId, conversationId: id } });
+    }
 
     return {
       reply: result.reply,

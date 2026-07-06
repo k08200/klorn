@@ -55,6 +55,7 @@ function ChatView() {
   const [input, setInput] = useState("");
   // Optimistic echo of the user's message while the turn is in flight.
   const [pendingText, setPendingText] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -97,9 +98,12 @@ function ChatView() {
         queryClient.invalidateQueries({ queryKey: queryKeys.chat.conversations() }),
       ]);
     },
-    onError: (err) => {
+    onError: (err, text) => {
       console.error("[CHAT] send failed:", err);
       captureClientError(err);
+      // Never eat the user's words: put the failed message back in the box.
+      setInput((prev) => (prev.trim() ? prev : text));
+      setSendError("Could not send your message — it's back in the input box. Try again.");
     },
     onSettled: () => setPendingText(null),
   });
@@ -107,6 +111,7 @@ function ChatView() {
   const send = (raw: string) => {
     const text = raw.trim();
     if (!text || sendMutation.isPending) return;
+    setSendError(null);
     setPendingText(text);
     setInput("");
     sendMutation.mutate(text);
@@ -175,6 +180,11 @@ function ChatView() {
               </p>
             )}
           </>
+        )}
+        {sendError && (
+          <p role="alert" className="text-sm text-red-400">
+            {sendError}
+          </p>
         )}
         <div ref={threadEndRef} />
       </div>
