@@ -9,6 +9,7 @@
 import type { EmailMessage, FeedbackSignal, Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { htmlToPlainText } from "../email-text.js";
 import { MULTI_INBOX_SYNC_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
 import {
@@ -963,7 +964,10 @@ export async function emailRoutes(app: FastifyInstance) {
         cc: dbEmail.cc,
         subject: dbEmail.subject,
         snippet: dbEmail.snippet,
-        body: dbEmail.body,
+        // Legacy HTML-only rows persisted body=null; project the stored HTML
+        // so the reader shows real content (incl. verification links) instead
+        // of the snippet stub.
+        body: dbEmail.body ?? (dbEmail.htmlBody ? htmlToPlainText(dbEmail.htmlBody) : null),
         date: dbEmail.receivedAt.toISOString(),
         labels: dbEmail.labels,
         isRead: markRead === "true" ? true : dbEmail.isRead,

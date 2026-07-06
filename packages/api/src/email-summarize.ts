@@ -8,6 +8,7 @@
 
 import { prisma } from "./db.js";
 import { classifyNeedsReplyFromSignals } from "./email-priority.js";
+import { htmlToPlainText } from "./email-text.js";
 import { asEnum, asString, asStringArray } from "./llm-coerce.js";
 import { getUserLlmCredentials } from "./llm-credentials.js";
 import { parseLlmJson } from "./llm-json.js";
@@ -77,8 +78,15 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
   const credentials = await getUserLlmCredentials(userId);
   if (getProviderChain(credentials).length === 0) return 0;
 
+  // Rescue every content-bearing shape: legacy rows persisted before the
+  // htmlToPlainText fallback have body=null but htmlBody/snippet — the old
+  // `body != null` filter stranded them as "not analyzed" forever.
   const unsummarized = await prisma.emailMessage.findMany({
-    where: { userId, summary: null, body: { not: null } },
+    where: {
+      userId,
+      summary: null,
+      OR: [{ body: { not: null } }, { htmlBody: { not: null } }, { snippet: { not: null } }],
+    },
     orderBy: { receivedAt: "desc" },
     take: limit,
   });
@@ -93,7 +101,7 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
       const result = await summarizeEmail(
         email.from,
         email.subject,
-        email.body || email.snippet || "",
+        email.body || (email.htmlBody ? htmlToPlainText(email.htmlBody) : "") || email.snippet || "",
         userId,
         credentials,
       );
