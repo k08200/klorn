@@ -965,10 +965,10 @@ async function runUserCycle(
         // Sync from Gmail → DB
         const syncResult = await syncEmails(config.userId, 20);
 
-        // AI summarize new emails
-        if (syncResult.newCount > 0) {
-          await summarizeUnsummarizedEmails(config.userId, syncResult.newCount);
-        }
+        // AI summarize new emails — floor 10 so a zero-new tick still drains
+        // the backlog (same #725 floor the interactive routes already have;
+        // this background path was the one left gated on newCount > 0).
+        await summarizeUnsummarizedEmails(config.userId, Math.max(syncResult.newCount, 10));
         await syncRecentCandidateIntakes(config.userId, Math.max(syncResult.newCount, 10));
         await notifyCandidateEmails(config.userId);
 

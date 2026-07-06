@@ -31,6 +31,7 @@ import {
   syncEmails,
   syncLinkedInboxesForUser,
 } from "../email-sync.js";
+import { htmlToPlainText } from "../email-text.js";
 import { requireAppAccess } from "../entitlement-guard.js";
 import { getLinkedInboxClients, toggleReadGmail } from "../gmail.js";
 import { senderEmail } from "../notification-format.js";
@@ -51,6 +52,18 @@ import { registerEmailRulesRoutes } from "./email-rules.js";
  * compact (no avgDelayDays / lateCount) so list payloads stay small —
  * details live in /contacts/:id when the user wants the full picture.
  */
+/** htmlBody → plain text for the detail view; failures degrade to null (snippet fallback). */
+function projectHtmlBody(htmlBody: string | null, emailId: string, userId: string): string | null {
+  if (!htmlBody) return null;
+  try {
+    return htmlToPlainText(htmlBody);
+  } catch (err) {
+    console.error("[EMAIL] htmlBody projection failed:", { emailId }, err);
+    captureError(err, { tags: { scope: "email.detail.html_project", userId }, extra: { emailId } });
+    return null;
+  }
+}
+
 function trustToWire(t: TrustScoreResult | undefined | null) {
   if (!t) return null;
   return {
@@ -963,7 +976,11 @@ export async function emailRoutes(app: FastifyInstance) {
         cc: dbEmail.cc,
         subject: dbEmail.subject,
         snippet: dbEmail.snippet,
-        body: dbEmail.body,
+        // Legacy HTML-only rows persisted body=null; project the stored HTML
+        // so the reader shows real content (incl. verification links) instead
+        // of the snippet stub. A pathological row must degrade to the snippet,
+        // not 500 the whole detail view.
+        body: dbEmail.body ?? projectHtmlBody(dbEmail.htmlBody, dbEmail.id, uid),
         date: dbEmail.receivedAt.toISOString(),
         labels: dbEmail.labels,
         isRead: markRead === "true" ? true : dbEmail.isRead,

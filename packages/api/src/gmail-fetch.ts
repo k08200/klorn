@@ -8,6 +8,7 @@
 import { type gmail_v1, google } from "googleapis";
 import { extractAttachmentContent, isReadableEmailAttachment } from "./email-attachment-text.js";
 import type { RawEmailAttachment } from "./email-attachments.js";
+import { htmlToPlainText } from "./email-text.js";
 import {
   getAuthedClient,
   isGoogleAuthError,
@@ -127,25 +128,25 @@ async function parseGmailMessageDetail(
   const decodePartBody = (data: string): string => decodeBase64Url(data).toString("utf-8");
   const attachments: RawEmailAttachment[] = [];
 
-  if (payload?.parts) {
-    for (const part of payload.parts) {
-      if (part.mimeType === "text/plain" && part.body?.data) {
+  // Recursive MIME walk: real mail nests text parts arbitrarily deep
+  // (multipart/mixed → multipart/alternative → text/*). The old one-level
+  // walk missed those, leaving body="" for a lot of legitimate mail.
+  const MAX_MIME_DEPTH = 10;
+  const walkParts = (parts: gmail_v1.Schema$MessagePart[], depth: number) => {
+    if (depth > MAX_MIME_DEPTH) return;
+    for (const part of parts) {
+      if (part.mimeType === "text/plain" && part.body?.data && !body) {
         body = decodePartBody(part.body.data);
       }
-      if (part.mimeType === "text/html" && part.body?.data) {
+      if (part.mimeType === "text/html" && part.body?.data && !htmlBody) {
         htmlBody = decodePartBody(part.body.data);
       }
-      if (part.parts) {
-        for (const sub of part.parts) {
-          if (sub.mimeType === "text/plain" && sub.body?.data && !body) {
-            body = decodePartBody(sub.body.data);
-          }
-          if (sub.mimeType === "text/html" && sub.body?.data && !htmlBody) {
-            htmlBody = decodePartBody(sub.body.data);
-          }
-        }
-      }
+      if (part.parts) walkParts(part.parts, depth + 1);
     }
+  };
+
+  if (payload?.parts) {
+    walkParts(payload.parts, 0);
   } else if (payload?.body?.data) {
     const decoded = decodePartBody(payload.body.data);
     if (payload.mimeType === "text/html") {
@@ -153,6 +154,13 @@ async function parseGmailMessageDetail(
     } else {
       body = decoded;
     }
+  }
+
+  // HTML-only mail: project the HTML into plain text so `body` is never null
+  // for content-bearing mail — a null body used to exclude the email from
+  // summarization forever ("Klorn has not analyzed this email yet").
+  if (!body && htmlBody) {
+    body = htmlToPlainText(htmlBody);
   }
 
   if (payload) {

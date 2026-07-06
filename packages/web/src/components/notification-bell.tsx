@@ -144,6 +144,20 @@ export default function NotificationBell({ userId }: { userId: string }) {
     };
   }, [open, rejectTarget]);
 
+  // Bridge service-worker push events into the same refresh bus the WS uses:
+  // when a push lands while the socket is down/backgrounded, the SW posts
+  // conversations-updated and open pages still refetch their lists.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    const handler = (event: MessageEvent) => {
+      if ((event.data as { type?: string } | null)?.type === "conversations-updated") {
+        window.dispatchEvent(new Event("conversations-updated"));
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", handler);
+    return () => navigator.serviceWorker.removeEventListener("message", handler);
+  }, []);
+
   // Listen for real-time push notifications via WebSocket
   useEffect(() => {
     const unsub = on("notification", (payload) => {

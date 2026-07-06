@@ -9,6 +9,7 @@ import { useConfirm } from "../../../components/confirm-dialog";
 import { useToast } from "../../../components/toast";
 import { TrustBadgeChip } from "../../../components/trust-badge";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
+import { linkifyText } from "../../../lib/linkify";
 import { captureClientError } from "../../../lib/sentry";
 import { DetailStat, EmailActionButton, formatBytes, ProfileFact, senderName } from "./atoms";
 import { AttachmentAnalysis } from "./attachment-analysis";
@@ -736,7 +737,7 @@ function EmailDetailView() {
                   Body
                 </h2>
                 <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-stone-200">
-                  {email.body}
+                  {linkifyText(email.body)}
                 </pre>
               </section>
             ) : email.snippet ? (
@@ -744,7 +745,7 @@ function EmailDetailView() {
                 <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-stone-500">
                   Preview
                 </h2>
-                <p className="text-sm text-stone-300">{email.snippet}</p>
+                <p className="text-sm text-stone-300">{linkifyText(email.snippet)}</p>
               </section>
             ) : null}
           </div>
