@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type Stripe from "stripe";
 import { prisma } from "../db.js";
+import { verifyPaddleSignature } from "../paddle.js";
 import { sendPushNotification } from "../push.js";
 import { captureError } from "../sentry.js";
 import { PLANS, stripe } from "../stripe.js";
@@ -162,6 +163,131 @@ export async function webhookRoutes(app: FastifyInstance) {
       // so a concurrent duplicate that raced past the findUnique above hits the
       // PK conflict and is swallowed — the work was idempotent either way.
       await prisma.webhookEvent.create({ data: { id: event.id } }).catch(() => {});
+      return { received: true };
+    },
+  });
+
+  // POST /api/webhook/paddle — Paddle Billing (web MoR) webhook. Mirrors the
+  // Stripe handler's semantics: sync the subscription's live status to
+  // user.plan (active/trialing → PRO; past_due/paused/canceled → FREE with a
+  // notification), dedup via WebhookEvent, record processed only after the
+  // work succeeded so Paddle's retries re-apply a grant lost to a DB blip.
+  // The user is mapped via custom_data.userId (set at checkout creation in
+  // paddle.ts); the stored paddleCustomerId is the fallback for events that
+  // arrive without custom_data.
+  app.post("/paddle", {
+    config: { rawBody: true },
+    handler: async (request, reply) => {
+      const secret = process.env.PADDLE_WEBHOOK_SECRET;
+      if (!secret) {
+        return reply.code(500).send({ error: "Webhook secret not configured" });
+      }
+      const rawBody = (request as unknown as { rawBody?: string }).rawBody ?? "";
+      const signature = request.headers["paddle-signature"] as string | undefined;
+      if (!verifyPaddleSignature(rawBody, signature, secret)) {
+        return reply.code(401).send({ error: "Invalid signature" });
+      }
+
+      const body = request.body as {
+        event_id?: string;
+        event_type?: string;
+        data?: {
+          status?: string;
+          customer_id?: string;
+          custom_data?: { userId?: string } | null;
+        };
+      };
+      if (!body?.event_id || !body?.event_type || !body?.data) {
+        return reply.code(400).send({ error: "Malformed event" });
+      }
+
+      const alreadyProcessed = await prisma.webhookEvent.findUnique({
+        where: { id: body.event_id },
+      });
+      if (alreadyProcessed) return { received: true };
+
+      if (body.event_type.startsWith("subscription.")) {
+        const data = body.data;
+        // Primary mapping: the userId we attached at checkout. Fallback: the
+        // customer id stored on a previous event for this user.
+        const customUserId = data.custom_data?.userId;
+        const user =
+          customUserId && UUID_RE.test(customUserId)
+            ? await prisma.user.findUnique({ where: { id: customUserId } })
+            : null;
+        const mapped =
+          user ??
+          (data.customer_id
+            ? await prisma.user.findFirst({ where: { paddleCustomerId: data.customer_id } })
+            : null);
+
+        if (!mapped) {
+          // A subscription event we can't map is a real billing signal (lost
+          // custom_data or customer drift) — never drop it silently.
+          console.warn(`[PADDLE] unmapped subscription event ${body.event_id}`);
+          captureError(new Error("paddle subscription event for unmapped user"), {
+            tags: { scope: "paddle.webhook" },
+            extra: { eventId: body.event_id, customer: data.customer_id },
+          });
+        } else {
+          const entitled = data.status === "active" || data.status === "trialing";
+          if (entitled) {
+            // Unconditional + idempotent (like Stripe/RevenueCat) so an
+            // out-of-order past_due followed by active can't leave a live
+            // subscriber downgraded. Store the customer id for the portal
+            // route and for custom_data-less future events.
+            await prisma.user.update({
+              where: { id: mapped.id },
+              data: { plan: "PRO", paddleCustomerId: data.customer_id ?? undefined },
+            });
+          } else {
+            if (mapped.plan !== "FREE") {
+              await prisma.user.update({ where: { id: mapped.id }, data: { plan: "FREE" } });
+            }
+            if (data.status === "canceled") {
+              await notifyUser(
+                mapped.id,
+                "billing",
+                "Subscription Cancelled",
+                "Your subscription has been cancelled. You've been moved to the Free plan.",
+                "/settings",
+              );
+            } else if (data.status === "past_due" || data.status === "paused") {
+              await notifyUser(
+                mapped.id,
+                "billing",
+                "Payment Issue",
+                "Your subscription payment failed. Please update your payment method to restore access.",
+                "/settings",
+              );
+            }
+          }
+        }
+      } else if (body.event_type === "transaction.payment_failed") {
+        const customerId = body.data.customer_id;
+        const user = customerId
+          ? await prisma.user.findFirst({ where: { paddleCustomerId: customerId } })
+          : null;
+        if (user) {
+          await notifyUser(
+            user.id,
+            "billing",
+            "Payment Failed",
+            "Your latest payment failed. Please update your payment method to keep your plan active.",
+            "/settings",
+          );
+        }
+      }
+      // Other event types (product/price/etc) are acknowledged and ignored.
+
+      await prisma.webhookEvent.create({ data: { id: body.event_id } }).catch((err) => {
+        if ((err as { code?: string })?.code !== "P2002") {
+          captureError(err, {
+            tags: { scope: "paddle.webhook.dedup" },
+            extra: { id: body.event_id },
+          });
+        }
+      });
       return { received: true };
     },
   });

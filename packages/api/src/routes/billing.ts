@@ -7,6 +7,7 @@ import { db, prisma } from "../db.js";
 import { CURATED_MODELS, isCuratedModel } from "../model-catalog.js";
 import { clearFallbackState } from "../model-fallback.js";
 import { MODEL } from "../openai.js";
+import { createPaddleCheckout, createPaddlePortalUrl, isPaddleConfigured } from "../paddle.js";
 import { getUserUsage } from "../quota-limiter.js";
 import { captureError } from "../sentry.js";
 import {
@@ -39,13 +40,22 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Invalid plan" });
     }
 
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return reply.code(404).send({ error: "User not found" });
+
+    // Paddle (merchant of record) is the web provider when configured; the
+    // Stripe path below stays as the alternative for a future entity. Both
+    // return the same { url } contract the web client expects. The trial is
+    // configured on the Paddle price itself (dashboard), not passed here.
+    if (isPaddleConfigured()) {
+      const url = await createPaddleCheckout({ userId, email: user.email });
+      return { url };
+    }
+
     const planConfig = PLANS[plan];
     if (!planConfig?.priceId) {
       return reply.code(400).send({ error: "Invalid plan" });
     }
-
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return reply.code(404).send({ error: "User not found" });
 
     // Anti trial-farming: a user who deletes their account loses their stripeId,
     // so a re-registration would otherwise mint a fresh Stripe customer and a
@@ -85,11 +95,16 @@ export async function billingRoutes(app: FastifyInstance) {
     return { url: session.url };
   });
 
-  // POST /api/billing/portal — Create Stripe customer portal session
+  // POST /api/billing/portal — customer portal (manage/cancel). Paddle when
+  // the user subscribed via Paddle; Stripe otherwise.
   app.post("/portal", async (request, reply) => {
     const userId = getUserId(request);
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (user?.paddleCustomerId && isPaddleConfigured()) {
+      const url = await createPaddlePortalUrl(user.paddleCustomerId);
+      return { url };
+    }
     if (!user?.stripeId) {
       return reply.code(400).send({ error: "No billing account" });
     }

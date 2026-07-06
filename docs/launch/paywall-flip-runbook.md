@@ -17,23 +17,39 @@ The only active billing mechanism today is the per-user daily LLM cost cap.
 |---|----------|----------------|
 | D1 | **Final price — DECIDED 2026-07-06: founding `$7.99` web / `$9.99` native.** UI copy is consistent across `packages/web/src/app/billing/page.tsx`, `components/paywall-screen.tsx:30`, `components/subscription-section.tsx:30`. The payment provider price/offering must charge exactly these amounts. | Provider dashboard price/offering (UI already aligned) |
 | D2 | **Free-tier daily AI budget.** `FREE_DAILY_COST_CAP_CENTS` (default 10¢/day) bounds free-user COGS once the paywall is on. | Render env |
-| D3 | **Trial length.** `TRIAL_DAYS` (default 7). Stripe checkout and the paywall copy both derive from it. | Render env |
-| D4 | **Web payment provider.** The code implements Stripe, but Stripe does not onboard Korea-domiciled merchants without a foreign entity. Options for an individual founder (no 사업자등록): launch **native-IAP-only** (Apple/Google are the merchant; individual developer accounts suffice; RevenueCat webhook already built — the web surfaces now degrade to a disabled "coming soon" state automatically when Stripe is unconfigured), or add a **merchant-of-record** provider for web (Paddle / Lemon Squeezy / Creem — the MoR is the legal seller, so no business registration is required; needs a new webhook integration, ~1 day). Stripe Atlas (US LLC) is the only way to keep the existing Stripe code, at incorporation + tax-filing cost. | Founder decision; MoR integration is a code task if chosen |
+| D3 | **Trial length.** `TRIAL_DAYS` (default 7) drives the Stripe path and the paywall copy; on Paddle the trial lives on the price itself — keep both at 7 days. | Render env + Paddle price |
+| D4 | **Web payment provider — DECIDED 2026-07-06: Paddle** (merchant of record — Paddle is the legal seller, so no Korean business registration is needed; individual/sole-trader onboarding with identity verification only). The integration is fully coded and inert until `PADDLE_*` env is set. Stripe code remains as the dormant alternative for a future entity. | Paddle account (founder) + `PADDLE_*` env on Render |
 
 ## 1. Provider setup (no user impact — do any time before flip)
 
-**Stripe (web subscriptions)**
-1. Create the Pro product + recurring Price in the Stripe Dashboard (live mode).
-2. Add a webhook endpoint → `https://<api-host>/api/webhook/stripe`, events:
+**Paddle (web subscriptions — the decided provider)**
+1. Sign up at paddle.com as an individual/sole trader (identity + product/domain
+   review; approval can take a few days — start early). A sandbox account is
+   separate and instant; use it for the end-to-end test first.
+2. Create the Pro product + recurring Price at the D1 amount (`$7.99`/mo) with
+   a **7-day trial configured on the price** (the code does not pass a trial —
+   Paddle applies the price's own trial).
+3. Checkout settings → set the **default payment link** domain (app.klorn.ai).
+   Without it Paddle returns no checkout URL and `/api/billing/checkout` fails
+   loud with a message saying exactly this.
+4. Add a notification (webhook) endpoint → `https://<api-host>/api/webhook/paddle`
+   subscribed to `subscription.*` and `transaction.payment_failed`, and copy
+   its secret.
+5. Set on Render (API service):
+   - `PADDLE_API_KEY` (Developer tools → Authentication)
+   - `PADDLE_WEBHOOK_SECRET` (from step 4)
+   - `PADDLE_PRO_PRICE_ID` (the `pri_…` id from step 2)
+   - `PADDLE_ENV=sandbox` while testing against sandbox; **remove it** for live.
+6. The moment `PADDLE_API_KEY` + `PADDLE_PRO_PRICE_ID` are set, the web
+   subscribe buttons come alive automatically (`webCheckoutAvailable` flips)
+   and `/api/billing/checkout` returns Paddle checkout URLs. No web deploy needed.
+
+**Stripe (dormant alternative — only with a future business entity)**
+1. Create the Pro Price, webhook endpoint (`/api/webhook/stripe`, events:
    `checkout.session.completed`, `customer.subscription.updated`,
-   `customer.subscription.deleted`, `invoice.payment_failed`.
-3. Set on Render (API service):
-   - `STRIPE_SECRET_KEY` (live `sk_...`)
-   - `STRIPE_WEBHOOK_SECRET` (from the endpoint you just created)
-   - `STRIPE_PRO_PRICE_ID` (the live Price id)
-4. Recommended: enable Stripe Radar — the checkout reuses an existing customer
-   by email to limit trial farming, but `you+1@` sub-addressing bypasses it
-   (noted in `routes/billing.ts`).
+   `customer.subscription.deleted`, `invoice.payment_failed`), then set
+   `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRO_PRICE_ID`.
+   Note: Paddle takes precedence at checkout when both are configured.
 
 **RevenueCat (iOS/Android IAP)**
 1. Create the RevenueCat project, attach the App Store / Play apps, and create
@@ -47,14 +63,16 @@ The only active billing mechanism today is the per-user daily LLM cost cap.
 
 ## 2. Pre-flip verification (still with paywall off)
 
-- [ ] `curl -s https://<api-host>/api/billing/status` (authed) returns plan data.
-- [ ] Stripe **test-mode** end-to-end once on a staging user: checkout → webhook
-      fires → `user.plan` becomes `PRO` → portal cancel → plan reverts to `FREE`.
-      Webhook idempotency: re-deliver the same event from the Stripe dashboard;
+- [ ] `curl -s https://<api-host>/api/billing/status` (authed) returns plan data
+      with `webCheckoutAvailable: true` once `PADDLE_*` is set.
+- [ ] Paddle **sandbox** end-to-end once on a staging user: checkout → webhook
+      fires → `user.plan` becomes `PRO` and `paddleCustomerId` is stored →
+      portal ("Manage subscription") opens → cancel → plan reverts to `FREE`.
+      Webhook idempotency: re-deliver the same event from the Paddle dashboard;
       the `WebhookEvent` table must dedupe it (no double grant).
 - [ ] RevenueCat sandbox purchase on a real device → webhook grants plan →
       "Restore purchase" works after app reinstall.
-- [ ] UI copy in the three D1 files matches the live Stripe/RevenueCat price.
+- [ ] UI copy in the three D1 files matches the live Paddle/RevenueCat price.
 - [ ] Confirm the admin comp path works as the escape hatch:
       `PATCH /api/admin/users/:id { plan: "PRO" }`.
 
@@ -94,20 +112,21 @@ What changes at that moment (all code paths already live):
 - [ ] Watch Render logs for `ENTITLEMENT_REQUIRED` spikes from surfaces that
       should be free — that means a guard is mis-scoped; comp affected users
       and fix before wider announcement.
-- [ ] Stripe Dashboard: webhook delivery success rate 100%.
+- [ ] Paddle Dashboard → Notifications: webhook delivery success rate 100%.
 
 ## 5. Rollback
 
 Set `PAYWALL_ENABLED=false` and redeploy. Guards become no-ops again; nobody
-loses data. Active Stripe subscriptions keep billing — pause or refund them
-from the Stripe Dashboard if the rollback is more than momentary.
+loses data. Active Paddle subscriptions keep billing — pause or refund them
+from the Paddle Dashboard if the rollback is more than momentary.
 
 ## Known limits (accepted, tracked)
 
 - The global daily cost ceiling is in-memory and single-instance; it must move
   to a shared store before scaling out (`cost-guard.ts`).
 - Trial farming via email sub-addressing is only mitigated, not blocked
-  (Stripe Radar recommended above).
+  on the Stripe path (Radar), and on Paddle bounded by Paddle's own risk
+  checks — monitor trial-abuse patterns after launch.
 - There is no separate Subscription/Purchase table — `user.plan` synced by
   webhooks is the single source of truth (by design; the `WebhookEvent` table
   provides idempotency).
