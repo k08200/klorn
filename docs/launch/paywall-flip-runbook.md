@@ -15,7 +15,7 @@ The only active billing mechanism today is the per-user daily LLM cost cap.
 
 | # | Decision | Where it lands |
 |---|----------|----------------|
-| D1 | **Final price.** Three different numbers exist in the repo today: `$29/mo` on the billing page (`packages/web/src/app/billing/page.tsx:46`), founding `$7.99` web / `$9.99` native on the paywall (`packages/web/src/components/paywall-screen.tsx:30`, `subscription-section.tsx:30`), and the 2026-06-29 locked decision of $12 web / $14.99 app. Pick one set; the Stripe Price object and RevenueCat offering must charge exactly what the UI says. | Stripe Dashboard price + the three UI files above |
+| D1 | **Final price.** UI copy is now consistent at the founding price — `$7.99` web / `$9.99` native (`packages/web/src/app/billing/page.tsx`, `components/paywall-screen.tsx:30`, `components/subscription-section.tsx:30`; the billing page's stale scaffold `$29` was removed 2026-07-06). Confirm founding pricing still stands vs the 2026-06-29 $12 web / $14.99 app list-price decision, then create the Stripe Price object and RevenueCat offering charging exactly what the UI says. | Stripe Dashboard price + RevenueCat offering (UI already aligned) |
 | D2 | **Free-tier daily AI budget.** `FREE_DAILY_COST_CAP_CENTS` (default 10¢/day) bounds free-user COGS once the paywall is on. | Render env |
 | D3 | **Trial length.** `TRIAL_DAYS` (default 7). Stripe checkout and the paywall copy both derive from it. | Render env |
 
