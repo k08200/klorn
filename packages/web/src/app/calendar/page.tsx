@@ -11,6 +11,7 @@ import { type NewEventInitial, NewEventModal } from "../../components/new-event-
 import VoiceButton from "../../components/voice-button";
 import { apiFetch, startGoogleConnect } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import { useT } from "../../lib/i18n";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 
@@ -59,6 +60,7 @@ function isoToInitial(event: {
 }
 
 function CalendarView() {
+  const { t } = useT();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   // Always have a deterministic IANA zone in hand — never rely on browser
@@ -216,7 +218,7 @@ function CalendarView() {
       <header className="mb-5 flex items-end justify-between gap-3 md:hidden">
         <div className="min-w-0">
           <h1 className="text-[28px] font-bold leading-none tracking-tight text-stone-50">
-            Calendar
+            {t("nav.calendar")}
           </h1>
           <p className="mt-1.5 truncate text-sm text-stone-400">
             {nextEvent ? `Next: ${nextEvent.title || "Untitled"}` : "Your next 14 days"}
@@ -291,7 +293,7 @@ function CalendarView() {
               </p>
               <div className="flex items-start justify-between gap-3">
                 <h1 className="text-lg font-semibold tracking-tight text-stone-50 md:text-2xl">
-                  Meetings that need prep
+                  {t("calendar.needPrep")}
                 </h1>
                 {/* One button pair for every breakpoint, anchored to the title
                     row. (They used to be absolutely positioned over the signal
@@ -310,7 +312,7 @@ function CalendarView() {
                     }}
                     className="min-h-9 rounded-md bg-accent px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent/90"
                   >
-                    New event
+                    {t("calendar.newEvent")}
                   </button>
                   <button
                     type="button"
@@ -318,7 +320,7 @@ function CalendarView() {
                     disabled={syncing}
                     className="min-h-9 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
                   >
-                    {syncing ? "Syncing..." : "Sync now"}
+                    {syncing ? t("common.syncing") : t("common.syncNow")}
                   </button>
                 </div>
               </div>
@@ -450,7 +452,7 @@ function CalendarView() {
       />
       {voiceParsing && (
         <output className="fixed bottom-24 left-1/2 z-40 -translate-x-1/2 rounded-full border border-stone-700 bg-stone-900/95 px-4 py-2 text-xs text-stone-200 shadow-lg md:bottom-8">
-          Understanding your event…
+          {t("calendar.voiceParsing")}
         </output>
       )}
     </div>

@@ -182,6 +182,9 @@ export default function SettingsPage() {
     // Persist language/timezone locally first so the UI preference always
     // sticks even if a server call below fails.
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    // The storage event never fires in the writing tab — nudge the i18n
+    // provider so the UI language flips immediately after Save.
+    window.dispatchEvent(new Event("klorn-profile-updated"));
 
     // Name is server-owned (the load path reads it from user.name, not
     // localStorage), so a failed PATCH silently reverts the displayed name on
@@ -842,7 +845,7 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="profile-lang" className="block text-sm text-stone-400 mb-1">
-                  Response language
+                  Language
                 </label>
                 <select
                   id="profile-lang"
@@ -857,7 +860,7 @@ export default function SettingsPage() {
                 >
                   <option value="auto">Auto-detect</option>
                   <option value="en">English</option>
-                  <option value="ko">Korean</option>
+                  <option value="ko">한국어</option>
                 </select>
               </div>
               <div>

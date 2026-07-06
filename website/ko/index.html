@@ -1,30 +1,17 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="alternate" hreflang="en" href="https://klorn.ai/">
   <link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/">
-  <link rel="canonical" href="https://klorn.ai/">
-  <script>
-    // Korean-browser visitors land on /ko/ unless they've picked a language.
-    // Runs pre-paint so there's no English flash; the KO/EN nav links set the
-    // override so a manual choice always wins over the browser locale.
-    (function () {
-      try {
-        var pick = localStorage.getItem("klorn-lang");
-        if (!pick && (navigator.language || "").toLowerCase().indexOf("ko") === 0) {
-          location.replace("/ko/" + location.hash);
-        }
-      } catch (e) { /* storage blocked — stay on English */ }
-    })();
-  </script>
-  <title>Klorn — The clear signal worth acting on</title>
-  <meta name="description" content="Klorn filters mail, calendar, and AI signals into one clear decision queue — with evidence and approval before anything leaves your hands.">
-  <meta property="og:title" content="Klorn — The clear signal worth acting on">
-  <meta property="og:description" content="Mail, calendar, and AI signals filtered into one clear decision queue — with evidence and approval before any action.">
+  <link rel="canonical" href="https://klorn.ai/ko/">
+  <title>Klorn — 행동할 가치가 있는 명확한 신호</title>
+  <meta name="description" content="Klorn은 메일, 캘린더, AI 신호를 하나의 명확한 결정 큐로 걸러냅니다 — 근거와 승인 없이는 어떤 것도 손을 떠나지 않습니다.">
+  <meta property="og:title" content="Klorn — 행동할 가치가 있는 명확한 신호">
+  <meta property="og:description" content="메일, 캘린더, AI 신호를 하나의 명확한 결정 큐로 — 모든 행동 전에 근거와 승인이 먼저입니다.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://klorn.ai/">
+  <meta property="og:url" content="https://klorn.ai/ko/">
   <meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -1191,16 +1178,17 @@
     </div>
 
     <nav class="hero-nav">
-      <a href="/" class="brand">
+      <a href="/ko/" class="brand">
         <img src="/brand/mark.svg?v=matte2" alt="">
         <span class="wordmark">KLORN</span>
       </a>
       <div class="hero-nav-actions">
-        <a href="#pricing" class="nav-link">Pricing</a>
-        <a href="#live-classifier" class="nav-link">Live demo</a>
-        <a href="https://app.klorn.ai/login" class="nav-link">Log in</a>
-        <a href="/ko/" class="nav-link" data-lang-switch="ko" aria-label="한국어로 보기">KO</a>
-        <a href="https://app.klorn.ai/early-access" class="nav-cta">Early access</a>
+        <a href="#pricing" class="nav-link">가격</a>
+        <a href="#live-classifier" class="nav-link">라이브 데모</a>
+        <a href="https://app.klorn.ai/login" class="nav-link">로그인</a>
+        <span class="nav-link" aria-current="page" style="color:#fff;font-weight:600">KO</span>
+        <a href="/" class="nav-link" data-lang-switch="en" aria-label="View in English">EN</a>
+        <a href="https://app.klorn.ai/early-access" class="nav-cta">얼리 액세스</a>
       </div>
     </nav>
 
@@ -1211,11 +1199,11 @@
             <circle cx="12" cy="12" r="9"></circle>
             <path d="m15.5 8.5-2.2 5-4.8 2 2.2-5 4.8-2Z"></path>
           </svg>
-          Decision queue
+          결정 큐
         </p>
-        <h1 class="hero-headline">The clear signal<br><span class="grad">worth acting on.</span></h1>
+        <h1 class="hero-headline">행동할 가치가 있는<br><span class="grad">명확한 신호.</span></h1>
         <p class="hero-sub">
-          Other AI agents act. Klorn helps you decide what's worth acting on. Mail, calendar, and AI signals filtered into one clear decision queue — with evidence and approval before anything leaves your hands.
+          다른 AI 에이전트는 실행부터 합니다. Klorn은 무엇이 행동할 가치가 있는지 먼저 판단하도록 돕습니다. 메일, 캘린더, AI 신호를 하나의 명확한 결정 큐로 걸러내고 — 근거와 승인 없이는 어떤 것도 손을 떠나지 않습니다.
         </p>
         <div class="invite-banner">
           <p class="invite-banner-head">
@@ -1223,102 +1211,102 @@
               <rect x="4" y="11" width="16" height="10" rx="2"></rect>
               <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
             </svg>
-            Klorn is invite-only beta. You can't log in until I add your Google email as a test user.
+            Klorn은 초대제 베타입니다. 제가 회원님의 Google 이메일을 테스트 사용자로 등록하기 전까지는 로그인할 수 없습니다.
           </p>
           <ol>
-            <li>Request access below (takes 30 seconds).</li>
-            <li>I approve within 5 minutes when I'm awake (KST), within a few hours otherwise — capped at 100 testers until Google CASA review clears.</li>
-            <li>You get an email from noreply@klorn.ai. Then Log in works.</li>
+            <li>아래에서 액세스를 신청하세요 (30초면 충분합니다).</li>
+            <li>제가 깨어 있는 시간(KST)에는 5분 이내, 그 외에는 몇 시간 안에 승인해 드립니다 — Google CASA 심사가 끝날 때까지 테스터는 100명으로 제한됩니다.</li>
+            <li>noreply@klorn.ai에서 이메일이 도착하면, 그때부터 로그인할 수 있습니다.</li>
           </ol>
         </div>
         <div class="hero-ctas">
-          <a href="https://app.klorn.ai/early-access" class="btn btn-gold" aria-label="Request early access — free during the private beta">
-            Request early access
+          <a href="https://app.klorn.ai/early-access" class="btn btn-gold" aria-label="얼리 액세스 신청 — 비공개 베타 기간 무료">
+            얼리 액세스 신청
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M5 12h14M13 6l6 6-6 6"></path>
             </svg>
           </a>
-          <a href="#live-classifier" class="btn btn-ghost" aria-label="Try the live classifier below — bring your own LLM key">
-            Try the live demo
+          <a href="#live-classifier" class="btn btn-ghost" aria-label="아래 라이브 분류기 체험 — 내 LLM 키로 실행">
+            라이브 데모 체험
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M5 12h14M13 6l6 6-6 6"></path>
             </svg>
           </a>
-          <a href="https://github.com/k08200/klorn" target="_blank" rel="noreferrer noopener" class="btn btn-ghost btn-github" aria-label="Star Klorn on GitHub">
+          <a href="https://github.com/k08200/klorn" target="_blank" rel="noreferrer noopener" class="btn btn-ghost btn-github" aria-label="GitHub에서 Klorn에 Star">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.16-.02-2.1-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.02 11.02 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.8-.01 3.18 0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"/></svg>
-            Star on GitHub
+            GitHub에서 Star
             <span class="star-count" data-gh-stars></span>
           </a>
         </div>
-        <a href="https://app.klorn.ai/login" class="hero-secondary-link">Already approved? Log in →</a>
+        <a href="https://app.klorn.ai/login" class="hero-secondary-link">이미 승인받으셨나요? 로그인 →</a>
         <div class="hero-badges">
-          <span class="hero-badge"><span class="dot-gold"></span>Open source — AGPLv3</span>
-          <span class="hero-badge"><span class="dot-gold"></span>Self-hostable</span>
-          <span class="hero-badge"><span class="dot-gold"></span>Every action needs your approval</span>
+          <span class="hero-badge"><span class="dot-gold"></span>오픈소스 — AGPLv3</span>
+          <span class="hero-badge"><span class="dot-gold"></span>셀프호스팅 가능</span>
+          <span class="hero-badge"><span class="dot-gold"></span>모든 행동은 승인 후에만 실행됩니다</span>
         </div>
       </div>
 
       <div class="mobile-preview">
         <div class="mobile-preview-head">
           <div>
-            <p class="mono label" style="color: var(--stone-500); letter-spacing: 0.14em; font-weight: 600;">Decision queue</p>
-            <p class="title">3 items need attention</p>
+            <p class="mono label" style="color: var(--stone-500); letter-spacing: 0.14em; font-weight: 600;">결정 큐</p>
+            <p class="title">주의가 필요한 항목 3건</p>
           </div>
-          <span class="live-pill">Live</span>
+          <span class="live-pill">라이브</span>
         </div>
         <div class="mobile-rows">
           <div class="mobile-row">
-            <p class="name">Reply to investor</p>
-            <p class="meta">Evidence attached · Ready for approval</p>
+            <p class="name">투자자에게 회신</p>
+            <p class="meta">근거 첨부됨 · 승인 대기</p>
           </div>
           <div class="mobile-row">
-            <p class="name">Review deploy risk</p>
-            <p class="meta">Evidence attached · Ready for approval</p>
+            <p class="name">배포 리스크 검토</p>
+            <p class="meta">근거 첨부됨 · 승인 대기</p>
           </div>
           <div class="mobile-row">
-            <p class="name">Prep partner call</p>
-            <p class="meta">Evidence attached · Ready for approval</p>
+            <p class="name">파트너 콜 준비</p>
+            <p class="meta">근거 첨부됨 · 승인 대기</p>
           </div>
         </div>
       </div>
 
       <div class="hero-frame-wrap" id="live-classifier" style="scroll-margin-top: 90px;">
         <div class="hero-float-chips">
-          <span class="hero-float-chip c1"><span class="dot"></span>Reply · OpenRouter Team</span>
-          <span class="hero-float-chip c2"><span class="dot"></span>Security · Vercel</span>
-          <span class="hero-float-chip c3"><span class="dot"></span>Approval ready</span>
+          <span class="hero-float-chip c1"><span class="dot"></span>회신 · OpenRouter Team</span>
+          <span class="hero-float-chip c2"><span class="dot"></span>보안 · Vercel</span>
+          <span class="hero-float-chip c3"><span class="dot"></span>승인 준비 완료</span>
         </div>
         <div class="hero-product">
           <div class="hero-titlebar">
             <span class="dot"></span>
             <span class="dot"></span>
             <span class="dot"></span>
-            <span class="crumb">Klorn / Today</span>
-            <span class="hero-live"><span class="hero-live-dot"></span>Live</span>
+            <span class="crumb">Klorn / 오늘</span>
+            <span class="hero-live"><span class="hero-live-dot"></span>라이브</span>
           </div>
           <div class="klassify">
             <div class="klassify-input">
-              <p class="mono klassify-eyebrow">Live classifier · bring your own key</p>
+              <p class="mono klassify-eyebrow">라이브 분류기 · 내 API 키로 실행</p>
               <div class="klassify-keyrow">
-                <select id="kf-provider" class="kf-field" aria-label="LLM provider">
+                <select id="kf-provider" class="kf-field" aria-label="LLM 제공자">
                   <option value="openrouter">OpenRouter</option>
                   <option value="gemini">Gemini</option>
                   <option value="openai">OpenAI</option>
                 </select>
-                <input id="kf-key" class="kf-field" type="password" placeholder="Your API key" autocomplete="off" spellcheck="false">
+                <input id="kf-key" class="kf-field" type="password" placeholder="내 API 키" autocomplete="off" spellcheck="false">
               </div>
-              <input id="kf-model" class="kf-field" placeholder="Model — optional (e.g. google/gemini-2.0-flash-001)" spellcheck="false">
-              <input id="kf-from" class="kf-field" placeholder="From — sender@example.com" spellcheck="false">
-              <input id="kf-subject" class="kf-field" placeholder="Subject line" spellcheck="false">
-              <textarea id="kf-snippet" class="kf-field" placeholder="Preview / first line (optional)"></textarea>
+              <input id="kf-model" class="kf-field" placeholder="모델 — 선택 사항 (예: google/gemini-2.0-flash-001)" spellcheck="false">
+              <input id="kf-from" class="kf-field" placeholder="보낸 사람 — sender@example.com" spellcheck="false">
+              <input id="kf-subject" class="kf-field" placeholder="제목" spellcheck="false">
+              <textarea id="kf-snippet" class="kf-field" placeholder="미리보기 / 첫 줄 (선택 사항)"></textarea>
               <div class="klassify-presets" id="kf-presets"></div>
-              <button type="button" id="kf-run" class="btn btn-gold klassify-run">Classify this email</button>
-              <p class="klassify-note">Runs the real 4-tier model. Your key is sent once for this call and is never stored on Klorn's servers. No key yet? <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer noopener">Get an OpenRouter key</a>.</p>
+              <button type="button" id="kf-run" class="btn btn-gold klassify-run">이 이메일 분류하기</button>
+              <p class="klassify-note">실제 4단계 모델이 그대로 실행됩니다. API 키는 이 호출 한 번에만 전송되며 Klorn 서버에 저장되지 않습니다. 키가 아직 없다면? <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer noopener">OpenRouter 키 발급받기</a>.</p>
             </div>
             <div class="klassify-result">
               <div class="klassify-tier">
                 <span class="klassify-tier-badge" id="kf-badge" data-tier="">READY</span>
-                <span class="klassify-tier-desc" id="kf-desc">Pick an example (or paste an email), add your key, then Classify to see the exact tier Klorn's model assigns — PUSH, QUEUE, SILENT, or AUTO.</span>
+                <span class="klassify-tier-desc" id="kf-desc">예시를 고르거나 이메일을 붙여넣고 키를 입력한 뒤 분류를 실행해 보세요. Klorn 모델이 배정하는 정확한 단계 — PUSH, QUEUE, SILENT, AUTO — 를 확인할 수 있습니다.</span>
               </div>
               <p class="klassify-reason" id="kf-reason"></p>
               <div class="klassify-features" id="kf-features"></div>
@@ -1330,11 +1318,11 @@
   </section>
 
   <!-- ── Walkthrough demo section ─────────────── -->
-  <section class="section demo-section snap-section" aria-label="Klorn walkthrough">
+  <section class="section demo-section snap-section" aria-label="Klorn 사용 흐름">
     <div class="reveal">
-      <p class="mono section-eyebrow">See it in action</p>
-      <h2 class="section-h">One minute. Inbox to decision queue.</h2>
-      <p class="section-lead">Every signal sorts into one of four tiers, then the ones that matter become decision cards you approve with one click. Nothing leaves your hands without that approval, and a daily receipt logs every action.</p>
+      <p class="mono section-eyebrow">직접 확인하세요</p>
+      <h2 class="section-h">1분이면 충분합니다. 인박스에서 결정 큐까지.</h2>
+      <p class="section-lead">모든 신호는 4단계 중 하나로 분류되고, 그중 중요한 것만 클릭 한 번으로 승인하는 결정 카드가 됩니다. 승인 없이는 어떤 것도 손을 떠나지 않으며, 모든 행동은 하루 단위 영수증에 기록됩니다.</p>
     </div>
     <div class="demo-frame reveal">
       <video controls autoplay muted loop playsinline preload="metadata" poster="/demo-poster.jpg">
@@ -1344,19 +1332,19 @@
     <div class="demo-legend">
       <div class="demo-tier push reveal">
         <p class="mono tier-name">Push</p>
-        <p class="tier-desc">Time-sensitive and high-stakes. Surfaced the moment it lands.</p>
+        <p class="tier-desc">시간에 민감하고 중요도가 높은 신호. 도착하는 즉시 표시됩니다.</p>
       </div>
       <div class="demo-tier queue reveal">
         <p class="mono tier-name">Queue</p>
-        <p class="tier-desc">Worth a look, not urgent. Batched into the decision queue.</p>
+        <p class="tier-desc">볼 가치는 있지만 급하지 않은 신호. 결정 큐에 모아 한 번에 처리합니다.</p>
       </div>
       <div class="demo-tier silent reveal">
         <p class="mono tier-name">Silent</p>
-        <p class="tier-desc">Noise and FYIs. Filed quietly so they never interrupt.</p>
+        <p class="tier-desc">노이즈와 단순 공지. 방해하지 않도록 조용히 정리됩니다.</p>
       </div>
       <div class="demo-tier auto reveal">
         <p class="mono tier-name">Auto</p>
-        <p class="tier-desc">Routine items pre-sorted for you — still staged, never sent on their own.</p>
+        <p class="tier-desc">반복적인 항목은 미리 분류해 둡니다 — 준비만 해 둘 뿐, 스스로 발송하지 않습니다.</p>
       </div>
     </div>
   </section>
@@ -1365,55 +1353,55 @@
   <section class="section snap-section">
     <div class="decision-grid">
       <div class="reveal">
-        <p class="mono section-eyebrow">Decision queue</p>
-        <h2 class="section-h">The important work fits on one card.</h2>
-        <p class="section-lead">Not another inbox. Just the decisions that have enough context to move.</p>
+        <p class="mono section-eyebrow">결정 큐</p>
+        <h2 class="section-h">중요한 일은 카드 한 장에 담깁니다.</h2>
+        <p class="section-lead">또 하나의 인박스가 아닙니다. 움직이기에 충분한 맥락을 갖춘 결정만 남습니다.</p>
       </div>
 
       <div class="decision-card-wrap reveal">
         <div class="decision-card">
           <div class="decision-card-head">
             <div>
-              <p class="mono eyebrow-mono">Decision card</p>
-              <h3>Investor follow-up ready</h3>
+              <p class="mono eyebrow-mono">결정 카드</p>
+              <h3>투자자 팔로업 준비 완료</h3>
             </div>
-            <span class="approval-pill">Approval needed</span>
+            <span class="approval-pill">승인 필요</span>
           </div>
 
           <div class="decision-rows">
             <article class="decision-row">
               <div class="inner">
-                <span class="mono tag sky">Signal</span>
+                <span class="mono tag sky">신호</span>
                 <div>
-                  <h4>Investor asked for revised metrics</h4>
-                  <p>Email, tomorrow's meeting, and open deck work are grouped into one decision.</p>
+                  <h4>투자자가 수정된 지표를 요청했습니다</h4>
+                  <p>이메일, 내일 미팅, 진행 중인 덱 작업이 하나의 결정으로 묶였습니다.</p>
                 </div>
               </div>
             </article>
             <article class="decision-row">
               <div class="inner">
-                <span class="mono tag amber">Context</span>
+                <span class="mono tag amber">맥락</span>
                 <div>
-                  <h4>The pitch deck is still unfinished</h4>
-                  <p>Unanswered mail and open tasks point to the same meeting risk.</p>
+                  <h4>피치 덱이 아직 미완성입니다</h4>
+                  <p>답장하지 않은 메일과 남아 있는 작업이 같은 미팅 리스크를 가리킵니다.</p>
                 </div>
               </div>
             </article>
             <article class="decision-row">
               <div class="inner">
-                <span class="mono tag emerald">Action</span>
+                <span class="mono tag emerald">행동</span>
                 <div>
-                  <h4>Hold 3-4 PM and prepare a reply draft</h4>
-                  <p>The next move is staged for approval before anything leaves your workspace.</p>
+                  <h4>오후 3-4시를 비워 두고 답장 초안을 준비합니다</h4>
+                  <p>다음 행동은 워크스페이스를 떠나기 전, 승인을 기다리며 준비됩니다.</p>
                 </div>
               </div>
             </article>
           </div>
 
           <div class="decision-actions">
-            <button type="button" class="act-btn primary">Approve</button>
-            <button type="button" class="act-btn ghost">Edit first</button>
-            <button type="button" class="act-btn plain">Hold</button>
+            <button type="button" class="act-btn primary">승인</button>
+            <button type="button" class="act-btn ghost">먼저 수정</button>
+            <button type="button" class="act-btn plain">보류</button>
           </div>
         </div>
       </div>
@@ -1432,9 +1420,9 @@
             <circle cx="20" cy="17" r="1.5" fill="currentColor" stroke="none"></circle>
           </svg>
         </div>
-        <p class="mono pillar-label">Capture</p>
-        <h3>Read the work signals</h3>
-        <p>Mail, calendar, tasks, and memory are pulled into one view for today.</p>
+        <p class="mono pillar-label">수집</p>
+        <h3>업무 신호를 읽습니다</h3>
+        <p>메일, 캘린더, 작업, 메모리를 오늘 하루의 한 화면으로 모읍니다.</p>
       </article>
       <article class="pillar reveal">
         <div class="pillar-icon">
@@ -1446,9 +1434,9 @@
             <path d="M8 7h8M7 9l1 7M10 17l5-1M17 9v6"></path>
           </svg>
         </div>
-        <p class="mono pillar-label">Connect</p>
-        <h3>Turn noise into context</h3>
-        <p>People, deadlines, threads, and promises are linked by business impact.</p>
+        <p class="mono pillar-label">연결</p>
+        <h3>노이즈를 맥락으로 바꿉니다</h3>
+        <p>사람, 마감, 스레드, 약속을 비즈니스 임팩트 기준으로 연결합니다.</p>
       </article>
       <article class="pillar reveal">
         <div class="pillar-icon">
@@ -1457,9 +1445,9 @@
             <path d="m8.8 12.2 2.1 2.1 4.5-5"></path>
           </svg>
         </div>
-        <p class="mono pillar-label">Approve</p>
-        <h3>Confirm before action</h3>
-        <p>Important execution carries evidence, risk, and an explicit approval path.</p>
+        <p class="mono pillar-label">승인</p>
+        <h3>행동 전에 확인합니다</h3>
+        <p>중요한 실행에는 근거와 리스크, 명시적인 승인 절차가 따릅니다.</p>
       </article>
     </div>
   </section>
@@ -1468,40 +1456,40 @@
   <section class="section section-narrow snap-section">
     <div class="principle-grid">
       <div class="reveal">
-        <p class="mono section-eyebrow">Operating principle</p>
-        <h2 class="section-h">Prepare quietly. Confirm clearly.</h2>
+        <p class="mono section-eyebrow">운영 원칙</p>
+        <h2 class="section-h">조용히 준비하고, 명확하게 확인합니다.</h2>
       </div>
       <div class="principle-steps">
         <div class="principle-step reveal">
           <p class="mono index">01</p>
-          <h3>Observe</h3>
-          <p>Detect important patterns without changing the workspace.</p>
+          <h3>관찰</h3>
+          <p>워크스페이스를 바꾸지 않고 중요한 패턴을 감지합니다.</p>
         </div>
         <div class="principle-step reveal">
           <p class="mono index">02</p>
-          <h3>Condense</h3>
-          <p>Compress useful signals into short decision cards.</p>
+          <h3>압축</h3>
+          <p>유용한 신호를 짧은 결정 카드로 압축합니다.</p>
         </div>
         <div class="principle-step reveal">
           <p class="mono index">03</p>
-          <h3>Draft</h3>
-          <p>Replies, reminders, and schedule changes start as drafts.</p>
+          <h3>초안</h3>
+          <p>답장, 리마인더, 일정 변경은 초안에서 시작합니다.</p>
         </div>
         <div class="principle-step reveal">
           <p class="mono index">04</p>
-          <h3>Approve</h3>
-          <p>External actions wait for a clear confirmation step.</p>
+          <h3>승인</h3>
+          <p>외부로 나가는 행동은 명확한 확인 단계를 기다립니다.</p>
         </div>
       </div>
     </div>
   </section>
 
   <!-- ── Pricing ─────────────────────────────── -->
-  <section class="section section-narrow snap-section" id="pricing" aria-label="Pricing">
+  <section class="section section-narrow snap-section" id="pricing" aria-label="가격">
     <div class="reveal">
-      <p class="mono section-eyebrow" style="text-align:center;color:var(--brand-gold)">Pricing</p>
-      <h2 class="section-h" style="text-align:center">Start free. Upgrade when Klorn acts for you.</h2>
-      <p class="section-lead" style="text-align:center;max-width:36rem;margin-left:auto;margin-right:auto">The firewall — reading, classifying, and briefing your mail — is free. Pro unlocks the actions: replies, calendar writes, and more inboxes.</p>
+      <p class="mono section-eyebrow" style="text-align:center;color:var(--brand-gold)">가격</p>
+      <h2 class="section-h" style="text-align:center">무료로 시작하세요. Klorn이 대신 행동할 때 업그레이드하세요.</h2>
+      <p class="section-lead" style="text-align:center;max-width:36rem;margin-left:auto;margin-right:auto">메일을 읽고, 분류하고, 브리핑하는 방화벽은 무료입니다. Pro는 행동을 열어줍니다 — 답장, 캘린더 기록, 그리고 더 많은 인박스.</p>
     </div>
     <div class="reveal" style="max-width:56rem;margin:2.5rem auto 0;display:flex;flex-wrap:wrap;gap:20px;justify-content:center;align-items:stretch">
       <div style="flex:1 1 20rem;max-width:26rem;border:1px solid rgba(255,255,255,0.12);border-radius:18px;overflow:hidden;background:rgba(255,255,255,0.02)">
@@ -1509,21 +1497,21 @@
         <div style="padding:28px">
           <div style="display:flex;align-items:center;justify-content:space-between">
             <span class="mono" style="background:rgba(255,255,255,0.08);color:var(--stone-300);font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;padding:5px 10px;border-radius:999px">Free</span>
-            <span class="mono" style="color:var(--stone-500);font-size:11px;letter-spacing:.14em;text-transform:uppercase">The firewall</span>
+            <span class="mono" style="color:var(--stone-500);font-size:11px;letter-spacing:.14em;text-transform:uppercase">방화벽</span>
           </div>
           <div style="margin-top:20px;display:flex;align-items:baseline;gap:6px">
             <span style="font-size:40px;font-weight:700;color:#fff;letter-spacing:-0.02em">$0</span>
-            <span style="color:var(--stone-400);font-size:14px">/month</span>
+            <span style="color:var(--stone-400);font-size:14px">/월</span>
           </div>
-          <p style="margin-top:4px;color:var(--stone-500);font-size:12px">No card. A daily AI budget keeps it sustainable.</p>
+          <p style="margin-top:4px;color:var(--stone-500);font-size:12px">카드 등록이 필요 없습니다. 일일 AI 예산으로 지속 가능하게 운영됩니다.</p>
           <ul style="list-style:none;padding:0;margin:24px 0 0;display:flex;flex-direction:column;gap:12px">
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--stone-400)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>4-tier mail firewall — only real signals interrupt you</span></li>
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--stone-400)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Decision queue with evidence for every card</span></li>
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--stone-400)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Morning briefing and calendar view</span></li>
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--stone-400)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Assistant that answers from your own mail</span></li>
+            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--stone-400)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>4단계 메일 방화벽 — 진짜 신호만 나를 방해합니다</span></li>
+            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--stone-400)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>모든 카드에 근거가 담긴 결정 큐</span></li>
+            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--stone-400)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>모닝 브리핑과 캘린더 뷰</span></li>
+            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--stone-400)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>내 메일에서 답을 찾아주는 어시스턴트</span></li>
           </ul>
-          <a href="https://app.klorn.ai/early-access" class="btn btn-ghost" style="margin-top:28px;width:100%;justify-content:center" aria-label="Start free">
-            Start free
+          <a href="https://app.klorn.ai/early-access" class="btn btn-ghost" style="margin-top:28px;width:100%;justify-content:center" aria-label="무료로 시작">
+            무료로 시작
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
           </a>
         </div>
@@ -1532,45 +1520,45 @@
         <div style="height:4px;background:linear-gradient(90deg, var(--brand-gold), transparent)"></div>
         <div style="padding:28px">
           <div style="display:flex;align-items:center;justify-content:space-between">
-            <span class="mono" style="background:rgba(216,164,93,0.15);color:var(--brand-gold);font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;padding:5px 10px;border-radius:999px">Founding price</span>
+            <span class="mono" style="background:rgba(216,164,93,0.15);color:var(--brand-gold);font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;padding:5px 10px;border-radius:999px">파운딩 가격</span>
             <span class="mono" style="color:var(--stone-500);font-size:11px;letter-spacing:.14em;text-transform:uppercase">Klorn Pro</span>
           </div>
           <div style="margin-top:20px;display:flex;align-items:baseline;gap:6px">
             <span style="font-size:40px;font-weight:700;color:#fff;letter-spacing:-0.02em">$7.99</span>
-            <span style="color:var(--stone-400);font-size:14px">/month</span>
+            <span style="color:var(--stone-400);font-size:14px">/월</span>
           </div>
-          <p style="margin-top:4px;color:var(--stone-500);font-size:12px">7-day Pro trial, then $7.99/mo on the web. Cancel anytime.</p>
+          <p style="margin-top:4px;color:var(--stone-500);font-size:12px">7일 Pro 무료 체험 후 웹 기준 월 $7.99. 언제든 해지할 수 있습니다.</p>
           <ul style="list-style:none;padding:0;margin:24px 0 0;display:flex;flex-direction:column;gap:12px">
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand-gold)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Everything in Free, with a bigger AI budget</span></li>
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand-gold)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Reply drafts you approve and send from Klorn</span></li>
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand-gold)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Create calendar events by voice or chat</span></li>
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand-gold)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Multiple Gmail inboxes, auto-handled noise</span></li>
+            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand-gold)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Free의 모든 것, 더 큰 AI 예산과 함께</span></li>
+            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand-gold)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>승인 후 Klorn에서 바로 발송하는 답장 초안</span></li>
+            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand-gold)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>음성이나 챗으로 캘린더 일정 생성</span></li>
+            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand-gold)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>여러 Gmail 인박스, 노이즈는 자동 처리</span></li>
           </ul>
-          <a href="https://app.klorn.ai/login" class="btn btn-cream" style="margin-top:28px;width:100%;justify-content:center" aria-label="Start your 7-day Pro trial">
-            Start 7-day Pro trial
+          <a href="https://app.klorn.ai/login" class="btn btn-cream" style="margin-top:28px;width:100%;justify-content:center" aria-label="7일 Pro 체험 시작">
+            7일 Pro 체험 시작
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
           </a>
         </div>
       </div>
     </div>
-    <p class="reveal" style="margin-top:16px;text-align:center;color:var(--stone-500);font-size:11px">On iPhone you subscribe in the app. Self-host everything free — Klorn is open source (AGPLv3).</p>
+    <p class="reveal" style="margin-top:16px;text-align:center;color:var(--stone-500);font-size:11px">iPhone에서는 앱 안에서 구독합니다. 셀프호스팅은 전부 무료 — Klorn은 오픈소스(AGPLv3)입니다.</p>
   </section>
 
   <!-- ── Final CTA ───────────────────────────── -->
   <section class="final-cta reveal snap-section">
-    <p class="mono section-eyebrow">Built for decisions</p>
-    <h2 class="final-cta-h">The next inbox is a decision queue.</h2>
-    <p class="final-cta-p">Before the day gets noisy, align context, evidence, and action in one clean line.</p>
+    <p class="mono section-eyebrow">결정을 위해 만들어졌습니다</p>
+    <h2 class="final-cta-h">다음 인박스는 결정 큐입니다.</h2>
+    <p class="final-cta-p">하루가 소란스러워지기 전에, 맥락과 근거와 행동을 하나의 깔끔한 줄로 정렬하세요.</p>
     <div class="final-cta-actions">
-      <a href="https://app.klorn.ai/early-access" class="btn btn-cream" aria-label="Request early access — free during the private beta">
-        Request early access
+      <a href="https://app.klorn.ai/early-access" class="btn btn-cream" aria-label="얼리 액세스 신청 — 비공개 베타 기간 무료">
+        얼리 액세스 신청
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M5 12h14M13 6l6 6-6 6"></path>
         </svg>
       </a>
-      <a href="https://github.com/k08200/klorn" target="_blank" rel="noreferrer noopener" class="btn btn-ghost btn-github" aria-label="View Klorn on GitHub">
+      <a href="https://github.com/k08200/klorn" target="_blank" rel="noreferrer noopener" class="btn btn-ghost btn-github" aria-label="GitHub에서 Klorn 보기">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.16-.02-2.1-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.02 11.02 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.8-.01 3.18 0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"/></svg>
-        Self-host on GitHub
+        GitHub에서 셀프호스팅
         <span class="star-count" data-gh-stars></span>
       </a>
     </div>
@@ -1581,19 +1569,19 @@
     <div class="footer-inner">
       <div class="footer-brand">
         <img src="/brand/mark.svg?v=matte2" alt="">
-        <span>Klorn — the clear signal worth acting on.</span>
+        <span>Klorn — 행동할 가치가 있는 명확한 신호.</span>
       </div>
       <div class="footer-right">
         <div class="footer-social">
-          <a href="https://github.com/k08200/klorn" target="_blank" rel="noreferrer noopener" aria-label="Klorn on GitHub"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.16-.02-2.1-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.02 11.02 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.8-.01 3.18 0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"/></svg></a>
-          <a href="https://x.com/klornai" target="_blank" rel="noreferrer noopener" aria-label="Klorn on X"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.66l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"/></svg></a>
-          <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" target="_blank" rel="noreferrer noopener" aria-label="Join the Klorn Slack"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg></a>
+          <a href="https://github.com/k08200/klorn" target="_blank" rel="noreferrer noopener" aria-label="GitHub의 Klorn"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.16-.02-2.1-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.02 11.02 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.8-.01 3.18 0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"/></svg></a>
+          <a href="https://x.com/klornai" target="_blank" rel="noreferrer noopener" aria-label="X의 Klorn"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.66l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"/></svg></a>
+          <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" target="_blank" rel="noreferrer noopener" aria-label="Klorn Slack 참여"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg></a>
         </div>
         <span class="footer-divider"></span>
         <div class="footer-links">
-          <a href="https://app.klorn.ai/privacy">Privacy</a>
-          <a href="https://app.klorn.ai/terms">Terms</a>
-          <a href="mailto:k0820086@gmail.com">Contact</a>
+          <a href="https://app.klorn.ai/privacy">개인정보처리방침</a>
+          <a href="https://app.klorn.ai/terms">이용약관</a>
+          <a href="mailto:k0820086@gmail.com">문의</a>
         </div>
       </div>
     </div>
@@ -1705,18 +1693,18 @@
       const kfFeatures = kfEl('kf-features');
 
       const TIER_DESC = {
-        PUSH: 'Time-sensitive and high-stakes — Klorn surfaces this the moment it lands.',
-        QUEUE: 'Worth a look, not urgent — batched into the decision queue.',
-        SILENT: 'Noise or an FYI — filed quietly so it never interrupts you.',
-        AUTO: 'Routine and low-risk — pre-handled for you, still staged for approval.',
+        PUSH: '시간에 민감하고 중요도가 높은 신호 — Klorn이 도착하는 즉시 표시합니다.',
+        QUEUE: '볼 가치는 있지만 급하지 않은 신호 — 결정 큐에 모아 처리합니다.',
+        SILENT: '노이즈 또는 단순 공지 — 방해하지 않도록 조용히 정리됩니다.',
+        AUTO: '반복적이고 위험이 낮은 항목 — 미리 처리해 두되, 발송은 승인을 기다립니다.',
       };
 
       // Example emails — one per tier, so a visitor sees the model separate them.
       const PRESETS = [
-        { name: 'Investor ask', from: 'Mina Kim <mina@sequoia.com>', subject: 'Revised metrics before tomorrow 3pm?', snippet: "Can you send the updated ARR and burn before our partner call tomorrow at 3? Need it to finalize the memo." },
-        { name: 'Newsletter', from: 'Morning Brew <crew@morningbrew.com>', subject: '☕ Nvidia earnings, and a $2 coffee war', snippet: 'Your daily roundup of business news. Unsubscribe anytime.' },
-        { name: 'Deploy failed', from: 'Vercel <notifications@vercel.com>', subject: 'Deployment to production failed', snippet: 'Build error in api route. Review env vars and redeploy.' },
-        { name: 'Receipt', from: 'Stripe <receipts@stripe.com>', subject: 'Your invoice #4021 was paid', snippet: 'No action needed. View invoice in your dashboard.' },
+        { name: '투자자 요청', from: 'Mina Kim <mina@sequoia.com>', subject: 'Revised metrics before tomorrow 3pm?', snippet: "Can you send the updated ARR and burn before our partner call tomorrow at 3? Need it to finalize the memo." },
+        { name: '뉴스레터', from: 'Morning Brew <crew@morningbrew.com>', subject: '☕ Nvidia earnings, and a $2 coffee war', snippet: 'Your daily roundup of business news. Unsubscribe anytime.' },
+        { name: '배포 실패', from: 'Vercel <notifications@vercel.com>', subject: 'Deployment to production failed', snippet: 'Build error in api route. Review env vars and redeploy.' },
+        { name: '영수증', from: 'Stripe <receipts@stripe.com>', subject: 'Your invoice #4021 was paid', snippet: 'No action needed. View invoice in your dashboard.' },
       ];
 
       // Presets
@@ -1785,8 +1773,8 @@
         const snippet = kfSnippet.value.trim();
         const model = kfModel.value.trim();
 
-        if (!apiKey) { showError('Add your API key first — it runs one classification on your own key.'); kfKey.focus(); return; }
-        if (!from || !subject) { showError('Fill in at least a From address and a Subject.'); return; }
+        if (!apiKey) { showError('API 키를 먼저 입력해 주세요 — 분류는 내 키로 1회 실행됩니다.'); kfKey.focus(); return; }
+        if (!from || !subject) { showError('최소한 보낸 사람 주소와 제목은 입력해 주세요.'); return; }
 
         try {
           localStorage.setItem('klorn_pg_key', apiKey);
@@ -1795,9 +1783,9 @@
         } catch (_) { /* ignore */ }
 
         kfRun.disabled = true;
-        kfRun.textContent = 'Classifying…';
+        kfRun.textContent = '분류 중…';
         setBadge('', '···');
-        kfDesc.textContent = 'Running the model on your email…';
+        kfDesc.textContent = '이메일에 모델을 실행하는 중…';
         kfReason.textContent = '';
         renderFeatures(null);
 
@@ -1813,8 +1801,8 @@
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
-            let msg = data.error || `Request failed (${res.status}).`;
-            if (res.status === 429) msg = 'Rate limit hit (8/min). Wait a moment and try again.';
+            let msg = data.error || `요청이 실패했습니다 (${res.status}).`;
+            if (res.status === 429) msg = '요청 한도(분당 8회)에 도달했습니다. 잠시 후 다시 시도해 주세요.';
             if (data.detail) msg += ` — ${data.detail}`;
             showError(msg);
             return;
@@ -1825,10 +1813,10 @@
           kfReason.textContent = data.reason || '';
           renderFeatures(data.features);
         } catch (err) {
-          showError('Couldn\'t reach the classifier. If you\'re the site owner, add this origin to the API\'s CORS_ORIGINS. Otherwise check your connection and retry.');
+          showError('분류기에 연결할 수 없습니다. 사이트 소유자라면 이 origin을 API의 CORS_ORIGINS에 추가해 주세요. 아니라면 연결 상태를 확인한 뒤 다시 시도해 주세요.');
         } finally {
           kfRun.disabled = false;
-          kfRun.textContent = 'Classify this email';
+          kfRun.textContent = '이 이메일 분류하기';
         }
       };
 
@@ -1845,13 +1833,13 @@
         btn.addEventListener('click', () => {
           if (!pill) return;
           if (btn.classList.contains('primary')) {
-            pill.textContent = 'Approved ✓';
+            pill.textContent = '승인됨 ✓';
             pill.classList.add('is-approved');
           } else if (btn.classList.contains('plain')) {
-            pill.textContent = 'On hold';
+            pill.textContent = '보류 중';
             pill.classList.remove('is-approved');
           } else {
-            pill.textContent = 'Editing…';
+            pill.textContent = '수정 중…';
             pill.classList.remove('is-approved');
           }
           actions.forEach((b) => b.classList.toggle('is-selected', b === btn));

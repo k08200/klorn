@@ -4,20 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/auth";
+import { useT } from "../lib/i18n";
 import { NavIcon, type NavIconType } from "./nav-icons";
 
 interface Tab {
   href: string;
-  label: string;
+  labelKey: string;
   icon: NavIconType;
 }
 
+// Labels resolve via t() inside the component.
 const TABS: Tab[] = [
-  { href: "/inbox", label: "Queue", icon: "inbox" },
-  { href: "/email", label: "Mail", icon: "mail" },
-  { href: "/calendar", label: "Calendar", icon: "calendar" },
-  { href: "/briefing", label: "Briefing", icon: "bell" },
-  { href: "/chat", label: "Assistant", icon: "chat" },
+  { href: "/inbox", labelKey: "tabs.queue", icon: "inbox" },
+  { href: "/email", labelKey: "nav.mail", icon: "mail" },
+  { href: "/calendar", labelKey: "nav.calendar", icon: "calendar" },
+  { href: "/briefing", labelKey: "nav.briefing", icon: "bell" },
+  { href: "/chat", labelKey: "nav.assistant", icon: "chat" },
 ];
 
 // Routes the account sheet owns — the account tab reads as "active" on these so
@@ -26,6 +28,7 @@ const ACCOUNT_ROUTES = ["/settings", "/admin"];
 
 export default function BottomTabs() {
   const pathname = usePathname();
+  const { t } = useT();
   const { user } = useAuth();
   const [accountOpen, setAccountOpen] = useState(false);
   // Stable identity so the sheet's focus/Escape effect doesn't re-run on every
@@ -62,7 +65,7 @@ export default function BottomTabs() {
                   }`}
                 >
                   <NavIcon type={tab.icon} size={22} strokeWidth={active ? 2 : 1.6} />
-                  <span className={active ? "font-medium" : ""}>{tab.label}</span>
+                  <span className={active ? "font-medium" : ""}>{t(tab.labelKey)}</span>
                 </Link>
               </li>
             );
@@ -85,7 +88,9 @@ export default function BottomTabs() {
               >
                 {initials || "?"}
               </span>
-              <span className={accountActive || accountOpen ? "font-medium" : ""}>Account</span>
+              <span className={accountActive || accountOpen ? "font-medium" : ""}>
+                {t("tabs.account")}
+              </span>
             </button>
           </li>
         </ul>
@@ -97,6 +102,7 @@ export default function BottomTabs() {
 }
 
 function AccountSheet({ onClose, initials }: { onClose: () => void; initials: string }) {
+  const { t } = useT();
   const { user, logout } = useAuth();
   const sheetRef = useRef<HTMLDivElement>(null);
 
@@ -176,9 +182,14 @@ function AccountSheet({ onClose, initials }: { onClose: () => void; initials: st
         )}
 
         <div className="border-t border-stone-800/70 px-2 py-2">
-          <SheetLink href="/settings" icon="settings" label="Settings" onNavigate={onClose} />
+          <SheetLink
+            href="/settings"
+            icon="settings"
+            label={t("settings.title")}
+            onNavigate={onClose}
+          />
           {isAdmin && (
-            <SheetLink href="/admin" icon="settings" label="Admin" onNavigate={onClose} />
+            <SheetLink href="/admin" icon="settings" label={t("nav.admin")} onNavigate={onClose} />
           )}
           <button
             type="button"
@@ -204,7 +215,7 @@ function AccountSheet({ onClose, initials }: { onClose: () => void; initials: st
                 <line x1="21" y1="12" x2="9" y2="12" />
               </svg>
             </span>
-            Log out
+            {t("nav.logout")}
           </button>
         </div>
       </div>

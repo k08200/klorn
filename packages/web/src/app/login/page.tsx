@@ -9,6 +9,7 @@ import { useToast } from "../../components/toast";
 import { Input } from "../../components/ui/input";
 import { API_BASE, apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import { useT } from "../../lib/i18n";
 import { isNativePlatform } from "../../lib/native/capacitor";
 import { startNativeGoogleLogin } from "../../lib/native/native-auth";
 
@@ -36,6 +37,7 @@ function LoginForm() {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const { login, register, user, loading: authLoading } = useAuth();
+  const { t } = useT();
   const { toast } = useToast();
   const router = useRouter();
   const nextPath = safeNextPath(searchParams.get("next"));
@@ -174,16 +176,12 @@ function LoginForm() {
 
   return (
     <AuthScreen
-      eyebrow={mode === "login" ? "Welcome back" : "Create account"}
-      title={mode === "login" ? "Return to your decision queue" : "Start with Klorn"}
-      description={
-        mode === "login"
-          ? "Reconnect your work signals and continue where you left off."
-          : "Connect Gmail and Calendar to turn team signals into evidence-backed decision cards."
-      }
+      eyebrow={mode === "login" ? t("auth.welcomeBack") : t("auth.signUp")}
+      title={mode === "login" ? t("auth.titleLogin") : t("auth.titleRegister")}
+      description={mode === "login" ? t("auth.descLogin") : t("auth.descRegister")}
       footer={
         <Link href="/" className="transition hover:text-stone-300">
-          Back to home
+          {t("auth.backHome")}
         </Link>
       }
     >
@@ -201,16 +199,15 @@ function LoginForm() {
       {!signupOpen ? (
         <div className="space-y-4">
           <div className="rounded-md border border-amber-300/40 bg-amber-300/10 px-3 py-2.5 text-xs leading-5 text-amber-100">
-            <span className="font-semibold text-amber-50">Klorn is invite-only.</span> Google blocks
-            sign-in until your email is approved as a test user. Request access first — you can sign
-            in the moment you&apos;re approved.
+            <span className="font-semibold text-amber-50">{t("auth.inviteOnlyTitle")}</span>{" "}
+            {t("auth.inviteOnlyBody")}
           </div>
 
           <Link
             href="/early-access"
             className="flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 shadow-sm shadow-amber-300/20 transition hover:bg-amber-200"
           >
-            Request early access
+            {t("auth.requestEarlyAccess")}
           </Link>
 
           <a
@@ -219,7 +216,7 @@ function LoginForm() {
             className="flex h-11 w-full items-center justify-center gap-3 rounded-md border border-stone-700 bg-transparent text-sm font-medium text-stone-300 transition hover:border-stone-500 hover:text-stone-100"
           >
             <GoogleMark />
-            Already approved? Sign in with Google
+            {t("auth.googleApprovedSignIn")}
           </a>
         </div>
       ) : (
@@ -230,7 +227,7 @@ function LoginForm() {
             className="flex h-11 w-full items-center justify-center gap-3 rounded-md bg-stone-100 text-sm font-semibold text-stone-900 shadow-sm transition hover:bg-white"
           >
             <GoogleMark />
-            Continue with Google
+            {t("auth.continueWithGoogle")}
           </a>
           {/* Marketing/doctrine copy is landing-page context — hide it on the app
               (mobile) for a clean login; keep it on desktop. */}
@@ -261,7 +258,7 @@ function LoginForm() {
       <div className="my-5 flex items-center gap-3">
         <div className="h-px flex-1 bg-stone-800/80" />
         <span className="text-xs text-stone-400">
-          {signupOpen ? "or continue with email" : "or sign in with email"}
+          {signupOpen ? t("auth.orContinueEmail") : t("auth.orSignInEmail")}
         </span>
         <div className="h-px flex-1 bg-stone-800/80" />
       </div>
@@ -282,7 +279,7 @@ function LoginForm() {
                 : "text-stone-400 hover:text-stone-200"
             }`}
           >
-            Log in
+            {t("nav.logIn")}
           </button>
           <button
             type="button"
@@ -294,7 +291,7 @@ function LoginForm() {
                 : "text-stone-400 hover:text-stone-200"
             }`}
           >
-            Sign up
+            {t("auth.signUpShort")}
           </button>
         </div>
       )}
@@ -304,18 +301,18 @@ function LoginForm() {
           <Input
             ref={nameRef}
             id="name"
-            label="Name"
+            label={t("auth.name")}
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Name"
+            placeholder={t("auth.name")}
           />
         )}
 
         <Input
           ref={emailRef}
           id="email"
-          label="Email"
+          label={t("auth.email")}
           type="email"
           value={email}
           onChange={(e) => {
@@ -330,14 +327,14 @@ function LoginForm() {
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-3">
             <label htmlFor="password" className="block text-xs font-medium text-stone-400">
-              Password
+              {t("auth.password")}
             </label>
             {mode === "login" && (
               <Link
                 href="/reset-password"
                 className="inline-flex min-h-10 items-center text-xs text-stone-400 transition hover:text-amber-300"
               >
-                Reset password
+                {t("auth.resetPassword")}
               </Link>
             )}
           </div>
@@ -349,7 +346,7 @@ function LoginForm() {
               if (passwordError) setPasswordError(null);
               setPassword(e.target.value);
             }}
-            placeholder={mode === "register" ? "At least 8 characters" : "Password"}
+            placeholder={mode === "register" ? t("auth.passwordMin") : t("auth.password")}
             required
             minLength={mode === "register" ? MIN_PASSWORD_LENGTH : undefined}
             error={passwordError ?? undefined}
@@ -364,12 +361,12 @@ function LoginForm() {
           {loading ? (
             <span className="flex items-center justify-center gap-2">
               <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-stone-950 border-t-transparent" />
-              {mode === "login" ? "Signing in..." : "Creating account..."}
+              {mode === "login" ? t("auth.signingIn") : t("auth.creatingAccount")}
             </span>
           ) : mode === "login" ? (
-            "Open decision queue"
+            t("auth.openDecisionQueue")
           ) : (
-            "Create account"
+            t("auth.signUp")
           )}
         </button>
       </form>
@@ -377,13 +374,13 @@ function LoginForm() {
       <div className="mt-5 border-t border-stone-800/80 pt-4 text-center text-xs text-stone-500">
         {signupOpen ? (
           <>
-            {mode === "login" ? "Need an account?" : "Already have an account?"}{" "}
+            {mode === "login" ? t("auth.needAccount") : t("auth.haveAccount")}{" "}
             <button
               type="button"
               onClick={() => changeMode(mode === "login" ? "register" : "login")}
               className="inline-flex min-h-10 items-center font-medium text-amber-300 transition hover:text-amber-200"
             >
-              {mode === "login" ? "Switch to sign-up" : "Switch to log-in"}
+              {mode === "login" ? t("auth.switchToSignUp") : t("auth.switchToLogIn")}
             </button>
           </>
         ) : (
@@ -391,12 +388,12 @@ function LoginForm() {
           // who lost their password, so we point at reset rather than repeat the
           // access CTA a third time.
           <>
-            Approved but can&apos;t sign in?{" "}
+            {t("auth.approvedCantSignIn")}{" "}
             <Link
               href="/reset-password"
               className="inline-flex min-h-10 items-center font-medium text-amber-300 transition hover:text-amber-200"
             >
-              Reset your password
+              {t("auth.resetYourPassword")}
             </Link>
           </>
         )}
