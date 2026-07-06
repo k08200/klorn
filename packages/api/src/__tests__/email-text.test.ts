@@ -12,13 +12,16 @@ describe("htmlToPlainText", () => {
   });
 
   it("keeps http(s) link targets so verification URLs survive", () => {
-    const html = '<p>Confirm your email by <a href="https://huggingface.co/email_confirmation/abc">clicking here</a></p>';
+    const html =
+      '<p>Confirm your email by <a href="https://huggingface.co/email_confirmation/abc">clicking here</a></p>';
     const text = htmlToPlainText(html);
     expect(text).toContain("https://huggingface.co/email_confirmation/abc");
   });
 
   it("drops javascript: and data: link targets", () => {
-    const text = htmlToPlainText('<a href="javascript:alert(1)">x</a><a href="data:text/html,hi">y</a>');
+    const text = htmlToPlainText(
+      '<a href="javascript:alert(1)">x</a><a href="data:text/html,hi">y</a>',
+    );
     expect(text).not.toContain("javascript:");
     expect(text).not.toContain("data:");
   });
@@ -34,7 +37,7 @@ describe("htmlToPlainText", () => {
   });
 
   it("never emits markup even from hostile input", () => {
-    const text = htmlToPlainText('<img src=x onerror=alert(1)><script>alert(2)</script>ok');
+    const text = htmlToPlainText("<img src=x onerror=alert(1)><script>alert(2)</script>ok");
     expect(text).not.toContain("<");
     expect(text).toContain("ok");
   });

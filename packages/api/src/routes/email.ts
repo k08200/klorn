@@ -9,7 +9,6 @@
 import type { EmailMessage, FeedbackSignal, Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
-import { htmlToPlainText } from "../email-text.js";
 import { MULTI_INBOX_SYNC_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
 import {
@@ -32,6 +31,7 @@ import {
   syncEmails,
   syncLinkedInboxesForUser,
 } from "../email-sync.js";
+import { htmlToPlainText } from "../email-text.js";
 import { requireAppAccess } from "../entitlement-guard.js";
 import { getLinkedInboxClients, toggleReadGmail } from "../gmail.js";
 import { senderEmail } from "../notification-format.js";

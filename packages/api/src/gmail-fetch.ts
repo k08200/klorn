@@ -7,8 +7,8 @@
 
 import { type gmail_v1, google } from "googleapis";
 import { extractAttachmentContent, isReadableEmailAttachment } from "./email-attachment-text.js";
-import { htmlToPlainText } from "./email-text.js";
 import type { RawEmailAttachment } from "./email-attachments.js";
+import { htmlToPlainText } from "./email-text.js";
 import {
   getAuthedClient,
   isGoogleAuthError,

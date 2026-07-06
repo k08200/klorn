@@ -50,7 +50,8 @@ export function htmlToPlainText(html: string): string {
       a: (_tag, attribs) => ({
         tagName: "a",
         attribs: {},
-        text: attribs.href && SAFE_HREF.test(attribs.href.trim()) ? ` ${attribs.href.trim()} ` : " ",
+        text:
+          attribs.href && SAFE_HREF.test(attribs.href.trim()) ? ` ${attribs.href.trim()} ` : " ",
       }),
     },
   });

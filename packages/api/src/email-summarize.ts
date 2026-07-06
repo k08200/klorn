@@ -101,7 +101,10 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
       const result = await summarizeEmail(
         email.from,
         email.subject,
-        email.body || (email.htmlBody ? htmlToPlainText(email.htmlBody) : "") || email.snippet || "",
+        email.body ||
+          (email.htmlBody ? htmlToPlainText(email.htmlBody) : "") ||
+          email.snippet ||
+          "",
         userId,
         credentials,
       );
