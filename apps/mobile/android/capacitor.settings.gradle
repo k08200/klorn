@@ -2,6 +2,12 @@
 include ':capacitor-android'
 project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor')
 
+include ':capacitor-community-speech-recognition'
+project(':capacitor-community-speech-recognition').projectDir = new File('../node_modules/@capacitor-community/speech-recognition/android')
+
+include ':capacitor-app'
+project(':capacitor-app').projectDir = new File('../node_modules/@capacitor/app/android')
+
 include ':capacitor-browser'
 project(':capacitor-browser').projectDir = new File('../node_modules/@capacitor/browser/android')
 
@@ -10,3 +16,6 @@ project(':capacitor-push-notifications').projectDir = new File('../node_modules/
 
 include ':ebarooni-capacitor-calendar'
 project(':ebarooni-capacitor-calendar').projectDir = new File('../node_modules/@ebarooni/capacitor-calendar/android')
+
+include ':revenuecat-purchases-capacitor'
+project(':revenuecat-purchases-capacitor').projectDir = new File('../node_modules/@revenuecat/purchases-capacitor/android')

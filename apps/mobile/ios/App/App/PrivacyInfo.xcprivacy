@@ -35,6 +35,23 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
+		<dict>
+			<!-- Assistant chat messages, including voice-dictated text. Raw
+			     audio never leaves the device through the app — speech is
+			     transcribed by the OS recognizer and only the resulting text
+			     is sent to Klorn to answer the request; linked to the account;
+			     not used for tracking. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
 	</array>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>

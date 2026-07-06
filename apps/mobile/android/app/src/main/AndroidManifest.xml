@@ -67,4 +67,8 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- Native push (FCM) runtime prompt on Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Voice input (@capacitor-community/speech-recognition): dictate chat
+         messages and calendar events. Runtime-prompted; speech goes through
+         the OS recognizer and the app receives only the transcribed text. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 </manifest>
