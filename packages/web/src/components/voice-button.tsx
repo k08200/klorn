@@ -1,22 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-
-// Web Speech API types (not in all TS libs)
-interface SpeechRecognitionEvent extends Event {
-  results: { [index: number]: { [index: number]: { transcript: string } } };
-}
-
-interface SpeechRecognitionInstance extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start(): void;
-  stop(): void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-}
+import { useSpeechInput } from "../lib/use-speech-input";
 
 interface VoiceButtonProps {
   onTranscript: (text: string) => void;
@@ -24,57 +8,7 @@ interface VoiceButtonProps {
 }
 
 export default function VoiceButton({ onTranscript, className }: VoiceButtonProps) {
-  const [listening, setListening] = useState(false);
-  const [supported, setSupported] = useState(false);
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const callbackRef = useRef(onTranscript);
-  callbackRef.current = onTranscript;
-
-  useEffect(() => {
-    const win = window as unknown as Record<string, unknown>;
-    const SpeechRecognitionCtor = (win.SpeechRecognition || win.webkitSpeechRecognition) as
-      | (new () => SpeechRecognitionInstance)
-      | undefined;
-    setSupported(!!SpeechRecognitionCtor);
-
-    if (SpeechRecognitionCtor) {
-      const recognition = new SpeechRecognitionCtor();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      // Auto-detect language (Korean + English)
-      recognition.lang = navigator.language.startsWith("ko") ? "ko-KR" : "en-US";
-
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        const transcript = event.results[0]?.[0]?.transcript;
-        if (transcript) {
-          callbackRef.current(transcript);
-        }
-        setListening(false);
-      };
-
-      recognition.onerror = () => {
-        setListening(false);
-      };
-
-      recognition.onend = () => {
-        setListening(false);
-      };
-
-      recognitionRef.current = recognition;
-    }
-  }, []);
-
-  const toggle = useCallback(() => {
-    if (!recognitionRef.current) return;
-
-    if (listening) {
-      recognitionRef.current.stop();
-      setListening(false);
-    } else {
-      recognitionRef.current.start();
-      setListening(true);
-    }
-  }, [listening]);
+  const { supported, listening, toggle } = useSpeechInput(onTranscript);
 
   if (!supported) return null;
 
