@@ -71,17 +71,49 @@ final class AppModel {
     /// immediately (optimistic). On failure, un-hide and refetch the truth.
     func dismiss(_ item: FirewallItem) async {
         guard let emailDbId = item.email?.emailDbId else { return }  // email items only
-        dismissed.insert(item.id)
-        queue = queue?.removingIDs([item.id])
+        hideLocally(item)
         do {
             try await api.post("/api/email/\(emailDbId)/archive")
         } catch APIError.unauthorized {
             signOut()
         } catch {
-            dismissed.remove(item.id)
-            loadError = Self.describe(error)
-            await loadQueue()
+            unhide(item, error)
         }
+    }
+
+    /// Snooze a PUSH item until `until`; it resurfaces server-side when the time
+    /// passes. Works for any source (uses the AttentionItem id, not the email id).
+    func snooze(_ item: FirewallItem, until: Date = AppModel.tomorrow9am()) async {
+        hideLocally(item)
+        do {
+            try await api.post(
+                "/api/inbox/firewall/\(item.id)/snooze",
+                json: ["snoozeUntil": ISO8601DateFormatter().string(from: until)])
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            unhide(item, error)
+        }
+    }
+
+    /// Optimistically drop an item from the visible queue + counts; keep it hidden
+    /// across reloads until the server resolves/snoozes it (then pruned in loadQueue).
+    private func hideLocally(_ item: FirewallItem) {
+        dismissed.insert(item.id)
+        queue = queue?.removingIDs([item.id])
+    }
+
+    /// Undo an optimistic hide when the mutation failed, then refetch the truth.
+    private func unhide(_ item: FirewallItem, _ error: Error) {
+        dismissed.remove(item.id)
+        loadError = Self.describe(error)
+        Task { await loadQueue() }
+    }
+
+    /// Default snooze target: 9am local tomorrow. Pure for testing.
+    nonisolated static func tomorrow9am(from now: Date = Date(), calendar: Calendar = .current) -> Date {
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
+        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow) ?? tomorrow
     }
 
     func signOut() {

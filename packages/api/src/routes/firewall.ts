@@ -18,6 +18,7 @@
 import type { FastifyInstance } from "fastify";
 import { checkAttentionInputHash } from "../attention-input-hash.js";
 import { overrideAttentionTier } from "../attention-override.js";
+import { snoozeAttentionItem } from "../attention-snooze.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { getDecisionMetrics } from "../decision-metrics.js";
@@ -559,6 +560,53 @@ export async function firewallRoutes(app: FastifyInstance) {
       }
 
       return { ok: true, tier: result.tier };
+    },
+  );
+
+  // POST /api/inbox/firewall/:id/snooze — set an item aside until a future time.
+  // The scheduler's source-agnostic resurrectSnoozedItems() flips it back to OPEN
+  // when snoozeUntil passes, so this works for any source (EMAIL included), unlike
+  // the PENDING_ACTION-scoped snooze in chat-pending-actions.ts.
+  app.post<{
+    Params: { id: string };
+    Body: { snoozeUntil: string };
+  }>(
+    "/:id/snooze",
+    {
+      schema: {
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", minLength: 1 } },
+        },
+        body: {
+          type: "object",
+          required: ["snoozeUntil"],
+          properties: { snoozeUntil: { type: "string", minLength: 1 } },
+        },
+      },
+    },
+    async (
+      request,
+      reply,
+    ): Promise<{ ok: true; snoozedUntil: string } | { ok: false; message: string }> => {
+      const userId = getUserId(request);
+      const { id } = request.params;
+      const { snoozeUntil } = request.body;
+
+      const snoozeDate = new Date(snoozeUntil);
+      if (!Number.isFinite(snoozeDate.getTime()) || snoozeDate <= new Date()) {
+        reply.code(400);
+        return { ok: false, message: "snoozeUntil must be a future ISO datetime." };
+      }
+
+      const result = await snoozeAttentionItem(userId, id, snoozeDate);
+      if (!result.ok) {
+        reply.code(404);
+        return { ok: false, message: "Attention item not found." };
+      }
+
+      return { ok: true, snoozedUntil: snoozeDate.toISOString() };
     },
   );
 }

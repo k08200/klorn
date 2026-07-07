@@ -171,6 +171,15 @@ func runSelfChecks() async -> Bool {
     } else {
         check("dismiss fixture decodes", false)
     }
+    // Snooze target: 9am the next day, strictly in the future.
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(identifier: "UTC")!
+    let noonJan1 = cal.date(from: DateComponents(year: 2026, month: 1, day: 1, hour: 12))!
+    let snoozeTo = AppModel.tomorrow9am(from: noonJan1, calendar: cal)
+    let parts = cal.dateComponents([.year, .month, .day, .hour, .minute], from: snoozeTo)
+    check("snooze = next day 09:00",
+          parts.year == 2026 && parts.month == 1 && parts.day == 2 && parts.hour == 9 && parts.minute == 0)
+    check("snooze is in the future", snoozeTo > noonJan1)
 
     print("Realtime:")
     check("wakes on notification", RealtimeClient.shouldWake(#"{"type":"notification","payload":{}}"#))
