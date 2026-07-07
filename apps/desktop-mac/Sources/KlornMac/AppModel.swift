@@ -29,6 +29,7 @@ final class AppModel {
     private var baselineEstablished = false
     private var didRequestNotifyAuth = false
     private var pollTask: Task<Void, Never>?
+    private var realtime: RealtimeClient?
 
     private let api: APIClient
 
@@ -65,6 +66,8 @@ final class AppModel {
 
     func signOut() {
         stopPolling()
+        realtime?.stop()
+        realtime = nil
         seenPush = []
         baselineEstablished = false
         didRequestNotifyAuth = false
@@ -112,6 +115,21 @@ final class AppModel {
             Task { await PushNotifier.requestAuthorization() }
         }
         if pollTask == nil { startPolling() }
+        startRealtime()
+    }
+
+    /// Open the WebSocket wake channel once signed in. On a server push it
+    /// refetches immediately; the poll loop remains the backstop. Idempotent.
+    private func startRealtime() {
+        guard realtime == nil, let token = KeychainStore.load() else { return }
+        let client = RealtimeClient(onWake: { [weak self] in
+            // Skip if a load is already in flight — avoids overlapping refetches
+            // if the server bursts events.
+            guard let self, !self.isLoadingQueue else { return }
+            Task { await self.loadQueue() }
+        })
+        client.start(token: token)
+        realtime = client
     }
 
     private func startPolling() {

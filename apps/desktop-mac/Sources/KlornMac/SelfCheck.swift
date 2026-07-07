@@ -153,6 +153,18 @@ func runSelfChecks() async -> Bool {
     check("no item falls back to inbox root",
           TopBarController.resolveURL(nil)?.absoluteString == web)
 
+    print("Realtime:")
+    check("wakes on notification", RealtimeClient.shouldWake(#"{"type":"notification","payload":{}}"#))
+    check("wakes on sync", RealtimeClient.shouldWake(#"{"type":"sync"}"#))
+    check("ignores connection chatter", !RealtimeClient.shouldWake(#"{"type":"client_joined"}"#))
+    check("ignores non-JSON", !RealtimeClient.shouldWake("pong"))
+    let ws = RealtimeClient.wsURL(token: "abc.def")
+    let wantScheme = Config.apiBaseURL.hasPrefix("https") ? "wss" : "ws"
+    check("ws url = scheme+/ws+desktop+token",
+          ws?.scheme == wantScheme && ws?.path == "/ws"
+          && ws?.query?.contains("type=desktop") == true
+          && ws?.query?.contains("token=abc.def") == true)
+
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0
 }
