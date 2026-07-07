@@ -25,11 +25,13 @@ enum Entry {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
+    private let hud = HudController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Reassert accessory policy post-launch; do NOT activate or foreground —
         // surfacing PUSH must never pull the user out of their current app.
         NSApp.setActivationPolicy(.accessory)
+        model.onNewPush = { [hud] items in hud.present(items) }
         model.start()
     }
 }

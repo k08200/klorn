@@ -18,6 +18,10 @@ final class AppModel {
     private(set) var loadError: String?
     private(set) var isLoadingQueue = false
 
+    /// Called with newly-arrived PUSH items (never the first-load baseline).
+    /// The AppDelegate wires this to the HUD; if unset, PUSH surfacing is a no-op.
+    var onNewPush: (([FirewallItem]) -> Void)?
+
     /// Refresh cadence so new PUSH mail surfaces a notification even with the
     /// window closed (also keeps the free-tier API warm).
     static let pollIntervalSeconds: Double = 60
@@ -85,15 +89,16 @@ final class AppModel {
         }
     }
 
-    /// Fire OS notifications for PUSH items new since the last load (the first
-    /// load is a silent baseline).
+    /// Surface PUSH items new since the last load (the first load is a silent
+    /// baseline). Routed to `onNewPush` (the HUD); the HUD falls back to an OS
+    /// banner when it can't draw a panel.
     private func reconcilePush() {
         guard let queue else { return }
         let plan = planPushNotifications(
             seen: seenPush,
             baselineEstablished: baselineEstablished,
             pushItems: queue.items(for: .push))
-        for item in plan.toNotify { PushNotifier.post(item) }
+        if !plan.toNotify.isEmpty { onNewPush?(plan.toNotify) }
         seenPush = plan.seen
         baselineEstablished = true
     }

@@ -135,6 +135,22 @@ func runSelfChecks() async -> Bool {
                                      pushItems: [push("a"), push("b")])
     check("no new PUSH = no notifications", none.toNotify.isEmpty)
 
+    print("HUD open URL:")
+    func item(href: String?) -> FirewallItem {
+        FirewallItem(id: "x", source: "email", sourceId: "x", type: "email", title: "t",
+                     tier: .push, tierReason: nil, priority: 0, surfacedAt: "",
+                     email: nil, href: href, hashStale: nil)
+    }
+    let web = Config.webBaseURL
+    check("absolute href opens verbatim",
+          HudController.resolveURL(item(href: "https://x.test/mail/9"))?.absoluteString == "https://x.test/mail/9")
+    check("root-relative href joins web base",
+          HudController.resolveURL(item(href: "/mail/9"))?.absoluteString == web + "/mail/9")
+    check("bare-relative href joins with slash",
+          HudController.resolveURL(item(href: "mail/9"))?.absoluteString == web + "/mail/9")
+    check("nil href falls back to inbox root",
+          HudController.resolveURL(item(href: nil))?.absoluteString == web)
+
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0
 }
