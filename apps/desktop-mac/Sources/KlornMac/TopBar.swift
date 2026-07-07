@@ -8,6 +8,8 @@ struct TopBarActions {
     let onSignOut: () -> Void
     /// Open an item on the web inbox; nil opens the inbox root.
     let onOpenWeb: (FirewallItem?) -> Void
+    /// Dismiss (archive) an email item out of the queue.
+    let onDismiss: (FirewallItem) -> Void
     let onQuit: () -> Void
 }
 
@@ -192,8 +194,17 @@ private struct RecentPushColumn: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         ForEach(items) { item in
-                            Button { actions.onOpenWeb(item) } label: { pushRow(item) }
-                                .buttonStyle(.plain)
+                            HStack(spacing: 8) {
+                                Button { actions.onOpenWeb(item) } label: { pushRow(item) }
+                                    .buttonStyle(.plain)
+                                if item.email?.emailDbId != nil {
+                                    Button { actions.onDismiss(item) } label: {
+                                        Image(systemName: "xmark").font(.caption2)
+                                    }
+                                    .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+                                    .help("Dismiss (archive)")
+                                }
+                            }
                         }
                     }
                 }

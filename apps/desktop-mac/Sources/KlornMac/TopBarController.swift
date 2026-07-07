@@ -62,6 +62,7 @@ final class TopBarController {
             onSignIn: { [weak self] in guard let self else { return }; Task { await self.model.signIn() } },
             onSignOut: { [weak self] in self?.model.signOut() },
             onOpenWeb: { [weak self] item in self?.open(item) },
+            onDismiss: { [weak self] item in guard let self else { return }; Task { await self.model.dismiss(item) } },
             onQuit: { NSApplication.shared.terminate(nil) })
     }
 

@@ -26,6 +26,9 @@ final class AppModel {
     /// window closed (also keeps the free-tier API warm).
     static let pollIntervalSeconds: Double = 60
     private var seenPush: Set<String> = []
+    /// AttentionItem ids the user dismissed locally; hidden until the server's
+    /// async reconcile drops them from the queue (then pruned here).
+    private var dismissed: Set<String> = []
     private var baselineEstablished = false
     private var didRequestNotifyAuth = false
     private var pollTask: Task<Void, Never>?
@@ -64,11 +67,29 @@ final class AppModel {
         }
     }
 
+    /// Dismiss an email PUSH item: archive it out of the inbox and hide it
+    /// immediately (optimistic). On failure, un-hide and refetch the truth.
+    func dismiss(_ item: FirewallItem) async {
+        guard let emailDbId = item.email?.emailDbId else { return }  // email items only
+        dismissed.insert(item.id)
+        queue = queue?.removingIDs([item.id])
+        do {
+            try await api.post("/api/email/\(emailDbId)/archive")
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            dismissed.remove(item.id)
+            loadError = Self.describe(error)
+            await loadQueue()
+        }
+    }
+
     func signOut() {
         stopPolling()
         realtime?.stop()
         realtime = nil
         seenPush = []
+        dismissed = []
         baselineEstablished = false
         didRequestNotifyAuth = false
         KeychainStore.clear()
@@ -81,7 +102,10 @@ final class AppModel {
         isLoadingQueue = true
         defer { isLoadingQueue = false }
         do {
-            queue = try await api.get("/api/inbox/firewall", as: FirewallResponse.self)
+            let fetched = try await api.get("/api/inbox/firewall", as: FirewallResponse.self)
+            // Drop dismissed ids the server has since resolved; hide the rest.
+            dismissed.formIntersection(fetched.allItemIDs)
+            queue = fetched.removingIDs(dismissed)
             loadError = nil
             reconcilePush()
             ensureActive()

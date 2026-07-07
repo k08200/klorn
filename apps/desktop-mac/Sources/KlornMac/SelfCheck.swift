@@ -153,6 +153,25 @@ func runSelfChecks() async -> Bool {
     check("no item falls back to inbox root",
           TopBarController.resolveURL(nil)?.absoluteString == web)
 
+    print("Dismiss:")
+    let fw2JSON = """
+    {"tiers":{"PUSH":[{"id":"p1","source":"email","sourceId":"e1","type":"email","title":"a",
+    "tier":"PUSH","tierReason":null,"priority":1,"surfacedAt":"","email":null,"hashStale":null},
+    {"id":"p2","source":"email","sourceId":"e2","type":"email","title":"b","tier":"PUSH",
+    "tierReason":null,"priority":1,"surfacedAt":"","email":null,"hashStale":null}],
+    "QUEUE":[],"SILENT":[],"AUTO":[]},"summary":{"PUSH":2,"QUEUE":0,"SILENT":0,"AUTO":0,"total":2}}
+    """
+    if let fw = try? JSONDecoder().decode(FirewallResponse.self, from: Data(fw2JSON.utf8)) {
+        let after = fw.removingIDs(["p1"])
+        check("removingIDs drops the item", after.items(for: .push).map(\.id) == ["p2"])
+        check("removingIDs decrements summary", after.summary.push == 1 && after.summary.total == 1)
+        check("removingIDs ignores unknown id",
+              fw.removingIDs(["nope"]).summary.push == 2)
+        check("allItemIDs collects across tiers", fw.allItemIDs == ["p1", "p2"])
+    } else {
+        check("dismiss fixture decodes", false)
+    }
+
     print("Realtime:")
     check("wakes on notification", RealtimeClient.shouldWake(#"{"type":"notification","payload":{}}"#))
     check("wakes on sync", RealtimeClient.shouldWake(#"{"type":"sync"}"#))
