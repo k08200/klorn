@@ -26,6 +26,7 @@ enum Entry {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     private var topBar: TopBarController?
+    private var hotKey: HotKey?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Reassert accessory policy post-launch; do NOT activate or foreground.
@@ -34,6 +35,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.onNewPush = { [weak bar] items in bar?.handleNewPush(items) }
         bar.show()
         topBar = bar
+
+        // ⌥⌘K from anywhere expands/collapses the bar (no focus, no permission).
+        let key = HotKey(onFire: { [weak bar] in bar?.toggle() })
+        key.register()
+        hotKey = key
+
         model.start()
     }
 }

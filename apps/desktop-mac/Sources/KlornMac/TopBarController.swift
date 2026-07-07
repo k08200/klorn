@@ -32,6 +32,14 @@ final class TopBarController {
         items.forEach { PushNotifier.post($0) }
     }
 
+    /// Global-hotkey entry point: expand if collapsed / collapse if expanded,
+    /// creating the bar first if it isn't on screen yet. Never steals focus.
+    func toggle() {
+        guard panel != nil else { show(); setExpanded(true); panel?.orderFrontRegardless(); return }
+        setExpanded(!expanded)
+        panel?.orderFrontRegardless()
+    }
+
     private func setExpanded(_ value: Bool) {
         expanded = value
         render()
