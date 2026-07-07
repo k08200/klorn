@@ -13,7 +13,7 @@ struct TopBarActions {
 
 enum TopBarMetrics {
     static let collapsed = NSSize(width: 400, height: 52)
-    static let expanded = NSSize(width: 760, height: 380)
+    static let expanded = NSSize(width: 900, height: 380)
     static let corner: CGFloat = 16
 }
 
