@@ -20,12 +20,22 @@ of what a mail firewall's UI should be, which is why it is unused:
 - No `NSStatusItem` / `NSPanel` / `nonactivating` / floating level anywhere (grep: 0).
 - No VRM/3D avatar exists (grep: 0) — earlier memory note was aspirational, not code.
 
-## 2. Target model (locked)
+## 2. Target model (locked — corrected 2026-07-07 after watching the reference video)
 
-> The desktop app **is** an ambient interrupt surface — nothing else.
-> Lives in the menu bar. When a **PUSH-tier** email arrives, a **non-focus-stealing**
-> panel slides into a screen corner. User acts in place via keyboard, it disappears.
-> QUEUE / SILENT / AUTO never surface. Full inbox lives on web/mobile, not here.
+> The desktop app is a **custom always-on top bar** pinned to the top-center of the
+> screen (NOT the macOS system menu bar). It has two states:
+> - **Collapsed**: a slim dark rounded pill — `☰ · Klorn logo · live state (PUSH count /
+>   syncing / Log In)`. Always visible = glanceable + proof the firewall is running.
+> - **Expanded**: clicking `☰` morphs the pill downward into a full panel (echoing the
+>   reference video's 3-column mega-menu: `INBOX counts · RECENT PUSH · ACCOUNT`).
+>   Clicking `— Close` collapses it back to the pill.
+> Non-focus-stealing throughout (`.nonactivatingPanel`, `orderFrontRegardless`). New PUSH
+> updates the always-visible count (+ optional OS-banner fallback); the user expands on
+> demand. QUEUE/SILENT/AUTO never force anything. Full inbox still lives on web/mobile.
+
+Reference video (`~/Desktop/화면 기록 2026-07-07…mov`): a centered dark pill navbar that
+expands into a wide dark panel on `☰ Menu` and collapses on `— Close`. NOT a system
+menu-bar dropdown, NOT a transient corner card — those were both wrong earlier reads.
 
 ### Non-negotiable constraints (violate one → we rebuild the flow-break we are killing)
 1. **Never steal focus.** `NSPanel(.nonactivatingPanel)`, `level = .floating`,
