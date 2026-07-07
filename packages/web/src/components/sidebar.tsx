@@ -4,22 +4,24 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/auth";
+import { useT } from "../lib/i18n";
 import { NavIcon, type NavIconType } from "./nav-icons";
 import NotificationBell from "./notification-bell";
 
 // Desktop-only workspace nav. On mobile the bottom tab bar (+ account sheet)
 // is the whole navigation, so this sidebar renders `hidden md:block` and there
-// is no mobile drawer anymore.
-const NAV_ITEMS: { href: string; label: string; icon: NavIconType }[] = [
-  { href: "/inbox", label: "Decision queue", icon: "check" },
-  { href: "/email", label: "Mail", icon: "mail" },
-  { href: "/calendar", label: "Calendar", icon: "calendar" },
-  { href: "/briefing", label: "Briefing", icon: "bell" },
-  { href: "/chat", label: "Assistant", icon: "chat" },
+// is no mobile drawer anymore. Labels resolve via t() inside the component.
+const NAV_ITEMS: { href: string; labelKey: string; icon: NavIconType }[] = [
+  { href: "/inbox", labelKey: "nav.decisionQueue", icon: "check" },
+  { href: "/email", labelKey: "nav.mail", icon: "mail" },
+  { href: "/calendar", labelKey: "nav.calendar", icon: "calendar" },
+  { href: "/briefing", labelKey: "nav.briefing", icon: "bell" },
+  { href: "/chat", labelKey: "nav.assistant", icon: "chat" },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { t } = useT();
   const { user, logout, loading: authLoading } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -58,7 +60,7 @@ export default function Sidebar() {
             <span>
               <span className="block leading-none">Klorn</span>
               <span className="mt-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-stone-500">
-                Decision queue
+                {t("nav.decisionQueue")}
               </span>
             </span>
           </Link>
@@ -87,7 +89,7 @@ export default function Sidebar() {
                   }`}
                 >
                   <NavIcon type={item.icon} size={14} />
-                  <span className="flex-1">{item.label}</span>
+                  <span className="flex-1">{t(item.labelKey)}</span>
                 </Link>
               );
             })}
@@ -102,7 +104,7 @@ export default function Sidebar() {
                 }`}
               >
                 <NavIcon type="settings" size={14} />
-                Admin
+                {t("nav.admin")}
               </Link>
             )}
           </div>
@@ -149,7 +151,7 @@ export default function Sidebar() {
                     onClick={() => setShowUserMenu(false)}
                     className="block px-3 py-2 text-sm text-stone-300 hover:bg-stone-800 rounded-md mx-1 transition"
                   >
-                    Settings
+                    {t("settings.title")}
                   </Link>
                   <div className="border-t border-stone-800 my-1" />
                   <button
@@ -160,7 +162,7 @@ export default function Sidebar() {
                     }}
                     className="w-[calc(100%-0.5rem)] text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-md mx-1 transition"
                   >
-                    Log out
+                    {t("nav.logout")}
                   </button>
                 </div>
               )}
@@ -170,7 +172,7 @@ export default function Sidebar() {
               href="/login"
               className="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm text-stone-400 hover:bg-stone-800/50 hover:text-white transition"
             >
-              Log in
+              {t("nav.logIn")}
             </Link>
           )}
         </div>

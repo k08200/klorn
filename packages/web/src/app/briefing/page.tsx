@@ -223,10 +223,12 @@ function BriefingView() {
       <header className="mb-5 flex items-end justify-between gap-3 md:hidden">
         <div className="min-w-0">
           <h1 className="text-[28px] font-bold leading-none tracking-tight text-stone-50">
-            Briefing
+            {t("nav.briefing")}
           </h1>
           <p className="mt-1.5 text-sm text-stone-400">
-            {content ? `Today${formattedTime ? ` · ${formattedTime}` : ""}` : "Not generated yet"}
+            {content
+              ? `Today${formattedTime ? ` · ${formattedTime}` : ""}`
+              : t("briefing.notGenerated")}
           </p>
         </div>
         <button
@@ -263,11 +265,11 @@ function BriefingView() {
         <div className="grid gap-5 p-4 md:p-6 lg:grid-cols-[1fr_300px] lg:items-stretch">
           <div className="min-w-0">
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80 md:mb-2">
-              Klorn · Briefing
+              Klorn · {t("nav.briefing")}
             </p>
             <div className="flex items-start justify-between gap-3">
               <h1 className="text-lg font-semibold tracking-tight text-stone-50 md:text-2xl">
-                Today's decision brief
+                {t("briefing.heading")}
               </h1>
               <button
                 type="button"
@@ -275,7 +277,7 @@ function BriefingView() {
                 disabled={generating}
                 className="min-h-9 shrink-0 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50 lg:hidden"
               >
-                {generating ? "..." : content ? "Regenerate" : "Generate"}
+                {generating ? "..." : content ? t("briefing.regenerate") : t("briefing.generate")}
               </button>
             </div>
             <p className="mt-2 hidden max-w-xl text-sm leading-6 text-stone-400 md:block">
@@ -291,7 +293,11 @@ function BriefingView() {
               disabled={generating}
               className="absolute right-3 top-3 inline-flex min-h-11 items-center rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
             >
-              {generating ? "Generating..." : content ? "Regenerate" : "Generate now"}
+              {generating
+                ? t("briefing.generating")
+                : content
+                  ? t("briefing.regenerate")
+                  : t("briefing.generateNow")}
             </button>
           </div>
           <div className="hidden grid-cols-3 gap-2 md:grid lg:col-span-2">

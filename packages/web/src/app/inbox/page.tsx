@@ -10,6 +10,7 @@ import { FirewallBoard } from "../../components/firewall-board";
 import { RejectReasonDialog } from "../../components/reject-reason-dialog";
 import { useToast } from "../../components/toast";
 import { apiFetch } from "../../lib/api";
+import { useT } from "../../lib/i18n";
 import type { ReplyNeededEmail } from "../../lib/inbox-summary";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
@@ -340,6 +341,7 @@ function DecisionsBody({
   onOpenReject: (id: string) => void;
   onSnooze: (id: string) => void;
 }) {
+  const { t } = useT();
   return (
     <>
       {/* MOBILE — purpose-built native screen (desktop layout untouched below) */}
@@ -367,14 +369,14 @@ function DecisionsBody({
         <div className="mb-6 flex items-center justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
-              Klorn · Decision queue
+              Klorn · {t("nav.decisionQueue")}
             </p>
             <h1 className="mt-1 text-xl font-semibold tracking-tight text-stone-50">
               {pendingCount > 0
                 ? `${pendingCount} decision${pendingCount !== 1 ? "s" : ""} waiting`
                 : commitments.length > 0
                   ? `${commitments.length} commitment${commitments.length !== 1 ? "s" : ""} tracked`
-                  : "All clear"}
+                  : t("inbox.allClear")}
             </h1>
           </div>
           <div className="flex shrink-0 items-center gap-3">
@@ -488,26 +490,27 @@ function buildIntroLine(pendingCount: number): string | null {
 // ─── Honest empty state ────────────────────────────────────────────────────
 
 function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
+  const { t } = useT();
   return (
     <div className="rounded-xl border border-stone-800 bg-stone-900/30 p-8 text-center">
-      <p className="text-base text-stone-200">Nothing to decide today.</p>
+      <p className="text-base text-stone-200">{t("inbox.nothingToDecideToday")}</p>
       <p className="mx-auto mt-2 max-w-sm text-xs text-stone-500">
         {commitmentCount > 0
           ? `Klorn is watching your mail and calendar. ${commitmentCount} tracked commitment${commitmentCount === 1 ? "" : "s"} in the background.`
-          : "Klorn is watching your mail and calendar. When something needs a decision, it lands here."}
+          : t("inbox.emptyBody")}
       </p>
       <div className="mt-5 flex justify-center gap-2">
         <Link
           href="/settings"
           className="inline-flex min-h-9 items-center justify-center rounded-md border border-stone-700 px-4 text-xs text-stone-300 transition hover:bg-stone-800"
         >
-          Settings
+          {t("settings.title")}
         </Link>
         <Link
           href="/email"
           className="inline-flex min-h-9 items-center justify-center rounded-md border border-stone-700 px-4 text-xs text-stone-300 transition hover:bg-stone-800"
         >
-          Open mail
+          {t("inbox.openMail")}
         </Link>
       </div>
     </div>
@@ -523,6 +526,7 @@ function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
 const ONBOARDING_STORAGE_KEY = "klorn.inbox.onboarding.v1.dismissed";
 
 function OnboardingHint() {
+  const { t } = useT();
   const [dismissed, setDismissed] = useState<boolean | null>(null);
   // On phones the full 4-step tour eats the whole first fold, burying the
   // decision queue. Collapse it to a single title line by default on mobile
@@ -553,7 +557,7 @@ function OnboardingHint() {
       <div className="flex items-center justify-between gap-3 md:items-start">
         <div className="min-w-0 space-y-1.5">
           <p className="text-[11px] font-medium text-stone-500 md:font-semibold md:uppercase md:tracking-[0.16em] md:text-amber-300">
-            New here? 30-second tour
+            {t("inbox.tourTitle")}
           </p>
           <ul
             className={`${expanded ? "block" : "hidden"} space-y-1 text-[13px] leading-5 text-stone-300 md:block`}
@@ -1095,13 +1099,19 @@ function MobileDecisionQueue({
   onReject: (id: string) => void;
   onSnooze: (id: string) => void;
 }) {
-  const title = pendingCount > 0 ? "Decisions" : commitments.length > 0 ? "Tracking" : "All clear";
+  const { t } = useT();
+  const title =
+    pendingCount > 0
+      ? t("inbox.decisions")
+      : commitments.length > 0
+        ? t("inbox.tracking")
+        : t("inbox.allClear");
   const subtitle =
     pendingCount > 0
       ? `${pendingCount} waiting for you`
       : commitments.length > 0
         ? `${commitments.length} commitment${commitments.length !== 1 ? "s" : ""} in the background`
-        : "Nothing needs you right now";
+        : t("inbox.nothingNeedsYou");
 
   return (
     <div>
@@ -1208,6 +1218,7 @@ function MobileSeg({
 }
 
 function MobileEmpty({ commitmentCount }: { commitmentCount: number }) {
+  const { t } = useT();
   return (
     <div className="rounded-2xl bg-stone-900/40 px-6 py-12 text-center">
       <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-stone-800/70">
@@ -1226,11 +1237,11 @@ function MobileEmpty({ commitmentCount }: { commitmentCount: number }) {
           <polyline points="20 6 9 17 4 12" />
         </svg>
       </div>
-      <p className="text-base font-medium text-stone-200">Nothing to decide</p>
+      <p className="text-base font-medium text-stone-200">{t("inbox.nothingToDecide")}</p>
       <p className="mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed text-stone-500">
         {commitmentCount > 0
           ? `Klorn is watching your mail and calendar. ${commitmentCount} tracked in the background.`
-          : "Klorn is watching your mail and calendar. New decisions land here."}
+          : t("inbox.emptyBodyMobile")}
       </p>
     </div>
   );

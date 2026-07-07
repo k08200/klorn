@@ -11,6 +11,7 @@ import AuthGuard from "../../components/auth-guard";
 import EventDraftCard, { type EventDraft } from "../../components/event-draft-card";
 import VoiceButton from "../../components/voice-button";
 import { apiFetch } from "../../lib/api";
+import { useT } from "../../lib/i18n";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 
@@ -34,11 +35,12 @@ interface TurnResponse {
   error?: string;
 }
 
-const SUGGESTIONS = [
-  "Summarize my unread mail",
-  "Find the last email from my boss",
-  "What's on my calendar tomorrow?",
-  "내일 3시 김대표 미팅 잡아줘",
+// Suggestion labels resolve via t() inside the component.
+const SUGGESTION_KEYS = [
+  "chat.suggestion1",
+  "chat.suggestion2",
+  "chat.suggestion3",
+  "chat.suggestion4",
 ];
 
 export default function ChatPage() {
@@ -50,6 +52,7 @@ export default function ChatPage() {
 }
 
 function ChatView() {
+  const { t } = useT();
   const queryClient = useQueryClient();
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -101,7 +104,7 @@ function ChatView() {
       captureClientError(err);
       // Never eat the user's words: put the failed message back in the box.
       setInput((prev) => (prev.trim() ? prev : text));
-      setSendError("Could not send your message — it's back in the input box. Try again.");
+      setSendError(t("chat.sendFailed"));
     },
     onSettled: () => setPendingText(null),
   });
@@ -126,35 +129,32 @@ function ChatView() {
   return (
     <main className="mx-auto flex h-[calc(100dvh-4rem)] w-full max-w-3xl flex-col px-4 pb-24 pt-4 md:pb-6">
       <div className="mb-3 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-white">Assistant</h1>
+        <h1 className="text-lg font-semibold text-white">{t("nav.assistant")}</h1>
         <button
           type="button"
           onClick={() => setConversationId(null)}
           disabled={!activeId || sendMutation.isPending}
           className="focus-ring min-h-[44px] rounded-md border border-stone-600 px-3 text-sm text-stone-300 transition hover:border-stone-400 hover:text-white disabled:opacity-40"
         >
-          New chat
+          {t("chat.newChat")}
         </button>
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto pr-1" aria-live="polite">
         {activeId && messagesQuery.isLoading ? (
-          <p className="text-sm text-stone-400">Loading conversation…</p>
+          <p className="text-sm text-stone-400">{t("chat.loadingConversation")}</p>
         ) : messages.length === 0 && !pendingText ? (
           <div className="mt-8 space-y-3">
-            <p className="text-sm text-stone-300">
-              Ask about your mail, calendar, or briefing — or speak with the mic. I work only on
-              your Klorn data.
-            </p>
+            <p className="text-sm text-stone-300">{t("chat.emptyState")}</p>
             <ul className="space-y-2">
-              {SUGGESTIONS.map((s) => (
-                <li key={s}>
+              {SUGGESTION_KEYS.map((key) => (
+                <li key={key}>
                   <button
                     type="button"
-                    onClick={() => send(s)}
+                    onClick={() => send(t(key))}
                     className="focus-ring min-h-[44px] w-full rounded-lg border border-stone-700 px-3 py-2 text-left text-sm text-stone-300 transition hover:border-stone-500 hover:text-white"
                   >
-                    {s}
+                    {t(key)}
                   </button>
                 </li>
               ))}
@@ -174,7 +174,7 @@ function ChatView() {
             )}
             {sendMutation.isPending && (
               <p role="status" className="text-sm text-stone-400">
-                Thinking…
+                {t("chat.thinking")}
               </p>
             )}
           </>
@@ -207,7 +207,7 @@ function ChatView() {
             }}
             rows={1}
             maxLength={4000}
-            placeholder="Ask about your mail or calendar…"
+            placeholder={t("chat.inputPlaceholder")}
             aria-label="Message the assistant"
             className="max-h-32 flex-1 resize-none bg-transparent text-sm text-white outline-none placeholder:text-stone-500"
           />
@@ -222,7 +222,7 @@ function ChatView() {
           disabled={!input.trim() || sendMutation.isPending}
           className="focus-ring min-h-[44px] rounded-xl bg-accent px-4 text-sm font-semibold text-stone-950 transition hover:bg-accent/90 disabled:opacity-40"
         >
-          Send
+          {t("chat.send")}
         </button>
       </form>
     </main>

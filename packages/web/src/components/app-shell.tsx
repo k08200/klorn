@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useAuth } from "../lib/auth";
+import { useT } from "../lib/i18n";
 import BottomTabs from "./bottom-tabs";
 import Sidebar from "./sidebar";
 
@@ -33,25 +34,27 @@ function isAppShellRoute(pathname: string): boolean {
   return APP_SHELL_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
 
-function currentSectionLabel(pathname: string): string {
-  if (pathname === "/inbox" || pathname.startsWith("/inbox/")) return "Decision queue";
-  if (pathname === "/graph" || pathname.startsWith("/graph/")) return "Graph";
-  if (pathname === "/email" || pathname.startsWith("/email/")) return "Mail";
-  if (pathname === "/calendar" || pathname.startsWith("/calendar/")) return "Calendar";
-  if (pathname === "/briefing" || pathname.startsWith("/briefing/")) return "Briefing";
-  if (pathname === "/chat" || pathname.startsWith("/chat/")) return "Assistant";
-  if (pathname === "/billing" || pathname.startsWith("/billing/")) return "Plan and billing";
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) return "Admin";
-  if (pathname.startsWith("/settings")) return "Settings";
-  return "Workspace";
+// Returns an i18n key — the component resolves it via t().
+function currentSectionLabelKey(pathname: string): string {
+  if (pathname === "/inbox" || pathname.startsWith("/inbox/")) return "nav.decisionQueue";
+  if (pathname === "/graph" || pathname.startsWith("/graph/")) return "nav.graph";
+  if (pathname === "/email" || pathname.startsWith("/email/")) return "nav.mail";
+  if (pathname === "/calendar" || pathname.startsWith("/calendar/")) return "nav.calendar";
+  if (pathname === "/briefing" || pathname.startsWith("/briefing/")) return "nav.briefing";
+  if (pathname === "/chat" || pathname.startsWith("/chat/")) return "nav.assistant";
+  if (pathname === "/billing" || pathname.startsWith("/billing/")) return "nav.billing";
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) return "nav.admin";
+  if (pathname.startsWith("/settings")) return "settings.title";
+  return "nav.workspace";
 }
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { t } = useT();
   const { user, loading } = useAuth();
 
   const showSidebar = !NO_SIDEBAR_ROUTES.includes(pathname) && isAppShellRoute(pathname);
-  const sectionLabel = currentSectionLabel(pathname);
+  const sectionLabel = t(currentSectionLabelKey(pathname));
 
   if (!showSidebar) {
     return <>{children}</>;

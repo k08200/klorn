@@ -9,6 +9,7 @@ import { ComposeModal } from "../../components/compose-modal";
 import { useToast } from "../../components/toast";
 import { TrustDot, type TrustScoreData } from "../../components/trust-badge";
 import { apiFetch } from "../../lib/api";
+import { useT } from "../../lib/i18n";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { formatRelative } from "../../lib/text";
@@ -180,19 +181,41 @@ function parseUndoNotice(searchParams: ReturnType<typeof useSearchParams>): Undo
   };
 }
 
-const FILTERS: { key: Filter; label: string; query: string }[] = [
-  { key: "all", label: "All signals", query: "" },
-  { key: "reply-needed", label: "Needs reply", query: "filter=reply-needed" },
-  { key: "urgent", label: "Urgent", query: "filter=urgent" },
-  { key: "unread", label: "Unread", query: "filter=unread" },
-  { key: "attachments", label: "Attachments", query: "filter=attachments" },
-  { key: "candidates", label: "Candidates", query: "filter=candidates" },
+// `labelKey` (when present) resolves through t() in FilterTabs; `label` is the
+// untranslated fallback for the domain filters that never render in the pill row.
+const FILTERS: { key: Filter; label: string; labelKey?: string; query: string }[] = [
+  { key: "all", label: "All signals", labelKey: "mail.filterAll", query: "" },
+  {
+    key: "reply-needed",
+    label: "Needs reply",
+    labelKey: "mail.filterReplyNeeded",
+    query: "filter=reply-needed",
+  },
+  { key: "urgent", label: "Urgent", labelKey: "mail.filterUrgent", query: "filter=urgent" },
+  { key: "unread", label: "Unread", labelKey: "mail.filterUnread", query: "filter=unread" },
+  {
+    key: "attachments",
+    label: "Attachments",
+    labelKey: "mail.filterAttachments",
+    query: "filter=attachments",
+  },
+  {
+    key: "candidates",
+    label: "Candidates",
+    labelKey: "mail.filterCandidates",
+    query: "filter=candidates",
+  },
   { key: "finance", label: "Finance", query: "category=billing" },
   { key: "legal", label: "Legal", query: "search=contract" },
   { key: "sales", label: "Sales", query: "category=business" },
   { key: "support", label: "Support", query: "search=support" },
-  { key: "threads", label: "Threads", query: "" },
-  { key: "automated", label: "Automated", query: "category=automated" },
+  { key: "threads", label: "Threads", labelKey: "mail.filterThreads", query: "" },
+  {
+    key: "automated",
+    label: "Automated",
+    labelKey: "mail.filterAutomated",
+    query: "category=automated",
+  },
 ];
 
 // Domain triage tiles. Counts were intentionally removed: the old
@@ -242,6 +265,7 @@ export default function EmailPage() {
 function EmailView() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useT();
   const { toast } = useToast();
   const undoNotice = useMemo(() => parseUndoNotice(searchParams), [searchParams]);
   const queryClient = useQueryClient();
@@ -665,7 +689,7 @@ function EmailView() {
         <header className="mb-4 flex items-end justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-[28px] font-bold leading-none tracking-tight text-stone-50">
-              Mail
+              {t("nav.mail")}
             </h1>
             <p className="mt-1.5 text-sm text-stone-400">
               {source === "demo"
@@ -705,7 +729,7 @@ function EmailView() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search mail"
+            placeholder={t("mail.searchMail")}
             className="h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-stone-900/60 px-4 text-sm text-stone-200 outline-none transition placeholder:text-stone-400 focus:border-accent/45"
           />
           {appliedSearch && (
@@ -742,12 +766,10 @@ function EmailView() {
         {!loading && !error && filter !== "threads" && emails.length === 0 && (
           <div className="mt-6 rounded-2xl bg-stone-900/40 px-6 py-12 text-center">
             <p className="text-base font-medium text-stone-200">
-              {filter === "reply-needed" ? "Nothing needs a reply" : "No mail here"}
+              {filter === "reply-needed" ? t("mail.emptyReplyTitle") : t("mail.emptyTitle")}
             </p>
             <p className="mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed text-stone-500">
-              {source === "demo"
-                ? "Connect Gmail in Settings so Klorn can sort your real mail."
-                : "When Klorn finds mail that needs you, it rises to the top."}
+              {source === "demo" ? t("mail.emptyDemoBody") : t("mail.emptyBody")}
             </p>
             <button
               type="button"
@@ -755,7 +777,7 @@ function EmailView() {
               disabled={syncing}
               className="mt-5 inline-flex min-h-11 items-center rounded-xl border border-stone-700 px-5 text-sm text-stone-300 transition active:bg-stone-800 disabled:opacity-50"
             >
-              {syncing ? "Syncing..." : "Sync now"}
+              {syncing ? t("common.syncing") : t("common.syncNow")}
             </button>
           </div>
         )}
@@ -812,7 +834,7 @@ function EmailView() {
                 title={source === "demo" ? "Connect Gmail to send email" : "Compose a new email"}
                 className="min-h-11 w-fit rounded-md bg-accent px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
-                ✎ Compose
+                ✎ {t("mail.compose")}
               </button>
               <button
                 type="button"
@@ -820,7 +842,7 @@ function EmailView() {
                 disabled={syncing}
                 className="min-h-11 w-fit rounded-md border border-white/10 bg-stone-950/60 px-3 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:bg-white/5 hover:text-stone-100 disabled:opacity-50"
               >
-                {syncing ? "Syncing..." : "Sync now"}
+                {syncing ? t("common.syncing") : t("common.syncNow")}
               </button>
               <button
                 type="button"
@@ -864,7 +886,7 @@ function EmailView() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search mail, attachments, fields"
+            placeholder={t("mail.searchPlaceholder")}
             className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-stone-950/60 px-3 text-sm text-stone-200 outline-none transition placeholder:text-stone-400 focus:border-accent/45"
           />
           <button
@@ -940,15 +962,13 @@ function EmailView() {
           <div className="mt-4 rounded-lg border border-white/10 bg-stone-900/40 p-6 text-center">
             <p className="text-sm text-stone-300">
               {filter === "all"
-                ? "No mail signals yet."
+                ? t("mail.emptyAll")
                 : filter === "reply-needed"
-                  ? "Nothing needs a reply right now."
-                  : "No signals match this filter."}
+                  ? t("mail.emptyReplyNow")
+                  : t("mail.emptyFilter")}
             </p>
             <p className="mt-1 text-xs text-stone-400">
-              {filter === "reply-needed"
-                ? "Switch tabs to see urgent, unread, or all mail — Klorn promotes a thread here when it detects something you should answer."
-                : "After sync, mail that needs action rises to the top."}
+              {filter === "reply-needed" ? t("mail.emptyReplyHint") : t("mail.emptySyncHint")}
             </p>
             {filter === "reply-needed" && (
               <div className="mt-4 flex flex-wrap justify-center gap-2">
@@ -957,7 +977,7 @@ function EmailView() {
                   onClick={() => setFilter("all")}
                   className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100"
                 >
-                  Show all signals
+                  {t("mail.showAllSignals")}
                 </button>
                 <button
                   type="button"
@@ -965,7 +985,7 @@ function EmailView() {
                   disabled={syncing}
                   className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100 disabled:opacity-50"
                 >
-                  {syncing ? "Syncing..." : "Sync now"}
+                  {syncing ? t("common.syncing") : t("common.syncNow")}
                 </button>
               </div>
             )}
@@ -975,7 +995,7 @@ function EmailView() {
                   href="/settings"
                   className="inline-flex min-h-11 items-center rounded-md bg-accent-light px-4 text-xs font-medium text-stone-950 transition hover:bg-accent-muted"
                 >
-                  Connect Google
+                  {t("mail.connectGoogle")}
                 </Link>
                 <button
                   type="button"
@@ -983,7 +1003,7 @@ function EmailView() {
                   disabled={syncing}
                   className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100 disabled:opacity-50"
                 >
-                  {syncing ? "Syncing..." : "Sync now"}
+                  {syncing ? t("common.syncing") : t("common.syncNow")}
                 </button>
               </div>
             )}
@@ -1321,6 +1341,7 @@ function InboxSelector({
 const MOBILE_FILTERS = new Set<Filter>(["all", "reply-needed", "urgent", "unread"]);
 
 function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filter) => void }) {
+  const { t } = useT();
   return (
     <div
       role="group"
@@ -1341,7 +1362,7 @@ function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filt
                 : "border border-white/10 bg-stone-900/40 text-stone-400 hover:bg-white/6 hover:text-stone-200"
             }`}
           >
-            {f.label}
+            {f.labelKey ? t(f.labelKey) : f.label}
           </button>
         );
       })}
