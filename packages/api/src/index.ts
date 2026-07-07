@@ -2,7 +2,7 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import type { PrismaClient } from "@prisma/client";
 import Fastify from "fastify";
-import { ensureDemoUser, getUserId, requireAuth } from "./auth.js";
+import { ensureDemoUser, getUserId, requireAdmin, requireAuth } from "./auth.js";
 import { startBackgroundAgent } from "./background.js";
 import { briefingRoutes } from "./briefing.js";
 import { db, prisma } from "./db.js";
@@ -319,8 +319,10 @@ app.get("/api/notion/status", async () => ({
   configured: !!process.env.NOTION_API_KEY,
 }));
 
-// Activity feed — recent items across all categories
-app.get("/api/activity", async (request) => {
+// Activity feed — recent items across all categories. requireAuth (not bare
+// getUserId) so the device-session and revocation checks apply like every
+// other authed surface, and an invalid token gets a 401 instead of a 500.
+app.get("/api/activity", { preHandler: requireAuth }, async (request) => {
   const uid = getUserId(request);
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // last 7 days
 
@@ -382,10 +384,13 @@ app.get("/api/activity", async (request) => {
   return { activity };
 });
 
-// WebSocket status endpoint (must be before listen)
-app.get("/api/ws/status", async () => ({
+// WebSocket status endpoint (must be before listen). Ops/debug surface — no
+// client consumes it, and connection counts are deployment telemetry, so it
+// is admin-gated rather than public. The old unauthenticated version also
+// hardcoded a demo-user count (dev leftover).
+app.get("/api/ws/status", { preHandler: requireAdmin }, async (request) => ({
   connected: getClientCount(),
-  connectedByUser: getClientCount("demo-user"),
+  connectedForMe: getClientCount(getUserId(request)),
 }));
 
 app.addHook("onClose", async () => {
@@ -541,4 +546,24 @@ try {
   // Exit so Render restarts the container. A permanent fallback 503 server
   // would mask DB recovery and require manual redeploy to clear.
   process.exit(1);
+}
+
+// Graceful shutdown: Render sends SIGTERM on every deploy/restart. Without a
+// handler the process dies mid-request; with one we stop accepting new
+// connections, let in-flight requests finish, and run the onClose hook
+// (Prisma disconnect). Explicit exit is required because the scheduler
+// setIntervals would otherwise keep the event loop alive forever, and the
+// hard-exit timer covers held-open WebSocket connections (server.close waits
+// for them). Anything cut off mid-outbox-execution is reclaimed by the
+// stale-IN_PROGRESS sweep on the next boot.
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.once(signal, () => {
+    console.log(`[SHUTDOWN] ${signal} received — draining connections`);
+    const hardExit = setTimeout(() => process.exit(1), 10_000);
+    hardExit.unref();
+    app
+      .close()
+      .then(() => process.exit(0))
+      .catch(() => process.exit(1));
+  });
 }
