@@ -33,6 +33,15 @@ final class AppModel {
         self.phase = KeychainStore.load() != nil ? .signedIn : .signedOut
     }
 
+    /// Kick off the headless lifecycle at app launch. With no window driving it,
+    /// this is what starts the background poll loop when we already hold a token.
+    /// `loadQueue()` -> `ensureActive()` establishes the silent PUSH baseline and
+    /// starts polling; idempotent, so calling it once on launch is enough.
+    func start() {
+        guard phase == .signedIn else { return }
+        Task { await loadQueue() }
+    }
+
     func signIn() async {
         phase = .signingIn
         signInError = nil
