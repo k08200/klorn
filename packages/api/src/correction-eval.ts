@@ -27,7 +27,7 @@
 import { prisma } from "./db.js";
 import { buildJudgeContext } from "./judge-context.js";
 import { judgeEmail } from "./poc-judge.js";
-import { isTier, MANUAL_OVERRIDE_PREFIX, TIERS, type Tier } from "./tiers.js";
+import { isTier, TIERS, type Tier } from "./tiers.js";
 
 export const CORRECTION_EVAL_LIMIT = 50;
 const DEFAULT_INTER_CALL_DELAY_MS = 1000;
@@ -138,7 +138,7 @@ export async function runCorrectionEval(
     where: {
       userId,
       source: "EMAIL",
-      tierReason: { startsWith: MANUAL_OVERRIDE_PREFIX },
+      isManualOverride: true,
       tier: { not: null },
     },
     orderBy: { updatedAt: "desc" },

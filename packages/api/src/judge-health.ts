@@ -40,9 +40,25 @@ function fallbackAlarmRate(): number {
   return Number.isFinite(v) && v > 0 && v <= 1 ? v : 0.2;
 }
 
+// 26h default: survives one quiet Sunday without a false alarm, still catches
+// a dyno that's been dead since yesterday's deploy.
+function heartbeatMaxSilenceMs(): number {
+  const v = Number(process.env.JUDGE_HEALTH_HEARTBEAT_MAX_SILENCE_MS);
+  return Number.isFinite(v) && v > 0 ? v : 26 * 60 * 60 * 1000;
+}
+
 const recent: JudgeSource[] = [];
 // Latched so the alarm fires once per degradation episode, re-arming on recovery.
 let alarmed = false;
+// Fleet-wide-per-dyno liveness pulse — see checkJudgeHeartbeat below. Seeded
+// at module load (process boot), not null: the daily scheduler tick runs
+// once immediately on start (automation-scheduler.ts), seconds after boot,
+// long before this process could plausibly have classified an email. Without
+// this seed, checkJudgeHeartbeat would read "never recorded" and
+// runJudgeHeartbeatCheck would alarm on every single deploy/restart —
+// exactly the false-positive-training-people-to-ignore-it failure mode
+// issue #742 exists to prevent. Boot itself counts as a heartbeat.
+let lastRecordedAt: number | null = Date.now();
 
 export interface JudgeHealth {
   total: number;
@@ -65,6 +81,7 @@ function computeHealth(): JudgeHealth {
  * alarm on crossing into degraded; re-arms once the window recovers.
  */
 export function recordJudgeSource(source: JudgeSource): void {
+  lastRecordedAt = Date.now();
   recent.push(source);
   const max = windowSize();
   if (recent.length > max) recent.splice(0, recent.length - max);
@@ -92,8 +109,53 @@ export function getJudgeHealth(): JudgeHealth {
   return computeHealth();
 }
 
-/** Test-only: reset the rolling window + alarm latch. */
+export interface JudgeHeartbeat {
+  alive: boolean;
+  lastRecordedAt: number | null;
+  silentForMs: number | null;
+}
+
+/**
+ * Heartbeat: computeHealth() alone can't tell "no drift" apart from "the
+ * tripwire itself stopped receiving data" — a dead classify pipeline and a
+ * quiet one both leave `recent` frozen, reading as healthy forever. This is
+ * the canary of the canary: has ANYTHING been recorded recently, fleet-wide
+ * (per dyno)? A reader's suggestion (GHSA discussion, #742).
+ */
+export function checkJudgeHeartbeat(now = Date.now()): JudgeHeartbeat {
+  if (lastRecordedAt === null) {
+    return { alive: false, lastRecordedAt: null, silentForMs: null };
+  }
+  const silentForMs = now - lastRecordedAt;
+  return { alive: silentForMs <= heartbeatMaxSilenceMs(), lastRecordedAt, silentForMs };
+}
+
+/**
+ * Best-effort daily check (call from automation-scheduler, once per UTC day —
+ * see runDailyCalibrationSnapshots for the sibling pattern). Alarms when the
+ * feed has gone dead, not merely quiet, so a broken call site upstream of
+ * recordJudgeSource (e.g. email-firewall.ts stops being invoked at all) is
+ * caught instead of silently reading as "0% fallback, all healthy."
+ */
+export function runJudgeHeartbeatCheck(now = Date.now()): void {
+  const beat = checkJudgeHeartbeat(now);
+  if (beat.alive) return;
+  const silentDesc =
+    beat.silentForMs === null
+      ? "since process start"
+      : `for ${(beat.silentForMs / (60 * 60 * 1000)).toFixed(1)}h`;
+  console.error(
+    `[JUDGE-HEALTH] Heartbeat dead: no judge decisions recorded ${silentDesc}. The tripwire's feed may be dead, not the classification quiet.`,
+  );
+  captureError(new Error("judge health heartbeat silent — tripwire feed may be dead"), {
+    tags: { scope: "judge-health-heartbeat" },
+    extra: { lastRecordedAt: beat.lastRecordedAt, silentForMs: beat.silentForMs },
+  });
+}
+
+/** Test-only: reset the rolling window + alarm latch + heartbeat. */
 export function __resetJudgeHealth(): void {
   recent.length = 0;
   alarmed = false;
+  lastRecordedAt = null;
 }

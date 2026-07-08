@@ -75,7 +75,7 @@ describe("fetchSenderItems query shape — SENDER_ADDRESS_INDEX_ENABLED off (def
     await buildJudgeContext("u1", { from: "Alice <alice@corp.com>" });
 
     const historyCall = attentionFindMany.mock.calls.find(
-      (c) => !("tierReason" in (c[0].where as Record<string, unknown>)),
+      (c) => !("isManualOverride" in (c[0].where as Record<string, unknown>)),
     );
     expect((historyCall?.[0].where.sourceId as { in: string[] }).in).toEqual(["real1"]);
   });
@@ -103,7 +103,7 @@ describe("fetchSenderItems query shape — SENDER_ADDRESS_INDEX_ENABLED on", () 
     expect(call?.[0].select).toEqual({ id: true });
 
     const historyCall = attentionFindMany.mock.calls.find(
-      (c) => !("tierReason" in (c[0].where as Record<string, unknown>)),
+      (c) => !("isManualOverride" in (c[0].where as Record<string, unknown>)),
     );
     expect((historyCall?.[0].where.sourceId as { in: string[] }).in).toEqual(["real1", "real2"]);
   });

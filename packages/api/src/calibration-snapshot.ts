@@ -6,8 +6,10 @@
  * per user per UTC day (written by the automation scheduler), so
  * /api/admin/calibration can trend:
  *
- *   - manualOverrides:    tier moves stamped with MANUAL_OVERRIDE_PREFIX —
- *                         the strongest "the firewall was wrong" signal
+ *   - manualOverrides:    tier moves where isManualOverride is true (not the
+ *                         tierReason prefix — that's display-only, see
+ *                         GHSA-cxc5-fmqv-pxv6) — the strongest "the firewall
+ *                         was wrong" signal
  *   - feedbackOverrides:  DISMISSED/IGNORED FeedbackEvents (same proxy the
  *                         CLI report uses)
  *   - judgeSourceCounts:  which judge path produced each EMAIL tier
@@ -39,7 +41,6 @@ import type { CorrectionEvalPayload } from "./correction-eval.js";
 import { prisma } from "./db.js";
 import { type DecisionDailySummary, getDecisionDailySummary } from "./decision-metrics.js";
 import { captureError } from "./sentry.js";
-import { isManualOverrideReason } from "./tiers.js";
 
 const WINDOW_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -91,6 +92,7 @@ export interface CalibrationSnapshotPayload {
 /** Snapshot row — AttentionRow plus the fields the new KPIs need. */
 export interface SnapshotSourceRow extends AttentionRow {
   tierReason: string | null;
+  isManualOverride: boolean;
   evidence: unknown;
 }
 
@@ -120,7 +122,7 @@ export function buildSnapshotPayload(args: {
   const { thisRows, previousRows, feedbackOverrideIds, windowDays, now } = args;
 
   const tierRows = thisRows.filter((r) => isTier(r.tier));
-  const manualCount = tierRows.filter((r) => isManualOverrideReason(r.tierReason)).length;
+  const manualCount = tierRows.filter((r) => r.isManualOverride).length;
 
   const feedbackOverrideRate = computeOverrideRate(thisRows, feedbackOverrideIds);
   let feedbackCount = 0;
@@ -174,6 +176,7 @@ async function fetchRows(userId: string, since: Date, until: Date): Promise<Snap
       sourceId: true,
       tier: true,
       tierReason: true,
+      isManualOverride: true,
       confidence: true,
       createdAt: true,
       evidence: true,

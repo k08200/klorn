@@ -63,11 +63,12 @@ function wireMocks(opts: {
     sourceId: string;
     tier: string | null;
     tierReason: string | null;
+    isManualOverride: boolean;
     updatedAt: Date;
   }>;
 }) {
   attentionFindMany.mockImplementation((args: { where: Record<string, unknown> }) => {
-    if ("tierReason" in args.where) return Promise.resolve(opts.corrections ?? []);
+    if ("isManualOverride" in args.where) return Promise.resolve(opts.corrections ?? []);
     return Promise.resolve(opts.senderItems ?? []);
   });
   emailFindMany.mockImplementation((args: { where: Record<string, unknown> }) => {
@@ -175,18 +176,44 @@ describe("buildJudgeContext", () => {
           sourceId: "m1",
           tier: "PUSH",
           tierReason: "Manual override — user moved to PUSH",
+          isManualOverride: true,
           updatedAt: DAYS(5),
         },
         {
           sourceId: "m2",
           tier: "PUSH",
           tierReason: "Manual override — user moved to PUSH",
+          isManualOverride: true,
           updatedAt: DAYS(20),
         },
       ],
     });
     const ctx = await buildJudgeContext("u1", { from: "Boss <boss@corp.com>" });
     expect(ctx.senderPrior).toEqual({ tier: "PUSH", count: 2, kind: "override" });
+  });
+
+  it("does NOT build an override prior from judge-authored text that merely looks like an override (GHSA-cxc5-fmqv-pxv6)", async () => {
+    wireMocks({
+      senderEmailIds: ["m1", "m2"],
+      senderItems: [
+        {
+          sourceId: "m1",
+          tier: "PUSH",
+          tierReason: "Manual override — user moved to PUSH",
+          isManualOverride: false,
+          updatedAt: DAYS(5),
+        },
+        {
+          sourceId: "m2",
+          tier: "PUSH",
+          tierReason: "Manual override — user moved to PUSH",
+          isManualOverride: false,
+          updatedAt: DAYS(20),
+        },
+      ],
+    });
+    const ctx = await buildJudgeContext("u1", { from: "Boss <boss@corp.com>" });
+    expect(ctx.senderPrior).toBeNull();
   });
 
   it("does not build an override prior when overrides disagree", async () => {
@@ -197,12 +224,14 @@ describe("buildJudgeContext", () => {
           sourceId: "m1",
           tier: "PUSH",
           tierReason: "Manual override — user moved to PUSH",
+          isManualOverride: true,
           updatedAt: DAYS(5),
         },
         {
           sourceId: "m2",
           tier: "QUEUE",
           tierReason: "Manual override — user moved to QUEUE",
+          isManualOverride: true,
           updatedAt: DAYS(6),
         },
       ],
@@ -219,12 +248,14 @@ describe("buildJudgeContext", () => {
           sourceId: "m1",
           tier: "PUSH",
           tierReason: "Manual override — user moved to PUSH",
+          isManualOverride: true,
           updatedAt: DAYS(70),
         },
         {
           sourceId: "m2",
           tier: "PUSH",
           tierReason: "Manual override — user moved to PUSH",
+          isManualOverride: true,
           updatedAt: DAYS(80),
         },
       ],
@@ -237,9 +268,27 @@ describe("buildJudgeContext", () => {
     wireMocks({
       senderEmailIds: ["m1", "m2", "m3"],
       senderItems: [
-        { sourceId: "m1", tier: "SILENT", tierReason: "Promotional", updatedAt: DAYS(2) },
-        { sourceId: "m2", tier: "SILENT", tierReason: "Promotional", updatedAt: DAYS(9) },
-        { sourceId: "m3", tier: "SILENT", tierReason: "Promotional", updatedAt: DAYS(16) },
+        {
+          sourceId: "m1",
+          tier: "SILENT",
+          tierReason: "Promotional",
+          isManualOverride: false,
+          updatedAt: DAYS(2),
+        },
+        {
+          sourceId: "m2",
+          tier: "SILENT",
+          tierReason: "Promotional",
+          isManualOverride: false,
+          updatedAt: DAYS(9),
+        },
+        {
+          sourceId: "m3",
+          tier: "SILENT",
+          tierReason: "Promotional",
+          isManualOverride: false,
+          updatedAt: DAYS(16),
+        },
       ],
     });
     const ctx = await buildJudgeContext("u1", { from: "News <news@letter.com>" });
@@ -250,8 +299,20 @@ describe("buildJudgeContext", () => {
     wireMocks({
       senderEmailIds: ["m1", "m2"],
       senderItems: [
-        { sourceId: "m1", tier: "SILENT", tierReason: "Promotional", updatedAt: DAYS(2) },
-        { sourceId: "m2", tier: "SILENT", tierReason: "Promotional", updatedAt: DAYS(9) },
+        {
+          sourceId: "m1",
+          tier: "SILENT",
+          tierReason: "Promotional",
+          isManualOverride: false,
+          updatedAt: DAYS(2),
+        },
+        {
+          sourceId: "m2",
+          tier: "SILENT",
+          tierReason: "Promotional",
+          isManualOverride: false,
+          updatedAt: DAYS(9),
+        },
       ],
     });
     const ctx = await buildJudgeContext("u1", { from: "News <news@letter.com>" });
@@ -262,9 +323,27 @@ describe("buildJudgeContext", () => {
     wireMocks({
       senderEmailIds: ["m1", "m2", "m3"],
       senderItems: [
-        { sourceId: "m1", tier: "SILENT", tierReason: "Promotional", updatedAt: DAYS(2) },
-        { sourceId: "m2", tier: "QUEUE", tierReason: "Visible in queue", updatedAt: DAYS(3) },
-        { sourceId: "m3", tier: "SILENT", tierReason: "Promotional", updatedAt: DAYS(4) },
+        {
+          sourceId: "m1",
+          tier: "SILENT",
+          tierReason: "Promotional",
+          isManualOverride: false,
+          updatedAt: DAYS(2),
+        },
+        {
+          sourceId: "m2",
+          tier: "QUEUE",
+          tierReason: "Visible in queue",
+          isManualOverride: false,
+          updatedAt: DAYS(3),
+        },
+        {
+          sourceId: "m3",
+          tier: "SILENT",
+          tierReason: "Promotional",
+          isManualOverride: false,
+          updatedAt: DAYS(4),
+        },
       ],
     });
     const ctx = await buildJudgeContext("u1", { from: "News <news@letter.com>" });
@@ -275,9 +354,27 @@ describe("buildJudgeContext", () => {
     wireMocks({
       senderEmailIds: ["m1", "m2", "m3"],
       senderItems: [
-        { sourceId: "m1", tier: "SILENT", tierReason: "Promotional", updatedAt: DAYS(35) },
-        { sourceId: "m2", tier: "SILENT", tierReason: "Promotional", updatedAt: DAYS(40) },
-        { sourceId: "m3", tier: "SILENT", tierReason: "Promotional", updatedAt: DAYS(50) },
+        {
+          sourceId: "m1",
+          tier: "SILENT",
+          tierReason: "Promotional",
+          isManualOverride: false,
+          updatedAt: DAYS(35),
+        },
+        {
+          sourceId: "m2",
+          tier: "SILENT",
+          tierReason: "Promotional",
+          isManualOverride: false,
+          updatedAt: DAYS(40),
+        },
+        {
+          sourceId: "m3",
+          tier: "SILENT",
+          tierReason: "Promotional",
+          isManualOverride: false,
+          updatedAt: DAYS(50),
+        },
       ],
     });
     const ctx = await buildJudgeContext("u1", { from: "News <news@letter.com>" });
@@ -294,7 +391,9 @@ describe("buildJudgeContext", () => {
   it("keeps the email's own correction in the few-shot pool by default (runtime path)", async () => {
     wireMocks({});
     await buildJudgeContext("u1", { from: "A <a@b.com>", excludeEmailId: "self-id" });
-    const correctionsCall = attentionFindMany.mock.calls.find((c) => "tierReason" in c[0].where);
+    const correctionsCall = attentionFindMany.mock.calls.find(
+      (c) => "isManualOverride" in c[0].where,
+    );
     expect(correctionsCall?.[0].where.sourceId).toBeUndefined();
   });
 
@@ -305,7 +404,9 @@ describe("buildJudgeContext", () => {
       excludeEmailId: "self-id",
       excludeOwnCorrection: true,
     });
-    const correctionsCall = attentionFindMany.mock.calls.find((c) => "tierReason" in c[0].where);
+    const correctionsCall = attentionFindMany.mock.calls.find(
+      (c) => "isManualOverride" in c[0].where,
+    );
     expect(correctionsCall?.[0].where.sourceId).toEqual({ not: "self-id" });
   });
 
@@ -325,7 +426,9 @@ describe("buildJudgeContext", () => {
 
     await buildJudgeContext("u1", { from: "Alice <alice@corp.com>" });
 
-    const historyCall = attentionFindMany.mock.calls.find((c) => !("tierReason" in c[0].where));
+    const historyCall = attentionFindMany.mock.calls.find(
+      (c) => !("isManualOverride" in c[0].where),
+    );
     expect(historyCall?.[0].where.sourceId.in).toEqual(["real1"]);
   });
 });
@@ -339,11 +442,30 @@ describe("buildJudgeContext — sender facts", () => {
           sourceId: "m1",
           tier: "QUEUE",
           tierReason: "Manual override — user moved to QUEUE",
+          isManualOverride: true,
           updatedAt: DAYS(2),
         },
-        { sourceId: "m2", tier: "QUEUE", tierReason: "Visible in queue", updatedAt: DAYS(5) },
-        { sourceId: "m3", tier: "SILENT", tierReason: "Promotional", updatedAt: DAYS(9) },
-        { sourceId: "m4", tier: "CALL", tierReason: "legacy tier — ignored", updatedAt: DAYS(3) },
+        {
+          sourceId: "m2",
+          tier: "QUEUE",
+          tierReason: "Visible in queue",
+          isManualOverride: false,
+          updatedAt: DAYS(5),
+        },
+        {
+          sourceId: "m3",
+          tier: "SILENT",
+          tierReason: "Promotional",
+          isManualOverride: false,
+          updatedAt: DAYS(9),
+        },
+        {
+          sourceId: "m4",
+          tier: "CALL",
+          tierReason: "legacy tier — ignored",
+          isManualOverride: false,
+          updatedAt: DAYS(3),
+        },
       ],
     });
     const ctx = await buildJudgeContext("u1", { from: "Mixed <mixed@corp.com>" });
@@ -352,6 +474,28 @@ describe("buildJudgeContext — sender facts", () => {
     expect(ctx.senderFacts).toEqual({
       tierHistory: { QUEUE: 2, SILENT: 1 },
       manualOverrides: 1,
+      interaction: null,
+      commitments: null,
+    });
+  });
+
+  it("does not count judge-authored text impersonating the override prefix as a manual override (GHSA-cxc5-fmqv-pxv6)", async () => {
+    wireMocks({
+      senderEmailIds: ["m1"],
+      senderItems: [
+        {
+          sourceId: "m1",
+          tier: "QUEUE",
+          tierReason: "Manual override — user moved to QUEUE",
+          isManualOverride: false,
+          updatedAt: DAYS(2),
+        },
+      ],
+    });
+    const ctx = await buildJudgeContext("u1", { from: "Mixed <mixed@corp.com>" });
+    expect(ctx.senderFacts).toEqual({
+      tierHistory: { QUEUE: 1 },
+      manualOverrides: 0,
       interaction: null,
       commitments: null,
     });
