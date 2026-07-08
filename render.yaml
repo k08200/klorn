@@ -57,6 +57,15 @@ services:
         value: "google/gemini-2.5-flash"
       - key: DISABLE_FREE_MODEL_FALLBACK
         value: "true"
+      # #653/#655: flipped by founder decision (2026-07-09) ahead of the formal
+      # body-bearing eval harness (#648/#650) — the synthetic eval set carries no
+      # body so this stays inert under CI either way (poc-judge.ts
+      # isJudgeBodyEnabled). Validation is live dogfooding on real mail rather
+      # than a held-out eval, by choice. Adds a 1500-char truncated plaintext
+      # body to the judge prompt (JUDGE_BODY_CAP) — expected to close a chunk of
+      # the measured PUSH recall gap (46% on the snippet-only pipeline).
+      - key: JUDGE_INCLUDE_BODY
+        value: "true"
       - key: FRONTEND_URL
         sync: false
       - key: WEB_URL
