@@ -28,6 +28,8 @@ const GRAPH_TTL_DAYS = 3; // rebuild every 3 days
 const MAX_NODES = 12;
 const EMAIL_LOOK_BACK_DAYS = 60;
 const CALENDAR_LOOK_AHEAD_DAYS = 14;
+// A handful of real outbound engagements saturates learnedImportance to 1.
+const ENGAGEMENT_SATURATION = 4;
 
 export interface InteractionNode {
   email: string;
@@ -37,6 +39,11 @@ export interface InteractionNode {
   lastEmailDaysAgo: number | null;
   upcomingMeetings: number;
   tags: string[]; // e.g. ["frequent", "overdue_reply", "meeting_soon"]
+  // Learned engagement from real user actions (outbound reply/send +, dismiss −),
+  // normalized 0..1. The measured "you actually engage with this person" signal —
+  // consumed (flag-gated) as soft grounding for the judge's senderTrust score.
+  learnedImportance?: number;
+  outboundCount?: number; // raw outbound engagements (for interpretable grounding text)
 }
 
 export interface InteractionGraph {
@@ -168,7 +175,7 @@ async function buildAndCacheGraph(userId: string): Promise<InteractionGraph> {
   const emailSince = new Date(now.getTime() - EMAIL_LOOK_BACK_DAYS * 24 * 60 * 60 * 1000);
   const calendarUntil = new Date(now.getTime() + CALENDAR_LOOK_AHEAD_DAYS * 24 * 60 * 60 * 1000);
 
-  const [emails, upcomingMeetingCount, contacts] = await Promise.all([
+  const [emails, upcomingMeetingCount, contacts, engagement] = await Promise.all([
     // Inbound emails from real senders in the last 60 days
     prisma.emailMessage.findMany({
       where: {
@@ -191,11 +198,25 @@ async function buildAndCacheGraph(userId: string): Promise<InteractionGraph> {
       where: { userId },
       select: { email: true, name: true },
     }),
+    // Learned engagement counters per contact (the measured action signal)
+    prisma.contactEngagementScore.findMany({
+      where: { userId },
+      select: { contactEmail: true, outboundCount: true, dismissCount: true },
+    }),
   ]);
 
   const contactNameMap = new Map<string, string>();
   for (const c of contacts) {
     if (c.email) contactNameMap.set(c.email.toLowerCase(), c.name);
+  }
+
+  // addr → learned engagement (outbound reply/send +, dismiss −)
+  const engagementByAddr = new Map<string, { outboundCount: number; dismissCount: number }>();
+  for (const e of engagement) {
+    engagementByAddr.set(e.contactEmail.toLowerCase(), {
+      outboundCount: e.outboundCount,
+      dismissCount: e.dismissCount,
+    });
   }
 
   // Parse sender emails and extract display names
@@ -225,7 +246,10 @@ async function buildAndCacheGraph(userId: string): Promise<InteractionGraph> {
     const upcomingMeetings = hasUpcomingMeetings && emailHistory.length >= 3 ? 1 : 0;
 
     const score = computeScore(emailHistory, upcomingMeetings, now);
-    if (score < 5) continue; // skip very low-signal contacts
+    const eng = engagementByAddr.get(addr);
+    // Keep a meaningful inbound sender OR anyone the user actually engages with —
+    // a few real replies shouldn't be dropped just for low inbound volume.
+    if (score < 5 && !eng) continue;
 
     const displayName = contactNameMap.get(addr) ?? emailHistory[0]?.displayName ?? null;
     const lastEmailMs =
@@ -241,6 +265,15 @@ async function buildAndCacheGraph(userId: string): Promise<InteractionGraph> {
     );
     if (hasUnansweredReply) tags.push("overdue_reply");
 
+    // Outbound engagement lifts importance; dismisses (half-weight) pull it down.
+    const learnedImportance = eng
+      ? Math.max(
+          0,
+          Math.min(1, (eng.outboundCount - eng.dismissCount * 0.5) / ENGAGEMENT_SATURATION),
+        )
+      : undefined;
+    if (eng && eng.outboundCount > 0) tags.push("you_engage");
+
     nodes.push({
       email: addr,
       name: displayName,
@@ -249,6 +282,8 @@ async function buildAndCacheGraph(userId: string): Promise<InteractionGraph> {
       lastEmailDaysAgo,
       upcomingMeetings,
       tags,
+      learnedImportance,
+      outboundCount: eng?.outboundCount,
     });
   }
 

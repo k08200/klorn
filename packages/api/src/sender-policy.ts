@@ -70,6 +70,13 @@ export interface SenderFacts {
   } | null;
   /** Commitment track record (only when the trust badge is load-bearing). */
   commitments: { onTime: number; total: number } | null;
+  /**
+   * Learned engagement: how much the user actually engages with this sender,
+   * measured from real outbound replies/sends (importance 0..1 + raw count).
+   * Flag-gated (CONTACT_ENGAGEMENT_IN_JUDGE); a soft senderTrust grounding fact,
+   * never a hard tier decision. null when off or the sender has no engagement.
+   */
+  engagement: { importance: number; outboundCount: number } | null;
 }
 
 /**
