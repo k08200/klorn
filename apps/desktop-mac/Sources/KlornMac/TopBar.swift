@@ -14,6 +14,8 @@ struct TopBarActions {
     let onSignOut: () -> Void
     /// Open an item on the web inbox; nil opens the inbox root.
     let onOpenWeb: (FirewallItem?) -> Void
+    /// Open an item IN-APP: jump to the full view and show it in the reading pane.
+    let onOpenInApp: (FirewallItem) -> Void
     /// Dismiss (archive) an item out of the queue.
     let onDismiss: (FirewallItem) -> Void
     /// Snooze an item to resurface tomorrow morning.
@@ -230,7 +232,7 @@ private struct RecentPushColumn: View {
                     VStack(alignment: .leading, spacing: 12) {
                         ForEach(items) { item in
                             HStack(spacing: 10) {
-                                Button { actions.onOpenWeb(item) } label: { pushRow(item) }
+                                Button { actions.onOpenInApp(item) } label: { pushRow(item) }
                                     .buttonStyle(.plain)
                                 Button { actions.onSnooze(item) } label: {
                                     Image(systemName: "moon.zzz").font(.caption2)
