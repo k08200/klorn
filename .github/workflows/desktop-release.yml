@@ -37,9 +37,17 @@ permissions:
 jobs:
   build:
     name: Build & publish Klorn.app
-    runs-on: macos-14
+    # macos-15 ships Swift 6 (Package.swift is swift-tools 6.0); macos-14's default
+    # is Swift 5.10, which can't parse the manifest.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select a Swift 6 toolchain
+        run: |
+          XC=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XC" ]; then sudo xcode-select -s "$XC"; fi
+          swift --version
 
       - name: Resolve release tag
         id: meta
