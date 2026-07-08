@@ -110,9 +110,9 @@ enum GoogleSignIn {
                 return .ok(token: token)
             }
             return .pending
-        } catch APIError.http(404) {
+        } catch APIError.http(404, _) {
             return .invalidNonce
-        } catch APIError.http(410) {
+        } catch APIError.http(410, _) {
             return .expired
         } catch {
             return .retry

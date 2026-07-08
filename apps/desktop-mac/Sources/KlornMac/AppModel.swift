@@ -279,7 +279,7 @@ final class AppModel {
     private static func describe(_ error: Error) -> String {
         Log.app.error("queue load failed: \(String(describing: error), privacy: .private)")
         switch error {
-        case APIError.http(let code): return "Server error (\(code))."
+        case APIError.http(let code, let msg): return msg ?? "Server error (\(code))."
         case APIError.transport: return "Network error — check your connection."
         case APIError.decoding: return "Unexpected response from the server."
         case APIError.unauthorized: return "Session expired. Please sign in again."

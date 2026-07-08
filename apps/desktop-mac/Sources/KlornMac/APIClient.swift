@@ -1,7 +1,9 @@
 import Foundation
 
 enum APIError: Error, Sendable, Equatable {
-    case http(Int)
+    /// Non-2xx status + the server's `message`/`error` field when present, so the
+    /// UI can show the real reason (e.g. a 409 "no-reply sender") not just a code.
+    case http(Int, String?)
     case unauthorized  // 401 — session invalid/expired (drop to sign-in)
     case forbidden     // 403 — authenticated but not entitled (e.g. Pro-only); do NOT sign out
     case transport(String)
@@ -78,7 +80,15 @@ struct APIClient: Sendable {
         case 200...299: return bytes
         case 401: throw APIError.unauthorized
         case 403: throw APIError.forbidden
-        default: throw APIError.http(http.statusCode)
+        default: throw APIError.http(http.statusCode, Self.serverMessage(bytes))
         }
+    }
+
+    /// Pull a human message out of an error response body (`{message}`/`{error}`).
+    private static func serverMessage(_ data: Data) -> String? {
+        struct Body: Decodable { let message: String?; let error: String? }
+        guard let body = try? JSONDecoder().decode(Body.self, from: data) else { return nil }
+        let msg = body.message ?? body.error
+        return (msg?.isEmpty == false) ? msg : nil
     }
 }
