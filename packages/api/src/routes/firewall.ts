@@ -10,8 +10,9 @@
  *                                 id so the UI can preview and link.
  * POST /api/inbox/firewall/:id  — manually override one item's tier.
  *
- * Override stamps tierReason as 'Manual override — user moved to X' so
- * the row is identifiable as a human-labelled ground-truth example for
+ * Override stamps tierReason as 'Manual override — user moved to X' (display)
+ * and sets isManualOverride: true (the actual trust signal, GHSA-cxc5-fmqv-pxv6)
+ * so the row is identifiable as a human-labelled ground-truth example for
  * poc-judge.
  */
 

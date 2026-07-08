@@ -21,9 +21,10 @@ import type { Tier } from "./tiers.js";
 
 /**
  * One past manual tier correction, rendered into the judge prompt as a
- * few-shot example. Mined from AttentionItem rows whose tierReason carries
- * MANUAL_OVERRIDE_PREFIX (see judge-context.ts). The judge stays pure —
- * callers fetch these and pass them in.
+ * few-shot example. Mined from AttentionItem rows where isManualOverride is
+ * true (see judge-context.ts) — tierReason's MANUAL_OVERRIDE_PREFIX text is
+ * display-only, not the trust signal (GHSA-cxc5-fmqv-pxv6). The judge stays
+ * pure — callers fetch these and pass them in.
  */
 export interface CorrectionExample {
   from: string;

@@ -36,18 +36,15 @@ export function isTier(value: unknown): value is Tier {
 
 /**
  * Prefix stamped into AttentionItem.tierReason when the user manually moves
- * an item to a different tier. This string IS the ground-truth marker: the
- * POC accuracy gate counts rows with this prefix as founder labels, and the
- * correction loop (judge-context.ts) mines them as few-shot examples. Always
- * build override reasons through manualOverrideReason() so the marker can't
- * drift.
+ * an item to a different tier. Human-readable only — NOT a trust boundary.
+ * tierReason also carries judge/LLM-authored text (attention-mirror.ts), so a
+ * prompt-injected email can make an LLM emit this exact prefix. Ground-truth
+ * decisions (POC accuracy gate, judge-context.ts correction mining) must key
+ * off AttentionItem.isManualOverride instead, which only overrideAttentionTier()
+ * (attention-override.ts) can set (GHSA-cxc5-fmqv-pxv6).
  */
 export const MANUAL_OVERRIDE_PREFIX = "Manual override";
 
 export function manualOverrideReason(tier: Tier): string {
   return `${MANUAL_OVERRIDE_PREFIX} — user moved to ${tier}`;
-}
-
-export function isManualOverrideReason(reason: string | null | undefined): boolean {
-  return typeof reason === "string" && reason.startsWith(MANUAL_OVERRIDE_PREFIX);
 }

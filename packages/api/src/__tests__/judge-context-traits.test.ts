@@ -67,7 +67,7 @@ describe("buildJudgeContext — sender traits (flag on)", () => {
   it("degrades senderTraits to [] without nuking corrections when the trait fetch fails", async () => {
     // corrections pool returns one row; sender-history query returns nothing.
     attentionFindMany.mockImplementation((args: { where: Record<string, unknown> }) =>
-      "tierReason" in args.where
+      "isManualOverride" in args.where
         ? Promise.resolve([{ sourceId: "e1", tier: "QUEUE" }])
         : Promise.resolve([]),
     );

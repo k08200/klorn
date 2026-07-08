@@ -33,7 +33,7 @@ import {
 } from "./sender-policy.js";
 import { getActiveSenderTraits, type SenderTraitFact } from "./sender-trait-store.js";
 import { captureError } from "./sentry.js";
-import { isManualOverrideReason, isTier, MANUAL_OVERRIDE_PREFIX } from "./tiers.js";
+import { isTier } from "./tiers.js";
 import { getTrustScore } from "./trust-score.js";
 
 // Sender-prior thresholds live in sender-policy.ts (the single source). Aliased
@@ -84,6 +84,7 @@ interface SenderItemRow {
   sourceId: string;
   tier: string | null;
   tierReason: string | null;
+  isManualOverride: boolean;
   updatedAt: Date;
 }
 
@@ -169,7 +170,7 @@ async function fetchCorrections(
     where: {
       userId,
       source: "EMAIL",
-      tierReason: { startsWith: MANUAL_OVERRIDE_PREFIX },
+      isManualOverride: true,
       tier: { not: null },
       ...(excludeSourceId ? { sourceId: { not: excludeSourceId } } : {}),
     },
@@ -201,7 +202,7 @@ function buildPrior(items: SenderItemRow[]): SenderPrior | null {
   // Strongest signal first: repeated identical manual overrides.
   const overrides = items.filter(
     (i) =>
-      isManualOverrideReason(i.tierReason) &&
+      i.isManualOverride &&
       isTier(i.tier) &&
       now - i.updatedAt.getTime() <= OVERRIDE_PRIOR_MAX_AGE_DAYS * DAY_MS,
   );
@@ -297,7 +298,13 @@ async function fetchSenderItems(
 
   return (await db.attentionItem.findMany({
     where: { userId, source: "EMAIL", sourceId: { in: ownIds } },
-    select: { sourceId: true, tier: true, tierReason: true, updatedAt: true },
+    select: {
+      sourceId: true,
+      tier: true,
+      tierReason: true,
+      isManualOverride: true,
+      updatedAt: true,
+    },
   })) as SenderItemRow[];
 }
 
@@ -314,7 +321,7 @@ function buildTierHistory(
   for (const item of items) {
     if (!isTier(item.tier)) continue;
     tierHistory[item.tier] = (tierHistory[item.tier] ?? 0) + 1;
-    if (isManualOverrideReason(item.tierReason)) manualOverrides++;
+    if (item.isManualOverride) manualOverrides++;
   }
   if (Object.keys(tierHistory).length === 0) return null;
   return { tierHistory, manualOverrides };

@@ -996,7 +996,13 @@ model AttentionItem {
   // SILENT = recorded only | QUEUE = inbox only, no push | PUSH = send push
   // AUTO = auto-handled, no interrupt | null = legacy / not yet classified
   tier       String? // "SILENT" | "QUEUE" | "PUSH" | "AUTO"
-  tierReason String? // why this tier was chosen
+  tierReason String? // why this tier was chosen — free text, may be LLM-authored. NOT a trust signal.
+
+  // True only when overrideAttentionTier() (attention-override.ts) set this row —
+  // the sole authenticated, ownership-checked human-override path. Judge writes
+  // (attention-mirror.ts) always reset this to false, so LLM-authored tierReason
+  // text can never be mistaken for ground truth (GHSA-cxc5-fmqv-pxv6).
+  isManualOverride Boolean @default(false)
 
   // Content-addressed classification. Hash of the decision-relevant input
   // bytes (from, subject, snippet, labels) at the moment tier was decided.
