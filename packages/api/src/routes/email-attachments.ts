@@ -32,7 +32,7 @@ import {
   requiresOriginalAttachment,
   SUPPORTED_CONVERSION_TARGETS,
 } from "../file-conversions.js";
-import { getAuthedClient } from "../gmail.js";
+import { resolveMailClient } from "../gmail.js";
 import { getUserLlmCredentials } from "../llm-credentials.js";
 import { createVisionCompletion, VISION_MODEL } from "../openai.js";
 import {
@@ -450,11 +450,13 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
           userId: uid,
           email: { OR: [{ id }, { gmailId: id }] },
         },
-        include: { email: { select: { gmailId: true } } },
+        include: { email: { select: { gmailId: true, linkedInboxAccountId: true } } },
       });
       if (!row) return reply.code(404).send({ error: "Attachment not found" });
 
-      const auth = await getAuthedClient(uid);
+      // The source message may live on a linked secondary inbox (#761, same
+      // class as #757) — fetch its attachment from THAT account, not always primary.
+      const auth = await resolveMailClient(uid, row.email.linkedInboxAccountId);
       if (!auth) return reply.code(409).send({ error: "Gmail not connected" });
 
       const { google } = await import("googleapis");
@@ -499,7 +501,7 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
           userId: uid,
           email: { OR: [{ id }, { gmailId: id }] },
         },
-        include: { email: { select: { gmailId: true } } },
+        include: { email: { select: { gmailId: true, linkedInboxAccountId: true } } },
       });
       if (!row) return reply.code(404).send({ error: "Attachment not found" });
 
@@ -507,7 +509,8 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
       const needsOriginal = requiresOriginalAttachment(target);
       const prefersOriginal = target === "pdf" || target === "docx" || target === "xlsx";
       if (needsOriginal || prefersOriginal) {
-        const auth = await getAuthedClient(uid);
+        // Same linked-inbox fix as the download route above (#761).
+        const auth = await resolveMailClient(uid, row.email.linkedInboxAccountId);
         if (!auth && needsOriginal) return reply.code(409).send({ error: "Gmail not connected" });
 
         if (auth) {
@@ -636,11 +639,12 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
 
     const dbEmail = await prisma.emailMessage.findFirst({
       where: { userId: uid, OR: [{ id }, { gmailId: id }] },
-      select: { id: true, gmailId: true },
+      select: { id: true, gmailId: true, linkedInboxAccountId: true },
     });
     if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
 
-    const auth = await getAuthedClient(uid);
+    // Same linked-inbox fix as the download/convert routes above (#761).
+    const auth = await resolveMailClient(uid, dbEmail.linkedInboxAccountId);
     if (!auth) return reply.code(409).send({ error: "Gmail not connected" });
 
     const rows = await prisma.emailAttachment.findMany({
