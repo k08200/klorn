@@ -10,7 +10,7 @@ import SwiftUI
 final class TopBarController {
     private let model: AppModel
     private var panel: NSPanel?
-    private var expanded = false
+    private var state: BarState = .collapsed
     private static let topMargin: CGFloat = 8
 
     init(model: AppModel) {
@@ -20,7 +20,7 @@ final class TopBarController {
     /// Show the bar (collapsed) at launch and keep it present for the session.
     func show() {
         guard NSScreen.main != nil else { return }  // headless: nothing to draw
-        expanded = false
+        state = .collapsed
         render()
         panel?.orderFrontRegardless()  // visible WITHOUT activating or taking focus
     }
@@ -32,22 +32,23 @@ final class TopBarController {
         items.forEach { PushNotifier.post($0) }
     }
 
-    /// Global-hotkey entry point: expand if collapsed / collapse if expanded,
+    /// Global-hotkey entry point: expand the pill / collapse whatever is open,
     /// creating the bar first if it isn't on screen yet. Never steals focus.
     func toggle() {
-        guard panel != nil else { show(); setExpanded(true); panel?.orderFrontRegardless(); return }
-        setExpanded(!expanded)
+        guard panel != nil else { show(); setState(.expanded); panel?.orderFrontRegardless(); return }
+        setState(state == .collapsed ? .expanded : .collapsed)
         panel?.orderFrontRegardless()
     }
 
-    private func setExpanded(_ value: Bool) {
-        expanded = value
+    private func setState(_ newState: BarState) {
+        state = newState
         render()
+        panel?.orderFrontRegardless()
     }
 
     private func render() {
-        let size = expanded ? TopBarMetrics.expanded : TopBarMetrics.collapsed
-        let root = TopBarRoot(expanded: expanded, actions: makeActions())
+        let size = TopBarMetrics.size(for: state)
+        let root = TopBarRoot(state: state, actions: makeActions())
             .environment(model)
         let panel = self.panel ?? makePanel()
         panel.contentView = NSHostingView(rootView: root)
@@ -57,8 +58,10 @@ final class TopBarController {
 
     private func makeActions() -> TopBarActions {
         TopBarActions(
-            onExpand: { [weak self] in self?.setExpanded(true) },
-            onCollapse: { [weak self] in self?.setExpanded(false) },
+            onExpand: { [weak self] in self?.setState(.expanded) },
+            onExpandFull: { [weak self] in self?.setState(.full) },
+            onRestore: { [weak self] in self?.setState(.expanded) },
+            onCollapse: { [weak self] in self?.setState(.collapsed) },
             onSignIn: { [weak self] in guard let self else { return }; Task { await self.model.signIn() } },
             onSignOut: { [weak self] in self?.model.signOut() },
             onOpenWeb: { [weak self] item in self?.open(item) },
