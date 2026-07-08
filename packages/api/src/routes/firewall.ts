@@ -263,13 +263,25 @@ export async function firewallRoutes(app: FastifyInstance) {
           group: domainOf(s.email),
           tags: ig?.tags ?? [],
           emailCount: s.count,
+          // Learned from the user's own actions (outbound replies/sends): who they
+          // actually engage with, so the graph can highlight it. null = no signal.
+          learnedImportance: ig?.learnedImportance ?? null,
+          outboundCount: ig?.outboundCount ?? 0,
         };
       }),
     ];
 
     const edges: Array<{ source: string; target: string; kind: string; weight: number }> = [];
     for (const s of top) {
-      edges.push({ source: "__you__", target: s.email, kind: "interaction", weight: s.count });
+      // Outbound engagement thickens the tie — the graph shows who the user
+      // actually reaches back to, not just who emails them.
+      const engagement = igByEmail.get(s.email)?.outboundCount ?? 0;
+      edges.push({
+        source: "__you__",
+        target: s.email,
+        kind: "interaction",
+        weight: s.count + engagement * 2,
+      });
     }
     // Chain members of each real-company domain so they cluster, without an
     // O(n^2) clique that would hairball a large company.

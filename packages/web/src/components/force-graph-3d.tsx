@@ -12,6 +12,8 @@ function colorFor(n: GraphNode): string {
   if (n.kind === "tier") return TIER_COLORS[n.tags?.[0] ?? ""] ?? "#a78bfa";
   if (n.tags?.includes("overdue_reply")) return "#fb7185"; // reuses PUSH rose
   if (n.tags?.includes("meeting_soon")) return "#f59e0b";
+  // Learned engagement (from the user's own replies) outranks raw frequency.
+  if (n.tags?.includes("you_engage")) return "#f472b6";
   if (n.tags?.includes("frequent")) return "#34d399";
   return "#60a5fa";
 }
@@ -21,7 +23,9 @@ function valFor(n: GraphNode): number {
   if (n.kind === "self") return 28;
   if (n.kind === "tier") return 18;
   if (n.kind === "feature") return 10;
-  return 2 + Math.max(0, n.score) / 12;
+  // Learned importance grows the node — the graph swells toward the people the
+  // user actually engages with, not just whoever emails the most.
+  return 2 + Math.max(0, n.score) / 12 + (n.learnedImportance ?? 0) * 8;
 }
 
 /**

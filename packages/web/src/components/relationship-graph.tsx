@@ -11,6 +11,13 @@ export interface GraphNode {
   tags: string[];
   lastEmailDaysAgo?: number | null;
   upcomingMeetings?: number;
+  /**
+   * Learned from the user's own outbound replies/sends (0..1). Not inbound
+   * frequency — who they actually reach back to. Sizes/colours the node so the
+   * graph shows what Klorn learned matters, straight from the user's actions.
+   */
+  learnedImportance?: number | null;
+  outboundCount?: number;
 }
 
 export interface GraphEdge {
@@ -42,6 +49,7 @@ const OVERDUE_COLOR = "#fb7185"; // waiting on a reply (reuses PUSH rose)
 const MEETING_COLOR = "#f59e0b"; // meeting coming up
 const FREQUENT_COLOR = "#34d399"; // high-frequency contact
 const CONTACT_COLOR = "#60a5fa"; // a plain contact
+const ENGAGED_COLOR = "#f472b6"; // you actually reach back to them (learned)
 
 /** Node colour. Relationships mode keys off tags; decisions mode off kind. */
 function colorFor(n: GraphNode): string {
@@ -50,6 +58,9 @@ function colorFor(n: GraphNode): string {
   if (n.kind === "tier") return TIER_COLORS[n.tags[0] ?? ""] ?? FEATURE_COLOR;
   if (n.tags.includes("overdue_reply")) return OVERDUE_COLOR;
   if (n.tags.includes("meeting_soon")) return MEETING_COLOR;
+  // Learned engagement outranks raw frequency — it's derived from the user's
+  // own actions, not just how much someone emails them.
+  if (n.tags.includes("you_engage")) return ENGAGED_COLOR;
   if (n.tags.includes("frequent")) return FREQUENT_COLOR;
   return CONTACT_COLOR;
 }
@@ -58,7 +69,10 @@ function radiusFor(n: GraphNode): number {
   if (n.kind === "self") return 17;
   if (n.kind === "tier") return 15;
   if (n.kind === "feature") return 11;
-  return 5 + Math.sqrt(Math.max(0, n.score)) * 1.4;
+  // Learned importance visibly enlarges the people the user engages with — the
+  // graph grows toward what it learned, so "it's accurate" reads at a glance.
+  const learned = (n.learnedImportance ?? 0) * 6;
+  return 5 + Math.sqrt(Math.max(0, n.score)) * 1.4 + learned;
 }
 
 interface Pt {

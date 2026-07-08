@@ -35,6 +35,7 @@ const REL_LEGEND: Array<{ color: string; label: string; shape: SwatchShape }> = 
   { color: "#fbbf24", label: "You", shape: "diamond" },
   { color: "#fb7185", label: "Waiting on a reply", shape: "triangle" },
   { color: "#f59e0b", label: "Meeting soon", shape: "square" },
+  { color: "#f472b6", label: "You engage (learned)", shape: "diamond" },
   { color: "#34d399", label: "Frequent contact", shape: "ring" },
   { color: "#60a5fa", label: "Contact", shape: "circle" },
 ];
@@ -61,7 +62,7 @@ const COPY: Record<Mode, { eyebrow: string; title: string; body: string }> = {
   relationships: {
     eyebrow: "Relationships",
     title: "Who matters to your inbox",
-    body: "A force-directed view of the relationship graph the firewall already reasons over — your ranked contacts (size = interaction score, colour = current signal) clustered by company domain. Read-only over your existing mail + calendar data; no new graph store.",
+    body: "A force-directed view of the relationship graph the firewall already reasons over — your ranked contacts (size = interaction score, colour = current signal) clustered by company domain. The people you actually reply to grow larger and turn pink: Klorn learns who matters from your own actions and feeds that back into how it triages.",
   },
   decisions: {
     eyebrow: "Decision brain",
