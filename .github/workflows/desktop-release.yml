@@ -1,0 +1,136 @@
+# Build the native macOS app and publish it as a downloadable GitHub Release.
+#
+# Trigger: push a tag like `desktop-v0.1.0` (or run manually via workflow_dispatch).
+#
+# Signing/notarization is OPTIONAL — the job runs either way:
+#   • With the secrets below present → Developer-ID signed + Apple-notarized +
+#     stapled, so the download opens with a plain double-click.
+#   • Without them → the ad-hoc-signed build make-app.sh already produces; the
+#     Release notes tell users to right-click → Open (Gatekeeper) once.
+#
+# Required repo Secrets for a notarized build (Settings › Secrets › Actions):
+#   MACOS_DEVELOPER_ID_CERT_P12_BASE64  base64 of your Developer ID Application .p12
+#   MACOS_DEVELOPER_ID_CERT_PASSWORD    the .p12 export password
+#   MACOS_SIGN_IDENTITY                 e.g. "Developer ID Application: Name (P89M32649C)"
+#   MACOS_NOTARY_APPLE_ID              Apple ID email used for notarytool
+#   MACOS_NOTARY_TEAM_ID              your Team ID (P89M32649C)
+#   MACOS_NOTARY_APP_PASSWORD         an app-specific password for that Apple ID
+#
+# Note: the build is host-arch (arm64 on the macos-14 runner). A universal
+# (arm64 + x86_64) build would need `swift build --arch arm64 --arch x86_64`.
+
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create (e.g. desktop-v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & publish Klorn.app
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: meta
+        run: echo "tag=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Detect signing secrets
+        id: signing
+        env:
+          CERT: ${{ secrets.MACOS_DEVELOPER_ID_CERT_P12_BASE64 }}
+        run: |
+          if [ -n "$CERT" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No Developer ID secrets set — publishing an ad-hoc (non-notarized) build."
+          fi
+
+      - name: Build Klorn.app
+        working-directory: apps/desktop-mac
+        run: scripts/make-app.sh release
+
+      - name: Import Developer ID certificate
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          CERT_P12_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PW="$(openssl rand -base64 24)"
+          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          echo "$CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PW" "$KEYCHAIN" >/dev/null
+          # Put the build keychain first in the search list so codesign finds the identity.
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Sign with Developer ID (hardened runtime)
+        if: steps.signing.outputs.enabled == 'true'
+        working-directory: apps/desktop-mac
+        env:
+          SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" Klorn.app
+          codesign --verify --strict --verbose=2 Klorn.app
+
+      - name: Notarize & staple
+        if: steps.signing.outputs.enabled == 'true'
+        working-directory: apps/desktop-mac
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_APP_PASSWORD }}
+        run: |
+          ditto -c -k --keepParent Klorn.app "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+            --apple-id "$NOTARY_APPLE_ID" \
+            --team-id "$NOTARY_TEAM_ID" \
+            --password "$NOTARY_PASSWORD" \
+            --wait
+          xcrun stapler staple Klorn.app
+
+      - name: Zip for download
+        working-directory: apps/desktop-mac
+        run: ditto -c -k --keepParent Klorn.app "$RUNNER_TEMP/Klorn-macos.zip"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNED: ${{ steps.signing.outputs.enabled }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          if [ "$SIGNED" = "true" ]; then
+            SIGN_LINE="✅ Signed with a Developer ID and notarized by Apple — opens with a normal double-click."
+          else
+            SIGN_LINE="⚠️ **Ad-hoc signed, not notarized.** macOS Gatekeeper blocks a plain double-click: right-click \`Klorn.app\` → **Open** → **Open** (once). A notarized build needs the signing secrets configured on the repo."
+          fi
+          NOTES="$RUNNER_TEMP/notes.md"
+          {
+            echo "Native macOS app — the always-on top-bar firewall."
+            echo
+            echo "**Install:** unzip, move \`Klorn.app\` to \`/Applications\`, and launch it. The pill appears at the top-center of your screen; \`⌥⌘K\` expands it."
+            echo
+            echo "$SIGN_LINE"
+            echo
+            echo "Requires macOS 14+. Apple Silicon build. Points at the prod API by default (\`KLORN_API_URL\` overrides)."
+          } > "$NOTES"
+          gh release create "$TAG" \
+            "$RUNNER_TEMP/Klorn-macos.zip#Klorn.app (macOS 14+, Apple Silicon)" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Klorn Desktop $TAG" \
+            --notes-file "$NOTES"

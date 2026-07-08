@@ -90,6 +90,29 @@ double-click points at prod; `KLORN_API_URL` still overrides it. The bundle is
 ad-hoc signed so macOS shows the notification-permission prompt. (A
 *distributable* signed/notarized `.app` still needs full Xcode + a Developer ID.)
 
+## Releasing (downloadable build)
+
+`.github/workflows/desktop-release.yml` builds `Klorn.app` on a macOS runner and
+publishes it as a **GitHub Release** asset. Cut one by pushing a tag:
+
+```bash
+git tag desktop-v0.1.0 && git push origin desktop-v0.1.0
+```
+
+The workflow runs with or without signing:
+
+- **Notarized** (recommended for a public download) — add these repo Secrets and
+  the release opens with a plain double-click:
+  `MACOS_DEVELOPER_ID_CERT_P12_BASE64`, `MACOS_DEVELOPER_ID_CERT_PASSWORD`,
+  `MACOS_SIGN_IDENTITY` (`Developer ID Application: … (P89M32649C)`),
+  `MACOS_NOTARY_APPLE_ID`, `MACOS_NOTARY_TEAM_ID` (`P89M32649C`),
+  `MACOS_NOTARY_APP_PASSWORD` (an app-specific password).
+- **Ad-hoc** (no secrets) — still publishes, but Gatekeeper needs a one-time
+  right-click → **Open**. The release notes say so.
+
+Once the first release exists, point the landing page's "Mac app" button at
+`https://github.com/k08200/klorn/releases/latest` instead of the source tree.
+
 ## Tests
 
 The Command Line Tools toolchain ships no XCTest/Testing, so the auth state
