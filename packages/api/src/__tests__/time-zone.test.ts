@@ -6,6 +6,7 @@ import {
   localDayUtcRange,
   localMinuteOfDay,
   normalizeTimeZone,
+  offsetStringFor,
 } from "../time-zone.js";
 
 describe("timezone helpers", () => {
@@ -50,5 +51,30 @@ describe("timezone helpers", () => {
     // Same instant is the WRONG hour in UTC (09:00) — proves it is tz-aware.
     expect(isLocalTimeWithin(at1800, "UTC", 18)).toBe(false);
     expect(isLocalTimeWithin(at1800, "UTC", 9)).toBe(true);
+  });
+
+  describe("offsetStringFor", () => {
+    const NOW = new Date("2026-07-08T12:00:00.000Z");
+
+    it("computes a whole-hour positive offset", () => {
+      expect(offsetStringFor(NOW, "Asia/Seoul")).toBe("+09:00");
+    });
+
+    it("computes a whole-hour negative offset", () => {
+      // America/New_York is on EDT (-04:00) in July.
+      expect(offsetStringFor(NOW, "America/New_York")).toBe("-04:00");
+    });
+
+    it("is +00:00 for UTC", () => {
+      expect(offsetStringFor(NOW, "UTC")).toBe("+00:00");
+    });
+
+    it("computes a half-hour offset", () => {
+      expect(offsetStringFor(NOW, "Asia/Kolkata")).toBe("+05:30");
+    });
+
+    it("computes a 45-minute offset", () => {
+      expect(offsetStringFor(NOW, "Asia/Kathmandu")).toBe("+05:45");
+    });
   });
 });

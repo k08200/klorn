@@ -250,6 +250,22 @@ function categoryForAgentNotification(category: unknown): NotifCategory {
   }
 }
 
+/**
+ * True when the context has nothing worth a real LLM call: no tasks, no
+ * calendar, no emails — OR gatherUserContext's own outer catch fired
+ * (context === ""). Without the empty-string branch, a total context
+ * failure fell through to a real, paid LLM call with a blank user message
+ * instead of skipping the tick the way every other failure mode does.
+ */
+export function isAgentContextEmpty(context: string): boolean {
+  if (context === "") return true;
+  return (
+    context.includes("## Open Tasks\nNone") &&
+    context.includes("## Upcoming Calendar\nNone") &&
+    !context.includes("## Recent Emails")
+  );
+}
+
 /** Run the autonomous reasoning loop for a single user */
 // Per-user re-entrancy guard. The scheduler tick and the email-action fast-path
 // (email-action-trigger.ts) both call runAgentForUser through separate,
@@ -304,7 +320,11 @@ export async function runAgentForUser(
       playbookHint,
       rejectionHint,
     ] = await Promise.all([
-      gatherUserContext(userId),
+      // gatherUserContext is internally fail-soft per query now (agent-context.ts),
+      // but still add the same outer safety net as its 9 siblings here — a
+      // future change adding a new non-fail-soft branch there shouldn't be
+      // able to abort the whole agent cycle for this user again.
+      gatherUserContext(userId).catch(() => ""),
       getAgentFeedback(userId),
       loadMemoriesForPrompt(userId).catch(() => ""),
       getProposalHistory(userId).catch(() => ""),
@@ -316,12 +336,7 @@ export async function runAgentForUser(
       buildRejectionHintForPrompt(userId).catch(() => ""),
     ]);
 
-    // Skip if context is minimal (no tasks, no calendar, no emails)
-    const hasNothing =
-      context.includes("## Open Tasks\nNone") &&
-      context.includes("## Upcoming Calendar\nNone") &&
-      !context.includes("## Recent Emails");
-    if (hasNothing) {
+    if (isAgentContextEmpty(context)) {
       await logAgentAction(userId, "skip", "No tasks, calendar, or emails to analyze");
       return;
     }

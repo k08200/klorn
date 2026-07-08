@@ -4,8 +4,8 @@
  * Extracted from autonomous-agent.ts (2026-05-19): this used to be a
  * single ~475-line function inside the main agent file. Splitting it
  * out lets the agent file focus on the reasoning loop and lets us
- * iterate on the context shape (cross-domain hints, ordering, KST
- * formatting) without rebasing through tool routing logic.
+ * iterate on the context shape (cross-domain hints, ordering, per-user
+ * timezone formatting) without rebasing through tool routing logic.
  *
  * The output is a Markdown-flavored string. The agent passes it as the
  * `user` message in the LLM call; AGENT_SYSTEM_PROMPT (in agent/prompt.ts)
@@ -24,7 +24,7 @@
  *   - Your Previous Decisions (if any)
  *   - Cross-Domain Insights (deadline cluster / free time / meeting-contact /
  *     meeting-task / email-contact links)
- *   - Current Time (KST + UTC) — LAST on purpose: it changes every call,
+ *   - Current Time (user's local zone + UTC) — LAST on purpose: it changes every call,
  *     and provider prompt caching matches on prefix, so putting it first
  *     would bust the cache for the entire context every tick.
  */
@@ -38,7 +38,9 @@ import {
 import { AGENT_MAX_CONTEXT_ITEMS } from "./config.js";
 import { db, prisma } from "./db.js";
 import { isNoReplyAddress } from "./gmail.js";
+import { offsetStringFor } from "./time-zone.js";
 import { wrapUntrusted } from "./untrusted.js";
+import { getUserTimeZone } from "./user-timezone.js";
 
 const MAX_CONTEXT_ITEMS = AGENT_MAX_CONTEXT_ITEMS;
 
@@ -75,11 +77,12 @@ export async function gatherUserContext(userId: string): Promise<string> {
   const now = new Date();
   const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const userZone = await getUserTimeZone(userId);
 
-  // Format current time in KST using Intl (avoids double-offset bug when
-  // the server is already in KST).
-  const kstFormatter = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "Asia/Seoul",
+  // Format current time in the user's own zone using Intl (avoids
+  // double-offset bugs versus manual arithmetic).
+  const localFormatter = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: userZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -88,7 +91,7 @@ export async function gatherUserContext(userId: string): Promise<string> {
     second: "2-digit",
     hour12: false,
   });
-  const kstStr = `${kstFormatter.format(now).replace(" ", "T")}+09:00`;
+  const localStr = `${localFormatter.format(now).replace(" ", "T")}${offsetStringFor(now, userZone)}`;
 
   const [
     tasks,
@@ -102,29 +105,44 @@ export async function gatherUserContext(userId: string): Promise<string> {
     recentChatMessages,
     recentProposalSuppressions,
   ] = await Promise.all([
-    prisma.task.findMany({
-      where: { userId, status: { not: "DONE" } },
-      orderBy: { dueDate: "asc" },
-      take: MAX_CONTEXT_ITEMS * 2,
-    }),
-    prisma.calendarEvent.findMany({
-      where: { userId, startTime: { gte: now, lte: in7d } },
-      orderBy: { startTime: "asc" },
-      take: MAX_CONTEXT_ITEMS * 2,
-    }),
-    prisma.reminder.findMany({
-      where: { userId, status: "PENDING" },
-      orderBy: { remindAt: "asc" },
-      take: MAX_CONTEXT_ITEMS * 2,
-    }),
-    prisma.note.findMany({
-      where: { userId },
-      orderBy: { updatedAt: "desc" },
-      take: 5,
-    }),
-    prisma.notification.count({
-      where: { userId, isRead: false },
-    }),
+    // Each query below is independently fail-soft (matches the emails/
+    // agentLogs/chatMessages/proposalSuppressions branches further down):
+    // before this, a transient failure in any ONE of these six unprotected
+    // queries rejected the whole Promise.all and threw away every OTHER
+    // already-successful branch too — not just its own slice of context.
+    prisma.task
+      .findMany({
+        where: { userId, status: { not: "DONE" } },
+        orderBy: { dueDate: "asc" },
+        take: MAX_CONTEXT_ITEMS * 2,
+      })
+      .catch(() => []),
+    prisma.calendarEvent
+      .findMany({
+        where: { userId, startTime: { gte: now, lte: in7d } },
+        orderBy: { startTime: "asc" },
+        take: MAX_CONTEXT_ITEMS * 2,
+      })
+      .catch(() => []),
+    prisma.reminder
+      .findMany({
+        where: { userId, status: "PENDING" },
+        orderBy: { remindAt: "asc" },
+        take: MAX_CONTEXT_ITEMS * 2,
+      })
+      .catch(() => []),
+    prisma.note
+      .findMany({
+        where: { userId },
+        orderBy: { updatedAt: "desc" },
+        take: 5,
+      })
+      .catch(() => []),
+    prisma.notification
+      .count({
+        where: { userId, isRead: false },
+      })
+      .catch(() => 0),
     // Email context: unread from last 24h (long dedup window) OR any email
     // from last 30min regardless of read state. The recent-any-read branch
     // is critical for the approval flow — Gmail auto-marks self-sends and
@@ -171,18 +189,20 @@ export async function gatherUserContext(userId: string): Promise<string> {
           }>,
       ),
     // Key contacts for cross-domain reasoning (link email sender to contact).
-    prisma.contact.findMany({
-      where: { userId },
-      orderBy: { updatedAt: "desc" },
-      take: 10,
-      select: {
-        name: true,
-        email: true,
-        company: true,
-        role: true,
-        tags: true,
-      },
-    }),
+    prisma.contact
+      .findMany({
+        where: { userId },
+        orderBy: { updatedAt: "desc" },
+        take: 10,
+        select: {
+          name: true,
+          email: true,
+          company: true,
+          role: true,
+          tags: true,
+        },
+      })
+      .catch(() => []),
     // Recent agent decisions — continuity across cycles (prevents amnesia).
     db.agentLog
       .findMany({
@@ -293,7 +313,7 @@ export async function gatherUserContext(userId: string): Promise<string> {
     const calLines = visibleCalendar.map(
       (e: { title: string; startTime: Date; meetingLink: string | null }) => {
         const start = e.startTime.toLocaleString("en-US", {
-          timeZone: "Asia/Seoul",
+          timeZone: userZone,
         });
         const minutesUntil = Math.round((e.startTime.getTime() - now.getTime()) / 60_000);
         const soon = minutesUntil <= 30 && minutesUntil > 0 ? " 🔴 STARTING SOON" : "";
@@ -308,7 +328,7 @@ export async function gatherUserContext(userId: string): Promise<string> {
 
   if (visibleReminders.length > 0) {
     const remLines = visibleReminders.map((r: { title: string; remindAt: Date }) => {
-      const at = r.remindAt.toLocaleString("en-US", { timeZone: "Asia/Seoul" });
+      const at = r.remindAt.toLocaleString("en-US", { timeZone: userZone });
       const overdue = r.remindAt < now ? " ⚠️ PAST DUE" : "";
       return `- ${r.title} @ ${at}${overdue}`;
     });
@@ -365,13 +385,13 @@ export async function gatherUserContext(userId: string): Promise<string> {
         ? `\n  Actions: ${wrapUntrusted(actionsText, "email:actions")}`
         : "";
       const read = e.isRead ? "" : " 📩 UNREAD";
-      const receivedKST = e.receivedAt.toLocaleString("en-US", {
-        timeZone: "Asia/Seoul",
+      const receivedLocal = e.receivedAt.toLocaleString("en-US", {
+        timeZone: userZone,
         hour: "2-digit",
         minute: "2-digit",
       });
       const fromWrapped = wrapUntrusted(e.from, "email:from");
-      return `### Email #${idx + 1} (received: ${receivedKST})${read}\n  From: ${fromWrapped}\n  Subject: ${subjectWrapped}${cat}${pri}${summ}${actions}\n  Body: ${bodyWrapped}`;
+      return `### Email #${idx + 1} (received: ${receivedLocal})${read}\n  From: ${fromWrapped}\n  Subject: ${subjectWrapped}${cat}${pri}${summ}${actions}\n  Body: ${bodyWrapped}`;
     });
     sections.push(
       `## Recent Emails (${replyableEmails.length})\nIMPORTANT: Each email below is a SEPARATE item. Different subjects or different body content = DIFFERENT meetings/requests. Do NOT merge them.\n${emailLines.join("\n\n")}`,
@@ -456,8 +476,8 @@ export async function gatherUserContext(userId: string): Promise<string> {
     endTime?: Date;
     meetingLink: string | null;
   }>;
-  const kstNow = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
-  const todayEnd = new Date(kstNow);
+  const localNow = new Date(now.toLocaleString("en-US", { timeZone: userZone }));
+  const todayEnd = new Date(localNow);
   todayEnd.setHours(23, 59, 59, 999);
   const todayEvents = typedCalendar.filter((e) => e.startTime < todayEnd);
   if (typedTasks.length > 0 && todayEvents.length <= 2) {
@@ -551,7 +571,7 @@ export async function gatherUserContext(userId: string): Promise<string> {
 
   // Volatile timestamp LAST — every section above stays a cacheable prefix
   // across the agent's 5-minute ticks (see NOTE at the top of this list).
-  sections.push(`## Current Time\nKST: ${kstStr}\nUTC: ${now.toISOString()}`);
+  sections.push(`## Current Time\nLocal (${userZone}): ${localStr}\nUTC: ${now.toISOString()}`);
 
   return sections.join("\n\n");
 }
