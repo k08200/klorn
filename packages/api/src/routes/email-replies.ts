@@ -9,6 +9,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { recordContactEngagement } from "../contact-engagement.js";
 import { prisma } from "../db.js";
 import { buildAttachmentCandidateProfile, listEmailAttachments } from "../email-attachments.js";
 import { updateCandidateIntake } from "../email-candidate-intake.js";
@@ -374,6 +375,10 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         references: referencesChain,
       });
       if ("error" in result) return reply.code(409).send(result);
+
+      // Manual reply = genuine engagement with this sender (an importance-graph
+      // edge). Only user-initiated routes record this — never the auto-reply path.
+      await recordContactEngagement(uid, to, "outbound");
 
       // threaded=false means we sent by threadId only (no RFC Message-ID found);
       // surfaced so a client can tell strict-threaded from best-effort.

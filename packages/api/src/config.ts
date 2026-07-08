@@ -71,6 +71,14 @@ export const SENDER_TRAITS_IN_JUDGE = process.env.SENDER_TRAITS_IN_JUDGE === "tr
 // APPLIED rules, so this never affects the eval gate.
 export const LEARNED_RULES_IN_JUDGE = process.env.LEARNED_RULES_IN_JUDGE === "true";
 
+// Ground the judge's senderTrust on the LEARNED contact-engagement graph — how
+// much the user actually engages with this sender (outbound replies +, dismisses
+// −), measured from real actions. OFF by default: it's a SOFT prompt fact for the
+// LLM to weigh, never a hard tier override (buildPrior's short-circuit is
+// untouched). The synthetic eval set has no engagement history, so this never
+// affects the eval gate — the live guardrail is decision-metrics drift.
+export const CONTACT_ENGAGEMENT_IN_JUDGE = process.env.CONTACT_ENGAGEMENT_IN_JUDGE === "true";
+
 // ── Paywall / monetization ────────────────────────────────────────────
 // Master kill-switch for the subscription paywall. OFF by default so merging
 // to main (which auto-deploys to prod) changes NOTHING: FREE keeps its current

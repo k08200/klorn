@@ -10,6 +10,7 @@
 import multipart from "@fastify/multipart";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { recordContactEngagement } from "../contact-engagement.js";
 import { prisma } from "../db.js";
 import { syncEmailByGmailId } from "../email-sync.js";
 import { requireEntitled } from "../entitlement-guard.js";
@@ -103,6 +104,9 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       if (result && "error" in result) {
         return reply.code(400).send(result);
       }
+      // Manual send = genuine engagement with this recipient (an importance-graph
+      // edge). Only user-initiated routes record this — never the auto-reply path.
+      await recordContactEngagement(uid, to, "outbound");
       return result;
     },
   );
@@ -197,6 +201,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       if (result && "error" in result) {
         return reply.code(400).send(result);
       }
+      await recordContactEngagement(uid, to, "outbound");
       return { ...result, attachedCount: attachments.length };
     },
   );

@@ -6,6 +6,7 @@
  */
 
 import { prisma } from "./db.js";
+import { recordFeedback } from "./feedback.js";
 
 export type AttentionDismissResult = { ok: true } | { ok: false; reason: "not_found" };
 
@@ -32,6 +33,18 @@ export async function dismissAttentionItem(
       data: { status: "DISMISSED", resolvedAt: new Date() },
     },
   );
+
+  // Learn from the action: a dismiss is a "not important" signal. This feeds the
+  // (live) feedback adaptor, which forces SILENT on patterns the user keeps
+  // dismissing. Best-effort — recordFeedback never throws (feedback is
+  // observability, not control flow), so it can't break the dismiss.
+  await recordFeedback({
+    userId,
+    source: "ATTENTION_ITEM",
+    sourceId: itemId,
+    signal: "DISMISSED",
+    evidence: "User dismissed from the desktop app",
+  });
 
   return { ok: true };
 }

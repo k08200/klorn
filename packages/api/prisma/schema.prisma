@@ -105,6 +105,7 @@ model User {
   updatedAt                 DateTime                   @updatedAt
   emailProcessingLogs       EmailProcessingLog[]
   contactTrustScores        ContactTrustScore[]
+  contactEngagementScores   ContactEngagementScore[]
   llmCostLedger             LlmCostLedger[]
   llmUsageLogs              LlmUsageLog[]
   senderTraits              SenderTrait[]
@@ -1465,6 +1466,26 @@ model ContactTrustScore {
   updatedAt      DateTime @updatedAt
 
   @@unique([userId, contactEmail])
+}
+
+/// Learned per-contact engagement — the edge weights of the importance graph.
+/// Written by user actions (emailing/replying a contact = engaged; dismissing
+/// their items = negative). Raw counters, never computed on the fly so judge-time
+/// reads are O(1) (same doctrine as ContactTrustScore). Consumed (flag-gated) as
+/// a soft grounding signal for the LLM's senderTrust score — never a hard override.
+model ContactEngagementScore {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contactEmail  String // lowercased, via extractEmailAddress()
+  outboundCount Int      @default(0) // user emailed/replied to them = engaged (+)
+  dismissCount  Int      @default(0) // user dismissed their items (−)
+  lastEngagedAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, contactEmail])
+  @@index([userId])
 }
 
 // Public early-access waitlist. Submissions land here before the founder
