@@ -88,6 +88,11 @@ struct FirewallResponse: Codable, Sendable {
         Set(tiers.values.flatMap { $0 }.map(\.id))
     }
 
+    /// Find an item by its AttentionItem id across all tiers (reading-pane lookup).
+    func item(id: String) -> FirewallItem? {
+        tiers.values.flatMap { $0 }.first { $0.id == id }
+    }
+
     /// A copy with the given item ids removed from every tier and the summary
     /// decremented by however many were actually present (never below zero).
     /// Decrement (not recompute) so a server-side list cap can't corrupt counts.
@@ -110,6 +115,27 @@ struct FirewallResponse: Codable, Sendable {
             auto: max(0, self.summary.auto - (removed[.auto] ?? 0)),
             total: max(0, self.summary.total - removed.values.reduce(0, +)))
         return FirewallResponse(tiers: newTiers, summary: summary)
+    }
+}
+
+// MARK: - Email detail (reading pane)
+
+/// GET /api/email/:id — a single email's content. Body is always plain text
+/// (the API strips HTML server-side); we decode only what the reading pane needs
+/// (JSONDecoder ignores the many other fields the endpoint returns).
+struct EmailDetail: Codable, Sendable, Identifiable {
+    let id: String
+    let from: String?
+    let subject: String?
+    let body: String?
+    let snippet: String?
+    let date: String?
+    let threadId: String?
+
+    /// Body, falling back to the snippet when the body is empty (as the web does).
+    var text: String {
+        if let body, !body.isEmpty { return body }
+        return snippet ?? ""
     }
 }
 

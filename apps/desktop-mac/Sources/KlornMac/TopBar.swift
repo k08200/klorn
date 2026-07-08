@@ -18,13 +18,15 @@ struct TopBarActions {
     let onDismiss: (FirewallItem) -> Void
     /// Snooze an item to resurface tomorrow morning.
     let onSnooze: (FirewallItem) -> Void
+    /// Select a row in the full view — loads its email into the reading pane.
+    let onSelect: (FirewallItem) -> Void
     let onQuit: () -> Void
 }
 
 enum TopBarMetrics {
     static let collapsed = NSSize(width: 400, height: 52)
     static let expanded = NSSize(width: 900, height: 380)
-    static let full = NSSize(width: 1280, height: 800)
+    static let full = NSSize(width: 1400, height: 860)
     static let corner: CGFloat = 16
 
     static func size(for state: BarState) -> NSSize {
@@ -304,9 +306,11 @@ struct FullView: View {
             header
             Divider().overlay(Theme.line)
             HStack(spacing: 0) {
-                FullSidebar(selected: $tier, actions: actions).frame(width: 260)
+                FullSidebar(selected: $tier, actions: actions).frame(width: 220)
                 Rectangle().fill(Theme.line).frame(width: 1)
-                FullList(tier: tier, actions: actions).frame(maxWidth: .infinity)
+                FullList(tier: tier, actions: actions).frame(width: 420)
+                Rectangle().fill(Theme.line).frame(width: 1)
+                ReadingPane(actions: actions).frame(maxWidth: .infinity)
             }
         }
         .frame(width: TopBarMetrics.full.width, height: TopBarMetrics.full.height)
@@ -432,11 +436,14 @@ private struct FullList: View {
 }
 
 private struct FullRow: View {
+    @Environment(AppModel.self) private var model
     let item: FirewallItem
     let actions: TopBarActions
 
+    private var selected: Bool { model.selectedItemId == item.id }
+
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.email?.from ?? item.title).font(.body.weight(.semibold))
                     .foregroundStyle(Theme.text).lineLimit(1)
@@ -446,15 +453,93 @@ private struct FullRow: View {
                     Text(reason).font(.caption).foregroundStyle(Theme.textDim).lineLimit(1)
                 }
             }
-            Spacer(minLength: 12)
-            Button("Open") { actions.onOpenWeb(item) }
-                .buttonStyle(.bordered).controlSize(.small)
+            Spacer(minLength: 8)
             Button { actions.onSnooze(item) } label: { Image(systemName: "moon.zzz") }
                 .buttonStyle(.plain).foregroundStyle(Theme.textDim).help("Snooze to tomorrow 9am")
             Button { actions.onDismiss(item) } label: { Image(systemName: "xmark") }
                 .buttonStyle(.plain).foregroundStyle(Theme.textDim).help("Dismiss")
         }
-        .padding(.horizontal, 24).padding(.vertical, 14)
+        .padding(.horizontal, 20).padding(.vertical, 12)
+        .background(selected ? Color.white.opacity(0.08) : .clear)
         .contentShape(Rectangle())
+        .onTapGesture { actions.onSelect(item) }
+    }
+}
+
+/// The reading pane: the selected email's content, loaded from GET /api/email/:id.
+/// Clicking a row (a plain mouse click, delivered even to the non-focus-stealing
+/// panel) loads it here — no need to leave the app for the browser.
+private struct ReadingPane: View {
+    @Environment(AppModel.self) private var model
+    let actions: TopBarActions
+
+    private var item: FirewallItem? {
+        guard let id = model.selectedItemId else { return nil }
+        return model.queue?.item(id: id)
+    }
+
+    var body: some View {
+        Group {
+            if model.isLoadingEmail {
+                centered { ProgressView().controlSize(.small) }
+            } else if let err = model.emailError {
+                centered { Text(err).font(.callout).foregroundStyle(Theme.textDim) }
+            } else if let email = model.openedEmail {
+                content(email)
+            } else if model.selectedItemId != nil {
+                centered { Text("No preview for this item.").font(.callout).foregroundStyle(Theme.textDim) }
+            } else {
+                centered { Text("Select a message to read it here.").font(.title3).foregroundStyle(Theme.textDim) }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func content(_ email: EmailDetail) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(email.subject ?? "(no subject)").font(.title3.weight(.semibold))
+                    .foregroundStyle(Theme.text).lineLimit(2)
+                HStack {
+                    Text(email.from ?? "").font(.callout).foregroundStyle(Theme.textDim).lineLimit(1)
+                    Spacer()
+                    Text(Self.formatDate(email.date)).font(.caption).foregroundStyle(Theme.textDim)
+                }
+                if let item {
+                    HStack(spacing: 10) {
+                        Button("Open in web") { actions.onOpenWeb(item) }
+                            .buttonStyle(.bordered).controlSize(.small)
+                        Button("Snooze") { actions.onSnooze(item) }
+                            .buttonStyle(.bordered).controlSize(.small)
+                        Button("Dismiss") { actions.onDismiss(item) }
+                            .buttonStyle(.bordered).controlSize(.small)
+                    }
+                    .padding(.top, 2)
+                }
+            }
+            .padding(24)
+            Divider().overlay(Theme.line)
+            ScrollView {
+                Text(email.text.isEmpty ? "(no content)" : email.text)
+                    .font(.callout)
+                    .foregroundStyle(Theme.text.opacity(0.92))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(24)
+            }
+        }
+    }
+
+    private func centered<Content: View>(@ViewBuilder _ c: () -> Content) -> some View {
+        VStack { Spacer(); c(); Spacer() }.frame(maxWidth: .infinity)
+    }
+
+    private static func formatDate(_ iso: String?) -> String {
+        guard let iso else { return "" }
+        let iso1 = ISO8601DateFormatter(); iso1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let iso2 = ISO8601DateFormatter(); iso2.formatOptions = [.withInternetDateTime]
+        guard let date = iso1.date(from: iso) ?? iso2.date(from: iso) else { return "" }
+        let out = DateFormatter(); out.dateFormat = "MMM d · h:mm a"
+        return out.string(from: date)
     }
 }
