@@ -18,19 +18,36 @@ final class AppModel {
     private(set) var loadError: String?
     private(set) var isLoadingQueue = false
 
+    /// Called with newly-arrived PUSH items (never the first-load baseline).
+    /// The AppDelegate wires this to the HUD; if unset, PUSH surfacing is a no-op.
+    var onNewPush: (([FirewallItem]) -> Void)?
+
     /// Refresh cadence so new PUSH mail surfaces a notification even with the
     /// window closed (also keeps the free-tier API warm).
     static let pollIntervalSeconds: Double = 60
     private var seenPush: Set<String> = []
+    /// AttentionItem ids the user dismissed locally; hidden until the server's
+    /// async reconcile drops them from the queue (then pruned here).
+    private var dismissed: Set<String> = []
     private var baselineEstablished = false
     private var didRequestNotifyAuth = false
     private var pollTask: Task<Void, Never>?
+    private var realtime: RealtimeClient?
 
     private let api: APIClient
 
     init(api: APIClient = APIClient()) {
         self.api = api
         self.phase = KeychainStore.load() != nil ? .signedIn : .signedOut
+    }
+
+    /// Kick off the headless lifecycle at app launch. With no window driving it,
+    /// this is what starts the background poll loop when we already hold a token.
+    /// `loadQueue()` -> `ensureActive()` establishes the silent PUSH baseline and
+    /// starts polling; idempotent, so calling it once on launch is enough.
+    func start() {
+        guard phase == .signedIn else { return }
+        Task { await loadQueue() }
     }
 
     func signIn() async {
@@ -50,9 +67,61 @@ final class AppModel {
         }
     }
 
+    /// Dismiss a PUSH item: clear it from the firewall queue (status DISMISSED,
+    /// leaves the source email in Gmail) and hide it immediately (optimistic).
+    /// Works for any source. On failure, un-hide and refetch the truth.
+    func dismiss(_ item: FirewallItem) async {
+        hideLocally(item)
+        do {
+            try await api.post("/api/inbox/firewall/\(item.id)/dismiss")
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            unhide(item, error)
+        }
+    }
+
+    /// Snooze a PUSH item until `until`; it resurfaces server-side when the time
+    /// passes. Works for any source (uses the AttentionItem id, not the email id).
+    func snooze(_ item: FirewallItem, until: Date = AppModel.tomorrow9am()) async {
+        hideLocally(item)
+        do {
+            try await api.post(
+                "/api/inbox/firewall/\(item.id)/snooze",
+                json: ["snoozeUntil": ISO8601DateFormatter().string(from: until)])
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            unhide(item, error)
+        }
+    }
+
+    /// Optimistically drop an item from the visible queue + counts; keep it hidden
+    /// across reloads until the server resolves/snoozes it (then pruned in loadQueue).
+    private func hideLocally(_ item: FirewallItem) {
+        dismissed.insert(item.id)
+        queue = queue?.removingIDs([item.id])
+    }
+
+    /// Undo an optimistic hide when the mutation failed, then refetch the truth.
+    private func unhide(_ item: FirewallItem, _ error: Error) {
+        dismissed.remove(item.id)
+        loadError = Self.describe(error)
+        Task { await loadQueue() }
+    }
+
+    /// Default snooze target: 9am local tomorrow. Pure for testing.
+    nonisolated static func tomorrow9am(from now: Date = Date(), calendar: Calendar = .current) -> Date {
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
+        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow) ?? tomorrow
+    }
+
     func signOut() {
         stopPolling()
+        realtime?.stop()
+        realtime = nil
         seenPush = []
+        dismissed = []
         baselineEstablished = false
         didRequestNotifyAuth = false
         KeychainStore.clear()
@@ -65,7 +134,10 @@ final class AppModel {
         isLoadingQueue = true
         defer { isLoadingQueue = false }
         do {
-            queue = try await api.get("/api/inbox/firewall", as: FirewallResponse.self)
+            let fetched = try await api.get("/api/inbox/firewall", as: FirewallResponse.self)
+            // Drop dismissed ids the server has since resolved; hide the rest.
+            dismissed.formIntersection(fetched.allItemIDs)
+            queue = fetched.removingIDs(dismissed)
             loadError = nil
             reconcilePush()
             ensureActive()
@@ -76,15 +148,16 @@ final class AppModel {
         }
     }
 
-    /// Fire OS notifications for PUSH items new since the last load (the first
-    /// load is a silent baseline).
+    /// Surface PUSH items new since the last load (the first load is a silent
+    /// baseline). Routed to `onNewPush` (the HUD); the HUD falls back to an OS
+    /// banner when it can't draw a panel.
     private func reconcilePush() {
         guard let queue else { return }
         let plan = planPushNotifications(
             seen: seenPush,
             baselineEstablished: baselineEstablished,
             pushItems: queue.items(for: .push))
-        for item in plan.toNotify { PushNotifier.post(item) }
+        if !plan.toNotify.isEmpty { onNewPush?(plan.toNotify) }
         seenPush = plan.seen
         baselineEstablished = true
     }
@@ -98,6 +171,21 @@ final class AppModel {
             Task { await PushNotifier.requestAuthorization() }
         }
         if pollTask == nil { startPolling() }
+        startRealtime()
+    }
+
+    /// Open the WebSocket wake channel once signed in. On a server push it
+    /// refetches immediately; the poll loop remains the backstop. Idempotent.
+    private func startRealtime() {
+        guard realtime == nil, let token = KeychainStore.load() else { return }
+        let client = RealtimeClient(onWake: { [weak self] in
+            // Skip if a load is already in flight — avoids overlapping refetches
+            // if the server bursts events.
+            guard let self, !self.isLoadingQueue else { return }
+            Task { await self.loadQueue() }
+        })
+        client.start(token: token)
+        realtime = client
     }
 
     private func startPolling() {

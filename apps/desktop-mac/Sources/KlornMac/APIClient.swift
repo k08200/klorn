@@ -36,10 +36,30 @@ struct APIClient: Sendable {
         }
     }
 
-    /// Raw GET → body bytes. Maps non-2xx to APIError (401/403 → .unauthorized).
+    /// Fire a POST (empty body); discard the response, mapping status to APIError.
+    func post(_ path: String, authed: Bool = true) async throws {
+        _ = try await data(path, method: "POST", authed: authed)
+    }
+
+    /// POST a JSON object; discard the response body.
+    func post(_ path: String, json: [String: String], authed: Bool = true) async throws {
+        let body = try JSONEncoder().encode(json)
+        _ = try await data(path, method: "POST", body: body, contentType: "application/json", authed: authed)
+    }
+
+    /// Raw request → body bytes. Maps non-2xx to APIError (401/403 → .unauthorized).
     @discardableResult
-    func data(_ path: String, authed: Bool = true) async throws -> Data {
+    func data(
+        _ path: String,
+        method: String = "GET",
+        body: Data? = nil,
+        contentType: String? = nil,
+        authed: Bool = true
+    ) async throws -> Data {
         var req = URLRequest(url: try url(path))
+        req.httpMethod = method
+        if let body { req.httpBody = body }
+        if let contentType { req.setValue(contentType, forHTTPHeaderField: "Content-Type") }
         if authed, let t = token() {
             req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization")
         }
