@@ -122,20 +122,26 @@ jobs:
           SIGNED: ${{ steps.signing.outputs.enabled }}
           TAG: ${{ steps.meta.outputs.tag }}
         run: |
-          if [ "$SIGNED" = "true" ]; then
-            SIGN_LINE="✅ Signed with a Developer ID and notarized by Apple — opens with a normal double-click."
-          else
-            SIGN_LINE="⚠️ **Ad-hoc signed, not notarized.** macOS Gatekeeper blocks a plain double-click: right-click \`Klorn.app\` → **Open** → **Open** (once). A notarized build needs the signing secrets configured on the repo."
-          fi
           NOTES="$RUNNER_TEMP/notes.md"
           {
-            echo "Native macOS app — the always-on top-bar firewall."
+            echo "Native macOS app — the always-on top-bar firewall (a slim pill at the top of your screen that expands with \`⌥⌘K\`)."
             echo
-            echo "**Install:** unzip, move \`Klorn.app\` to \`/Applications\`, and launch it. The pill appears at the top-center of your screen; \`⌥⌘K\` expands it."
+            echo "## Install"
+            echo "1. Download \`Klorn-macos.zip\` and unzip it."
+            echo "2. Move \`Klorn.app\` to \`/Applications\`."
+            if [ "$SIGNED" = "true" ]; then
+              echo "3. Launch it — signed with a Developer ID and notarized by Apple, so a plain double-click just works."
+            else
+              echo "3. This build is **ad-hoc signed (not notarized)**, so macOS quarantines a web download and shows \"Klorn.app is damaged.\" Clear the quarantine once:"
+              echo '   ```'
+              echo "   xattr -dr com.apple.quarantine /Applications/Klorn.app"
+              echo '   ```'
+              echo "4. Launch \`Klorn.app\`."
+            fi
             echo
-            echo "$SIGN_LINE"
+            echo "> A notarized build opens with a plain double-click (no \`xattr\`) — configure the Developer-ID/notary secrets and re-tag (see \`apps/desktop-mac/README.md\`)."
             echo
-            echo "Requires macOS 14+. Apple Silicon build. Points at the prod API by default (\`KLORN_API_URL\` overrides)."
+            echo "Requires macOS 14+, Apple Silicon. Points at the prod API by default (\`KLORN_API_URL\` overrides)."
           } > "$NOTES"
           gh release create "$TAG" \
             "$RUNNER_TEMP/Klorn-macos.zip#Klorn.app (macOS 14+, Apple Silicon)" \
