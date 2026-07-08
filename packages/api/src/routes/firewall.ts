@@ -267,6 +267,9 @@ export async function firewallRoutes(app: FastifyInstance) {
           // actually engage with, so the graph can highlight it. null = no signal.
           learnedImportance: ig?.learnedImportance ?? null,
           outboundCount: ig?.outboundCount ?? 0,
+          // Inferred (propagated) importance for a quiet peer at an org the user
+          // engages with — rendered softer than direct engagement. null = none.
+          propagatedImportance: ig?.propagatedImportance ?? null,
         };
       }),
     ];

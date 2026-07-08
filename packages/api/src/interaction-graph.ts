@@ -22,6 +22,7 @@
 
 import { prisma } from "./db.js";
 import { remember } from "./memory.js";
+import { captureError } from "./sentry.js";
 
 const GRAPH_KEY = "interaction_graph_v1";
 const GRAPH_TTL_DAYS = 3; // rebuild every 3 days
@@ -30,6 +31,93 @@ const EMAIL_LOOK_BACK_DAYS = 60;
 const CALENDAR_LOOK_AHEAD_DAYS = 14;
 // A handful of real outbound engagements saturates learnedImportance to 1.
 const ENGAGEMENT_SATURATION = 4;
+// How much a directly-engaged contact lifts a *quiet peer* at the same org.
+// Propagated importance is deliberately much softer than measured engagement —
+// it's a cold-start prior, never a decision.
+const PROPAGATION_DISCOUNT = 0.4;
+// A domain must have at least this many DISTINCT engaged contacts before its
+// importance propagates. One reply to one person (who may have a vanity domain,
+// or be a social-engineering pretext) must never lift trust for every stranger
+// at that domain — propagation is meant to model working with an *organization*.
+const PROPAGATION_MIN_ENGAGED = 2;
+
+/**
+ * Consumer mail providers where a shared domain means nothing — millions of
+ * strangers share "gmail.com". Propagation is skipped for these so a single
+ * engaged gmail contact can't lift trust for the entire internet. Only true
+ * organizational domains propagate. Lowercase, exact-match on the domain.
+ */
+const PUBLIC_EMAIL_DOMAINS = new Set<string>([
+  "gmail.com",
+  "googlemail.com",
+  "outlook.com",
+  "hotmail.com",
+  "hotmail.co.uk",
+  "live.com",
+  "msn.com",
+  "yahoo.com",
+  "yahoo.co.uk",
+  "yahoo.co.jp",
+  "ymail.com",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "aol.com",
+  "proton.me",
+  "protonmail.com",
+  "pm.me",
+  "gmx.com",
+  "gmx.net",
+  "gmx.de",
+  "web.de",
+  "mail.com",
+  "zoho.com",
+  "fastmail.com",
+  "yandex.com",
+  "yandex.ru",
+  "mail.ru",
+  "qq.com",
+  "163.com",
+  "126.com",
+  "139.com",
+  "sina.com",
+  "sohu.com",
+  "rediffmail.com",
+  "naver.com",
+  "daum.net",
+  "hanmail.net",
+  "nate.com",
+  "kakao.com",
+]);
+
+/**
+ * Organizational domain of an address, or null when it's a public mail provider
+ * (or unparseable). Only org domains are eligible for importance propagation.
+ */
+function orgDomainOf(addr: string): string | null {
+  const at = addr.lastIndexOf("@");
+  if (at < 0) return null;
+  const domain = addr
+    .slice(at + 1)
+    .trim()
+    .toLowerCase();
+  if (!domain.includes(".") || PUBLIC_EMAIL_DOMAINS.has(domain)) return null;
+  return domain;
+}
+
+/** Round to 2 decimals — keeps stored propagated priors compact and stable. */
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Case-insensitive node/address match that tolerates a malformed cache row
+ * (non-string email) instead of throwing — a corrupt cache must fail soft on
+ * the classification hot path, never wipe the whole judge-context fan-out.
+ */
+export function nodeMatchesEmail(node: InteractionNode, lowerAddress: string): boolean {
+  return typeof node.email === "string" && node.email.toLowerCase() === lowerAddress;
+}
 
 export interface InteractionNode {
   email: string;
@@ -44,11 +132,19 @@ export interface InteractionNode {
   // consumed (flag-gated) as soft grounding for the judge's senderTrust score.
   learnedImportance?: number;
   outboundCount?: number; // raw outbound engagements (for interpretable grounding text)
+  // Propagated (inferred) importance for a quiet contact at an org the user
+  // actively engages with — a soft cold-start prior, NOT a measured signal.
+  // Only set when the contact has no direct engagement of their own.
+  propagatedImportance?: number;
 }
 
 export interface InteractionGraph {
   nodes: InteractionNode[];
   builtAt: string;
+  // org domain → max direct learnedImportance among engaged contacts there.
+  // Lets the judge give a cold-start sender (not yet a node) a soft prior when
+  // the user demonstrably engages with their organization. Gated at consumption.
+  orgImportance?: Record<string, number>;
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────────
@@ -82,21 +178,14 @@ export async function buildInteractionGraph(userId: string): Promise<Interaction
 }
 
 /**
- * Cache-only lookup of one contact's interaction node. Unlike
- * getInteractionGraph this NEVER rebuilds — the judge path calls it per
- * email, and a stale cache must cost one Memory read, not a mailbox scan
- * (a sync burst would otherwise fan out N simultaneous rebuilds). The
- * weekly batch + agent paths keep the cache warm. Returns null when the
- * cache is missing, stale, unparsable, or has no node for the address.
- * Absence of a node means "not a top contact", NOT "stranger" — the graph
- * only keeps the top MAX_NODES contacts.
+ * Cache-only read of the whole graph, freshness-guarded — NEVER rebuilds (safe
+ * on the classification hot path, which calls it per email; a sync burst would
+ * otherwise fan out N simultaneous mailbox scans). The weekly batch + agent
+ * paths keep the cache warm. null when the cache is missing, stale, or
+ * unparsable. Callers that only need one sender should use
+ * getCachedInteractionNode.
  */
-export async function getCachedInteractionNode(
-  userId: string,
-  email: string,
-): Promise<InteractionNode | null> {
-  const address = email.toLowerCase().trim();
-  if (!address) return null;
+export async function getCachedInteractionGraph(userId: string): Promise<InteractionGraph | null> {
   try {
     const mem = await prisma.memory.findUnique({
       where: { userId_type_key: { userId, type: "CONTEXT", key: GRAPH_KEY } },
@@ -105,11 +194,48 @@ export async function getCachedInteractionNode(
     const parsed = JSON.parse(mem.content) as InteractionGraph;
     const ageMs = Date.now() - new Date(parsed.builtAt).getTime();
     if (!(ageMs < GRAPH_TTL_DAYS * 24 * 60 * 60 * 1000)) return null;
-    return parsed.nodes.find((n) => n.email.toLowerCase() === address) ?? null;
+    // Guard against a legacy/partial cache shape — downstream .find calls index
+    // node.email, so a non-array nodes field must fail soft here, not throw on
+    // the classification hot path.
+    if (!Array.isArray(parsed.nodes)) return null;
+    return parsed;
   } catch (err) {
-    console.warn("[INTERACTION-GRAPH] getCachedInteractionNode failed:", err);
+    // console + captureError: captureError alone is silent when Sentry is off.
+    console.warn("[INTERACTION-GRAPH] getCachedInteractionGraph failed:", err);
+    captureError(err, { tags: { scope: "interaction-graph-cache-read" } });
     return null;
   }
+}
+
+/**
+ * Cache-only lookup of one contact's node. Absence means "not a top contact",
+ * NOT "stranger" — the graph only keeps the top MAX_NODES + engaged contacts.
+ */
+export async function getCachedInteractionNode(
+  userId: string,
+  email: string,
+): Promise<InteractionNode | null> {
+  const address = email.toLowerCase().trim();
+  if (!address) return null;
+  const graph = await getCachedInteractionGraph(userId);
+  if (!graph) return null;
+  return graph.nodes.find((n) => nodeMatchesEmail(n, address)) ?? null;
+}
+
+/**
+ * Cold-start propagated prior for a sender who isn't a graph node yet: the max
+ * measured engagement at their organization, discounted. Returns 0 when the
+ * sender's domain is public or has no engaged peer. Cache-only (judge-safe).
+ */
+export function propagatedImportanceForDomain(
+  graph: InteractionGraph | null,
+  senderAddress: string,
+): number {
+  if (!graph?.orgImportance) return 0;
+  const org = orgDomainOf(senderAddress);
+  if (!org) return 0;
+  const orgMax = graph.orgImportance[org];
+  return orgMax ? round2(orgMax * PROPAGATION_DISCOUNT) : 0;
 }
 
 /**
@@ -287,10 +413,56 @@ async function buildAndCacheGraph(userId: string): Promise<InteractionGraph> {
     });
   }
 
+  // ── Learned-importance propagation (VIP cluster hops) ──────────────────────
+  // A contact the user actively engages with makes their *organization* matter:
+  // org domain → strongest measured engagement there. Computed over ALL engaged
+  // nodes (not just the cached top) so the map is complete. Public providers are
+  // excluded by orgDomainOf — sharing "gmail.com" is not a relationship. Only
+  // domains with ≥PROPAGATION_MIN_ENGAGED distinct engaged contacts qualify, so a
+  // single reply can't inflate trust for a whole domain (a spoofing / farming
+  // guard — a domain propagates only once the user works with an *org*, not one
+  // person). Positive engagement only: a dismiss-only contact (importance 0) is
+  // not a relationship and must not tag peers as engaged.
+  const orgEngaged = new Map<string, { max: number; contacts: Set<string> }>();
+  for (const n of nodes) {
+    if (!n.learnedImportance) continue; // measured, positive engagement only (0/undefined out)
+    const org = orgDomainOf(n.email);
+    if (!org) continue;
+    const e = orgEngaged.get(org) ?? { max: 0, contacts: new Set<string>() };
+    e.max = Math.max(e.max, n.learnedImportance);
+    e.contacts.add(n.email);
+    orgEngaged.set(org, e);
+  }
+  const orgImportance = new Map<string, number>();
+  for (const [org, e] of orgEngaged) {
+    if (e.contacts.size >= PROPAGATION_MIN_ENGAGED) orgImportance.set(org, e.max);
+  }
+
   nodes.sort((a, b) => b.score - a.score);
   const top = nodes.slice(0, MAX_NODES);
+  // Measured engagement must always reach the judge — never let a contact the
+  // user actively replies to (but who rarely emails them, so low score) get
+  // pruned by the top-N score cut. Append any engaged stragglers.
+  for (const n of nodes) {
+    if (n.learnedImportance !== undefined && !top.includes(n)) top.push(n);
+  }
 
-  const graph: InteractionGraph = { nodes: top, builtAt: now.toISOString() };
+  // Give quiet in-graph peers at an engaged org a soft propagated prior (for the
+  // graph visual + judge grounding). Direct engagement always wins over this.
+  for (const n of top) {
+    if (n.learnedImportance !== undefined) continue;
+    const org = orgDomainOf(n.email);
+    const orgMax = org ? orgImportance.get(org) : undefined;
+    if (!orgMax) continue; // 0 or undefined → no real org signal, don't tag
+    n.propagatedImportance = round2(orgMax * PROPAGATION_DISCOUNT);
+    n.tags.push("org_engaged");
+  }
+
+  const graph: InteractionGraph = {
+    nodes: top,
+    builtAt: now.toISOString(),
+    orgImportance: Object.fromEntries(orgImportance),
+  };
 
   await remember(userId, "CONTEXT", GRAPH_KEY, JSON.stringify(graph), "interaction-graph");
 

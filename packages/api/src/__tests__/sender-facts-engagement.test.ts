@@ -13,7 +13,7 @@ describe("buildSenderFactsBlock — learned engagement grounding", () => {
   it("renders a measured engagement fact (replied N times) when present", () => {
     const block = buildSenderFactsBlock({
       ...base,
-      engagement: { importance: 0.9, outboundCount: 5 },
+      engagement: { importance: 0.9, outboundCount: 5, propagated: false },
     });
     expect(block).toContain("strongly engages");
     expect(block).toContain("5 times");
@@ -23,11 +23,23 @@ describe("buildSenderFactsBlock — learned engagement grounding", () => {
   it("uses a softer qualifier for low importance and singular for one engagement", () => {
     const block = buildSenderFactsBlock({
       ...base,
-      engagement: { importance: 0.2, outboundCount: 1 },
+      engagement: { importance: 0.2, outboundCount: 1, propagated: false },
     });
     expect(block).toContain("sometimes engages");
     expect(block).toContain("1 time");
     expect(block).not.toContain("1 times");
+  });
+
+  it("hedges a propagated (org-inferred) prior and never claims a direct reply", () => {
+    const block = buildSenderFactsBlock({
+      ...base,
+      engagement: { importance: 0.4, outboundCount: 0, propagated: true },
+    });
+    expect(block).toContain("other people at this sender's organization");
+    expect(block).toContain("weigh it lightly");
+    // Must NOT assert a measured reply-count claim for a propagated prior.
+    expect(block).not.toContain("has replied to or written them");
+    expect(block).not.toContain("strongly engages");
   });
 
   it("renders nothing when there is no engagement (dark-ship default)", () => {

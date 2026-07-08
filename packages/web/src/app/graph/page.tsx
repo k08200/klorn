@@ -36,6 +36,7 @@ const REL_LEGEND: Array<{ color: string; label: string; shape: SwatchShape }> = 
   { color: "#fb7185", label: "Waiting on a reply", shape: "triangle" },
   { color: "#f59e0b", label: "Meeting soon", shape: "square" },
   { color: "#f472b6", label: "You engage (learned)", shape: "diamond" },
+  { color: "#c084fc", label: "Org you engage (inferred)", shape: "diamond" },
   { color: "#34d399", label: "Frequent contact", shape: "ring" },
   { color: "#60a5fa", label: "Contact", shape: "circle" },
 ];

@@ -75,8 +75,16 @@ export interface SenderFacts {
    * measured from real outbound replies/sends (importance 0..1 + raw count).
    * Flag-gated (CONTACT_ENGAGEMENT_IN_JUDGE); a soft senderTrust grounding fact,
    * never a hard tier decision. null when off or the sender has no engagement.
+   *
+   * `propagated` distinguishes the two kinds: false = directly measured
+   * (outboundCount > 0); true = an inferred cold-start prior from the sender's
+   * organization (outboundCount 0, much softer — rendered with weaker language).
    */
-  engagement: { importance: number; outboundCount: number } | null;
+  engagement: {
+    importance: number;
+    outboundCount: number;
+    propagated: boolean;
+  } | null;
 }
 
 /**
