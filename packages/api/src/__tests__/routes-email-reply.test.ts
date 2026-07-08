@@ -112,6 +112,22 @@ describe("POST /api/email/:id/reply", () => {
     await app.close();
   });
 
+  it("threads linkedInboxAccountId through to getReplyHeaders and sendEmail for a message from a linked secondary inbox (#757)", async () => {
+    emailFindFirst.mockResolvedValue({ ...EMAIL, linkedInboxAccountId: "linked-acct-1" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/reply",
+      payload: { body: "3pm works for me." },
+    });
+    expect(res.statusCode).toBe(200);
+
+    expect(getReplyHeaders.mock.calls[0]).toEqual(["user-1", "g1", "linked-acct-1"]);
+    const options = sendEmail.mock.calls[0][5];
+    expect(options.linkedInboxAccountId).toBe("linked-acct-1");
+    await app.close();
+  });
+
   it("reports threaded=false when no RFC Message-ID is found (threadId-only)", async () => {
     getReplyHeaders.mockResolvedValue({});
     const app = await buildApp();
