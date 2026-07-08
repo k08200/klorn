@@ -8,6 +8,11 @@ enum Config {
     /// malformed value is ignored. Returned without a trailing slash.
     static let apiBaseURL: String = resolveAPIBase()
 
+    /// Web app base for deep-linking an item into the full inbox when the user
+    /// taps "Open" on a HUD card. Resolution mirrors `apiBaseURL`:
+    /// `KLORN_WEB_URL` env → `KlornWebURL` in Info.plist → prod web default.
+    static let webBaseURL: String = resolveWebBase()
+
     /// Keychain coordinates for the persisted JWT. The API authenticates with
     /// `Authorization: Bearer` (no cookie session), so the token must survive
     /// across launches.
@@ -19,6 +24,15 @@ enum Config {
         if let raw = ProcessInfo.processInfo.environment["KLORN_API_URL"],
            let url = validated(raw) { return url }
         if let raw = Bundle.main.object(forInfoDictionaryKey: "KlornAPIURL") as? String,
+           let url = validated(raw) { return url }
+        return fallback
+    }
+
+    private static func resolveWebBase() -> String {
+        let fallback = "https://app.klorn.ai"
+        if let raw = ProcessInfo.processInfo.environment["KLORN_WEB_URL"],
+           let url = validated(raw) { return url }
+        if let raw = Bundle.main.object(forInfoDictionaryKey: "KlornWebURL") as? String,
            let url = validated(raw) { return url }
         return fallback
     }

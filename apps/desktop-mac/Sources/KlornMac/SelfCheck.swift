@@ -135,6 +135,64 @@ func runSelfChecks() async -> Bool {
                                      pushItems: [push("a"), push("b")])
     check("no new PUSH = no notifications", none.toNotify.isEmpty)
 
+    print("Top bar open URL:")
+    func item(href: String?) -> FirewallItem {
+        FirewallItem(id: "x", source: "email", sourceId: "x", type: "email", title: "t",
+                     tier: .push, tierReason: nil, priority: 0, surfacedAt: "",
+                     email: nil, href: href, hashStale: nil)
+    }
+    let web = Config.webBaseURL
+    check("absolute href opens verbatim",
+          TopBarController.resolveURL(item(href: "https://x.test/mail/9"))?.absoluteString == "https://x.test/mail/9")
+    check("root-relative href joins web base",
+          TopBarController.resolveURL(item(href: "/mail/9"))?.absoluteString == web + "/mail/9")
+    check("bare-relative href joins with slash",
+          TopBarController.resolveURL(item(href: "mail/9"))?.absoluteString == web + "/mail/9")
+    check("nil href falls back to inbox root",
+          TopBarController.resolveURL(item(href: nil))?.absoluteString == web)
+    check("no item falls back to inbox root",
+          TopBarController.resolveURL(nil)?.absoluteString == web)
+
+    print("Dismiss:")
+    let fw2JSON = """
+    {"tiers":{"PUSH":[{"id":"p1","source":"email","sourceId":"e1","type":"email","title":"a",
+    "tier":"PUSH","tierReason":null,"priority":1,"surfacedAt":"","email":null,"hashStale":null},
+    {"id":"p2","source":"email","sourceId":"e2","type":"email","title":"b","tier":"PUSH",
+    "tierReason":null,"priority":1,"surfacedAt":"","email":null,"hashStale":null}],
+    "QUEUE":[],"SILENT":[],"AUTO":[]},"summary":{"PUSH":2,"QUEUE":0,"SILENT":0,"AUTO":0,"total":2}}
+    """
+    if let fw = try? JSONDecoder().decode(FirewallResponse.self, from: Data(fw2JSON.utf8)) {
+        let after = fw.removingIDs(["p1"])
+        check("removingIDs drops the item", after.items(for: .push).map(\.id) == ["p2"])
+        check("removingIDs decrements summary", after.summary.push == 1 && after.summary.total == 1)
+        check("removingIDs ignores unknown id",
+              fw.removingIDs(["nope"]).summary.push == 2)
+        check("allItemIDs collects across tiers", fw.allItemIDs == ["p1", "p2"])
+    } else {
+        check("dismiss fixture decodes", false)
+    }
+    // Snooze target: 9am the next day, strictly in the future.
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(identifier: "UTC")!
+    let noonJan1 = cal.date(from: DateComponents(year: 2026, month: 1, day: 1, hour: 12))!
+    let snoozeTo = AppModel.tomorrow9am(from: noonJan1, calendar: cal)
+    let parts = cal.dateComponents([.year, .month, .day, .hour, .minute], from: snoozeTo)
+    check("snooze = next day 09:00",
+          parts.year == 2026 && parts.month == 1 && parts.day == 2 && parts.hour == 9 && parts.minute == 0)
+    check("snooze is in the future", snoozeTo > noonJan1)
+
+    print("Realtime:")
+    check("wakes on notification", RealtimeClient.shouldWake(#"{"type":"notification","payload":{}}"#))
+    check("wakes on sync", RealtimeClient.shouldWake(#"{"type":"sync"}"#))
+    check("ignores connection chatter", !RealtimeClient.shouldWake(#"{"type":"client_joined"}"#))
+    check("ignores non-JSON", !RealtimeClient.shouldWake("pong"))
+    let ws = RealtimeClient.wsURL(token: "abc.def")
+    let wantScheme = Config.apiBaseURL.hasPrefix("https") ? "wss" : "ws"
+    check("ws url = scheme+/ws+desktop+token",
+          ws?.scheme == wantScheme && ws?.path == "/ws"
+          && ws?.query?.contains("type=desktop") == true
+          && ws?.query?.contains("token=abc.def") == true)
+
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0
 }

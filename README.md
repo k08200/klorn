@@ -103,11 +103,29 @@ Klorn's first screen is not a chat or an inbox — it's a decision queue. Scatte
 
 ```text
 packages/
-  api/   Fastify API, Prisma schema, agent/tool orchestration
-  web/   Next.js app: decision queue, mail, calendar, briefing, settings
-  core/  shared utilities and CLI-facing primitives
-docs/    doctrine, screenshots, operational notes
+  api/          Fastify API, Prisma schema, agent/tool orchestration
+  web/          Next.js app: decision queue, mail, calendar, briefing, settings
+  core/         shared utilities and CLI-facing primitives
+apps/
+  desktop-mac/  native macOS app — the always-on top-bar firewall (SwiftUI)
+  mobile/       Capacitor shell (iOS / Android)
+docs/           doctrine, screenshots, operational notes
 ```
+
+## Native macOS app
+
+A real native SwiftUI client that lives as a **custom always-on bar pinned to the
+top of your screen** — a slim pill that expands (`☰` / `⌥⌘K`) into the firewall
+and never steals focus from what you're working in. Real-time over the existing
+WebSocket hub; row actions Open / Snooze / Dismiss.
+
+```bash
+cd apps/desktop-mac
+KLORN_API_URL=https://klorn-api.onrender.com swift run KlornMac   # or plain `swift run KlornMac` for local dev
+```
+
+See [`apps/desktop-mac/README.md`](apps/desktop-mac/README.md) for the full guide
+(sign-in, hotkey, packaging a double-clickable `Klorn.app`, tests).
 
 ## Local development
 

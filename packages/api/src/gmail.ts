@@ -1000,17 +1000,33 @@ export function safeMimeType(raw: string): string {
     : "application/octet-stream";
 }
 
+interface ThreadingHeaders {
+  inReplyTo?: string;
+  references?: string;
+}
+
+/** RFC822 threading headers, CR/LF-stripped so a fetched value can't inject. */
+function threadingHeaderLines(headers?: ThreadingHeaders): string[] {
+  const lines: string[] = [];
+  if (headers?.inReplyTo) lines.push(`In-Reply-To: ${safeHeaderValue(headers.inReplyTo)}`);
+  if (headers?.references) lines.push(`References: ${safeHeaderValue(headers.references)}`);
+  return lines;
+}
+
 function buildPlainTextRawEmail(
   to: string,
   subject: string,
   body: string,
   attachments: GmailDraftAttachment[] = [],
+  threading?: ThreadingHeaders,
 ): string {
+  const threadLines = threadingHeaderLines(threading);
   if (attachments.length === 0) {
     return Buffer.from(
       [
         `To: ${safeHeaderValue(to)}`,
         `Subject: ${encodeSubject(subject)}`,
+        ...threadLines,
         "MIME-Version: 1.0",
         "Content-Type: text/plain; charset=utf-8",
         "Content-Transfer-Encoding: 8bit",
@@ -1024,6 +1040,7 @@ function buildPlainTextRawEmail(
   const parts = [
     `To: ${safeHeaderValue(to)}`,
     `Subject: ${encodeSubject(subject)}`,
+    ...threadLines,
     "MIME-Version: 1.0",
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
     "",
@@ -1057,6 +1074,7 @@ export async function sendEmail(
   subject: string,
   body: string,
   attachments: GmailDraftAttachment[] = [],
+  options?: { threadId?: string | null; inReplyTo?: string; references?: string },
 ) {
   // Single recipient only. A comma or semicolon means multiple addresses —
   // reject it so the angle-bracket display-name trick
@@ -1081,13 +1099,16 @@ export async function sendEmail(
 
   const gmail = google.gmail({ version: "v1", auth });
 
-  const raw = buildPlainTextRawEmail(to, subject, body, attachments);
+  const raw = buildPlainTextRawEmail(to, subject, body, attachments, {
+    inReplyTo: options?.inReplyTo,
+    references: options?.references,
+  });
 
   let res: { data: { id?: string | null } };
   try {
     res = await gmail.users.messages.send({
       userId: "me",
-      requestBody: { raw },
+      requestBody: { raw, ...(options?.threadId ? { threadId: options.threadId } : {}) },
     });
   } catch (err) {
     if (isGoogleAuthError(err)) {
@@ -1149,6 +1170,41 @@ export async function createEmailDraft(
     messageId: res.data.message?.id,
     url: "https://mail.google.com/mail/u/0/#drafts",
   };
+}
+
+/**
+ * Fetch the RFC822 `Message-ID` (and any existing `References` chain) of a Gmail
+ * message so a reply can set correct `In-Reply-To` / `References` headers. The DB
+ * stores only Gmail's internal id + threadId, not the RFC822 Message-ID, so this
+ * reads it live (metadata only). Returns `{}` on any failure — the caller can
+ * still thread by `threadId` alone.
+ */
+export async function getReplyHeaders(
+  userId: string,
+  gmailMessageId: string,
+): Promise<{ messageId?: string; references?: string }> {
+  try {
+    const auth = await getAuthedClient(userId);
+    if (!auth) return {};
+    const gmail = google.gmail({ version: "v1", auth });
+    const res = await gmail.users.messages.get({
+      userId: "me",
+      id: gmailMessageId,
+      format: "metadata",
+      metadataHeaders: ["Message-ID", "References"],
+    });
+    const headers = res.data.payload?.headers ?? [];
+    const find = (name: string): string | undefined =>
+      headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? undefined;
+    return { messageId: find("Message-ID"), references: find("References") };
+  } catch (err) {
+    // Non-fatal — reply still threads by threadId. Log a signal, don't swallow.
+    console.warn(
+      "[gmail] getReplyHeaders failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return {};
+  }
 }
 
 /** Mark a Gmail message as read (remove UNREAD label) */
