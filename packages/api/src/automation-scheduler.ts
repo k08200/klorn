@@ -763,6 +763,18 @@ async function runAutomations() {
           console.warn("[AUTOMATION] Ontology proposal recompute failed:", err);
           captureError(err, { tags: { scope: "automation.ontology-proposals" } });
         });
+
+      // --- Daily: judge-health heartbeat ---
+      // computeHealth() alone can't tell "no drift" from "the tripwire's feed
+      // died" — both leave its rolling window frozen and reading as healthy.
+      // This is the canary of the canary (#742): alarms if NO judge decision
+      // has been recorded fleet-wide (per dyno) within the max-silence window.
+      import("./judge-health.js")
+        .then(({ runJudgeHeartbeatCheck }) => runJudgeHeartbeatCheck())
+        .catch((err) => {
+          console.warn("[AUTOMATION] Judge heartbeat check failed:", err);
+          captureError(err, { tags: { scope: "automation.judge-heartbeat" } });
+        });
     }
 
     // --- Every tick: Resurrect snoozed AttentionItems whose snooze has expired ---
