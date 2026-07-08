@@ -160,40 +160,54 @@ async function semanticRankCorrections(
   return topIdx.map((i) => candidates[i].example);
 }
 
+/**
+ * Fail-soft in its OWN try/catch (#677): this used to share the outer
+ * buildJudgeContext catch with fetchSenderItems, so a transient error here
+ * silently wiped the sender-prior/history context too, not just corrections.
+ */
 async function fetchCorrections(
   userId: string,
   senderAddress: string,
   excludeSourceId?: string,
   incomingText?: string,
 ): Promise<CorrectionExample[]> {
-  const rows = (await db.attentionItem.findMany({
-    where: {
-      userId,
-      source: "EMAIL",
-      isManualOverride: true,
-      tier: { not: null },
-      ...(excludeSourceId ? { sourceId: { not: excludeSourceId } } : {}),
-    },
-    orderBy: { updatedAt: "desc" },
-    take: CORRECTION_POOL_SIZE,
-    select: { sourceId: true, tier: true },
-  })) as OverrideRow[];
-  if (rows.length === 0) return [];
+  try {
+    const rows = (await db.attentionItem.findMany({
+      where: {
+        userId,
+        source: "EMAIL",
+        isManualOverride: true,
+        tier: { not: null },
+        ...(excludeSourceId ? { sourceId: { not: excludeSourceId } } : {}),
+      },
+      orderBy: { updatedAt: "desc" },
+      take: CORRECTION_POOL_SIZE,
+      select: { sourceId: true, tier: true },
+    })) as OverrideRow[];
+    if (rows.length === 0) return [];
 
-  const emails = (await db.emailMessage.findMany({
-    where: { id: { in: rows.map((r) => r.sourceId) } },
-    select: { id: true, from: true, subject: true },
-  })) as EmailRow[];
-  const emailsById = new Map(emails.map((e) => [e.id, e]));
+    const emails = (await db.emailMessage.findMany({
+      where: { id: { in: rows.map((r) => r.sourceId) } },
+      select: { id: true, from: true, subject: true },
+    })) as EmailRow[];
+    const emailsById = new Map(emails.map((e) => [e.id, e]));
 
-  // Semantic ranking when an embedding model is configured and we have the
-  // incoming email's text; otherwise (and on any embedding failure) fall back to
-  // the deterministic same-sender/domain/recency ranking.
-  if (isEmbeddingEnabled() && incomingText) {
-    const semantic = await semanticRankCorrections(incomingText, rows, emailsById);
-    if (semantic) return semantic;
+    // Semantic ranking when an embedding model is configured and we have the
+    // incoming email's text; otherwise (and on any embedding failure) fall back to
+    // the deterministic same-sender/domain/recency ranking.
+    if (isEmbeddingEnabled() && incomingText) {
+      const semantic = await semanticRankCorrections(incomingText, rows, emailsById);
+      if (semantic) return semantic;
+    }
+    return rankCorrections(rows, emailsById, senderAddress);
+  } catch (err) {
+    console.warn(
+      "[judge-context] corrections fetch failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    captureError(err, { tags: { scope: "judge-context-corrections" }, extra: { userId } });
+    return [];
   }
-  return rankCorrections(rows, emailsById, senderAddress);
 }
 
 function buildPrior(items: SenderItemRow[]): SenderPrior | null {
@@ -284,6 +298,9 @@ async function fetchSenderEmailIdsLegacy(
   return emails.filter((e) => extractEmailAddress(e.from) === senderAddress).map((e) => e.id);
 }
 
+/**
+ * Fail-soft in its OWN try/catch (#677) — see fetchCorrections above for why.
+ */
 async function fetchSenderItems(
   userId: string,
   senderAddress: string,
@@ -291,21 +308,30 @@ async function fetchSenderItems(
 ): Promise<SenderItemRow[]> {
   if (!senderAddress) return [];
 
-  const ownIds = isSenderAddressIndexEnabled()
-    ? await fetchSenderEmailIdsIndexed(userId, senderAddress, excludeEmailId)
-    : await fetchSenderEmailIdsLegacy(userId, senderAddress, excludeEmailId);
-  if (ownIds.length === 0) return [];
+  try {
+    const ownIds = isSenderAddressIndexEnabled()
+      ? await fetchSenderEmailIdsIndexed(userId, senderAddress, excludeEmailId)
+      : await fetchSenderEmailIdsLegacy(userId, senderAddress, excludeEmailId);
+    if (ownIds.length === 0) return [];
 
-  return (await db.attentionItem.findMany({
-    where: { userId, source: "EMAIL", sourceId: { in: ownIds } },
-    select: {
-      sourceId: true,
-      tier: true,
-      tierReason: true,
-      isManualOverride: true,
-      updatedAt: true,
-    },
-  })) as SenderItemRow[];
+    return (await db.attentionItem.findMany({
+      where: { userId, source: "EMAIL", sourceId: { in: ownIds } },
+      select: {
+        sourceId: true,
+        tier: true,
+        tierReason: true,
+        isManualOverride: true,
+        updatedAt: true,
+      },
+    })) as SenderItemRow[];
+  } catch (err) {
+    console.warn(
+      "[judge-context] sender-items fetch failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    captureError(err, { tags: { scope: "judge-context-sender-items" }, extra: { userId } });
+    return [];
+  }
 }
 
 /**
@@ -402,8 +428,12 @@ async function fetchLearnedRules(userId: string): Promise<LearnedRule[]> {
 /**
  * Fetch correction few-shots, sender prior, and sender facts for one email.
  * Never throws — a broken correction loop must degrade to plain
- * classification. (getCachedInteractionNode and getTrustScore are
- * internally fail-soft; the outer catch covers the two history queries.)
+ * classification. All six Promise.all branches are now independently
+ * fail-soft (#677): fetchCorrections and fetchSenderItems catch in their own
+ * try/catch, same as fetchSenderTraits/fetchLearnedRules; getCachedInteractionNode
+ * and getTrustScore are internally fail-soft. A transient error in ANY one
+ * branch no longer wipes the other five — this outer catch now only fires on
+ * something outside those six calls (e.g. extractEmailAddress throwing).
  */
 export async function buildJudgeContext(
   userId: string,

@@ -87,6 +87,10 @@ export async function createEvent(
   if (!auth) return { error: "Google Calendar not connected." };
 
   try {
+    // A naive (offset-less) dateTime is interpreted by Google in whatever
+    // timeZone field is sent — hardcoding "Asia/Seoul" here put every
+    // non-KST user's event at the wrong absolute time (#676).
+    const userZone = await getUserTimeZone(userId);
     const calendar = google.calendar({ version: "v3", auth });
     const res = await calendar.events.insert({
       calendarId: "primary",
@@ -94,8 +98,8 @@ export async function createEvent(
         summary,
         description: description || "",
         location: location || "",
-        start: { dateTime: startTime, timeZone: "Asia/Seoul" },
-        end: { dateTime: endTime, timeZone: "Asia/Seoul" },
+        start: { dateTime: startTime, timeZone: userZone },
+        end: { dateTime: endTime, timeZone: userZone },
       },
     });
 
