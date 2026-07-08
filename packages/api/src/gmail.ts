@@ -761,7 +761,7 @@ export async function getAuthedInboxAccount(
  * (EmailMessage.linkedInboxAccountId). This is what makes multi-account actions
  * (archive/read/star/trash) hit the right account instead of always the primary.
  */
-async function resolveMailClient(
+export async function resolveMailClient(
   userId: string,
   linkedInboxAccountId?: string | null,
 ): Promise<InstanceType<typeof google.auth.OAuth2> | null> {
@@ -1074,7 +1074,12 @@ export async function sendEmail(
   subject: string,
   body: string,
   attachments: GmailDraftAttachment[] = [],
-  options?: { threadId?: string | null; inReplyTo?: string; references?: string },
+  options?: {
+    threadId?: string | null;
+    inReplyTo?: string;
+    references?: string;
+    linkedInboxAccountId?: string | null;
+  },
 ) {
   // Single recipient only. A comma or semicolon means multiple addresses —
   // reject it so the angle-bracket display-name trick
@@ -1094,7 +1099,10 @@ export async function sendEmail(
     };
   }
 
-  const auth = await getAuthedClient(userId);
+  // A message that arrived via a linked secondary inbox lives on THAT
+  // account's Gmail, not the primary — sending/threading against the
+  // primary account rejects the mismatched threadId (#757).
+  const auth = await resolveMailClient(userId, options?.linkedInboxAccountId);
   if (!auth) return { error: "Gmail not connected." };
 
   const gmail = google.gmail({ version: "v1", auth });
@@ -1112,7 +1120,7 @@ export async function sendEmail(
     });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markGoogleTokenForReconnect(userId);
+      await markInboxForReconnect(userId, options?.linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;
@@ -1128,6 +1136,7 @@ export async function createEmailDraft(
   body: string,
   threadId?: string | null,
   attachments: GmailDraftAttachment[] = [],
+  linkedInboxAccountId?: string | null,
 ) {
   if (!looksLikeEmailAddress(to)) {
     return {
@@ -1140,7 +1149,9 @@ export async function createEmailDraft(
     };
   }
 
-  const auth = await getAuthedClient(userId);
+  // Same fix as sendEmail (#757): a draft threaded against a linked-inbox
+  // message must be created on THAT account, not the primary.
+  const auth = await resolveMailClient(userId, linkedInboxAccountId);
   if (!auth) return { error: "Gmail not connected." };
 
   const gmail = google.gmail({ version: "v1", auth });
@@ -1158,7 +1169,7 @@ export async function createEmailDraft(
     });
   } catch (err) {
     if (isGoogleAuthError(err)) {
-      await markGoogleTokenForReconnect(userId);
+      await markInboxForReconnect(userId, linkedInboxAccountId);
       return { error: "Gmail not connected. Please reconnect your Google account." };
     }
     throw err;
@@ -1182,9 +1193,10 @@ export async function createEmailDraft(
 export async function getReplyHeaders(
   userId: string,
   gmailMessageId: string,
+  linkedInboxAccountId?: string | null,
 ): Promise<{ messageId?: string; references?: string }> {
   try {
-    const auth = await getAuthedClient(userId);
+    const auth = await resolveMailClient(userId, linkedInboxAccountId);
     if (!auth) return {};
     const gmail = google.gmail({ version: "v1", auth });
     const res = await gmail.users.messages.get({
