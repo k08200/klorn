@@ -27,6 +27,7 @@ final class AppModel {
     private(set) var openedEmail: EmailDetail?
     private(set) var isLoadingEmail = false
     private(set) var emailError: String?
+    private(set) var replyError: String?
 
     /// Refresh cadence so new PUSH mail surfaces a notification even with the
     /// window closed (also keeps the free-tier API warm).
@@ -100,6 +101,55 @@ final class AppModel {
         selectedItemId = nil
         openedEmail = nil
         emailError = nil
+        replyError = nil
+    }
+
+    private(set) var isDrafting = false
+
+    /// Ask Klorn's AI to write a reply draft for this email (POST
+    /// /api/email/:id/reply-draft). Returns the drafted body to prefill the
+    /// composer — the user still reviews and sends (approval-before-action).
+    func draftReply(_ item: FirewallItem) async -> String? {
+        guard let emailDbId = item.email?.emailDbId else { return nil }
+        struct Draft: Decodable { let body: String? }
+        isDrafting = true
+        defer { isDrafting = false }
+        replyError = nil
+        do {
+            let draft: Draft = try await api.post("/api/email/\(emailDbId)/reply-draft", json: [:], as: Draft.self)
+            return draft.body
+        } catch APIError.unauthorized {
+            signOut()
+            return nil
+        } catch APIError.forbidden {
+            replyError = "AI reply drafts need Klorn Pro."
+            return nil
+        } catch {
+            replyError = Self.describe(error)
+            return nil
+        }
+    }
+
+    /// Send a threaded reply to the selected email's sender in-app
+    /// (POST /api/email/:id/reply). Returns true on success. A 403 means the
+    /// account isn't entitled (Pro) — surfaced, NOT treated as a sign-out.
+    func reply(_ item: FirewallItem, body: String) async -> Bool {
+        guard let emailDbId = item.email?.emailDbId, !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return false }
+        replyError = nil
+        do {
+            try await api.post("/api/email/\(emailDbId)/reply", json: ["body": body])
+            return true
+        } catch APIError.unauthorized {
+            signOut()
+            return false
+        } catch APIError.forbidden {
+            replyError = "Replying from the app needs Klorn Pro."
+            return false
+        } catch {
+            replyError = Self.describe(error)
+            return false
+        }
     }
 
     /// Dismiss a PUSH item: clear it from the firewall queue (status DISMISSED,
@@ -255,10 +305,11 @@ final class AppModel {
     private static func describe(_ error: Error) -> String {
         Log.app.error("queue load failed: \(String(describing: error), privacy: .private)")
         switch error {
-        case APIError.http(let code): return "Server error (\(code))."
+        case APIError.http(let code, let msg): return msg ?? "Server error (\(code))."
         case APIError.transport: return "Network error — check your connection."
         case APIError.decoding: return "Unexpected response from the server."
         case APIError.unauthorized: return "Session expired. Please sign in again."
+        case APIError.forbidden: return "This action needs Klorn Pro."
         default: return "Something went wrong."
         }
     }

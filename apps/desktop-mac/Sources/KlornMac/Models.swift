@@ -131,6 +131,11 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     let snippet: String?
     let date: String?
     let threadId: String?
+    // Klorn's intelligence for this email (all optional/simple — decoding stays
+    // resilient; JSONDecoder ignores the endpoint's other, richer fields).
+    let summary: String?
+    let needsReply: Bool?
+    let needsReplyReason: String?
 
     /// Body, falling back to the snippet when the body is empty (as the web does).
     var text: String {

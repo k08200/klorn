@@ -1,8 +1,11 @@
 import Foundation
 
 enum APIError: Error, Sendable, Equatable {
-    case http(Int)
-    case unauthorized
+    /// Non-2xx status + the server's `message`/`error` field when present, so the
+    /// UI can show the real reason (e.g. a 409 "no-reply sender") not just a code.
+    case http(Int, String?)
+    case unauthorized  // 401 — session invalid/expired (drop to sign-in)
+    case forbidden     // 403 — authenticated but not entitled (e.g. Pro-only); do NOT sign out
     case transport(String)
     case decoding(String)
 }
@@ -47,6 +50,18 @@ struct APIClient: Sendable {
         _ = try await data(path, method: "POST", body: body, contentType: "application/json", authed: authed)
     }
 
+    /// POST a JSON object and decode the response (e.g. an AI reply draft).
+    func post<T: Decodable>(_ path: String, json: [String: String], as _: T.Type = T.self, authed: Bool = true) async throws -> T {
+        let reqBody = try JSONEncoder().encode(json)
+        let data = try await data(path, method: "POST", body: reqBody, contentType: "application/json", authed: authed)
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            Log.net.debug("decode failed for \(path, privacy: .public): \(String(describing: error), privacy: .private)")
+            throw APIError.decoding(path)
+        }
+    }
+
     /// Raw request → body bytes. Maps non-2xx to APIError (401/403 → .unauthorized).
     @discardableResult
     func data(
@@ -75,8 +90,17 @@ struct APIClient: Sendable {
         }
         switch http.statusCode {
         case 200...299: return bytes
-        case 401, 403: throw APIError.unauthorized
-        default: throw APIError.http(http.statusCode)
+        case 401: throw APIError.unauthorized
+        case 403: throw APIError.forbidden
+        default: throw APIError.http(http.statusCode, Self.serverMessage(bytes))
         }
+    }
+
+    /// Pull a human message out of an error response body (`{message}`/`{error}`).
+    private static func serverMessage(_ data: Data) -> String? {
+        struct Body: Decodable { let message: String?; let error: String? }
+        guard let body = try? JSONDecoder().decode(Body.self, from: data) else { return nil }
+        let msg = body.message ?? body.error
+        return (msg?.isEmpty == false) ? msg : nil
     }
 }

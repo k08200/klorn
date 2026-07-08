@@ -1,6 +1,14 @@
 import AppKit
 import SwiftUI
 
+/// A borderless panel that can still become key — used only for the full state
+/// so its reply text field can receive keyboard input. (A plain borderless
+/// window returns false for canBecomeKey.)
+final class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 /// Owns the always-on top bar: a single non-focus-stealing panel pinned to the
 /// top-center of the screen. Collapsed it's a slim pill; `☰` expands it (the
 /// window frame animates) into the full panel, `— Close` collapses it back.
@@ -11,6 +19,7 @@ final class TopBarController {
     private let model: AppModel
     private var panel: NSPanel?
     private var state: BarState = .collapsed
+    private var panelIsFocusable = false
     private static let topMargin: CGFloat = 8
 
     init(model: AppModel) {
@@ -22,7 +31,6 @@ final class TopBarController {
         guard NSScreen.main != nil else { return }  // headless: nothing to draw
         state = .collapsed
         render()
-        panel?.orderFrontRegardless()  // visible WITHOUT activating or taking focus
     }
 
     /// New PUSH arrived: the live count already updates via observation; also post
@@ -35,25 +43,43 @@ final class TopBarController {
     /// Global-hotkey entry point: expand the pill / collapse whatever is open,
     /// creating the bar first if it isn't on screen yet. Never steals focus.
     func toggle() {
-        guard panel != nil else { show(); setState(.expanded); panel?.orderFrontRegardless(); return }
+        guard panel != nil else { show(); setState(.expanded); return }
         setState(state == .collapsed ? .expanded : .collapsed)
-        panel?.orderFrontRegardless()
     }
 
     private func setState(_ newState: BarState) {
         state = newState
         render()
-        panel?.orderFrontRegardless()
     }
 
     private func render() {
+        let focusable = (state == .full)
         let size = TopBarMetrics.size(for: state)
         let root = TopBarRoot(state: state, actions: makeActions())
             .environment(model)
-        let panel = self.panel ?? makePanel()
+        // Recreate the window when the focus model flips: pill/panel are
+        // non-focus-stealing; full is a key-able app window so its reply field
+        // can accept keyboard input.
+        if let existing = self.panel, panelIsFocusable != focusable {
+            existing.orderOut(nil)
+            self.panel = nil
+        }
+        let panel = self.panel ?? makePanel(focusable: focusable)
+        panelIsFocusable = focusable
         panel.contentView = NSHostingView(rootView: root)
         self.panel = panel
         setFrame(panel, size: size)
+        if focusable {
+            // Full is a real, focusable app window: switch to a regular activation
+            // policy (Dock icon + menu + real focus) so the reply field can type.
+            NSApp.setActivationPolicy(.regular)
+            panel.makeKeyAndOrderFront(nil)
+            NSApp.activate()
+        } else {
+            // Ambient: no Dock icon, never steal focus from the user's app.
+            NSApp.setActivationPolicy(.accessory)
+            panel.orderFrontRegardless()
+        }
     }
 
     private func makeActions() -> TopBarActions {
@@ -65,22 +91,29 @@ final class TopBarController {
             onSignIn: { [weak self] in guard let self else { return }; Task { await self.model.signIn() } },
             onSignOut: { [weak self] in self?.model.signOut() },
             onOpenWeb: { [weak self] item in self?.open(item) },
+            onOpenInApp: { [weak self] item in
+                guard let self else { return }
+                self.setState(.full)
+                Task { await self.model.select(item) }
+            },
             onDismiss: { [weak self] item in guard let self else { return }; Task { await self.model.dismiss(item) } },
             onSnooze: { [weak self] item in guard let self else { return }; Task { await self.model.snooze(item) } },
             onSelect: { [weak self] item in guard let self else { return }; Task { await self.model.select(item) } },
             onQuit: { NSApplication.shared.terminate(nil) })
     }
 
-    private func makePanel() -> NSPanel {
-        let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: TopBarMetrics.collapsed),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false)
+    private func makePanel(focusable: Bool) -> NSPanel {
+        let rect = NSRect(origin: .zero, size: TopBarMetrics.collapsed)
+        // Non-focus-stealing for pill/panel (`.nonactivatingPanel`); a key-able
+        // window for full so the reply field can accept typing.
+        let mask: NSWindow.StyleMask = focusable ? [.borderless] : [.borderless, .nonactivatingPanel]
+        let panel: NSPanel = focusable
+            ? KeyablePanel(contentRect: rect, styleMask: mask, backing: .buffered, defer: false)
+            : NSPanel(contentRect: rect, styleMask: mask, backing: .buffered, defer: false)
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.hidesOnDeactivate = false
-        panel.becomesKeyOnlyIfNeeded = true
+        panel.becomesKeyOnlyIfNeeded = !focusable
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isOpaque = false
         panel.backgroundColor = .clear
