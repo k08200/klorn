@@ -49,8 +49,20 @@ describe("overrideAttentionTier", () => {
     expect(result).toEqual({ ok: true, tier: "QUEUE" });
     expect(attentionItem.update).toHaveBeenCalledWith({
       where: { id: "item-1" },
-      data: { tier: "QUEUE", tierReason: "Manual override — user moved to QUEUE" },
+      data: {
+        tier: "QUEUE",
+        tierReason: "Manual override — user moved to QUEUE",
+        isManualOverride: true,
+      },
     });
+  });
+
+  it("is the only path that sets isManualOverride true (GHSA-cxc5-fmqv-pxv6)", async () => {
+    // The ownership-checked human path is the sole legitimate writer of this
+    // flag — judge-authored tierReason text must never be able to set it.
+    await overrideAttentionTier("user-1", "item-1", "PUSH");
+    const data = attentionItem.update.mock.calls[0][0].data;
+    expect(data.isManualOverride).toBe(true);
   });
 
   it("checks ownership before mutating", async () => {

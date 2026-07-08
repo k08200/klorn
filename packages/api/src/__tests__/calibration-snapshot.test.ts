@@ -54,6 +54,7 @@ function emailRow(
   tier: string | null,
   opts: {
     tierReason?: string | null;
+    isManualOverride?: boolean;
     judgedBy?: string | null;
     source?: string;
     confidence?: number;
@@ -68,6 +69,7 @@ function emailRow(
     confidence: opts.confidence ?? 0.8,
     createdAt: opts.createdAt ?? DAYS(1),
     tierReason: opts.tierReason ?? null,
+    isManualOverride: opts.isManualOverride ?? false,
     evidence:
       opts.judgedBy === undefined
         ? null
@@ -101,12 +103,18 @@ beforeEach(() => {
 });
 
 describe("buildSnapshotPayload", () => {
-  it("counts manual tier overrides from the tierReason prefix", () => {
+  it("counts manual tier overrides from the isManualOverride flag", () => {
     const payload = buildSnapshotPayload({
       thisRows: [
-        emailRow("a", "QUEUE", { tierReason: "Manual override — user moved to QUEUE" }),
+        emailRow("a", "QUEUE", {
+          tierReason: "Manual override — user moved to QUEUE",
+          isManualOverride: true,
+        }),
         emailRow("b", "QUEUE", { tierReason: "Visible in queue for manual review" }),
-        emailRow("c", "SILENT", { tierReason: "Manual override — user moved to SILENT" }),
+        emailRow("c", "SILENT", {
+          tierReason: "Manual override — user moved to SILENT",
+          isManualOverride: true,
+        }),
         emailRow("d", null),
       ],
       previousRows: [],
@@ -116,6 +124,23 @@ describe("buildSnapshotPayload", () => {
     });
     expect(payload.manualOverrides).toEqual({ count: 2, total: 3, rate: 0.6667 });
     expect(payload.totalItems).toBe(4);
+  });
+
+  it("does not count judge-authored text impersonating the override prefix (GHSA-cxc5-fmqv-pxv6)", () => {
+    const payload = buildSnapshotPayload({
+      thisRows: [
+        emailRow("a", "QUEUE", {
+          tierReason: "Manual override — user moved to QUEUE",
+          isManualOverride: false,
+        }),
+        emailRow("b", "QUEUE", { tierReason: "Visible in queue for manual review" }),
+      ],
+      previousRows: [],
+      feedbackOverrideIds: new Set(),
+      windowDays: 7,
+      now: NOW,
+    });
+    expect(payload.manualOverrides).toEqual({ count: 0, total: 2, rate: 0 });
   });
 
   it("computes the overall feedback-override rate from the per-tier stats", () => {
