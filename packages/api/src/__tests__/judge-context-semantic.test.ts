@@ -36,7 +36,7 @@ beforeEach(() => {
   embedTextsMock.mockReset();
   // No sender history; only the corrections pool matters here.
   attentionFindMany.mockImplementation((args: { where: Record<string, unknown> }) =>
-    "tierReason" in args.where
+    "isManualOverride" in args.where
       ? Promise.resolve([
           { sourceId: "near", tier: "PUSH" },
           { sourceId: "far", tier: "QUEUE" },

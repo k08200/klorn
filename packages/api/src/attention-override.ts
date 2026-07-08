@@ -2,9 +2,11 @@
  * Manual tier override — shared by the firewall API and the Telegram
  * webhook's inline buttons so the ground-truth convention can't fork.
  *
- * Override stamps tierReason as 'Manual override — user moved to X' so the
- * row is identifiable as a human-labelled ground-truth example for poc-judge
- * (Day 7 bar = 80% agreement between auto-tier and user-override-tier).
+ * Override stamps tierReason as 'Manual override — user moved to X' (display)
+ * AND sets isManualOverride: true (the actual trust signal — this is the only
+ * call site allowed to set it, GHSA-cxc5-fmqv-pxv6) so the row is identifiable
+ * as a human-labelled ground-truth example for poc-judge (Day 7 bar = 80%
+ * agreement between auto-tier and user-override-tier).
  */
 
 import { prisma } from "./db.js";
@@ -46,8 +48,10 @@ export async function overrideAttentionTier(
     await (tx.attentionItem as unknown as { update: (args: unknown) => Promise<unknown> }).update({
       where: { id: itemId },
       // manualOverrideReason keeps the MANUAL_OVERRIDE_PREFIX marker that
-      // judge-context.ts mines from ever drifting.
-      data: { tier, tierReason: manualOverrideReason(tier) },
+      // judge-context.ts mines from ever drifting. isManualOverride is the
+      // actual trust boundary (GHSA-cxc5-fmqv-pxv6) — this is the only call
+      // site in the codebase allowed to set it true.
+      data: { tier, tierReason: manualOverrideReason(tier), isManualOverride: true },
     });
 
     await tx.decisionLabel.updateMany({

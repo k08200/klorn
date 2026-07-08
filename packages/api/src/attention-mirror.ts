@@ -216,6 +216,12 @@ export async function upsertAttentionForPendingAction(pa: PendingActionLike): Pr
         resolvedAt: isResolved ? new Date() : null,
         tier,
         tierReason,
+        // Not judge/LLM-authored text, but overrideAttentionTier() isn't
+        // source-restricted and can set this true on any AttentionItem. Reset
+        // on every producer write so a stale override can't outlive the
+        // tierReason content it was stamped against (calibration-snapshot's
+        // manualOverrides KPI is source-unfiltered).
+        isManualOverride: false,
       },
       update: {
         status,
@@ -232,6 +238,12 @@ export async function upsertAttentionForPendingAction(pa: PendingActionLike): Pr
         resolvedAt: isResolved ? new Date() : null,
         tier,
         tierReason,
+        // Not judge/LLM-authored text, but overrideAttentionTier() isn't
+        // source-restricted and can set this true on any AttentionItem. Reset
+        // on every producer write so a stale override can't outlive the
+        // tierReason content it was stamped against (calibration-snapshot's
+        // manualOverrides KPI is source-unfiltered).
+        isManualOverride: false,
       },
     });
   } catch (err) {
@@ -368,6 +380,12 @@ export async function upsertAttentionForTask(task: TaskLike, now = Date.now()): 
         resolvedAt: isResolved ? new Date() : null,
         tier,
         tierReason,
+        // Not judge/LLM-authored text, but overrideAttentionTier() isn't
+        // source-restricted and can set this true on any AttentionItem. Reset
+        // on every producer write so a stale override can't outlive the
+        // tierReason content it was stamped against (calibration-snapshot's
+        // manualOverrides KPI is source-unfiltered).
+        isManualOverride: false,
       },
       update: {
         status,
@@ -383,6 +401,12 @@ export async function upsertAttentionForTask(task: TaskLike, now = Date.now()): 
         resolvedAt: isResolved ? new Date() : null,
         tier,
         tierReason,
+        // Not judge/LLM-authored text, but overrideAttentionTier() isn't
+        // source-restricted and can set this true on any AttentionItem. Reset
+        // on every producer write so a stale override can't outlive the
+        // tierReason content it was stamped against (calibration-snapshot's
+        // manualOverrides KPI is source-unfiltered).
+        isManualOverride: false,
       },
     });
   } catch (err) {
@@ -477,6 +501,12 @@ export async function upsertAttentionForCalendarEvent(
         resolvedAt: isResolved ? new Date() : null,
         tier,
         tierReason,
+        // Not judge/LLM-authored text, but overrideAttentionTier() isn't
+        // source-restricted and can set this true on any AttentionItem. Reset
+        // on every producer write so a stale override can't outlive the
+        // tierReason content it was stamped against (calibration-snapshot's
+        // manualOverrides KPI is source-unfiltered).
+        isManualOverride: false,
       },
       update: {
         status,
@@ -493,6 +523,12 @@ export async function upsertAttentionForCalendarEvent(
         resolvedAt: isResolved ? new Date() : null,
         tier,
         tierReason,
+        // Not judge/LLM-authored text, but overrideAttentionTier() isn't
+        // source-restricted and can set this true on any AttentionItem. Reset
+        // on every producer write so a stale override can't outlive the
+        // tierReason content it was stamped against (calibration-snapshot's
+        // manualOverrides KPI is source-unfiltered).
+        isManualOverride: false,
       },
     });
   } catch (err) {
@@ -577,6 +613,12 @@ export async function upsertAttentionForNotification(notif: NotificationLike): P
         resolvedAt: isResolved ? new Date() : null,
         tier,
         tierReason,
+        // Not judge/LLM-authored text, but overrideAttentionTier() isn't
+        // source-restricted and can set this true on any AttentionItem. Reset
+        // on every producer write so a stale override can't outlive the
+        // tierReason content it was stamped against (calibration-snapshot's
+        // manualOverrides KPI is source-unfiltered).
+        isManualOverride: false,
       },
       update: {
         status,
@@ -592,6 +634,12 @@ export async function upsertAttentionForNotification(notif: NotificationLike): P
         resolvedAt: isResolved ? new Date() : null,
         tier,
         tierReason,
+        // Not judge/LLM-authored text, but overrideAttentionTier() isn't
+        // source-restricted and can set this true on any AttentionItem. Reset
+        // on every producer write so a stale override can't outlive the
+        // tierReason content it was stamped against (calibration-snapshot's
+        // manualOverrides KPI is source-unfiltered).
+        isManualOverride: false,
       },
     });
   } catch (err) {
@@ -699,6 +747,12 @@ export async function upsertAttentionForCommitment(
         resolvedAt: isResolved ? new Date() : null,
         tier,
         tierReason,
+        // Not judge/LLM-authored text, but overrideAttentionTier() isn't
+        // source-restricted and can set this true on any AttentionItem. Reset
+        // on every producer write so a stale override can't outlive the
+        // tierReason content it was stamped against (calibration-snapshot's
+        // manualOverrides KPI is source-unfiltered).
+        isManualOverride: false,
       },
       update: {
         status,
@@ -719,6 +773,12 @@ export async function upsertAttentionForCommitment(
         resolvedAt: isResolved ? new Date() : null,
         tier,
         tierReason,
+        // Not judge/LLM-authored text, but overrideAttentionTier() isn't
+        // source-restricted and can set this true on any AttentionItem. Reset
+        // on every producer write so a stale override can't outlive the
+        // tierReason content it was stamped against (calibration-snapshot's
+        // manualOverrides KPI is source-unfiltered).
+        isManualOverride: false,
       },
     });
   } catch (err) {
@@ -840,6 +900,9 @@ export async function upsertAttentionForEmailJudgement(
         surfacedAt: email.receivedAt,
         tier: judgement.tier,
         tierReason: judgement.reason,
+        // judgement.reason is LLM-authored — never let it set the ground-truth
+        // flag, even if it happens to say "Manual override" (GHSA-cxc5-fmqv-pxv6).
+        isManualOverride: false,
         inputHash,
         inputHashAt,
       },
@@ -859,6 +922,9 @@ export async function upsertAttentionForEmailJudgement(
         ]),
         tier: judgement.tier,
         tierReason: judgement.reason,
+        // Reset on every re-judge: a prior genuine override must not survive
+        // as "true" over fresh judge-authored tierReason text.
+        isManualOverride: false,
         inputHash,
         inputHashAt,
       },
@@ -948,6 +1014,9 @@ export async function upsertAttentionForGitHubNotification(
         surfacedAt: n.updatedAt,
         tier: judgement.tier,
         tierReason: judgement.reason,
+        // judgement.reason is LLM-authored — never let it set the ground-truth
+        // flag, even if it happens to say "Manual override" (GHSA-cxc5-fmqv-pxv6).
+        isManualOverride: false,
       },
       update: {
         // Intentionally NOT setting status here. The GitHub poller re-fetches
@@ -964,6 +1033,8 @@ export async function upsertAttentionForGitHubNotification(
         surfacedAt: n.updatedAt,
         tier: judgement.tier,
         tierReason: judgement.reason,
+        // Reset on every re-judge, same rationale as the EMAIL path above.
+        isManualOverride: false,
       },
     });
   } catch (err) {
