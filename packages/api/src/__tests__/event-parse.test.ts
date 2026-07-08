@@ -16,6 +16,11 @@ vi.mock("../llm-credentials.js", () => ({
 const captureError = vi.fn();
 vi.mock("../sentry.js", () => ({ captureError: (...args: unknown[]) => captureError(...args) }));
 
+const getUserTimeZone = vi.fn(async () => "Asia/Seoul");
+vi.mock("../user-timezone.js", () => ({
+  getUserTimeZone: (...args: unknown[]) => getUserTimeZone(...args),
+}));
+
 import { parseEventText } from "../event-parse.js";
 
 function llmJson(obj: unknown) {
@@ -30,6 +35,8 @@ const NOW = new Date("2026-07-06T10:00:00+09:00");
 beforeEach(() => {
   createCompletion.mockReset();
   captureError.mockClear();
+  getUserTimeZone.mockReset();
+  getUserTimeZone.mockResolvedValue("Asia/Seoul");
 });
 
 describe("parseEventText", () => {
@@ -73,6 +80,30 @@ describe("parseEventText", () => {
     expect(params.model).toBe("google/gemini-2.5-flash");
     const options = createCompletion.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(options.useUserModel).toBeUndefined();
+  });
+
+  it("anchors relative dates to the USER's timezone, not a hardcoded Asia/Seoul (#756)", async () => {
+    // NOW is 2026-07-06 10:00 KST = 2026-07-05 21:00 in America/New_York.
+    // A New-York user's "tomorrow" must resolve against 07-05, not Seoul's 07-06.
+    getUserTimeZone.mockResolvedValue("America/New_York");
+    createCompletion.mockResolvedValueOnce(
+      llmJson({
+        title: "x",
+        startTime: "2026-07-06T15:00:00-04:00",
+        endTime: "2026-07-06T16:00:00-04:00",
+      }),
+    );
+
+    await parseEventText("u1", "tomorrow 3pm meeting", NOW);
+
+    const params = createCompletion.mock.calls[0]?.[0] as {
+      messages: { role: string; content: string }[];
+    };
+    const promptText = params.messages.map((m) => m.content).join("\n");
+    expect(promptText).toContain("2026-07-05");
+    expect(promptText).not.toContain("2026-07-06");
+    expect(promptText).toContain("America/New_York");
+    expect(promptText).toContain("-04:00 offset");
   });
 
   it("returns null when the model reports unparseable", async () => {
