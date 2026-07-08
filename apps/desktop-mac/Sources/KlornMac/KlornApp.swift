@@ -4,74 +4,53 @@ import SwiftUI
 
 /// Entry point. `--self-check` runs the verification harness and exits (so tests
 /// work on a Command Line Tools toolchain with no XCTest); otherwise the app
-/// launches normally.
+/// launches as a menu-bar-less accessory whose only chrome is the custom top bar.
 @main
 enum Entry {
     static func main() {
         if CommandLine.arguments.contains("--self-check") {
             exit(runSelfChecksBlocking() ? 0 : 1)
         }
-        // An unbundled `swift run` executable launches as a background process
-        // (no Info.plist) — promote it to a regular foreground app so the window
-        // actually appears and takes focus. A signed `.app` gets this for free.
-        NSApplication.shared.setActivationPolicy(.regular)
+        // Ambient firewall: no Dock icon, no system menu bar, and never steal focus
+        // from whatever the user is working in. `.accessory` gives a chrome-less
+        // process; the custom top bar (an NSPanel) is the app's entire surface.
+        NSApplication.shared.setActivationPolicy(.accessory)
         KlornApp.main()
     }
 }
 
-/// Brings the window forward on launch — needed for the unbundled dev run, where
-/// the window server won't auto-foreground a policy-promoted process.
+/// Owns the model and the top bar, driving the headless lifecycle. Both live here
+/// (not in the SwiftUI `App`) so the poll loop and the bar exist on launch with no
+/// window and no system-menu-bar item.
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.windows.first?.makeKeyAndOrderFront(nil)
-    }
+    let model = AppModel()
+    private var topBar: TopBarController?
+    private var hotKey: HotKey?
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool {
-        true
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Reassert accessory policy post-launch; do NOT activate or foreground.
+        NSApp.setActivationPolicy(.accessory)
+        let bar = TopBarController(model: model)
+        model.onNewPush = { [weak bar] items in bar?.handleNewPush(items) }
+        bar.show()
+        topBar = bar
+
+        // ⌥⌘K from anywhere expands/collapses the bar (no focus, no permission).
+        let key = HotKey(onFire: { [weak bar] in bar?.toggle() })
+        key.register()
+        hotKey = key
+
+        model.start()
     }
 }
 
-/// The SwiftUI app: a main window for the decision queue plus a menu-bar
-/// surface — the firewall belongs in the menu bar, always present, surfacing
-/// the counts at a glance.
+/// The custom top bar (an AppKit NSPanel) is the whole UI, so SwiftUI needs only a
+/// placeholder scene. `Settings` is invisible under `.accessory` (no menu to open it).
 struct KlornApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var model = AppModel()
 
     var body: some Scene {
-        WindowGroup("Klorn") {
-            RootView()
-                .environment(model)
-                .frame(minWidth: 720, minHeight: 480)
-        }
-        .defaultSize(width: 1040, height: 720)
-
-        MenuBarExtra("Klorn", systemImage: "shield.lefthalf.filled") {
-            MenuBarContent()
-                .environment(model)
-        }
-        .menuBarExtraStyle(.menu)
-    }
-}
-
-/// Menu-bar dropdown: live tier counts + quick actions.
-struct MenuBarContent: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        if let s = model.queue?.summary {
-            Text("PUSH \(s.push)  ·  QUEUE \(s.queue)  ·  SILENT \(s.silent)")
-            Divider()
-        } else {
-            Text("Klorn — not signed in")
-            Divider()
-        }
-        Button("Refresh") { Task { await model.loadQueue() } }
-            .disabled(model.phase != .signedIn)
-        Divider()
-        Button("Quit Klorn") { NSApplication.shared.terminate(nil) }
-            .keyboardShortcut("q")
+        Settings { EmptyView() }
     }
 }
