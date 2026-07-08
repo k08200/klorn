@@ -22,6 +22,12 @@ final class AppModel {
     /// The AppDelegate wires this to the HUD; if unset, PUSH surfacing is a no-op.
     var onNewPush: (([FirewallItem]) -> Void)?
 
+    // Reading pane (full view): the selected row + its loaded email content.
+    private(set) var selectedItemId: String?
+    private(set) var openedEmail: EmailDetail?
+    private(set) var isLoadingEmail = false
+    private(set) var emailError: String?
+
     /// Refresh cadence so new PUSH mail surfaces a notification even with the
     /// window closed (also keeps the free-tier API warm).
     static let pollIntervalSeconds: Double = 60
@@ -67,6 +73,35 @@ final class AppModel {
         }
     }
 
+    /// Select a row in the full view and load its email into the reading pane.
+    /// Clicking works in the non-focus-stealing panel (mouse events are delivered),
+    /// so reading needs no focus change — only replying (later) does.
+    func select(_ item: FirewallItem) async {
+        selectedItemId = item.id
+        emailError = nil
+        guard let emailDbId = item.email?.emailDbId else {
+            openedEmail = nil  // non-email item: nothing to read in-app
+            return
+        }
+        openedEmail = nil
+        isLoadingEmail = true
+        defer { isLoadingEmail = false }
+        do {
+            openedEmail = try await api.get(
+                "/api/email/\(emailDbId)?markRead=true", as: EmailDetail.self)
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            emailError = Self.describe(error)
+        }
+    }
+
+    func clearSelection() {
+        selectedItemId = nil
+        openedEmail = nil
+        emailError = nil
+    }
+
     /// Dismiss a PUSH item: clear it from the firewall queue (status DISMISSED,
     /// leaves the source email in Gmail) and hide it immediately (optimistic).
     /// Works for any source. On failure, un-hide and refetch the truth.
@@ -101,6 +136,7 @@ final class AppModel {
     private func hideLocally(_ item: FirewallItem) {
         dismissed.insert(item.id)
         queue = queue?.removingIDs([item.id])
+        if selectedItemId == item.id { clearSelection() }
     }
 
     /// Undo an optimistic hide when the mutation failed, then refetch the truth.
@@ -122,6 +158,7 @@ final class AppModel {
         realtime = nil
         seenPush = []
         dismissed = []
+        clearSelection()
         baselineEstablished = false
         didRequestNotifyAuth = false
         KeychainStore.clear()
