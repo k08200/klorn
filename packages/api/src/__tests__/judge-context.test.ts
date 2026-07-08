@@ -28,6 +28,11 @@ vi.mock("../trust-score.js", () => ({
 
 vi.mock("../interaction-graph.js", () => ({
   getCachedInteractionNode: getCachedNodeMock,
+  // fetchLearnedImportanceFact short-circuits on the (default-off) flag before
+  // touching these, but mock them so the engagement path can't throw if a test
+  // ever flips the flag on.
+  getCachedInteractionGraph: vi.fn(async () => null),
+  propagatedImportanceForDomain: vi.fn(() => 0),
 }));
 
 import { buildJudgeContext } from "../judge-context.js";

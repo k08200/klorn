@@ -25,7 +25,12 @@ import {
 import { db } from "./db.js";
 import { extractEmailAddress } from "./email-address.js";
 import { embedTexts, isEmbeddingEnabled, rankBySimilarity } from "./embedding.js";
-import { getCachedInteractionNode } from "./interaction-graph.js";
+import {
+  getCachedInteractionGraph,
+  getCachedInteractionNode,
+  nodeMatchesEmail,
+  propagatedImportanceForDomain,
+} from "./interaction-graph.js";
 import { getAppliedRulesForMatch } from "./learned-rule-store.js";
 import type { LearnedRule } from "./learned-rules.js";
 import { EMPTY_JUDGE_CONTEXT, type JudgeContext } from "./poc-judge.js";
@@ -383,10 +388,33 @@ async function fetchLearnedImportanceFact(
   senderAddress: string,
 ): Promise<SenderFacts["engagement"]> {
   if (!CONTACT_ENGAGEMENT_IN_JUDGE || !senderAddress) return null;
-  const node = await getCachedInteractionNode(userId, senderAddress);
-  const outbound = node?.outboundCount ?? 0;
-  if (!node || node.learnedImportance == null || outbound === 0) return null;
-  return { importance: node.learnedImportance, outboundCount: outbound };
+  // Fully fail-soft: this is one of six independent Promise.all branches in
+  // buildJudgeContext — a throw here (e.g. a malformed cache node) must not wipe
+  // the other five. Degrade to "no engagement fact", with a signal.
+  try {
+    const graph = await getCachedInteractionGraph(userId);
+    if (!graph) return null;
+    const lower = senderAddress.toLowerCase();
+
+    // Direct, measured engagement — the strong signal — always wins.
+    const node = graph.nodes.find((n) => nodeMatchesEmail(n, lower));
+    const outbound = node?.outboundCount ?? 0;
+    if (node && node.learnedImportance != null && outbound > 0) {
+      return { importance: node.learnedImportance, outboundCount: outbound, propagated: false };
+    }
+
+    // Cold-start: no direct engagement, but the user engages with this sender's
+    // organization — a soft, discounted, inferred prior (never a measured claim).
+    const propagated = propagatedImportanceForDomain(graph, senderAddress);
+    if (propagated > 0) {
+      return { importance: propagated, outboundCount: 0, propagated: true };
+    }
+    return null;
+  } catch (err) {
+    console.warn("[JUDGE-CONTEXT] fetchLearnedImportanceFact failed:", err);
+    captureError(err, { tags: { scope: "judge-context-engagement" }, extra: { userId } });
+    return null;
+  }
 }
 
 /** Commitment track record — only when the badge is load-bearing (≥3 fresh data points). */
@@ -502,6 +530,9 @@ export async function buildJudgeContext(
 
     return { corrections, senderPrior, senderFacts, senderTraits, learnedRules };
   } catch (err) {
+    // console + captureError: captureError is a no-op when Sentry is off, so a
+    // failed judge-context build would otherwise degrade silently (CLAUDE.md).
+    console.error("[JUDGE-CONTEXT] buildJudgeContext failed, using empty context:", err);
     captureError(err, { tags: { scope: "judge-context" }, extra: { userId } });
     return EMPTY_JUDGE_CONTEXT;
   }

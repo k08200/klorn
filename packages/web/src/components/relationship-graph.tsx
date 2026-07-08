@@ -18,6 +18,11 @@ export interface GraphNode {
    */
   learnedImportance?: number | null;
   outboundCount?: number;
+  /**
+   * Inferred importance for a quiet contact at an org the user engages with —
+   * a soft cold-start prior, rendered lighter than direct engagement.
+   */
+  propagatedImportance?: number | null;
 }
 
 export interface GraphEdge {
@@ -50,6 +55,7 @@ const MEETING_COLOR = "#f59e0b"; // meeting coming up
 const FREQUENT_COLOR = "#34d399"; // high-frequency contact
 const CONTACT_COLOR = "#60a5fa"; // a plain contact
 const ENGAGED_COLOR = "#f472b6"; // you actually reach back to them (learned)
+const ORG_ENGAGED_COLOR = "#c084fc"; // inferred via an org you engage with (softer)
 
 /** Node colour. Relationships mode keys off tags; decisions mode off kind. */
 function colorFor(n: GraphNode): string {
@@ -61,6 +67,7 @@ function colorFor(n: GraphNode): string {
   // Learned engagement outranks raw frequency — it's derived from the user's
   // own actions, not just how much someone emails them.
   if (n.tags.includes("you_engage")) return ENGAGED_COLOR;
+  if (n.tags.includes("org_engaged")) return ORG_ENGAGED_COLOR;
   if (n.tags.includes("frequent")) return FREQUENT_COLOR;
   return CONTACT_COLOR;
 }
@@ -71,7 +78,8 @@ function radiusFor(n: GraphNode): number {
   if (n.kind === "feature") return 11;
   // Learned importance visibly enlarges the people the user engages with — the
   // graph grows toward what it learned, so "it's accurate" reads at a glance.
-  const learned = (n.learnedImportance ?? 0) * 6;
+  // Propagated (inferred) importance nudges size too, but softer.
+  const learned = (n.learnedImportance ?? 0) * 6 + (n.propagatedImportance ?? 0) * 3;
   return 5 + Math.sqrt(Math.max(0, n.score)) * 1.4 + learned;
 }
 

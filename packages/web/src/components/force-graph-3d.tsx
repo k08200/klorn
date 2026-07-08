@@ -14,6 +14,7 @@ function colorFor(n: GraphNode): string {
   if (n.tags?.includes("meeting_soon")) return "#f59e0b";
   // Learned engagement (from the user's own replies) outranks raw frequency.
   if (n.tags?.includes("you_engage")) return "#f472b6";
+  if (n.tags?.includes("org_engaged")) return "#c084fc"; // inferred via the org (softer)
   if (n.tags?.includes("frequent")) return "#34d399";
   return "#60a5fa";
 }
@@ -24,8 +25,14 @@ function valFor(n: GraphNode): number {
   if (n.kind === "tier") return 18;
   if (n.kind === "feature") return 10;
   // Learned importance grows the node — the graph swells toward the people the
-  // user actually engages with, not just whoever emails the most.
-  return 2 + Math.max(0, n.score) / 12 + (n.learnedImportance ?? 0) * 8;
+  // user actually engages with, not just whoever emails the most. Propagated
+  // (inferred) importance nudges it too, but softer.
+  return (
+    2 +
+    Math.max(0, n.score) / 12 +
+    (n.learnedImportance ?? 0) * 8 +
+    (n.propagatedImportance ?? 0) * 4
+  );
 }
 
 /**
