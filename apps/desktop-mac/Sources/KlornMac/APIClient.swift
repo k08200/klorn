@@ -50,6 +50,18 @@ struct APIClient: Sendable {
         _ = try await data(path, method: "POST", body: body, contentType: "application/json", authed: authed)
     }
 
+    /// POST a JSON object and decode the response (e.g. an AI reply draft).
+    func post<T: Decodable>(_ path: String, json: [String: String], as _: T.Type = T.self, authed: Bool = true) async throws -> T {
+        let reqBody = try JSONEncoder().encode(json)
+        let data = try await data(path, method: "POST", body: reqBody, contentType: "application/json", authed: authed)
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            Log.net.debug("decode failed for \(path, privacy: .public): \(String(describing: error), privacy: .private)")
+            throw APIError.decoding(path)
+        }
+    }
+
     /// Raw request → body bytes. Maps non-2xx to APIError (401/403 → .unauthorized).
     @discardableResult
     func data(

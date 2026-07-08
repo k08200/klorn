@@ -511,7 +511,7 @@ private struct ReadingPane: View {
                 }
                 if let item {
                     HStack(spacing: 10) {
-                        Button("Reply") { replying = true }
+                        Button("Reply with AI") { startReply(item) }
                             .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
                         Button("Open in web") { actions.onOpenWeb(item) }
                             .buttonStyle(.bordered).controlSize(.small)
@@ -525,6 +525,7 @@ private struct ReadingPane: View {
             }
             .padding(24)
             Divider().overlay(Theme.line)
+            klornBand(email)
             ScrollView {
                 Text(email.text.isEmpty ? "(no content)" : email.text)
                     .font(.callout)
@@ -542,8 +543,23 @@ private struct ReadingPane: View {
 
     private func replyComposer(_ item: FirewallItem) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Reply to \(item.email?.from ?? "")")
-                .font(.caption).foregroundStyle(Theme.textDim).lineLimit(1)
+            HStack {
+                Text("Reply to \(item.email?.from ?? "")")
+                    .font(.caption).foregroundStyle(Theme.textDim).lineLimit(1)
+                Spacer()
+                if model.isDrafting {
+                    HStack(spacing: 5) {
+                        ProgressView().controlSize(.mini)
+                        Text("Klorn is drafting…").font(.caption).foregroundStyle(Theme.textDim)
+                    }
+                } else {
+                    Button { Task { if let d = await model.draftReply(item) { replyText = d } } } label: {
+                        Label("Regenerate", systemImage: "sparkles").font(.caption)
+                    }
+                    .buttonStyle(.plain).foregroundStyle(Theme.accent)
+                    .help("Ask Klorn to rewrite the draft")
+                }
+            }
             TextEditor(text: $replyText)
                 .font(.callout).foregroundStyle(Theme.text)
                 .scrollContentBackground(.hidden)
@@ -560,10 +576,54 @@ private struct ReadingPane: View {
                     .buttonStyle(.bordered).controlSize(.small)
                 Button(sending ? "Sending…" : "Send") { send(item) }
                     .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
-                    .disabled(sending || replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(sending || model.isDrafting || replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(16)
+    }
+
+    /// Klorn's per-email intelligence: why it landed in this tier, the AI summary,
+    /// and whether it needs a reply. Hidden when there's nothing to show.
+    @ViewBuilder
+    private func klornBand(_ email: EmailDetail) -> some View {
+        let reason = item?.tierReason
+        let show = (reason?.isEmpty == false) || (email.summary?.isEmpty == false) || (email.needsReply == true)
+        if show {
+            VStack(alignment: .leading, spacing: 6) {
+                if let item, let reason, !reason.isEmpty {
+                    HStack(spacing: 6) {
+                        Circle().fill(Theme.tint(item.tier)).frame(width: 7, height: 7)
+                        Text("Why \(item.tier.label) · \(reason)")
+                            .font(.caption).foregroundStyle(Theme.textDim).lineLimit(2)
+                    }
+                }
+                if let summary = email.summary, !summary.isEmpty {
+                    Text(summary).font(.callout).foregroundStyle(Theme.text.opacity(0.9))
+                }
+                if email.needsReply == true {
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrowshape.turn.up.left").font(.caption2)
+                        Text((email.needsReplyReason?.isEmpty == false) ? email.needsReplyReason! : "Needs a reply")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(Theme.accent)
+                }
+            }
+            .padding(.horizontal, 24).padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white.opacity(0.04))
+            Divider().overlay(Theme.line)
+        }
+    }
+
+    /// Open the composer and let Klorn's AI draft the reply into it. The user
+    /// reviews/edits before Send (approval before action).
+    private func startReply(_ item: FirewallItem) {
+        replying = true
+        replyText = ""
+        Task {
+            if let draft = await model.draftReply(item) { replyText = draft }
+        }
     }
 
     private func send(_ item: FirewallItem) {

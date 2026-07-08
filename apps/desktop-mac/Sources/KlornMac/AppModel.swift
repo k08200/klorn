@@ -104,6 +104,32 @@ final class AppModel {
         replyError = nil
     }
 
+    private(set) var isDrafting = false
+
+    /// Ask Klorn's AI to write a reply draft for this email (POST
+    /// /api/email/:id/reply-draft). Returns the drafted body to prefill the
+    /// composer — the user still reviews and sends (approval-before-action).
+    func draftReply(_ item: FirewallItem) async -> String? {
+        guard let emailDbId = item.email?.emailDbId else { return nil }
+        struct Draft: Decodable { let body: String? }
+        isDrafting = true
+        defer { isDrafting = false }
+        replyError = nil
+        do {
+            let draft: Draft = try await api.post("/api/email/\(emailDbId)/reply-draft", json: [:], as: Draft.self)
+            return draft.body
+        } catch APIError.unauthorized {
+            signOut()
+            return nil
+        } catch APIError.forbidden {
+            replyError = "AI reply drafts need Klorn Pro."
+            return nil
+        } catch {
+            replyError = Self.describe(error)
+            return nil
+        }
+    }
+
     /// Send a threaded reply to the selected email's sender in-app
     /// (POST /api/email/:id/reply). Returns true on success. A 403 means the
     /// account isn't entitled (Pro) — surfaced, NOT treated as a sign-out.
