@@ -246,6 +246,31 @@ async function executeToolCallInternal(
           });
         }
 
+        // Conflict check: the ±30min dedup above only catches re-booking the
+        // SAME slot twice — a real double-book (an existing event that merely
+        // overlaps) sailed straight through into createEvent(), because
+        // check_calendar_conflicts was only ever a separate, optional tool the
+        // model could choose to call first. It wasn't required to, so it
+        // didn't (customer-reported double-booking, #743). Enforce it here so
+        // booking is impossible without checking, instead of relying on the
+        // model remembering a second tool call. checkConflicts' HANDLED
+        // failure modes (Google not connected, bad time range — returned as
+        // {error}, see calendar.ts) fail OPEN — createEvent() below surfaces
+        // the same underlying problem itself. An UNEXPECTED exception (a
+        // genuine Google API error) is not caught here; it propagates to this
+        // function's outer catch and aborts the whole call without booking —
+        // effectively fail-closed for that case, which is fine, just not
+        // "open" in the same sense. Only a genuine detected conflict returns
+        // the skipped result below.
+        const conflictCheck = await checkConflicts(userId, evStart, evEnd);
+        if ("hasConflicts" in conflictCheck && conflictCheck.hasConflicts) {
+          return JSON.stringify({
+            skipped: true,
+            message: conflictCheck.message,
+            conflicts: conflictCheck.conflicts,
+          });
+        }
+
         const evResult = await createEvent(
           userId,
           evSummary,
