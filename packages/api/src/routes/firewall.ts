@@ -16,6 +16,7 @@
  */
 
 import type { FastifyInstance } from "fastify";
+import { dismissAttentionItem } from "../attention-dismiss.js";
 import { checkAttentionInputHash } from "../attention-input-hash.js";
 import { overrideAttentionTier } from "../attention-override.js";
 import { snoozeAttentionItem } from "../attention-snooze.js";
@@ -607,6 +608,35 @@ export async function firewallRoutes(app: FastifyInstance) {
       }
 
       return { ok: true, snoozedUntil: snoozeDate.toISOString() };
+    },
+  );
+
+  // POST /api/inbox/firewall/:id/dismiss — clear an item from the queue
+  // (status DISMISSED) without touching the source email. Works for any source.
+  app.post<{
+    Params: { id: string };
+  }>(
+    "/:id/dismiss",
+    {
+      schema: {
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", minLength: 1 } },
+        },
+      },
+    },
+    async (request, reply): Promise<{ ok: true } | { ok: false; message: string }> => {
+      const userId = getUserId(request);
+      const { id } = request.params;
+
+      const result = await dismissAttentionItem(userId, id);
+      if (!result.ok) {
+        reply.code(404);
+        return { ok: false, message: "Attention item not found." };
+      }
+
+      return { ok: true };
     },
   );
 }

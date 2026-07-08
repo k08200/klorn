@@ -67,13 +67,13 @@ final class AppModel {
         }
     }
 
-    /// Dismiss an email PUSH item: archive it out of the inbox and hide it
-    /// immediately (optimistic). On failure, un-hide and refetch the truth.
+    /// Dismiss a PUSH item: clear it from the firewall queue (status DISMISSED,
+    /// leaves the source email in Gmail) and hide it immediately (optimistic).
+    /// Works for any source. On failure, un-hide and refetch the truth.
     func dismiss(_ item: FirewallItem) async {
-        guard let emailDbId = item.email?.emailDbId else { return }  // email items only
         hideLocally(item)
         do {
-            try await api.post("/api/email/\(emailDbId)/archive")
+            try await api.post("/api/inbox/firewall/\(item.id)/dismiss")
         } catch APIError.unauthorized {
             signOut()
         } catch {

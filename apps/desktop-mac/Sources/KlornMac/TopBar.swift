@@ -204,13 +204,11 @@ private struct RecentPushColumn: View {
                                 }
                                 .buttonStyle(.plain).foregroundStyle(Theme.textDim)
                                 .help("Snooze to tomorrow 9am")
-                                if item.email?.emailDbId != nil {
-                                    Button { actions.onDismiss(item) } label: {
-                                        Image(systemName: "xmark").font(.caption2)
-                                    }
-                                    .buttonStyle(.plain).foregroundStyle(Theme.textDim)
-                                    .help("Dismiss (archive)")
+                                Button { actions.onDismiss(item) } label: {
+                                    Image(systemName: "xmark").font(.caption2)
                                 }
+                                .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+                                .help("Dismiss")
                             }
                         }
                     }
