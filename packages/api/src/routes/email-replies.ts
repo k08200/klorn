@@ -16,8 +16,8 @@ import { requireEntitled } from "../entitlement-guard.js";
 import {
   createEmailDraft,
   type GmailDraftAttachment,
-  getAuthedClient,
   getReplyHeaders,
+  resolveMailClient,
   sendEmail,
 } from "../gmail.js";
 import { getUserLlmCredentials } from "../llm-credentials.js";
@@ -35,6 +35,7 @@ async function fetchOriginalAttachmentsForDraft(input: {
   emailId: string;
   gmailMessageId: string;
   attachmentIds: string[];
+  linkedInboxAccountId?: string | null;
 }): Promise<GmailDraftAttachment[]> {
   const uniqueIds = Array.from(new Set(input.attachmentIds)).slice(0, 10);
   if (uniqueIds.length === 0) return [];
@@ -59,7 +60,9 @@ async function fetchOriginalAttachmentsForDraft(input: {
     throw new Error("The attachments are too large to include in a Gmail draft.");
   }
 
-  const auth = await getAuthedClient(input.userId);
+  // The source message may live on a linked secondary inbox (#757) — fetch
+  // its attachments from THAT account, not always the primary.
+  const auth = await resolveMailClient(input.userId, input.linkedInboxAccountId);
   if (!auth) throw new Error("Gmail not connected.");
 
   const { google } = await import("googleapis");
@@ -253,6 +256,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
           subject: true,
           summary: true,
           receivedAt: true,
+          linkedInboxAccountId: true,
         },
       });
       if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
@@ -264,6 +268,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
           emailId: dbEmail.id,
           gmailMessageId: dbEmail.gmailId,
           attachmentIds: Array.isArray(attachmentIds) ? attachmentIds : [],
+          linkedInboxAccountId: dbEmail.linkedInboxAccountId,
         });
         if (includeBriefAttachment) {
           const analyzedAttachments = await listEmailAttachments([dbEmail.id], uid);
@@ -288,7 +293,15 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
           .send({ error: err instanceof Error ? err.message : "Attachment fetch failed" });
       }
 
-      const result = await createEmailDraft(uid, to, subject, body, dbEmail.threadId, attachments);
+      const result = await createEmailDraft(
+        uid,
+        to,
+        subject,
+        body,
+        dbEmail.threadId,
+        attachments,
+        dbEmail.linkedInboxAccountId,
+      );
       if ("error" in result) return reply.code(409).send(result);
       await updateCandidateIntake({
         userId: uid,
@@ -328,7 +341,14 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
 
       const dbEmail = await prisma.emailMessage.findFirst({
         where: { userId: uid, OR: [{ id }, { gmailId: id }] },
-        select: { id: true, gmailId: true, threadId: true, from: true, subject: true },
+        select: {
+          id: true,
+          gmailId: true,
+          threadId: true,
+          from: true,
+          subject: true,
+          linkedInboxAccountId: true,
+        },
       });
       if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
 
@@ -339,11 +359,17 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
 
       // RFC822 Message-ID isn't stored — fetch it live so In-Reply-To/References
       // are correct. References = original chain + original Message-ID (RFC 5322).
-      const { messageId, references } = await getReplyHeaders(uid, dbEmail.gmailId);
+      // A message from a linked secondary inbox lives on THAT account (#757).
+      const { messageId, references } = await getReplyHeaders(
+        uid,
+        dbEmail.gmailId,
+        dbEmail.linkedInboxAccountId,
+      );
       const referencesChain = [references, messageId].filter(Boolean).join(" ") || undefined;
 
       const result = await sendEmail(uid, to, subject, body, [], {
         threadId: dbEmail.threadId,
+        linkedInboxAccountId: dbEmail.linkedInboxAccountId,
         inReplyTo: messageId,
         references: referencesChain,
       });
