@@ -472,6 +472,9 @@ private struct FullRow: View {
 private struct ReadingPane: View {
     @Environment(AppModel.self) private var model
     let actions: TopBarActions
+    @State private var replying = false
+    @State private var replyText = ""
+    @State private var sending = false
 
     private var item: FirewallItem? {
         guard let id = model.selectedItemId else { return nil }
@@ -493,6 +496,7 @@ private struct ReadingPane: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: model.selectedItemId) { _, _ in replying = false; replyText = "" }
     }
 
     private func content(_ email: EmailDetail) -> some View {
@@ -507,6 +511,8 @@ private struct ReadingPane: View {
                 }
                 if let item {
                     HStack(spacing: 10) {
+                        Button("Reply") { replying = true }
+                            .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
                         Button("Open in web") { actions.onOpenWeb(item) }
                             .buttonStyle(.bordered).controlSize(.small)
                         Button("Snooze") { actions.onSnooze(item) }
@@ -527,6 +533,45 @@ private struct ReadingPane: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(24)
             }
+            if replying, let item {
+                Divider().overlay(Theme.line)
+                replyComposer(item)
+            }
+        }
+    }
+
+    private func replyComposer(_ item: FirewallItem) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Reply to \(item.email?.from ?? "")")
+                .font(.caption).foregroundStyle(Theme.textDim).lineLimit(1)
+            TextEditor(text: $replyText)
+                .font(.callout).foregroundStyle(Theme.text)
+                .scrollContentBackground(.hidden)
+                .frame(height: 110)
+                .padding(8)
+                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line))
+            if let err = model.replyError {
+                Text(err).font(.caption).foregroundStyle(.orange)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { replying = false; replyText = "" }
+                    .buttonStyle(.bordered).controlSize(.small)
+                Button(sending ? "Sending…" : "Send") { send(item) }
+                    .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
+                    .disabled(sending || replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(16)
+    }
+
+    private func send(_ item: FirewallItem) {
+        sending = true
+        Task {
+            let ok = await model.reply(item, body: replyText)
+            sending = false
+            if ok { replying = false; replyText = "" }
         }
     }
 

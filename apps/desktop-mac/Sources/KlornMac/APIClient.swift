@@ -2,7 +2,8 @@ import Foundation
 
 enum APIError: Error, Sendable, Equatable {
     case http(Int)
-    case unauthorized
+    case unauthorized  // 401 — session invalid/expired (drop to sign-in)
+    case forbidden     // 403 — authenticated but not entitled (e.g. Pro-only); do NOT sign out
     case transport(String)
     case decoding(String)
 }
@@ -75,7 +76,8 @@ struct APIClient: Sendable {
         }
         switch http.statusCode {
         case 200...299: return bytes
-        case 401, 403: throw APIError.unauthorized
+        case 401: throw APIError.unauthorized
+        case 403: throw APIError.forbidden
         default: throw APIError.http(http.statusCode)
         }
     }
