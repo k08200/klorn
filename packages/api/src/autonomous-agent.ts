@@ -250,6 +250,22 @@ function categoryForAgentNotification(category: unknown): NotifCategory {
   }
 }
 
+/**
+ * True when the context has nothing worth a real LLM call: no tasks, no
+ * calendar, no emails — OR gatherUserContext's own outer catch fired
+ * (context === ""). Without the empty-string branch, a total context
+ * failure fell through to a real, paid LLM call with a blank user message
+ * instead of skipping the tick the way every other failure mode does.
+ */
+export function isAgentContextEmpty(context: string): boolean {
+  if (context === "") return true;
+  return (
+    context.includes("## Open Tasks\nNone") &&
+    context.includes("## Upcoming Calendar\nNone") &&
+    !context.includes("## Recent Emails")
+  );
+}
+
 /** Run the autonomous reasoning loop for a single user */
 // Per-user re-entrancy guard. The scheduler tick and the email-action fast-path
 // (email-action-trigger.ts) both call runAgentForUser through separate,
@@ -304,7 +320,11 @@ export async function runAgentForUser(
       playbookHint,
       rejectionHint,
     ] = await Promise.all([
-      gatherUserContext(userId),
+      // gatherUserContext is internally fail-soft per query now (agent-context.ts),
+      // but still add the same outer safety net as its 9 siblings here — a
+      // future change adding a new non-fail-soft branch there shouldn't be
+      // able to abort the whole agent cycle for this user again.
+      gatherUserContext(userId).catch(() => ""),
       getAgentFeedback(userId),
       loadMemoriesForPrompt(userId).catch(() => ""),
       getProposalHistory(userId).catch(() => ""),
@@ -316,12 +336,7 @@ export async function runAgentForUser(
       buildRejectionHintForPrompt(userId).catch(() => ""),
     ]);
 
-    // Skip if context is minimal (no tasks, no calendar, no emails)
-    const hasNothing =
-      context.includes("## Open Tasks\nNone") &&
-      context.includes("## Upcoming Calendar\nNone") &&
-      !context.includes("## Recent Emails");
-    if (hasNothing) {
+    if (isAgentContextEmpty(context)) {
       await logAgentAction(userId, "skip", "No tasks, calendar, or emails to analyze");
       return;
     }
@@ -399,9 +414,9 @@ When you see "N시" in email body, you MUST disambiguate AM/PM:
 3. ALWAYS use 24-hour format in create_event: "20:00" not "8:00"
 
 Examples:
-- Email received 18:30 says "8시 미팅" → create_event at 20:00 KST
-- Email received 07:00 says "8시 미팅" → create_event at 08:00 KST
-- Email received 15:00 says "3시 미팅" → create_event at 15:00 KST (same day context)
+- Email received 18:30 says "8시 미팅" → create_event at 20:00 (user's local time)
+- Email received 07:00 says "8시 미팅" → create_event at 08:00 (user's local time)
+- Email received 15:00 says "3시 미팅" → create_event at 15:00 (user's local time, same day context)
 - Email says "오전 10시" → 10:00 regardless of received time
 
 ## Meeting Email Policy
@@ -418,8 +433,8 @@ When confidence is low or the sender looks automated/no-reply, skip or create an
 
 Create separate events for distinct meetings. If there are 2 meetings at different times, treat them separately.
 
-Example: Email says "4/15 19:00 KST 미팅" → create_event at 2026-04-15T19:00:00+09:00
-Another email says "8시미팅 강남" (received 20:09 KST) → "8시" + received after 14:00 → 20:00 PM → create_event at 2026-04-15T20:00:00+09:00
+Example: Email says "4/15 19:00 미팅" → create_event at 2026-04-15T19:00:00, using the SAME UTC offset shown in the "Current Time" section of your context — not a fixed one, match the user's actual zone.
+Another email says "8시미팅 강남" (received 20:09 local) → "8시" + received after 14:00 → 20:00 PM → create_event at 2026-04-15T20:00:00, same offset rule.
 
 ## MANDATORY: Email Processing Rules
 

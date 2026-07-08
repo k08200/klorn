@@ -20,6 +20,24 @@ export function normalizeTimeZone(value: unknown): string {
   }
 }
 
+/**
+ * "+09:00" / "-04:00" — the ISO offset string for `timeZone` at `date`.
+ * Used wherever a zone-aware offset must be shown/instructed (e.g.
+ * agent-context.ts's "Current Time" line, event-parse.ts's LLM prompt)
+ * instead of a hardcoded "+09:00" that assumed every user was in Seoul.
+ * Derived from getTimeZoneOffsetMs (below) — the same arithmetic this file
+ * already uses elsewhere — rather than parsing Intl's locale-formatted
+ * "GMT±HH:MM" string, so there's one source of truth for offset math.
+ */
+export function offsetStringFor(date: Date, timeZone: string): string {
+  const offsetMs = getTimeZoneOffsetMs(date, timeZone);
+  const sign = offsetMs < 0 ? "-" : "+";
+  const abs = Math.abs(offsetMs);
+  const hours = Math.floor(abs / (60 * 60 * 1000));
+  const minutes = Math.floor((abs % (60 * 60 * 1000)) / (60 * 1000));
+  return `${sign}${pad2(hours)}:${pad2(minutes)}`;
+}
+
 export function localDateKey(now: Date = new Date(), timeZone: string = DEFAULT_TIME_ZONE): string {
   const parts = getLocalParts(now, normalizeTimeZone(timeZone));
   return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`;
