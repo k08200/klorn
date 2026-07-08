@@ -110,6 +110,62 @@ describe("buildJudgeContext", () => {
     });
   });
 
+  it("a corrections-query failure degrades only corrections, not the sender prior/history (#677)", async () => {
+    // Before the fix, fetchCorrections and fetchSenderItems shared ONE outer
+    // try/catch — either one throwing wiped BOTH, even though they're
+    // independent history queries. This locks down that a corrections-only
+    // failure no longer costs the sender-prior/history context.
+    attentionFindMany.mockImplementation((args: { where: Record<string, unknown> }) => {
+      if ("isManualOverride" in args.where) throw new Error("corrections query down");
+      return Promise.resolve([
+        {
+          sourceId: "m1",
+          tier: "PUSH",
+          tierReason: "Manual override — user moved to PUSH",
+          isManualOverride: true,
+          updatedAt: DAYS(5),
+        },
+        {
+          sourceId: "m2",
+          tier: "PUSH",
+          tierReason: "Manual override — user moved to PUSH",
+          isManualOverride: true,
+          updatedAt: DAYS(20),
+        },
+      ]);
+    });
+    emailFindMany.mockImplementation((args: { where: Record<string, unknown> }) =>
+      "from" in args.where
+        ? Promise.resolve(["m1", "m2"].map((id) => ({ id, from: "Boss <boss@corp.com>" })))
+        : Promise.resolve([]),
+    );
+
+    const ctx = await buildJudgeContext("u1", { from: "Boss <boss@corp.com>" });
+    expect(ctx.corrections).toEqual([]);
+    expect(ctx.senderPrior).toEqual({ tier: "PUSH", count: 2, kind: "override" });
+  });
+
+  it("a sender-items-query failure degrades only sender history, not corrections (#677)", async () => {
+    attentionFindMany.mockImplementation((args: { where: Record<string, unknown> }) => {
+      if ("isManualOverride" in args.where) {
+        return Promise.resolve([{ sourceId: "e1", tier: "QUEUE" }]);
+      }
+      throw new Error("sender-items query down");
+    });
+    emailFindMany.mockImplementation((args: { where: Record<string, unknown> }) =>
+      "from" in args.where
+        ? Promise.resolve([{ id: "m1", from: "Alice <alice@corp.com>" }]) // ownIds for fetchSenderItems
+        : Promise.resolve([{ id: "e1", from: "Alice <alice@corp.com>", subject: "hi" }]),
+    );
+
+    const ctx = await buildJudgeContext("u1", { from: "Alice <alice@corp.com>" });
+    expect(ctx.corrections).toEqual([
+      { from: "Alice <alice@corp.com>", subject: "hi", tier: "QUEUE" },
+    ]);
+    expect(ctx.senderPrior).toBeNull();
+    expect(ctx.senderFacts).toBeNull();
+  });
+
   it("ranks correction examples: same sender, then same domain, then recency — capped at 5", async () => {
     wireMocks({
       corrections: [
