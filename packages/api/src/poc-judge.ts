@@ -173,6 +173,16 @@ export function buildSenderFactsBlock(facts?: SenderFacts | null): string {
     );
   }
 
+  if (facts.engagement) {
+    const e = facts.engagement;
+    const strength =
+      e.importance >= 0.75 ? "strongly" : e.importance >= 0.4 ? "regularly" : "sometimes";
+    const times = `${e.outboundCount} time${e.outboundCount > 1 ? "s" : ""}`;
+    lines.push(
+      `- The recipient ${strength} engages with this sender — has replied to or written them ${times} (a strong signal this sender matters to them)`,
+    );
+  }
+
   if (lines.length === 0) return "";
   return `
 

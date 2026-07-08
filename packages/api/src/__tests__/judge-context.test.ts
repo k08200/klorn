@@ -532,6 +532,7 @@ describe("buildJudgeContext — sender facts", () => {
       manualOverrides: 1,
       interaction: null,
       commitments: null,
+      engagement: null,
     });
   });
 
@@ -554,6 +555,7 @@ describe("buildJudgeContext — sender facts", () => {
       manualOverrides: 0,
       interaction: null,
       commitments: null,
+      engagement: null,
     });
   });
 
@@ -580,6 +582,7 @@ describe("buildJudgeContext — sender facts", () => {
       manualOverrides: 0,
       interaction: { emailCount: 14, lastEmailDaysAgo: 2, upcomingMeetings: 1 },
       commitments: null,
+      engagement: null,
     });
   });
 

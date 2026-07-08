@@ -17,7 +17,11 @@
  * so classification never blocks on the correction loop.
  */
 
-import { LEARNED_RULES_IN_JUDGE, SENDER_TRAITS_IN_JUDGE } from "./config.js";
+import {
+  CONTACT_ENGAGEMENT_IN_JUDGE,
+  LEARNED_RULES_IN_JUDGE,
+  SENDER_TRAITS_IN_JUDGE,
+} from "./config.js";
 import { db } from "./db.js";
 import { extractEmailAddress } from "./email-address.js";
 import { embedTexts, isEmbeddingEnabled, rankBySimilarity } from "./embedding.js";
@@ -368,6 +372,23 @@ async function fetchInteractionFact(
   };
 }
 
+/**
+ * Learned contact-engagement from the interaction graph — how much the user
+ * actually engages with this sender (measured outbound replies/sends). Flag-gated
+ * (CONTACT_ENGAGEMENT_IN_JUDGE, default off); a SOFT grounding fact for the LLM's
+ * senderTrust, never a hard tier decision. Cache-only read (never rebuilds).
+ */
+async function fetchLearnedImportanceFact(
+  userId: string,
+  senderAddress: string,
+): Promise<SenderFacts["engagement"]> {
+  if (!CONTACT_ENGAGEMENT_IN_JUDGE || !senderAddress) return null;
+  const node = await getCachedInteractionNode(userId, senderAddress);
+  const outbound = node?.outboundCount ?? 0;
+  if (!node || node.learnedImportance == null || outbound === 0) return null;
+  return { importance: node.learnedImportance, outboundCount: outbound };
+}
+
 /** Commitment track record — only when the badge is load-bearing (≥3 fresh data points). */
 async function fetchCommitmentFact(
   userId: string,
@@ -448,25 +469,34 @@ export async function buildJudgeContext(
     const incomingText = isEmbeddingEnabled()
       ? correctionText(input.from || "", input.subject || "")
       : undefined;
-    const [corrections, senderItems, interaction, commitments, senderTraits, learnedRules] =
-      await Promise.all([
-        fetchCorrections(userId, senderAddress, correctionExcludeId, incomingText),
-        fetchSenderItems(userId, senderAddress, input.excludeEmailId),
-        fetchInteractionFact(userId, senderAddress),
-        fetchCommitmentFact(userId, senderAddress),
-        fetchSenderTraits(userId, senderAddress),
-        fetchLearnedRules(userId),
-      ]);
+    const [
+      corrections,
+      senderItems,
+      interaction,
+      commitments,
+      senderTraits,
+      learnedRules,
+      engagement,
+    ] = await Promise.all([
+      fetchCorrections(userId, senderAddress, correctionExcludeId, incomingText),
+      fetchSenderItems(userId, senderAddress, input.excludeEmailId),
+      fetchInteractionFact(userId, senderAddress),
+      fetchCommitmentFact(userId, senderAddress),
+      fetchSenderTraits(userId, senderAddress),
+      fetchLearnedRules(userId),
+      fetchLearnedImportanceFact(userId, senderAddress),
+    ]);
 
     const senderPrior = senderItems.length > 0 ? buildPrior(senderItems) : null;
     const history = buildTierHistory(senderItems);
     const senderFacts: SenderFacts | null =
-      history || interaction || commitments
+      history || interaction || commitments || engagement
         ? {
             tierHistory: history?.tierHistory ?? {},
             manualOverrides: history?.manualOverrides ?? 0,
             interaction,
             commitments,
+            engagement,
           }
         : null;
 
