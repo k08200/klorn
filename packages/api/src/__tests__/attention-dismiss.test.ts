@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const findFirst = vi.fn();
 const update = vi.fn();
+const recordFeedback = vi.fn();
 
 vi.mock("../db.js", () => ({
   prisma: {
@@ -11,6 +12,7 @@ vi.mock("../db.js", () => ({
     },
   },
 }));
+vi.mock("../feedback.js", () => ({ recordFeedback: (args: unknown) => recordFeedback(args) }));
 
 import { dismissAttentionItem } from "../attention-dismiss.js";
 
@@ -18,6 +20,7 @@ describe("dismissAttentionItem", () => {
   beforeEach(() => {
     findFirst.mockReset();
     update.mockReset();
+    recordFeedback.mockReset();
   });
 
   it("returns not_found and never mutates when the item isn't the user's", async () => {
@@ -47,5 +50,26 @@ describe("dismissAttentionItem", () => {
     expect(call.where).toEqual({ id: "i1" });
     expect(call.data.status).toBe("DISMISSED");
     expect(call.data.resolvedAt).toBeInstanceOf(Date);
+  });
+
+  it("records a DISMISSED learning signal for the dismissed item", async () => {
+    findFirst.mockResolvedValue({ id: "i1" });
+    update.mockResolvedValue({});
+
+    await dismissAttentionItem("u1", "i1");
+
+    expect(recordFeedback).toHaveBeenCalledTimes(1);
+    expect(recordFeedback.mock.calls[0][0]).toMatchObject({
+      userId: "u1",
+      source: "ATTENTION_ITEM",
+      sourceId: "i1",
+      signal: "DISMISSED",
+    });
+  });
+
+  it("does not record feedback when the item isn't the user's", async () => {
+    findFirst.mockResolvedValue(null);
+    await dismissAttentionItem("u1", "i1");
+    expect(recordFeedback).not.toHaveBeenCalled();
   });
 });
