@@ -13,7 +13,13 @@ import { prisma } from "../db.js";
 import { buildAttachmentCandidateProfile, listEmailAttachments } from "../email-attachments.js";
 import { updateCandidateIntake } from "../email-candidate-intake.js";
 import { requireEntitled } from "../entitlement-guard.js";
-import { createEmailDraft, type GmailDraftAttachment, getAuthedClient } from "../gmail.js";
+import {
+  createEmailDraft,
+  type GmailDraftAttachment,
+  getAuthedClient,
+  getReplyHeaders,
+  sendEmail,
+} from "../gmail.js";
 import { getUserLlmCredentials } from "../llm-credentials.js";
 import { createCompletion, DRAFT_MODEL } from "../openai.js";
 import { captureError } from "../sentry.js";
@@ -299,6 +305,53 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         });
       });
       return { ...result, attachedCount: attachments.length };
+    },
+  );
+
+  // POST /api/email/:id/reply
+  // One-call threaded reply: send `body` to the original sender in the same Gmail
+  // thread (threadId + In-Reply-To/References), no draft step. Pro-only compose;
+  // rate-limited like /send since each call is a real Gmail send.
+  app.post(
+    "/:id/reply",
+    {
+      preHandler: [requireAuth, requireEntitled],
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const uid = getUserId(request);
+      const { body } = (request.body as { body?: string }) || {};
+      if (!body || !body.trim()) {
+        return reply.code(400).send({ error: "Missing required field: body" });
+      }
+
+      const dbEmail = await prisma.emailMessage.findFirst({
+        where: { userId: uid, OR: [{ id }, { gmailId: id }] },
+        select: { id: true, gmailId: true, threadId: true, from: true, subject: true },
+      });
+      if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
+
+      const to = extractReplyAddress(dbEmail.from);
+      const subject = dbEmail.subject.startsWith("Re:")
+        ? dbEmail.subject
+        : `Re: ${dbEmail.subject}`;
+
+      // RFC822 Message-ID isn't stored — fetch it live so In-Reply-To/References
+      // are correct. References = original chain + original Message-ID (RFC 5322).
+      const { messageId, references } = await getReplyHeaders(uid, dbEmail.gmailId);
+      const referencesChain = [references, messageId].filter(Boolean).join(" ") || undefined;
+
+      const result = await sendEmail(uid, to, subject, body, [], {
+        threadId: dbEmail.threadId,
+        inReplyTo: messageId,
+        references: referencesChain,
+      });
+      if ("error" in result) return reply.code(409).send(result);
+
+      // threaded=false means we sent by threadId only (no RFC Message-ID found);
+      // surfaced so a client can tell strict-threaded from best-effort.
+      return { ...result, to, threaded: Boolean(messageId) };
     },
   );
 }

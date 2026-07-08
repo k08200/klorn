@@ -5,6 +5,12 @@ enum Theme {
     static let accent = Color.orange
     static let line = Color.white.opacity(0.08)
 
+    /// The top bar is always a dark floating surface regardless of system
+    /// appearance, so its text uses explicit light tones (not semantic colors).
+    static let panel = Color.black.opacity(0.92)
+    static let text = Color.white
+    static let textDim = Color.white.opacity(0.55)
+
     /// Per-tier accent: loud (red) for PUSH down to quiet (gray) for SILENT.
     static func tint(_ tier: Tier) -> Color {
         switch tier {

@@ -83,6 +83,34 @@ struct FirewallResponse: Codable, Sendable {
     func items(for tier: Tier) -> [FirewallItem] {
         tiers[tier.rawValue] ?? []
     }
+
+    var allItemIDs: Set<String> {
+        Set(tiers.values.flatMap { $0 }.map(\.id))
+    }
+
+    /// A copy with the given item ids removed from every tier and the summary
+    /// decremented by however many were actually present (never below zero).
+    /// Decrement (not recompute) so a server-side list cap can't corrupt counts.
+    func removingIDs(_ ids: Set<String>) -> FirewallResponse {
+        guard !ids.isEmpty else { return self }
+        var newTiers = tiers
+        var removed: [Tier: Int] = [:]
+        for tier in Tier.allCases {
+            let original = tiers[tier.rawValue] ?? []
+            let kept = original.filter { !ids.contains($0.id) }
+            if kept.count != original.count {
+                removed[tier] = original.count - kept.count
+                newTiers[tier.rawValue] = kept
+            }
+        }
+        let summary = FirewallSummary(
+            silent: max(0, self.summary.silent - (removed[.silent] ?? 0)),
+            queue: max(0, self.summary.queue - (removed[.queue] ?? 0)),
+            push: max(0, self.summary.push - (removed[.push] ?? 0)),
+            auto: max(0, self.summary.auto - (removed[.auto] ?? 0)),
+            total: max(0, self.summary.total - removed.values.reduce(0, +)))
+        return FirewallResponse(tiers: newTiers, summary: summary)
+    }
 }
 
 // MARK: - Auth (desktop nonce-poll flow)
