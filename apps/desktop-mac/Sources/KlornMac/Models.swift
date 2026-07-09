@@ -136,11 +136,95 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     let summary: String?
     let needsReply: Bool?
     let needsReplyReason: String?
+    /// Learned engagement: how often the user has replied to/written this sender.
+    /// null (absent) for strangers — only present when there's real engagement.
+    let engagement: Engagement?
+
+    /// A measured "you engage with this sender" signal, learned from the user's
+    /// own replies/sends. Display-only in the reading pane.
+    struct Engagement: Codable, Sendable {
+        let outboundCount: Int
+        /// 0…1 dismiss-adjusted importance the graph learned. Saturates to 1 after
+        /// ~4 net engagements; dismisses pull it back down — so it says "does this
+        /// sender still matter" beyond the raw reply count. (interaction-graph.ts)
+        let learnedImportance: Double
+
+        /// "You engage with this sender · replied once / N times" — the raw count.
+        var replyCountLabel: String {
+            let times = outboundCount == 1 ? "once" : "\(outboundCount) times"
+            return "You engage with this sender · replied \(times)"
+        }
+
+        /// Meter fill fraction (0…1), clamped for display safety.
+        var importanceFill: Double { max(0, min(1, learnedImportance)) }
+
+        /// Whether the learned-importance strength is worth surfacing. When dismisses
+        /// have fully cancelled the engagement (fill == 0) we show only the count.
+        var showsImportance: Bool { importanceFill > 0 }
+
+        /// Qualitative reading of the 0…1 strength — paired with the meter so the
+        /// signal is never conveyed by color/graphic alone (WCAG 1.4.1).
+        var importanceLabel: String {
+            switch importanceFill {
+            case let v where v >= 0.99: return "Consistently important to you"
+            case let v where v >= 0.5: return "Important to you"
+            default: return "Building importance"
+            }
+        }
+
+        /// One combined string for VoiceOver — count plus, when present, strength.
+        var accessibilityLabel: String {
+            showsImportance ? "\(replyCountLabel). \(importanceLabel)" : replyCountLabel
+        }
+    }
 
     /// Body, falling back to the snippet when the body is empty (as the web does).
     var text: String {
         if let body, !body.isEmpty { return body }
         return snippet ?? ""
+    }
+}
+
+// MARK: - Snooze options
+
+/// User-selectable snooze targets for a PUSH item; each resolves to a concrete
+/// resurface time the server honours (POST /snooze accepts any ISO `snoozeUntil`).
+/// Pure (Date/Calendar in) so the self-check harness can assert the math.
+enum SnoozeOption: String, CaseIterable, Identifiable, Sendable {
+    case oneHour, thisEvening, tomorrow, nextWeek
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .oneHour: return "In 1 hour"
+        case .thisEvening: return "This evening"
+        case .tomorrow: return "Tomorrow 9am"
+        case .nextWeek: return "Next week"
+        }
+    }
+
+    /// The concrete resurface time — always strictly in the future. An option whose
+    /// natural time has already passed today rolls to its next sensible occurrence.
+    func resurface(from now: Date = Date(), calendar: Calendar = .current) -> Date {
+        switch self {
+        case .oneHour:
+            return calendar.date(byAdding: .hour, value: 1, to: now) ?? now
+        case .thisEvening:
+            let sixToday = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: now) ?? now
+            if sixToday > now { return sixToday }
+            // Already past 6pm → roll to tomorrow evening so it's never in the past.
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
+            return calendar.date(bySettingHour: 18, minute: 0, second: 0, of: tomorrow) ?? tomorrow
+        case .tomorrow:
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
+            return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow) ?? tomorrow
+        case .nextWeek:
+            // 09:00 the next Monday (weekday 2, Gregorian) strictly after `now`.
+            let monday9 = DateComponents(hour: 9, minute: 0, second: 0, weekday: 2)
+            return calendar.nextDate(after: now, matching: monday9, matchingPolicy: .nextTime)
+                ?? (calendar.date(byAdding: .day, value: 7, to: now) ?? now)
+        }
     }
 }
 

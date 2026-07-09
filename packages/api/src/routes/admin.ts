@@ -7,6 +7,7 @@ import type { CalibrationSnapshotPayload } from "../calibration-snapshot.js";
 import { db, prisma } from "../db.js";
 import { getDecisionMetrics } from "../decision-metrics.js";
 import { sendBetaInviteEmail } from "../email.js";
+import { buildInteractionGraph } from "../interaction-graph.js";
 import { getJudgeHealth } from "../judge-health.js";
 import {
   listAppliedLearnedRules,
@@ -534,6 +535,37 @@ export async function adminRoutes(app: FastifyInstance) {
       ...(sinceDays !== undefined && Number.isFinite(sinceDays) ? { sinceDays } : {}),
       source: channel,
     });
+  });
+
+  // POST /api/admin/interaction-graph/rebuild — force-rebuild the interaction
+  // graph NOW. The judge reads a CACHED graph (getCachedInteractionGraph, never
+  // rebuilt on the hot path); that cache otherwise refreshes only on the weekly
+  // batch or after its 3-day TTL. So right after flipping CONTACT_ENGAGEMENT_IN_
+  // JUDGE, freshly-accrued engagement won't reach the judge until a rebuild —
+  // this forces it immediately. The counts confirm there's actually a signal to
+  // consume (the runbook's "is anything learned yet?" check). Defaults to the
+  // acting admin's own account; ?userId= targets another (support/dogfood).
+  // Counts only — no contact addresses (see the per-user /graph page for those).
+  app.post("/interaction-graph/rebuild", async (request) => {
+    const { userId: q } = request.query as { userId?: string };
+    const userId = q || getUserId(request);
+    const graph = await buildInteractionGraph(userId);
+    const directlyEngaged = graph.nodes.filter(
+      (n) => n.learnedImportance != null && (n.outboundCount ?? 0) > 0,
+    ).length;
+    const orgPropagated = graph.nodes.filter((n) => n.propagatedImportance != null).length;
+    return {
+      userId,
+      builtAt: graph.builtAt,
+      nodeCount: graph.nodes.length,
+      // Direct measured engagement present in the freshly-built graph. If this is
+      // 0, the flip is inert for this user — no replies have accrued yet.
+      directlyEngaged,
+      // Quiet peers that inherited a soft org prior (cold-start propagation).
+      orgPropagated,
+      // How many org domains carry an engagement signal (≥2 engaged contacts).
+      orgImportanceDomains: Object.keys(graph.orgImportance ?? {}).length,
+    };
   });
 
   // GET /api/admin/judge-health — fleet-wide judge health: the rolling rate at

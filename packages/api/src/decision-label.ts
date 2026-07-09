@@ -18,6 +18,7 @@
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db.js";
+import type { EngagementKind } from "./sender-policy.js";
 import { captureError } from "./sentry.js";
 import type { TierFeatures } from "./tier-policy.js";
 import type { Tier } from "./tiers.js";
@@ -39,6 +40,11 @@ export interface EmailDecision {
   sender?: string | null;
   /** Which path decided: "fast-path" | "sender-prior" | "llm" | "keyword-fallback". */
   decidedBy?: string | null;
+  /**
+   * Which learned-engagement grounding fed the judge, if any ("DIRECT" |
+   * "PROPAGATED" | null). Rollout instrumentation for CONTACT_ENGAGEMENT_IN_JUDGE.
+   */
+  engagementKind?: EngagementKind | null;
 }
 
 /**
@@ -96,6 +102,7 @@ export async function recordDecision(decision: DecisionInput): Promise<void> {
       features: decision.features as unknown as Prisma.InputJsonValue,
       sender: decision.sender ?? null,
       decidedBy: decision.decidedBy ?? null,
+      engagementKind: decision.engagementKind ?? null,
     };
     await prisma.decisionLabel.upsert({
       where,

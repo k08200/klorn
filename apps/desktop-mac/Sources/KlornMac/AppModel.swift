@@ -196,10 +196,10 @@ final class AppModel {
         Task { await loadQueue() }
     }
 
-    /// Default snooze target: 9am local tomorrow. Pure for testing.
+    /// Default snooze target: 9am local tomorrow. Pure for testing. Delegates to
+    /// `SnoozeOption` so the resurface math lives in one place.
     nonisolated static func tomorrow9am(from now: Date = Date(), calendar: Calendar = .current) -> Date {
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
-        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow) ?? tomorrow
+        SnoozeOption.tomorrow.resurface(from: now, calendar: calendar)
     }
 
     func signOut() {
