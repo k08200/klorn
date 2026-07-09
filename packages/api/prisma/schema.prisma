@@ -174,6 +174,7 @@ model Message {
   // composite serves the filter and returns rows already ordered, and also
   // makes Conversation-cascade deletes an index scan.
   @@index([conversationId, createdAt])
+  @@index([conversationId, role, createdAt(sort: Desc)])
   @@index([content(ops: raw("gin_trgm_ops"))], map: "Message_content_trgm_idx", type: Gin)
 }
 
@@ -427,6 +428,8 @@ model AgentLog {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+
+  @@index([userId, action, createdAt(sort: Desc)])
 }
 
 // Tracks Eve's processing of individual emails (SUGGEST vs AUTO, which action taken).
@@ -443,6 +446,7 @@ model EmailProcessingLog {
 
   @@index([userId, emailId])
   @@index([userId, processedAt])
+  @@index([userId, mode, processedAt(sort: Desc)])
 }
 
 model Notification {
@@ -469,6 +473,7 @@ model Notification {
   @@unique([userId, dedupeKey])
   @@index([userId, createdAt])
   @@index([userId, isRead])
+  @@index([userId, type, isRead, createdAt(sort: Desc)])
   @@index([pendingActionId])
 }
 
@@ -604,6 +609,7 @@ model Memory {
 
   @@unique([userId, type, key])
   @@index([userId, type])
+  @@index([userId, type, confidence(sort: Desc)])
 }
 
 enum MemoryType {
@@ -854,7 +860,7 @@ model EmailAttachment {
   analysisStatus    String       @default("PENDING")
   analysisError     String?
   createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  updatedAt         DateTime     @default(now()) @updatedAt
 
   @@unique([emailId, gmailAttachmentId])
   @@index([userId, createdAt])
@@ -883,7 +889,7 @@ model CandidateIntake {
   lastDetectedAt DateTime     @default(now())
   reviewedAt     DateTime?
   createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  updatedAt      DateTime     @default(now()) @updatedAt
 
   @@unique([userId, emailId])
   @@index([userId, status, updatedAt])
@@ -1468,7 +1474,7 @@ model ContactTrustScore {
   totalDelayDays Int      @default(0) // sum of days late (for avg computation)
   lastUpdatedAt  DateTime @default(now())
   createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime @default(now()) @updatedAt
 
   @@unique([userId, contactEmail])
 }
@@ -1487,7 +1493,7 @@ model ContactEngagementScore {
   dismissCount  Int      @default(0) // user dismissed their items (−)
   lastEngagedAt DateTime @default(now())
   createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  updatedAt     DateTime @default(now()) @updatedAt
 
   @@unique([userId, contactEmail])
   @@index([userId])

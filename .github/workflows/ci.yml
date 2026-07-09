@@ -84,3 +84,48 @@ jobs:
         run: cd packages/api && pnpm exec prisma generate
       - name: Build all packages
         run: pnpm -r build
+
+  # Guards prod: prod deploys via `prisma migrate deploy` (start.sh), so a
+  # schema.prisma change with no matching migration silently ships nothing and
+  # breaks at runtime. This replays every migration into a throwaway Postgres and
+  # fails if the result doesn't match schema.prisma — catching drift at PR time,
+  # not deploy time.
+  migrations:
+    name: Migrations
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: shadow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check migrations match schema (no drift)
+        working-directory: packages/api
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shadow
+        run: |
+          pnpm exec prisma migrate diff \
+            --from-migrations ./prisma/migrations \
+            --to-schema-datamodel ./prisma/schema.prisma \
+            --shadow-database-url postgresql://postgres:postgres@localhost:5432/shadow \
+            --exit-code \
+          || {
+            echo "::error::schema.prisma and prisma/migrations have drifted. Generate a migration: cd packages/api && pnpm exec prisma migrate dev --name <change>";
+            exit 1;
+          }
