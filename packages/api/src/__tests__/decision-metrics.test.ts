@@ -9,7 +9,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { type DecisionRow, dailySummaryOf, summarizeDecisions } from "../decision-metrics.js";
+import {
+  type DecisionRow,
+  dailySummaryOf,
+  summarizeDecisions,
+  summarizeEngagementGrounding,
+} from "../decision-metrics.js";
 
 // shownTier × outcome matrix exercising every classification branch.
 const ROWS: DecisionRow[] = [
@@ -109,6 +114,50 @@ describe("dailySummaryOf", () => {
       overrideRate: 0.5,
       pushShown: 2,
       silentShown: 3,
+    });
+  });
+});
+
+describe("summarizeEngagementGrounding", () => {
+  // Mix of engagement kinds, tiers, and outcomes — plus non-grounded rows that
+  // must be ignored entirely.
+  const G_ROWS: DecisionRow[] = [
+    { shownTier: "PUSH", outcome: null, engagementKind: "DIRECT" }, // fired, kept
+    { shownTier: "QUEUE", outcome: "OVERRIDE:PUSH", engagementKind: "DIRECT" }, // fired, corrected
+    { shownTier: "QUEUE", outcome: "OVERRIDE:QUEUE", engagementKind: "PROPAGATED" }, // fired, same-tier no-op
+    { shownTier: "PUSH", outcome: null, engagementKind: "PROPAGATED" }, // fired, kept
+    { shownTier: "SILENT", outcome: null, engagementKind: null }, // NOT grounded — ignored
+    { shownTier: "PUSH", outcome: "OVERRIDE:SILENT" }, // no engagementKind field — ignored
+  ];
+
+  it("counts only grounded rows, split by kind and shown tier", () => {
+    const m = summarizeEngagementGrounding(G_ROWS);
+    expect(m.total).toBe(4);
+    expect(m.direct).toBe(2);
+    expect(m.propagated).toBe(2);
+    expect(m.byTier).toEqual({ PUSH: 2, QUEUE: 2 });
+  });
+
+  it("uses confirmed tier-moving overrides for the correction rate (same-tier is a no-op)", () => {
+    const m = summarizeEngagementGrounding(G_ROWS);
+    expect(m.acted).toBe(2); // the two OVERRIDE rows
+    expect(m.corrections).toBe(1); // only QUEUE→PUSH moved; QUEUE→QUEUE didn't
+    expect(m.correctionRate).toBe(0.5);
+  });
+
+  it("is all-zero and null-rate before the flag ever fires (no grounded rows)", () => {
+    const m = summarizeEngagementGrounding([
+      { shownTier: "PUSH", outcome: null },
+      { shownTier: "SILENT", outcome: "OVERRIDE:PUSH", engagementKind: null },
+    ]);
+    expect(m).toEqual({
+      total: 0,
+      direct: 0,
+      propagated: 0,
+      byTier: {},
+      acted: 0,
+      corrections: 0,
+      correctionRate: null,
     });
   });
 });

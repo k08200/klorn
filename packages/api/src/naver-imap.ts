@@ -30,6 +30,7 @@ import { isAllowedImapHost } from "./is-allowed-imap-host.js";
 import { buildJudgeContext } from "./judge-context.js";
 import { getUserLlmCredentials } from "./llm-credentials.js";
 import { judgeEmail } from "./poc-judge.js";
+import { engagementKindOf } from "./sender-policy.js";
 import { captureError } from "./sentry.js";
 
 interface VerifyArgs {
@@ -261,6 +262,8 @@ export async function syncNaverImap(args: SyncArgs): Promise<SyncResult> {
             // buildJudgeContext feeds past manual overrides back in and
             // never throws — worst case is an empty context.
             buildJudgeContext(args.userId, { from, excludeEmailId: upserted.id })
+              // Nested so judgeContext stays in scope for the ledger's
+              // engagementKind (it's lost across a flat .then chain).
               .then((judgeContext) =>
                 judgeEmail(
                   {
@@ -276,20 +279,20 @@ export async function syncNaverImap(args: SyncArgs): Promise<SyncResult> {
                   args.userId,
                   judgeContext,
                   llmCredentials,
-                ),
-              )
-              .then((judgement) =>
-                upsertAttentionForEmailJudgement(
-                  {
-                    id: upserted.id,
-                    userId: args.userId,
-                    from,
-                    subject,
-                    snippet,
-                    labels,
-                    receivedAt,
-                  },
-                  judgement,
+                ).then((judgement) =>
+                  upsertAttentionForEmailJudgement(
+                    {
+                      id: upserted.id,
+                      userId: args.userId,
+                      from,
+                      subject,
+                      snippet,
+                      labels,
+                      receivedAt,
+                    },
+                    judgement,
+                    engagementKindOf(judgeContext.senderFacts),
+                  ),
                 ),
               )
               .catch((err) => {
