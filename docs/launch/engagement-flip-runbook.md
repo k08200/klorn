@@ -82,6 +82,26 @@ What changes at that moment: for a sender the user engages with (directly, or
 via an engaged org), the judge prompt gains one hedged grounding line that nudges
 `senderTrust`. Nothing else. Classification of strangers is byte-identical.
 
+### Force the graph to rebuild (or the flip is inert for days)
+
+The judge reads a **cached** interaction graph (`getCachedInteractionGraph` —
+never rebuilt on the hot path). That cache refreshes only on the weekly batch
+(Sunday) or after its 3-day TTL. So engagement that accrued *after* the last
+rebuild won't reach the judge until the next one — the flip can look dead for up
+to a week even though it's on.
+
+Force it immediately, per user (defaults to the acting admin's own account):
+
+```
+curl -s -X POST "https://<api-host>/api/admin/interaction-graph/rebuild" \
+  -H "authorization: Bearer <admin-token>"
+# → { userId, builtAt, nodeCount, directlyEngaged, orgPropagated, orgImportanceDomains }
+```
+
+`directlyEngaged: 0` means the flip is inert for this account — no replies have
+accrued yet (S1 needs the user to have manually replied/sent since #768 shipped).
+A non-zero count means there's a real signal the judge will now consume.
+
 ## Post-flip validation (dogfood — the only real test)
 
 On the founder's real account (`k0820086@gmail.com`, which has reply history):
@@ -95,6 +115,16 @@ On the founder's real account (`k0820086@gmail.com`, which has reply history):
       etc.) gets **no** lift even if you engage with someone else there.
 - [ ] Watch for any sender you dismiss a lot still being lifted — it shouldn't be
       (dismiss-only → importance 0 → no fact).
+- [ ] Read the instrumentation once a few emails have been judged:
+      ```
+      curl -s "https://<api-host>/api/admin/decision-metrics?userId=<you>" \
+        -H "authorization: Bearer <admin-token>" | jq .engagementGrounding
+      ```
+      `total > 0` proves the grounding is firing on real classifications; a
+      `correctionRate` at or below the overall `overall.overrideRate` means the
+      signal is aligned with you (you're not overriding grounded decisions more
+      than average). A high `correctionRate` on grounded rows is the signal to
+      roll back and reconsider.
 
 ## Rollback
 
