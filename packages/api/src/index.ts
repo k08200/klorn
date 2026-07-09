@@ -40,6 +40,7 @@ import { telegramRoutes } from "./routes/telegram.js";
 import { tokenUsageRoutes } from "./routes/token-usage.js";
 import { waitlistRoutes } from "./routes/waitlist.js";
 import { webhookRoutes } from "./routes/webhook.js";
+import { buildSchedulerHealthReport, isBackgroundAgentsDisabled } from "./scheduler-heartbeat.js";
 import { captureError, initSentry } from "./sentry.js";
 import { getClientCount, initWebSocket } from "./websocket.js";
 
@@ -214,6 +215,17 @@ app.get("/api/health", async () => {
       process.env.VERCEL_GIT_COMMIT_SHA ||
       null,
   };
+});
+
+// Scheduler liveness for external monitors (UptimeRobot etc). 503 when any
+// in-process scheduler loop has gone silent past its staleness threshold —
+// the failure mode where the dyno slept or an import failed and briefings
+// just stopped (see routes/cron.ts). Public like /api/health: exposes only
+// scheduler names and tick times, no user data.
+app.get("/api/health/schedulers", async (_request, reply) => {
+  const report = buildSchedulerHealthReport({ disabled: isBackgroundAgentsDisabled() });
+  reply.code(report.statusCode);
+  return report.body;
 });
 
 // User data management — "me" routes require authentication
@@ -453,9 +465,7 @@ try {
   // pass `userId`, so any system-call path that omits it is invisible
   // to the cap. Until that gap is closed, this switch is the only
   // bytes-down brake.
-  const BG_DISABLED =
-    process.env.BACKGROUND_AGENTS_DISABLED === "true" ||
-    process.env.BACKGROUND_AGENTS_DISABLED === "1";
+  const BG_DISABLED = isBackgroundAgentsDisabled();
   if (BG_DISABLED) {
     console.warn(
       "[STARTUP] BACKGROUND_AGENTS_DISABLED is set — skipping all schedulers and background agents. The HTTP API still serves; no LLM calls from this container.",
