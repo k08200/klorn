@@ -39,6 +39,7 @@ import { formatUrgentEmailBody, senderName } from "./notification-format.js";
 import { escalateUnackedPush } from "./phone-escalation.js";
 import { runProactiveActions } from "./proactive-actions.js";
 import { sendPushNotification } from "./push.js";
+import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
 import { sendSms } from "./sms.js";
 import { isEntitled, planHasFeature } from "./stripe.js";
@@ -536,6 +537,7 @@ export async function ensureUrgentEmailNotification(
 }
 
 async function runAutomations() {
+  recordSchedulerTick("automation");
   // Skip if this process is still running the previous tick (see schedulerInFlight).
   if (schedulerInFlight) return;
   schedulerInFlight = true;
@@ -1387,6 +1389,7 @@ export function startAutomationScheduler() {
   console.log(
     `[AUTOMATION] Scheduler started (checking every 60s, dbHeartbeat=${DB_HEARTBEAT_ENABLED ? "on" : "off"}, proactive=${PROACTIVE_ACTIONS_ENABLED ? "on" : "off"})`,
   );
+  registerScheduler("automation", CHECK_INTERVAL_MS);
 
   // Run once on start
   runAutomations();

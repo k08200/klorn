@@ -9,6 +9,7 @@
 
 import { prisma } from "./db.js";
 import { syncGitHubForUser } from "./github-source.js";
+import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -43,12 +44,15 @@ export function startGitHubScheduler(): void {
   // Guard the 30s boot window too: intervalId isn't set until the first tick
   // fires, so a second start() before then would schedule a duplicate tick.
   if (intervalId || firstTickTimer) return;
+  registerScheduler("github", POLL_INTERVAL_MS);
   firstTickTimer = setTimeout(() => {
     firstTickTimer = null;
+    recordSchedulerTick("github");
     tickOnce().catch((err) =>
       captureError(err, { tags: { scope: "github-scheduler.first-tick" } }),
     );
     intervalId = setInterval(() => {
+      recordSchedulerTick("github");
       tickOnce().catch((err) => captureError(err, { tags: { scope: "github-scheduler.tick" } }));
     }, POLL_INTERVAL_MS);
   }, 30_000);

@@ -10,6 +10,7 @@
 
 import { prisma } from "./db.js";
 import { sendPushNotification } from "./push.js";
+import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
 import { pushNotification } from "./websocket.js";
 
@@ -146,6 +147,7 @@ export async function deliverDueReminders(userId?: string): Promise<{
 }
 
 async function checkDueReminders() {
+  recordSchedulerTick("reminder");
   try {
     await deliverDueReminders();
   } catch (err) {
@@ -159,6 +161,7 @@ export function startReminderScheduler() {
   if (intervalId) return; // already running
 
   console.log("[REMINDER] Scheduler started (checking every 30s)");
+  registerScheduler("reminder", CHECK_INTERVAL_MS);
 
   // Run immediately on start
   checkDueReminders();

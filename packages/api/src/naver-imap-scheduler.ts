@@ -13,6 +13,7 @@
 
 import { prisma } from "./db.js";
 import { syncNaverImapForUser } from "./naver-imap.js";
+import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -53,14 +54,17 @@ export function startNaverImapScheduler(): void {
   // ~30s in, so a second start() call before then would schedule a duplicate
   // first tick. Track the setTimeout handle so the double-start guard covers it.
   if (intervalId || firstTickTimer) return;
+  registerScheduler("naver-imap", POLL_INTERVAL_MS);
   // First tick after 30s so the API server can finish booting before
   // we open IMAP sockets. Subsequent ticks on the regular interval.
   firstTickTimer = setTimeout(() => {
     firstTickTimer = null;
+    recordSchedulerTick("naver-imap");
     tickOnce().catch((err) =>
       captureError(err, { tags: { scope: "naver-imap-scheduler.first-tick" } }),
     );
     intervalId = setInterval(() => {
+      recordSchedulerTick("naver-imap");
       tickOnce().catch((err) =>
         captureError(err, { tags: { scope: "naver-imap-scheduler.tick" } }),
       );
