@@ -51,6 +51,8 @@ model User {
   // mapping for events that arrive without custom_data.userId.
   paddleCustomerId          String?                    @unique
   emailVerified             Boolean                    @default(false)
+  // SHA-256 hash of the emailed one-time token (one-time-token.ts) — the raw
+  // token is never stored, same standard as Device.tokenHash.
   verifyToken               String?
   verifyTokenExp            DateTime?
   resetToken                String?
