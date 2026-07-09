@@ -1,0 +1,50 @@
+name: Desktop
+
+# The native macOS app (apps/desktop-mac) carries real logic — API-response
+# decoding, the desktop OAuth state machine, notification planning — verified by
+# `swift run KlornMac --self-check` (the Command Line Tools toolchain ships no
+# XCTest, so the checks live in SelfCheck.swift). Nothing ran them in CI: only
+# desktop-release.yml built the app, and only on a tag. A PR could break the
+# decoder (as the reading-pane work risked) with zero signal. This gate closes
+# that. Path-filtered so it only spends a macOS runner when the desktop changes;
+# macOS runners are free for this public repo. Not a required check (a PR that
+# doesn't touch the desktop never produces it).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/desktop-mac/**"
+      - ".github/workflows/desktop.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/desktop-mac/**"
+      - ".github/workflows/desktop.yml"
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  self-check:
+    name: Desktop self-check
+    # macos-15 ships Swift 6 (Package.swift is swift-tools 6.0); macos-14's
+    # default toolchain is 5.10 and fails to build. Mirrors desktop-release.yml.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select a Swift 6 toolchain
+        run: |
+          XC=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XC" ]; then sudo xcode-select -s "$XC"; fi
+          swift --version
+
+      - name: Build
+        run: cd apps/desktop-mac && swift build
+
+      # Runs the verification harness and exits (the --self-check branch runs
+      # before any GUI, so it's headless-safe). Non-zero exit = a check failed.
+      - name: Self-check
+        run: cd apps/desktop-mac && swift run KlornMac --self-check
