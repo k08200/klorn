@@ -47,6 +47,7 @@ enum TopBarMetrics {
 struct TopBarRoot: View {
     let state: BarState
     let actions: TopBarActions
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         Group {
@@ -58,7 +59,7 @@ struct TopBarRoot: View {
         }
         .background(
             RoundedRectangle(cornerRadius: TopBarMetrics.corner)
-                .fill(Theme.panel)
+                .fill(Color.black.opacity(Theme.panelOpacity(reduceTransparency: reduceTransparency)))
                 .overlay(RoundedRectangle(cornerRadius: TopBarMetrics.corner).strokeBorder(Theme.line))
         )
         .clipShape(RoundedRectangle(cornerRadius: TopBarMetrics.corner))
