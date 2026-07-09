@@ -116,6 +116,15 @@ func runSelfChecks() async -> Bool {
         DesktopTokenResponse.self, from: Data(#"{"status":"pending"}"#.utf8))
     check("DesktopToken pending", pendTok?.status == "pending" && pendTok?.token == nil)
 
+    // EmailDetail learned-engagement signal — present decodes, absent stays nil
+    // (decoding must be resilient: strangers omit the field entirely).
+    let engJSON = #"{"id":"e1","from":"a@co.com","engagement":{"outboundCount":5,"learnedImportance":0.9}}"#
+    let engDetail = try? JSONDecoder().decode(EmailDetail.self, from: Data(engJSON.utf8))
+    check("EmailDetail engagement decodes", engDetail?.engagement?.outboundCount == 5)
+    let noEng = try? JSONDecoder().decode(
+        EmailDetail.self, from: Data(#"{"id":"e2","from":"b@co.com"}"#.utf8))
+    check("EmailDetail no-engagement is nil", noEng != nil && noEng?.engagement == nil)
+
     print("Notifications:")
     func push(_ id: String) -> FirewallItem {
         FirewallItem(id: id, source: "email", sourceId: id, type: "email", title: id,

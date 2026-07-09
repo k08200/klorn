@@ -136,6 +136,16 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     let summary: String?
     let needsReply: Bool?
     let needsReplyReason: String?
+    /// Learned engagement: how often the user has replied to/written this sender.
+    /// null (absent) for strangers — only present when there's real engagement.
+    let engagement: Engagement?
+
+    /// A measured "you engage with this sender" signal, learned from the user's
+    /// own replies/sends. Display-only in the reading pane.
+    struct Engagement: Codable, Sendable {
+        let outboundCount: Int
+        let learnedImportance: Double
+    }
 
     /// Body, falling back to the snippet when the body is empty (as the web does).
     var text: String {

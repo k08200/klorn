@@ -589,7 +589,8 @@ private struct ReadingPane: View {
     @ViewBuilder
     private func klornBand(_ email: EmailDetail) -> some View {
         let reason = item?.tierReason
-        let show = (reason?.isEmpty == false) || (email.summary?.isEmpty == false) || (email.needsReply == true)
+        let hasEngagement = (email.engagement?.outboundCount ?? 0) > 0
+        let show = (reason?.isEmpty == false) || (email.summary?.isEmpty == false) || (email.needsReply == true) || hasEngagement
         if show {
             VStack(alignment: .leading, spacing: 6) {
                 if let item, let reason, !reason.isEmpty {
@@ -610,12 +611,29 @@ private struct ReadingPane: View {
                     }
                     .foregroundStyle(Theme.accent)
                 }
+                if let engagement = email.engagement, engagement.outboundCount > 0 {
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.turn.up.left").font(.caption2)
+                        Text(engagementLabel(engagement.outboundCount))
+                            .font(.caption)
+                    }
+                    // Warm tint mirrors the web graph's "you engage" pink — the
+                    // signal Klorn learned from the user's own replies.
+                    .foregroundStyle(Color(red: 0.96, green: 0.45, blue: 0.71))
+                }
             }
             .padding(.horizontal, 24).padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.white.opacity(0.04))
             Divider().overlay(Theme.line)
         }
+    }
+
+    /// "You've replied to this sender once / N times" — Klorn learned this sender
+    /// matters from the user's own outbound replies. Singular-aware.
+    private func engagementLabel(_ count: Int) -> String {
+        let times = count == 1 ? "once" : "\(count) times"
+        return "You engage with this sender · replied \(times)"
     }
 
     /// Open the composer and let Klorn's AI draft the reply into it. The user
