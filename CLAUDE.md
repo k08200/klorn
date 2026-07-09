@@ -27,6 +27,10 @@ pnpm -r build
 Gotchas:
 - Fresh clone/worktree: typecheck fails until `prisma generate` has run.
 - Warnings don't block the lint gate; errors do.
+- CI jobs run in parallel with a warm pnpm cache — the local gate above is the sum
+  of them; a green local run means a green CI.
+- Touching `apps/desktop-mac/**`? CI runs `swift run KlornMac --self-check` on a
+  macOS runner. Run it locally before pushing (the Swift `--self-check` harness).
 
 ## Branch & PR rules
 
