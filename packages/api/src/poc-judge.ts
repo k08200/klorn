@@ -186,6 +186,13 @@ export function buildSenderFactsBlock(facts?: SenderFacts | null): string {
       lines.push(
         "- The recipient actively engages with other people at this sender's organization (a mild prior that this sender may matter — weigh it lightly, it is not about this person directly)",
       );
+    } else if (e.outboundCount === 0 && (e.dismissCount ?? 0) > 0) {
+      // Measured negative: dismissed repeatedly, never engaged back. Hedged so a
+      // genuinely urgent email can still override the low-importance prior.
+      const times = `${e.dismissCount} time${(e.dismissCount ?? 0) > 1 ? "s" : ""}`;
+      lines.push(
+        `- The recipient has dismissed this sender's mail ${times} without ever replying (a measured signal this sender is low-importance — lower senderTrust unless the email itself is clearly urgent)`,
+      );
     } else {
       const strength =
         e.importance >= 0.75 ? "strongly" : e.importance >= 0.4 ? "regularly" : "sometimes";

@@ -132,6 +132,7 @@ export interface InteractionNode {
   // consumed (flag-gated) as soft grounding for the judge's senderTrust score.
   learnedImportance?: number;
   outboundCount?: number; // raw outbound engagements (for interpretable grounding text)
+  dismissCount?: number; // raw dismisses (the negative signal — user keeps clearing this sender)
   // Propagated (inferred) importance for a quiet contact at an org the user
   // actively engages with — a soft cold-start prior, NOT a measured signal.
   // Only set when the contact has no direct engagement of their own.
@@ -410,6 +411,7 @@ async function buildAndCacheGraph(userId: string): Promise<InteractionGraph> {
       tags,
       learnedImportance,
       outboundCount: eng?.outboundCount,
+      dismissCount: eng?.dismissCount,
     });
   }
 

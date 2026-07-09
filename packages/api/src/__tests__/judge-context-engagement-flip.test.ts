@@ -88,6 +88,7 @@ describe("engagement flip gate — full judge-context → prompt path", () => {
     expect(ctx.senderFacts?.engagement).toEqual({
       importance: 0.9,
       outboundCount: 5,
+      dismissCount: 0,
       propagated: false,
     });
 
