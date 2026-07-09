@@ -29,6 +29,11 @@ async function tickOnce(): Promise<void> {
         console.log(`[github] ${user.id}: fetched=${result.fetched} surfaced=${result.surfaced}`);
       }
     } catch (err) {
+      // Terminal handler for the per-user GitHub sync — console first so a
+      // failure is visible without a Sentry DSN (self-host / dev), matching
+      // naver-imap-scheduler. Without this, a broken token or API change
+      // silently stalls that user's GitHub notifications with no trace.
+      console.warn(`[github-scheduler] sync failed for user ${user.id}:`, err);
       captureError(err, { tags: { scope: "github-scheduler" }, extra: { userId: user.id } });
     }
   }
