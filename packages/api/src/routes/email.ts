@@ -48,6 +48,20 @@ import { registerEmailMutationsRoutes } from "./email-mutations.js";
 import { registerEmailRepliesRoutes } from "./email-replies.js";
 import { registerEmailRulesRoutes } from "./email-rules.js";
 
+const MAX_PAGE = 10_000; // guardrail: paging past ~500k rows is a client bug, not a real request
+
+/**
+ * Parse a `?page=` query value into a safe 1-based page number. A missing,
+ * non-numeric, or negative value collapses to page 1 (a negative would make
+ * Prisma's `skip` throw a 500); an absurdly large value is clamped so `skip`
+ * can't be pushed arbitrarily high by query-string manipulation.
+ */
+function parsePageNum(page: string | undefined): number {
+  const n = Number.parseInt(page ?? "1", 10);
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(n, MAX_PAGE);
+}
+
 /**
  * Slice of TrustScoreResult that we ship to the inbox UI. Keeping this
  * compact (no avgDelayDays / lateCount) so list payloads stay small —
@@ -572,7 +586,7 @@ export async function emailRoutes(app: FastifyInstance) {
       inbox?: string;
     };
     const uid = getUserId(request);
-    const pageNum = parseInt(page || "1", 10);
+    const pageNum = parsePageNum(page);
     // Heavy-email users (~200/day) clicking "Load more" 10 times to see one
     // morning's intake was the #1 dogfood friction. 50 keeps the first
     // payload under ~25 KB once joined with attachment summaries and trust
@@ -709,12 +723,20 @@ export async function emailRoutes(app: FastifyInstance) {
     const attachmentSummaries = await summarizeEmailAttachmentsByEmail(emailIds, uid);
     const candidateProfiles = await listCandidateProfilesByEmail(emailIds, uid);
     const candidateIntakes = await listCandidateIntakesByEmail(emailIds, uid);
-    for (const emailId of emailIds) {
-      if (candidateProfiles[emailId] && !candidateIntakes[emailId]) {
-        const intake = await syncCandidateIntakeForEmail({ userId: uid, emailId });
-        if (intake) candidateIntakes[emailId] = intake;
-      }
-    }
+    // Backfill candidate intake for résumé/candidate emails that have a
+    // profile but no intake row yet. Run these concurrently instead of
+    // awaiting each in sequence — the old loop added up to ~2 DB round trips
+    // × pageSize serial hops to a single inbox page-load. Each sync writes its
+    // own emailId key so concurrent writes don't race; Prisma's pool provides
+    // backpressure on the fan-out.
+    await Promise.all(
+      emailIds
+        .filter((emailId) => candidateProfiles[emailId] && !candidateIntakes[emailId])
+        .map(async (emailId) => {
+          const intake = await syncCandidateIntakeForEmail({ userId: uid, emailId });
+          if (intake) candidateIntakes[emailId] = intake;
+        }),
+    );
     // Bulk-fetch Trust Scores for every unique sender on this page so the
     // inbox row can render a dot without an N+1 query per email.
     const senderAddresses = Array.from(
@@ -815,7 +837,7 @@ export async function emailRoutes(app: FastifyInstance) {
       return { threads, total: threads.length, source: "demo" };
     }
 
-    const pageNum = parseInt(page || "1", 10);
+    const pageNum = parsePageNum(page);
     // Match the /api/email pageSize bump (heavy-user friction). Threads
     // are heavier per row but a single page still fits in the same envelope.
     const pageSize = 50;
