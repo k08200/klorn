@@ -28,6 +28,8 @@ const enTranslations: Record<string, string> = {
   "nav.workspace": "Workspace",
   "nav.logIn": "Log in",
   "nav.logout": "Log out",
+  "nav.home": "Home",
+  "nav.earlyAccess": "Early access",
   // Bottom tabs (mobile)
   "tabs.queue": "Queue",
   "tabs.account": "Account",
@@ -68,6 +70,38 @@ const enTranslations: Record<string, string> = {
   "auth.switchToLogIn": "Switch to log-in",
   "auth.approvedCantSignIn": "Approved but can't sign in?",
   "auth.resetYourPassword": "Reset your password",
+  // Auth — login left panel (aside), doctrine, toasts, deep-link banner
+  "auth.asideTitle": "Keep only the work that needs a decision",
+  "auth.asideBody":
+    "Klorn reads mail, calendar, and task signals, then turns them into cards you can review before anything runs.",
+  "auth.stepSignal": "Signal",
+  "auth.stepSignalDesc": "Detect meaningful changes in mail and calendar",
+  "auth.stepContext": "Context",
+  "auth.stepContextDesc": "Connect people, deadlines, and projects",
+  "auth.stepApproval": "Approval",
+  "auth.stepApprovalDesc": "Review evidence before external execution",
+  "auth.betaScope":
+    "Free during the private beta. Google flags unverified apps with the restricted Gmail scope until CASA review clears — standard for every Gmail integration.",
+  "auth.noSilentActions":
+    "What we don't do: send mail without a click-through receipt. Every send, permanent delete, and external forward is hash-bound and verifiable on read.",
+  "auth.readDoctrine": "Read the doctrine before the login flow →",
+  "auth.openSourceVersion": "Open source · AGPLv3 · v0.3.0",
+  "auth.signInToContinue": "Sign in to continue to {destination}.",
+  "auth.googleSignInError": "Google sign-in could not be completed. Please try again.",
+  "auth.googleUnverified":
+    "Google hasn't finished verifying Klorn for your account yet. Approved testers can retry shortly; otherwise request early access.",
+  "auth.sessionExpired": "Your session expired. Please sign in again.",
+  "auth.inviteOnlyRedirect":
+    "Klorn is invite-only right now. Request access from the early access page.",
+  "auth.emailVerified": "Email verified. You can sign in now.",
+  "auth.passwordMinChars": "Use at least {count} characters.",
+  "auth.genericError": "Something went wrong.",
+  "auth.formGroupLabel": "Sign in or create an account",
+  "auth.destMemory": "Memory settings",
+  "auth.destUsage": "Usage settings",
+  "auth.destStatus": "System status",
+  "auth.destFeedback": "Mail feedback",
+  "auth.destFiles": "Files",
   // Settings
   "settings.title": "Settings",
   "settings.subtitle": "Manage your profile, integrations, and preferences",
@@ -234,6 +268,8 @@ const koTranslations: Record<string, string> = {
   "nav.workspace": "워크스페이스",
   "nav.logIn": "로그인",
   "nav.logout": "로그아웃",
+  "nav.home": "홈",
+  "nav.earlyAccess": "얼리 액세스",
   // Bottom tabs (mobile)
   "tabs.queue": "큐",
   "tabs.account": "계정",
@@ -273,6 +309,38 @@ const koTranslations: Record<string, string> = {
   "auth.switchToLogIn": "로그인으로 전환",
   "auth.approvedCantSignIn": "승인됐는데 로그인이 안 되나요?",
   "auth.resetYourPassword": "비밀번호를 재설정하세요",
+  // Auth — 로그인 좌측 패널, 도크트린, 토스트, 딥링크 배너
+  "auth.asideTitle": "결정이 필요한 일만 남기세요",
+  "auth.asideBody":
+    "Klorn이 메일·캘린더·업무 신호를 읽어, 무엇이든 실행되기 전에 검토할 수 있는 카드로 만들어 줍니다.",
+  "auth.stepSignal": "신호",
+  "auth.stepSignalDesc": "메일과 캘린더의 의미 있는 변화를 감지합니다",
+  "auth.stepContext": "컨텍스트",
+  "auth.stepContextDesc": "사람·마감·프로젝트를 연결합니다",
+  "auth.stepApproval": "승인",
+  "auth.stepApprovalDesc": "외부 실행 전에 근거를 검토합니다",
+  "auth.betaScope":
+    "비공개 베타 기간 동안 무료입니다. Google은 CASA 심사가 끝날 때까지 제한된 Gmail 범위를 사용하는 미검증 앱을 표시하며, 이는 모든 Gmail 연동에 적용되는 표준 절차입니다.",
+  "auth.noSilentActions":
+    "저희가 하지 않는 것: 클릭 확인 없이 메일을 보내지 않습니다. 모든 발송·영구 삭제·외부 전달은 해시로 묶여 있어 열람 시 검증할 수 있습니다.",
+  "auth.readDoctrine": "로그인 전에 설계 원칙 읽기 →",
+  "auth.openSourceVersion": "오픈소스 · AGPLv3 · v0.3.0",
+  "auth.signInToContinue": "{destination}(으)로 이어가려면 로그인하세요.",
+  "auth.googleSignInError": "Google 로그인을 완료하지 못했습니다. 다시 시도해 주세요.",
+  "auth.googleUnverified":
+    "Google이 아직 회원님 계정에 대한 Klorn 검증을 마치지 않았습니다. 승인된 테스터는 잠시 후 다시 시도할 수 있으며, 그 외에는 얼리 액세스를 신청해 주세요.",
+  "auth.sessionExpired": "세션이 만료되었습니다. 다시 로그인해 주세요.",
+  "auth.inviteOnlyRedirect":
+    "Klorn은 현재 초대 전용입니다. 얼리 액세스 페이지에서 액세스를 신청해 주세요.",
+  "auth.emailVerified": "이메일이 확인되었습니다. 이제 로그인할 수 있어요.",
+  "auth.passwordMinChars": "최소 {count}자 이상 입력해 주세요.",
+  "auth.genericError": "문제가 발생했습니다.",
+  "auth.formGroupLabel": "로그인 또는 계정 만들기",
+  "auth.destMemory": "메모리 설정",
+  "auth.destUsage": "사용량 설정",
+  "auth.destStatus": "시스템 상태",
+  "auth.destFeedback": "메일 피드백",
+  "auth.destFiles": "파일",
   // Settings
   "settings.title": "설정",
   "settings.subtitle": "프로필, 연동, 환경설정을 관리하세요",
