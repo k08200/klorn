@@ -37,6 +37,9 @@ final class TopBarController {
     /// an OS banner as a fallback for when the bar isn't on the user's current Space
     /// (a no-op on unbundled `swift run`, which has no bundle id).
     func handleNewPush(_ items: [FirewallItem]) {
+        // The pill's live count already updated via observation; the OS banner is
+        // the opt-out-able extra (Preferences → Notifications).
+        guard model.settings.notificationsEnabled else { return }
         items.forEach { PushNotifier.post($0) }
     }
 
@@ -102,6 +105,11 @@ final class TopBarController {
                 Task { await self.model.snooze(item, until: option.resurface()) }
             },
             onSelect: { [weak self] item in guard let self else { return }; Task { await self.model.select(item) } },
+            onOpenPreferences: { [weak self] in
+                guard let self else { return }
+                self.setState(.full)          // the overlay lives in the full view
+                self.model.showPreferences = true
+            },
             onQuit: { NSApplication.shared.terminate(nil) })
     }
 
