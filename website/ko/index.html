@@ -1169,8 +1169,9 @@
     /* ── Floating download + language dock (bottom-center) ─────── */
     .dl-dock {
       position: fixed;
-      right: 22px;
+      left: 50%;
       bottom: 22px;
+      transform: translate(-50%, 0);
       z-index: 60;
       display: flex;
       align-items: center;
@@ -1187,7 +1188,7 @@
       pointer-events: auto;
       animation: dlDockIn 0.45s ease both;
     }
-    @keyframes dlDockIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes dlDockIn { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
     .dl-dock-btn {
       display: inline-flex;
       align-items: center;
@@ -1225,7 +1226,7 @@
       .dl-dock-btn { padding: 9px 15px; font-size: 13px; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .dl-dock { animation: none; transform: none; }
+      .dl-dock { animation: none; transform: translate(-50%, 0); }
     }
   </style>
 </head>
