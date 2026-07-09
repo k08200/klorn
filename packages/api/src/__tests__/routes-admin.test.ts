@@ -35,6 +35,48 @@ vi.mock("../ontology-overrides.js", () => ({
   overriddenKnobs: vi.fn(() => []),
 }));
 
+// Force-rebuild route: mock the heavy graph build; assert the route reports the
+// engagement footprint of the freshly-built graph.
+const buildInteractionGraphSpy = vi.fn(async (_userId: string) => ({
+  builtAt: "2026-07-09T00:00:00Z",
+  orgImportance: { "acme.com": 0.9 },
+  nodes: [
+    {
+      email: "alice@acme.com",
+      name: "Alice",
+      score: 70,
+      emailCount: 20,
+      lastEmailDaysAgo: 1,
+      upcomingMeetings: 0,
+      tags: ["you_engage"],
+      learnedImportance: 0.9,
+      outboundCount: 5,
+    },
+    {
+      email: "bob@acme.com",
+      name: "Bob",
+      score: 30,
+      emailCount: 8,
+      lastEmailDaysAgo: 2,
+      upcomingMeetings: 0,
+      tags: ["org_engaged"],
+      propagatedImportance: 0.36,
+    },
+    {
+      email: "stranger@x.com",
+      name: null,
+      score: 12,
+      emailCount: 3,
+      lastEmailDaysAgo: 5,
+      upcomingMeetings: 0,
+      tags: [],
+    },
+  ],
+}));
+vi.mock("../interaction-graph.js", () => ({
+  buildInteractionGraph: (...args: [string]) => buildInteractionGraphSpy(...args),
+}));
+
 type StoredProposal = { id: string; status: string; knob: string; proposedValue: number };
 const proposalById = new Map<string, StoredProposal>();
 
@@ -253,6 +295,51 @@ describe("admin routes", () => {
       headers: { authorization: `Bearer ${USER_TOKEN}` },
     });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("force-rebuilds the interaction graph and reports the engagement footprint", async () => {
+    buildInteractionGraphSpy.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/admin/interaction-graph/rebuild",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(200);
+    // Defaults to the acting admin's own account when ?userId= is omitted.
+    expect(buildInteractionGraphSpy).toHaveBeenCalledWith("admin-1");
+    expect(res.json()).toMatchObject({
+      userId: "admin-1",
+      nodeCount: 3,
+      directlyEngaged: 1, // alice (learnedImportance + outboundCount>0)
+      orgPropagated: 1, // bob (propagatedImportance)
+      orgImportanceDomains: 1, // acme.com
+    });
+    await app.close();
+  });
+
+  it("targets another user's graph when ?userId= is given (support/dogfood)", async () => {
+    buildInteractionGraphSpy.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/admin/interaction-graph/rebuild?userId=user-1",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(buildInteractionGraphSpy).toHaveBeenCalledWith("user-1");
+    await app.close();
+  });
+
+  it("rejects a non-admin from the graph rebuild with 403", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/admin/interaction-graph/rebuild",
+      headers: { authorization: `Bearer ${USER_TOKEN}` },
+    });
+    expect(res.statusCode).toBe(403);
     await app.close();
   });
 
