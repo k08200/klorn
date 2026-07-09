@@ -125,6 +125,26 @@ func runSelfChecks() async -> Bool {
         EmailDetail.self, from: Data(#"{"id":"e2","from":"b@co.com"}"#.utf8))
     check("EmailDetail no-engagement is nil", noEng != nil && noEng?.engagement == nil)
 
+    // Engagement display logic — reply-count phrasing, learned-importance buckets,
+    // clamping, and the color-independent accessibility label.
+    check("engagement reply count (plural)",
+          engDetail?.engagement?.replyCountLabel == "You engage with this sender · replied 5 times")
+    check("engagement reply count (singular)",
+          EmailDetail.Engagement(outboundCount: 1, learnedImportance: 0.25).replyCountLabel
+              == "You engage with this sender · replied once")
+    let saturated = EmailDetail.Engagement(outboundCount: 6, learnedImportance: 1.0)
+    check("importance label: consistent", saturated.importanceLabel == "Consistently important to you")
+    check("importance label: important",
+          EmailDetail.Engagement(outboundCount: 2, learnedImportance: 0.5).importanceLabel == "Important to you")
+    check("importance label: building",
+          EmailDetail.Engagement(outboundCount: 1, learnedImportance: 0.25).importanceLabel == "Building importance")
+    check("importance fill clamps high", EmailDetail.Engagement(outboundCount: 9, learnedImportance: 1.5).importanceFill == 1.0)
+    let faded = EmailDetail.Engagement(outboundCount: 2, learnedImportance: 0.0)
+    check("faded engagement hides meter", faded.importanceFill == 0.0 && !faded.showsImportance)
+    check("faded a11y label omits importance", faded.accessibilityLabel == faded.replyCountLabel)
+    check("engaged a11y label combines count + strength",
+          saturated.accessibilityLabel == "You engage with this sender · replied 6 times. Consistently important to you")
+
     print("Notifications:")
     func push(_ id: String) -> FirewallItem {
         FirewallItem(id: id, source: "email", sourceId: id, type: "email", title: id,

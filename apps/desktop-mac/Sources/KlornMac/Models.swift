@@ -144,7 +144,38 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     /// own replies/sends. Display-only in the reading pane.
     struct Engagement: Codable, Sendable {
         let outboundCount: Int
+        /// 0…1 dismiss-adjusted importance the graph learned. Saturates to 1 after
+        /// ~4 net engagements; dismisses pull it back down — so it says "does this
+        /// sender still matter" beyond the raw reply count. (interaction-graph.ts)
         let learnedImportance: Double
+
+        /// "You engage with this sender · replied once / N times" — the raw count.
+        var replyCountLabel: String {
+            let times = outboundCount == 1 ? "once" : "\(outboundCount) times"
+            return "You engage with this sender · replied \(times)"
+        }
+
+        /// Meter fill fraction (0…1), clamped for display safety.
+        var importanceFill: Double { max(0, min(1, learnedImportance)) }
+
+        /// Whether the learned-importance strength is worth surfacing. When dismisses
+        /// have fully cancelled the engagement (fill == 0) we show only the count.
+        var showsImportance: Bool { importanceFill > 0 }
+
+        /// Qualitative reading of the 0…1 strength — paired with the meter so the
+        /// signal is never conveyed by color/graphic alone (WCAG 1.4.1).
+        var importanceLabel: String {
+            switch importanceFill {
+            case let v where v >= 0.99: return "Consistently important to you"
+            case let v where v >= 0.5: return "Important to you"
+            default: return "Building importance"
+            }
+        }
+
+        /// One combined string for VoiceOver — count plus, when present, strength.
+        var accessibilityLabel: String {
+            showsImportance ? "\(replyCountLabel). \(importanceLabel)" : replyCountLabel
+        }
     }
 
     /// Body, falling back to the snippet when the body is empty (as the web does).

@@ -612,14 +612,20 @@ private struct ReadingPane: View {
                     .foregroundStyle(Theme.accent)
                 }
                 if let engagement = email.engagement, engagement.outboundCount > 0 {
-                    HStack(spacing: 5) {
-                        Image(systemName: "arrow.turn.up.left").font(.caption2)
-                        Text(engagementLabel(engagement.outboundCount))
-                            .font(.caption)
-                    }
                     // Warm tint mirrors the web graph's "you engage" pink — the
                     // signal Klorn learned from the user's own replies.
-                    .foregroundStyle(Color(red: 0.96, green: 0.45, blue: 0.71))
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.turn.up.left").font(.caption2)
+                            Text(engagement.replyCountLabel).font(.caption)
+                        }
+                        if engagement.showsImportance {
+                            importanceRow(engagement)
+                        }
+                    }
+                    .foregroundStyle(Theme.engage)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(engagement.accessibilityLabel)
                 }
             }
             .padding(.horizontal, 24).padding(.vertical, 14)
@@ -629,11 +635,21 @@ private struct ReadingPane: View {
         }
     }
 
-    /// "You've replied to this sender once / N times" — Klorn learned this sender
-    /// matters from the user's own outbound replies. Singular-aware.
-    private func engagementLabel(_ count: Int) -> String {
-        let times = count == 1 ? "once" : "\(count) times"
-        return "You engage with this sender · replied \(times)"
+    /// Slim strength meter for the 0…1 learned importance, with its qualitative
+    /// label. Fixed-width capsule (no GeometryReader); a11y is handled by the
+    /// parent's combined label so this stays a decorative child.
+    @ViewBuilder
+    private func importanceRow(_ engagement: EmailDetail.Engagement) -> some View {
+        let trackWidth: CGFloat = 64
+        HStack(spacing: 7) {
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.engage.opacity(0.22)).frame(width: trackWidth, height: 5)
+                Capsule().fill(Theme.engage)
+                    .frame(width: max(4, trackWidth * engagement.importanceFill), height: 5)
+            }
+            Text(engagement.importanceLabel).font(.caption2).foregroundStyle(Theme.engage.opacity(0.95))
+        }
+        .accessibilityHidden(true)
     }
 
     /// Open the composer and let Klorn's AI draft the reply into it. The user

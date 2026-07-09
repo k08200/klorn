@@ -11,6 +11,10 @@ enum Theme {
     static let text = Color.white
     static let textDim = Color.white.opacity(0.55)
 
+    /// The web engagement graph's "you engage with this sender" pink — reused by
+    /// the reading pane's learned-engagement chip so desktop matches the web signal.
+    static let engage = Color(red: 0.96, green: 0.45, blue: 0.71)
+
     /// Per-tier accent: loud (red) for PUSH down to quiet (gray) for SILENT.
     static func tint(_ tier: Tier) -> Color {
         switch tier {
