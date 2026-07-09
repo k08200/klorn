@@ -204,7 +204,25 @@ async function executeToolCallInternal(
           action: "send_email",
           currentPayloadHash: sendEmailPayloadHash({ to, subject, body }),
         });
-        return JSON.stringify(await sendEmail(userId, to, subject, body));
+        // Send from the RIGHT account: a reply to mail that arrived on a linked
+        // secondary inbox must go out via that inbox's Gmail client, not the
+        // primary. Resolve the source row server-side (never trust the model
+        // for the account) — mirrors the mark_read case below. Sent bytes are
+        // unchanged, so the floor receipt (hashed over {to,subject,body}) still
+        // matches; a missing/unknown id falls back to the primary as before.
+        const inReplyToId =
+          typeof args.in_reply_to_email_id === "string" ? args.in_reply_to_email_id : undefined;
+        let linkedInboxAccountId: string | null | undefined;
+        if (inReplyToId) {
+          const source = await prisma.emailMessage.findFirst({
+            where: { userId, OR: [{ id: inReplyToId }, { gmailId: inReplyToId }] },
+            select: { linkedInboxAccountId: true },
+          });
+          linkedInboxAccountId = source?.linkedInboxAccountId ?? undefined;
+        }
+        return JSON.stringify(
+          await sendEmail(userId, to, subject, body, [], { linkedInboxAccountId }),
+        );
       }
       case "classify_emails":
         return JSON.stringify(await classifyEmails(userId, safeInt(args.max_results, 10, 100)));
