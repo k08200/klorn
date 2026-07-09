@@ -97,7 +97,10 @@ final class TopBarController {
                 Task { await self.model.select(item) }
             },
             onDismiss: { [weak self] item in guard let self else { return }; Task { await self.model.dismiss(item) } },
-            onSnooze: { [weak self] item in guard let self else { return }; Task { await self.model.snooze(item) } },
+            onSnooze: { [weak self] item, option in
+                guard let self else { return }
+                Task { await self.model.snooze(item, until: option.resurface()) }
+            },
             onSelect: { [weak self] item in guard let self else { return }; Task { await self.model.select(item) } },
             onQuit: { NSApplication.shared.terminate(nil) })
     }

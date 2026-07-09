@@ -210,6 +210,27 @@ func runSelfChecks() async -> Bool {
           parts.year == 2026 && parts.month == 1 && parts.day == 2 && parts.hour == 9 && parts.minute == 0)
     check("snooze is in the future", snoozeTo > noonJan1)
 
+    // Snooze options — each resolves to its concrete target, always in the future.
+    // noonJan1 = Thu 2026-01-01 12:00 UTC.
+    func at(_ opt: SnoozeOption) -> DateComponents {
+        cal.dateComponents([.year, .month, .day, .hour, .minute, .weekday],
+                           from: opt.resurface(from: noonJan1, calendar: cal))
+    }
+    let oneHour = at(.oneHour)
+    check("snooze 1h = +1 hour same day", oneHour.day == 1 && oneHour.hour == 13 && oneHour.minute == 0)
+    let evening = at(.thisEvening)
+    check("snooze evening = today 18:00", evening.day == 1 && evening.hour == 18)
+    let tom = at(.tomorrow)
+    check("snooze tomorrow = next day 09:00", tom.day == 2 && tom.hour == 9)
+    let week = at(.nextWeek)  // next Monday after Thu Jan 1 → Mon Jan 5, 09:00
+    check("snooze next week = next Monday 09:00", week.weekday == 2 && week.day == 5 && week.hour == 9)
+    check("every snooze option is in the future",
+          SnoozeOption.allCases.allSatisfy { $0.resurface(from: noonJan1, calendar: cal) > noonJan1 })
+    // Past-6pm evening rolls to tomorrow so it's never in the past.
+    let latePM = cal.date(from: DateComponents(year: 2026, month: 1, day: 1, hour: 22))!
+    let rolled = cal.dateComponents([.day, .hour], from: SnoozeOption.thisEvening.resurface(from: latePM, calendar: cal))
+    check("evening after 6pm rolls to tomorrow", rolled.day == 2 && rolled.hour == 18)
+
     print("Realtime:")
     check("wakes on notification", RealtimeClient.shouldWake(#"{"type":"notification","payload":{}}"#))
     check("wakes on sync", RealtimeClient.shouldWake(#"{"type":"sync"}"#))

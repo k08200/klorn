@@ -18,8 +18,8 @@ struct TopBarActions {
     let onOpenInApp: (FirewallItem) -> Void
     /// Dismiss (archive) an item out of the queue.
     let onDismiss: (FirewallItem) -> Void
-    /// Snooze an item to resurface tomorrow morning.
-    let onSnooze: (FirewallItem) -> Void
+    /// Snooze an item to resurface at the chosen time.
+    let onSnooze: (FirewallItem, SnoozeOption) -> Void
     /// Select a row in the full view — loads its email into the reading pane.
     let onSelect: (FirewallItem) -> Void
     let onQuit: () -> Void
@@ -76,6 +76,22 @@ private struct ColumnHeader: View {
     var body: some View {
         Text(title).font(.caption2.weight(.semibold))
             .foregroundStyle(Theme.textDim).tracking(0.6)
+    }
+}
+
+/// A snooze control that pops the option list. Shared by every snooze site so the
+/// choices stay identical; the caller supplies the label (icon vs. text button).
+private struct SnoozeMenu<Label: View>: View {
+    let item: FirewallItem
+    let onSnooze: (FirewallItem, SnoozeOption) -> Void
+    @ViewBuilder let label: () -> Label
+
+    var body: some View {
+        Menu {
+            ForEach(SnoozeOption.allCases) { option in
+                Button(option.label) { onSnooze(item, option) }
+            }
+        } label: { label() }
     }
 }
 
@@ -234,11 +250,12 @@ private struct RecentPushColumn: View {
                             HStack(spacing: 10) {
                                 Button { actions.onOpenInApp(item) } label: { pushRow(item) }
                                     .buttonStyle(.plain)
-                                Button { actions.onSnooze(item) } label: {
+                                SnoozeMenu(item: item, onSnooze: actions.onSnooze) {
                                     Image(systemName: "moon.zzz").font(.caption2)
                                 }
-                                .buttonStyle(.plain).foregroundStyle(Theme.textDim)
-                                .help("Snooze to tomorrow 9am")
+                                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                                .foregroundStyle(Theme.textDim)
+                                .help("Snooze…")
                                 Button { actions.onDismiss(item) } label: {
                                     Image(systemName: "xmark").font(.caption2)
                                 }
@@ -456,8 +473,9 @@ private struct FullRow: View {
                 }
             }
             Spacer(minLength: 8)
-            Button { actions.onSnooze(item) } label: { Image(systemName: "moon.zzz") }
-                .buttonStyle(.plain).foregroundStyle(Theme.textDim).help("Snooze to tomorrow 9am")
+            SnoozeMenu(item: item, onSnooze: actions.onSnooze) { Image(systemName: "moon.zzz") }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                .foregroundStyle(Theme.textDim).help("Snooze…")
             Button { actions.onDismiss(item) } label: { Image(systemName: "xmark") }
                 .buttonStyle(.plain).foregroundStyle(Theme.textDim).help("Dismiss")
         }
@@ -517,8 +535,8 @@ private struct ReadingPane: View {
                             .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
                         Button("Open in web") { actions.onOpenWeb(item) }
                             .buttonStyle(.bordered).controlSize(.small)
-                        Button("Snooze") { actions.onSnooze(item) }
-                            .buttonStyle(.bordered).controlSize(.small)
+                        SnoozeMenu(item: item, onSnooze: actions.onSnooze) { Text("Snooze") }
+                            .menuStyle(.button).buttonStyle(.bordered).controlSize(.small).fixedSize()
                         Button("Dismiss") { actions.onDismiss(item) }
                             .buttonStyle(.bordered).controlSize(.small)
                     }
