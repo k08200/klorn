@@ -11,9 +11,10 @@
 
 import { prisma } from "./db.js";
 import type { AttentionSourceName } from "./decision-label.js";
-import { manualOverrideReason, type Tier } from "./tiers.js";
+import { manualOverrideReason, normalizeTier, type Tier } from "./tiers.js";
 
 export type AttentionOverrideResult = { ok: true; tier: Tier } | { ok: false; reason: "not_found" };
+export type AttentionConfirmResult = { ok: true; tier: Tier } | { ok: false; reason: "not_found" };
 
 /** Apply a manual tier override to an attention item the user owns. */
 export async function overrideAttentionTier(
@@ -65,6 +66,57 @@ export async function overrideAttentionTier(
       },
       data: { outcome: `OVERRIDE:${tier}`, outcomeAt: new Date() },
     });
+  });
+
+  return { ok: true, tier };
+}
+
+/**
+ * Record that the user EXPLICITLY agreed with the tier the firewall showed —
+ * positive ground truth, the counterpart to overrideAttentionTier's negative
+ * signal. Unlike an override it does NOT move the tier and does NOT set
+ * isManualOverride: agreement is not a manual move, and judge-context correction
+ * mining keys off isManualOverride, so a confirm must never look like a
+ * correction. It only stamps the decision ledger (outcome "CONFIRM:<tier>",
+ * first-action-wins via the outcome:null guard) so decision-metrics can turn a
+ * bounded recall into a point estimate over rows the user actually labelled
+ * instead of inferring correctness from silence.
+ */
+export async function confirmAttentionTier(
+  userId: string,
+  itemId: string,
+): Promise<AttentionConfirmResult> {
+  const existing = await (
+    prisma.attentionItem as unknown as {
+      findFirst: (args: unknown) => Promise<{
+        id: string;
+        source: string;
+        sourceId: string;
+        tier: string | null;
+      } | null>;
+    }
+  ).findFirst({
+    where: { id: itemId, userId },
+    select: { id: true, source: true, sourceId: true, tier: true },
+  });
+
+  if (!existing) return { ok: false, reason: "not_found" };
+
+  // Confirm the tier the user actually saw. normalizeTier folds a legacy CALL
+  // row into PUSH (its real delivery behaviour) so the label never records a
+  // retired tier.
+  const tier = normalizeTier(existing.tier);
+  // No AttentionItem write: a confirmation leaves the shown tier as-is and must
+  // not trip isManualOverride. Only the ground-truth ledger is stamped, guarded
+  // by outcome:null so the first explicit action (confirm OR override) wins.
+  await prisma.decisionLabel.updateMany({
+    where: {
+      userId,
+      source: existing.source as AttentionSourceName,
+      sourceId: existing.sourceId,
+      outcome: null,
+    },
+    data: { outcome: `CONFIRM:${tier}`, outcomeAt: new Date() },
   });
 
   return { ok: true, tier };

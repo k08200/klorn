@@ -6,6 +6,7 @@ import AuthGuard from "../../components/auth-guard";
 import { ONBOARDING_ACTIVE_KEY } from "../../components/google-connect-redirect";
 import { startGoogleConnect } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import { ReviewStep } from "./review-step";
 
 export default function OnboardingPage() {
   return (
@@ -17,10 +18,12 @@ export default function OnboardingPage() {
   );
 }
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4;
 
 function deriveStep(googleConnected: boolean | null, syncStatus: string): Step {
   if (!googleConnected) return 1;
+  // Sync done → land on the review step (3); the ready step (4) is reached only
+  // after the user finishes (or skips) reviewing their classifications.
   if (syncStatus === "done") return 3;
   return 2;
 }
@@ -34,7 +37,7 @@ function OnboardingFlow() {
   const derivedStep = deriveStep(googleConnected, initSync.status);
   const step = manualStep ?? derivedStep;
 
-  // Auto-advance from syncing → ready when sync finishes
+  // Auto-advance from syncing → review when sync finishes
   useEffect(() => {
     if (step === 2 && initSync.status === "done") {
       setManualStep(3);
@@ -67,11 +70,12 @@ function OnboardingFlow() {
 
         {step === 1 && <WelcomeStep connecting={connecting} onConnectClick={handleConnectClick} />}
         {step === 2 && <SyncingStep initSync={initSync} onContinue={handleDone} />}
-        {step === 3 && <ReadyStep initSync={initSync} onDone={handleDone} />}
+        {step === 3 && <ReviewStep onContinue={() => setManualStep(4)} />}
+        {step === 4 && <ReadyStep initSync={initSync} onDone={handleDone} />}
 
         {/* Progress dots */}
         <div className="mt-12 flex justify-center gap-2">
-          {([1, 2, 3] as Step[]).map((s) => (
+          {([1, 2, 3, 4] as Step[]).map((s) => (
             <div
               key={s}
               className={`h-1.5 rounded-full transition-all duration-300 ${
