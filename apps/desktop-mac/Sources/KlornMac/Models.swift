@@ -185,6 +185,49 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     }
 }
 
+// MARK: - Snooze options
+
+/// User-selectable snooze targets for a PUSH item; each resolves to a concrete
+/// resurface time the server honours (POST /snooze accepts any ISO `snoozeUntil`).
+/// Pure (Date/Calendar in) so the self-check harness can assert the math.
+enum SnoozeOption: String, CaseIterable, Identifiable, Sendable {
+    case oneHour, thisEvening, tomorrow, nextWeek
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .oneHour: return "In 1 hour"
+        case .thisEvening: return "This evening"
+        case .tomorrow: return "Tomorrow 9am"
+        case .nextWeek: return "Next week"
+        }
+    }
+
+    /// The concrete resurface time — always strictly in the future. An option whose
+    /// natural time has already passed today rolls to its next sensible occurrence.
+    func resurface(from now: Date = Date(), calendar: Calendar = .current) -> Date {
+        switch self {
+        case .oneHour:
+            return calendar.date(byAdding: .hour, value: 1, to: now) ?? now
+        case .thisEvening:
+            let sixToday = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: now) ?? now
+            if sixToday > now { return sixToday }
+            // Already past 6pm → roll to tomorrow evening so it's never in the past.
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
+            return calendar.date(bySettingHour: 18, minute: 0, second: 0, of: tomorrow) ?? tomorrow
+        case .tomorrow:
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
+            return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow) ?? tomorrow
+        case .nextWeek:
+            // 09:00 the next Monday (weekday 2, Gregorian) strictly after `now`.
+            let monday9 = DateComponents(hour: 9, minute: 0, second: 0, weekday: 2)
+            return calendar.nextDate(after: now, matching: monday9, matchingPolicy: .nextTime)
+                ?? (calendar.date(byAdding: .day, value: 7, to: now) ?? now)
+        }
+    }
+}
+
 // MARK: - Auth (desktop nonce-poll flow)
 
 struct DesktopNonce: Codable, Sendable {
