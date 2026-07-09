@@ -34,6 +34,7 @@ import {
 import { htmlToPlainText } from "../email-text.js";
 import { requireAppAccess } from "../entitlement-guard.js";
 import { getLinkedInboxClients, toggleReadGmail } from "../gmail.js";
+import { getCachedInteractionNode } from "../interaction-graph.js";
 import { senderEmail } from "../notification-format.js";
 import { captureError } from "../sentry.js";
 import { planHasFeature } from "../stripe.js";
@@ -965,6 +966,9 @@ export async function emailRoutes(app: FastifyInstance) {
         : null;
       const addr = senderEmail(dbEmail.from);
       const trust = addr ? await getTrustScore(uid, addr) : null;
+      // Learned engagement for the reading-pane "you engage with this sender"
+      // chip. Cache-only (fails soft to null, never rebuilds on a request).
+      const engagementNode = addr ? await getCachedInteractionNode(uid, addr) : null;
       return {
         id: dbEmail.id,
         gmailId: dbEmail.gmailId,
@@ -972,6 +976,16 @@ export async function emailRoutes(app: FastifyInstance) {
         from: dbEmail.from,
         senderEmail: addr || null,
         trust: trustToWire(trust),
+        // Display signal only (not the classifier gate CONTACT_ENGAGEMENT_IN_JUDGE):
+        // how often the user has replied to/written this sender. null unless there's
+        // real outbound engagement, so strangers surface nothing.
+        engagement:
+          engagementNode && engagementNode.outboundCount
+            ? {
+                outboundCount: engagementNode.outboundCount,
+                learnedImportance: engagementNode.learnedImportance ?? 0,
+              }
+            : null,
         to: dbEmail.to,
         cc: dbEmail.cc,
         subject: dbEmail.subject,
