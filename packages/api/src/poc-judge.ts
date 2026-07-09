@@ -18,7 +18,12 @@
 import type { ClassifiableEmail } from "./email-classifier.js";
 import { getCachedJudgeFeatures, judgeCacheKey, setCachedJudgeFeatures } from "./judge-cache.js";
 import { resolveEscalation } from "./judge-dial.js";
-import { isClearMarketing, keywordFeatures, looksUrgent } from "./keyword-policy.js";
+import {
+  isAutomatedSender,
+  isClearMarketing,
+  keywordFeatures,
+  looksUrgent,
+} from "./keyword-policy.js";
 import { type LearnedRule, matchLearnedRules } from "./learned-rules.js";
 import { asString, asUnitInterval, isNonFinitePresent } from "./llm-coerce.js";
 import { parseLlmJson } from "./llm-json.js";
@@ -180,6 +185,13 @@ export function buildSenderFactsBlock(facts?: SenderFacts | null): string {
       // treats it as a weak prior, not a measured fact about this person.
       lines.push(
         "- The recipient actively engages with other people at this sender's organization (a mild prior that this sender may matter — weigh it lightly, it is not about this person directly)",
+      );
+    } else if (e.outboundCount === 0 && (e.dismissCount ?? 0) > 0) {
+      // Measured negative: dismissed repeatedly, never engaged back. Hedged so a
+      // genuinely urgent email can still override the low-importance prior.
+      const times = `${e.dismissCount} time${(e.dismissCount ?? 0) > 1 ? "s" : ""}`;
+      lines.push(
+        `- The recipient has dismissed this sender's mail ${times} without ever replying (a measured signal this sender is low-importance — lower senderTrust unless the email itself is clearly urgent)`,
       );
     } else {
       const strength =
@@ -562,6 +574,28 @@ function applyRoutineConfirmationCap(email: ClassifiableEmail, features: PocFeat
 }
 
 /**
+ * Deterministic PUSH floor: a machine-generated sender must never interrupt.
+ * If the scored tier is PUSH but the sender is automated (no-reply /
+ * notifications@ / updates.*), demote to QUEUE — a glance, never an
+ * interruption. This is the sender-based complement to
+ * {@link applyRoutineConfirmationCap}: that catches account/security
+ * confirmations by subject; this catches deploy/CI/monitoring notices by
+ * sender, whose "Failed" / "DOWN" subjects the LLM over-scores as urgent.
+ *
+ * Applied only to the scoring paths (LLM, keyword fallback) — an explicit
+ * sender-prior override or a learned rule to PUSH is ground truth and is
+ * respected. Only PUSH is demoted; SILENT/QUEUE/AUTO pass through untouched.
+ */
+function applyAutomatedSenderPushFloor(
+  from: string | undefined,
+  decision: { tier: Tier; reason: string },
+): { tier: Tier; reason: string } {
+  if (decision.tier !== "PUSH") return decision;
+  if (!isAutomatedSender(from ?? "")) return decision;
+  return { tier: "QUEUE", reason: "Automated sender — queued for a glance, never interrupts" };
+}
+
+/**
  * Judge a single email → 4-tier. Pure: does not persist anything.
  *
  * Hot path:
@@ -655,9 +689,13 @@ export async function judgeEmail(
     }
     const features = applyRoutineConfirmationCap(email, llm.features);
     const { tier, reason: ruleReason } = tierFromFeatures(features, getEffectiveThresholds());
-    return {
+    const floored = applyAutomatedSenderPushFloor(email.from, {
       tier,
       reason: llm.reason || ruleReason,
+    });
+    return {
+      tier: floored.tier,
+      reason: floored.reason,
       features,
       source: "llm",
     };
@@ -665,7 +703,8 @@ export async function judgeEmail(
 
   const features = applyRoutineConfirmationCap(email, keywordFeatures(email));
   const { tier, reason } = tierFromFeatures(features, getEffectiveThresholds());
-  return { tier, reason, features, source: "keyword-fallback" };
+  const floored = applyAutomatedSenderPushFloor(email.from, { tier, reason });
+  return { tier: floored.tier, reason: floored.reason, features, source: "keyword-fallback" };
 }
 
 /**
