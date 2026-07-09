@@ -24,6 +24,7 @@ import { prisma } from "./db.js";
 import { recordDecision, recordEmailDecision } from "./decision-label.js";
 import { getSuppressionSet, isSuppressed } from "./feedback-adaptor.js";
 import type { PocJudgement } from "./poc-judge.js";
+import type { EngagementKind } from "./sender-policy.js";
 import type { Tier } from "./tiers.js";
 
 // Typed wrapper around attentionItem.upsert. The where uses the userId-scoped
@@ -860,6 +861,8 @@ function emailPriority(j: EmailJudgementLike): number {
 export async function upsertAttentionForEmailJudgement(
   email: EmailLike,
   judgement: EmailJudgementLike,
+  /** Learned-engagement grounding that fed this judgement, for the ledger. */
+  engagementKind: EngagementKind | null = null,
 ): Promise<void> {
   // Content-addressed classification — see attention-input-hash.ts.
   // Same bytes that fed the classifier are the bytes we hash so any
@@ -945,6 +948,7 @@ export async function upsertAttentionForEmailJudgement(
       features: judgement.features,
       sender: email.from,
       decidedBy: judgement.source ?? null,
+      engagementKind,
     });
   }
 }

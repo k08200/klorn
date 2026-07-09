@@ -18,8 +18,8 @@ struct TopBarActions {
     let onOpenInApp: (FirewallItem) -> Void
     /// Dismiss (archive) an item out of the queue.
     let onDismiss: (FirewallItem) -> Void
-    /// Snooze an item to resurface tomorrow morning.
-    let onSnooze: (FirewallItem) -> Void
+    /// Snooze an item to resurface at the chosen time.
+    let onSnooze: (FirewallItem, SnoozeOption) -> Void
     /// Select a row in the full view — loads its email into the reading pane.
     let onSelect: (FirewallItem) -> Void
     let onQuit: () -> Void
@@ -68,6 +68,15 @@ private struct LogoRing: View {
     var size: CGFloat = 16
     var body: some View {
         Circle().strokeBorder(Theme.accent, lineWidth: 2).frame(width: size, height: size)
+            .accessibilityHidden(true)  // decorative wordmark ring
+    }
+}
+
+private extension View {
+    /// Enlarge an icon control's hit area to clear WCAG 2.5.8 Target Size (24pt AA;
+    /// 28 gives margin) without changing the glyph size. Frame the label content.
+    func iconTarget(_ side: CGFloat = 28) -> some View {
+        frame(width: side, height: side).contentShape(Rectangle())
     }
 }
 
@@ -76,6 +85,22 @@ private struct ColumnHeader: View {
     var body: some View {
         Text(title).font(.caption2.weight(.semibold))
             .foregroundStyle(Theme.textDim).tracking(0.6)
+    }
+}
+
+/// A snooze control that pops the option list. Shared by every snooze site so the
+/// choices stay identical; the caller supplies the label (icon vs. text button).
+private struct SnoozeMenu<Label: View>: View {
+    let item: FirewallItem
+    let onSnooze: (FirewallItem, SnoozeOption) -> Void
+    @ViewBuilder let label: () -> Label
+
+    var body: some View {
+        Menu {
+            ForEach(SnoozeOption.allCases) { option in
+                Button(option.label) { onSnooze(item, option) }
+            }
+        } label: { label() }
     }
 }
 
@@ -91,10 +116,11 @@ struct CollapsedBar: View {
     var body: some View {
         HStack(spacing: 12) {
             Button(action: actions.onExpand) {
-                Image(systemName: "line.3.horizontal").font(.body.weight(.medium))
+                Image(systemName: "line.3.horizontal").font(.body.weight(.medium)).iconTarget(32)
             }
             .buttonStyle(.plain).foregroundStyle(Theme.text)
             .help("Expand")
+            .accessibilityLabel("Expand Klorn")
 
             LogoRing()
             Text("Klorn").font(.callout.weight(.semibold)).foregroundStyle(Theme.text)
@@ -153,7 +179,7 @@ struct ExpandedPanel: View {
         HStack {
             Button(action: actions.onCollapse) {
                 HStack(spacing: 6) {
-                    Image(systemName: "minus").font(.caption.weight(.bold))
+                    Image(systemName: "minus").font(.caption.weight(.bold)).accessibilityHidden(true)
                     Text("Close").font(.callout)
                 }
             }
@@ -165,10 +191,11 @@ struct ExpandedPanel: View {
 
             HStack(spacing: 14) {
                 Button(action: actions.onExpandFull) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right").font(.callout)
+                    Image(systemName: "arrow.up.left.and.arrow.down.right").font(.callout).iconTarget()
                 }
                 .buttonStyle(.plain).foregroundStyle(Theme.textDim)
                 .help("Full view")
+                .accessibilityLabel("Open full view")
 
                 if model.phase == .signedIn {
                     Button("Sign Out", action: actions.onSignOut)
@@ -231,19 +258,23 @@ private struct RecentPushColumn: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         ForEach(items) { item in
+                            let sender = item.email?.from ?? item.title
                             HStack(spacing: 10) {
                                 Button { actions.onOpenInApp(item) } label: { pushRow(item) }
                                     .buttonStyle(.plain)
-                                Button { actions.onSnooze(item) } label: {
-                                    Image(systemName: "moon.zzz").font(.caption2)
+                                SnoozeMenu(item: item, onSnooze: actions.onSnooze) {
+                                    Image(systemName: "moon.zzz").font(.caption2).iconTarget()
                                 }
-                                .buttonStyle(.plain).foregroundStyle(Theme.textDim)
-                                .help("Snooze to tomorrow 9am")
+                                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                                .foregroundStyle(Theme.textDim)
+                                .help("Snooze…")
+                                .accessibilityLabel("Snooze message from \(sender)")
                                 Button { actions.onDismiss(item) } label: {
-                                    Image(systemName: "xmark").font(.caption2)
+                                    Image(systemName: "xmark").font(.caption2).iconTarget()
                                 }
                                 .buttonStyle(.plain).foregroundStyle(Theme.textDim)
                                 .help("Dismiss")
+                                .accessibilityLabel("Dismiss message from \(sender)")
                             }
                         }
                     }
@@ -322,7 +353,7 @@ struct FullView: View {
         HStack(spacing: 14) {
             Button(action: actions.onRestore) {
                 HStack(spacing: 6) {
-                    Image(systemName: "arrow.down.right.and.arrow.up.left").font(.callout)
+                    Image(systemName: "arrow.down.right.and.arrow.up.left").font(.callout).accessibilityHidden(true)
                     Text("Smaller").font(.callout)
                 }
             }
@@ -330,10 +361,11 @@ struct FullView: View {
             .help("Back to the compact panel")
 
             Button(action: actions.onCollapse) {
-                Image(systemName: "minus").font(.callout.weight(.bold))
+                Image(systemName: "minus").font(.callout.weight(.bold)).iconTarget()
             }
             .buttonStyle(.plain).foregroundStyle(Theme.textDim)
             .help("Collapse to the pill")
+            .accessibilityLabel("Collapse to pill")
 
             Spacer()
             HStack(spacing: 8) {
@@ -441,30 +473,58 @@ private struct FullRow: View {
     @Environment(AppModel.self) private var model
     let item: FirewallItem
     let actions: TopBarActions
+    @FocusState private var focused: Bool
 
     private var selected: Bool { model.selectedItemId == item.id }
+    private var sender: String { item.email?.from ?? item.title }
 
     var body: some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(item.email?.from ?? item.title).font(.body.weight(.semibold))
-                    .foregroundStyle(Theme.text).lineLimit(1)
-                Text(item.email?.subject ?? item.title).font(.callout)
-                    .foregroundStyle(Theme.text.opacity(0.85)).lineLimit(1)
-                if let reason = item.tierReason, !reason.isEmpty {
-                    Text(reason).font(.caption).foregroundStyle(Theme.textDim).lineLimit(1)
+            // The select action is a real Button (role + keyboard + focus), not an
+            // onTapGesture, so VoiceOver / Full-Keyboard-Access can open the message.
+            Button { actions.onSelect(item) } label: {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(sender).font(.body.weight(.semibold))
+                            .foregroundStyle(Theme.text).lineLimit(1)
+                        Text(item.email?.subject ?? item.title).font(.callout)
+                            .foregroundStyle(Theme.text.opacity(0.85)).lineLimit(1)
+                        if let reason = item.tierReason, !reason.isEmpty {
+                            Text(reason).font(.caption).foregroundStyle(Theme.textDim).lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 8)
                 }
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 8)
-            Button { actions.onSnooze(item) } label: { Image(systemName: "moon.zzz") }
-                .buttonStyle(.plain).foregroundStyle(Theme.textDim).help("Snooze to tomorrow 9am")
-            Button { actions.onDismiss(item) } label: { Image(systemName: "xmark") }
+            .buttonStyle(.plain)
+            .focused($focused)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+
+            SnoozeMenu(item: item, onSnooze: actions.onSnooze) {
+                Image(systemName: "moon.zzz").iconTarget()
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .foregroundStyle(Theme.textDim).help("Snooze…")
+            .accessibilityLabel("Snooze message from \(sender)")
+            Button { actions.onDismiss(item) } label: { Image(systemName: "xmark").iconTarget() }
                 .buttonStyle(.plain).foregroundStyle(Theme.textDim).help("Dismiss")
+                .accessibilityLabel("Dismiss message from \(sender)")
         }
         .padding(.horizontal, 20).padding(.vertical, 12)
-        .background(selected ? Color.white.opacity(0.08) : .clear)
-        .contentShape(Rectangle())
-        .onTapGesture { actions.onSelect(item) }
+        // Selection is not color-only: an accent leading bar + a stronger fill (both
+        // perceivable), plus the .isSelected trait above.
+        .background(alignment: .leading) {
+            if selected { Rectangle().fill(Theme.accent).frame(width: 3) }
+        }
+        .background(selected ? Color.white.opacity(0.14) : .clear)
+        // Visible keyboard-focus indicator (2.4.7 / 2.4.13): .plain suppresses the
+        // system ring, so draw our own — accent on the dark panel is ≈9.5:1 (≥3:1).
+        .overlay {
+            if focused {
+                RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.accent, lineWidth: 2)
+            }
+        }
     }
 }
 
@@ -517,8 +577,8 @@ private struct ReadingPane: View {
                             .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
                         Button("Open in web") { actions.onOpenWeb(item) }
                             .buttonStyle(.bordered).controlSize(.small)
-                        Button("Snooze") { actions.onSnooze(item) }
-                            .buttonStyle(.bordered).controlSize(.small)
+                        SnoozeMenu(item: item, onSnooze: actions.onSnooze) { Text("Snooze") }
+                            .menuStyle(.button).buttonStyle(.bordered).controlSize(.small).fixedSize()
                         Button("Dismiss") { actions.onDismiss(item) }
                             .buttonStyle(.bordered).controlSize(.small)
                     }
@@ -568,7 +628,7 @@ private struct ReadingPane: View {
                 .frame(height: 110)
                 .padding(8)
                 .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.field))
             if let err = model.replyError {
                 Text(err).font(.caption).foregroundStyle(.orange)
             }
@@ -589,7 +649,8 @@ private struct ReadingPane: View {
     @ViewBuilder
     private func klornBand(_ email: EmailDetail) -> some View {
         let reason = item?.tierReason
-        let show = (reason?.isEmpty == false) || (email.summary?.isEmpty == false) || (email.needsReply == true)
+        let hasEngagement = (email.engagement?.outboundCount ?? 0) > 0
+        let show = (reason?.isEmpty == false) || (email.summary?.isEmpty == false) || (email.needsReply == true) || hasEngagement
         if show {
             VStack(alignment: .leading, spacing: 6) {
                 if let item, let reason, !reason.isEmpty {
@@ -604,11 +665,27 @@ private struct ReadingPane: View {
                 }
                 if email.needsReply == true {
                     HStack(spacing: 5) {
-                        Image(systemName: "arrowshape.turn.up.left").font(.caption2)
+                        Image(systemName: "arrowshape.turn.up.left").font(.caption2).accessibilityHidden(true)
                         Text((email.needsReplyReason?.isEmpty == false) ? email.needsReplyReason! : "Needs a reply")
                             .font(.caption)
                     }
                     .foregroundStyle(Theme.accent)
+                }
+                if let engagement = email.engagement, engagement.outboundCount > 0 {
+                    // Warm tint mirrors the web graph's "you engage" pink — the
+                    // signal Klorn learned from the user's own replies.
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.turn.up.left").font(.caption2)
+                            Text(engagement.replyCountLabel).font(.caption)
+                        }
+                        if engagement.showsImportance {
+                            importanceRow(engagement)
+                        }
+                    }
+                    .foregroundStyle(Theme.engage)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(engagement.accessibilityLabel)
                 }
             }
             .padding(.horizontal, 24).padding(.vertical, 14)
@@ -616,6 +693,23 @@ private struct ReadingPane: View {
             .background(Color.white.opacity(0.04))
             Divider().overlay(Theme.line)
         }
+    }
+
+    /// Slim strength meter for the 0…1 learned importance, with its qualitative
+    /// label. Fixed-width capsule (no GeometryReader); a11y is handled by the
+    /// parent's combined label so this stays a decorative child.
+    @ViewBuilder
+    private func importanceRow(_ engagement: EmailDetail.Engagement) -> some View {
+        let trackWidth: CGFloat = 64
+        HStack(spacing: 7) {
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.engage.opacity(0.22)).frame(width: trackWidth, height: 5)
+                Capsule().fill(Theme.engage)
+                    .frame(width: max(4, trackWidth * engagement.importanceFill), height: 5)
+            }
+            Text(engagement.importanceLabel).font(.caption2).foregroundStyle(Theme.engage.opacity(0.95))
+        }
+        .accessibilityHidden(true)
     }
 
     /// Open the composer and let Klorn's AI draft the reply into it. The user

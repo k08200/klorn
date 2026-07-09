@@ -116,6 +116,35 @@ func runSelfChecks() async -> Bool {
         DesktopTokenResponse.self, from: Data(#"{"status":"pending"}"#.utf8))
     check("DesktopToken pending", pendTok?.status == "pending" && pendTok?.token == nil)
 
+    // EmailDetail learned-engagement signal — present decodes, absent stays nil
+    // (decoding must be resilient: strangers omit the field entirely).
+    let engJSON = #"{"id":"e1","from":"a@co.com","engagement":{"outboundCount":5,"learnedImportance":0.9}}"#
+    let engDetail = try? JSONDecoder().decode(EmailDetail.self, from: Data(engJSON.utf8))
+    check("EmailDetail engagement decodes", engDetail?.engagement?.outboundCount == 5)
+    let noEng = try? JSONDecoder().decode(
+        EmailDetail.self, from: Data(#"{"id":"e2","from":"b@co.com"}"#.utf8))
+    check("EmailDetail no-engagement is nil", noEng != nil && noEng?.engagement == nil)
+
+    // Engagement display logic — reply-count phrasing, learned-importance buckets,
+    // clamping, and the color-independent accessibility label.
+    check("engagement reply count (plural)",
+          engDetail?.engagement?.replyCountLabel == "You engage with this sender · replied 5 times")
+    check("engagement reply count (singular)",
+          EmailDetail.Engagement(outboundCount: 1, learnedImportance: 0.25).replyCountLabel
+              == "You engage with this sender · replied once")
+    let saturated = EmailDetail.Engagement(outboundCount: 6, learnedImportance: 1.0)
+    check("importance label: consistent", saturated.importanceLabel == "Consistently important to you")
+    check("importance label: important",
+          EmailDetail.Engagement(outboundCount: 2, learnedImportance: 0.5).importanceLabel == "Important to you")
+    check("importance label: building",
+          EmailDetail.Engagement(outboundCount: 1, learnedImportance: 0.25).importanceLabel == "Building importance")
+    check("importance fill clamps high", EmailDetail.Engagement(outboundCount: 9, learnedImportance: 1.5).importanceFill == 1.0)
+    let faded = EmailDetail.Engagement(outboundCount: 2, learnedImportance: 0.0)
+    check("faded engagement hides meter", faded.importanceFill == 0.0 && !faded.showsImportance)
+    check("faded a11y label omits importance", faded.accessibilityLabel == faded.replyCountLabel)
+    check("engaged a11y label combines count + strength",
+          saturated.accessibilityLabel == "You engage with this sender · replied 6 times. Consistently important to you")
+
     print("Notifications:")
     func push(_ id: String) -> FirewallItem {
         FirewallItem(id: id, source: "email", sourceId: id, type: "email", title: id,
@@ -181,6 +210,27 @@ func runSelfChecks() async -> Bool {
           parts.year == 2026 && parts.month == 1 && parts.day == 2 && parts.hour == 9 && parts.minute == 0)
     check("snooze is in the future", snoozeTo > noonJan1)
 
+    // Snooze options — each resolves to its concrete target, always in the future.
+    // noonJan1 = Thu 2026-01-01 12:00 UTC.
+    func at(_ opt: SnoozeOption) -> DateComponents {
+        cal.dateComponents([.year, .month, .day, .hour, .minute, .weekday],
+                           from: opt.resurface(from: noonJan1, calendar: cal))
+    }
+    let oneHour = at(.oneHour)
+    check("snooze 1h = +1 hour same day", oneHour.day == 1 && oneHour.hour == 13 && oneHour.minute == 0)
+    let evening = at(.thisEvening)
+    check("snooze evening = today 18:00", evening.day == 1 && evening.hour == 18)
+    let tom = at(.tomorrow)
+    check("snooze tomorrow = next day 09:00", tom.day == 2 && tom.hour == 9)
+    let week = at(.nextWeek)  // next Monday after Thu Jan 1 → Mon Jan 5, 09:00
+    check("snooze next week = next Monday 09:00", week.weekday == 2 && week.day == 5 && week.hour == 9)
+    check("every snooze option is in the future",
+          SnoozeOption.allCases.allSatisfy { $0.resurface(from: noonJan1, calendar: cal) > noonJan1 })
+    // Past-6pm evening rolls to tomorrow so it's never in the past.
+    let latePM = cal.date(from: DateComponents(year: 2026, month: 1, day: 1, hour: 22))!
+    let rolled = cal.dateComponents([.day, .hour], from: SnoozeOption.thisEvening.resurface(from: latePM, calendar: cal))
+    check("evening after 6pm rolls to tomorrow", rolled.day == 2 && rolled.hour == 18)
+
     print("Realtime:")
     check("wakes on notification", RealtimeClient.shouldWake(#"{"type":"notification","payload":{}}"#))
     check("wakes on sync", RealtimeClient.shouldWake(#"{"type":"sync"}"#))
@@ -192,6 +242,12 @@ func runSelfChecks() async -> Bool {
           ws?.scheme == wantScheme && ws?.path == "/ws"
           && ws?.query?.contains("type=desktop") == true
           && ws?.query?.contains("token=abc.def") == true)
+
+    print("Accessibility:")
+    check("reduce motion disables the panel morph",
+          !TopBarController.shouldAnimateFrame(reduceMotion: true))
+    check("normal motion keeps the panel morph",
+          TopBarController.shouldAnimateFrame(reduceMotion: false))
 
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0

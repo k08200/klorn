@@ -88,6 +88,20 @@ export interface SenderFacts {
 }
 
 /**
+ * Which flavour of engagement grounding a decision used, for rollout
+ * instrumentation (decision-label ledger). "DIRECT" = measured replies to this
+ * sender; "PROPAGATED" = inferred from an engaged org peer; null = none fired.
+ */
+export type EngagementKind = "DIRECT" | "PROPAGATED";
+
+/** Classify the engagement fact into its ledger kind. Pure. null when absent. */
+export function engagementKindOf(facts: SenderFacts | null | undefined): EngagementKind | null {
+  const e = facts?.engagement;
+  if (!e) return null;
+  return e.propagated ? "PROPAGATED" : "DIRECT";
+}
+
+/**
  * Thresholds that decide when raw sender history becomes an actionable prior
  * or a few-shot pool. Every magic number that used to sit inline in
  * judge-context.ts lives here, named, so the policy is one editable surface.

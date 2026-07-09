@@ -97,7 +97,10 @@ final class TopBarController {
                 Task { await self.model.select(item) }
             },
             onDismiss: { [weak self] item in guard let self else { return }; Task { await self.model.dismiss(item) } },
-            onSnooze: { [weak self] item in guard let self else { return }; Task { await self.model.snooze(item) } },
+            onSnooze: { [weak self] item, option in
+                guard let self else { return }
+                Task { await self.model.snooze(item, until: option.resurface()) }
+            },
             onSelect: { [weak self] item in guard let self else { return }; Task { await self.model.select(item) } },
             onQuit: { NSApplication.shared.terminate(nil) })
     }
@@ -128,8 +131,15 @@ final class TopBarController {
         let origin = NSPoint(
             x: visible.midX - size.width / 2,
             y: visible.maxY - size.height - Self.topMargin)
-        panel.setFrame(NSRect(origin: origin, size: size), display: true, animate: true)
+        // Honor Reduce Motion (WCAG 2.3.3 + CLAUDE.md): a full-window morph up to
+        // 1400px is exactly the large motion the setting exists to suppress.
+        let animate = Self.shouldAnimateFrame(
+            reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        panel.setFrame(NSRect(origin: origin, size: size), display: true, animate: animate)
     }
+
+    /// Animate the panel morph unless the user asked for reduced motion. Pure for testing.
+    nonisolated static func shouldAnimateFrame(reduceMotion: Bool) -> Bool { !reduceMotion }
 
     private func open(_ item: FirewallItem?) {
         guard let url = Self.resolveURL(item) else {
