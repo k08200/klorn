@@ -6,19 +6,7 @@
   <link rel="alternate" hreflang="en" href="https://klorn.ai/">
   <link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/">
   <link rel="canonical" href="https://klorn.ai/">
-  <script>
-    // Korean-browser visitors land on /ko/ unless they've picked a language.
-    // Runs pre-paint so there's no English flash; the KO/EN nav links set the
-    // override so a manual choice always wins over the browser locale.
-    (function () {
-      try {
-        var pick = localStorage.getItem("klorn-lang");
-        if (!pick && (navigator.language || "").toLowerCase().indexOf("ko") === 0) {
-          location.replace("/ko/" + location.hash);
-        }
-      } catch (e) { /* storage blocked — stay on English */ }
-    })();
-  </script>
+  <!-- English is always the default at klorn.ai. Korean is reached only via the KO toggle in the floating dock. -->
   <title>Klorn — The clear signal worth acting on</title>
   <meta name="description" content="Klorn filters mail, calendar, and AI signals into one clear decision queue — with evidence and approval before anything leaves your hands.">
   <meta property="og:title" content="Klorn — The clear signal worth acting on">
@@ -1178,6 +1166,69 @@
     .klassify-feature .kf-val { font-size: 11px; color: var(--stone-400); text-align: right; font-family: ui-monospace, Menlo, monospace; }
     .klassify-error { font-size: 12px; line-height: 1.6; color: #f5b8a8; }
     @media (max-width: 1023px) { .klassify { grid-template-columns: 1fr; height: auto; } .klassify-input { border-right: none; border-bottom: 1px solid var(--stone-800); } }
+
+    /* ── Floating download + language dock (bottom-center) ─────── */
+    .dl-dock {
+      position: fixed;
+      left: 50%;
+      bottom: 22px;
+      transform: translate(-50%, 10px);
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px 6px 6px;
+      border-radius: 999px;
+      background: rgba(17, 19, 24, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      box-shadow: 0 10px 34px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      -webkit-backdrop-filter: blur(16px) saturate(1.3);
+      backdrop-filter: blur(16px) saturate(1.3);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+    .dl-dock.visible { opacity: 1; visibility: visible; pointer-events: auto; transform: translate(-50%, 0); }
+    .dl-dock-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 999px;
+      background: var(--brand-gold);
+      color: var(--brand-ink);
+      font-size: 14px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: background 0.2s ease;
+    }
+    .dl-dock-btn:hover { background: var(--brand-gold-bright); }
+    .dl-dock-btn svg { width: 16px; height: 16px; }
+    .dl-dock-lang { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px 0 2px; }
+    .dl-dock-lang a,
+    .dl-dock-lang .dl-dock-cur {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      padding: 6px 8px;
+      border-radius: 8px;
+      text-decoration: none;
+      color: var(--stone-400);
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+    .dl-dock-lang a:hover { color: var(--stone-100); background: rgba(255, 255, 255, 0.06); }
+    .dl-dock-cur { color: #fff; background: rgba(255, 255, 255, 0.08); cursor: default; }
+    .dl-dock-sep { color: var(--stone-600); font-size: 11px; }
+    @media (max-width: 520px) {
+      .dl-dock { bottom: 14px; gap: 4px; padding: 5px 6px 5px 5px; }
+      .dl-dock-btn { padding: 9px 15px; font-size: 13px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .dl-dock { transition: opacity 0.2s ease; transform: translate(-50%, 0); }
+    }
   </style>
 </head>
 <body>
@@ -1199,7 +1250,6 @@
         <a href="#pricing" class="nav-link">Pricing</a>
         <a href="#live-classifier" class="nav-link">Live demo</a>
         <a href="https://app.klorn.ai/login" class="nav-link">Log in</a>
-        <a href="/ko/" class="nav-link" data-lang-switch="ko" aria-label="한국어로 보기">KO</a>
         <a href="https://app.klorn.ai/early-access" class="nav-cta">Early access</a>
       </div>
     </nav>
@@ -1248,10 +1298,6 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.16-.02-2.1-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.02 11.02 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.8-.01 3.18 0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"/></svg>
             Star on GitHub
             <span class="star-count" data-gh-stars></span>
-          </a>
-          <a href="https://github.com/k08200/klorn/releases/latest/download/Klorn-macos.zip" rel="noreferrer noopener" class="btn btn-ghost" aria-label="Download Klorn.app for macOS (native top-bar firewall, .zip)">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 11l5 5 5-5"></path><path d="M5 21h14"></path></svg>
-            Download for Mac
           </a>
         </div>
         <a href="https://app.klorn.ai/login" class="hero-secondary-link">Already approved? Log in →</a>
@@ -1602,6 +1648,19 @@
       </div>
     </div>
   </footer>
+
+  <!-- Persistent download + language dock (bottom-center) -->
+  <div class="dl-dock" id="dlDock">
+    <a href="https://github.com/k08200/klorn/releases/latest/download/Klorn-macos.zip" rel="noreferrer noopener" class="dl-dock-btn" aria-label="Download Klorn.app for macOS (native top-bar firewall, .zip)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 11l5 5 5-5"></path><path d="M5 21h14"></path></svg>
+      Download for Mac
+    </a>
+    <div class="dl-dock-lang" role="group" aria-label="Language">
+      <span class="dl-dock-cur" aria-current="page">EN</span>
+      <span class="dl-dock-sep" aria-hidden="true">·</span>
+      <a href="/ko/" data-lang-switch="ko" aria-label="한국어로 보기">KO</a>
+    </div>
+  </div>
 
   <script>
     // Fade-in + slide-up on scroll — plain IntersectionObserver.
@@ -2035,12 +2094,17 @@
   </script>
 
 <script>
-  // Persist an explicit language choice so the head auto-detect respects it.
-  document.addEventListener("click", function (e) {
-    var a = e.target && e.target.closest ? e.target.closest("[data-lang-switch]") : null;
-    if (!a) return;
-    try { localStorage.setItem("klorn-lang", a.getAttribute("data-lang-switch")); } catch (err) {}
-  });
+  // Reveal the floating download + language dock once you've scrolled past the hero.
+  (function () {
+    var dock = document.getElementById("dlDock");
+    if (!dock) return;
+    var reveal = function () {
+      dock.classList.toggle("visible", window.scrollY > Math.min(window.innerHeight * 0.6, 520));
+    };
+    window.addEventListener("scroll", reveal, { passive: true });
+    window.addEventListener("resize", reveal);
+    reveal();
+  })();
 </script>
 </body>
 </html>
