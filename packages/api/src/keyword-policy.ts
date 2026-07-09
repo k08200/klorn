@@ -13,6 +13,7 @@
  * editable, reviewable surface instead of literals scattered through the judge.
  */
 
+import { extractEmailAddress } from "./email-address.js";
 import type { ClassifiableEmail } from "./email-classifier.js";
 import type { TierFeatures } from "./tier-policy.js";
 
@@ -87,6 +88,34 @@ const TRANSACTIONAL_SENDER_RE =
 /** True for an automated shipping/order/delivery sender (see regex above). */
 export function isTransactionalSender(from: string): boolean {
   return TRANSACTIONAL_SENDER_RE.test(from);
+}
+
+/**
+ * Machine-generated sender that must never INTERRUPT the user (PUSH). Broad on
+ * purpose — the union of the system-notification signal (no-reply@ / noreply@ /
+ * donotreply@ / notifications@ / updates.* / email.* / notifications.*
+ * subdomains) and the transactional logistics roles. Used ONLY by the judge's
+ * PUSH floor (poc-judge.ts): a match lands QUEUE — a glance — never PUSH.
+ *
+ * Deliberately BROADER than {@link isNoReplySender}, which stays narrow so
+ * commitment mining still reads human promises relayed via notifications@
+ * ("Sarah will review Friday"). The two answer different questions:
+ * isNoReplySender = "can this carry a commitment?"; isAutomatedSender =
+ * "should this ever interrupt?".
+ *
+ * The founder's own ground truth agrees: every automated sender in
+ * eval/judge-eval-set.json is labeled QUEUE or AUTO, never PUSH — so this floor
+ * only ever corrects a live misclassification (a failed deploy, a security
+ * confirmation the LLM over-scored as urgent), never the eval gate. The
+ * CI/monitoring→SILENT refinement is tracked separately.
+ */
+export function isAutomatedSender(from: string): boolean {
+  if (!from) return false;
+  // Normalize "Name <addr>" → bare addr-spec so the role-anchored transactional
+  // regex (which expects the role at the start of the local-part) matches a
+  // display-name header too; SYSTEM_NOTIFICATION_RE matches either form.
+  const addr = extractEmailAddress(from);
+  return SYSTEM_NOTIFICATION_RE.test(addr) || TRANSACTIONAL_SENDER_RE.test(addr);
 }
 
 /** Investor signal (from) → high trust, low reversibility. */
