@@ -22,6 +22,13 @@ final class AppModel {
     /// The AppDelegate wires this to the HUD; if unset, PUSH surfacing is a no-op.
     var onNewPush: (([FirewallItem]) -> Void)?
 
+    /// User preferences (persisted). Observed by the Preferences panel and read
+    /// by the controller before posting an OS banner.
+    let settings = AppSettings()
+
+    /// Drives the Preferences overlay in the full view.
+    var showPreferences = false
+
     // Reading pane (full view): the selected row + its loaded email content.
     private(set) var selectedItemId: String?
     private(set) var openedEmail: EmailDetail?

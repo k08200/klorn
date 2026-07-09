@@ -7,7 +7,15 @@ enum Theme {
 
     /// The top bar is always a dark floating surface regardless of system
     /// appearance, so its text uses explicit light tones (not semantic colors).
-    static let panel = Color.black.opacity(0.92)
+    static let panel = Color.black.opacity(panelDefaultOpacity)
+    static let panelDefaultOpacity = 0.92
+
+    /// Panel fill opacity: fully opaque when the user asked to reduce transparency
+    /// (the 8% see-through can drop contrast over a busy backdrop), else the
+    /// translucent default. Pure for testing.
+    static func panelOpacity(reduceTransparency: Bool) -> Double {
+        reduceTransparency ? 1.0 : panelDefaultOpacity
+    }
     static let text = Color.white
     static let textDim = Color.white.opacity(0.55)
 

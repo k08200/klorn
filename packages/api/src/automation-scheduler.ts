@@ -607,6 +607,8 @@ async function runAutomations() {
             { emailAutoClassify: true },
             { autonomousAgent: true },
             { phoneEscalationEnabled: true },
+            // A user who enabled ONLY proactive actions still needs a tick.
+            { proactiveActions: true },
           ],
         },
         take: BATCH_SIZE,
@@ -1333,8 +1335,8 @@ async function runUserCycle(
 
   // --- Proactive Actions (rule-based, no LLM cost) ---
   // Enabled either via global env flag (PROACTIVE_ACTIONS_ENABLED=true for all users)
-  // or per-user toggle (proactiveActions: true in automationConfig JSON field).
-  const perUserProactive = (config as unknown as Record<string, unknown>).proactiveActions === true;
+  // or the per-user AutomationConfig.proactiveActions toggle.
+  const perUserProactive = config.proactiveActions === true;
   if (PROACTIVE_ACTIONS_ENABLED || perUserProactive) {
     runProactiveActions(config.userId).catch((err) => {
       console.error(`[PROACTIVE] Failed for ${config.userId}:`, err);

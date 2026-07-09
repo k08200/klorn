@@ -31,7 +31,7 @@ describe("dismissAttentionItem", () => {
     expect(res).toEqual({ ok: false, reason: "not_found" });
     expect(findFirst).toHaveBeenCalledWith({
       where: { id: "i1", userId: "u1" },
-      select: { id: true },
+      select: { id: true, source: true, sourceId: true },
     });
     expect(update).not.toHaveBeenCalled();
   });

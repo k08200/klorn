@@ -5,7 +5,9 @@
  * source. Mirrors the ownership-checked mutation shape of attention-override.ts.
  */
 
+import { recordContactEngagement } from "./contact-engagement.js";
 import { prisma } from "./db.js";
+import { extractEmailAddress } from "./email-address.js";
 import { recordFeedback } from "./feedback.js";
 
 export type AttentionDismissResult = { ok: true } | { ok: false; reason: "not_found" };
@@ -18,11 +20,15 @@ export async function dismissAttentionItem(
   // Ownership check before mutating — never mutate by bare id.
   const existing = await (
     prisma.attentionItem as unknown as {
-      findFirst: (args: unknown) => Promise<{ id: string } | null>;
+      findFirst: (args: unknown) => Promise<{
+        id: string;
+        source: string;
+        sourceId: string;
+      } | null>;
     }
   ).findFirst({
     where: { id: itemId, userId },
-    select: { id: true },
+    select: { id: true, source: true, sourceId: true },
   });
 
   if (!existing) return { ok: false, reason: "not_found" };
@@ -45,6 +51,22 @@ export async function dismissAttentionItem(
     signal: "DISMISSED",
     evidence: "User dismissed from the desktop app",
   });
+
+  // Per-sender learning: dismissing an EMAIL is the negative half of the
+  // contact-engagement graph — the "dismisses −" the outbound "+" was already
+  // wired for in #768, but whose writer was never called (dismissCount sat at
+  // 0). Records dismissCount for the sender so the judge can learn to distrust a
+  // sender the user keeps clearing (consumed only when CONTACT_ENGAGEMENT_IN_JUDGE
+  // is on). Best-effort; recordContactEngagement never throws.
+  if (existing.source === "EMAIL") {
+    const email = await prisma.emailMessage.findUnique({
+      where: { id: existing.sourceId },
+      select: { from: true },
+    });
+    if (email?.from) {
+      await recordContactEngagement(userId, extractEmailAddress(email.from), "dismiss");
+    }
+  }
 
   return { ok: true };
 }

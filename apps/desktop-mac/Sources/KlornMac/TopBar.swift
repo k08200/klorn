@@ -22,6 +22,8 @@ struct TopBarActions {
     let onSnooze: (FirewallItem, SnoozeOption) -> Void
     /// Select a row in the full view — loads its email into the reading pane.
     let onSelect: (FirewallItem) -> Void
+    /// Open the Preferences overlay (switches to the full view first).
+    let onOpenPreferences: () -> Void
     let onQuit: () -> Void
 }
 
@@ -45,6 +47,7 @@ enum TopBarMetrics {
 struct TopBarRoot: View {
     let state: BarState
     let actions: TopBarActions
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         Group {
@@ -56,7 +59,7 @@ struct TopBarRoot: View {
         }
         .background(
             RoundedRectangle(cornerRadius: TopBarMetrics.corner)
-                .fill(Theme.panel)
+                .fill(Color.black.opacity(Theme.panelOpacity(reduceTransparency: reduceTransparency)))
                 .overlay(RoundedRectangle(cornerRadius: TopBarMetrics.corner).strokeBorder(Theme.line))
         )
         .clipShape(RoundedRectangle(cornerRadius: TopBarMetrics.corner))
@@ -80,7 +83,7 @@ private extension View {
     }
 }
 
-private struct ColumnHeader: View {
+struct ColumnHeader: View {
     let title: String
     var body: some View {
         Text(title).font(.caption2.weight(.semibold))
@@ -316,6 +319,9 @@ private struct AccountColumn: View {
                     Text("Sign in with Google").font(.body).foregroundStyle(Theme.text)
                 }.buttonStyle(.plain)
             }
+            Button(action: actions.onOpenPreferences) {
+                Text("Preferences").font(.body).foregroundStyle(Theme.textDim)
+            }.buttonStyle(.plain)
             Button(action: actions.onQuit) {
                 Text("Quit Klorn").font(.body).foregroundStyle(Theme.textDim)
             }.buttonStyle(.plain)
@@ -335,15 +341,24 @@ struct FullView: View {
     @State private var tier: Tier = .push
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider().overlay(Theme.line)
-            HStack(spacing: 0) {
-                FullSidebar(selected: $tier, actions: actions).frame(width: 220)
-                Rectangle().fill(Theme.line).frame(width: 1)
-                FullList(tier: tier, actions: actions).frame(width: 420)
-                Rectangle().fill(Theme.line).frame(width: 1)
-                ReadingPane(actions: actions).frame(maxWidth: .infinity)
+        ZStack {
+            VStack(spacing: 0) {
+                header
+                Divider().overlay(Theme.line)
+                HStack(spacing: 0) {
+                    FullSidebar(selected: $tier, actions: actions).frame(width: 220)
+                    Rectangle().fill(Theme.line).frame(width: 1)
+                    FullList(tier: tier, actions: actions).frame(width: 420)
+                    Rectangle().fill(Theme.line).frame(width: 1)
+                    ReadingPane(actions: actions).frame(maxWidth: .infinity)
+                }
+            }
+            if model.showPreferences {
+                // Scrim: click-off dismiss (a11y users use the Done button instead).
+                Color.black.opacity(0.55)
+                    .onTapGesture { model.showPreferences = false }
+                    .accessibilityHidden(true)
+                PreferencesView(actions: actions)
             }
         }
         .frame(width: TopBarMetrics.full.width, height: TopBarMetrics.full.height)
@@ -419,6 +434,7 @@ private struct FullSidebar: View {
             } else {
                 sidebarAction("Sign in with Google") { actions.onSignIn() }
             }
+            sidebarAction("Preferences", dim: true) { model.showPreferences = true }
             sidebarAction("Quit Klorn", dim: true) { actions.onQuit() }
         }
         .padding(.horizontal, 8).padding(.vertical, 18)
