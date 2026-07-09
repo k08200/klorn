@@ -14,6 +14,7 @@
 
 import { prisma } from "./db.js";
 import { getUpcomingMeetings } from "./meeting.js";
+import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
 import { pushNotification } from "./websocket.js";
 
@@ -246,12 +247,14 @@ export function startBackgroundAgent() {
   if (intervalId) return;
 
   console.log("[BG] Background agent started (60s interval)");
+  registerScheduler("background-agent", 60_000);
 
   // Run immediately once
   checkUpcomingMeetings();
 
   // Then every 60 seconds — only meeting checks (task checks moved to autonomous-agent.ts)
   intervalId = setInterval(async () => {
+    recordSchedulerTick("background-agent");
     await checkUpcomingMeetings();
   }, 60_000);
 }
