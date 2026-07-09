@@ -25,6 +25,7 @@ import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { getDecisionMetrics } from "../decision-metrics.js";
 import { requireAppAccess } from "../entitlement-guard.js";
+import { collapseEmailThreads } from "../firewall-thread-collapse.js";
 import { ensureFreshGmailWatch } from "../gmail.js";
 import { getInteractionGraph } from "../interaction-graph.js";
 import { senderEmail } from "../notification-format.js";
@@ -396,6 +397,9 @@ export async function firewallRoutes(app: FastifyInstance) {
               from: true,
               snippet: true,
               labels: true,
+              // Gmail thread id — used to collapse a multi-message conversation
+              // (N EmailMessage rows) to a single firewall card. See below.
+              threadId: true,
             },
           })
         : Promise.resolve([] as never[]),
@@ -426,7 +430,17 @@ export async function firewallRoutes(app: FastifyInstance) {
       AUTO: [],
     };
 
-    for (const row of items) {
+    // Collapse a multi-message email conversation to one card. Items are ordered
+    // [priority desc, surfacedAt desc], so the kept row is the thread's
+    // highest-priority (newest on ties) message. Without this, a reschedule
+    // thread or a repeated "Deployment failed" shows once per message, each with
+    // a different judge-authored tierReason (the duplicate seen in dogfooding).
+    const dedupedItems = collapseEmailThreads(
+      items,
+      (row) => emailById.get(row.sourceId)?.threadId ?? null,
+    );
+
+    for (const row of dedupedItems) {
       // normalizeTier maps legacy CALL rows → PUSH (not QUEUE) and any
       // unknown/null tier → QUEUE. See tiers.ts.
       const tier = normalizeTier(row.tier);

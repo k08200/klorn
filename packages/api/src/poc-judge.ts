@@ -18,7 +18,12 @@
 import type { ClassifiableEmail } from "./email-classifier.js";
 import { getCachedJudgeFeatures, judgeCacheKey, setCachedJudgeFeatures } from "./judge-cache.js";
 import { resolveEscalation } from "./judge-dial.js";
-import { isClearMarketing, keywordFeatures, looksUrgent } from "./keyword-policy.js";
+import {
+  isAutomatedSender,
+  isClearMarketing,
+  keywordFeatures,
+  looksUrgent,
+} from "./keyword-policy.js";
 import { type LearnedRule, matchLearnedRules } from "./learned-rules.js";
 import { asString, asUnitInterval, isNonFinitePresent } from "./llm-coerce.js";
 import { parseLlmJson } from "./llm-json.js";
@@ -562,6 +567,28 @@ function applyRoutineConfirmationCap(email: ClassifiableEmail, features: PocFeat
 }
 
 /**
+ * Deterministic PUSH floor: a machine-generated sender must never interrupt.
+ * If the scored tier is PUSH but the sender is automated (no-reply /
+ * notifications@ / updates.*), demote to QUEUE — a glance, never an
+ * interruption. This is the sender-based complement to
+ * {@link applyRoutineConfirmationCap}: that catches account/security
+ * confirmations by subject; this catches deploy/CI/monitoring notices by
+ * sender, whose "Failed" / "DOWN" subjects the LLM over-scores as urgent.
+ *
+ * Applied only to the scoring paths (LLM, keyword fallback) — an explicit
+ * sender-prior override or a learned rule to PUSH is ground truth and is
+ * respected. Only PUSH is demoted; SILENT/QUEUE/AUTO pass through untouched.
+ */
+function applyAutomatedSenderPushFloor(
+  from: string | undefined,
+  decision: { tier: Tier; reason: string },
+): { tier: Tier; reason: string } {
+  if (decision.tier !== "PUSH") return decision;
+  if (!isAutomatedSender(from ?? "")) return decision;
+  return { tier: "QUEUE", reason: "Automated sender — queued for a glance, never interrupts" };
+}
+
+/**
  * Judge a single email → 4-tier. Pure: does not persist anything.
  *
  * Hot path:
@@ -655,9 +682,13 @@ export async function judgeEmail(
     }
     const features = applyRoutineConfirmationCap(email, llm.features);
     const { tier, reason: ruleReason } = tierFromFeatures(features, getEffectiveThresholds());
-    return {
+    const floored = applyAutomatedSenderPushFloor(email.from, {
       tier,
       reason: llm.reason || ruleReason,
+    });
+    return {
+      tier: floored.tier,
+      reason: floored.reason,
       features,
       source: "llm",
     };
@@ -665,7 +696,8 @@ export async function judgeEmail(
 
   const features = applyRoutineConfirmationCap(email, keywordFeatures(email));
   const { tier, reason } = tierFromFeatures(features, getEffectiveThresholds());
-  return { tier, reason, features, source: "keyword-fallback" };
+  const floored = applyAutomatedSenderPushFloor(email.from, { tier, reason });
+  return { tier: floored.tier, reason: floored.reason, features, source: "keyword-fallback" };
 }
 
 /**
