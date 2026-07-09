@@ -37,10 +37,20 @@ final class TopBarController {
     /// an OS banner as a fallback for when the bar isn't on the user's current Space
     /// (a no-op on unbundled `swift run`, which has no bundle id).
     func handleNewPush(_ items: [FirewallItem]) {
+        guard !items.isEmpty else { return }
+        // Announce for VoiceOver (WCAG 4.1.3 Status Messages): the AT-equivalent of
+        // the always-live pill count, so it fires regardless of the OS-banner
+        // preference (that toggle only gates the interruptive system banner below).
+        AccessibilityNotification.Announcement(Self.pushAnnouncement(newCount: items.count)).post()
         // The pill's live count already updated via observation; the OS banner is
         // the opt-out-able extra (Preferences → Notifications).
         guard model.settings.notificationsEnabled else { return }
         items.forEach { PushNotifier.post($0) }
+    }
+
+    /// VoiceOver announcement for newly-arrived PUSH. Pure for testing.
+    nonisolated static func pushAnnouncement(newCount n: Int) -> String {
+        n == 1 ? "1 new message needs you" : "\(n) new messages need you"
     }
 
     /// Global-hotkey entry point: expand the pill / collapse whatever is open,
