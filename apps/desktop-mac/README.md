@@ -101,17 +101,56 @@ git tag desktop-v0.1.0 && git push origin desktop-v0.1.0
 
 The workflow runs with or without signing:
 
-- **Notarized** (recommended for a public download) — add these repo Secrets and
-  the release opens with a plain double-click:
-  `MACOS_DEVELOPER_ID_CERT_P12_BASE64`, `MACOS_DEVELOPER_ID_CERT_PASSWORD`,
-  `MACOS_SIGN_IDENTITY` (`Developer ID Application: … (P89M32649C)`),
-  `MACOS_NOTARY_APPLE_ID`, `MACOS_NOTARY_TEAM_ID` (`P89M32649C`),
-  `MACOS_NOTARY_APP_PASSWORD` (an app-specific password).
-- **Ad-hoc** (no secrets) — still publishes, but Gatekeeper needs a one-time
-  right-click → **Open**. The release notes say so.
+- **Ad-hoc** (no secrets, current state) — still publishes, but the build is
+  ad-hoc signed, so a web download is quarantined and macOS shows
+  **"Klorn.app is damaged."** Users must clear it once:
+  `xattr -dr com.apple.quarantine /Applications/Klorn.app`. The release notes say so.
+- **Notarized** (recommended for a public download) — with the six secrets below
+  present the release is Developer-ID signed + Apple-notarized + stapled, so it
+  opens with a plain double-click (no `xattr`).
 
-Once the first release exists, point the landing page's "Mac app" button at
-`https://github.com/k08200/klorn/releases/latest` instead of the source tree.
+### One-time notarization setup
+
+Everything below is done by whoever owns the Apple Developer account (Team
+`P89M32649C`). The CI is already wired — it only needs the secrets.
+
+1. **Developer ID Application certificate** → export a `.p12`.
+   Xcode › Settings › Accounts › your team › *Manage Certificates* › **+** ›
+   *Developer ID Application*. Then in **Keychain Access**, right-click the new
+   cert → *Export* → save `DeveloperID.p12` and set an export password.
+2. **Base64 the cert** (this is the secret value, not the file):
+   ```bash
+   base64 -i DeveloperID.p12 | pbcopy   # → MACOS_DEVELOPER_ID_CERT_P12_BASE64
+   ```
+3. **Sign-identity string** — copy the full quoted name:
+   ```bash
+   security find-identity -v -p codesigning   # → "Developer ID Application: NAME (P89M32649C)"
+   ```
+4. **App-specific password for notarytool**: appleid.apple.com › *Sign-In and
+   Security* › *App-Specific Passwords* › **+** → the generated `xxxx-xxxx-xxxx-xxxx`.
+5. **Set the six repo secrets** (from the repo root, `gh` authenticated):
+   ```bash
+   base64 -i DeveloperID.p12 | gh secret set MACOS_DEVELOPER_ID_CERT_P12_BASE64
+   gh secret set MACOS_DEVELOPER_ID_CERT_PASSWORD   # the .p12 export password
+   gh secret set MACOS_SIGN_IDENTITY                # "Developer ID Application: NAME (P89M32649C)"
+   gh secret set MACOS_NOTARY_APPLE_ID              # your Apple ID email
+   gh secret set MACOS_NOTARY_TEAM_ID               # P89M32649C
+   gh secret set MACOS_NOTARY_APP_PASSWORD          # the app-specific password from step 4
+   ```
+6. **Cut a notarized release** — push a *new* tag (releases are immutable, so bump
+   rather than re-tag `desktop-v0.1.1`):
+   ```bash
+   git tag desktop-v0.1.2 && git push origin desktop-v0.1.2
+   ```
+   The workflow detects the cert, signs + notarizes + staples, and publishes the
+   release. It becomes "Latest", so the landing "Download for Mac" button —
+   which points at `releases/latest/download/Klorn-macos.zip` — serves it with no
+   further change, and the download now opens on a plain double-click.
+
+The landing button already links directly to
+`https://github.com/k08200/klorn/releases/latest/download/Klorn-macos.zip`
+(a direct download, not the release page). Keep the release asset named
+`Klorn-macos.zip` so that URL keeps resolving.
 
 ## Tests
 
