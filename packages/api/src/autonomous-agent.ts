@@ -47,6 +47,7 @@ import {
   LEGACY_AGENT_NOTIFICATION_PREFIX,
   safeJson,
 } from "./agent-proposal-dedup.js";
+import { isFloorAction } from "./attention-floor.js";
 import { upsertAttentionForPendingAction } from "./attention-mirror.js";
 import { AGENT_MAX_CONTEXT_ITEMS, AGENT_MAX_TOOLS_PER_LOOP } from "./config.js";
 import { db, prisma } from "./db.js";
@@ -351,7 +352,12 @@ export async function runAgentForUser(
     });
     const alwaysAllowedTools = new Set(
       (automationCfg?.alwaysAllowedTools || []).filter(
-        (t) => t !== "send_email" && TOOL_RISK_LEVELS.get(t) === "MEDIUM",
+        // Floor actions (send/delete/forward) are irreversible and must always
+        // mint a per-action receipt via explicit approval — pre-approval can
+        // never bypass the floor. Exclude ALL of them (via the canonical
+        // isFloorAction), not just the hardcoded "send_email", so this stays
+        // correct if delete_permanent/forward_external ever ship as tools.
+        (t) => !isFloorAction(t) && TOOL_RISK_LEVELS.get(t) === "MEDIUM",
       ),
     );
 
