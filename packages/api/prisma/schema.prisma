@@ -1070,6 +1070,11 @@ model DecisionLabel {
   // "keyword-fallback" — so prior-bypass decisions stay separable (the
   // SILENT-prior over-suppression class is exactly the prior-bypass rows).
   decidedBy String?
+  // Which learned-engagement grounding fed the judge, if any: "DIRECT" (measured
+  // replies to this sender) | "PROPAGATED" (inferred from an engaged org peer) |
+  // null. Rollout instrumentation for CONTACT_ENGAGEMENT_IN_JUDGE — lets us see,
+  // once flipped, how often the signal fires and whether those rows get corrected.
+  engagementKind String?
 
   // Stamped once when the user acts. For an override, "OVERRIDE:<tier>";
   // otherwise a terminal status. Null until then.

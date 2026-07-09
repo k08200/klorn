@@ -35,6 +35,8 @@ export interface DecisionRow {
   outcome: string | null;
   /** "fast-path" | "sender-prior" | "llm" | "keyword-fallback" | null. */
   decidedBy?: string | null;
+  /** "DIRECT" | "PROPAGATED" | null — which engagement grounding fed the judge. */
+  engagementKind?: string | null;
 }
 
 export interface DecidedByMetric {
@@ -214,12 +216,42 @@ export interface ConfusionReport {
   matrix: Partial<Record<Tier, Partial<Record<Tier, number>>>>;
 }
 
+/**
+ * Rollout instrumentation for CONTACT_ENGAGEMENT_IN_JUDGE: how often the learned-
+ * engagement grounding actually fed a decision, split by kind, and whether those
+ * decisions get corrected. Honest like the rest of this module — correctionRate
+ * counts only confirmed tier-moving overrides; unconfirmed rows aren't "right".
+ *
+ * Reading it after the flip: a LOW correctionRate on grounded rows (vs the
+ * overall overrideRate) means the signal is aligned with the user; a HIGH one
+ * means it's steering wrong. `total` staying 0 after the flip means the signal
+ * never fires (no engagement history yet) — nothing to trust either way.
+ */
+export interface EngagementGroundingMetric {
+  /** Decisions where any engagement grounding fired (engagementKind non-null). */
+  total: number;
+  /** Measured direct engagement (replies to this sender). */
+  direct: number;
+  /** Inferred from an engaged org peer. */
+  propagated: number;
+  /** shownTier distribution of grounded decisions. */
+  byTier: Partial<Record<Tier, number>>;
+  /** Grounded rows the user acted on (outcome stamped). */
+  acted: number;
+  /** Grounded rows overridden to a different tier — confirmed steered-wrong. */
+  corrections: number;
+  /** corrections / acted — LOWER is better (grounding matched the user). */
+  correctionRate: number | null;
+}
+
 export interface DecisionMetricsReport {
   /** How many days back the ledger was read (the recall/over-suppression window). */
   windowDays: number;
   overall: DecisionMetrics;
   /** Full per-tier confusion from confirmed overrides (all 4 tiers). */
   confusion: ConfusionReport;
+  /** CONTACT_ENGAGEMENT_IN_JUDGE rollout footprint (0 until the flag fires). */
+  engagementGrounding: EngagementGroundingMetric;
   perUser: UserDecisionSummary[];
 }
 
@@ -306,6 +338,49 @@ export function summarizeConfusion(rows: readonly DecisionRow[]): ConfusionRepor
 }
 
 /**
+ * Pure: fold ledger rows into the engagement-grounding rollout footprint. Counts
+ * only rows where the grounding actually fired (engagementKind non-null), so it
+ * stays all-zero until CONTACT_ENGAGEMENT_IN_JUDGE is flipped and a sender with
+ * real engagement history is judged. correctionRate uses confirmed tier-moving
+ * overrides only (same honesty contract as summarizeDecisions).
+ */
+export function summarizeEngagementGrounding(
+  rows: readonly DecisionRow[],
+): EngagementGroundingMetric {
+  const byTier: Partial<Record<Tier, number>> = {};
+  let total = 0;
+  let direct = 0;
+  let propagated = 0;
+  let acted = 0;
+  let corrections = 0;
+
+  for (const row of rows) {
+    const kind = row.engagementKind;
+    if (kind !== "DIRECT" && kind !== "PROPAGATED") continue;
+    total += 1;
+    if (kind === "DIRECT") direct += 1;
+    else propagated += 1;
+    if (TIER_SET.has(row.shownTier)) {
+      const tier = row.shownTier as Tier;
+      byTier[tier] = (byTier[tier] ?? 0) + 1;
+    }
+    if (row.outcome !== null) acted += 1;
+    const target = overrideTarget(row.outcome);
+    if (target !== null && target !== row.shownTier) corrections += 1;
+  }
+
+  return {
+    total,
+    direct,
+    propagated,
+    byTier,
+    acted,
+    corrections,
+    correctionRate: ratio(corrections, acted),
+  };
+}
+
+/**
  * Compact headline for a daily drift snapshot — the bounded numbers worth
  * trending over time, without the per-path breakdown.
  */
@@ -370,7 +445,13 @@ export async function getDecisionMetrics(
       judgedAt: { gte: since },
       ...(opts.userId ? { userId: opts.userId } : {}),
     },
-    select: { userId: true, shownTier: true, outcome: true, decidedBy: true },
+    select: {
+      userId: true,
+      shownTier: true,
+      outcome: true,
+      decidedBy: true,
+      engagementKind: true,
+    },
     // Most-recent-first + a hard row cap so memory is bounded by the cap, not by
     // ledger volume. Served by @@index([source, judgedAt]) (userId-less) and
     // @@index([userId, shownTier, judgedAt]) (per-user).
@@ -389,6 +470,7 @@ export async function getDecisionMetrics(
     windowDays,
     overall: summarizeDecisions(rows),
     confusion: summarizeConfusion(rows),
+    engagementGrounding: summarizeEngagementGrounding(rows),
     perUser: summarizePerUser(rows),
   };
 }

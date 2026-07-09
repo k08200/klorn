@@ -8,7 +8,46 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { PRIOR_SHORTCIRCUIT_TIERS, SENDER_PRIOR_POLICY } from "../sender-policy.js";
+import {
+  engagementKindOf,
+  PRIOR_SHORTCIRCUIT_TIERS,
+  SENDER_PRIOR_POLICY,
+  type SenderFacts,
+} from "../sender-policy.js";
+
+const baseFacts: SenderFacts = {
+  tierHistory: {},
+  manualOverrides: 0,
+  interaction: null,
+  commitments: null,
+  engagement: null,
+};
+
+describe("engagementKindOf", () => {
+  it("returns null when there's no engagement fact (or no facts at all)", () => {
+    expect(engagementKindOf(null)).toBeNull();
+    expect(engagementKindOf(undefined)).toBeNull();
+    expect(engagementKindOf(baseFacts)).toBeNull();
+  });
+
+  it("classifies measured engagement as DIRECT", () => {
+    expect(
+      engagementKindOf({
+        ...baseFacts,
+        engagement: { importance: 0.9, outboundCount: 5, propagated: false },
+      }),
+    ).toBe("DIRECT");
+  });
+
+  it("classifies an inferred org prior as PROPAGATED", () => {
+    expect(
+      engagementKindOf({
+        ...baseFacts,
+        engagement: { importance: 0.4, outboundCount: 0, propagated: true },
+      }),
+    ).toBe("PROPAGATED");
+  });
+});
 
 describe("PRIOR_SHORTCIRCUIT_TIERS", () => {
   it("never lets a prior short-circuit to SILENT (no silent one-way door)", () => {
