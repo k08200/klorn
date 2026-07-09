@@ -540,21 +540,17 @@ function getStoredProfile(): string | null {
 }
 
 function detectLocale(): Locale {
+  // English is the default. Korean is opt-in only — a Korean-locale browser
+  // still lands in English unless the user explicitly picks 한국어 in
+  // Settings → Language. We intentionally do NOT follow navigator.language.
   try {
     const stored = getStoredProfile();
     if (stored) {
       const { language } = JSON.parse(stored);
-      if (language === "en") return "en";
       if (language === "ko") return "ko";
-      // "auto" (or unset) falls through to the browser locale.
     }
   } catch {
-    // ignore
-  }
-  try {
-    if ((navigator.language || "").toLowerCase().startsWith("ko")) return "ko";
-  } catch {
-    // SSR / restricted context — default below.
+    // ignore a malformed profile
   }
   return "en";
 }
