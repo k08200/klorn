@@ -70,11 +70,7 @@ export interface SchedulerHealth {
 
 const registry = new Map<string, SchedulerState>();
 
-export function registerScheduler(
-  name: SchedulerName,
-  intervalMs: number,
-  now = Date.now(),
-): void {
+export function registerScheduler(name: SchedulerName, intervalMs: number, now = Date.now()): void {
   registry.set(name, { intervalMs, lastSeenAt: now, disabled: false });
 }
 
