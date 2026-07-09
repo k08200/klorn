@@ -17,6 +17,9 @@ jobs:
   audit:
     name: Dependency Audit
     runs-on: ubuntu-latest
+    # Skip on PRs — the audit is non-blocking (`|| true`) so it gates nothing per
+    # PR; keep it on push-to-main + the weekly schedule to trim PR CI time.
+    if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v4
 
@@ -53,6 +56,10 @@ jobs:
   codeql:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
+    # Skip on PRs — CodeQL is the slowest job and only uploads to the Security
+    # tab (no PR comments/gate). Scanning every push to main + the weekly cron
+    # keeps main continuously analyzed while cutting PR CI time.
+    if: github.event_name != 'pull_request'
     permissions:
       contents: read
       security-events: write
