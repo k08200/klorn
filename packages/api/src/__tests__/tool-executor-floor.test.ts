@@ -17,6 +17,10 @@ import { mintReceipt, RECEIPT_SCHEMA_VERSION, sendEmailPayloadHash } from "../at
 // Mock everything tool-executor pulls in that would touch external state.
 // We only care about the floor guard at the send_email seam.
 const sendEmailMock = vi.fn(async () => ({ success: true, messageId: "msg-1" }));
+// Source-email lookup send_email uses to resolve the linked inbox account.
+const findFirstMock = vi.fn(
+  async (): Promise<{ linkedInboxAccountId: string | null } | null> => null,
+);
 
 vi.mock("../gmail.js", () => ({
   GMAIL_TOOLS: [],
@@ -26,7 +30,10 @@ vi.mock("../gmail.js", () => ({
   markAsRead: vi.fn(),
   classifyEmails: vi.fn(),
 }));
-vi.mock("../db.js", () => ({ prisma: {}, db: {} }));
+vi.mock("../db.js", () => ({
+  prisma: { emailMessage: { findFirst: (...args: unknown[]) => findFirstMock(...args) } },
+  db: {},
+}));
 vi.mock("../calendar.js", () => ({
   CALENDAR_TOOLS: [],
   createEvent: vi.fn(),
@@ -118,7 +125,60 @@ describe("executeToolCall — floor enforcement for send_email", () => {
     const result = await executeToolCall(userId, "send_email", args, receipt);
     expect(JSON.parse(result)).toMatchObject({ success: true });
     expect(sendEmailMock).toHaveBeenCalledOnce();
-    expect(sendEmailMock).toHaveBeenCalledWith(userId, args.to, args.subject, args.body);
+    // No in_reply_to_email_id → no source lookup → primary account (undefined).
+    expect(sendEmailMock).toHaveBeenCalledWith(userId, args.to, args.subject, args.body, [], {
+      linkedInboxAccountId: undefined,
+    });
+  });
+
+  it("routes the send through the linked inbox when in_reply_to_email_id resolves to one", async () => {
+    sendEmailMock.mockClear();
+    findFirstMock.mockClear();
+    findFirstMock.mockResolvedValueOnce({ linkedInboxAccountId: "linked-abc" });
+    // The routing arg is NOT part of the payload hash — the receipt still
+    // verifies over {to,subject,body}, so the floor is unaffected.
+    const receipt = mintReceipt({
+      action: "send_email",
+      inputHash: "",
+      payloadHash: sendEmailPayloadHash(args),
+      target: args.to,
+      approvedAt: new Date("2026-06-04T09:00:00Z"),
+      approvedBy: userId,
+    });
+    const result = await executeToolCall(
+      userId,
+      "send_email",
+      { ...args, in_reply_to_email_id: "email-42" },
+      receipt,
+    );
+    expect(JSON.parse(result)).toMatchObject({ success: true });
+    expect(findFirstMock).toHaveBeenCalledOnce();
+    expect(sendEmailMock).toHaveBeenCalledWith(userId, args.to, args.subject, args.body, [], {
+      linkedInboxAccountId: "linked-abc",
+    });
+  });
+
+  it("falls back to the primary account when in_reply_to_email_id resolves to nothing", async () => {
+    sendEmailMock.mockClear();
+    findFirstMock.mockClear();
+    findFirstMock.mockResolvedValueOnce(null); // stale / foreign id → no row
+    const receipt = mintReceipt({
+      action: "send_email",
+      inputHash: "",
+      payloadHash: sendEmailPayloadHash(args),
+      target: args.to,
+      approvedAt: new Date("2026-06-04T09:00:00Z"),
+      approvedBy: userId,
+    });
+    await executeToolCall(
+      userId,
+      "send_email",
+      { ...args, in_reply_to_email_id: "does-not-exist" },
+      receipt,
+    );
+    expect(sendEmailMock).toHaveBeenCalledWith(userId, args.to, args.subject, args.body, [], {
+      linkedInboxAccountId: undefined,
+    });
   });
 
   it("throws ActionReceiptMismatchError when the body has been mutated post-approve", async () => {
