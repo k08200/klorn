@@ -9,9 +9,7 @@ test-results/
 .next/
 .next-dev/
 
-# Local Claude Code project guide (kept out of repo to avoid staleness
-# and to keep internal prioritization notes private)
-CLAUDE.md
+# Local Claude Code state (session settings/worktrees — never commit)
 .claude/
 .gstack/
 
