@@ -1170,9 +1170,8 @@
     /* ── Floating download + language dock (bottom-center) ─────── */
     .dl-dock {
       position: fixed;
-      left: 50%;
+      right: 22px;
       bottom: 22px;
-      transform: translate(-50%, 10px);
       z-index: 60;
       display: flex;
       align-items: center;
@@ -1184,12 +1183,12 @@
       box-shadow: 0 10px 34px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.05);
       -webkit-backdrop-filter: blur(16px) saturate(1.3);
       backdrop-filter: blur(16px) saturate(1.3);
-      opacity: 0;
-      visibility: hidden;
-      pointer-events: none;
-      transition: opacity 0.35s ease, transform 0.35s ease;
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      animation: dlDockIn 0.45s ease both;
     }
-    .dl-dock.visible { opacity: 1; visibility: visible; pointer-events: auto; transform: translate(-50%, 0); }
+    @keyframes dlDockIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
     .dl-dock-btn {
       display: inline-flex;
       align-items: center;
@@ -1227,7 +1226,7 @@
       .dl-dock-btn { padding: 9px 15px; font-size: 13px; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .dl-dock { transition: opacity 0.2s ease; transform: translate(-50%, 0); }
+      .dl-dock { animation: none; transform: none; }
     }
   </style>
 </head>
@@ -2093,18 +2092,5 @@
     }
   </script>
 
-<script>
-  // Reveal the floating download + language dock once you've scrolled past the hero.
-  (function () {
-    var dock = document.getElementById("dlDock");
-    if (!dock) return;
-    var reveal = function () {
-      dock.classList.toggle("visible", window.scrollY > Math.min(window.innerHeight * 0.6, 520));
-    };
-    window.addEventListener("scroll", reveal, { passive: true });
-    window.addEventListener("resize", reveal);
-    reveal();
-  })();
-</script>
 </body>
 </html>
