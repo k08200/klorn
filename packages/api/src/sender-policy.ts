@@ -77,12 +77,18 @@ export interface SenderFacts {
    * never a hard tier decision. null when off or the sender has no engagement.
    *
    * `propagated` distinguishes the two kinds: false = directly measured
-   * (outboundCount > 0); true = an inferred cold-start prior from the sender's
-   * organization (outboundCount 0, much softer — rendered with weaker language).
+   * (outboundCount > 0, or a net-negative dismissed-only sender); true = an
+   * inferred cold-start prior from the sender's organization (outboundCount 0,
+   * much softer — rendered with weaker language).
+   *
+   * `dismissCount` is the negative half: how many times the user cleared this
+   * sender's mail without engaging. A sender with outboundCount 0 and a
+   * meaningful dismissCount is a measured "low importance" signal.
    */
   engagement: {
     importance: number;
     outboundCount: number;
+    dismissCount?: number;
     propagated: boolean;
   } | null;
 }
@@ -90,15 +96,19 @@ export interface SenderFacts {
 /**
  * Which flavour of engagement grounding a decision used, for rollout
  * instrumentation (decision-label ledger). "DIRECT" = measured replies to this
- * sender; "PROPAGATED" = inferred from an engaged org peer; null = none fired.
+ * sender; "PROPAGATED" = inferred from an engaged org peer; "DISMISSED" = the
+ * user keeps clearing this sender without ever replying (measured negative);
+ * null = none fired.
  */
-export type EngagementKind = "DIRECT" | "PROPAGATED";
+export type EngagementKind = "DIRECT" | "PROPAGATED" | "DISMISSED";
 
 /** Classify the engagement fact into its ledger kind. Pure. null when absent. */
 export function engagementKindOf(facts: SenderFacts | null | undefined): EngagementKind | null {
   const e = facts?.engagement;
   if (!e) return null;
-  return e.propagated ? "PROPAGATED" : "DIRECT";
+  if (e.propagated) return "PROPAGATED";
+  if (e.outboundCount === 0 && (e.dismissCount ?? 0) > 0) return "DISMISSED";
+  return "DIRECT";
 }
 
 /**
