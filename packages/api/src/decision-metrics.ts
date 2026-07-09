@@ -79,12 +79,25 @@ export interface DecisionMetrics {
 }
 
 const OVERRIDE_PREFIX = "OVERRIDE:";
+const CONFIRM_PREFIX = "CONFIRM:";
 const TIER_SET: ReadonlySet<string> = new Set(TIERS);
 
 /** The tier a user moved an item to, or null if the outcome isn't a tier move. */
 function overrideTarget(outcome: string | null): Tier | null {
   if (!outcome || !outcome.startsWith(OVERRIDE_PREFIX)) return null;
   const target = outcome.slice(OVERRIDE_PREFIX.length);
+  return TIER_SET.has(target) ? (target as Tier) : null;
+}
+
+/**
+ * The tier a user EXPLICITLY affirmed, or null if the outcome isn't a confirm.
+ * A confirm is the only positive ground truth in the ledger — the counterpart
+ * to an override — so a confirmed row can be counted correct without inferring
+ * anything from silence.
+ */
+function confirmedTier(outcome: string | null): Tier | null {
+  if (!outcome || !outcome.startsWith(CONFIRM_PREFIX)) return null;
+  const target = outcome.slice(CONFIRM_PREFIX.length);
   return TIER_SET.has(target) ? (target as Tier) : null;
 }
 
@@ -201,16 +214,28 @@ export interface TierConfusion {
   shown: number;
   /** Shown this tier, then overridden to a DIFFERENT tier — confirmed wrong. */
   overriddenAway: number;
+  /** Shown this tier and EXPLICITLY confirmed at it — confirmed right (positive ground truth). */
+  confirmedCorrect: number;
   /** Confirmed-error LOWER bound: overriddenAway / shown (unconfirmed rows never counted correct). */
   correctionRate: number | null;
+  /**
+   * Confirmed-error POINT ESTIMATE over rows the user actually labelled:
+   * overriddenAway / (overriddenAway + confirmedCorrect). null when the tier has
+   * zero explicit labels — an honest "unknown", distinct from a 0 over `shown`
+   * (which folds in silence). This is the number worth trending after onboarding
+   * seeds confirmations; correctionRate stays the conservative floor.
+   */
+  confirmedErrorRate: number | null;
   /** Where the user moved shown-this-tier items (confirmed overrides only). */
   movedTo: Partial<Record<Tier, number>>;
 }
 
 export interface ConfusionReport {
   total: number;
-  /** Tier-moving overrides across all tiers — the only ground-truth cells. */
+  /** Tier-moving overrides across all tiers — the negative ground-truth cells. */
   confirmedOverrides: number;
+  /** Explicit same-tier confirmations across all tiers — the positive ground-truth cells. */
+  confirmedCorrect: number;
   perTier: TierConfusion[];
   /** shownTier → revealedTier counts, confirmed overrides only. */
   matrix: Partial<Record<Tier, Partial<Record<Tier, number>>>>;
@@ -297,7 +322,9 @@ function summarizePerUser(rows: readonly LedgerRow[]): UserDecisionSummary[] {
 export function summarizeConfusion(rows: readonly DecisionRow[]): ConfusionReport {
   const shown = new Map<Tier, number>();
   const movedTo = new Map<Tier, Map<Tier, number>>();
+  const confirmed = new Map<Tier, number>();
   let confirmedOverrides = 0;
+  let confirmedCorrectTotal = 0;
 
   for (const row of rows) {
     if (!TIER_SET.has(row.shownTier)) continue; // skip legacy/garbage tiers
@@ -309,6 +336,14 @@ export function summarizeConfusion(rows: readonly DecisionRow[]): ConfusionRepor
       const inner = movedTo.get(from) ?? new Map<Tier, number>();
       inner.set(target, (inner.get(target) ?? 0) + 1);
       movedTo.set(from, inner);
+      continue; // an override is never also a confirm
+    }
+    // Positive ground truth: an explicit confirm of the tier we showed. A
+    // confirm naming a DIFFERENT tier is contradictory (a confirm doesn't move
+    // the tier) and is ignored — counted neither right nor wrong.
+    if (confirmedTier(row.outcome) === from) {
+      confirmed.set(from, (confirmed.get(from) ?? 0) + 1);
+      confirmedCorrectTotal += 1;
     }
   }
 
@@ -316,13 +351,17 @@ export function summarizeConfusion(rows: readonly DecisionRow[]): ConfusionRepor
     const s = shown.get(tier) ?? 0;
     const moved = movedTo.get(tier);
     const overriddenAway = moved ? [...moved.values()].reduce((a, b) => a + b, 0) : 0;
+    const confirmedCorrect = confirmed.get(tier) ?? 0;
+    const labelled = overriddenAway + confirmedCorrect;
     const movedToObj: Partial<Record<Tier, number>> = {};
     if (moved) for (const [t, n] of moved) movedToObj[t] = n;
     return {
       tier,
       shown: s,
       overriddenAway,
+      confirmedCorrect,
       correctionRate: ratio(overriddenAway, s),
+      confirmedErrorRate: ratio(overriddenAway, labelled),
       movedTo: movedToObj,
     };
   });
@@ -334,7 +373,13 @@ export function summarizeConfusion(rows: readonly DecisionRow[]): ConfusionRepor
     matrix[from] = obj;
   }
 
-  return { total: rows.length, confirmedOverrides, perTier, matrix };
+  return {
+    total: rows.length,
+    confirmedOverrides,
+    confirmedCorrect: confirmedCorrectTotal,
+    perTier,
+    matrix,
+  };
 }
 
 /**
