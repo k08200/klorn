@@ -72,7 +72,7 @@ function LoginForm() {
     e.preventDefault();
     startNativeGoogleLogin().catch((err) => {
       console.error("[AUTH] Native Google login failed:", err);
-      toast("Google sign-in could not be completed. Please try again.", "error");
+      toast(t("auth.googleSignInError"), "error");
     });
   };
 
@@ -103,18 +103,18 @@ function LoginForm() {
     if (error) {
       const message =
         error === "google_failed"
-          ? "Google sign-in could not be completed. Please try again."
+          ? t("auth.googleSignInError")
           : error === "google_unverified"
-            ? "Google hasn't finished verifying Klorn for your account yet. Approved testers can retry shortly; otherwise request early access."
+            ? t("auth.googleUnverified")
             : error === "session_expired"
-              ? "Your session expired. Please sign in again."
+              ? t("auth.sessionExpired")
               : error === "invite_only"
-                ? "Klorn is invite-only right now. Request access from the early access page."
+                ? t("auth.inviteOnlyRedirect")
                 : error;
       toast(message, "error");
     }
     if (verified) {
-      toast("Email verified. You can sign in now.", "success");
+      toast(t("auth.emailVerified"), "success");
     }
   }, [searchParams, toast]);
 
@@ -125,7 +125,7 @@ function LoginForm() {
     if (!email || !password) return;
 
     if (mode === "register" && password.length < MIN_PASSWORD_LENGTH) {
-      setPasswordError(`Use at least ${MIN_PASSWORD_LENGTH} characters.`);
+      setPasswordError(t("auth.passwordMinChars", { count: String(MIN_PASSWORD_LENGTH) }));
       return;
     }
 
@@ -133,13 +133,13 @@ function LoginForm() {
     try {
       if (mode === "login") {
         await login(email, password, nextPath);
-        toast("Welcome back.", "success");
+        toast(t("auth.welcomeBack"), "success");
       } else {
         await register(email, password, name || undefined, nextPath);
-        toast("Account created.", "success");
+        toast(t("auth.accountCreated"), "success");
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Something went wrong.";
+      const msg = err instanceof Error ? err.message : t("auth.genericError");
       const match = msg.match(/API \d+: (.+)/);
       const parsed = match
         ? (() => {
@@ -187,8 +187,7 @@ function LoginForm() {
     >
       {nextPath !== "/inbox" && (
         <div className="mb-4 rounded-md border border-amber-300/40 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100">
-          Sign in to continue to{" "}
-          <span className="font-medium text-amber-50">{returnDestinationLabel(nextPath)}</span>.
+          {t("auth.signInToContinue", { destination: returnDestinationLabel(nextPath, t) })}
         </div>
       )}
 
@@ -232,14 +231,8 @@ function LoginForm() {
           {/* Marketing/doctrine copy is landing-page context — hide it on the app
               (mobile) for a clean login; keep it on desktop. */}
           <div className="mt-3 hidden space-y-2 text-center text-[11px] leading-5 text-stone-400 md:block">
-            <p>
-              Free during the private beta. Google flags unverified apps with the restricted Gmail
-              scope until CASA review clears — standard for every Gmail integration.
-            </p>
-            <p>
-              What we don’t do: send mail without a click-through receipt. Every send, permanent
-              delete, and external forward is hash-bound and verifiable on read.
-            </p>
+            <p>{t("auth.betaScope")}</p>
+            <p>{t("auth.noSilentActions")}</p>
             <p>
               <a
                 href="https://github.com/k08200/klorn/blob/main/docs/doctrine/deterministic-floor.md"
@@ -247,9 +240,9 @@ function LoginForm() {
                 rel="noopener noreferrer"
                 className="underline decoration-stone-600 underline-offset-2 hover:text-amber-200 hover:decoration-amber-300"
               >
-                Read the doctrine before the login flow →
+                {t("auth.readDoctrine")}
               </a>
-              <span className="ml-2 text-stone-500">Open source · AGPLv3 · v0.3.0</span>
+              <span className="ml-2 text-stone-500">{t("auth.openSourceVersion")}</span>
             </p>
           </div>
         </>
@@ -266,7 +259,7 @@ function LoginForm() {
       {signupOpen && (
         <div
           role="group"
-          aria-label="Sign in or create an account"
+          aria-label={t("auth.formGroupLabel")}
           className="mb-5 grid grid-cols-2 rounded-md border border-stone-700/70 bg-black/20 p-1"
         >
           <button
@@ -432,19 +425,19 @@ function safeNextPath(value: string | null): string {
   return value;
 }
 
-function returnDestinationLabel(path: string): string {
+function returnDestinationLabel(path: string, t: (key: string) => string): string {
   const cleanPath = path.split("?")[0] || path;
-  if (cleanPath === "/inbox") return "Decision queue";
-  if (cleanPath === "/email" || cleanPath.startsWith("/email/")) return "Mail";
-  if (cleanPath === "/calendar") return "Calendar";
-  if (cleanPath === "/briefing") return "Briefing";
-  if (cleanPath === "/settings") return "Settings";
-  if (cleanPath.startsWith("/settings/memory")) return "Memory settings";
-  if (cleanPath.startsWith("/settings/usage")) return "Usage settings";
-  if (cleanPath.startsWith("/settings/status")) return "System status";
-  if (cleanPath.startsWith("/settings/email-feedback")) return "Mail feedback";
-  if (cleanPath === "/billing") return "Plan and billing";
-  if (cleanPath === "/files") return "Files";
-  if (cleanPath === "/admin" || cleanPath.startsWith("/admin/")) return "Admin";
+  if (cleanPath === "/inbox") return t("nav.decisionQueue");
+  if (cleanPath === "/email" || cleanPath.startsWith("/email/")) return t("nav.mail");
+  if (cleanPath === "/calendar") return t("nav.calendar");
+  if (cleanPath === "/briefing") return t("nav.briefing");
+  if (cleanPath === "/settings") return t("settings.title");
+  if (cleanPath.startsWith("/settings/memory")) return t("auth.destMemory");
+  if (cleanPath.startsWith("/settings/usage")) return t("auth.destUsage");
+  if (cleanPath.startsWith("/settings/status")) return t("auth.destStatus");
+  if (cleanPath.startsWith("/settings/email-feedback")) return t("auth.destFeedback");
+  if (cleanPath === "/billing") return t("nav.billing");
+  if (cleanPath === "/files") return t("auth.destFiles");
+  if (cleanPath === "/admin" || cleanPath.startsWith("/admin/")) return t("nav.admin");
   return path;
 }
