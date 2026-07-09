@@ -243,6 +243,12 @@ func runSelfChecks() async -> Bool {
           && ws?.query?.contains("type=desktop") == true
           && ws?.query?.contains("token=abc.def") == true)
 
+    print("Accessibility:")
+    check("reduce motion disables the panel morph",
+          !TopBarController.shouldAnimateFrame(reduceMotion: true))
+    check("normal motion keeps the panel morph",
+          TopBarController.shouldAnimateFrame(reduceMotion: false))
+
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0
 }
