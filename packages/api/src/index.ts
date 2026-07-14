@@ -1,12 +1,20 @@
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import type { PrismaClient } from "@prisma/client";
 import Fastify from "fastify";
-import { ensureDemoUser, getUserId, requireAdmin, requireAuth } from "./auth.js";
+import {
+  ensureDemoUser,
+  getUserId,
+  requireAdmin,
+  requireAuth,
+  revokeDemoAccessIfDisabled,
+} from "./auth.js";
 import { startBackgroundAgent } from "./background.js";
 import { briefingRoutes } from "./briefing.js";
 import { db, prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
+import { handleError } from "./error-handler.js";
 import { attachPerfMonitor } from "./perf-monitor.js";
 import { adminRoutes } from "./routes/admin.js";
 import { authRoutes } from "./routes/auth.js";
@@ -73,6 +81,17 @@ const app = Fastify({
 
 // Attach per-request performance tracking (p50/p95/p99 per route)
 attachPerfMonitor(app);
+
+// Global error handler: never reflect a 5xx's raw message to the client
+// (Fastify's default does). 4xx pass through; 5xx are logged + generic.
+app.setErrorHandler(handleError);
+
+// Security response headers (X-Content-Type-Options: nosniff, HSTS,
+// Referrer-Policy, frameguard, etc.). CSP is disabled: this is a JSON API plus
+// a couple of static HTML responses, not an app origin that needs a content
+// policy — the Next.js web app sets its own CSP. Registered before cors so the
+// headers apply to every response.
+await app.register(helmet, { contentSecurityPolicy: false });
 
 // First-party surfaces that call the API from a browser. Always allowed —
 // independent of CORS_ORIGINS — so the public marketing site's login-free
@@ -409,9 +428,19 @@ try {
     baseDelayMs: 500,
   });
 
-  // Ensure demo user exists for unauthenticated access
+  // Ensure demo user exists for unauthenticated access (no-op unless demo
+  // access is explicitly enabled in a non-prod environment).
   await withDbRetry(() => ensureDemoUser(), {
     label: "startup.ensure_demo_user",
+    maxAttempts: 8,
+    baseDelayMs: 500,
+  });
+
+  // In prod, retroactively revoke any demo-user session/JWT seeded by an
+  // earlier build (the seeding gate stops new seeds but can't reach a row
+  // already in the DB). No-op once revoked.
+  await withDbRetry(() => revokeDemoAccessIfDisabled(), {
+    label: "startup.revoke_demo_access",
     maxAttempts: 8,
     baseDelayMs: 500,
   });

@@ -174,4 +174,39 @@ describe("skills routes", () => {
     expect(res.json().prompt).toBe("Say hello to Alice");
     await app.close();
   });
+
+  it("rejects a prompt over the length cap with 400", async () => {
+    const { MAX_SKILL_PROMPT_LENGTH } = await import("../skill-render.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/skills",
+      headers: auth(),
+      payload: { name: "Huge", prompt: "a".repeat(MAX_SKILL_PROMPT_LENGTH + 1) },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/at most/i);
+    await app.close();
+  });
+
+  it("treats a regex-metacharacter variable key as a literal on execute (ReDoS-safe)", async () => {
+    const app = await buildApp();
+    await app.inject({
+      method: "POST",
+      url: "/api/skills",
+      headers: auth(),
+      payload: { name: "Redos", prompt: "x {{(a+)+}} y" },
+    });
+    const start = Date.now();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/skills/skill_redos/execute",
+      headers: auth(),
+      payload: { variables: { "(a+)+": "Z" } },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().prompt).toBe("x Z y");
+    expect(Date.now() - start).toBeLessThan(1000);
+    await app.close();
+  });
 });

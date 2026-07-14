@@ -186,12 +186,12 @@ func runSelfChecks() async -> Bool {
     check("wakes on sync", RealtimeClient.shouldWake(#"{"type":"sync"}"#))
     check("ignores connection chatter", !RealtimeClient.shouldWake(#"{"type":"client_joined"}"#))
     check("ignores non-JSON", !RealtimeClient.shouldWake("pong"))
-    let ws = RealtimeClient.wsURL(token: "abc.def")
+    let ws = RealtimeClient.wsURL()
     let wantScheme = Config.apiBaseURL.hasPrefix("https") ? "wss" : "ws"
-    check("ws url = scheme+/ws+desktop+token",
+    check("ws url = scheme+/ws+desktop, no token in URL",
           ws?.scheme == wantScheme && ws?.path == "/ws"
           && ws?.query?.contains("type=desktop") == true
-          && ws?.query?.contains("token=abc.def") == true)
+          && ws?.query?.contains("token=") != true)
 
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0

@@ -5,6 +5,7 @@ import {
   getUserId,
   hashPassword,
   isAdminEmail,
+  isDemoAccessEnabled,
   registerDevice,
   removeDeviceSession,
   requireAuth,
@@ -354,6 +355,15 @@ export function authRoutes(app: FastifyInstance) {
 
       const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
       if (!user?.passwordHash) {
+        return reply.code(401).send({ error: "Invalid email or password" });
+      }
+
+      // The seeded demo account has a public, fixed password ("demo"). Outside an
+      // explicitly demo-enabled non-prod environment it must never be a login
+      // target — treat it as invalid credentials (no existence oracle). Defense
+      // in depth alongside ensureDemoUser no longer seeding it in prod: this also
+      // closes any demo row left over from an earlier build.
+      if (isDemoUser(user.id) && !isDemoAccessEnabled()) {
         return reply.code(401).send({ error: "Invalid email or password" });
       }
 
@@ -963,6 +973,13 @@ export function authRoutes(app: FastifyInstance) {
           label: "oauth.find_user_by_email",
         });
         const isNewGoogleUser = !user;
+        // Defense in depth: never let Google login resolve INTO the shared demo
+        // account (a legacy demo-user row left from before the demo lockout
+        // shipped). The password /login guard only covers its own path; the demo
+        // email is on the operator's own domain, so this is belt-and-suspenders.
+        if (user && isDemoUser(user.id) && !isDemoAccessEnabled()) {
+          return reply.redirect(`${webUrl}/login?error=google_failed`);
+        }
         if (!user) {
           // Beta gate: when BETA_GATE_ENABLED=true, the Google sign-in path
           // can only create a new user if they have an APPROVED waitlist

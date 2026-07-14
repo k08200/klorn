@@ -10,7 +10,12 @@
 
 import type { Server } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
-import { isDeviceSessionValid, sessionRevokedForToken, verifyToken } from "./auth.js";
+import {
+  isDemoAccessEnabled,
+  isDeviceSessionValid,
+  sessionRevokedForToken,
+  verifyToken,
+} from "./auth.js";
 
 interface WsClient {
   ws: WebSocket;
@@ -30,17 +35,54 @@ const clients: Map<string, WsClient> = new Map();
 
 let wss: WebSocketServer | null = null;
 
+/** Subprotocol marker that carries the auth JWT out of the URL. The client
+ *  offers ["klorn-ws-v1", <jwt>] as its Sec-WebSocket-Protocol; the server
+ *  selects only the marker back and reads the JWT from the value after it. */
+export const WS_AUTH_SUBPROTOCOL = "klorn-ws-v1";
+
+/**
+ * Pull the auth JWT from a Sec-WebSocket-Protocol header when the client used
+ * the subprotocol relay (token as the value right after the marker). Returns
+ * null if the marker is absent, so the caller can fall back to the legacy
+ * ?token= query param. Keeping the JWT in a header rather than the URL stops
+ * the long-lived credential from landing in proxy/LB access logs.
+ */
+export function extractWsSubprotocolToken(header: string | string[] | undefined): string | null {
+  if (!header) return null;
+  const parts = (Array.isArray(header) ? header.join(",") : header)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const idx = parts.indexOf(WS_AUTH_SUBPROTOCOL);
+  if (idx === -1) return null;
+  return parts[idx + 1] ?? null;
+}
+
 /** Initialize WebSocket server attached to existing HTTP server */
 export function initWebSocket(server: Server): WebSocketServer {
-  wss = new WebSocketServer({ server, path: "/ws" });
+  wss = new WebSocketServer({
+    server,
+    path: "/ws",
+    // Accept the auth marker subprotocol so clients can carry the JWT in the
+    // Sec-WebSocket-Protocol header instead of the URL. Only ever select the
+    // marker back — never echo the token. Clients that offer no subprotocol
+    // (legacy query-param path) negotiate none and still connect.
+    handleProtocols: (protocols: Set<string>) =>
+      protocols.has(WS_AUTH_SUBPROTOCOL) ? WS_AUTH_SUBPROTOCOL : false,
+  });
 
   wss.on("connection", async (ws, req) => {
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
     const clientType = (url.searchParams.get("type") || "web") as WsClient["type"];
 
-    // Authenticate: prefer token param, fall back to userId for backward compat (demo only)
+    // Authenticate. Prefer the JWT from the Sec-WebSocket-Protocol subprotocol
+    // (keeps the credential out of the URL and access logs); fall back to the
+    // ?token= query param for native clients not yet migrated to the relay, and
+    // finally to userId for the demo-only backward-compat path.
     let userId: string;
-    const token = url.searchParams.get("token");
+    const token =
+      extractWsSubprotocolToken(req.headers["sec-websocket-protocol"]) ||
+      url.searchParams.get("token");
     if (token) {
       try {
         const payload = verifyToken(token);
@@ -66,11 +108,10 @@ export function initWebSocket(server: Server): WebSocketServer {
         return;
       }
     } else {
-      // Unauthenticated demo-user is OFF in production. Mirror getUserId's gate:
-      // NODE_ENV !== "production" AND ENABLE_DEMO_USER === "true". Without both,
-      // a tokenless client must not connect (closes the prod anon-WS gap).
-      const demoAllowed =
-        process.env.NODE_ENV !== "production" && process.env.ENABLE_DEMO_USER === "true";
+      // Unauthenticated demo-user is OFF in production. Same single predicate as
+      // every HTTP demo path (getUserId, ensureDemoUser, /login) so the gates
+      // can't drift. Without it a tokenless client must not connect.
+      const demoAllowed = isDemoAccessEnabled();
       const rawUserId = url.searchParams.get("userId");
       if (!demoAllowed || (rawUserId && rawUserId !== "demo-user")) {
         ws.close(4001, "Authentication required — use token parameter");
