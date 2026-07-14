@@ -544,6 +544,19 @@ try {
       .catch((_err) => {});
   }
 
+  // Start log retention sweep (6h cycle; no-op + disabled heartbeat report
+  // unless LOG_RETENTION_ENABLED is set)
+  if (!BG_DISABLED) {
+    import("./log-retention.js")
+      .then(({ startLogRetentionScheduler }) => {
+        startLogRetentionScheduler();
+      })
+      .catch((err) => {
+        console.error("[STARTUP] log-retention failed to start:", err);
+        captureError(err, { tags: { context: "startup:log-retention" } });
+      });
+  }
+
   // Self-ping to prevent Render free tier from sleeping after 15 min inactivity
   const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
   if (RENDER_URL) {
