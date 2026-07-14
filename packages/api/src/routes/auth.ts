@@ -11,6 +11,7 @@ import {
   signToken,
   verifyToken,
 } from "../auth.js";
+import { INIT_SYNC_EMAIL_COUNT } from "../config.js";
 import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
@@ -1666,10 +1667,12 @@ export function authRoutes(app: FastifyInstance) {
       // Gmail contact sync failed — skip
     }
 
-    // 3. Sync emails from Gmail (latest 30)
+    // 3. Sync emails from Gmail (latest INIT_SYNC_EMAIL_COUNT). This first-sync
+    // snapshot is what the onboarding "review your classifications" step shows,
+    // so the count doubles as the onboarding sample size (env-tunable).
     try {
       const { syncEmails, summarizeUnsummarizedEmails } = await import("../email-sync.js");
-      const emailResult = await syncEmails(userId, 30);
+      const emailResult = await syncEmails(userId, INIT_SYNC_EMAIL_COUNT);
       results.emails = emailResult.newCount;
       // Summarize in the background so freshly-synced mail doesn't sit as
       // "Klorn has not analyzed this email yet" until the user finds the manual

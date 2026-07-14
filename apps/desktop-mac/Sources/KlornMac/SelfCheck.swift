@@ -248,6 +248,20 @@ func runSelfChecks() async -> Bool {
           !TopBarController.shouldAnimateFrame(reduceMotion: true))
     check("normal motion keeps the panel morph",
           TopBarController.shouldAnimateFrame(reduceMotion: false))
+    check("reduce transparency → opaque panel",
+          Theme.panelOpacity(reduceTransparency: true) == 1.0)
+    check("normal transparency keeps the translucent panel",
+          Theme.panelOpacity(reduceTransparency: false) == Theme.panelDefaultOpacity)
+    check("push announcement (singular)",
+          TopBarController.pushAnnouncement(newCount: 1) == "1 new message needs you")
+    check("push announcement (plural)",
+          TopBarController.pushAnnouncement(newCount: 3) == "3 new messages need you")
+
+    print("Settings:")
+    check("notifications default ON when unset", AppSettings.resolveNotifications(nil))
+    check("notifications honor stored false", !AppSettings.resolveNotifications(false))
+    check("notifications honor stored true", AppSettings.resolveNotifications(true))
+    check("notifications ignore non-bool", AppSettings.resolveNotifications("nope"))
 
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0

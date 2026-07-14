@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { useT } from "../lib/i18n";
 
 interface AuthScreenProps {
   eyebrow: string;
@@ -21,17 +22,24 @@ export default function AuthScreen({
   title,
   description,
   children,
-  asideTitle = "Keep only the work that needs a decision",
-  asideBody = "Klorn reads mail, calendar, and task signals, then turns them into cards you can review before anything runs.",
-  asideItems = [
-    { label: "Signal", value: "Detect meaningful changes in mail and calendar" },
-    { label: "Context", value: "Connect people, deadlines, and projects" },
-    { label: "Approval", value: "Review evidence before external execution" },
-  ],
+  asideTitle,
+  asideBody,
+  asideItems,
   footer,
   navCtaHref = "/early-access",
-  navCtaLabel = "Early access",
+  navCtaLabel,
 }: AuthScreenProps) {
+  const { t } = useT();
+  // Callers may override the marketing aside (e.g. early-access); otherwise
+  // fall back to the translated defaults so the panel matches the app locale.
+  const resolvedAsideTitle = asideTitle ?? t("auth.asideTitle");
+  const resolvedAsideBody = asideBody ?? t("auth.asideBody");
+  const resolvedAsideItems = asideItems ?? [
+    { label: t("auth.stepSignal"), value: t("auth.stepSignalDesc") },
+    { label: t("auth.stepContext"), value: t("auth.stepContextDesc") },
+    { label: t("auth.stepApproval"), value: t("auth.stepApprovalDesc") },
+  ];
+  const resolvedNavCtaLabel = navCtaLabel ?? t("nav.earlyAccess");
   return (
     <main id="main" className="min-h-screen overflow-x-hidden bg-surface-canvas text-stone-50">
       <nav className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-6">
@@ -46,13 +54,13 @@ export default function AuthScreen({
             className="inline-flex min-h-11 items-center whitespace-nowrap text-stone-400 transition hover:text-stone-100"
             href="/"
           >
-            Home
+            {t("nav.home")}
           </Link>
           <Link
             className="inline-flex min-h-11 items-center whitespace-nowrap rounded-md border border-stone-700 px-3 py-2 text-stone-300 transition hover:border-stone-500 hover:text-stone-100"
             href={navCtaHref}
           >
-            {navCtaLabel}
+            {resolvedNavCtaLabel}
           </Link>
         </div>
       </nav>
@@ -61,15 +69,15 @@ export default function AuthScreen({
         <aside className="hidden lg:block">
           <div className="max-w-xl">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
-              Decision queue
+              {t("nav.decisionQueue")}
             </p>
             <h2 className="mt-4 text-5xl font-semibold leading-[1.02] tracking-tight text-white">
-              {asideTitle}
+              {resolvedAsideTitle}
             </h2>
-            <p className="mt-5 max-w-lg text-base leading-7 text-stone-400">{asideBody}</p>
+            <p className="mt-5 max-w-lg text-base leading-7 text-stone-400">{resolvedAsideBody}</p>
           </div>
           <div className="mt-9 max-w-xl overflow-hidden rounded-lg border border-stone-800 bg-surface-panel">
-            {asideItems.map((item, index) => (
+            {resolvedAsideItems.map((item, index) => (
               <div
                 key={item.label}
                 className="grid grid-cols-[72px_1fr] gap-4 border-b border-stone-800 px-4 py-4 last:border-b-0"
@@ -100,10 +108,10 @@ export default function AuthScreen({
               above the form so phone visitors still get context. */}
           <div className="mb-5 overflow-hidden rounded-lg border border-stone-800 bg-surface-panel lg:hidden">
             <p className="border-b border-stone-800 px-4 py-3 text-sm font-medium text-stone-200">
-              {asideTitle}
+              {resolvedAsideTitle}
             </p>
             <ul className="divide-y divide-stone-800">
-              {asideItems.map((item) => (
+              {resolvedAsideItems.map((item) => (
                 <li key={item.label} className="flex gap-3 px-4 py-2.5">
                   <span className="shrink-0 text-xs font-medium text-stone-400">{item.label}</span>
                   <span className="text-xs leading-5 text-stone-300">{item.value}</span>

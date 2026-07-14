@@ -415,6 +415,13 @@ model AutomationConfig {
   // intrusive delivery channel Klorn has — nobody gets dialed without
   // explicitly flipping this on (and PHONE_ESCALATION_ENABLED=true globally).
   phoneEscalationEnabled Boolean  @default(false)
+  // Per-user opt-in for rule-based proactive actions (reminders/notifications
+  // only — no floor actions, no LLM cost). Complements the global
+  // PROACTIVE_ACTIONS_ENABLED env flag; the scheduler runs proactive actions
+  // when EITHER is on. Default off so a new install stays classify-only. The
+  // settings UI toggle + scheduler already referenced this field before the
+  // column existed, so a PATCH carrying it used to 500.
+  proactiveActions       Boolean  @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 }

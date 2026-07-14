@@ -39,6 +39,7 @@ import { formatUrgentEmailBody, senderName } from "./notification-format.js";
 import { escalateUnackedPush } from "./phone-escalation.js";
 import { runProactiveActions } from "./proactive-actions.js";
 import { sendPushNotification } from "./push.js";
+import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
 import { sendSms } from "./sms.js";
 import { isEntitled, planHasFeature } from "./stripe.js";
@@ -536,6 +537,7 @@ export async function ensureUrgentEmailNotification(
 }
 
 async function runAutomations() {
+  recordSchedulerTick("automation");
   // Skip if this process is still running the previous tick (see schedulerInFlight).
   if (schedulerInFlight) return;
   schedulerInFlight = true;
@@ -605,6 +607,8 @@ async function runAutomations() {
             { emailAutoClassify: true },
             { autonomousAgent: true },
             { phoneEscalationEnabled: true },
+            // A user who enabled ONLY proactive actions still needs a tick.
+            { proactiveActions: true },
           ],
         },
         take: BATCH_SIZE,
@@ -1331,8 +1335,8 @@ async function runUserCycle(
 
   // --- Proactive Actions (rule-based, no LLM cost) ---
   // Enabled either via global env flag (PROACTIVE_ACTIONS_ENABLED=true for all users)
-  // or per-user toggle (proactiveActions: true in automationConfig JSON field).
-  const perUserProactive = (config as unknown as Record<string, unknown>).proactiveActions === true;
+  // or the per-user AutomationConfig.proactiveActions toggle.
+  const perUserProactive = config.proactiveActions === true;
   if (PROACTIVE_ACTIONS_ENABLED || perUserProactive) {
     runProactiveActions(config.userId).catch((err) => {
       console.error(`[PROACTIVE] Failed for ${config.userId}:`, err);
@@ -1385,6 +1389,7 @@ export function startAutomationScheduler() {
   console.log(
     `[AUTOMATION] Scheduler started (checking every 60s, dbHeartbeat=${DB_HEARTBEAT_ENABLED ? "on" : "off"}, proactive=${PROACTIVE_ACTIONS_ENABLED ? "on" : "off"})`,
   );
+  registerScheduler("automation", CHECK_INTERVAL_MS);
 
   // Run once on start
   runAutomations();

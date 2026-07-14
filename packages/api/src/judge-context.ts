@@ -378,10 +378,19 @@ async function fetchInteractionFact(
 }
 
 /**
+ * Minimum dismisses (with zero outbound engagement) before a dismissed-only
+ * sender grounds a negative importance fact. Below this a stray dismiss says
+ * nothing; at or above it the pattern is real. Softer than the feedback
+ * adaptor's SILENT-forcing threshold (4) — this only nudges senderTrust.
+ */
+const ENGAGEMENT_DISMISS_FACT_THRESHOLD = 3;
+
+/**
  * Learned contact-engagement from the interaction graph — how much the user
- * actually engages with this sender (measured outbound replies/sends). Flag-gated
- * (CONTACT_ENGAGEMENT_IN_JUDGE, default off); a SOFT grounding fact for the LLM's
- * senderTrust, never a hard tier decision. Cache-only read (never rebuilds).
+ * actually engages with this sender (measured outbound replies/sends, minus
+ * dismisses). Flag-gated (CONTACT_ENGAGEMENT_IN_JUDGE, default off); a SOFT
+ * grounding fact for the LLM's senderTrust, never a hard tier decision.
+ * Cache-only read (never rebuilds).
  */
 async function fetchLearnedImportanceFact(
   userId: string,
@@ -399,8 +408,22 @@ async function fetchLearnedImportanceFact(
     // Direct, measured engagement — the strong signal — always wins.
     const node = graph.nodes.find((n) => nodeMatchesEmail(n, lower));
     const outbound = node?.outboundCount ?? 0;
+    const dismiss = node?.dismissCount ?? 0;
     if (node && node.learnedImportance != null && outbound > 0) {
-      return { importance: node.learnedImportance, outboundCount: outbound, propagated: false };
+      return {
+        importance: node.learnedImportance,
+        outboundCount: outbound,
+        dismissCount: dismiss,
+        propagated: false,
+      };
+    }
+
+    // Measured negative: the user keeps clearing this sender without ever
+    // engaging back. A dismissed-only sender (outbound 0) with enough dismisses
+    // is a real low-importance signal — surface it so the judge can lower
+    // senderTrust. Thresholded so a single stray dismiss doesn't ground anything.
+    if (outbound === 0 && dismiss >= ENGAGEMENT_DISMISS_FACT_THRESHOLD) {
+      return { importance: 0, outboundCount: 0, dismissCount: dismiss, propagated: false };
     }
 
     // Cold-start: no direct engagement, but the user engages with this sender's
