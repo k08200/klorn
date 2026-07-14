@@ -89,7 +89,9 @@ export async function sendTelegramForPush(
       });
       return "failed";
     }
-    console.log(`[TELEGRAM] Sent to linked chat for ${userId} (${category}): "${payload.title}"`);
+    // Category only — payload.title carries the sender's identity (PII) and must
+    // not reach stdout/log drains.
+    console.log(`[TELEGRAM] Sent to linked chat for ${userId} (${category})`);
     return "sent";
   } catch (err) {
     console.warn(`[TELEGRAM] Send error for ${userId} (${category}):`, err);

@@ -201,6 +201,7 @@ function resetStores() {
   delete process.env.BETA_GATE_ENABLED;
   delete process.env.BETA_AUTO_PRO_ENABLED;
   delete process.env.BETA_AUTO_PRO_LIMIT;
+  delete process.env.ENABLE_DEMO_USER;
 }
 
 /** Register a user via the route and return the JWT token. */
@@ -754,6 +755,57 @@ describe("POST /api/auth/login", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().user.email).toBe("login@example.com");
+    await app.close();
+  });
+});
+
+// ── Demo account lockout (public fixed-credential auth bypass) ─────
+// The seeded demo-user (demo@klorn.ai / "demo") must not be a login target
+// unless demo access is explicitly enabled in a non-prod environment.
+describe("POST /api/auth/login — demo account lockout", () => {
+  beforeEach(resetStores);
+
+  async function seedDemoUser() {
+    // Mirror ensureDemoUser's seeded row: fixed id/email + bcrypt("demo").
+    const { hashPassword } = await import("../auth.js");
+    userStore.set("demo-user", {
+      id: "demo-user",
+      email: "demo@klorn.ai",
+      passwordHash: await hashPassword("demo"),
+      name: "Demo User",
+      plan: "FREE",
+      role: "USER",
+    });
+    userByEmail.set("demo@klorn.ai", "demo-user");
+  }
+
+  it("rejects demo@klorn.ai/demo with a generic 401 when demo access is disabled", async () => {
+    // ENABLE_DEMO_USER unset (resetStores) → disabled. This is the prod default
+    // and the exact public-credential exploit that must be closed.
+    await seedDemoUser();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "demo@klorn.ai", password: "demo" },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error).toBe("Invalid email or password");
+    await app.close();
+  });
+
+  it("allows the demo login only when ENABLE_DEMO_USER=true in a non-prod env", async () => {
+    // vitest runs with NODE_ENV=test (≠ production), so the opt-in flag is the
+    // only remaining gate here.
+    process.env.ENABLE_DEMO_USER = "true";
+    await seedDemoUser();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "demo@klorn.ai", password: "demo" },
+    });
+    expect(res.statusCode).toBe(200);
     await app.close();
   });
 });

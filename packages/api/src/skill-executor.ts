@@ -6,6 +6,7 @@
  */
 
 import { prisma } from "./db.js";
+import { renderSkillTemplate } from "./skill-render.js";
 
 export const SKILL_TOOLS = [
   {
@@ -90,12 +91,7 @@ export async function executeSkill(
     return { error: `Skill "${skillName}" not found. Use list_skills to see available skills.` };
   }
 
-  let prompt = match.prompt;
-  if (variables) {
-    for (const [k, v] of Object.entries(variables)) {
-      prompt = prompt.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v);
-    }
-  }
+  const prompt = renderSkillTemplate(match.prompt, variables);
 
   return { prompt, skillName: match.name };
 }
