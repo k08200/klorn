@@ -16,6 +16,11 @@ import { AGENT_CHECK_INTERVAL_MS, AGENT_IDLE_THRESHOLD_MS } from "./config.js";
 import { db, prisma } from "./db.js";
 import { recipientFromToolArgs, recordFeedback } from "./feedback.js";
 import { openai } from "./openai.js";
+import {
+  markSchedulerDisabled,
+  recordSchedulerTick,
+  registerScheduler,
+} from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
 import { planHasFeature } from "./stripe.js";
 
@@ -133,6 +138,7 @@ async function expireStalePendingActions() {
  * advisory lock so only one dyno runs the loop per tick under N>1 dynos.
  */
 async function runAutonomousAgent() {
+  recordSchedulerTick("autonomous-agent");
   if (agentTickInFlight) {
     console.log("[AGENT] Previous tick still in flight — skipping this tick");
     return;
@@ -266,10 +272,14 @@ export function startAutonomousAgent() {
 
   if (!openai) {
     console.log("[AGENT] Autonomous agent disabled — no LLM configured");
+    // Off by design (self-host without an LLM) — report it as disabled so
+    // the scheduler health check doesn't page about a loop that should not run.
+    markSchedulerDisabled("autonomous-agent");
     return;
   }
 
   console.log("[AGENT] Autonomous agent started (checking every 60s)");
+  registerScheduler("autonomous-agent", CHECK_INTERVAL_MS);
 
   // First run after 30 seconds. Track the handle so stop() can cancel it
   // during the boot window (otherwise a deferred tick fires after shutdown).

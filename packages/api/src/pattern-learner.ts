@@ -17,6 +17,7 @@ import { db, prisma } from "./db.js";
 import { runFeedbackAdaptationForAllUsers } from "./feedback-adaptor.js";
 import { buildInteractionGraphsForAllUsers } from "./interaction-graph.js";
 import { remember } from "./memory.js";
+import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { detectSkillsForAllUsers } from "./skill-recorder.js";
 import { planHasFeature } from "./stripe.js";
 
@@ -529,6 +530,7 @@ export function startPatternLearner() {
   if (patternIntervalId) return;
 
   console.log("[PATTERN] Pattern learner started (6h interval)");
+  registerScheduler("pattern-learner", PATTERN_INTERVAL_MS);
 
   // Run first analysis after 5 minutes (let server warm up). Track the handle
   // so stop() can cancel it during the boot window — otherwise a deferred
@@ -558,6 +560,7 @@ export function stopPatternLearner() {
 }
 
 async function runPatternAnalysisForAllUsers() {
+  recordSchedulerTick("pattern-learner");
   try {
     // Find users with autonomous agent enabled
     const configs = await prisma.automationConfig.findMany({
