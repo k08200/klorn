@@ -7,7 +7,12 @@
  *   2. Deploy — new writes are already v2 under the new key; old rows still
  *      decrypt via the retained old key.
  *   3. Run this sweep with --apply to rewrite every old row to the new key.
- *   4. Once the sweep reports 0 remaining, drop the old key from the ring.
+ *      Re-run until it reports rewritten=0 (skipped rows are ones live traffic
+ *      changed mid-sweep; a re-run picks them up).
+ *   4. Only then drop the retired key. If any v1 rows still exist, KEEP the
+ *      legacy TOKEN_ENCRYPTION_KEY set until this sweep has migrated them all —
+ *      removing it early makes decryptToken fail-closed on every remaining v1
+ *      row (by design), e.g. breaking Gmail sync for those users.
  *
  * Covers every encrypted column: UserToken (Google OAuth), the two linked
  * account tables (calendar/inbox OAuth), and the User BYOK/app-secret columns
@@ -25,60 +30,90 @@
 import { activeKeyId, needsReencryption, reencryptToActiveKey } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 
+interface SweepStats {
+  scanned: number;
+  rewritten: number;
+  skipped: number;
+  failed: number;
+}
+
 interface FieldSweep {
   label: string;
-  scan: (apply: boolean) => Promise<{ scanned: number; rewritten: number; failed: number }>;
+  scan: (apply: boolean) => Promise<SweepStats>;
 }
 
-function summarize(
-  results: Array<{ label: string; scanned: number; rewritten: number; failed: number }>,
-) {
-  let scanned = 0;
-  let rewritten = 0;
-  let failed = 0;
+function summarize(results: Array<{ label: string } & SweepStats>) {
+  const totals: SweepStats = { scanned: 0, rewritten: 0, skipped: 0, failed: 0 };
   for (const r of results) {
-    scanned += r.scanned;
-    rewritten += r.rewritten;
-    failed += r.failed;
+    totals.scanned += r.scanned;
+    totals.rewritten += r.rewritten;
+    totals.skipped += r.skipped;
+    totals.failed += r.failed;
     console.log(
-      `  ${r.label}: scanned=${r.scanned} needing-rewrite=${r.rewritten} failed=${r.failed}`,
+      `  ${r.label}: scanned=${r.scanned} rewritten=${r.rewritten} skipped=${r.skipped} failed=${r.failed}`,
     );
   }
-  console.log(`Totals: scanned=${scanned} rewritten=${rewritten} failed=${failed}`);
-  return { scanned, rewritten, failed };
+  console.log(
+    `Totals: scanned=${totals.scanned} rewritten=${totals.rewritten} skipped=${totals.skipped} failed=${totals.failed}`,
+  );
+  return totals;
 }
 
-/** Build a sweep over one table's encrypted string columns, keyed by row id. */
+/**
+ * Build a sweep over one table's encrypted string columns, keyed by row id.
+ *
+ * `guardedUpdate` must issue a conditional updateMany that only writes when the
+ * originally-read ciphertext still matches (where: { id, ...originalValues }),
+ * returning the affected row count. This closes a lost-update race: live
+ * traffic (e.g. a Gmail OAuth refresh) can rotate a token between our read and
+ * our write, and a blind update would clobber that fresh token with a
+ * re-encryption of the stale value we read. On a 0-row match we skip the row —
+ * it changed under us; a fresh write is already v2-or-newer, and a later run
+ * re-checks it.
+ */
 function tableSweep<Row extends { id: string }>(
   label: string,
   fetch: () => Promise<Row[]>,
   columns: Array<keyof Row>,
-  update: (id: string, data: Record<string, string>) => Promise<unknown>,
+  guardedUpdate: (
+    id: string,
+    data: Record<string, string>,
+    guard: Record<string, string>,
+  ) => Promise<{ count: number }>,
 ): FieldSweep {
   return {
     label,
     scan: async (apply) => {
       const rows = await fetch();
-      let rewritten = 0;
-      let failed = 0;
+      const stats: SweepStats = { scanned: rows.length, rewritten: 0, skipped: 0, failed: 0 };
       for (const row of rows) {
         const data: Record<string, string> = {};
+        const guard: Record<string, string> = {};
         for (const col of columns) {
           const value = row[col] as unknown as string | null | undefined;
           if (!needsReencryption(value)) continue;
           try {
             const next = reencryptToActiveKey(value);
-            if (next && next !== value) data[col as string] = next;
+            if (next && next !== value) {
+              data[col as string] = next;
+              // `value` is truthy here (needsReencryption is false for empty).
+              guard[col as string] = value as string;
+            }
           } catch (err) {
-            failed += 1;
+            stats.failed += 1;
             console.error(`  [${label}] row ${row.id} column ${String(col)} failed:`, err);
           }
         }
         if (Object.keys(data).length === 0) continue;
-        rewritten += 1;
-        if (apply) await update(row.id, data);
+        if (!apply) {
+          stats.rewritten += 1;
+          continue;
+        }
+        const { count } = await guardedUpdate(row.id, data, guard);
+        if (count > 0) stats.rewritten += 1;
+        else stats.skipped += 1; // row changed under us since the read
       }
-      return { scanned: rows.length, rewritten, failed };
+      return stats;
     },
   };
 }
@@ -90,7 +125,7 @@ function buildSweeps(): FieldSweep[] {
       () =>
         prisma.userToken.findMany({ select: { id: true, accessToken: true, refreshToken: true } }),
       ["accessToken", "refreshToken"],
-      (id, data) => prisma.userToken.update({ where: { id }, data }),
+      (id, data, guard) => prisma.userToken.updateMany({ where: { id, ...guard }, data }),
     ),
     tableSweep(
       "LinkedCalendarAccount",
@@ -99,7 +134,8 @@ function buildSweeps(): FieldSweep[] {
           select: { id: true, accessToken: true, refreshToken: true },
         }),
       ["accessToken", "refreshToken"],
-      (id, data) => prisma.linkedCalendarAccount.update({ where: { id }, data }),
+      (id, data, guard) =>
+        prisma.linkedCalendarAccount.updateMany({ where: { id, ...guard }, data }),
     ),
     tableSweep(
       "LinkedInboxAccount",
@@ -108,7 +144,7 @@ function buildSweeps(): FieldSweep[] {
           select: { id: true, accessToken: true, refreshToken: true },
         }),
       ["accessToken", "refreshToken"],
-      (id, data) => prisma.linkedInboxAccount.update({ where: { id }, data }),
+      (id, data, guard) => prisma.linkedInboxAccount.updateMany({ where: { id, ...guard }, data }),
     ),
     tableSweep(
       "User(secrets)",
@@ -123,7 +159,7 @@ function buildSweeps(): FieldSweep[] {
           },
         }),
       ["naverImapPasswordCipher", "githubTokenCipher", "openRouterApiKey", "geminiApiKey"],
-      (id, data) => prisma.user.update({ where: { id }, data }),
+      (id, data, guard) => prisma.user.updateMany({ where: { id, ...guard }, data }),
     ),
   ];
 }
@@ -142,7 +178,7 @@ async function main() {
 
   console.log(`Active key id: ${active}. Mode: ${apply ? "APPLY" : "dry run"}.`);
 
-  const results: Array<{ label: string; scanned: number; rewritten: number; failed: number }> = [];
+  const results: Array<{ label: string } & SweepStats> = [];
   for (const sweep of buildSweeps()) {
     results.push({ label: sweep.label, ...(await sweep.scan(apply)) });
   }
@@ -154,6 +190,9 @@ async function main() {
     console.log("\nDry run. Re-run with --apply to rewrite the rows above.");
   } else {
     console.log(`\nRewrote ${totals.rewritten} row(s) to key "${active}".`);
+    if (totals.skipped > 0) {
+      console.log(`${totals.skipped} row(s) changed under us mid-sweep — re-run to pick them up.`);
+    }
     if (totals.failed > 0) {
       console.log(`${totals.failed} column(s) failed to decrypt and were left as-is.`);
     }
