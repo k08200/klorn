@@ -42,14 +42,31 @@ These are wired but inert until FORCE — setting an unused GUC does nothing.
 
 1. **Prereq (founder)**: a tested Postgres backup + point-in-time restore
    rehearsal on the prod plan. Do not FORCE any table before this exists.
+   Also confirm the app's role is neither a superuser nor `BYPASSRLS` —
+   either makes `FORCE` silently inert (they bypass RLS unconditionally):
+
+   ```sql
+   SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user;
+   -- both must be false, or FORCE will no-op and isolation never engages
+   ```
 2. **Route query sites through the helpers**, one domain at a time: replace
    `prisma.*` calls in a domain's handlers with `withTenant`/`withSystem`.
    Still inert (nothing FORCEd), so each PR is behavior-preserving and testable
    against a real DB in CI.
 3. **FORCE per table**, lowest-traffic first, once that table's query sites all
-   go through a helper. Benchmark p95 (each FORCEd read adds one transaction
-   round-trip) before widening. Roll back a table with
-   `ALTER TABLE t NO FORCE ROW LEVEL SECURITY;` (instant, no data change).
+   go through a helper. Two hard gates before widening:
+   - **Correctness canary (required)**: an integration test per newly-FORCEd
+     table asserting a `withTenant`-scoped query returns the expected rows AND
+     the same query on the global `prisma` client returns 0/empty. This is the
+     trip-wire for a missed call site — once forced, a stray `prisma.*` bulk
+     read/write goes **silently dark** (`findMany`→empty, `updateMany`→
+     `{count:0}`, no error; only single-record `update`/`delete` throw P2025),
+     so a user could lose visibility into their own data with nothing crashing.
+     Catch it in CI, not in production.
+   - **p95 benchmark**: each FORCEd read adds one transaction round-trip.
+
+   Roll back a table instantly with `ALTER TABLE t NO FORCE ROW LEVEL SECURITY;`
+   (no data change).
 4. **Bespoke policies** for the tables this slice skipped: `Message` (scoped by
    `conversationId` → needs a subquery/join policy), `LlmUsageLog` (nullable
    `userId` for system calls), `WebhookEvent` (global idempotency ledger — likely
