@@ -31,6 +31,7 @@ import {
   markGoogleTokenForReconnect,
 } from "../gmail.js";
 import { mapGoogleEventTimes } from "../google-calendar-time.js";
+import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
 import { captureError } from "../sentry.js";
 import { isEntitled, isHardPaywalled, isWebCheckoutAvailable } from "../stripe.js";
 import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
@@ -273,7 +274,9 @@ export function authRoutes(app: FastifyInstance) {
 
       const betaAutoProGrant = await evaluateBetaAutoPro();
 
-      const verifyToken = crypto.randomBytes(32).toString("hex");
+      // Only the hash is stored (one-time-token.ts); the raw token exists
+      // only in the verification email.
+      const { token: rawVerifyToken, tokenHash: verifyTokenHash } = mintOneTimeToken();
       const verifyTokenExp = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
       const user = await prisma.user.create({
@@ -283,7 +286,7 @@ export function authRoutes(app: FastifyInstance) {
           name: normalizedName || normalizedEmail.split("@")[0],
           ...(betaGateEnabled && { plan: "PRO" }),
           ...(betaAutoProGrant ?? {}),
-          verifyToken,
+          verifyToken: verifyTokenHash,
           verifyTokenExp,
         },
       });
@@ -291,7 +294,7 @@ export function authRoutes(app: FastifyInstance) {
       // Send verification email (non-blocking). Never silent: a swallowed
       // failure here strands the user unverified (and so never welcomed), so
       // leave a console signal even though the request still succeeds.
-      sendVerificationEmail(normalizedEmail, verifyToken).catch((err) =>
+      sendVerificationEmail(normalizedEmail, rawVerifyToken).catch((err) =>
         console.error(`[AUTH] verification email failed for ${user.id}:`, err),
       );
 
@@ -1315,15 +1318,17 @@ export function authRoutes(app: FastifyInstance) {
       // Always return success to prevent email enumeration
       if (!user) return reply.send({ success: true });
 
-      const resetToken = crypto.randomBytes(32).toString("hex");
+      // Only the hash is stored (one-time-token.ts); the raw token exists
+      // only in the reset email.
+      const { token: rawResetToken, tokenHash: resetTokenHash } = mintOneTimeToken();
       const resetTokenExp = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
       await prisma.user.update({
         where: { id: user.id },
-        data: { resetToken, resetTokenExp },
+        data: { resetToken: resetTokenHash, resetTokenExp },
       });
 
-      await sendPasswordResetEmail(normalizedEmail, resetToken);
+      await sendPasswordResetEmail(normalizedEmail, rawResetToken);
 
       return reply.send({ success: true });
     },
@@ -1350,9 +1355,11 @@ export function authRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: "Password must be at least 8 characters" });
       }
 
+      // The DB holds only the SHA-256 hash; hash the presented token to look it up.
+      const presentedHash = hashOneTimeToken(token);
       const user = await prisma.user.findFirst({
         where: {
-          resetToken: token,
+          resetToken: presentedHash,
           resetTokenExp: { gte: new Date() },
         },
         select: { id: true },
@@ -1367,7 +1374,7 @@ export function authRoutes(app: FastifyInstance) {
       const updated = await prisma.user.updateMany({
         where: {
           id: user.id,
-          resetToken: token,
+          resetToken: presentedHash,
           resetTokenExp: { gte: new Date() },
         },
         data: {
@@ -1405,9 +1412,11 @@ export function authRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: "Missing verification token" });
       }
 
+      // The DB holds only the SHA-256 hash; hash the presented token to look it up.
+      const presentedHash = hashOneTimeToken(token);
       const user = await prisma.user.findFirst({
         where: {
-          verifyToken: token,
+          verifyToken: presentedHash,
           verifyTokenExp: { gte: new Date() },
         },
         select: { id: true, email: true, name: true },
@@ -1421,7 +1430,7 @@ export function authRoutes(app: FastifyInstance) {
       const updated = await prisma.user.updateMany({
         where: {
           id: user.id,
-          verifyToken: token,
+          verifyToken: presentedHash,
           verifyTokenExp: { gte: new Date() },
         },
         data: {
@@ -1475,15 +1484,17 @@ export function authRoutes(app: FastifyInstance) {
       if (!user) return reply.code(404).send({ error: "User not found" });
       if (user.emailVerified) return reply.send({ success: true, alreadyVerified: true });
 
-      const verifyToken = crypto.randomBytes(32).toString("hex");
+      // Only the hash is stored (one-time-token.ts); the raw token exists
+      // only in the verification email.
+      const { token: rawVerifyToken, tokenHash: verifyTokenHash } = mintOneTimeToken();
       const verifyTokenExp = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
       await prisma.user.update({
         where: { id: user.id },
-        data: { verifyToken, verifyTokenExp },
+        data: { verifyToken: verifyTokenHash, verifyTokenExp },
       });
 
-      await sendVerificationEmail(user.email, verifyToken);
+      await sendVerificationEmail(user.email, rawVerifyToken);
       return reply.send({ success: true });
     },
   );
