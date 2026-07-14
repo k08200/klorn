@@ -22,6 +22,13 @@ final class AppModel {
     /// The AppDelegate wires this to the HUD; if unset, PUSH surfacing is a no-op.
     var onNewPush: (([FirewallItem]) -> Void)?
 
+    /// User preferences (persisted). Observed by the Preferences panel and read
+    /// by the controller before posting an OS banner.
+    let settings = AppSettings()
+
+    /// Drives the Preferences overlay in the full view.
+    var showPreferences = false
+
     // Reading pane (full view): the selected row + its loaded email content.
     private(set) var selectedItemId: String?
     private(set) var openedEmail: EmailDetail?
@@ -196,10 +203,10 @@ final class AppModel {
         Task { await loadQueue() }
     }
 
-    /// Default snooze target: 9am local tomorrow. Pure for testing.
+    /// Default snooze target: 9am local tomorrow. Pure for testing. Delegates to
+    /// `SnoozeOption` so the resurface math lives in one place.
     nonisolated static func tomorrow9am(from now: Date = Date(), calendar: Calendar = .current) -> Date {
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
-        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow) ?? tomorrow
+        SnoozeOption.tomorrow.resurface(from: now, calendar: calendar)
     }
 
     func signOut() {

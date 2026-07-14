@@ -38,6 +38,7 @@ import {
 import { AGENT_MAX_CONTEXT_ITEMS } from "./config.js";
 import { db, prisma } from "./db.js";
 import { isNoReplyAddress } from "./gmail.js";
+import { captureError } from "./sentry.js";
 import { offsetStringFor } from "./time-zone.js";
 import { wrapUntrusted } from "./untrusted.js";
 import { getUserTimeZone } from "./user-timezone.js";
@@ -70,6 +71,24 @@ function formatActionItems(value: unknown): string {
     return value;
   }
   return "";
+}
+
+/**
+ * Surface a degraded context branch. Each query in gatherUserContext is
+ * independently fail-soft, but historically swallowed its error with a bare
+ * `.catch(() => [])` — so a branch failing systematically (e.g. a bad column
+ * after a migration) left the agent reasoning on silently-incomplete context
+ * forever, with zero operator signal. Log every degradation the way the
+ * judge-context siblings do: console first (visible without a Sentry DSN on
+ * self-host / dev), then captureError. Message-only to keep any PII a raw
+ * Prisma error might embed out of the console line.
+ */
+function logContextBranchFailure(branch: string, err: unknown, userId: string): void {
+  console.warn(
+    `[agent-context] ${branch} fetch failed (degrading to empty):`,
+    err instanceof Error ? err.message : String(err),
+  );
+  captureError(err, { tags: { scope: `agent-context.${branch}` }, extra: { userId } });
 }
 
 /** Gather full user context for LLM reasoning. */
@@ -116,33 +135,48 @@ export async function gatherUserContext(userId: string): Promise<string> {
         orderBy: { dueDate: "asc" },
         take: MAX_CONTEXT_ITEMS * 2,
       })
-      .catch(() => []),
+      .catch((err) => {
+        logContextBranchFailure("tasks", err, userId);
+        return [];
+      }),
     prisma.calendarEvent
       .findMany({
         where: { userId, startTime: { gte: now, lte: in7d } },
         orderBy: { startTime: "asc" },
         take: MAX_CONTEXT_ITEMS * 2,
       })
-      .catch(() => []),
+      .catch((err) => {
+        logContextBranchFailure("calendar", err, userId);
+        return [];
+      }),
     prisma.reminder
       .findMany({
         where: { userId, status: "PENDING" },
         orderBy: { remindAt: "asc" },
         take: MAX_CONTEXT_ITEMS * 2,
       })
-      .catch(() => []),
+      .catch((err) => {
+        logContextBranchFailure("reminders", err, userId);
+        return [];
+      }),
     prisma.note
       .findMany({
         where: { userId },
         orderBy: { updatedAt: "desc" },
         take: 5,
       })
-      .catch(() => []),
+      .catch((err) => {
+        logContextBranchFailure("notes", err, userId);
+        return [];
+      }),
     prisma.notification
       .count({
         where: { userId, isRead: false },
       })
-      .catch(() => 0),
+      .catch((err) => {
+        logContextBranchFailure("unreadNotifs", err, userId);
+        return 0;
+      }),
     // Email context: unread from last 24h (long dedup window) OR any email
     // from last 30min regardless of read state. The recent-any-read branch
     // is critical for the approval flow — Gmail auto-marks self-sends and
@@ -168,26 +202,26 @@ export async function gatherUserContext(userId: string): Promise<string> {
           receivedAt: true,
         },
       })
-      .catch(
-        () =>
-          [] as Array<{
-            id: string;
-            gmailId: string;
-            from: string;
-            subject: string;
-            snippet: string;
-            body: string | null;
-            summary: string | null;
-            category: string | null;
-            priority: string;
-            // JSONB after migration 20260519040000; legacy callers can
-            // still pass the JSON-string form because formatActionItems
-            // accepts both.
-            actionItems: unknown;
-            isRead: boolean;
-            receivedAt: Date;
-          }>,
-      ),
+      .catch((err) => {
+        logContextBranchFailure("emails", err, userId);
+        return [] as Array<{
+          id: string;
+          gmailId: string;
+          from: string;
+          subject: string;
+          snippet: string;
+          body: string | null;
+          summary: string | null;
+          category: string | null;
+          priority: string;
+          // JSONB after migration 20260519040000; legacy callers can
+          // still pass the JSON-string form because formatActionItems
+          // accepts both.
+          actionItems: unknown;
+          isRead: boolean;
+          receivedAt: Date;
+        }>;
+      }),
     // Key contacts for cross-domain reasoning (link email sender to contact).
     prisma.contact
       .findMany({
@@ -202,7 +236,10 @@ export async function gatherUserContext(userId: string): Promise<string> {
           tags: true,
         },
       })
-      .catch(() => []),
+      .catch((err) => {
+        logContextBranchFailure("contacts", err, userId);
+        return [];
+      }),
     // Recent agent decisions — continuity across cycles (prevents amnesia).
     db.agentLog
       .findMany({
@@ -214,7 +251,10 @@ export async function gatherUserContext(userId: string): Promise<string> {
         take: 5,
         select: { action: true, summary: true, createdAt: true },
       })
-      .catch(() => []),
+      .catch((err) => {
+        logContextBranchFailure("recentAgentLogs", err, userId);
+        return [];
+      }),
     // Recent user chat messages — what the user is currently working on.
     prisma.message
       .findMany({
@@ -227,8 +267,14 @@ export async function gatherUserContext(userId: string): Promise<string> {
         take: 5,
         select: { content: true, createdAt: true },
       })
-      .catch(() => []),
-    getRecentProposalSuppressions(userId).catch(() => []),
+      .catch((err) => {
+        logContextBranchFailure("recentChatMessages", err, userId);
+        return [];
+      }),
+    getRecentProposalSuppressions(userId).catch((err) => {
+      logContextBranchFailure("proposalSuppressions", err, userId);
+      return [];
+    }),
   ]);
 
   const suppressedTasks = filterSuppressedContextItems(

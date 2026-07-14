@@ -7,9 +7,26 @@ enum Theme {
 
     /// The top bar is always a dark floating surface regardless of system
     /// appearance, so its text uses explicit light tones (not semantic colors).
-    static let panel = Color.black.opacity(0.92)
+    static let panel = Color.black.opacity(panelDefaultOpacity)
+    static let panelDefaultOpacity = 0.92
+
+    /// Panel fill opacity: fully opaque when the user asked to reduce transparency
+    /// (the 8% see-through can drop contrast over a busy backdrop), else the
+    /// translucent default. Pure for testing.
+    static func panelOpacity(reduceTransparency: Bool) -> Double {
+        reduceTransparency ? 1.0 : panelDefaultOpacity
+    }
     static let text = Color.white
     static let textDim = Color.white.opacity(0.55)
+
+    /// Input-field boundary. `line` (white@0.08 ≈ 1.2:1) is fine for decorative
+    /// dividers but fails WCAG 1.4.11 (≥3:1) for a control boundary; 0.40 ≈ 3:1
+    /// on the dark panel. Use only where a control edge must be perceivable.
+    static let field = Color.white.opacity(0.40)
+
+    /// The web engagement graph's "you engage with this sender" pink — reused by
+    /// the reading pane's learned-engagement chip so desktop matches the web signal.
+    static let engage = Color(red: 0.96, green: 0.45, blue: 0.71)
 
     /// Per-tier accent: loud (red) for PUSH down to quiet (gray) for SILENT.
     static func tint(_ tier: Tier) -> Color {

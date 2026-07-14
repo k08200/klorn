@@ -35,6 +35,8 @@ export interface DecisionRow {
   outcome: string | null;
   /** "fast-path" | "sender-prior" | "llm" | "keyword-fallback" | null. */
   decidedBy?: string | null;
+  /** "DIRECT" | "PROPAGATED" | null — which engagement grounding fed the judge. */
+  engagementKind?: string | null;
 }
 
 export interface DecidedByMetric {
@@ -77,12 +79,25 @@ export interface DecisionMetrics {
 }
 
 const OVERRIDE_PREFIX = "OVERRIDE:";
+const CONFIRM_PREFIX = "CONFIRM:";
 const TIER_SET: ReadonlySet<string> = new Set(TIERS);
 
 /** The tier a user moved an item to, or null if the outcome isn't a tier move. */
 function overrideTarget(outcome: string | null): Tier | null {
   if (!outcome || !outcome.startsWith(OVERRIDE_PREFIX)) return null;
   const target = outcome.slice(OVERRIDE_PREFIX.length);
+  return TIER_SET.has(target) ? (target as Tier) : null;
+}
+
+/**
+ * The tier a user EXPLICITLY affirmed, or null if the outcome isn't a confirm.
+ * A confirm is the only positive ground truth in the ledger — the counterpart
+ * to an override — so a confirmed row can be counted correct without inferring
+ * anything from silence.
+ */
+function confirmedTier(outcome: string | null): Tier | null {
+  if (!outcome || !outcome.startsWith(CONFIRM_PREFIX)) return null;
+  const target = outcome.slice(CONFIRM_PREFIX.length);
   return TIER_SET.has(target) ? (target as Tier) : null;
 }
 
@@ -199,19 +214,59 @@ export interface TierConfusion {
   shown: number;
   /** Shown this tier, then overridden to a DIFFERENT tier — confirmed wrong. */
   overriddenAway: number;
+  /** Shown this tier and EXPLICITLY confirmed at it — confirmed right (positive ground truth). */
+  confirmedCorrect: number;
   /** Confirmed-error LOWER bound: overriddenAway / shown (unconfirmed rows never counted correct). */
   correctionRate: number | null;
+  /**
+   * Confirmed-error POINT ESTIMATE over rows the user actually labelled:
+   * overriddenAway / (overriddenAway + confirmedCorrect). null when the tier has
+   * zero explicit labels — an honest "unknown", distinct from a 0 over `shown`
+   * (which folds in silence). This is the number worth trending after onboarding
+   * seeds confirmations; correctionRate stays the conservative floor.
+   */
+  confirmedErrorRate: number | null;
   /** Where the user moved shown-this-tier items (confirmed overrides only). */
   movedTo: Partial<Record<Tier, number>>;
 }
 
 export interface ConfusionReport {
   total: number;
-  /** Tier-moving overrides across all tiers — the only ground-truth cells. */
+  /** Tier-moving overrides across all tiers — the negative ground-truth cells. */
   confirmedOverrides: number;
+  /** Explicit same-tier confirmations across all tiers — the positive ground-truth cells. */
+  confirmedCorrect: number;
   perTier: TierConfusion[];
   /** shownTier → revealedTier counts, confirmed overrides only. */
   matrix: Partial<Record<Tier, Partial<Record<Tier, number>>>>;
+}
+
+/**
+ * Rollout instrumentation for CONTACT_ENGAGEMENT_IN_JUDGE: how often the learned-
+ * engagement grounding actually fed a decision, split by kind, and whether those
+ * decisions get corrected. Honest like the rest of this module — correctionRate
+ * counts only confirmed tier-moving overrides; unconfirmed rows aren't "right".
+ *
+ * Reading it after the flip: a LOW correctionRate on grounded rows (vs the
+ * overall overrideRate) means the signal is aligned with the user; a HIGH one
+ * means it's steering wrong. `total` staying 0 after the flip means the signal
+ * never fires (no engagement history yet) — nothing to trust either way.
+ */
+export interface EngagementGroundingMetric {
+  /** Decisions where any engagement grounding fired (engagementKind non-null). */
+  total: number;
+  /** Measured direct engagement (replies to this sender). */
+  direct: number;
+  /** Inferred from an engaged org peer. */
+  propagated: number;
+  /** shownTier distribution of grounded decisions. */
+  byTier: Partial<Record<Tier, number>>;
+  /** Grounded rows the user acted on (outcome stamped). */
+  acted: number;
+  /** Grounded rows overridden to a different tier — confirmed steered-wrong. */
+  corrections: number;
+  /** corrections / acted — LOWER is better (grounding matched the user). */
+  correctionRate: number | null;
 }
 
 export interface DecisionMetricsReport {
@@ -220,6 +275,8 @@ export interface DecisionMetricsReport {
   overall: DecisionMetrics;
   /** Full per-tier confusion from confirmed overrides (all 4 tiers). */
   confusion: ConfusionReport;
+  /** CONTACT_ENGAGEMENT_IN_JUDGE rollout footprint (0 until the flag fires). */
+  engagementGrounding: EngagementGroundingMetric;
   perUser: UserDecisionSummary[];
 }
 
@@ -265,7 +322,9 @@ function summarizePerUser(rows: readonly LedgerRow[]): UserDecisionSummary[] {
 export function summarizeConfusion(rows: readonly DecisionRow[]): ConfusionReport {
   const shown = new Map<Tier, number>();
   const movedTo = new Map<Tier, Map<Tier, number>>();
+  const confirmed = new Map<Tier, number>();
   let confirmedOverrides = 0;
+  let confirmedCorrectTotal = 0;
 
   for (const row of rows) {
     if (!TIER_SET.has(row.shownTier)) continue; // skip legacy/garbage tiers
@@ -277,6 +336,14 @@ export function summarizeConfusion(rows: readonly DecisionRow[]): ConfusionRepor
       const inner = movedTo.get(from) ?? new Map<Tier, number>();
       inner.set(target, (inner.get(target) ?? 0) + 1);
       movedTo.set(from, inner);
+      continue; // an override is never also a confirm
+    }
+    // Positive ground truth: an explicit confirm of the tier we showed. A
+    // confirm naming a DIFFERENT tier is contradictory (a confirm doesn't move
+    // the tier) and is ignored — counted neither right nor wrong.
+    if (confirmedTier(row.outcome) === from) {
+      confirmed.set(from, (confirmed.get(from) ?? 0) + 1);
+      confirmedCorrectTotal += 1;
     }
   }
 
@@ -284,13 +351,17 @@ export function summarizeConfusion(rows: readonly DecisionRow[]): ConfusionRepor
     const s = shown.get(tier) ?? 0;
     const moved = movedTo.get(tier);
     const overriddenAway = moved ? [...moved.values()].reduce((a, b) => a + b, 0) : 0;
+    const confirmedCorrect = confirmed.get(tier) ?? 0;
+    const labelled = overriddenAway + confirmedCorrect;
     const movedToObj: Partial<Record<Tier, number>> = {};
     if (moved) for (const [t, n] of moved) movedToObj[t] = n;
     return {
       tier,
       shown: s,
       overriddenAway,
+      confirmedCorrect,
       correctionRate: ratio(overriddenAway, s),
+      confirmedErrorRate: ratio(overriddenAway, labelled),
       movedTo: movedToObj,
     };
   });
@@ -302,7 +373,56 @@ export function summarizeConfusion(rows: readonly DecisionRow[]): ConfusionRepor
     matrix[from] = obj;
   }
 
-  return { total: rows.length, confirmedOverrides, perTier, matrix };
+  return {
+    total: rows.length,
+    confirmedOverrides,
+    confirmedCorrect: confirmedCorrectTotal,
+    perTier,
+    matrix,
+  };
+}
+
+/**
+ * Pure: fold ledger rows into the engagement-grounding rollout footprint. Counts
+ * only rows where the grounding actually fired (engagementKind non-null), so it
+ * stays all-zero until CONTACT_ENGAGEMENT_IN_JUDGE is flipped and a sender with
+ * real engagement history is judged. correctionRate uses confirmed tier-moving
+ * overrides only (same honesty contract as summarizeDecisions).
+ */
+export function summarizeEngagementGrounding(
+  rows: readonly DecisionRow[],
+): EngagementGroundingMetric {
+  const byTier: Partial<Record<Tier, number>> = {};
+  let total = 0;
+  let direct = 0;
+  let propagated = 0;
+  let acted = 0;
+  let corrections = 0;
+
+  for (const row of rows) {
+    const kind = row.engagementKind;
+    if (kind !== "DIRECT" && kind !== "PROPAGATED") continue;
+    total += 1;
+    if (kind === "DIRECT") direct += 1;
+    else propagated += 1;
+    if (TIER_SET.has(row.shownTier)) {
+      const tier = row.shownTier as Tier;
+      byTier[tier] = (byTier[tier] ?? 0) + 1;
+    }
+    if (row.outcome !== null) acted += 1;
+    const target = overrideTarget(row.outcome);
+    if (target !== null && target !== row.shownTier) corrections += 1;
+  }
+
+  return {
+    total,
+    direct,
+    propagated,
+    byTier,
+    acted,
+    corrections,
+    correctionRate: ratio(corrections, acted),
+  };
 }
 
 /**
@@ -370,7 +490,13 @@ export async function getDecisionMetrics(
       judgedAt: { gte: since },
       ...(opts.userId ? { userId: opts.userId } : {}),
     },
-    select: { userId: true, shownTier: true, outcome: true, decidedBy: true },
+    select: {
+      userId: true,
+      shownTier: true,
+      outcome: true,
+      decidedBy: true,
+      engagementKind: true,
+    },
     // Most-recent-first + a hard row cap so memory is bounded by the cap, not by
     // ledger volume. Served by @@index([source, judgedAt]) (userId-less) and
     // @@index([userId, shownTier, judgedAt]) (per-user).
@@ -389,6 +515,7 @@ export async function getDecisionMetrics(
     windowDays,
     overall: summarizeDecisions(rows),
     confusion: summarizeConfusion(rows),
+    engagementGrounding: summarizeEngagementGrounding(rows),
     perUser: summarizePerUser(rows),
   };
 }

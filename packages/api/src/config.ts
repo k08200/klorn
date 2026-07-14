@@ -159,6 +159,14 @@ export const GLOBAL_DAILY_COST_CAP_CENTS = intEnv("GLOBAL_DAILY_COST_CAP_CENTS",
 // ── Email classifier ──────────────────────────────────────────────────
 export const EMAIL_CLASSIFY_BATCH_SIZE = intEnv("EMAIL_CLASSIFY_BATCH_SIZE", 15);
 
+// First-connect onboarding snapshot: how many most-recent inbox emails to pull
+// AND classify on a user's very first sync, so the onboarding "review your
+// classifications" step has a real sample to show and label. Env-overridable so
+// a founder can widen the sample (e.g. 50/100) for more ground-truth labels
+// without a redeploy. Default 30 keeps the prior first-sync behaviour. Each
+// email is an LLM classify call, so this rides the same per-user daily cost cap.
+export const INIT_SYNC_EMAIL_COUNT = intEnv("INIT_SYNC_EMAIL_COUNT", 30);
+
 // ── Scheduler ─────────────────────────────────────────────────────────
 export const SCHEDULER_CHECK_INTERVAL_MS = intEnv("SCHEDULER_CHECK_INTERVAL_MS", 60_000);
 // Email sync cadence. Dropped from 3min to 1min so a fresh email is

@@ -24,7 +24,11 @@ vi.mock("../db.js", () => {
 
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { findOpenEmailAttentionItemId, overrideAttentionTier } from "../attention-override.js";
+import {
+  confirmAttentionTier,
+  findOpenEmailAttentionItemId,
+  overrideAttentionTier,
+} from "../attention-override.js";
 import { prisma } from "../db.js";
 
 type AttentionItemMock = {
@@ -108,6 +112,67 @@ describe("overrideAttentionTier", () => {
     // tier write) rather than leaving a corrected tier with a lost ledger row.
     decisionLabel.updateMany.mockRejectedValueOnce(new Error("db blip"));
     await expect(overrideAttentionTier("user-1", "item-1", "PUSH")).rejects.toThrow("db blip");
+  });
+});
+
+describe("confirmAttentionTier", () => {
+  beforeEach(() => {
+    // Confirm reads the item's current tier to stamp CONFIRM:<tier>.
+    attentionItem.findFirst.mockResolvedValue({
+      id: "item-1",
+      source: "EMAIL",
+      sourceId: "email-1",
+      tier: "PUSH",
+    });
+  });
+
+  it("stamps CONFIRM:<current tier> as positive ground truth", async () => {
+    const result = await confirmAttentionTier("user-1", "item-1");
+    expect(result).toEqual({ ok: true, tier: "PUSH" });
+    expect(decisionLabel.updateMany).toHaveBeenCalledTimes(1);
+    const args = decisionLabel.updateMany.mock.calls[0][0];
+    expect(args.where).toEqual({
+      userId: "user-1",
+      source: "EMAIL",
+      sourceId: "email-1",
+      outcome: null, // first-action-wins, same guard as override
+    });
+    expect(args.data.outcome).toBe("CONFIRM:PUSH");
+  });
+
+  it("does NOT move the tier or set isManualOverride (agreement is not a correction)", async () => {
+    // judge-context correction mining keys off isManualOverride; a confirm must
+    // never look like a manual override, so it writes no AttentionItem row at all.
+    await confirmAttentionTier("user-1", "item-1");
+    expect(attentionItem.update).not.toHaveBeenCalled();
+    expect($transaction).not.toHaveBeenCalled();
+  });
+
+  it("checks ownership before stamping", async () => {
+    await confirmAttentionTier("user-1", "item-1");
+    expect(attentionItem.findFirst).toHaveBeenCalledWith({
+      where: { id: "item-1", userId: "user-1" },
+      select: { id: true, source: true, sourceId: true, tier: true },
+    });
+  });
+
+  it("returns not_found for items the user does not own, without stamping", async () => {
+    attentionItem.findFirst.mockResolvedValueOnce(null);
+    const result = await confirmAttentionTier("user-1", "other-users-item");
+    expect(result).toEqual({ ok: false, reason: "not_found" });
+    expect(decisionLabel.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("normalizes a legacy CALL tier to PUSH before stamping", async () => {
+    attentionItem.findFirst.mockResolvedValueOnce({
+      id: "item-1",
+      source: "EMAIL",
+      sourceId: "email-1",
+      tier: "CALL",
+    });
+    const result = await confirmAttentionTier("user-1", "item-1");
+    expect(result).toEqual({ ok: true, tier: "PUSH" });
+    expect(decisionLabel.updateMany.mock.calls[0][0].data.outcome).toBe("CONFIRM:PUSH");
   });
 });
 

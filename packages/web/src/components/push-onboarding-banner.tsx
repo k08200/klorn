@@ -2,20 +2,29 @@
 
 /**
  * Push onboarding banner — surfaces the "Enable notifications" call-to-action
- * outside of /settings, where users would otherwise never find it.
+ * outside of /settings, where users would otherwise never find it. Enabling is
+ * a real user gesture (button click), which is the only reliable way to request
+ * notification permission — the gesture-less auto-subscribe in PushRegister is
+ * silently ignored by most browsers, so this banner is the dependable path.
  *
  * Shows only when:
- *   1. Page is running as installed PWA (display-mode: standalone) — required
- *      because iOS Safari refuses pushManager.subscribe() outside a PWA.
- *   2. Browser supports Notification + PushManager.
- *   3. Notification.permission === "default" (not granted, not denied).
- *   4. The browser has no existing pushManager subscription.
- *   5. User is logged in (we need an auth token to register the subscription).
- *   6. User has not dismissed the banner within the last 24h.
+ *   1. Not running in the Capacitor native shell — native push goes through
+ *      FCM/APNs (registerNativePush), not Web Push.
+ *   2. Web Push is usable on this platform. Desktop and Android browsers deliver
+ *      Web Push from a normal tab (no install required), so we offer it there.
+ *      iOS is the exception: it delivers Web Push only from an installed PWA and
+ *      pushManager.subscribe() throws in a Safari tab, so iOS browser users are
+ *      routed to PwaPrompts' Add-to-Home-Screen card instead of this banner.
+ *   3. Browser supports Notification + PushManager.
+ *   4. Notification.permission === "default" (not granted, not denied).
+ *   5. The browser has no existing pushManager subscription.
+ *   6. User is logged in (we need an auth token to register the subscription).
+ *   7. User has not dismissed the banner within the last 24h.
  */
 
 import { useEffect, useState } from "react";
 import { useAuth } from "../lib/auth";
+import { isNativePlatform } from "../lib/native/capacitor";
 import {
   fetchVapidKey,
   getOrCreatePushSubscription,
@@ -66,7 +75,7 @@ export default function PushOnboardingBanner() {
       if (permission !== "granted") {
         setError(
           permission === "denied"
-            ? "Allow notifications in iPhone Settings -> Klorn -> Notifications."
+            ? "Notifications are blocked. Allow them for Klorn in your browser or device settings."
             : "Notification permission is required.",
         );
         setSubmitting(false);
@@ -103,7 +112,7 @@ export default function PushOnboardingBanner() {
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-stone-100">Enable Klorn notifications</p>
         <p className="text-xs text-stone-400 mt-0.5">
-          Get briefings and urgent mail on your phone.
+          Get briefings and urgent mail the moment they land.
         </p>
         {error && <p className="text-xs text-red-400 mt-1.5">{error}</p>}
         <div className="flex gap-2 mt-2.5">
@@ -143,11 +152,19 @@ async function isEligible(): Promise<boolean> {
   if (!("Notification" in window) || !("PushManager" in window)) return false;
   if (!("serviceWorker" in navigator)) return false;
 
-  // Only show inside an installed PWA — iOS Safari rejects subscribe() outside.
+  // Native shell delivers push via FCM/APNs (registerNativePush), not Web Push.
+  if (isNativePlatform()) return false;
+
+  // Web Push works in a plain browser tab on desktop and Android, so offer it
+  // there. iOS is the exception: it delivers Web Push only from an installed
+  // PWA and pushManager.subscribe() throws in a Safari tab, so iOS browser
+  // users are handled by PwaPrompts' Add-to-Home-Screen card instead.
   const inPwa =
     window.matchMedia?.("(display-mode: standalone)").matches ||
     (navigator as { standalone?: boolean }).standalone === true;
-  if (!inPwa) return false;
+  const isIos =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as { MSStream?: unknown }).MSStream;
+  if (isIos && !inPwa) return false;
 
   if (Notification.permission !== "default") return false;
 

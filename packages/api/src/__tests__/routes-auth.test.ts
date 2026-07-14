@@ -372,6 +372,18 @@ describe("desktop /google/login — appScheme relay binding", () => {
 describe("POST /api/auth/register", () => {
   beforeEach(resetStores);
 
+  it("stores only a SHA-256 hash of the verification token at register", async () => {
+    const app = await buildApp();
+    await registerAndGetToken(app, "vhash@example.com");
+
+    const rawToken = sendVerificationEmailSpy.mock.calls[0]?.[1] as string;
+    const stored = userStore.get("user-1")?.verifyToken;
+    expect(rawToken).toMatch(/^[0-9a-f]{64}$/);
+    expect(stored).toBe(crypto.createHash("sha256").update(rawToken).digest("hex"));
+    expect(stored).not.toBe(rawToken);
+    await app.close();
+  });
+
   it("creates a user, returns a valid JWT, and fires a verification email", async () => {
     const app = await buildApp();
     const res = await app.inject({
@@ -1105,6 +1117,26 @@ describe("POST /api/auth/forgot-password", () => {
     await app.close();
   });
 
+  it("stores only a SHA-256 hash of the reset token, never the raw token", async () => {
+    // Same standard as Device.tokenHash: a DB read (backup leak, replica,
+    // SQLi elsewhere) must never yield a directly usable reset link.
+    const app = await buildApp();
+    await registerAndGetToken(app, "hash@example.com");
+
+    await app.inject({
+      method: "POST",
+      url: "/api/auth/forgot-password",
+      payload: { email: "hash@example.com" },
+    });
+
+    const rawToken = sendPasswordResetEmailSpy.mock.calls[0]?.[1] as string;
+    const stored = userStore.get("user-1")?.resetToken;
+    expect(rawToken).toMatch(/^[0-9a-f]{64}$/);
+    expect(stored).toBe(crypto.createHash("sha256").update(rawToken).digest("hex"));
+    expect(stored).not.toBe(rawToken);
+    await app.close();
+  });
+
   it("returns success even for non-existent email (prevents enumeration)", async () => {
     const app = await buildApp();
     const res = await app.inject({
@@ -1159,13 +1191,14 @@ describe("POST /api/auth/reset-password", () => {
     const app = await buildApp();
     await registerAndGetToken(app, "reset@example.com", "oldpassword1");
 
-    // Trigger forgot-password to set resetToken
+    // Trigger forgot-password to set resetToken. Use the token from the
+    // email (the raw secret) — the DB row only holds its SHA-256 hash.
     await app.inject({
       method: "POST",
       url: "/api/auth/forgot-password",
       payload: { email: "reset@example.com" },
     });
-    const resetToken = userStore.get("user-1")?.resetToken;
+    const resetToken = sendPasswordResetEmailSpy.mock.calls[0]?.[1] as string;
 
     const res = await app.inject({
       method: "POST",
@@ -1249,8 +1282,9 @@ describe("GET /api/auth/verify-email", () => {
     const app = await buildApp();
     await registerAndGetToken(app, "verify@example.com");
 
-    const user = userStore.get("user-1");
-    const vToken = user?.verifyToken;
+    // Use the token from the verification email (the raw secret) — the DB
+    // row only holds its SHA-256 hash.
+    const vToken = sendVerificationEmailSpy.mock.calls[0]?.[1] as string;
 
     const res = await app.inject({
       method: "GET",

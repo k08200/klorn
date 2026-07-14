@@ -37,7 +37,20 @@ final class TopBarController {
     /// an OS banner as a fallback for when the bar isn't on the user's current Space
     /// (a no-op on unbundled `swift run`, which has no bundle id).
     func handleNewPush(_ items: [FirewallItem]) {
+        guard !items.isEmpty else { return }
+        // Announce for VoiceOver (WCAG 4.1.3 Status Messages): the AT-equivalent of
+        // the always-live pill count, so it fires regardless of the OS-banner
+        // preference (that toggle only gates the interruptive system banner below).
+        AccessibilityNotification.Announcement(Self.pushAnnouncement(newCount: items.count)).post()
+        // The pill's live count already updated via observation; the OS banner is
+        // the opt-out-able extra (Preferences → Notifications).
+        guard model.settings.notificationsEnabled else { return }
         items.forEach { PushNotifier.post($0) }
+    }
+
+    /// VoiceOver announcement for newly-arrived PUSH. Pure for testing.
+    nonisolated static func pushAnnouncement(newCount n: Int) -> String {
+        n == 1 ? "1 new message needs you" : "\(n) new messages need you"
     }
 
     /// Global-hotkey entry point: expand the pill / collapse whatever is open,
@@ -97,8 +110,16 @@ final class TopBarController {
                 Task { await self.model.select(item) }
             },
             onDismiss: { [weak self] item in guard let self else { return }; Task { await self.model.dismiss(item) } },
-            onSnooze: { [weak self] item in guard let self else { return }; Task { await self.model.snooze(item) } },
+            onSnooze: { [weak self] item, option in
+                guard let self else { return }
+                Task { await self.model.snooze(item, until: option.resurface()) }
+            },
             onSelect: { [weak self] item in guard let self else { return }; Task { await self.model.select(item) } },
+            onOpenPreferences: { [weak self] in
+                guard let self else { return }
+                self.setState(.full)          // the overlay lives in the full view
+                self.model.showPreferences = true
+            },
             onQuit: { NSApplication.shared.terminate(nil) })
     }
 
@@ -128,8 +149,15 @@ final class TopBarController {
         let origin = NSPoint(
             x: visible.midX - size.width / 2,
             y: visible.maxY - size.height - Self.topMargin)
-        panel.setFrame(NSRect(origin: origin, size: size), display: true, animate: true)
+        // Honor Reduce Motion (WCAG 2.3.3 + CLAUDE.md): a full-window morph up to
+        // 1400px is exactly the large motion the setting exists to suppress.
+        let animate = Self.shouldAnimateFrame(
+            reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        panel.setFrame(NSRect(origin: origin, size: size), display: true, animate: animate)
     }
+
+    /// Animate the panel morph unless the user asked for reduced motion. Pure for testing.
+    nonisolated static func shouldAnimateFrame(reduceMotion: Bool) -> Bool { !reduceMotion }
 
     private func open(_ item: FirewallItem?) {
         guard let url = Self.resolveURL(item) else {

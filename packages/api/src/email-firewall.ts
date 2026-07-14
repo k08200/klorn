@@ -24,6 +24,7 @@ import { getUserLlmCredentials } from "./llm-credentials.js";
 import { judgeEmail, type PocTier } from "./poc-judge.js";
 import type { ProviderCredentials } from "./providers/index.js";
 import { resolveUserEmail } from "./resolve-user-email.js";
+import { engagementKindOf } from "./sender-policy.js";
 import { captureError } from "./sentry.js";
 
 /**
@@ -278,7 +279,11 @@ export async function judgeAndMirrorEmail(
   // keyword fallback that caps PUSH recall ~46%). Prod path only — the eval
   // harness calls judgeEmail directly and must not pollute the window.
   recordJudgeSource(judgement.source);
-  await upsertAttentionForEmailJudgement({ userId, ...email }, judgement);
+  await upsertAttentionForEmailJudgement(
+    { userId, ...email },
+    judgement,
+    engagementKindOf(judgeContext.senderFacts),
+  );
 
   // The whole point of the firewall: a PUSH tier should actually interrupt
   // you. Until now nothing did — email pushes fired only off the separate

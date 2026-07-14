@@ -1796,13 +1796,19 @@ export const GMAIL_TOOLS: {
     type: "function" as const,
     function: {
       name: "send_email",
-      description: "Send an email on behalf of the user",
+      description:
+        "Send an email on behalf of the user. When replying to an email from the provided context, pass its id as in_reply_to_email_id so the message is sent from the inbox account that email arrived on (not always the primary).",
       parameters: {
         type: "object",
         properties: {
           to: { type: "string", description: "Recipient email address" },
           subject: { type: "string", description: "Email subject line" },
           body: { type: "string", description: "Email body text" },
+          in_reply_to_email_id: {
+            type: "string",
+            description:
+              "Optional. The id of the email being replied to (from context). Routes the send through the linked inbox account that email belongs to; omit for a brand-new message.",
+          },
         },
         required: ["to", "subject", "body"],
       },

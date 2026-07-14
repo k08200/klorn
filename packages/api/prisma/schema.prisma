@@ -51,6 +51,8 @@ model User {
   // mapping for events that arrive without custom_data.userId.
   paddleCustomerId          String?                    @unique
   emailVerified             Boolean                    @default(false)
+  // SHA-256 hash of the emailed one-time token (one-time-token.ts) — the raw
+  // token is never stored, same standard as Device.tokenHash.
   verifyToken               String?
   verifyTokenExp            DateTime?
   resetToken                String?
@@ -174,6 +176,7 @@ model Message {
   // composite serves the filter and returns rows already ordered, and also
   // makes Conversation-cascade deletes an index scan.
   @@index([conversationId, createdAt])
+  @@index([conversationId, role, createdAt(sort: Desc)])
   @@index([content(ops: raw("gin_trgm_ops"))], map: "Message_content_trgm_idx", type: Gin)
 }
 
@@ -412,6 +415,13 @@ model AutomationConfig {
   // intrusive delivery channel Klorn has — nobody gets dialed without
   // explicitly flipping this on (and PHONE_ESCALATION_ENABLED=true globally).
   phoneEscalationEnabled Boolean  @default(false)
+  // Per-user opt-in for rule-based proactive actions (reminders/notifications
+  // only — no floor actions, no LLM cost). Complements the global
+  // PROACTIVE_ACTIONS_ENABLED env flag; the scheduler runs proactive actions
+  // when EITHER is on. Default off so a new install stays classify-only. The
+  // settings UI toggle + scheduler already referenced this field before the
+  // column existed, so a PATCH carrying it used to 500.
+  proactiveActions       Boolean  @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 }
@@ -427,6 +437,8 @@ model AgentLog {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+
+  @@index([userId, action, createdAt(sort: Desc)])
 }
 
 // Tracks Eve's processing of individual emails (SUGGEST vs AUTO, which action taken).
@@ -443,6 +455,7 @@ model EmailProcessingLog {
 
   @@index([userId, emailId])
   @@index([userId, processedAt])
+  @@index([userId, mode, processedAt(sort: Desc)])
 }
 
 model Notification {
@@ -469,6 +482,7 @@ model Notification {
   @@unique([userId, dedupeKey])
   @@index([userId, createdAt])
   @@index([userId, isRead])
+  @@index([userId, type, isRead, createdAt(sort: Desc)])
   @@index([pendingActionId])
 }
 
@@ -604,6 +618,7 @@ model Memory {
 
   @@unique([userId, type, key])
   @@index([userId, type])
+  @@index([userId, type, confidence(sort: Desc)])
 }
 
 enum MemoryType {
@@ -854,7 +869,7 @@ model EmailAttachment {
   analysisStatus    String       @default("PENDING")
   analysisError     String?
   createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  updatedAt         DateTime     @default(now()) @updatedAt
 
   @@unique([emailId, gmailAttachmentId])
   @@index([userId, createdAt])
@@ -883,7 +898,7 @@ model CandidateIntake {
   lastDetectedAt DateTime     @default(now())
   reviewedAt     DateTime?
   createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  updatedAt      DateTime     @default(now()) @updatedAt
 
   @@unique([userId, emailId])
   @@index([userId, status, updatedAt])
@@ -1070,6 +1085,11 @@ model DecisionLabel {
   // "keyword-fallback" — so prior-bypass decisions stay separable (the
   // SILENT-prior over-suppression class is exactly the prior-bypass rows).
   decidedBy String?
+  // Which learned-engagement grounding fed the judge, if any: "DIRECT" (measured
+  // replies to this sender) | "PROPAGATED" (inferred from an engaged org peer) |
+  // null. Rollout instrumentation for CONTACT_ENGAGEMENT_IN_JUDGE — lets us see,
+  // once flipped, how often the signal fires and whether those rows get corrected.
+  engagementKind String?
 
   // Stamped once when the user acts. For an override, "OVERRIDE:<tier>";
   // otherwise a terminal status. Null until then.
@@ -1463,7 +1483,7 @@ model ContactTrustScore {
   totalDelayDays Int      @default(0) // sum of days late (for avg computation)
   lastUpdatedAt  DateTime @default(now())
   createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime @default(now()) @updatedAt
 
   @@unique([userId, contactEmail])
 }
@@ -1482,7 +1502,7 @@ model ContactEngagementScore {
   dismissCount  Int      @default(0) // user dismissed their items (−)
   lastEngagedAt DateTime @default(now())
   createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  updatedAt     DateTime @default(now()) @updatedAt
 
   @@unique([userId, contactEmail])
   @@index([userId])
