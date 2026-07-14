@@ -76,6 +76,14 @@ describe("isSafePushEndpoint", () => {
     expect(isSafePushEndpoint("https://[0:0:0:0:0:ffff:10.0.0.1]/x")).toBe(false);
   });
 
+  it("rejects the deprecated IPv4-compatible form wrapping a private IPv4", () => {
+    // ::a.b.c.d (no ffff marker) — not routed by modern stacks, blocked anyway.
+    expect(isSafePushEndpoint("https://[::169.254.169.254]/x")).toBe(false);
+    expect(isSafePushEndpoint("https://[::10.0.0.1]/x")).toBe(false);
+    // A compatible-form public IPv4 is still allowed.
+    expect(isSafePushEndpoint("https://[::8.8.8.8]/x")).toBe(true);
+  });
+
   it("accepts public IPv6 addresses and boundary neighbors of private ranges", () => {
     expect(isSafePushEndpoint("https://[2606:4700::1111]/x")).toBe(true);
     expect(isSafePushEndpoint("https://[2600:1901::1]/x")).toBe(true);

@@ -30,7 +30,9 @@ function isPrivateIPv4(host: string): boolean {
  * into its 8 16-bit groups. Returns null when the string is not a valid
  * IPv6 address — plain hostnames never contain ":" so they can't reach this.
  * A trailing dotted-quad ("::ffff:10.0.0.1") is folded into the last two
- * groups first, per RFC 4291 §2.2.
+ * groups first, per RFC 4291 §2.2. In practice `new URL().hostname` already
+ * canonicalizes dotted-quad IPv6 into hex groups before this runs, so that
+ * branch is belt-and-suspenders for any direct caller, not the push path.
  */
 function expandIPv6(host: string): number[] | null {
   let s = host;
@@ -76,8 +78,14 @@ function isPrivateIPv6(host: string): boolean {
   if (headIsZero && (groups[7] === 0 || groups[7] === 1)) return true; // :: and ::1
   if ((groups[0] & 0xfe00) === 0xfc00) return true; // unique-local fc00::/7
   if ((groups[0] & 0xffc0) === 0xfe80) return true; // link-local fe80::/10
-  // IPv4-mapped (::ffff:a.b.c.d) — re-run the IPv4 policy on the embedded address.
-  if (groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff) {
+  // Both IPv4 embeddings whose last 32 bits are an IPv4 address: the mapped
+  // form ::ffff:a.b.c.d (groups[5]=0xffff) and the deprecated compatible form
+  // ::a.b.c.d (groups[5]=0). Re-run the IPv4 policy on the embedded address so
+  // a private/loopback v4 can't be smuggled through either wrapper. The
+  // compatible form isn't routed by modern stacks, but block it anyway rather
+  // than depend on that staying true.
+  const firstFiveZero = groups.slice(0, 5).every((g) => g === 0);
+  if (firstFiveZero && (groups[5] === 0xffff || groups[5] === 0)) {
     const embedded = `${groups[6] >> 8}.${groups[6] & 0xff}.${groups[7] >> 8}.${groups[7] & 0xff}`;
     return isPrivateIPv4(embedded);
   }
