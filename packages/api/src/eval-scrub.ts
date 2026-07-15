@@ -57,17 +57,66 @@ function looksLikeDate(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s.trim());
 }
 
+/**
+ * Machine-role local-parts that MUST survive scrubbing. The deterministic
+ * sender policies (keyword-policy.ts isAutomatedSender/isNoReplySender, the
+ * #794 automated-sender PUSH floor, ci-noise.ts) key on these — replacing
+ * `noreply@vercel.com` with `person-N@…` silently switches those floors OFF
+ * for the whole eval, which is exactly the instrument defect the first
+ * real-set run exposed (Vercel deploy-fail predicted PUSH because the floor
+ * never saw an automated sender).
+ */
+const ROLE_LOCAL_PARTS = [
+  "no-reply",
+  "noreply",
+  "donotreply",
+  "notifications",
+  "notification",
+  "messages-noreply",
+  "updates",
+  "update",
+  "alerts",
+  "alert",
+  "billing",
+  "receipts",
+  "onboarding",
+  "support",
+  "hello",
+  "info",
+  "admin",
+  "security",
+] as const;
+
+function roleOf(localPart: string): string | null {
+  const lower = localPart.toLowerCase();
+  for (const role of ROLE_LOCAL_PARTS) {
+    if (lower === role || lower.startsWith(`${role}-`) || lower.startsWith(`${role}.`)) {
+      return role;
+    }
+  }
+  // Role at the END of a branded local (CloudPlatform-noreply@google.com):
+  // SYSTEM_NOTIFICATION_RE matches unanchored "noreply@", so the suffix is
+  // the signal that must survive.
+  if (/(-|\.)?(no-?reply|donotreply)$/.test(lower)) return "noreply";
+  return null;
+}
+
 function placeholderFor(address: string, ctx: ScrubContext): string {
   const lower = address.toLowerCase();
   const existing = ctx.addressMap.get(lower);
   if (existing) return existing;
-  const domain = lower.split("@")[1] ?? "unknown";
+  const [localPart, domain = "unknown"] = lower.split("@");
   let domainToken = ctx.domainMap.get(domain);
   if (!domainToken) {
     domainToken = `domain-${ctx.domainMap.size + 1}`;
     ctx.domainMap.set(domain, domainToken);
   }
-  const placeholder = `person-${ctx.addressMap.size + 1}@${domainToken}.example`;
+  // Role-preserving: machine roles keep their local-part (the sender-policy
+  // signal); human-looking locals become person-N (the anonymization).
+  const role = roleOf(localPart);
+  const placeholder = role
+    ? `${role}@${domainToken}.example`
+    : `person-${ctx.addressMap.size + 1}@${domainToken}.example`;
   ctx.addressMap.set(lower, placeholder);
   return placeholder;
 }
@@ -134,7 +183,8 @@ export function scrubItem(item: RealEvalSourceItem, ctx: ScrubContext): DraftEva
 }
 
 /** Placeholder shapes the linter must NOT flag. */
-const PLACEHOLDER_EMAIL_RE = /^person-\d+@domain-\d+\.example$/;
+const PLACEHOLDER_EMAIL_RE =
+  /^(person-\d+|(no-reply|noreply|donotreply|notifications?|messages-noreply|updates?|alerts?|billing|receipts|onboarding|support|hello|info|admin|security)(-\d+)?)@domain-\d+\.example$/;
 const PLACEHOLDER_URL_RE = /^https:\/\/link-\d+\.example\/?$/;
 
 /** Collect every string value in a parsed JSON structure. */

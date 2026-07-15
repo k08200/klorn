@@ -9,7 +9,7 @@
     {
       "id": "a27ca000-9f08-4e48-ab4c-837c7983836b",
       "gmailId": "19e6dceba68a5424",
-      "from": "LinkedIn <person-1@domain-1.example>",
+      "from": "LinkedIn <messages-noreply@domain-1.example>",
       "subject": "👤 김클론 님, 사람A 님과 1촌을 맺어보세요.",
       "snippet": "-- ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏",
       "body": "사람A님을 아세요?\r\n\r\n네, 1촌 맺기https://link-1.example\r\n\r\n\r\n아는 사람 찾기\r\n            \r\n    사람B\r\n--\r\nhttps://link-2.example\r\n            \r\n    사람C\r\n--\r\nhttps://link-3.example\r\n            \r\n    사람D\r\n--\r\nhttps://link-4.example\r\n            \r\n    사람E\r\n--\r\nhttps://link-5.example\r\n\r\n더보기https://link-6.example\r\n      \r\n\r\n----------------------------------------\r\n\r\n김클론님에게 발송된 이메일입니다(--).\r\n자세히 보기: https://link-7.example\r\n아는 사람 찾기 알림 이메일을 받고 있습니다.\r\n\r\n\r\n이메일 받지 않기: https://link-8.example\r\n도움말: https://link-9.example\r\n\r\n© 2026 LinkedIn Ireland Unlimited Company, Wilton Plaza, Wilton Place, Dublin 2.LinkedIn은 LinkedIn Ireland Unlimited Company의 등록 사업자명입니다.\r\nLinkedIn과 LinkedIn 로고는 LinkedIn의 등록 상표입니다.",
@@ -31,7 +31,7 @@
     {
       "id": "d526d2f7-b819-4bb1-bb2a-298f434165c5",
       "gmailId": "19e69e9bc6f0adc6",
-      "from": "Google <person-3@domain-3.example>",
+      "from": "Google <no-reply@domain-3.example>",
       "subject": "✅ 클론님, Google 서비스로 Apple iPhone 설정을 완료하세요",
       "snippet": "설정 완료하기 ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌",
       "body": "클론님, Apple iPhone에서 Google 설정이 거의 완료되었습니다\r\n\r\n\r\n잠시 시간을 내어 새 기기에 Google 앱 및 설정을 구성하세요\r\n\r\n설정 완료하기  \r\n<https://link-44.example>\r\n\r\n최근에 Apple iPhone 기기에서 Google 계정에 로그인했기 때문에  \r\nperson-4@domain-4.example <person-4@domain-4.example> 주소로 발송된 이메일입니다.  \r\n기기에서 처음으로 계정에 로그인했을 때 기기의 Google 서비스를 설정하는  \r\n방법을 안내하는 이메일을 받고 싶지 않다면 수신 거부  \r\n<https://link-45.example>해  \r\n주세요.\r\n\r\n© 2026 Google LLC 1600 Amphitheatre Parkway, Mountain View, CA 94043\r\n",
@@ -42,7 +42,7 @@
     {
       "id": "22273cda-84b0-4296-95f4-7decc2b01714",
       "gmailId": "19e69e8c63f54545",
-      "from": "Google <person-5@domain-5.example>",
+      "from": "Google <no-reply@domain-5.example>",
       "subject": "보안 알림",
       "snippet": "Apple iPhone에서 새로 로그인함 person-4@domain-4.example Apple iPhone 기기에서 내 Google 계정에 새로 로그인했습니다. 직접 로그인한 것이 맞다면 아무런 조치를 취하지 않아도 됩니다. 본인이 아니라면 안내에 따라 계정을 보호하세요. 활동 확인 다음 페이지에서 보안 활동도 확인할 수 있습니다. https://link-46.example",
       "body": "[image: Google]\r\nApple iPhone에서 새로 로그인함\r\n\r\n\r\nperson-4@domain-4.example\r\nApple iPhone 기기에서 내 Google 계정에 새로 로그인했습니다. 직접 로그인한  \r\n것이 맞다면 아무런 조치를 취하지 않아도\r\n됩니다. 본인이 아니라면 안내에 따라 계정을 보호하세요.\r\n활동 확인\r\n<https://link-47.example>\r\n다음 페이지에서 보안 활동도 확인할 수 있습니다.\r\nhttps://link-48.example\r\n이 이메일은 Google 계정 및 서비스의 중요한 변경사항을 알려드리기 위해  \r\n발송되었습니다.\r\n© 2026 Google LLC, 1600 Amphitheatre Parkway, Mountain View, CA 94043, USA\r\n",
@@ -64,7 +64,7 @@
     {
       "id": "b585274a-f433-4f47-9245-69a485bc8365",
       "gmailId": "19e68558315a09d6",
-      "from": "Google Cloud <person-7@domain-3.example>",
+      "from": "Google Cloud <noreply-2@domain-3.example>",
       "subject": "[Action Advised] Ensure you trust all Google Trust Services Root CAs and ECDSA certificate chains before Jun 15, 2026",
       "snippet": "Review changes to intermediate CAs and TLS certificate types. MY CONSOLE Hello 클론, In Q2 2026, to improve efficiency, we will be updating the Transport Layer Security (TLS) certificate for many Google",
       "body": "Hello 클론,\r\n\r\nIn Q2 2026, to improve efficiency, we will be updating the Transport Layer  \r\nSecurity (TLS) certificate for many Google endpoints. The intermediate  \r\nCertificate Authority (CA) and certificate type will shift from a RSA  \r\ncertificate chain and leaf certificate to an ECDSA certificate.\r\n\r\nWhat you need to know\r\n\r\nKey changes:\r\n\r\n   Many services, including googleapis.com, will shift to using the Google  \r\nTrust Services WE1 intermediate and ECDSA based TLS certificates.\r\n\r\nPotential impact:\r\n\r\n   If your client applications are not configured correctly, they may be  \r\nunable to connect to Google services after this change. Connection failures  \r\nare most likely to occur in the following two scenarios:\r\n    - Certificate pinning: We do not recommend pinning intermediate or leaf  \r\ncertificates. This practice will cause your application to break during  \r\nroutine certificate rotations.\r\n    - Custom trust stores: If you use a custom trust store, you must ensure  \r\nit includes all of Google Trust Services (GTS) Root CAs to prevent outages.\r\nFor most customers, no action is required as a result of this change.  \r\nHowever, if you run a custom trust store or pin CAs, you may need to take  \r\naction. We’ve provided additional information to guide you through this  \r\nchange.\r\n\r\nWhat you need to do\r\n\r\nAction advised before June 15, 2026:\r\n\r\n    - Ensure you trust all Google Trust Services Root CAs as detailed in  \r\nthis Google Trust Services Certificates documentation[1].\r\n    - Pinning is discouraged. If you choose to pin, ensure that all Google  \r\nTrust Services Roots and, if applicable, intermediates are in your pin list.\r\n\r\nTimeline: Services will shift to new intermediates throughout late Q2 2026.\r\n\r\nImpacted customers/accounts:\r\n\r\nAny cloud project using a limited set of trusted roots or pinning  \r\ncertificates may experience issues.\r\n\r\nWe’re here to help\r\n\r\nPlease review the Google Trust Services[2] announcement for guidance on  \r\nensuring reliable connections to Google services.\r\n\r\nIf you have any questions or require assistance, please contact Google  \r\nCloud Support[3].\r\n\r\nThanks for choosing Google Cloud.\r\n\r\n— The Google Cloud Team\r\n\r\n[1] https://link-68.example\r\n[2] https://link-69.example\r\n[3] https://link-70.example\r\n\r\n© 2026 Google LLC 1600 Amphitheatre Parkway, Mountain View, CA 94043\r\n\r\nYou’ve received this mandatory service announcement to update you about  \r\nimportant changes to Google Cloud or your account.\r\n",
@@ -75,10 +75,10 @@
     {
       "id": "e265df5b-e659-4348-8335-91b1439d489a",
       "gmailId": "19e6571fc9087866",
-      "from": "\"Weee!\" <person-8@domain-7.example>",
+      "from": "\"Weee!\" <hello@domain-7.example>",
       "subject": "🍓화요일만 반짝✨ 신선 과일·야채 최대 50% 할인 🍒🍑🌼💕",
       "snippet": "오늘만 오픈! 신선함은 기다려주지 않아요 💥💕 ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏",
-      "body": "[speaker]\r\n\r\n재입고\r\n\r\n[carat](https://link-71.example) [ads-emailHeaderNote](https://link-72.example) [ads-emailHeaderTop](https://link-73.example)\r\n[Hero Banner](https://link-74.example)\r\n\r\n[sku index 0](https://link-75.example)\t[sku index 1](https://link-76.example)\t[sku index 2](https://link-77.example)\r\n[sku index 3](https://link-78.example)\t[sku index 4](https://link-79.example)\t[sku index 5](https://link-80.example)\r\n[sku index 6](https://link-81.example)\t[sku index 7](https://link-82.example)\t[sku index 8](https://link-83.example)    [Lightning Deals](https://link-84.example) [Global Lightning Deals](https://link-85.example) [ads-emailFooterTop](https://link-86.example) [장바구니](https://link-87.example) [생활용품\r\n\r\n[Sku img]\t[Sku img]\t[Sku img]\r\n[Sku img]\t[Sku img]\t[Sku img]](https://link-88.example) [Global+ 생활용품\r\n\r\n[Sku img]\t[Sku img]\t[Sku img]\r\n[Sku img]\t[Sku img]\t[Sku img]](https://link-89.example)\r\n[Hero Banner](https://link-90.example)\r\n[ads-emailFooterMiddle](https://link-91.example) [ads-emailFooterBottom](https://link-92.example) [ads-emailFootnote](https://link-93.example)  2026 Weee!, Inc.\r\n47467 Fremont Blvd\r\nFremont, CA 94538\r\n\r\n[Unsubscribe](https://link-94.example) [Manage](https://link-95.example) [Support](mailto:person-9@domain-7.example)",
+      "body": "[speaker]\r\n\r\n재입고\r\n\r\n[carat](https://link-71.example) [ads-emailHeaderNote](https://link-72.example) [ads-emailHeaderTop](https://link-73.example)\r\n[Hero Banner](https://link-74.example)\r\n\r\n[sku index 0](https://link-75.example)\t[sku index 1](https://link-76.example)\t[sku index 2](https://link-77.example)\r\n[sku index 3](https://link-78.example)\t[sku index 4](https://link-79.example)\t[sku index 5](https://link-80.example)\r\n[sku index 6](https://link-81.example)\t[sku index 7](https://link-82.example)\t[sku index 8](https://link-83.example)    [Lightning Deals](https://link-84.example) [Global Lightning Deals](https://link-85.example) [ads-emailFooterTop](https://link-86.example) [장바구니](https://link-87.example) [생활용품\r\n\r\n[Sku img]\t[Sku img]\t[Sku img]\r\n[Sku img]\t[Sku img]\t[Sku img]](https://link-88.example) [Global+ 생활용품\r\n\r\n[Sku img]\t[Sku img]\t[Sku img]\r\n[Sku img]\t[Sku img]\t[Sku img]](https://link-89.example)\r\n[Hero Banner](https://link-90.example)\r\n[ads-emailFooterMiddle](https://link-91.example) [ads-emailFooterBottom](https://link-92.example) [ads-emailFootnote](https://link-93.example)  2026 Weee!, Inc.\r\n47467 Fremont Blvd\r\nFremont, CA 94538\r\n\r\n[Unsubscribe](https://link-94.example) [Manage](https://link-95.example) [Support](mailto:support@domain-7.example)",
       "labels": ["CATEGORY_PROMOTIONS", "UNREAD", "INBOX"],
       "receivedAt": "2026-05-26T18:00:28.000Z",
       "label": "SILENT"
@@ -97,7 +97,7 @@
     {
       "id": "91ff01bc-a49d-4659-81bf-552447ca613b",
       "gmailId": "19e638201312c003",
-      "from": "LinkedIn <person-1@domain-1.example>",
+      "from": "LinkedIn <messages-noreply@domain-1.example>",
       "subject": "👤 김클론 님, 사람F 님과 1촌을 맺어보세요.",
       "snippet": "-- ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏",
       "body": "사람F님을 아세요?\r\n\r\n네, 1촌 맺기https://link-105.example\r\n\r\n\r\n아는 사람 찾기\r\n            \r\n    사람G 소속팀\r\n--\r\nhttps://link-106.example\r\n            \r\n    사람H\r\n--\r\nhttps://link-107.example\r\n            \r\n    사람I\r\n--\r\nhttps://link-108.example\r\n            \r\n    사람J\r\n--\r\nhttps://link-109.example\r\n            \r\n    사람K\r\n--\r\nhttps://link-110.example\r\n\r\n더보기https://link-111.example\r\n      \r\n\r\n----------------------------------------\r\n\r\n김클론님에게 발송된 이메일입니다(--).\r\n자세히 보기: https://link-112.example\r\n아는 사람 찾기 알림 이메일을 받고 있습니다.\r\n\r\n\r\n이메일 받지 않기: https://link-113.example\r\n도움말: https://link-114.example\r\n\r\n© 2026 LinkedIn Ireland Unlimited Company, Wilton Plaza, Wilton Place, Dublin 2.LinkedIn은 LinkedIn Ireland Unlimited Company의 등록 사업자명입니다.\r\nLinkedIn과 LinkedIn 로고는 LinkedIn의 등록 상표입니다.",
@@ -108,7 +108,7 @@
     {
       "id": "595f1800-2ce6-4685-b3b6-8121bec3d0bd",
       "gmailId": "19e62f2db367c70e",
-      "from": "LinkedIn <person-1@domain-1.example>",
+      "from": "LinkedIn <messages-noreply@domain-1.example>",
       "subject": "퍼즐이 진행 중이네요, 클론 님 🧩",
       "snippet": "전문가 수백만 명이 이미 LinkedIn의 일일 퍼즐 게임으로 자신의 실력을 시험하고 있습니다. ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏",
       "body": "전문가 수백만 명이 이미 LinkedIn의 일일 퍼즐 게임으로 자신의 실력을 시험하고 있습니다.\r\n\r\nLinkedIn 게임은 재충전과 집중을 돕기 위해 짧은 퍼즐을 매일 제공합니다.\r\n\r\n30초 휴식! - Zip\r\n점들을 순서대로 연결해서 그리드를 얼마나 빨리 채울 수 있는지 확인해 보세요.\r\n플레이: https://link-115.example\r\n\r\n3분 휴식! - Mini Sudoku\r\n미니멀하게 만들어진 고전 게임으로 “스도쿠”의 창시자가 만들었습니다.\r\n플레이: https://link-116.example\r\n\r\n      \r\n\r\n----------------------------------------\r\n\r\n김클론님에게 발송된 이메일입니다(--).\r\n자세히 보기: https://link-117.example\r\nLinkedIn 알림 이메일을 받고 있습니다.\r\n\r\n\r\n이메일 받지 않기: https://link-118.example\r\n도움말: https://link-119.example\r\n\r\n© 2026 LinkedIn Ireland Unlimited Company, Wilton Plaza, Wilton Place, Dublin 2.LinkedIn은 LinkedIn Ireland Unlimited Company의 등록 사업자명입니다.\r\nLinkedIn과 LinkedIn 로고는 LinkedIn의 등록 상표입니다.",
@@ -141,7 +141,7 @@
     {
       "id": "3c92815e-38a7-4136-91d0-81f6717157ce",
       "gmailId": "19e604f71fe67a98",
-      "from": "YouVersion <person-12@domain-10.example>",
+      "from": "YouVersion <no-reply@domain-10.example>",
       "subject": "클론 님, ❤️‍🔥 오순절은 모든 것을 변화시킵니다.",
       "snippet": "오늘날 오순절이 우리에게 주는 의미에 대해 더 알아보세요. ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏",
       "body": "오늘날 오순절이 우리에게 주는 의미에 대해 더 알아보세요.    ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏\r\n͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏\r\n͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏\r\n͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏\r\n͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏\r\n͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏\r\n͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏   body, table, td\r\n{font-family: Arial, Helvetica, sans-serif !important;}\r\n성경 앱 ( https://link-155.example )\r\nYouVersion ( https://link-156.example )\r\n도시 거리에서 많은 사람들이 모션 블러 효과와 함께 움직이는 가운데 홍로 서 있는 남성. \r\n( https://link-157.example )\r\n\r\n\r\n********************\r\n오순절 이후에 무슨 일이 일어났나요?\r\n********************\r\n\r\n예수님의 부활 후 50일째 되는 날, 하나님은 모든 신도들을 돕기 위해 성령을 보내셨습니다. 바로 그때, 예수님의\r\n복음이 온 세상에 퍼졌습니다. 그 복음은 오늘날에도 여전히 역사하고 있습니다.\r\n\r\n오순절은 단순히 기념하는 날이 아닙니다. 우리가 삶 속에서 실천하는 진리입니다.\r\n\r\n오늘도 동일한 성령이 여러분과 함께하면서 여러분을 인도하고, 강하게 하고, 다른 사람들에게 소망을 전할 수 있도록\r\n능력을 주십니다.\r\n\r\n마태복음 28장 18–20절을 묵상하면서 오늘 예수님을 전할 수 있는 주위 사람에 대해 생각해 보세요.\r\n\r\n마태복음 28장 18-20절 읽기 \r\n( https://link-158.example )\r\n                              YouVersion   YouVersion   \r\n( https://link-159.example )       Bible App \r\n( https://link-160.example )   Bible App for Kids\r\n( https://link-161.example )\r\n지금 후원하세요 ( https://link-162.example )\r\n도움이 필요하신가요? ( https://link-163.example )\r\nInstagram   Instagram   \r\n( https://link-164.example )\r\nFacebook   Facebook   \r\n( https://link-165.example )   YouTube\r\nYouTube   ( https://link-166.example )\r\nLinkedIn   LinkedIn   \r\n( https://link-167.example )   Blog\r\nBlog   ( https://link-168.example )          이\r\n이메일은 회원님께서 YouVersion 소식을 받아 보시길 원하셔서 발송되었습니다.\r\n\r\n알림 설정 변경 \r\n( https://link-169.example )\r\n\r\n© Life.Church / YouVersion\r\n\r\n4600 East Second Street\r\nEdmond, OK 73034        개인 정보 취급 정책 \r\n( https://link-170.example ) | 사용 약관 \r\n( https://link-171.example ) | 구독 중단 \r\n( https://link-172.example )",
@@ -152,10 +152,10 @@
     {
       "id": "c7e2a7ed-a8bb-4fc2-acbe-8b07cda50a90",
       "gmailId": "19e604beeff33e93",
-      "from": "\"Weee!\" <person-8@domain-7.example>",
+      "from": "\"Weee!\" <hello@domain-7.example>",
       "subject": "🎉 단 하루! 월요일만! 원데이 Super Sale 🎉",
       "snippet": "👀뭐가 나왔는지 안 보면 진짜 손해! ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏",
-      "body": "[speaker]\r\n\r\n재입고\r\n\r\n[carat](https://link-173.example) [ads-emailHeaderNote](https://link-174.example) [ads-emailHeaderTop](https://link-175.example)\r\n[Hero Banner](https://link-176.example)\r\n\r\n[sku index 0](https://link-177.example)\t[sku index 1](https://link-178.example)\t[sku index 2](https://link-179.example)\r\n[sku index 3](https://link-180.example)\t[sku index 4](https://link-181.example)\t[sku index 5](https://link-182.example)\r\n[sku index 6](https://link-183.example)\t[sku index 7](https://link-184.example)\t[sku index 8](https://link-185.example)    [Lightning Deals](https://link-186.example) [Global Lightning Deals](https://link-187.example) [ads-emailFooterTop](https://link-188.example) [장바구니](https://link-189.example) [생활용품\r\n\r\n[Sku img]\t[Sku img]\t[Sku img]\r\n[Sku img]\t[Sku img]\t[Sku img]](https://link-190.example) [Global+ 생활용품\r\n\r\n[Sku img]\t[Sku img]\t[Sku img]\r\n[Sku img]\t[Sku img]\t[Sku img]](https://link-191.example)\r\n[Hero Banner](https://link-192.example)\r\n[ads-emailFooterMiddle](https://link-193.example) [ads-emailFooterBottom](https://link-194.example) [ads-emailFootnote](https://link-195.example)  2026 Weee!, Inc.\r\n47467 Fremont Blvd\r\nFremont, CA 94538\r\n\r\n[Unsubscribe](https://link-196.example) [Manage](https://link-197.example) [Support](mailto:person-9@domain-7.example)",
+      "body": "[speaker]\r\n\r\n재입고\r\n\r\n[carat](https://link-173.example) [ads-emailHeaderNote](https://link-174.example) [ads-emailHeaderTop](https://link-175.example)\r\n[Hero Banner](https://link-176.example)\r\n\r\n[sku index 0](https://link-177.example)\t[sku index 1](https://link-178.example)\t[sku index 2](https://link-179.example)\r\n[sku index 3](https://link-180.example)\t[sku index 4](https://link-181.example)\t[sku index 5](https://link-182.example)\r\n[sku index 6](https://link-183.example)\t[sku index 7](https://link-184.example)\t[sku index 8](https://link-185.example)    [Lightning Deals](https://link-186.example) [Global Lightning Deals](https://link-187.example) [ads-emailFooterTop](https://link-188.example) [장바구니](https://link-189.example) [생활용품\r\n\r\n[Sku img]\t[Sku img]\t[Sku img]\r\n[Sku img]\t[Sku img]\t[Sku img]](https://link-190.example) [Global+ 생활용품\r\n\r\n[Sku img]\t[Sku img]\t[Sku img]\r\n[Sku img]\t[Sku img]\t[Sku img]](https://link-191.example)\r\n[Hero Banner](https://link-192.example)\r\n[ads-emailFooterMiddle](https://link-193.example) [ads-emailFooterBottom](https://link-194.example) [ads-emailFootnote](https://link-195.example)  2026 Weee!, Inc.\r\n47467 Fremont Blvd\r\nFremont, CA 94538\r\n\r\n[Unsubscribe](https://link-196.example) [Manage](https://link-197.example) [Support](mailto:support@domain-7.example)",
       "labels": ["CATEGORY_PROMOTIONS", "UNREAD", "INBOX"],
       "receivedAt": "2026-05-25T18:00:46.000Z",
       "label": "SILENT"
@@ -174,7 +174,7 @@
     {
       "id": "d63feb18-65ac-4dda-8f85-7616a8e4a64c",
       "gmailId": "19e5fedef8563679",
-      "from": "Google <person-5@domain-5.example>",
+      "from": "Google <no-reply@domain-5.example>",
       "subject": "보안 알림",
       "snippet": "Mac에서 새로 로그인함 person-4@domain-4.example Mac 기기에서 내 Google 계정에 새로 로그인했습니다. 직접 로그인한 것이 맞다면 아무런 조치를 취하지 않아도 됩니다. 본인이 아니라면 안내에 따라 계정을 보호하세요. 활동 확인 다음 페이지에서 보안 활동도 확인할 수 있습니다. https://link-207.example",
       "body": "[image: Google]\r\nMac에서 새로 로그인함\r\n\r\n\r\nperson-4@domain-4.example\r\nMac 기기에서 내 Google 계정에 새로 로그인했습니다. 직접 로그인한 것이  \r\n맞다면 아무런 조치를 취하지 않아도 됩니다. 본인이\r\n아니라면 안내에 따라 계정을 보호하세요.\r\n활동 확인\r\n<https://link-208.example>\r\n다음 페이지에서 보안 활동도 확인할 수 있습니다.\r\nhttps://link-209.example\r\n이 이메일은 Google 계정 및 서비스의 중요한 변경사항을 알려드리기 위해  \r\n발송되었습니다.\r\n© 2026 Google LLC, 1600 Amphitheatre Parkway, Mountain View, CA 94043, USA\r\n",
@@ -185,7 +185,7 @@
     {
       "id": "0f9533aa-f3f7-43b3-a541-50970fd07371",
       "gmailId": "19e5fb6ce5055db6",
-      "from": "GitHub <person-13@domain-11.example>",
+      "from": "GitHub <noreply@domain-11.example>",
       "subject": "[GitHub] Please verify your email address.",
       "snippet": "Almost done! To secure your GitHub account, we just need to verify your email address: person-4@domain-4.example. Verify email address This will let you receive notifications and password resets from GitHub.",
       "body": "Almost done, @user-1!\r\n\r\nTo secure your GitHub account, we just need to verify your email address: person-4@domain-4.example.\r\n\r\nClick the link below to verify your email address:\r\nhttps://link-210.example\r\n\r\nThis will let you receive notifications and password resets from GitHub.\r\n\r\n\r\n\r\nYou're receiving this email because you recently created a new GitHub account or added a new email address. If this wasn’t you, please ignore this email.\r\n\r\n---\r\nSent with <3 by GitHub.\r\nGitHub, Inc. 88 Colin P Kelly Jr Street\r\nSan Francisco, CA 94107\r\n",
@@ -196,7 +196,7 @@
     {
       "id": "cedb3d15-3341-47bb-927f-d6f67ecb2bb1",
       "gmailId": "19e5fb6adf297e8d",
-      "from": "GitHub <person-13@domain-11.example>",
+      "from": "GitHub <noreply@domain-11.example>",
       "subject": "[GitHub] Please verify your email address.",
       "snippet": "Almost done! To secure your GitHub account, we just need to verify your email address: person-4@domain-4.example. Verify email address This will let you receive notifications and password resets from GitHub.",
       "body": "Almost done, @user-1!\r\n\r\nTo secure your GitHub account, we just need to verify your email address: person-4@domain-4.example.\r\n\r\nClick the link below to verify your email address:\r\nhttps://link-211.example\r\n\r\nThis will let you receive notifications and password resets from GitHub.\r\n\r\n\r\n\r\nYou're receiving this email because you recently created a new GitHub account or added a new email address. If this wasn’t you, please ignore this email.\r\n\r\n---\r\nSent with <3 by GitHub.\r\nGitHub, Inc. 88 Colin P Kelly Jr Street\r\nSan Francisco, CA 94107\r\n",
@@ -207,10 +207,10 @@
     {
       "id": "d2e4fc6b-3224-4ff7-8542-efa936f1db22",
       "gmailId": "19e5b25b0db7d94c",
-      "from": "\"Weee!\" <person-8@domain-7.example>",
+      "from": "\"Weee!\" <hello@domain-7.example>",
       "subject": "🔥 이번 주 핫딜 🔥 장바구니에 담을 준비 되셨나요?",
       "snippet": "이번 주엔 뭐가 쌀까? 👀 ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏",
-      "body": "[speaker]\r\n\r\n재입고\r\n\r\n[carat](https://link-212.example) [ads-emailHeaderNote](https://link-213.example) [ads-emailHeaderTop](https://link-214.example)\r\n[Hero Banner](https://link-215.example)\r\n\r\n[sku index 0](https://link-216.example)\t[sku index 1](https://link-217.example)\t[sku index 2](https://link-218.example)\r\n[sku index 3](https://link-219.example)\t[sku index 4](https://link-220.example)\t[sku index 5](https://link-221.example)\r\n[sku index 6](https://link-222.example)\t[sku index 7](https://link-223.example)\t[sku index 8](https://link-224.example)    [Lightning Deals](https://link-225.example) [Global Lightning Deals](https://link-226.example) [ads-emailFooterTop](https://link-227.example) [장바구니](https://link-228.example) [생활용품\r\n\r\n[Sku img]\t[Sku img]\t[Sku img]\r\n[Sku img]\t[Sku img]\t[Sku img]](https://link-229.example) [Global+ 생활용품\r\n\r\n[Sku img]\t[Sku img]\t[Sku img]\r\n[Sku img]\t[Sku img]\t[Sku img]](https://link-230.example)\r\n[Hero Banner](https://link-231.example)\r\n[ads-emailFooterMiddle](https://link-232.example) [ads-emailFooterBottom](https://link-233.example) [ads-emailFootnote](https://link-234.example)  2026 Weee!, Inc.\r\n47467 Fremont Blvd\r\nFremont, CA 94538\r\n\r\n[Unsubscribe](https://link-235.example) [Manage](https://link-236.example) [Support](mailto:person-9@domain-7.example)",
+      "body": "[speaker]\r\n\r\n재입고\r\n\r\n[carat](https://link-212.example) [ads-emailHeaderNote](https://link-213.example) [ads-emailHeaderTop](https://link-214.example)\r\n[Hero Banner](https://link-215.example)\r\n\r\n[sku index 0](https://link-216.example)\t[sku index 1](https://link-217.example)\t[sku index 2](https://link-218.example)\r\n[sku index 3](https://link-219.example)\t[sku index 4](https://link-220.example)\t[sku index 5](https://link-221.example)\r\n[sku index 6](https://link-222.example)\t[sku index 7](https://link-223.example)\t[sku index 8](https://link-224.example)    [Lightning Deals](https://link-225.example) [Global Lightning Deals](https://link-226.example) [ads-emailFooterTop](https://link-227.example) [장바구니](https://link-228.example) [생활용품\r\n\r\n[Sku img]\t[Sku img]\t[Sku img]\r\n[Sku img]\t[Sku img]\t[Sku img]](https://link-229.example) [Global+ 생활용품\r\n\r\n[Sku img]\t[Sku img]\t[Sku img]\r\n[Sku img]\t[Sku img]\t[Sku img]](https://link-230.example)\r\n[Hero Banner](https://link-231.example)\r\n[ads-emailFooterMiddle](https://link-232.example) [ads-emailFooterBottom](https://link-233.example) [ads-emailFootnote](https://link-234.example)  2026 Weee!, Inc.\r\n47467 Fremont Blvd\r\nFremont, CA 94538\r\n\r\n[Unsubscribe](https://link-235.example) [Manage](https://link-236.example) [Support](mailto:support@domain-7.example)",
       "labels": ["CATEGORY_PROMOTIONS", "UNREAD", "INBOX"],
       "receivedAt": "2026-05-24T18:00:54.000Z",
       "label": "SILENT"
@@ -218,7 +218,7 @@
     {
       "id": "c1fc2248-822e-40b5-b903-be45f778c368",
       "gmailId": "19e59e00690ba536",
-      "from": "Vercel <person-14@domain-12.example>",
+      "from": "Vercel <notifications@domain-12.example>",
       "subject": "Failed preview deployment on team 'team-1's projects'",
       "snippet": "Hello, team-1. There was an error deploying klorn-web to the preview environment. See deployment details If you&#39;d like to report an issue, reach out to Vercel Help. Manage your notification",
       "body": "\r\nHey team-1,\r\n completed an activity.\r\nSomething happened that you should be aware of.\r\nThanks,\r\nThe team @ \r\n\r\n\r\n--\r\n\r\n\r\nIf you have questions, reach out to https://link-237.example\r\n\r\n\r\nManage your notification settings:\r\nhttps://link-238.example\r\n\r\nCopyright 2026 Vercel Inc. All rights reserved.\r\n440 N Barranca Ave #4133 Covina, CA 91723\r\n\r\n",
@@ -229,7 +229,7 @@
     {
       "id": "987d4ecd-85f3-40a8-8895-dcd3ca591b83",
       "gmailId": "19e57e46d2bbbaab",
-      "from": "EVE <person-15@domain-13.example>",
+      "from": "EVE <onboarding@domain-13.example>",
       "subject": "[Klorn] New waitlist signup: person-16@domain-9.example",
       "snippet": "New early-access request Email: person-16@domain-9.example Review at https://link-239.example",
       "body": "NEW EARLY-ACCESS REQUEST\r\n\r\nEmail: person-16@domain-9.example\r\n\r\nReview at https://link-240.example",
@@ -240,7 +240,7 @@
     {
       "id": "c22f2c56-7d7e-47e4-a839-09cc0140d652",
       "gmailId": "19e55d42e07a13e5",
-      "from": "Vercel <person-14@domain-12.example>",
+      "from": "Vercel <notifications@domain-12.example>",
       "subject": "Failed preview deployment on team 'team-1's projects'",
       "snippet": "Hello, team-1. There was an error deploying klorn-web to the preview environment. See deployment details If you&#39;d like to report an issue, reach out to Vercel Help. Manage your notification",
       "body": "\r\nHey team-1,\r\n completed an activity.\r\nSomething happened that you should be aware of.\r\nThanks,\r\nThe team @ \r\n\r\n\r\n--\r\n\r\n\r\nIf you have questions, reach out to https://link-241.example\r\n\r\n\r\nManage your notification settings:\r\nhttps://link-242.example\r\n\r\nCopyright 2026 Vercel Inc. All rights reserved.\r\n440 N Barranca Ave #4133 Covina, CA 91723\r\n\r\n",
@@ -262,7 +262,7 @@
     {
       "id": "99749a00-faa8-43db-af63-45f751ee8cd3",
       "gmailId": "19e5534b57d13c2b",
-      "from": "EVE <person-15@domain-13.example>",
+      "from": "EVE <onboarding@domain-13.example>",
       "subject": "[Klorn] Waitlist re-submission: person-11@domain-9.example",
       "snippet": "Waitlist re-submission Email: person-11@domain-9.example Name: fddsaf How they use email: dfsafs Review at https://link-252.example",
       "body": "WAITLIST RE-SUBMISSION\r\n\r\nEmail: person-11@domain-9.example\r\n\r\nName: fddsaf\r\n\r\nHow they use email: dfsafs\r\n\r\nReview at https://link-253.example",
@@ -273,7 +273,7 @@
     {
       "id": "6a6a8395-6a20-42d3-9acc-826d0311f97b",
       "gmailId": "19e55342e36c6957",
-      "from": "EVE <person-15@domain-13.example>",
+      "from": "EVE <onboarding@domain-13.example>",
       "subject": "[Klorn] Waitlist re-submission: person-11@domain-9.example",
       "snippet": "Waitlist re-submission Email: person-11@domain-9.example Name: dnsalkjkdkl How they use email: asdnklsan Review at https://link-254.example",
       "body": "WAITLIST RE-SUBMISSION\r\n\r\nEmail: person-11@domain-9.example\r\n\r\nName: dnsalkjkdkl\r\n\r\nHow they use email: asdnklsan\r\n\r\nReview at https://link-255.example",
@@ -284,7 +284,7 @@
     {
       "id": "ac24f799-4942-4df6-a685-ebf74fc3b4c5",
       "gmailId": "19e553173b764692",
-      "from": "EVE <person-15@domain-13.example>",
+      "from": "EVE <onboarding@domain-13.example>",
       "subject": "[Klorn] New waitlist signup: person-17@domain-14.example",
       "snippet": "New early-access request Email: person-17@domain-14.example Review at https://link-256.example",
       "body": "NEW EARLY-ACCESS REQUEST\r\n\r\nEmail: person-17@domain-14.example\r\n\r\nReview at https://link-257.example",
@@ -295,7 +295,7 @@
     {
       "id": "d2ae30bf-87be-444a-a88f-0500a8afadf9",
       "gmailId": "19e54fe01f2daee5",
-      "from": "Google <person-3@domain-3.example>",
+      "from": "Google <no-reply@domain-3.example>",
       "subject": "클론님, Google 계정 설정을 확인해 주세요",
       "snippet": "클론 님, 안녕하세요. 새로운 컴퓨터에서 Google을 사용해 주셔서 감사합니다. 계정 이용과 관련한 유용한 도움말을 아래에서 확인해 보세요. ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌",
       "body": "\r\n클론 님 안녕하세요.\r\n\r\n새로운 컴퓨터에서 Google을 사용해 주셔서 감사합니다. 계정 이용과 관련한  \r\n유용한 도움말을 아래에서 확인해 보세요.\r\n\r\n계정 관리하기\r\n\r\n나에게 꼭 맞는 옵션을 선택하세요. 개인 정보 보호 및 보안 설정은 언제든지  \r\n검토하고 조정할 수 있습니다.\r\n\r\n계속  \r\n<https://link-258.example>\r\n\r\nChrome을 사용하여 웹 탐색하기\r\n\r\nGoogle이 만든 브라우저인 Chrome을 선택하세요\r\n\r\nChrome은 4주마다 업데이트되므로 항상 최신 보안 기능과 수정사항을 이용할 수  \r\n있으며, 멀웨어나 피싱과 같은 보안 위협으로부터 사용자를 보호합니다.\r\n\r\nChrome 다운로드  \r\n<https://link-259.example>\r\n\r\nGoogle 계정을 최대한 활용하세요\r\n\r\nGoogle에서 맞춤 도움말, 뉴스, 추천 항목을 보내 드립니다.\r\n\r\n예, 최신 소식을 받습니다  \r\n<https://link-260.example>\r\n\r\n최근에 Mac 기기에서 Google 계정에 로그인했기 때문에 person-4@domain-4.example  \r\n<person-4@domain-4.example> 주소로 발송된 이메일입니다. 기기에서 처음으로 계정에  \r\n로그인했을 때 기기의 Google 서비스를 설정하는 방법을 안내하는 이메일을 받고  \r\n싶지 않다면 수신 거부  \r\n<https://link-261.example>해  \r\n주세요.\r\n\r\n© 2026 Google LLC 1600 Amphitheatre Parkway, Mountain View, CA 94043\r\n",
@@ -306,7 +306,7 @@
     {
       "id": "a8ca544a-edce-4f3c-b2b1-94a9ebdc6ce8",
       "gmailId": "19e54fd0fdf20cc3",
-      "from": "Google <person-5@domain-5.example>",
+      "from": "Google <no-reply@domain-5.example>",
       "subject": "보안 알림",
       "snippet": "Mac에서 새로 로그인함 person-4@domain-4.example Mac 기기에서 내 Google 계정에 새로 로그인했습니다. 직접 로그인한 것이 맞다면 아무런 조치를 취하지 않아도 됩니다. 본인이 아니라면 안내에 따라 계정을 보호하세요. 활동 확인 다음 페이지에서 보안 활동도 확인할 수 있습니다. https://link-262.example",
       "body": "[image: Google]\r\nMac에서 새로 로그인함\r\n\r\n\r\nperson-4@domain-4.example\r\nMac 기기에서 내 Google 계정에 새로 로그인했습니다. 직접 로그인한 것이  \r\n맞다면 아무런 조치를 취하지 않아도 됩니다. 본인이\r\n아니라면 안내에 따라 계정을 보호하세요.\r\n활동 확인\r\n<https://link-263.example>\r\n다음 페이지에서 보안 활동도 확인할 수 있습니다.\r\nhttps://link-264.example\r\n이 이메일은 Google 계정 및 서비스의 중요한 변경사항을 알려드리기 위해  \r\n발송되었습니다.\r\n© 2026 Google LLC, 1600 Amphitheatre Parkway, Mountain View, CA 94043, USA\r\n",
@@ -328,7 +328,7 @@
     {
       "id": "72239b32-6d05-4341-8f2a-4166f3b42c71",
       "gmailId": "19e540ee4361731d",
-      "from": "LinkedIn <person-1@domain-1.example>",
+      "from": "LinkedIn <messages-noreply@domain-1.example>",
       "subject": "👤 김클론 님, 닉네임A 님과 1촌을 맺어보세요.",
       "snippet": "-- ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏",
       "body": "닉네임A님을 아세요?\r\n\r\n네, 1촌 맺기https://link-268.example\r\n\r\n\r\n아는 사람 찾기\r\n            \r\n    변민욱(보람) undefined\r\n--\r\nhttps://link-269.example\r\n\r\n더보기https://link-270.example\r\n      \r\n\r\n----------------------------------------\r\n\r\n김클론님에게 발송된 이메일입니다(--).\r\n자세히 보기: https://link-271.example\r\n아는 사람 찾기 알림 이메일을 받고 있습니다.\r\n\r\n\r\n이메일 받지 않기: https://link-272.example\r\n도움말: https://link-273.example\r\n\r\n© 2026 LinkedIn Ireland Unlimited Company, Wilton Plaza, Wilton Place, Dublin 2.LinkedIn은 LinkedIn Ireland Unlimited Company의 등록 사업자명입니다.\r\nLinkedIn과 LinkedIn 로고는 LinkedIn의 등록 상표입니다.",
@@ -339,7 +339,7 @@
     {
       "id": "07c35e4e-4650-4799-86b5-110c87e78cfe",
       "gmailId": "19e53ba650074b21",
-      "from": "Vercel <person-14@domain-12.example>",
+      "from": "Vercel <notifications@domain-12.example>",
       "subject": "Failed production deployment on team 'team-1's projects'",
       "snippet": "Hello, team-1. There was an error deploying klorn-web to the production environment. See deployment details If you&#39;d like to report an issue, reach out to Vercel Help. Manage your",
       "body": "\r\nHey team-1,\r\n completed an activity.\r\nSomething happened that you should be aware of.\r\nThanks,\r\nThe team @ \r\n\r\n\r\n--\r\n\r\n\r\nIf you have questions, reach out to https://link-274.example\r\n\r\n\r\nManage your notification settings:\r\nhttps://link-275.example\r\n\r\nCopyright 2026 Vercel Inc. All rights reserved.\r\n440 N Barranca Ave #4133 Covina, CA 91723\r\n\r\n",
@@ -350,7 +350,7 @@
     {
       "id": "a8ce4fd3-edfb-4b64-a527-04c538783861",
       "gmailId": "19e532421e3447ce",
-      "from": "Vercel <person-14@domain-12.example>",
+      "from": "Vercel <notifications@domain-12.example>",
       "subject": "Failed preview deployment on team 'team-1's projects'",
       "snippet": "Hello, team-1. There was an error deploying klorn-web to the preview environment. See deployment details If you&#39;d like to report an issue, reach out to Vercel Help. Manage your notification",
       "body": "\r\nHey team-1,\r\n completed an activity.\r\nSomething happened that you should be aware of.\r\nThanks,\r\nThe team @ \r\n\r\n\r\n--\r\n\r\n\r\nIf you have questions, reach out to https://link-276.example\r\n\r\n\r\nManage your notification settings:\r\nhttps://link-277.example\r\n\r\nCopyright 2026 Vercel Inc. All rights reserved.\r\n440 N Barranca Ave #4133 Covina, CA 91723\r\n\r\n",
@@ -361,7 +361,7 @@
     {
       "id": "b31d9b6b-a864-4505-8323-c2cc6c7c63b4",
       "gmailId": "19e52ea6046af027",
-      "from": "Google <person-5@domain-5.example>",
+      "from": "Google <no-reply@domain-5.example>",
       "subject": "보안 알림",
       "snippet": "새로운 계정 로그인 person-4@domain-4.example 내 Google 계정에 새로 로그인했습니다. 직접 로그인한 것이 맞다면 아무런 조치를 취하지 않아도 됩니다. 본인이 아니라면 안내에 따라 계정을 보호하세요. 활동 확인 다음 페이지에서 보안 활동도 확인할 수 있습니다. https://link-278.example 이 이메일은",
       "body": "[image: Google]\r\n새로운 계정 로그인\r\n\r\n\r\nperson-4@domain-4.example\r\n내 Google 계정에 새로 로그인했습니다. 직접 로그인한 것이 맞다면 아무런  \r\n조치를 취하지 않아도 됩니다. 본인이 아니라면 안내에\r\n따라 계정을 보호하세요.\r\n활동 확인\r\n<https://link-279.example>\r\n다음 페이지에서 보안 활동도 확인할 수 있습니다.\r\nhttps://link-280.example\r\n이 이메일은 Google 계정 및 서비스의 중요한 변경사항을 알려드리기 위해  \r\n발송되었습니다.\r\n© 2026 Google LLC, 1600 Amphitheatre Parkway, Mountain View, CA 94043, USA\r\n",
@@ -383,7 +383,7 @@
     {
       "id": "5af65d66-3756-405f-b6e7-d3ee2d0f07c9",
       "gmailId": "19e501c20b9b85de",
-      "from": "ChatGPT <person-19@domain-16.example>",
+      "from": "ChatGPT <noreply@domain-16.example>",
       "subject": "A faster way to shop",
       "snippet": "Without all the tabs Shop smarter with ChatGPT Instead of scrolling through pages of results, simply describe what you want. Start shopping ChatGPT helps you browse, compare, and refine options - all",
       "body": null,
@@ -394,7 +394,7 @@
     {
       "id": "c8e80651-e4b8-4705-8a6b-65a01b88354c",
       "gmailId": "19e4fa125b5c88fb",
-      "from": "Namecheap Support <person-20@domain-15.example>",
+      "from": "Namecheap Support <support@domain-15.example>",
       "subject": "Your confirmation code",
       "snippet": "Sign-in from unauthorized device detected — please verify. ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌",
       "body": null,
@@ -405,7 +405,7 @@
     {
       "id": "3219cf95-8060-4494-b84c-0ef0ca1216af",
       "gmailId": "19e4f14625bb9b77",
-      "from": "Vercel <person-14@domain-12.example>",
+      "from": "Vercel <notifications@domain-12.example>",
       "subject": "Failed preview deployment on team 'team-1's projects'",
       "snippet": "Hello, team-1. There was an error deploying jigeum-web to the preview environment. See deployment details If you&#39;d like to report an issue, reach out to Vercel Help. Manage your notification",
       "body": "\r\nHey team-1,\r\n completed an activity.\r\nSomething happened that you should be aware of.\r\nThanks,\r\nThe team @ \r\n\r\n\r\n--\r\n\r\n\r\nIf you have questions, reach out to https://link-314.example\r\n\r\n\r\nManage your notification settings:\r\nhttps://link-315.example\r\n\r\nCopyright 2026 Vercel Inc. All rights reserved.\r\n440 N Barranca Ave #4133 Covina, CA 91723\r\n\r\n",
@@ -416,7 +416,7 @@
     {
       "id": "6730d8fb-4847-4d4f-aae1-34f523fc37db",
       "gmailId": "19e4ee9013ec6fd2",
-      "from": "Namecheap Support <person-20@domain-15.example>",
+      "from": "Namecheap Support <support@domain-15.example>",
       "subject": "Namecheap Order Summary (Order# 200000001);",
       "snippet": "Namecheap Order Summary Date: May 22, 2026 04:59:12 AM EST Hello, Thank you for choosing Namecheap. Here&#39;s a summary of your order. Order Details Order Date: May 22, 2026 04:59:03 AM Order Number:",
       "body": "\r\n--------------------------------------------------------------------------------\r\nNamecheap Order Summary\r\nDate: May 22, 2026 04:59:12 AM EST\r\n--------------------------------------------------------------------------------\r\n\r\nHello,\r\n\r\nThank you for choosing Namecheap. Here's a summary of your order.\r\n\r\n\r\nOrder Details\r\n\r\n********************************************************************************\r\nOrder Date     : May 22, 2026 04:59:03 AM\r\nOrder Number   : 200000001\r\nTransaction ID : 200000002\r\nUser Name      : $USERNAME$\r\nAddress\t       : person-0, Kim\r\n                 Example-ro 1\r\n                 100, 100\r\n                 Cityname\r\n                 Cityname\r\n                 0000000                 \r\n                 KR\r\n\t\t\r\n\r\nPayment source : Credit Card ***(* * * * 0000)\r\nInitial Charge : $185.96\r\nFinal Cost     : $185.96\r\n\r\nTotal Refund   : N/A\r\nRefund Trans   : N/A\r\nN/A\r\n\r\nFull details for this order can be viewed at\r\n\r\nOrder details are available only in HTML email. To see order details go to \r\n https://link-316.example\r\n\r\nAdditional Transaction Details:\r\nOrder #        : user-1-104.30.167.22-4c78055ee34d41e0832c063c3d6466b3\r\nApproval #     : ch_3TZotNI2aKwfvOvn0khwprJs\r\n\r\n\r\nHosting:\r\nIf you've purchased a hosting plan, its activation and setup will start soon (https://link-317.example). Once both are complete, we'll send you a welcome email with your IP address and hosting account information.\r\n\r\nSSL Certificates: \r\nIf you've purchased an SSL certificate, you will need to enable the SSL on your server (https://link-318.example). However, if you purchased a renewal PositiveSSL or EssentialSSL for a domain on Namecheap Shared Hosting, it should be installed automatically within an hour of the purchase.\r\n\r\nPremium domains:\r\nPlease note that the premium purchase may take 24-72 hours to complete. We might get in touch with you to confirm purchase details. Please see our Knowledgebase(https://link-319.example) for more information.\r\n\r\nTransfers: \r\nIf you are transferring domains that require an Auth Code (or \"EPP code\"), we'll let you know. If it's required, please obtain the Auth Code from your previous registrar and enter it via your Account Panel.\r\n\r\nRenewals: \r\nWe strongly encourage you to select auto-renewal for your domains and other products, whenever the option is available. We offer a variety of payment options for auto-renewals.\r\n\r\nFeel free to contact our Customer Service(https://link-320.example) team if you have any questions or concerns. They're available 24/7.\r\n \r\nRegards, \r\nTeam  Namecheap \r\nhttps://link-321.example \r\n--------------------------------------------------------------------------------\r\n\r\n",
@@ -427,7 +427,7 @@
     {
       "id": "cb78e96d-9147-4cab-b004-95873b89813d",
       "gmailId": "19e4ee214aee0ae8",
-      "from": "Namecheap <person-21@domain-15.example>",
+      "from": "Namecheap <hello@domain-15.example>",
       "subject": "Welcome to Namecheap",
       "snippet": "We have everything you need to launch your online business. ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ ‌ ͏ Namecheap Namecheap Domains Hosting",
       "body": "Namecheap We have everything you need to launch your online business.  ͏ ‌   ͏ \r\n‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌ \r\n  ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ ‌   ͏ \r\n\r\n\r\n\r\n <https://link-322.example> \r\nDomains \r\n<https://link-323.example> \r\nHosting <https://link-324.example> Apps \r\n<https://link-325.example>  \r\n<https://link-326.example> \r\n\r\n\r\n\r\n\r\nWelcome to Namecheap\r\n\r\nEnjoy the best customer service and support\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\nUsername: user-1\r\nSign in to Your Account <https://link-327.example> \r\n\r\n\r\n\r\nLaunch your business\r\n\r\nWe have everything you need to launch your online business, from finding the \r\nperfect domain to building, hosting, and securing your site.\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\nBuy a domain\r\n\r\nDiscover our latest domain deals and check our pricing on hundreds of \r\nin-demand TLDs today.\r\nSearch Domains <https://link-328.example> \r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\nSet up hosting\r\n\r\nLaunch your site in minutes with our reliable, secure and stress-free hosting \r\noptions.\r\nView Plans <https://link-329.example> \r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\nBuild a new website\r\n\r\nGet all the tools you need to build a beautiful website and connect your \r\nNamecheap domain in minutes.\r\nTry for Free <https://link-330.example> \r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\nSecure your website\r\n\r\nProtect your website's data fast with high-quality SSL certificates for every \r\nbusiness and budget.\r\nGet Protection <https://link-331.example> \r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\nGet professional email\r\n\r\nImpress your clients with a branded, customized email address that's ideal for \r\nyour personal and business needs.\r\nGet Email <https://link-332.example> \r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\nGrow your social reach\r\n\r\nGet more customers, with tools like auto-publish, media library, keyword \r\ntracking & more. All in one Dashboard.\r\nTry for Free <https://link-333.example> \r\n\r\n\r\n\r\n\r\n\r\nControl your notifications\r\n\r\nOver the next few weeks, we'll share some tips on how to start your next \r\nproject. We want you to have the power to control what, where, and when we \r\ncommunicate with you.\r\nUpdate Your Preferences \r\n<https://link-334.example> \r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\nTell us what interests you\r\n\r\nSelect the profile that best describes you so that we can send you relevant \r\ninformation.\r\n\r\nGet better deals → \r\n<https://link-335.example>\r\n\r\n\r\n\r\nNeed help?\r\n\r\nWe’re always here for you.\r\nChat Now <https://link-336.example> \r\n\r\n\r\nFollow Namecheap\r\n\r\n <https://link-337.example>  <https://link-338.example>  \r\n<https://link-339.example>  \r\n<https://link-340.example>  \r\n<https://link-341.example> \r\n\r\nAbout Us <https://link-342.example> Help Center \r\n<https://link-343.example> Privacy Policy \r\n<https://link-344.example> Terms & Conditions \r\n<https://link-345.example> Unsubscribe \r\n<https://link-346.example>\r\n\r\n\r\n4600 East Washington Street, Suite 305, Phoenix, AZ 85034, USA <>\r\n\r\nNamecheap is a trademark and/or registered trademark of Namecheap, Inc\r\n\r\nCopyright © 2026 Namecheap, Inc\r\n\r\nWe are an ICANN accredited registrar.\r\n\r\nServing customers since 2001.\r\n\r\n",
@@ -438,7 +438,7 @@
     {
       "id": "3ef324e3-1419-4dfa-a81e-2f22ec1a35e2",
       "gmailId": "19e4a848d6c44583",
-      "from": "person-22@domain-3.example",
+      "from": "noreply@domain-3.example",
       "subject": "Thanks for applying to Google",
       "snippet": "Hi Yongrean Kim, Thanks for applying to Google! There are a ton of great companies out there, so we appreciate your interest in joining our team. While we&#39;re not able to reach out to every",
       "body": "Hi Yongrean Kim,\r\n\r\nThanks for applying to Google! There are a ton of great companies out  \r\nthere, so we appreciate your interest in joining our team.\r\n\r\nWhile we’re not able to reach out to every applicant, our recruiting team  \r\nwill contact you if your skills and experience are a strong match for the  \r\nrole. In the meantime, join the conversation about job opportunities and  \r\nlife at Google on our LinkedIn page:  \r\nhttps://link-347.example\r\n\r\nThanks,\r\n\r\nGoogle Recruiting\r\n\r\n\r\nLearn more about our Equal Employment Opportunity policy:  \r\nhttps://link-348.example and the EEOC's \"Equal Employment  \r\nOpportunity is The Law\" (PDF):  \r\nhttps://link-349.example\r\n\r\nPay Transparency Policy\r\nGoogle's Pay Transparency Policy ensures that you won't be discharged or  \r\ndiscriminated against based on whether you've inquired about, discussed, or  \r\ndisclosed your pay.  Read the full policy (PDF):  \r\nhttps://link-350.example\r\n\r\nThe information you provide will be used in accordance with Google's  \r\napplicant and candidate privacy policy:  \r\nhttps://link-351.example\r\n",
@@ -449,7 +449,7 @@
     {
       "id": "2d0676d9-3896-4099-9c0e-bd39867c53ea",
       "gmailId": "19e49c23444718b9",
-      "from": "LinkedIn <person-1@domain-1.example>",
+      "from": "LinkedIn <messages-noreply@domain-1.example>",
       "subject": "김클론님, DONGWOO Lee님(1촌 0명)과 1촌이 되세요. 💬",
       "snippet": "-- ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏",
       "body": "DONGWOO Lee님을 아세요?\r\n\r\n네, 1촌 맺기https://link-352.example\r\n\r\n\r\n아는 사람 찾기\r\n            \r\n    사람A\r\n--\r\nhttps://link-353.example\r\n            \r\n    강윤진\r\n--\r\nhttps://link-354.example\r\n            \r\n    Darwin Guilaran\r\n--\r\nhttps://link-355.example\r\n            \r\n    brandon yoon\r\n--\r\nhttps://link-356.example\r\n            \r\n    이관우\r\n--\r\nhttps://link-357.example\r\n\r\n더보기https://link-358.example\r\n      \r\n\r\n----------------------------------------\r\n\r\n김클론님에게 발송된 이메일입니다(--).\r\n자세히 보기: https://link-359.example\r\n아는 사람 찾기 알림 이메일을 받고 있습니다.\r\n\r\n\r\n이메일 받지 않기: https://link-360.example\r\n도움말: https://link-361.example\r\n\r\n© 2026 LinkedIn Ireland Unlimited Company, Wilton Plaza, Wilton Place, Dublin 2.LinkedIn은 LinkedIn Ireland Unlimited Company의 등록 사업자명입니다.\r\nLinkedIn과 LinkedIn 로고는 LinkedIn의 등록 상표입니다.",
@@ -493,7 +493,7 @@
     {
       "id": "ebea276f-bd0d-45eb-af2d-f82e8c505781",
       "gmailId": "19e3f757b68cf80e",
-      "from": "LinkedIn <person-1@domain-1.example>",
+      "from": "LinkedIn <messages-noreply@domain-1.example>",
       "subject": "김클론님, 사람L님(1촌 0명)과 1촌이 되세요. 💬",
       "snippet": "-- ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏",
       "body": "사람L님을 아세요?\r\n\r\n네, 1촌 맺기https://link-441.example\r\n\r\n\r\n아는 사람 찾기\r\n\r\n더보기https://link-442.example\r\n      \r\n\r\n----------------------------------------\r\n\r\n김클론님에게 발송된 이메일입니다(--).\r\n자세히 보기: https://link-443.example\r\n아는 사람 찾기 알림 이메일을 받고 있습니다.\r\n\r\n\r\n이메일 받지 않기: https://link-444.example\r\n도움말: https://link-445.example\r\n\r\n© 2026 LinkedIn Ireland Unlimited Company, Wilton Plaza, Wilton Place, Dublin 2.LinkedIn은 LinkedIn Ireland Unlimited Company의 등록 사업자명입니다.\r\nLinkedIn과 LinkedIn 로고는 LinkedIn의 등록 상표입니다.",
@@ -504,7 +504,7 @@
     {
       "id": "34aa6e27-b5c3-409e-9a7d-caa8af27246d",
       "gmailId": "19e3ee64bb6e9510",
-      "from": "LinkedIn <person-1@domain-1.example>",
+      "from": "LinkedIn <messages-noreply@domain-1.example>",
       "subject": "이기셨어요, 클론 님 🏆",
       "snippet": "전문가 수백만 명이 이미 LinkedIn의 일일 퍼즐 게임으로 자신의 실력을 시험하고 있습니다. ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏",
       "body": "전문가 수백만 명이 이미 LinkedIn의 일일 퍼즐 게임으로 자신의 실력을 시험하고 있습니다.\r\n\r\nLinkedIn 게임은 재충전과 집중을 돕기 위해 짧은 퍼즐을 매일 제공합니다.\r\n\r\n30초 휴식! - Zip\r\n점들을 순서대로 연결해서 그리드를 얼마나 빨리 채울 수 있는지 확인해 보세요.\r\n플레이: https://link-446.example\r\n\r\n3분 휴식! - Mini Sudoku\r\n미니멀하게 만들어진 고전 게임으로 “스도쿠”의 창시자가 만들었습니다.\r\n플레이: https://link-447.example\r\n\r\n      \r\n\r\n----------------------------------------\r\n\r\n김클론님에게 발송된 이메일입니다(--).\r\n자세히 보기: https://link-448.example\r\nLinkedIn 알림 이메일을 받고 있습니다.\r\n\r\n\r\n이메일 받지 않기: https://link-449.example\r\n도움말: https://link-450.example\r\n\r\n© 2026 LinkedIn Ireland Unlimited Company, Wilton Plaza, Wilton Place, Dublin 2.LinkedIn은 LinkedIn Ireland Unlimited Company의 등록 사업자명입니다.\r\nLinkedIn과 LinkedIn 로고는 LinkedIn의 등록 상표입니다.",
@@ -515,7 +515,7 @@
     {
       "id": "9c36e628-df53-404c-8fdb-23315eecd70c",
       "gmailId": "19e3cf5cc7f14eec",
-      "from": "Reddit <person-23@domain-17.example>",
+      "from": "Reddit <noreply@domain-17.example>",
       "subject": "Artificial Intelligence & Machine Learning에 관심이 있나요? \"11 Claude things I wish someone had told me 12 months ago\" 게시물을 살펴보세요.",
       "snippet": "Artificial Intelligence &amp; Machine Learning에 관심이 있나요? &quot;11 Claude things I wish someone had told me 12 months ago&quot; 게시물을 살펴보세요. ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌",
       "body": null,
@@ -526,7 +526,7 @@
     {
       "id": "6ea94fe5-92c2-4fd9-b6f7-cf42a4b3afb2",
       "gmailId": "19e3be4cb14d9614",
-      "from": "EVE <person-15@domain-13.example>",
+      "from": "EVE <onboarding@domain-13.example>",
       "subject": "[Jigeum] Waitlist re-submission: person-11@domain-9.example",
       "snippet": "Waitlist re-submission Email: person-11@domain-9.example Name: fjdsalfjlk How they use email: fdshjklfdsajkl Review at https://link-451.example",
       "body": "WAITLIST RE-SUBMISSION\r\n\r\nEmail: person-11@domain-9.example\r\n\r\nName: fjdsalfjlk\r\n\r\nHow they use email: fdshjklfdsajkl\r\n\r\nReview at https://link-452.example",
@@ -537,7 +537,7 @@
     {
       "id": "8f4ca51c-6097-4145-9799-e02c39c80aea",
       "gmailId": "19e3bd744e096027",
-      "from": "EVE <person-15@domain-13.example>",
+      "from": "EVE <onboarding@domain-13.example>",
       "subject": "[EVE] Email config test",
       "snippet": "Email delivery is working.",
       "body": "Email delivery is working.",
@@ -548,7 +548,7 @@
     {
       "id": "d3e1b4f5-fb59-4a22-a9d2-4009d9a9b022",
       "gmailId": "19e3a4f1816be6db",
-      "from": "LinkedIn <person-1@domain-1.example>",
+      "from": "LinkedIn <messages-noreply@domain-1.example>",
       "subject": "Bill Gates Co-chair님이 인맥 중에서 인기를 끌고 있습니다",
       "snippet": "클론님을 위한 추천 보기 ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏ ͏",
       "body": "5명을 팔로우하면 프로필 조회수를 얻을 확률이 최대 1.5배나 높아집니다.\r\n\r\n\r\nhttps://link-453.example\r\n      \r\n\r\n----------------------------------------\r\n\r\n김클론님에게 발송된 이메일입니다(--).\r\n자세히 보기: https://link-454.example\r\n아는 사람 찾기 알림 이메일을 받고 있습니다.\r\n\r\n\r\n이메일 받지 않기: https://link-455.example\r\n도움말: https://link-456.example\r\n\r\n© 2026 LinkedIn Ireland Unlimited Company, Wilton Plaza, Wilton Place, Dublin 2.LinkedIn은 LinkedIn Ireland Unlimited Company의 등록 사업자명입니다.\r\nLinkedIn과 LinkedIn 로고는 LinkedIn의 등록 상표입니다.",
@@ -559,7 +559,7 @@
     {
       "id": "ledger-c94a8bf5-fe63-4246-ade7-088d15811caa",
       "gmailId": "19eff073727699ed",
-      "from": "Klorn <person-24@domain-18.example>",
+      "from": "Klorn <noreply@domain-18.example>",
       "subject": "[Klorn] Waitlist re-submission: person-25@domain-4.example",
       "snippet": "Waitlist re-submission Email: person-25@domain-4.example Name: 김장훈 Review at https://link-457.example",
       "body": "WAITLIST RE-SUBMISSION\r\n\r\nEmail: person-25@domain-4.example\r\n\r\nName: 김장훈\r\n\r\nReview at https://link-458.example",
@@ -571,7 +571,7 @@
     {
       "id": "ledger-f2e76c69-79e8-4c83-af4e-6e61cd6adc9d",
       "gmailId": "19eff067ba3eb5ad",
-      "from": "Klorn <person-24@domain-18.example>",
+      "from": "Klorn <noreply@domain-18.example>",
       "subject": "[Klorn] Waitlist re-submission: person-25@domain-4.example",
       "snippet": "Waitlist re-submission Email: person-25@domain-4.example Review at https://link-459.example",
       "body": "WAITLIST RE-SUBMISSION\r\n\r\nEmail: person-25@domain-4.example\r\n\r\nReview at https://link-460.example",
@@ -583,7 +583,7 @@
     {
       "id": "ledger-1624c4d7-b252-4fd2-b410-a01e0218f8d0",
       "gmailId": "19efefeab8762cf8",
-      "from": "Klorn <person-24@domain-18.example>",
+      "from": "Klorn <noreply@domain-18.example>",
       "subject": "[Klorn] New waitlist signup: person-25@domain-4.example",
       "snippet": "New early-access request Email: person-25@domain-4.example Review at https://link-461.example",
       "body": "NEW EARLY-ACCESS REQUEST\r\n\r\nEmail: person-25@domain-4.example\r\n\r\nReview at https://link-462.example",
