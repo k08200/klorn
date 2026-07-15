@@ -1,0 +1,103 @@
+# Prod-lag tripwire — catches the "prod silently frozen" failure mode.
+#
+# Render deploys have silently stalled twice (2026-07-15 alone): the tsc
+# build OOM'd (#807/#809, prod stuck 7 PRs behind) and the dashboard-managed
+# buildCommand kept referencing the deleted packages/core (#829, prod stuck
+# 19 commits behind for 6+ hours). CI stays green in both cases — the gap is
+# that nothing compares WHAT IS LIVE against main. /api/health exposes the
+# running commit SHA, so this workflow does exactly that comparison and
+# fails (GitHub's workflow-failure notification is the alarm, same channel
+# as judge-canary) when the oldest undeployed main commit is older than the
+# threshold.
+#
+# Reuses the KEEPALIVE_URL repository variable (see keepalive.yml) — no new
+# configuration. If the variable is unset, the run is a no-op notice.
+#
+# States:
+#   - prod == main HEAD                        → OK
+#   - prod behind, newest gap < threshold      → OK (deploy in flight)
+#   - prod behind, gap ≥ threshold             → FAIL (deploys are stuck)
+#   - prod commit unknown to main (diverged)   → FAIL (manual deploy/rollback
+#                                                 — worth a human look)
+#   - health endpoint unreachable              → FAIL (service down beats lag)
+
+name: Prod lag tripwire
+
+on:
+  schedule:
+    - cron: "23 * * * *" # hourly, off the top-of-hour cron congestion
+  workflow_dispatch:
+    inputs:
+      lag-hours:
+        description: "Alert when the oldest undeployed main commit is older than this many hours"
+        type: string
+        default: "2"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prod-lag-tripwire
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    name: Compare live prod commit against main
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LAG_HOURS: ${{ inputs.lag-hours || '2' }}
+    steps:
+      - name: Not configured
+        if: vars.KEEPALIVE_URL == ''
+        run: echo "::notice::Set repository variable KEEPALIVE_URL to enable the prod-lag tripwire."
+
+      - name: Check prod lag
+        if: vars.KEEPALIVE_URL != ''
+        run: |
+          set -euo pipefail
+
+          health=$(curl -fsS --max-time 60 --retry 2 "${{ vars.KEEPALIVE_URL }}") || {
+            echo "::error::Prod health endpoint unreachable — service may be down."
+            exit 1
+          }
+          prod_sha=$(echo "$health" | jq -r '.commit // empty')
+          if [ -z "$prod_sha" ]; then
+            echo "::error::Health response has no commit field: $health"
+            exit 1
+          fi
+
+          main_sha="${{ github.sha }}"
+          echo "prod=$prod_sha main=$main_sha"
+          if [ "$prod_sha" = "$main_sha" ]; then
+            echo "OK: prod is on main HEAD."
+            exit 0
+          fi
+
+          gh api "repos/${{ github.repository }}/compare/${prod_sha}...${main_sha}" > compare.json || {
+            echo "::error::Compare API failed — prod commit ${prod_sha} may not exist in this repo."
+            exit 1
+          }
+          status=$(jq -r '.status' compare.json)
+          ahead=$(jq -r '.ahead_by' compare.json)
+
+          if [ "$status" = "identical" ] || { [ "$status" = "ahead" ] && [ "$ahead" = "0" ]; }; then
+            echo "OK: prod is on main HEAD."
+            exit 0
+          fi
+          if [ "$status" != "ahead" ]; then
+            echo "::error::Prod commit ${prod_sha} is '${status}' relative to main — manual deploy or rollback? Check the Render dashboard."
+            exit 1
+          fi
+
+          oldest=$(jq -r '.commits[0].commit.committer.date' compare.json)
+          oldest_epoch=$(date -d "$oldest" +%s)
+          now_epoch=$(date +%s)
+          lag_hours=$(( (now_epoch - oldest_epoch) / 3600 ))
+
+          echo "Prod is ${ahead} commit(s) behind main; oldest undeployed commit is from ${oldest} (~${lag_hours}h ago)."
+          if [ "$lag_hours" -ge "$LAG_HOURS" ]; then
+            echo "::error::Prod deploys look stuck: ${ahead} undeployed commit(s), oldest is ~${lag_hours}h old (threshold ${LAG_HOURS}h). Check the Render dashboard (Events/Deploys) — see #829 and #809 for the two known failure modes."
+            exit 1
+          fi
+          echo "OK: within threshold (${LAG_HOURS}h) — a deploy is likely in flight."
