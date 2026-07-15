@@ -4,15 +4,19 @@
  * The offline eval routes each item's JudgeContext through this seam, so it
  * must (a) feed the exact context to the exact item, and (b) leave behavior
  * byte-identical when absent (default = EMPTY_JUDGE_CONTEXT, as before).
- * The LLM is mocked down at the openai.js boundary — every assertion below
- * is about the deterministic paths (sender-prior, learned-rule, fallback).
+ * The LLM is mocked down at the llm/openai.js boundary — every assertion
+ * below is about the deterministic paths (sender-prior, learned-rule,
+ * fallback). The fallback tests assert the mock WAS called: if this path
+ * ever drifts from poc-judge's real import again (as after the #812 module
+ * move), the suite must fail loudly instead of silently hitting a live
+ * provider on machines where Prisma's .env auto-load supplies an API key.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createCompletionMock = vi.hoisted(() => vi.fn());
 
-vi.mock("../openai.js", () => ({
+vi.mock("../llm/openai.js", () => ({
   createCompletion: createCompletionMock,
   MODEL: "test-model",
   JUDGE_MODEL: "test-judge-model",
@@ -96,6 +100,9 @@ describe("judgeEmails contextFor seam", () => {
     expect(judgements[0].source).toBe("keyword-fallback");
     expect(judgements[1].source).toBe("keyword-fallback");
     expect(judgements[3].source).toBe("keyword-fallback");
+    // The empty-context items reached the (mocked, down) LLM — proves the
+    // mock intercepts the real boundary rather than a stale module path.
+    expect(createCompletionMock).toHaveBeenCalled();
   });
 
   it("supports an async contextFor", async () => {
@@ -111,5 +118,6 @@ describe("judgeEmails contextFor seam", () => {
   it("behaves exactly as before when contextFor is absent", async () => {
     const [judgement] = await judgeEmails([neutralEmail(0)], {});
     expect(judgement.source).toBe("keyword-fallback");
+    expect(createCompletionMock).toHaveBeenCalled();
   });
 });
