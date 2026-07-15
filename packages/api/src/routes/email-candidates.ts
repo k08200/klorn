@@ -8,10 +8,6 @@
 
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
-import {
-  type CandidateIntakeStatus,
-  openCommitmentForCandidateTransition,
-} from "../candidate-commitments.js";
 import { prisma } from "../db.js";
 import {
   listCandidateIntakes,
@@ -21,6 +17,10 @@ import {
   updateCandidateIntake,
   updateCandidateIntakes,
 } from "../email-candidate-intake.js";
+import {
+  type CandidateIntakeStatus,
+  openCommitmentForCandidateTransition,
+} from "../pim/candidate-commitments.js";
 
 type CandidateRows = Awaited<ReturnType<typeof listCandidateIntakes>>;
 

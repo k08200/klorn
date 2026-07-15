@@ -12,7 +12,7 @@ vi.mock("../gmail.js", () => ({
   getGoogleUserInfo: vi.fn(),
   getOAuth2Client: vi.fn(),
 }));
-vi.mock("../calendar.js", () => ({
+vi.mock("../pim/calendar.js", () => ({
   createEvent: vi.fn(async () => ({ eventId: null })),
   deleteEvent: vi.fn(async () => {}),
 }));

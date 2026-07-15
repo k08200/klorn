@@ -9,7 +9,7 @@
  * graph schema can come after the grouping rules prove useful in dogfooding.
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 
 /**
  * How far back the work graph reaches when scanning mail. Active contexts

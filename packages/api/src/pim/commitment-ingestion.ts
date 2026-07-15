@@ -9,14 +9,14 @@
 
 import { createHash } from "node:crypto";
 import type { CommitmentKind, CommitmentSource } from "@prisma/client";
+import { prisma } from "../db.js";
+import { isNoReplySender, isTransactionalSender } from "../keyword-policy.js";
 import { type CommitmentCandidate, extractCommitmentCandidates } from "./commitment-extractor.js";
 import {
   type CommitmentRefinement,
   maybeRefineCommitmentCandidateWithLlm,
 } from "./commitment-refiner.js";
 import { type CommitmentInput, upsertCommitment } from "./commitments.js";
-import { prisma } from "./db.js";
-import { isNoReplySender, isTransactionalSender } from "./keyword-policy.js";
 
 const TITLE_MAX_LEN = 120;
 const HASH_LEN = 16;

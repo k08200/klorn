@@ -11,7 +11,7 @@ vi.mock("../gmail.js", () => ({
   getGoogleUserInfo: vi.fn(),
   getOAuth2Client: vi.fn(),
 }));
-vi.mock("../briefing-status.js", () => ({
+vi.mock("../pim/briefing-status.js", () => ({
   getBriefingStatus: vi.fn(async () => ({
     generated: false,
     automation: { enabled: true, briefingTime: "09:00" },

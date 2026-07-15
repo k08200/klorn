@@ -49,7 +49,7 @@ vi.mock("../db.js", () => ({
 
 vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
 
-import { checkConflicts } from "../calendar.js";
+import { checkConflicts } from "../pim/calendar.js";
 
 const START = "2026-06-03T14:00:00+09:00"; // 05:00Z
 const END = "2026-06-03T15:00:00+09:00"; // 06:00Z

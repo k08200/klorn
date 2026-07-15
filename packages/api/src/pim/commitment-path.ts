@@ -11,9 +11,9 @@
  * to deliver X" and "here are the three things I need to do this week."
  */
 
-import { prisma } from "./db.js";
-import { parseLlmJson } from "./llm/llm-json.js";
-import { createCompletion, MODEL } from "./llm/openai.js";
+import { prisma } from "../db.js";
+import { parseLlmJson } from "../llm/llm-json.js";
+import { createCompletion, MODEL } from "../llm/openai.js";
 
 export interface PathStep {
   step: string;

@@ -1,4 +1,4 @@
-import { stripUntrusted } from "./untrusted.js";
+import { stripUntrusted } from "../untrusted.js";
 
 export type BriefingSource = "email" | "task" | "calendar";
 

@@ -13,7 +13,6 @@ import { drainActionOutbox } from "./action-outbox.js";
 import { findOpenEmailAttentionItemId } from "./attention-override.js";
 import { sendAutoReplyViaFloor } from "./auto-reply-send.js";
 import { isEntitled, planHasFeature } from "./billing/stripe.js";
-import { createDailyBriefingDelivery } from "./briefing.js";
 import {
   MULTI_INBOX_SYNC_ENABLED,
   SCHEDULER_CALENDAR_SYNC_INTERVAL_MS,
@@ -41,6 +40,7 @@ import { escalateUnackedPush } from "./notify/phone-escalation.js";
 import { sendPushNotification } from "./notify/push.js";
 import { sendSms } from "./notify/sms.js";
 import { buildUrgentDedupMessage, parseNotifiedGmailIds } from "./notify/urgent-dedup.js";
+import { createDailyBriefingDelivery } from "./pim/briefing.js";
 import { runProactiveActions } from "./proactive-actions.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";

@@ -13,7 +13,7 @@
  */
 
 import { prisma } from "./db.js";
-import { getUpcomingMeetings } from "./meeting.js";
+import { getUpcomingMeetings } from "./pim/meeting.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
 import { pushNotification } from "./websocket.js";

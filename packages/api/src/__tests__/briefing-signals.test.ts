@@ -4,7 +4,7 @@ import {
   dogfoodBriefingFixture,
   expectedDogfoodTopActionRefs,
 } from "../__fixtures__/briefing/dogfood.js";
-import { buildBriefingSignals } from "../briefing-signals.js";
+import { buildBriefingSignals } from "../pim/briefing-signals.js";
 
 const NOW = new Date("2026-04-28T09:00:00.000Z");
 

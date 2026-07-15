@@ -11,16 +11,16 @@ const upsertCalls: Array<{ userId: string; input: Record<string, unknown> }> = [
 vi.mock("../db.js", () => ({
   prisma: { commitment: { findUnique: vi.fn(async () => null) } },
 }));
-vi.mock("../commitments.js", () => ({
+vi.mock("../pim/commitments.js", () => ({
   upsertCommitment: vi.fn(async (userId: string, input: Record<string, unknown>) => {
     upsertCalls.push({ userId, input });
     return { id: "c-1", ...input };
   }),
 }));
 
-import { extractCommitmentCandidates } from "../commitment-extractor.js";
-import { extractAndUpsertCommitmentsFromText } from "../commitment-ingestion.js";
 import { isNoReplySender, isTransactionalSender } from "../keyword-policy.js";
+import { extractCommitmentCandidates } from "../pim/commitment-extractor.js";
+import { extractAndUpsertCommitmentsFromText } from "../pim/commitment-ingestion.js";
 
 describe("isNoReplySender (F1 helper)", () => {
   it("flags no-reply / do-not-reply machine senders", () => {

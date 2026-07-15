@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractCommitmentCandidates } from "../commitment-extractor.js";
+import { extractCommitmentCandidates } from "../pim/commitment-extractor.js";
 
 describe("extractCommitmentCandidates", () => {
   it("returns no candidates for empty input", () => {

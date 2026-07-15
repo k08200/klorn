@@ -16,7 +16,7 @@ vi.mock("googleapis", () => ({
 }));
 
 import { getAuthedClient } from "../gmail.js";
-import { getUpcomingMeetings } from "../meeting.js";
+import { getUpcomingMeetings } from "../pim/meeting.js";
 import { captureError } from "../sentry.js";
 
 const mockedGetAuthedClient = vi.mocked(getAuthedClient);

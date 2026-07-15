@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sendPushNotification } from "../notify/push.js";
-import { deliverDueReminderById, scheduleReminderDeliveryCheck } from "../reminder-scheduler.js";
+import {
+  deliverDueReminderById,
+  scheduleReminderDeliveryCheck,
+} from "../pim/reminder-scheduler.js";
 import { captureError } from "../sentry.js";
 import { pushNotification } from "../websocket.js";
 

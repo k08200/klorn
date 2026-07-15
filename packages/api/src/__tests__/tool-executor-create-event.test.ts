@@ -31,20 +31,20 @@ vi.mock("../gmail.js", () => ({
   markAsRead: vi.fn(),
   classifyEmails: vi.fn(),
 }));
-vi.mock("../calendar.js", () => ({
+vi.mock("../pim/calendar.js", () => ({
   CALENDAR_TOOLS: [],
   createEvent: (...args: unknown[]) => createEventMock(...args),
   deleteEvent: vi.fn(),
   listEvents: vi.fn(),
   checkConflicts: (...args: unknown[]) => checkConflictsMock(...args),
 }));
-vi.mock("../meeting.js", () => ({
+vi.mock("../pim/meeting.js", () => ({
   MEETING_TOOLS: [],
   getUpcomingMeetings: vi.fn(),
   joinMeeting: vi.fn(),
   summarizeMeeting: vi.fn(),
 }));
-vi.mock("../briefing.js", () => ({ BRIEFING_TOOLS: [] }));
+vi.mock("../pim/briefing.js", () => ({ BRIEFING_TOOLS: [] }));
 vi.mock("../memory.js", () => ({
   MEMORY_TOOLS: [],
   forget: vi.fn(),

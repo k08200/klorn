@@ -22,11 +22,11 @@ vi.mock("../db.js", () => ({
   },
 }));
 
-vi.mock("../commitments.js", () => ({
+vi.mock("../pim/commitments.js", () => ({
   upsertCommitment: mocks.upsertCommitmentMock,
 }));
 
-import { extractAndUpsertCommitmentsFromText } from "../commitment-ingestion.js";
+import { extractAndUpsertCommitmentsFromText } from "../pim/commitment-ingestion.js";
 
 describe("extractAndUpsertCommitmentsFromText", () => {
   beforeEach(() => {

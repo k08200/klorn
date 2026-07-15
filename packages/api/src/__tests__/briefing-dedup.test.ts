@@ -52,9 +52,9 @@ vi.mock("../llm/openai.js", () => ({
     return Promise.resolve({ choices: [{ message: { content: "GENERATED BRIEFING" } }] });
   }),
 }));
-vi.mock("../tasks.js", () => ({ listTasks: vi.fn(() => Promise.resolve({ tasks: [] })) }));
+vi.mock("../pim/tasks.js", () => ({ listTasks: vi.fn(() => Promise.resolve({ tasks: [] })) }));
 vi.mock("../gmail.js", () => ({ listEmails: vi.fn(() => Promise.resolve({ emails: [] })) }));
-vi.mock("../notes.js", () => ({ listNotes: vi.fn(() => Promise.resolve({ notes: [] })) }));
+vi.mock("../pim/notes.js", () => ({ listNotes: vi.fn(() => Promise.resolve({ notes: [] })) }));
 vi.mock("../llm/llm-credentials.js", () => ({
   getUserLlmCredentials: vi.fn(() => Promise.resolve(undefined)),
 }));
@@ -70,8 +70,8 @@ vi.mock("../websocket.js", () => ({
   }),
 }));
 
-import { createDailyBriefingDelivery, ensureDailyBriefingNotification } from "../briefing.js";
 import { sendPushNotification } from "../notify/push.js";
+import { createDailyBriefingDelivery, ensureDailyBriefingNotification } from "../pim/briefing.js";
 
 const USER = "user-1";
 const DAY_KEY = "2026-07-01";

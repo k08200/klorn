@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { InboxSummary } from "../inbox-summary.js";
-import { buildOperatingPlanFromSignals } from "../operating-plan.js";
+import type { InboxSummary } from "../pim/inbox-summary.js";
+import { buildOperatingPlanFromSignals } from "../pim/operating-plan.js";
+import type { WorkGraphSummary } from "../pim/work-graph.js";
 import type { PlaybookRecommendation } from "../playbooks.js";
-import type { WorkGraphSummary } from "../work-graph.js";
 
 const NOW = new Date("2026-05-11T09:00:00.000Z").getTime();
 

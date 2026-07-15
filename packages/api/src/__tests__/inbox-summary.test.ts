@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTodaySection, type EventInput, type TaskInput } from "../inbox-summary.js";
+import { buildTodaySection, type EventInput, type TaskInput } from "../pim/inbox-summary.js";
 
 const NOW = new Date("2026-04-28T10:00:00Z").getTime();
 // startOfToday uses local time, so derive TODAY_START the same way the
