@@ -52,9 +52,30 @@ DATABASE_URL=... OPENROUTER_API_KEY=... npx tsx scripts/poc-accuracy.ts \
   --in=../../poc-ground-truth.json
 ```
 
+## Weekly canary: verdict flips + margin erosion (#769)
+
+`judge-canary.yml` re-scores the committed set every Monday and compares the
+run against the previous week's baseline with `scripts/canary-compare.ts`:
+
+- **Verdict flip = alarm.** An item present in both runs whose predicted tier
+  changed (with an unchanged label) fails the workflow. On a fixed set with a
+  temperature-0 judge, a flip means the decision boundary itself moved —
+  prompt drift, threshold change, or provider-side model drift. This is the
+  signal the PR-gate eval cannot see: it only runs when a PR touches judge
+  files, never on an unchanged codebase.
+- **Margins = readout.** Per floor check, `value − floor` for both runs and
+  the delta, so a floor that is still green but clearing by less every week
+  (e.g. PUSH recall 0.92 → 0.91 → 0.901 against a 0.90 floor) is visible
+  before the run that finally trips it.
+
+Baseline lifecycle: on a stable run the baseline refreshes (rolling
+actions/cache key); on an alarm it is kept, so the flip keeps firing weekly
+until investigated. To accept a new normal, run the workflow manually with
+`accept-baseline=true`.
+
 ## Planned: repoint the canary at real mail
 
-Today `judge-canary.yml` runs the **synthetic** set, so a green canary proves
+`judge-canary.yml` runs the **synthetic** set, so a green canary proves
 "the model didn't silently drift", NOT "the thesis holds on real mail". The
 launch GO/NO-GO bar (POC.md) is ≥80% on the founder's real 50 — and that
 number has never been the thing CI measures.
