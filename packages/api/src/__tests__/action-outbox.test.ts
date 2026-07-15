@@ -86,11 +86,11 @@ vi.mock("../tool-executor.js", () => ({
 }));
 vi.mock("../websocket.js", () => ({ pushNotification }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
-vi.mock("../pattern-learner.js", () => ({ learnFromApproval: vi.fn(async () => {}) }));
+vi.mock("../learning/pattern-learner.js", () => ({ learnFromApproval: vi.fn(async () => {}) }));
 vi.mock("../attention-mirror.js", () => ({
   upsertAttentionForPendingAction: vi.fn(async () => {}),
 }));
-vi.mock("../feedback.js", () => ({
+vi.mock("../learning/feedback.js", () => ({
   recordFeedback,
   recipientFromToolArgs: () => null,
 }));

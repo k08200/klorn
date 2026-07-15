@@ -22,9 +22,9 @@ import { AUTOPILOT_LEVEL, type AutopilotLevel } from "./agent-mode.js";
 import { computeAttentionInputHash } from "./attention-input-hash.js";
 import { prisma } from "./db.js";
 import { recordDecision, recordEmailDecision } from "./decision-label.js";
-import { getSuppressionSet, isSuppressed } from "./feedback-adaptor.js";
+import { getSuppressionSet, isSuppressed } from "./learning/feedback-adaptor.js";
+import type { EngagementKind } from "./learning/sender-policy.js";
 import type { PocJudgement } from "./poc-judge.js";
-import type { EngagementKind } from "./sender-policy.js";
 import type { Tier } from "./tiers.js";
 
 // Typed wrapper around attentionItem.upsert. The where uses the userId-scoped

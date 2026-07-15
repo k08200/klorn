@@ -4,7 +4,7 @@ import {
   type FeedbackPolicyCandidateKind,
   formatFeedbackPolicyCandidatesForPrompt,
   selectFeedbackPolicyCandidatesForPrompt,
-} from "../policy-extraction.js";
+} from "../learning/policy-extraction.js";
 
 type FeedbackPolicyEvent = Parameters<typeof extractFeedbackPolicyCandidates>[0][number];
 

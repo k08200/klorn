@@ -41,7 +41,7 @@ vi.mock("../db.js", () => ({
 
 // memory.ts imports prisma via a typed alias; mock the helper directly so the
 // remember() call path is exercised without re-implementing the upsert wiring.
-vi.mock("../memory.js", () => ({
+vi.mock("../learning/memory.js", () => ({
   remember: vi.fn(async (userId: string, type: string, key: string, content: string) => {
     const id = memoryKey(userId, type, key);
     memoryStore.set(id, { userId, type, key, content });

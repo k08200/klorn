@@ -464,7 +464,7 @@ try {
   // surface that here too. Independent of BG_DISABLED — it only reads, and
   // overrides affect on-demand classification too.
   try {
-    const { refreshOverrideCache } = await import("./ontology-overrides.js");
+    const { refreshOverrideCache } = await import("./learning/ontology-overrides.js");
     const ok = await refreshOverrideCache();
     if (!ok) {
       console.warn(
@@ -566,7 +566,7 @@ try {
 
   // Start pattern learner (6-hour cycle for learning user behavior patterns)
   if (!BG_DISABLED) {
-    import("./pattern-learner.js")
+    import("./learning/pattern-learner.js")
       .then(({ startPatternLearner }) => {
         startPatternLearner();
       })

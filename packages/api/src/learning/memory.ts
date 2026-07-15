@@ -5,7 +5,7 @@
  * across conversations. Memories are automatically loaded into system prompt.
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 
 // biome-ignore lint/suspicious/noExplicitAny: Prisma dynamic model access requires untyped delegate
 const db: Record<string, Record<string, (...args: any[]) => Promise<any>>> = prisma as never;

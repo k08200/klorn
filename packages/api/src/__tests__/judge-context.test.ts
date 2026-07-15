@@ -22,11 +22,11 @@ vi.mock("../sentry.js", () => ({
   captureError: vi.fn(),
 }));
 
-vi.mock("../trust-score.js", () => ({
+vi.mock("../learning/trust-score.js", () => ({
   getTrustScore: getTrustScoreMock,
 }));
 
-vi.mock("../interaction-graph.js", () => ({
+vi.mock("../learning/interaction-graph.js", () => ({
   getCachedInteractionNode: getCachedNodeMock,
   // fetchLearnedImportanceFact short-circuits on the (default-off) flag before
   // touching these, but mock them so the engagement path can't throw if a test

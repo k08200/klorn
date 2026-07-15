@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getTraitMetrics, summarizeTraits, type TraitRow } from "../sender-trait-metrics.js";
+import {
+  getTraitMetrics,
+  summarizeTraits,
+  type TraitRow,
+} from "../learning/sender-trait-metrics.js";
 
 const rows: TraitRow[] = [
   { sender: "a@x.com", factKind: "relationship", status: "active", confidence: 0.9 },

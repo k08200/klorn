@@ -27,8 +27,11 @@ vi.mock("../llm/llm-credentials.js", () => ({
   getUserLlmCredentials: vi.fn(async () => undefined),
 }));
 
-import { extractSenderTraitsForUser, extractTraitsFromEmails } from "../sender-trait-extractor.js";
-import { computeTraitSourceSig } from "../sender-trait-signature.js";
+import {
+  extractSenderTraitsForUser,
+  extractTraitsFromEmails,
+} from "../learning/sender-trait-extractor.js";
+import { computeTraitSourceSig } from "../learning/sender-trait-signature.js";
 
 const emails = [
   { from: "vc@fund.com", subject: "Investment", snippet: "we want to invest", labels: [] },

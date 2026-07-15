@@ -20,9 +20,9 @@
  * The top contacts by score are saved as InteractionNode[] into Memory.
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
+import { captureError } from "../sentry.js";
 import { remember } from "./memory.js";
-import { captureError } from "./sentry.js";
 
 const GRAPH_KEY = "interaction_graph_v1";
 const GRAPH_TTL_DAYS = 3; // rebuild every 3 days

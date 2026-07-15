@@ -415,7 +415,7 @@ async function onOutboxCompleted(row: OutboxRow, result: string): Promise<void> 
       message: "",
       createdAt: new Date().toISOString(),
     });
-    import("./pattern-learner.js")
+    import("./learning/pattern-learner.js")
       .then(({ learnFromApproval }) =>
         learnFromApproval(row.userId, row.toolName, asRecord(row.toolArgs)),
       )
@@ -427,7 +427,7 @@ async function onOutboxCompleted(row: OutboxRow, result: string): Promise<void> 
     // with the FAILED signal in onOutboxDead), matching the pre-outbox
     // coupling — so a transient-failed-then-retried action records exactly
     // one terminal signal, not a conflicting APPROVED+FAILED pair.
-    const { recordFeedback, recipientFromToolArgs } = await import("./feedback.js");
+    const { recordFeedback, recipientFromToolArgs } = await import("./learning/feedback.js");
     await recordFeedback({
       userId: row.userId,
       source: "PENDING_ACTION",
@@ -469,7 +469,7 @@ async function onOutboxDead(row: OutboxRow, error: string): Promise<void> {
         },
       });
     }
-    const { recordFeedback, recipientFromToolArgs } = await import("./feedback.js");
+    const { recordFeedback, recipientFromToolArgs } = await import("./learning/feedback.js");
     await recordFeedback({
       userId: row.userId,
       source: "PENDING_ACTION",

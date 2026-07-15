@@ -19,8 +19,10 @@ vi.mock("../db.js", () => ({
   prisma: {},
 }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
-vi.mock("../trust-score.js", () => ({ getTrustScore: vi.fn(async () => null) }));
-vi.mock("../interaction-graph.js", () => ({ getCachedInteractionNode: vi.fn(async () => null) }));
+vi.mock("../learning/trust-score.js", () => ({ getTrustScore: vi.fn(async () => null) }));
+vi.mock("../learning/interaction-graph.js", () => ({
+  getCachedInteractionNode: vi.fn(async () => null),
+}));
 
 // Partial mock: keep the real pure math, override only the model-facing parts.
 vi.mock("../embedding.js", async (importOriginal) => {

@@ -23,7 +23,6 @@ import {
   syncCandidateIntakeForEmail,
   syncRecentCandidateIntakes,
 } from "../email-candidate-intake.js";
-import { recordFeedback as recordLedgerFeedback } from "../feedback.js";
 import { saveConversionResult } from "../file-conversion-store.js";
 import {
   convertEmailAttachment,
@@ -33,6 +32,7 @@ import {
   SUPPORTED_CONVERSION_TARGETS,
 } from "../file-conversions.js";
 import { resolveMailClient } from "../gmail.js";
+import { recordFeedback as recordLedgerFeedback } from "../learning/feedback.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { createVisionCompletion, VISION_MODEL } from "../llm/openai.js";
 import {

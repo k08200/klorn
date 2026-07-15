@@ -35,7 +35,7 @@ vi.mock("../sentry.js", () => ({
   captureError: vi.fn(),
 }));
 
-import { runCorrectionEval, summarizeCorrectionEval } from "../correction-eval.js";
+import { runCorrectionEval, summarizeCorrectionEval } from "../learning/correction-eval.js";
 
 const NOW = new Date("2026-06-14T01:00:00.000Z");
 

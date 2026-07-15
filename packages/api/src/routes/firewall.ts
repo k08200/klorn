@@ -27,12 +27,12 @@ import { prisma } from "../db.js";
 import { getDecisionMetrics } from "../decision-metrics.js";
 import { collapseEmailThreads } from "../firewall-thread-collapse.js";
 import { ensureFreshGmailWatch } from "../gmail.js";
-import { getInteractionGraph } from "../interaction-graph.js";
+import { getInteractionGraph } from "../learning/interaction-graph.js";
+import { describePolicy } from "../learning/ontology.js";
+import { getTrustScoresBulk } from "../learning/trust-score.js";
 import { senderEmail } from "../notify/notification-format.js";
-import { describePolicy } from "../ontology.js";
 import { captureError } from "../sentry.js";
 import { manualOverrideReason, normalizeTier, TIERS, type Tier } from "../tiers.js";
-import { getTrustScoresBulk } from "../trust-score.js";
 
 // Tool args that carry a Gmail message id we can map back to a stored
 // EmailMessage row. Other tools (create_event, send_email, etc.) carry

@@ -11,9 +11,9 @@
  * `proposeThresholdAdjustments` is pure so it can be unit-tested without a DB.
  */
 
-import type { DecisionMetrics } from "./decision-metrics.js";
-import { riskCoverageThreshold, type ScoredOutcome } from "./selective-threshold.js";
-import { CLAMP, type ThresholdConfig, TIER_THRESHOLDS } from "./tier-policy.js";
+import type { DecisionMetrics } from "../decision-metrics.js";
+import { riskCoverageThreshold, type ScoredOutcome } from "../selective-threshold.js";
+import { CLAMP, type ThresholdConfig, TIER_THRESHOLDS } from "../tier-policy.js";
 
 /** PUSH recall below this (the CI eval-gate floor) means the firewall is missing
  * interrupts — propose lowering the PUSH confidence gate. */

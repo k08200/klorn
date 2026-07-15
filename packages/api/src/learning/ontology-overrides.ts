@@ -16,9 +16,9 @@
  * See docs/superpowers/specs/2026-06-23-ontology-approval-gate-design.md.
  */
 
-import { prisma } from "./db.js";
-import { captureError } from "./sentry.js";
-import { type ThresholdConfig, TIER_THRESHOLDS } from "./tier-policy.js";
+import { prisma } from "../db.js";
+import { captureError } from "../sentry.js";
+import { type ThresholdConfig, TIER_THRESHOLDS } from "../tier-policy.js";
 
 export interface AppliedOverride {
   knob: string;

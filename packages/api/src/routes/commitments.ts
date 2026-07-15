@@ -9,7 +9,8 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
-import { recordFeedback } from "../feedback.js";
+import { recordFeedback } from "../learning/feedback.js";
+import { getTrustScoresBulk, updateTrustScore } from "../learning/trust-score.js";
 import {
   buildPath,
   getOrBuildPath,
@@ -22,7 +23,6 @@ import {
   listCommitments,
   updateCommitment,
 } from "../pim/commitments.js";
-import { getTrustScoresBulk, updateTrustScore } from "../trust-score.js";
 
 const ALLOWED_STATUSES = new Set(["OPEN", "DONE", "DISMISSED", "SNOOZED"]);
 

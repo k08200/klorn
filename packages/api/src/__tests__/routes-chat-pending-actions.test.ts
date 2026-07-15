@@ -22,7 +22,7 @@ vi.mock("../action-target.js", () => ({
 }));
 
 const recordFeedbackSpy = vi.fn(async () => {});
-vi.mock("../feedback.js", () => ({
+vi.mock("../learning/feedback.js", () => ({
   recordFeedback: (...args: unknown[]) => recordFeedbackSpy(...args),
   recipientFromToolArgs: () => null,
 }));
@@ -33,11 +33,11 @@ vi.mock("../websocket.js", () => ({
 
 // Dynamically imported by the routes — stub so importing them never pulls
 // in openai/googleapis.
-vi.mock("../pattern-learner.js", () => ({
+vi.mock("../learning/pattern-learner.js", () => ({
   learnFromApproval: vi.fn(async () => {}),
   learnFromRejection: vi.fn(async () => {}),
 }));
-vi.mock("../memory.js", () => ({
+vi.mock("../learning/memory.js", () => ({
   remember: vi.fn(async () => {}),
 }));
 

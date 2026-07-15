@@ -13,7 +13,7 @@ import {
   PRIOR_SHORTCIRCUIT_TIERS,
   SENDER_PRIOR_POLICY,
   type SenderFacts,
-} from "../sender-policy.js";
+} from "../learning/sender-policy.js";
 
 const baseFacts: SenderFacts = {
   tierHistory: {},

@@ -71,7 +71,7 @@ vi.mock("../auth.js", () => ({
   getUserId: vi.fn(() => "user-1"),
 }));
 
-vi.mock("../trust-score.js", () => ({
+vi.mock("../learning/trust-score.js", () => ({
   getTrustScoresBulk: vi.fn(async () => new Map()),
 }));
 

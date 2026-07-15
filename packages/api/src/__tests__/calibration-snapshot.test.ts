@@ -36,7 +36,7 @@ vi.mock("../sentry.js", () => ({
   captureError: captureErrorMock,
 }));
 
-vi.mock("../correction-eval.js", () => ({
+vi.mock("../learning/correction-eval.js", () => ({
   runCorrectionEval: runCorrectionEvalMock,
 }));
 

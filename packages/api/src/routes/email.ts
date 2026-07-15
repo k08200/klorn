@@ -35,11 +35,15 @@ import {
 } from "../email-sync.js";
 import { htmlToPlainText } from "../email-text.js";
 import { getLinkedInboxClients, toggleReadGmail } from "../gmail.js";
-import { getCachedInteractionNode } from "../interaction-graph.js";
+import { getCachedInteractionNode } from "../learning/interaction-graph.js";
+import {
+  getTrustScore,
+  getTrustScoresBulk,
+  type TrustScoreResult,
+} from "../learning/trust-score.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { createTask } from "../pim/tasks.js";
 import { captureError } from "../sentry.js";
-import { getTrustScore, getTrustScoresBulk, type TrustScoreResult } from "../trust-score.js";
 import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
 import { registerEmailBulkRoutes } from "./email-bulk.js";
 import { registerEmailCandidatesRoutes } from "./email-candidates.js";

@@ -12,7 +12,9 @@ vi.mock("../db.js", () => ({
     },
   },
 }));
-vi.mock("../feedback.js", () => ({ recordFeedback: (args: unknown) => recordFeedback(args) }));
+vi.mock("../learning/feedback.js", () => ({
+  recordFeedback: (args: unknown) => recordFeedback(args),
+}));
 
 import { dismissAttentionItem } from "../attention-dismiss.js";
 

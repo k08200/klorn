@@ -17,10 +17,10 @@ vi.mock("../crypto-tokens.js", () => ({
   decryptToken: vi.fn(),
   decryptOptional: vi.fn(),
 }));
-vi.mock("../memory.js", () => ({ remember: vi.fn() }));
+vi.mock("../learning/memory.js", () => ({ remember: vi.fn() }));
 vi.mock("../llm/openai.js", () => ({ createCompletion: vi.fn(), MODEL: "test-model" }));
 
-import { getVoiceProfile } from "../voice-profile-extractor.js";
+import { getVoiceProfile } from "../learning/voice-profile-extractor.js";
 
 beforeEach(() => memoryFindUnique.mockReset());
 

@@ -8,8 +8,10 @@
  */
 
 import type { Prisma } from "@prisma/client";
-import { prisma } from "./db.js";
-import { getDecisionMetrics } from "./decision-metrics.js";
+import { prisma } from "../db.js";
+import { getDecisionMetrics } from "../decision-metrics.js";
+import type { ScoredOutcome } from "../selective-threshold.js";
+import { captureError } from "../sentry.js";
 import { getEffectiveThresholds } from "./ontology-overrides.js";
 import {
   type ProposalCandidate,
@@ -17,8 +19,6 @@ import {
   proposeThresholdAdjustments,
   signalsFromMetrics,
 } from "./ontology-proposals.js";
-import type { ScoredOutcome } from "./selective-threshold.js";
-import { captureError } from "./sentry.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

@@ -28,11 +28,11 @@ vi.mock("../db.js", () => ({
 }));
 
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
-vi.mock("../trust-score.js", () => ({ getTrustScore: vi.fn(async () => null) }));
-vi.mock("../interaction-graph.js", () => ({
+vi.mock("../learning/trust-score.js", () => ({ getTrustScore: vi.fn(async () => null) }));
+vi.mock("../learning/interaction-graph.js", () => ({
   getCachedInteractionNode: vi.fn(async () => null),
 }));
-vi.mock("../sender-trait-store.js", () => ({
+vi.mock("../learning/sender-trait-store.js", () => ({
   getActiveSenderTraits: getActiveSenderTraitsMock,
 }));
 

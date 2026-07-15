@@ -23,7 +23,7 @@ import {
   readEmail,
   sendEmail,
 } from "./gmail.js";
-import { forget, MEMORY_TOOLS, recall, remember } from "./memory.js";
+import { forget, MEMORY_TOOLS, recall, remember } from "./learning/memory.js";
 import { BRIEFING_TOOLS } from "./pim/briefing.js";
 import {
   CALENDAR_TOOLS,

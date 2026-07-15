@@ -14,7 +14,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { InteractionGraph } from "../interaction-graph.js";
+import type { InteractionGraph } from "../learning/interaction-graph.js";
 
 const getGraphMock = vi.hoisted(() => vi.fn());
 
@@ -28,9 +28,13 @@ vi.mock("../db.js", () => ({
 }));
 
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
-vi.mock("../trust-score.js", () => ({ getTrustScore: vi.fn(async () => null) }));
-vi.mock("../sender-trait-store.js", () => ({ getActiveSenderTraits: vi.fn(async () => []) }));
-vi.mock("../learned-rule-store.js", () => ({ getAppliedRulesForMatch: vi.fn(async () => []) }));
+vi.mock("../learning/trust-score.js", () => ({ getTrustScore: vi.fn(async () => null) }));
+vi.mock("../learning/sender-trait-store.js", () => ({
+  getActiveSenderTraits: vi.fn(async () => []),
+}));
+vi.mock("../learning/learned-rule-store.js", () => ({
+  getAppliedRulesForMatch: vi.fn(async () => []),
+}));
 
 // The flip: engagement grounding ON. Everything else in config stays real.
 vi.mock("../config.js", async (importOriginal) => {
@@ -39,8 +43,8 @@ vi.mock("../config.js", async (importOriginal) => {
 });
 
 // Stub ONLY the cache read — keep propagatedImportanceForDomain / nodeMatchesEmail real.
-vi.mock("../interaction-graph.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../interaction-graph.js")>();
+vi.mock("../learning/interaction-graph.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../learning/interaction-graph.js")>();
   return { ...actual, getCachedInteractionGraph: getGraphMock };
 });
 

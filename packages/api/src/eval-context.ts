@@ -9,10 +9,10 @@
  * silently degrading to the empty context and reporting "no difference".
  */
 
-import type { LearnedRule, RulePattern } from "./learned-rules.js";
+import type { LearnedRule, RulePattern } from "./learning/learned-rules.js";
+import type { CorrectionExample, SenderFacts, SenderPrior } from "./learning/sender-policy.js";
+import type { SenderTraitFact } from "./learning/sender-trait-store.js";
 import { EMPTY_JUDGE_CONTEXT, type JudgeContext } from "./poc-judge.js";
-import type { CorrectionExample, SenderFacts, SenderPrior } from "./sender-policy.js";
-import type { SenderTraitFact } from "./sender-trait-store.js";
 import { TIERS, type Tier } from "./tiers.js";
 
 const FIXTURE_KEYS = new Set([

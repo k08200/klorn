@@ -7,7 +7,7 @@
  */
 
 import type { FeedbackEvent, FeedbackSignal } from "@prisma/client";
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 
 export type FeedbackPolicyCandidateKind =
   | "ALLOW_AFTER_SUGGESTION"

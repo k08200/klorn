@@ -11,7 +11,7 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 
-import { buildRejectionHintForPrompt, REJECTION_HINT_LIMIT } from "../rejection-hint.js";
+import { buildRejectionHintForPrompt, REJECTION_HINT_LIMIT } from "../learning/rejection-hint.js";
 
 beforeEach(() => {
   findManySpy.mockReset();

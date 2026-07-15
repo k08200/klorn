@@ -46,7 +46,7 @@ vi.mock("../email-candidate-intake.js", () => ({
   syncCandidateIntakeForEmail: vi.fn(),
   syncRecentCandidateIntakes: vi.fn(),
 }));
-vi.mock("../feedback.js", () => ({ recordFeedback: vi.fn() }));
+vi.mock("../learning/feedback.js", () => ({ recordFeedback: vi.fn() }));
 vi.mock("../file-conversion-store.js", () => ({ saveConversionResult: vi.fn() }));
 vi.mock("../file-conversions.js", () => ({
   convertEmailAttachment: vi.fn(),

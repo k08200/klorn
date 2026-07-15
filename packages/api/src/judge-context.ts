@@ -30,20 +30,20 @@ import {
   getCachedInteractionNode,
   nodeMatchesEmail,
   propagatedImportanceForDomain,
-} from "./interaction-graph.js";
-import { getAppliedRulesForMatch } from "./learned-rule-store.js";
-import type { LearnedRule } from "./learned-rules.js";
-import { EMPTY_JUDGE_CONTEXT, type JudgeContext } from "./poc-judge.js";
+} from "./learning/interaction-graph.js";
+import { getAppliedRulesForMatch } from "./learning/learned-rule-store.js";
+import type { LearnedRule } from "./learning/learned-rules.js";
 import {
   type CorrectionExample,
   SENDER_PRIOR_POLICY,
   type SenderFacts,
   type SenderPrior,
-} from "./sender-policy.js";
-import { getActiveSenderTraits, type SenderTraitFact } from "./sender-trait-store.js";
+} from "./learning/sender-policy.js";
+import { getActiveSenderTraits, type SenderTraitFact } from "./learning/sender-trait-store.js";
+import { getTrustScore } from "./learning/trust-score.js";
+import { EMPTY_JUDGE_CONTEXT, type JudgeContext } from "./poc-judge.js";
 import { captureError } from "./sentry.js";
 import { isTier } from "./tiers.js";
-import { getTrustScore } from "./trust-score.js";
 
 // Sender-prior thresholds live in sender-policy.ts (the single source). Aliased
 // locally for readability where they're used.

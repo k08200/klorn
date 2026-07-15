@@ -15,17 +15,17 @@
  * from.
  */
 
-export * from "./judge-dial.js";
-export * from "./keyword-policy.js";
+export * from "../judge-dial.js";
+export * from "../keyword-policy.js";
+export * from "../tier-policy.js";
 export * from "./sender-policy.js";
-export * from "./tier-policy.js";
 
-import { ESCALATION_CONFIDENCE_FLOOR, escalationModel } from "./judge-dial.js";
-import { KEYWORD_SCORES } from "./keyword-policy.js";
+import { ESCALATION_CONFIDENCE_FLOOR, escalationModel } from "../judge-dial.js";
+import { KEYWORD_SCORES } from "../keyword-policy.js";
+import { TIER_THRESHOLDS } from "../tier-policy.js";
+import { TIERS } from "../tiers.js";
 import { getEffectiveThresholds, overriddenKnobs } from "./ontology-overrides.js";
 import { PRIOR_SHORTCIRCUIT_TIERS, SENDER_PRIOR_POLICY } from "./sender-policy.js";
-import { TIER_THRESHOLDS } from "./tier-policy.js";
-import { TIERS } from "./tiers.js";
 
 /**
  * A JSON-serializable snapshot of the whole deterministic core. Sets are

@@ -73,7 +73,7 @@ vi.mock("../db.js", () => {
   return { prisma: { memory }, db: { memory } };
 });
 
-import { forget, loadMemoriesForPrompt, recall, remember } from "../memory.js";
+import { forget, loadMemoriesForPrompt, recall, remember } from "../learning/memory.js";
 
 describe("memory functions", () => {
   beforeEach(() => {

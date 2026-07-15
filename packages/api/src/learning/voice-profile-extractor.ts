@@ -16,17 +16,17 @@
  */
 
 import { google } from "googleapis";
-import { decryptToken } from "./crypto-tokens.js";
-import { prisma } from "./db.js";
+import { decryptToken } from "../crypto-tokens.js";
+import { prisma } from "../db.js";
 import {
   asBoundedNumber,
   asEnum,
   asString,
   asStringArray,
   asUnitInterval,
-} from "./llm/llm-coerce.js";
-import { parseLlmJson } from "./llm/llm-json.js";
-import { createCompletion, MODEL } from "./llm/openai.js";
+} from "../llm/llm-coerce.js";
+import { parseLlmJson } from "../llm/llm-json.js";
+import { createCompletion, MODEL } from "../llm/openai.js";
 import { remember } from "./memory.js";
 
 const VOICE_PROFILE_KEY = "voice_profile_v1";
@@ -310,7 +310,7 @@ async function getUserCredentials(userId: string) {
       select: { openRouterApiKey: true, geminiApiKey: true },
     });
     if (!user) return undefined;
-    const { decryptOptional } = await import("./crypto-tokens.js");
+    const { decryptOptional } = await import("../crypto-tokens.js");
     return {
       openRouterApiKey: user.openRouterApiKey ? decryptOptional(user.openRouterApiKey) : undefined,
       geminiApiKey: user.geminiApiKey ? decryptOptional(user.geminiApiKey) : undefined,

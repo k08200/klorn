@@ -45,7 +45,7 @@ vi.mock("../pim/meeting.js", () => ({
   summarizeMeeting: vi.fn(),
 }));
 vi.mock("../pim/briefing.js", () => ({ BRIEFING_TOOLS: [] }));
-vi.mock("../memory.js", () => ({
+vi.mock("../learning/memory.js", () => ({
   MEMORY_TOOLS: [],
   forget: vi.fn(),
   recall: vi.fn(),

@@ -17,7 +17,7 @@
  */
 
 import { prisma } from "../src/db.js";
-import { getTraitMetrics } from "../src/sender-trait-metrics.js";
+import { getTraitMetrics } from "../src/learning/sender-trait-metrics.js";
 
 async function main(): Promise<void> {
   const userId = process.argv[2];

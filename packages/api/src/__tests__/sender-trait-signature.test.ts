@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { computeTraitSourceSig, type TraitSourceEmail } from "../sender-trait-signature.js";
+import {
+  computeTraitSourceSig,
+  type TraitSourceEmail,
+} from "../learning/sender-trait-signature.js";
 
 const sample: TraitSourceEmail[] = [
   { from: "a@x.com", subject: "Hi", snippet: "hello", labels: ["INBOX"] },

@@ -31,7 +31,7 @@ import {
   getFeedback,
   recordFeedback,
 } from "../email-label-feedback.js";
-import { recordFeedback as recordLedgerFeedback } from "../feedback.js";
+import { recordFeedback as recordLedgerFeedback } from "../learning/feedback.js";
 import {
   looksReplyNeeded,
   parseJsonArray,

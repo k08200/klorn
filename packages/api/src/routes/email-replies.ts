@@ -10,7 +10,6 @@
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
-import { recordContactEngagement } from "../contact-engagement.js";
 import { prisma } from "../db.js";
 import { buildAttachmentCandidateProfile, listEmailAttachments } from "../email-attachments.js";
 import { updateCandidateIntake } from "../email-candidate-intake.js";
@@ -21,11 +20,12 @@ import {
   resolveMailClient,
   sendEmail,
 } from "../gmail.js";
+import { recordContactEngagement } from "../learning/contact-engagement.js";
+import { buildVoicePromptHint } from "../learning/voice-profile-extractor.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
-import { buildVoicePromptHint } from "../voice-profile-extractor.js";
 import { parseJsonArray, safeAttachmentFilename } from "./email.js";
 import { buildEmailAttachmentBrief } from "./email-attachments.js";
 

@@ -1,5 +1,5 @@
 import { beforeEach } from "vitest";
-import { resetOverrideCache } from "../ontology-overrides.js";
+import { resetOverrideCache } from "../learning/ontology-overrides.js";
 import { resetSchedulerHeartbeats } from "../scheduler-heartbeat.js";
 
 // The classifier reads a module-global effective-threshold cache

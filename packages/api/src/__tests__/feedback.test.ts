@@ -9,7 +9,7 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 
-const { recordFeedback, recipientFromToolArgs } = await import("../feedback.js");
+const { recordFeedback, recipientFromToolArgs } = await import("../learning/feedback.js");
 
 beforeEach(() => createSpy.mockClear());
 

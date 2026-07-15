@@ -35,11 +35,11 @@ import {
   type Tier,
   type TierStats,
 } from "./calibration.js";
-// Type-only: the implementation is dynamically imported in the Sunday
-// branch so the daily snapshot path never loads the LLM provider stack.
-import type { CorrectionEvalPayload } from "./correction-eval.js";
 import { prisma } from "./db.js";
 import { type DecisionDailySummary, getDecisionDailySummary } from "./decision-metrics.js";
+// Type-only: the implementation is dynamically imported in the Sunday
+// branch so the daily snapshot path never loads the LLM provider stack.
+import type { CorrectionEvalPayload } from "./learning/correction-eval.js";
 import { captureError } from "./sentry.js";
 
 const WINDOW_DAYS = 7;
@@ -277,7 +277,7 @@ async function maybeMergeWeeklyCorrectionEval(userId: string, now: Date): Promis
   })) as { payload?: { correctionEval?: CorrectionEvalPayload } } | null;
   if (!row || row.payload?.correctionEval) return;
 
-  const { runCorrectionEval } = await import("./correction-eval.js");
+  const { runCorrectionEval } = await import("./learning/correction-eval.js");
   const result = await runCorrectionEval(userId, now);
   if (!result) return;
 

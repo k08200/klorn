@@ -6,7 +6,7 @@ import {
   PUSH_RECALL_TARGET,
   proposeThresholdAdjustments,
   SILENT_OVERSUPPRESS_TARGET,
-} from "../ontology-proposals.js";
+} from "../learning/ontology-proposals.js";
 import { TIER_THRESHOLDS } from "../tier-policy.js";
 
 /** Signals with everything healthy (no proposal should fire). */
