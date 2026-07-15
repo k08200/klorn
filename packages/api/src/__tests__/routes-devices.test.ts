@@ -44,7 +44,7 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 
-vi.mock("../stripe.js", () => ({
+vi.mock("../billing/stripe.js", () => ({
   getEffectivePlan: vi.fn(() => ({ deviceLimit: 5, name: "FREE" })),
 }));
 

@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
-import { mintTierOverrideToken } from "../tier-override-token.js";
+import { mintTierOverrideToken } from "../billing/tier-override-token.js";
 
 // Set before importing push-origin-allowlist (loaded transitively via routes).
 process.env.PUSH_ALLOWED_ORIGINS = "https://app.klorn.ai,http://localhost:8001";

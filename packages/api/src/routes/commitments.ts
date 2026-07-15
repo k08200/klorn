@@ -7,6 +7,7 @@
  */
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { requireEntitled } from "../billing/entitlement-guard.js";
 import {
   buildPath,
   getOrBuildPath,
@@ -20,7 +21,6 @@ import {
   updateCommitment,
 } from "../commitments.js";
 import { prisma } from "../db.js";
-import { requireEntitled } from "../entitlement-guard.js";
 import { recordFeedback } from "../feedback.js";
 import { getTrustScoresBulk, updateTrustScore } from "../trust-score.js";
 

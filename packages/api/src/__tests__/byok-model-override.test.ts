@@ -35,7 +35,7 @@ vi.mock("../db.js", () => ({
   db: {},
 }));
 
-vi.mock("../llm-usage.js", () => ({
+vi.mock("../billing/llm-usage.js", () => ({
   recordLlmUsage: vi.fn(async () => {}),
   estimatePrebillCents: vi.fn(() => 0),
   trueUpCostLedgers: vi.fn(async () => {}),

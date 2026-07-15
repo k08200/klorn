@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getEffectivePlan, PLANS, planHasFeature } from "../stripe.js";
+import { getEffectivePlan, PLANS, planHasFeature } from "../billing/stripe.js";
 
 describe("plan device limits", () => {
   it("gives free accounts a single device (no free tier — locked at launch)", () => {
@@ -57,7 +57,7 @@ describe("free tier under the paywall (PAYWALL_ENABLED=true)", () => {
   const loadPaywalled = async () => {
     process.env.PAYWALL_ENABLED = "true";
     vi.resetModules();
-    return import("../stripe.js");
+    return import("../billing/stripe.js");
   };
 
   it("grants FREE the core firewall taster: read + classify + briefing + AUTO", async () => {

@@ -22,21 +22,21 @@ describe("isPaddleConfigured", () => {
   it("is false with no env at all", async () => {
     delete process.env.PADDLE_API_KEY;
     delete process.env.PADDLE_PRO_PRICE_ID;
-    const { isPaddleConfigured } = await import("../paddle.js");
+    const { isPaddleConfigured } = await import("../billing/paddle.js");
     expect(isPaddleConfigured()).toBe(false);
   });
 
   it("is false with only the API key (no price)", async () => {
     process.env.PADDLE_API_KEY = "pdl_test_key";
     delete process.env.PADDLE_PRO_PRICE_ID;
-    const { isPaddleConfigured } = await import("../paddle.js");
+    const { isPaddleConfigured } = await import("../billing/paddle.js");
     expect(isPaddleConfigured()).toBe(false);
   });
 
   it("is true with API key and PRO price id", async () => {
     process.env.PADDLE_API_KEY = "pdl_test_key";
     process.env.PADDLE_PRO_PRICE_ID = "pri_123";
-    const { isPaddleConfigured } = await import("../paddle.js");
+    const { isPaddleConfigured } = await import("../billing/paddle.js");
     expect(isPaddleConfigured()).toBe(true);
   });
 });
@@ -48,23 +48,23 @@ describe("verifyPaddleSignature", () => {
   const ts = Math.floor(nowMs / 1000);
 
   it("accepts a valid signature", async () => {
-    const { verifyPaddleSignature } = await import("../paddle.js");
+    const { verifyPaddleSignature } = await import("../billing/paddle.js");
     expect(verifyPaddleSignature(body, sign(body, secret, ts), secret, nowMs)).toBe(true);
   });
 
   it("rejects a signature computed with a different secret", async () => {
-    const { verifyPaddleSignature } = await import("../paddle.js");
+    const { verifyPaddleSignature } = await import("../billing/paddle.js");
     expect(verifyPaddleSignature(body, sign(body, "wrong", ts), secret, nowMs)).toBe(false);
   });
 
   it("rejects when the body was tampered with", async () => {
-    const { verifyPaddleSignature } = await import("../paddle.js");
+    const { verifyPaddleSignature } = await import("../billing/paddle.js");
     const sig = sign(body, secret, ts);
     expect(verifyPaddleSignature(`${body} `, sig, secret, nowMs)).toBe(false);
   });
 
   it("rejects a missing or malformed header", async () => {
-    const { verifyPaddleSignature } = await import("../paddle.js");
+    const { verifyPaddleSignature } = await import("../billing/paddle.js");
     expect(verifyPaddleSignature(body, undefined, secret, nowMs)).toBe(false);
     expect(verifyPaddleSignature(body, "", secret, nowMs)).toBe(false);
     expect(verifyPaddleSignature(body, "garbage", secret, nowMs)).toBe(false);
@@ -72,7 +72,7 @@ describe("verifyPaddleSignature", () => {
   });
 
   it("rejects a stale timestamp (replay guard)", async () => {
-    const { verifyPaddleSignature } = await import("../paddle.js");
+    const { verifyPaddleSignature } = await import("../billing/paddle.js");
     const staleTs = ts - 3600;
     expect(verifyPaddleSignature(body, sign(body, secret, staleTs), secret, nowMs)).toBe(false);
   });
@@ -90,7 +90,7 @@ describe("createPaddleCheckout", () => {
       text: async () => "",
     }));
     vi.stubGlobal("fetch", fetchMock);
-    const { createPaddleCheckout } = await import("../paddle.js");
+    const { createPaddleCheckout } = await import("../billing/paddle.js");
 
     const url = await createPaddleCheckout({ userId: "u-1", email: "t@e.com" });
 
@@ -115,7 +115,7 @@ describe("createPaddleCheckout", () => {
       text: async () => "",
     }));
     vi.stubGlobal("fetch", fetchMock);
-    const { createPaddleCheckout } = await import("../paddle.js");
+    const { createPaddleCheckout } = await import("../billing/paddle.js");
     await createPaddleCheckout({ userId: "u-1", email: "t@e.com" });
     expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe(
       "https://sandbox-api.paddle.com/transactions",
@@ -134,7 +134,7 @@ describe("createPaddleCheckout", () => {
         text: async () => "forbidden",
       })),
     );
-    const { createPaddleCheckout } = await import("../paddle.js");
+    const { createPaddleCheckout } = await import("../billing/paddle.js");
     await expect(createPaddleCheckout({ userId: "u-1", email: "t@e.com" })).rejects.toThrow(/403/);
   });
 
@@ -150,7 +150,7 @@ describe("createPaddleCheckout", () => {
         text: async () => "",
       })),
     );
-    const { createPaddleCheckout } = await import("../paddle.js");
+    const { createPaddleCheckout } = await import("../billing/paddle.js");
     await expect(createPaddleCheckout({ userId: "u-1", email: "t@e.com" })).rejects.toThrow(
       /checkout url/i,
     );
@@ -171,7 +171,7 @@ describe("createPaddlePortalUrl", () => {
       text: async () => "",
     }));
     vi.stubGlobal("fetch", fetchMock);
-    const { createPaddlePortalUrl } = await import("../paddle.js");
+    const { createPaddlePortalUrl } = await import("../billing/paddle.js");
 
     const url = await createPaddlePortalUrl("ctm_1");
 

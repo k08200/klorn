@@ -49,6 +49,7 @@ import {
 } from "./agent-proposal-dedup.js";
 import { isFloorAction } from "./attention-floor.js";
 import { upsertAttentionForPendingAction } from "./attention-mirror.js";
+import { trackTokenUsage } from "./billing/token-usage.js";
 import { AGENT_MAX_CONTEXT_ITEMS, AGENT_MAX_TOOLS_PER_LOOP } from "./config.js";
 import { db, prisma } from "./db.js";
 import { recipientFromToolArgs, recordFeedback } from "./feedback.js";
@@ -61,7 +62,6 @@ import { sendPushNotification } from "./notify/push.js";
 import { AGENT_MODEL, createCompletion } from "./openai.js";
 import { getFeedbackPolicyContextForPrompt } from "./policy-extraction.js";
 import { captureError } from "./sentry.js";
-import { trackTokenUsage } from "./token-usage.js";
 import { ALL_TOOLS, executeToolCall, isToolAllowedForPlan } from "./tool-executor.js";
 import { pushNotification } from "./websocket.js";
 

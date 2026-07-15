@@ -13,6 +13,7 @@ import {
   verifyReceipt,
 } from "./attention-floor.js";
 import { upsertAttentionForCalendarEvent } from "./attention-mirror.js";
+import { planHasFeature, TOOL_FEATURE_MAP } from "./billing/stripe.js";
 import { BRIEFING_TOOLS } from "./briefing.js";
 import {
   CALENDAR_TOOLS,
@@ -34,7 +35,6 @@ import { getUpcomingMeetings, joinMeeting, MEETING_TOOLS, summarizeMeeting } fro
 import { forget, MEMORY_TOOLS, recall, remember } from "./memory.js";
 import { captureError } from "./sentry.js";
 import { executeSkill, listUserSkills, SKILL_TOOLS } from "./skill-executor.js";
-import { planHasFeature, TOOL_FEATURE_MAP } from "./stripe.js";
 import { capToolResult } from "./tool-result-budget.js";
 import { calculate, generatePassword, UTILITY_TOOLS } from "./utilities.js";
 

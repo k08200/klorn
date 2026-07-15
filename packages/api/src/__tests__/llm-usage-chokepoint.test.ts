@@ -38,7 +38,7 @@ const trueUpSpy = vi.hoisted(() => vi.fn(async () => {}));
 // ACTUALLY served (the paid slug), not the requested `:free` one (which would
 // estimate 0 — the bug this guards).
 const PAID_PREBILL_CENTS = 7;
-vi.mock("../llm-usage.js", () => ({
+vi.mock("../billing/llm-usage.js", () => ({
   recordLlmUsage: vi.fn(async (input: Record<string, unknown>) => {
     recorded.push(input);
   }),

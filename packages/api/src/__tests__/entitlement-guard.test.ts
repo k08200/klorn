@@ -30,7 +30,7 @@ describe("requireEntitled", () => {
   it("is a zero-DB no-op when the paywall is OFF (pre-launch)", async () => {
     process.env.PAYWALL_ENABLED = "";
     vi.resetModules();
-    const { requireEntitled } = await import("../entitlement-guard.js");
+    const { requireEntitled } = await import("../billing/entitlement-guard.js");
     const reply = makeReply();
     await requireEntitled({ userId: "u1" } as never, reply as never);
     expect(reply.statusCode).toBe(0); // never touched reply
@@ -41,7 +41,7 @@ describe("requireEntitled", () => {
     process.env.PAYWALL_ENABLED = "true";
     vi.resetModules();
     findUnique.mockResolvedValue({ plan: "FREE", role: "USER" });
-    const { requireEntitled } = await import("../entitlement-guard.js");
+    const { requireEntitled } = await import("../billing/entitlement-guard.js");
     const reply = makeReply();
     await requireEntitled({ userId: "u1" } as never, reply as never);
     expect(reply.statusCode).toBe(403);
@@ -52,7 +52,7 @@ describe("requireEntitled", () => {
     process.env.PAYWALL_ENABLED = "true";
     vi.resetModules();
     findUnique.mockResolvedValue({ plan: "PRO", role: "USER" });
-    const { requireEntitled } = await import("../entitlement-guard.js");
+    const { requireEntitled } = await import("../billing/entitlement-guard.js");
     const reply = makeReply();
     await requireEntitled({ userId: "u1" } as never, reply as never);
     expect(reply.statusCode).toBe(0);
@@ -62,7 +62,7 @@ describe("requireEntitled", () => {
     process.env.PAYWALL_ENABLED = "true";
     vi.resetModules();
     findUnique.mockResolvedValue({ plan: "FREE", role: "ADMIN" });
-    const { requireEntitled } = await import("../entitlement-guard.js");
+    const { requireEntitled } = await import("../billing/entitlement-guard.js");
     const reply = makeReply();
     await requireEntitled({ userId: "u1" } as never, reply as never);
     expect(reply.statusCode).toBe(0);
@@ -71,7 +71,7 @@ describe("requireEntitled", () => {
   it("401s when no authenticated userId is present and the paywall is ON", async () => {
     process.env.PAYWALL_ENABLED = "true";
     vi.resetModules();
-    const { requireEntitled } = await import("../entitlement-guard.js");
+    const { requireEntitled } = await import("../billing/entitlement-guard.js");
     const reply = makeReply();
     await requireEntitled({} as never, reply as never);
     expect(reply.statusCode).toBe(401);
@@ -82,7 +82,7 @@ describe("requireAppAccess (usable free tier gate)", () => {
   it("is a zero-DB no-op when the paywall is OFF (pre-launch)", async () => {
     process.env.PAYWALL_ENABLED = "";
     vi.resetModules();
-    const { requireAppAccess } = await import("../entitlement-guard.js");
+    const { requireAppAccess } = await import("../billing/entitlement-guard.js");
     const reply = makeReply();
     await requireAppAccess({ userId: "u1" } as never, reply as never);
     expect(reply.statusCode).toBe(0);
@@ -93,7 +93,7 @@ describe("requireAppAccess (usable free tier gate)", () => {
     process.env.PAYWALL_ENABLED = "true";
     vi.resetModules();
     findUnique.mockResolvedValue({ plan: "FREE", role: "USER" });
-    const { requireAppAccess } = await import("../entitlement-guard.js");
+    const { requireAppAccess } = await import("../billing/entitlement-guard.js");
     const reply = makeReply();
     await requireAppAccess({ userId: "u1" } as never, reply as never);
     // Free tier is usable — the app-entry gate lets them in.
@@ -104,7 +104,7 @@ describe("requireAppAccess (usable free tier gate)", () => {
     process.env.PAYWALL_ENABLED = "true";
     vi.resetModules();
     findUnique.mockResolvedValue({ plan: "PRO", role: "USER" });
-    const { requireAppAccess } = await import("../entitlement-guard.js");
+    const { requireAppAccess } = await import("../billing/entitlement-guard.js");
     const reply = makeReply();
     await requireAppAccess({ userId: "u1" } as never, reply as never);
     expect(reply.statusCode).toBe(0);
@@ -113,7 +113,7 @@ describe("requireAppAccess (usable free tier gate)", () => {
   it("401s when no authenticated userId is present and the paywall is ON", async () => {
     process.env.PAYWALL_ENABLED = "true";
     vi.resetModules();
-    const { requireAppAccess } = await import("../entitlement-guard.js");
+    const { requireAppAccess } = await import("../billing/entitlement-guard.js");
     const reply = makeReply();
     await requireAppAccess({} as never, reply as never);
     expect(reply.statusCode).toBe(401);

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { getEffectivePlan } from "../billing/stripe.js";
 import { db, prisma } from "../db.js";
-import { getEffectivePlan } from "../stripe.js";
 
 export async function deviceRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);

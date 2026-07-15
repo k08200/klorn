@@ -21,8 +21,8 @@ import {
 } from "../attention-floor.js";
 import { upsertAttentionForPendingAction } from "../attention-mirror.js";
 import { getUserId, requireAuth } from "../auth.js";
+import { requireEntitled } from "../billing/entitlement-guard.js";
 import { db, prisma } from "../db.js";
-import { requireEntitled } from "../entitlement-guard.js";
 import { recipientFromToolArgs, recordFeedback } from "../feedback.js";
 
 /**

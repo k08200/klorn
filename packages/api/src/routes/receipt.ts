@@ -24,8 +24,8 @@
 import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
-import { requireEntitled } from "../entitlement-guard.js";
 
 interface ReceiptItem {
   id: string;

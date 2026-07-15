@@ -39,7 +39,7 @@ vi.mock("../llm-credentials.js", () => ({
 }));
 
 const trackTokenUsage = vi.fn(async () => {});
-vi.mock("../token-usage.js", () => ({
+vi.mock("../billing/token-usage.js", () => ({
   trackTokenUsage: (...args: unknown[]) => trackTokenUsage(...args),
 }));
 

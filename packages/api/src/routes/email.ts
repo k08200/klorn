@@ -9,6 +9,8 @@
 import type { EmailMessage, FeedbackSignal, Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { requireAppAccess } from "../billing/entitlement-guard.js";
+import { planHasFeature } from "../billing/stripe.js";
 import { MULTI_INBOX_SYNC_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
 import {
@@ -32,12 +34,10 @@ import {
   syncLinkedInboxesForUser,
 } from "../email-sync.js";
 import { htmlToPlainText } from "../email-text.js";
-import { requireAppAccess } from "../entitlement-guard.js";
 import { getLinkedInboxClients, toggleReadGmail } from "../gmail.js";
 import { getCachedInteractionNode } from "../interaction-graph.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { captureError } from "../sentry.js";
-import { planHasFeature } from "../stripe.js";
 import { createTask } from "../tasks.js";
 import { getTrustScore, getTrustScoresBulk, type TrustScoreResult } from "../trust-score.js";
 import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
