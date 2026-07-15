@@ -2,8 +2,8 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import jwt, { type SignOptions } from "jsonwebtoken";
+import { getEffectivePlan } from "./billing/stripe.js";
 import { db, prisma } from "./db.js";
-import { getEffectivePlan } from "./stripe.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET && process.env.NODE_ENV === "production") {

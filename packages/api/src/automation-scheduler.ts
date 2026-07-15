@@ -12,6 +12,7 @@
 import { drainActionOutbox } from "./action-outbox.js";
 import { findOpenEmailAttentionItemId } from "./attention-override.js";
 import { sendAutoReplyViaFloor } from "./auto-reply-send.js";
+import { isEntitled, planHasFeature } from "./billing/stripe.js";
 import { createDailyBriefingDelivery } from "./briefing.js";
 import {
   MULTI_INBOX_SYNC_ENABLED,
@@ -43,7 +44,6 @@ import { buildUrgentDedupMessage, parseNotifiedGmailIds } from "./notify/urgent-
 import { runProactiveActions } from "./proactive-actions.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
-import { isEntitled, planHasFeature } from "./stripe.js";
 import {
   localDateKey,
   localDayUtcRange,

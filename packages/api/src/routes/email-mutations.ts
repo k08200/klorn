@@ -10,10 +10,10 @@
 import multipart from "@fastify/multipart";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { requireEntitled } from "../billing/entitlement-guard.js";
 import { recordContactEngagement } from "../contact-engagement.js";
 import { prisma } from "../db.js";
 import { syncEmailByGmailId } from "../email-sync.js";
-import { requireEntitled } from "../entitlement-guard.js";
 import {
   archiveEmail,
   type GmailDraftAttachment,

@@ -63,7 +63,7 @@ async function main() {
   }
 
   // 5. Plan feature check
-  const { planHasFeature } = await import("../stripe.js");
+  const { planHasFeature } = await import("../billing/stripe.js");
   console.log(`\nFEATURE GATES (plan=${user.plan}, role=${user.role}):`);
   for (const feat of [
     "daily_briefing",

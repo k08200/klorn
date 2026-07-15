@@ -9,9 +9,9 @@ import {
   upsertAttentionForCalendarEvent,
 } from "../attention-mirror.js";
 import { getUserId, requireAuth } from "../auth.js";
+import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.js";
 import { createEvent as googleCreateEvent, deleteEvent as googleDeleteEvent } from "../calendar.js";
 import { prisma } from "../db.js";
-import { requireAppAccess, requireEntitled } from "../entitlement-guard.js";
 import { getAuthedClient, isGoogleAuthError, markGoogleTokenForReconnect } from "../gmail.js";
 import { parseGoogleDateTime } from "../google-calendar-time.js";
 import { buildMeetingPrepPack } from "../meeting-prep-pack.js";

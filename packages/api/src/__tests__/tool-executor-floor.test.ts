@@ -66,7 +66,7 @@ vi.mock("../attention-mirror.js", () => ({
 }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 vi.mock("../agent-mode.js", () => ({ AGENT_MODES: [] }));
-vi.mock("../stripe.js", () => ({
+vi.mock("../billing/stripe.js", () => ({
   planHasFeature: () => true,
   TOOL_FEATURE_MAP: {},
 }));

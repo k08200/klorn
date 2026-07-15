@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import jwt from "jsonwebtoken";
 import { describe, expect, it } from "vitest";
 import { signToken } from "../auth.js";
-import { mintTierOverrideToken, verifyTierOverrideToken } from "../tier-override-token.js";
+import { mintTierOverrideToken, verifyTierOverrideToken } from "../billing/tier-override-token.js";
 
 // Recompute the derived secret the module uses (white-box) so a test can mint a
 // validly-signed token with a wrong `kind` to prove kind enforcement, not just

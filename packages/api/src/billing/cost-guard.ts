@@ -19,9 +19,9 @@ import {
   FREE_DAILY_COST_CAP_CENTS,
   GLOBAL_DAILY_COST_CAP_CENTS,
   PAYWALL_ENABLED,
-} from "./config.js";
-import { prisma } from "./db.js";
-import { captureError } from "./sentry.js";
+} from "../config.js";
+import { prisma } from "../db.js";
+import { captureError } from "../sentry.js";
 import { isEntitled } from "./stripe.js";
 
 export interface CostGateResult {

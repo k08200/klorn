@@ -11,9 +11,9 @@
 import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { requireAppAccess } from "../billing/entitlement-guard.js";
 import { runChatTurn } from "../chat-engine.js";
 import { prisma } from "../db.js";
-import { requireAppAccess } from "../entitlement-guard.js";
 import { captureError } from "../sentry.js";
 
 const MAX_TEXT_LENGTH = 4000;

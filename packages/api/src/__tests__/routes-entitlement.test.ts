@@ -59,7 +59,7 @@ async function buildApp() {
   process.env.PAYWALL_ENABLED = "true";
   vi.resetModules();
   const { signToken, requireAuth } = await import("../auth.js");
-  const { requireAppAccess } = await import("../entitlement-guard.js");
+  const { requireAppAccess } = await import("../billing/entitlement-guard.js");
   const { registerEmailMutationsRoutes } = await import("../routes/email-mutations.js");
   const app = Fastify();
   app.addHook("preHandler", requireAuth);

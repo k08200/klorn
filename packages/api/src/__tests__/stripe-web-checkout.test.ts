@@ -29,7 +29,7 @@ describe("isWebCheckoutAvailable", () => {
     clearAll();
     process.env.STRIPE_PRO_PRICE_ID = "price_x";
     vi.resetModules();
-    const { isWebCheckoutAvailable } = await import("../stripe.js");
+    const { isWebCheckoutAvailable } = await import("../billing/stripe.js");
     expect(isWebCheckoutAvailable()).toBe(false);
   });
 
@@ -37,7 +37,7 @@ describe("isWebCheckoutAvailable", () => {
     clearAll();
     process.env.STRIPE_SECRET_KEY = "sk_test_x";
     vi.resetModules();
-    const { isWebCheckoutAvailable } = await import("../stripe.js");
+    const { isWebCheckoutAvailable } = await import("../billing/stripe.js");
     expect(isWebCheckoutAvailable()).toBe(false);
   });
 
@@ -46,7 +46,7 @@ describe("isWebCheckoutAvailable", () => {
     process.env.STRIPE_SECRET_KEY = "sk_test_x";
     process.env.STRIPE_PRO_PRICE_ID = "price_x";
     vi.resetModules();
-    const { isWebCheckoutAvailable } = await import("../stripe.js");
+    const { isWebCheckoutAvailable } = await import("../billing/stripe.js");
     expect(isWebCheckoutAvailable()).toBe(true);
   });
 
@@ -55,7 +55,7 @@ describe("isWebCheckoutAvailable", () => {
     process.env.PADDLE_API_KEY = "pdl_test_key";
     process.env.PADDLE_PRO_PRICE_ID = "pri_123";
     vi.resetModules();
-    const { isWebCheckoutAvailable } = await import("../stripe.js");
+    const { isWebCheckoutAvailable } = await import("../billing/stripe.js");
     expect(isWebCheckoutAvailable()).toBe(true);
   });
 
@@ -63,7 +63,7 @@ describe("isWebCheckoutAvailable", () => {
     clearAll();
     process.env.PADDLE_API_KEY = "pdl_test_key";
     vi.resetModules();
-    const { isWebCheckoutAvailable } = await import("../stripe.js");
+    const { isWebCheckoutAvailable } = await import("../billing/stripe.js");
     expect(isWebCheckoutAvailable()).toBe(false);
   });
 });

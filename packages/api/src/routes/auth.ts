@@ -12,13 +12,14 @@ import {
   signToken,
   verifyToken,
 } from "../auth.js";
+import { requireEntitled } from "../billing/entitlement-guard.js";
+import { isEntitled, isHardPaywalled, isWebCheckoutAvailable } from "../billing/stripe.js";
 import { INIT_SYNC_EMAIL_COUNT } from "../config.js";
 import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../email.js";
 import { syncLinkedInboxesForUser } from "../email-sync.js";
-import { requireEntitled } from "../entitlement-guard.js";
 import {
   getAuthedClient,
   getAuthUrl,
@@ -35,7 +36,6 @@ import { mapGoogleEventTimes } from "../google-calendar-time.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
 import { captureError } from "../sentry.js";
-import { isEntitled, isHardPaywalled, isWebCheckoutAvailable } from "../stripe.js";
 import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
 
 // Allowlisted native app URL schemes for the OAuth deep-link relay. The token is

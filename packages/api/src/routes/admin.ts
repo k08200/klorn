@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { Resend } from "resend";
 import { runAllScenarios, summarizeEval } from "../agent-eval.js";
 import { getUserId, requireAdmin } from "../auth.js";
+import { getUsageSummary } from "../billing/llm-usage.js";
 import type { CalibrationSnapshotPayload } from "../calibration-snapshot.js";
 import { db, prisma } from "../db.js";
 import { getDecisionMetrics } from "../decision-metrics.js";
@@ -14,7 +15,6 @@ import {
   listOpenLearnedRules,
   recomputeLearnedRules,
 } from "../learned-rule-store.js";
-import { getUsageSummary } from "../llm-usage.js";
 import { clearFallbackState, getProviderCooldownInfo } from "../model-fallback.js";
 import { describePolicy } from "../ontology.js";
 import { refreshOverrideCache } from "../ontology-overrides.js";
