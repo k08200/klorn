@@ -1,4 +1,8 @@
 import crypto from "node:crypto";
+// The intake wire shapes live in @klorn/contract (they ride on the email
+// list response). Re-exported here so intake internals and existing
+// importers keep a single source.
+import type { CandidateIntakeStatus, CandidateIntakeWire } from "@klorn/contract";
 import { prisma } from "../db.js";
 import {
   type AttachmentCandidateProfile,
@@ -6,46 +10,9 @@ import {
   listEmailAttachments,
 } from "./email-attachments.js";
 
-export type CandidateIntakeStatus =
-  | "NEEDS_ANALYSIS"
-  | "NEEDS_INFO"
-  | "READY_TO_REVIEW"
-  | "REVIEWING"
-  | "CONTACTED"
-  | "SHORTLISTED"
-  | "REJECTED"
-  | "ARCHIVED";
+export type { CandidateIntakeStatus };
 
-export interface CandidateIntakeView {
-  id: string;
-  emailId: string;
-  status: CandidateIntakeStatus;
-  name: string | null;
-  role: string | null;
-  contact: string | null;
-  emailAddress: string | null;
-  phone: string | null;
-  summary: string;
-  confidence: number;
-  missingFields: string[];
-  evidenceFiles: Array<{
-    filename: string;
-    category: string | null;
-    summary: string | null;
-    analysisStatus: string | null;
-    needsManualReview: boolean;
-    reviewReason: string | null;
-  }>;
-  notes: string | null;
-  lastDetectedAt: string;
-  reviewedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  duplicateKey: string | null;
-  duplicateCount: number;
-  duplicateEmailIds: string[];
-  duplicateReasons: string[];
-}
+export type CandidateIntakeView = CandidateIntakeWire;
 
 export interface CandidateIntakeListItem extends CandidateIntakeView {
   email: {

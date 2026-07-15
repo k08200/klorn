@@ -8,27 +8,15 @@
  * existing `@/lib/inbox-summary` importers are unchanged.
  */
 
+// Reply-needed rail — `GET /api/inbox/reply-needed`. Same single-source deal.
 export type {
   AttentionItem,
   DecisionDetails,
   DecisionEvidenceFact,
   EventItem,
   InboxSummary,
+  ReplyNeededEmail,
+  ReplyNeededResponse,
   TaskItem,
   TodaySection,
 } from "@klorn/contract";
-
-/**
- * Reply-needed email row — `GET /api/email` (reply-needed filter). Still a
- * local shape: its server side lives in the email routes and moves to
- * @klorn/contract in a later contract slice.
- */
-export interface ReplyNeededEmail {
-  id: string;
-  subject: string;
-  from: string;
-  snippet: string | null;
-  needsReplyReason: string | null;
-  needsReplyConfidence: number;
-  receivedAt: string;
-}
