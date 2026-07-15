@@ -6,7 +6,12 @@
     "lib": ["ES2022"],
     "outDir": "dist",
     "rootDir": "src",
-    "declaration": true,
+    // No declaration emit: @klorn/api is a private leaf app (main=dist/index.js,
+    // no "types", nothing imports its types) so .d.ts output is dead weight.
+    // Dropping it cuts the deploy build's tsc memory/time — headroom against the
+    // Render builder's V8-heap OOM (see render.yaml buildCommand). The type
+    // check still runs fully via the separate `tsc --noEmit` CI gate.
+    "declaration": false,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,

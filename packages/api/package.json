@@ -6,7 +6,7 @@
   "description": "Klorn API server",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "NODE_OPTIONS=--max-old-space-size=4096 tsc",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "start:prod": "sh scripts/start.sh",
