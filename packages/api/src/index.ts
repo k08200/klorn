@@ -1,7 +1,6 @@
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
-import type { PrismaClient } from "@prisma/client";
 import Fastify from "fastify";
 import {
   ensureDemoUser,
@@ -16,6 +15,7 @@ import { withDbRetry } from "./db-retry.js";
 import { handleError } from "./error-handler.js";
 import { attachPerfMonitor } from "./perf-monitor.js";
 import { briefingRoutes } from "./pim/briefing.js";
+import { purgeUserData } from "./purge-user-data.js";
 import { adminRoutes } from "./routes/admin.js";
 import { authRoutes } from "./routes/auth.js";
 import { automationRoutes } from "./routes/automations.js";
@@ -51,11 +51,6 @@ import { webhookRoutes } from "./routes/webhook.js";
 import { buildSchedulerHealthReport, isBackgroundAgentsDisabled } from "./scheduler-heartbeat.js";
 import { captureError, initSentry } from "./sentry.js";
 import { getClientCount, initWebSocket } from "./websocket.js";
-
-type TxClient = Omit<
-  PrismaClient,
-  "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends"
->;
 
 // Initialize Sentry FIRST so every captureError() across the app actually
 // reports. Without this call `initialized` stays false and every captureError
@@ -294,55 +289,9 @@ app.get("/api/user/me/export", { preHandler: requireAuth }, async (request) => {
 
 app.delete("/api/user/me/data", { preHandler: requireAuth }, async (request, reply) => {
   const userId = getUserId(request);
-  await prisma.$transaction(async (tx: TxClient) => {
-    // Wipe ALL of the user's data-bearing rows (the account row itself is kept).
-    // These were missing — email bodies/attachments, candidate PII, device IPs,
-    // push/phone logs, decision labels, LLM usage all used to survive a
-    // "delete my data". Children before parents where a real FK exists; the
-    // rest are userId-direct. `typeof db` exposes every model on the tx client.
-    const wide = tx as unknown as typeof db;
-    await wide.emailAttachment.deleteMany({ where: { userId } });
-    await wide.candidateIntake.deleteMany({ where: { userId } });
-    await wide.emailLabelFeedback.deleteMany({ where: { userId } });
-    await wide.emailMessage.deleteMany({ where: { userId } });
-    await wide.emailRule.deleteMany({ where: { userId } });
-    await wide.decisionLabel.deleteMany({ where: { userId } });
-    await wide.calibrationSnapshot.deleteMany({ where: { userId } });
-    await wide.device.deleteMany({ where: { userId } });
-    await wide.pushDeliveryLog.deleteMany({ where: { userId } });
-    await wide.pushRingEvent.deleteMany({ where: { userId } });
-    await wide.phoneEscalation.deleteMany({ where: { userId } });
-    await wide.actionOutbox.deleteMany({ where: { userId } });
-    await wide.skill.deleteMany({ where: { userId } });
-    await wide.activatedPlaybook.deleteMany({ where: { userId } });
-    await wide.feedbackPolicyPreference.deleteMany({ where: { userId } });
-    await wide.workContextSnapshot.deleteMany({ where: { userId } });
-    await wide.llmCostLedger.deleteMany({ where: { userId } });
-    await wide.llmUsageLog.deleteMany({ where: { userId } });
-    await tx.pushSubscription.deleteMany({ where: { userId } });
-    await tx.notification.deleteMany({ where: { userId } });
-    await (tx as unknown as typeof db).agentLog.deleteMany({ where: { userId } });
-    await tx.automationConfig.deleteMany({ where: { userId } });
-    await tx.calendarEvent.deleteMany({ where: { userId } });
-    await tx.userToken.deleteMany({ where: { userId } });
-    await (tx as unknown as typeof db).tokenUsage.deleteMany({ where: { userId } });
-    await (tx as unknown as typeof db).memory.deleteMany({ where: { userId } });
-    await (tx as unknown as typeof db).conversationSummary.deleteMany({
-      where: { conversation: { userId } },
-    });
-    await tx.message.deleteMany({ where: { conversation: { userId } } });
-    await tx.conversation.deleteMany({ where: { userId } });
-    await tx.task.deleteMany({ where: { userId } });
-    await tx.note.deleteMany({ where: { userId } });
-    await tx.contact.deleteMany({ where: { userId } });
-    await tx.reminder.deleteMany({ where: { userId } });
-    await tx.commitment.deleteMany({ where: { userId } });
-    await tx.feedbackEvent.deleteMany({ where: { userId } });
-    await tx.attentionItem.deleteMany({ where: { userId } });
-    await (
-      tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>
-    ).contactTrustScore.deleteMany({ where: { userId } });
-  });
+  // Exhaustive user-data wipe (keeps the account row). See purge-user-data.ts —
+  // the list is CASA/Google "delete my data" critical and regression-tested.
+  await prisma.$transaction((tx) => purgeUserData(tx as unknown as typeof db, userId));
   return reply.code(204).send();
 });
 

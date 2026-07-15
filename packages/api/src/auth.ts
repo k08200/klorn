@@ -4,10 +4,19 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { getEffectivePlan } from "./billing/stripe.js";
 import { db, prisma } from "./db.js";
+import { isDevFallbackSecretAllowed } from "./security-env.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET && process.env.NODE_ENV === "production") {
-  throw new Error("JWT_SECRET must be set in production. Server cannot start without it.");
+// The hardcoded fallback below is public in this repo, so it may only ever back
+// local dev/test. Gate on an explicit allowlist (not "!= production"): the old
+// check let any other NODE_ENV — unset, "staging", a "prod" typo, a self-host
+// image that never sets it — silently sign JWTs with a guessable key, letting
+// anyone forge a session for any userId (incl. admin). Fail closed to boot.
+if (!JWT_SECRET && !isDevFallbackSecretAllowed()) {
+  throw new Error(
+    `JWT_SECRET is required when NODE_ENV is "${process.env.NODE_ENV ?? "unset"}". ` +
+      "The insecure dev fallback is only allowed for NODE_ENV=development or test.",
+  );
 }
 if (!JWT_SECRET) {
   console.warn("[AUTH] WARNING: JWT_SECRET not set — using insecure default for development.");
