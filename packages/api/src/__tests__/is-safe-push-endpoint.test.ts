@@ -45,4 +45,52 @@ describe("isSafePushEndpoint", () => {
     expect(isSafePushEndpoint("not a url")).toBe(false);
     expect(isSafePushEndpoint("")).toBe(false);
   });
+
+  it("rejects the whole IPv4 loopback /8, not just the 127.0.0.1 literal", () => {
+    expect(isSafePushEndpoint("https://127.0.0.2/x")).toBe(false);
+    expect(isSafePushEndpoint("https://127.255.255.255/x")).toBe(false);
+  });
+
+  it("rejects IPv6 loopback and unspecified in every textual form", () => {
+    expect(isSafePushEndpoint("https://[0:0:0:0:0:0:0:1]/x")).toBe(false);
+    expect(isSafePushEndpoint("https://[::]/x")).toBe(false);
+    expect(isSafePushEndpoint("https://[0:0:0:0:0:0:0:0]/x")).toBe(false);
+  });
+
+  it("rejects IPv6 unique-local addresses (fc00::/7)", () => {
+    expect(isSafePushEndpoint("https://[fc00::1]/x")).toBe(false);
+    expect(isSafePushEndpoint("https://[fd12:3456:789a::1]/x")).toBe(false);
+    expect(isSafePushEndpoint("https://[fdff::1]/x")).toBe(false);
+  });
+
+  it("rejects IPv6 link-local addresses (fe80::/10)", () => {
+    expect(isSafePushEndpoint("https://[fe80::1]/x")).toBe(false);
+    expect(isSafePushEndpoint("https://[febf::ffff]/x")).toBe(false);
+  });
+
+  it("rejects IPv4-mapped IPv6 wrapping a private or loopback IPv4", () => {
+    expect(isSafePushEndpoint("https://[::ffff:10.0.0.1]/x")).toBe(false);
+    expect(isSafePushEndpoint("https://[::ffff:192.168.1.1]/x")).toBe(false);
+    expect(isSafePushEndpoint("https://[::ffff:127.0.0.1]/x")).toBe(false);
+    expect(isSafePushEndpoint("https://[::ffff:169.254.169.254]/x")).toBe(false);
+    expect(isSafePushEndpoint("https://[0:0:0:0:0:ffff:10.0.0.1]/x")).toBe(false);
+  });
+
+  it("rejects the deprecated IPv4-compatible form wrapping a private IPv4", () => {
+    // ::a.b.c.d (no ffff marker) — not routed by modern stacks, blocked anyway.
+    expect(isSafePushEndpoint("https://[::169.254.169.254]/x")).toBe(false);
+    expect(isSafePushEndpoint("https://[::10.0.0.1]/x")).toBe(false);
+    // A compatible-form public IPv4 is still allowed.
+    expect(isSafePushEndpoint("https://[::8.8.8.8]/x")).toBe(true);
+  });
+
+  it("accepts public IPv6 addresses and boundary neighbors of private ranges", () => {
+    expect(isSafePushEndpoint("https://[2606:4700::1111]/x")).toBe(true);
+    expect(isSafePushEndpoint("https://[2600:1901::1]/x")).toBe(true);
+    // fbff is just below fc00::/7; fec0 is just past fe80::/10.
+    expect(isSafePushEndpoint("https://[fbff::1]/x")).toBe(true);
+    expect(isSafePushEndpoint("https://[fec0::1]/x")).toBe(true);
+    // IPv4-mapped wrapping a public IPv4 stays allowed.
+    expect(isSafePushEndpoint("https://[::ffff:8.8.8.8]/x")).toBe(true);
+  });
 });

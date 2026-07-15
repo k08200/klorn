@@ -41,10 +41,13 @@ export function useWebSocket(userId: string) {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
     if (wsRef.current?.readyState === WebSocket.CONNECTING) return;
 
-    // Pass JWT token for authenticated WebSocket connection
+    // Carry the JWT in the Sec-WebSocket-Protocol subprotocol (marker
+    // "klorn-ws-v1", matched server-side) instead of a ?token= query param —
+    // a query param leaks the long-lived credential into proxy/LB access logs.
     const token = getStoredAuthToken();
-    const authParam = token ? `token=${encodeURIComponent(token)}` : `userId=${userId}`;
-    const ws = new WebSocket(`${WS_URL}/ws?${authParam}&type=web`);
+    const ws = token
+      ? new WebSocket(`${WS_URL}/ws?type=web`, ["klorn-ws-v1", token])
+      : new WebSocket(`${WS_URL}/ws?userId=${encodeURIComponent(userId)}&type=web`);
 
     ws.onopen = () => {
       if (!mountedRef.current) {

@@ -15,6 +15,20 @@ if (!JWT_SECRET) {
 const EFFECTIVE_SECRET = JWT_SECRET || "klorn-dev-secret-do-not-use-in-production";
 const TOKEN_EXPIRY = "7d";
 
+/**
+ * The seeded `demo-user` account (demo@klorn.ai / password "demo") is a shared,
+ * fixed-credential account whose password is public in this repo. It may only
+ * ever exist or be reachable in a non-production dev/preview environment that
+ * has explicitly opted in. Every demo path — the anonymous fallback in
+ * getUserId/websocket, the startup seeding in ensureDemoUser, and the
+ * password-login route — gates on this single predicate so they can never
+ * drift apart (a seeded row + an ungated /login is a public-credential auth
+ * bypass into a real account).
+ */
+export function isDemoAccessEnabled(): boolean {
+  return process.env.NODE_ENV !== "production" && process.env.ENABLE_DEMO_USER === "true";
+}
+
 export function isAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false;
   const adminEmails = (process.env.ADMIN_EMAILS || "")
@@ -107,11 +121,10 @@ export function getUserId(request: FastifyRequest): string {
       // invalid token — fall through
     }
   }
-  // Demo-user fallback is OFF by default. Requires both:
-  //   1. NODE_ENV !== "production"
-  //   2. ENABLE_DEMO_USER === "true" (explicit opt-in)
-  // This prevents accidental anonymous access on staging/preview deploys.
-  if (process.env.NODE_ENV !== "production" && process.env.ENABLE_DEMO_USER === "true") {
+  // Demo-user fallback is OFF by default (see isDemoAccessEnabled): requires
+  // NODE_ENV !== "production" AND ENABLE_DEMO_USER === "true". This prevents
+  // accidental anonymous access on staging/preview/prod deploys.
+  if (isDemoAccessEnabled()) {
     return "demo-user";
   }
   throw new Error("Authentication required");
@@ -250,6 +263,11 @@ export async function removeDeviceSession(token: string): Promise<void> {
 
 /** Ensure demo user exists (for unauthenticated use) */
 export async function ensureDemoUser() {
+  // Never seed the shared fixed-credential demo account outside an explicitly
+  // demo-enabled non-prod environment. Its password ("demo") is public in the
+  // repo, so a seeded row would let anyone POST /api/auth/login as a real
+  // account. Same gate as every other demo path.
+  if (!isDemoAccessEnabled()) return;
   const hash = await hashPassword("demo");
   await prisma.user.upsert({
     where: { id: "demo-user" },
@@ -270,6 +288,35 @@ export async function ensureDemoUser() {
   const taskCount = await prisma.task.count({ where: { userId: "demo-user" } });
   if (taskCount === 0) {
     await seedDemoData();
+  }
+}
+
+/**
+ * Retroactively revoke a previously-seeded demo-user's live access when demo
+ * access is disabled (production). ensureDemoUser now stops NEW seeding and
+ * /login + Google login block NEW logins, but a demo JWT minted before this
+ * shipped stays valid for its 7-day TTL and any existing device session keeps
+ * working — the demo account's password is public in the repo. Stamping
+ * sessionsInvalidatedAt makes the auth gate reject every pre-existing demo JWT
+ * (isTokenRevokedByEpoch), and dropping the device rows kills live sessions.
+ * No-op when demo access is enabled, the row is absent, or it was already
+ * revoked with no devices left — so this is a cheap idempotent boot-time step.
+ */
+export async function revokeDemoAccessIfDisabled(): Promise<void> {
+  if (isDemoAccessEnabled()) return;
+  const demo = await prisma.user.findUnique({
+    where: { id: "demo-user" },
+    select: { sessionsInvalidatedAt: true },
+  });
+  if (!demo) return;
+  const deviceCount = await prisma.device.count({ where: { userId: "demo-user" } });
+  if (demo.sessionsInvalidatedAt && deviceCount === 0) return;
+  await prisma.user.update({
+    where: { id: "demo-user" },
+    data: { sessionsInvalidatedAt: new Date() },
+  });
+  if (deviceCount > 0) {
+    await prisma.device.deleteMany({ where: { userId: "demo-user" } });
   }
 }
 

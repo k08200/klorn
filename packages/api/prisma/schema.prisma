@@ -51,6 +51,8 @@ model User {
   // mapping for events that arrive without custom_data.userId.
   paddleCustomerId          String?                    @unique
   emailVerified             Boolean                    @default(false)
+  // SHA-256 hash of the emailed one-time token (one-time-token.ts) — the raw
+  // token is never stored, same standard as Device.tokenHash.
   verifyToken               String?
   verifyTokenExp            DateTime?
   resetToken                String?
@@ -437,6 +439,8 @@ model AgentLog {
   @@index([userId, createdAt])
 
   @@index([userId, action, createdAt(sort: Desc)])
+  // Userless range for the retention sweep (WHERE createdAt < cutoff).
+  @@index([createdAt])
 }
 
 // Tracks Eve's processing of individual emails (SUGGEST vs AUTO, which action taken).
@@ -454,6 +458,8 @@ model EmailProcessingLog {
   @@index([userId, emailId])
   @@index([userId, processedAt])
   @@index([userId, mode, processedAt(sort: Desc)])
+  // Userless range for the retention sweep (WHERE processedAt < cutoff).
+  @@index([processedAt])
 }
 
 model Notification {
@@ -547,6 +553,8 @@ model PushDeliveryLog {
   @@index([userId, createdAt])
   @@index([userId, status, createdAt])
   @@index([subscriptionId])
+  // Userless range for the retention sweep (WHERE createdAt < cutoff).
+  @@index([createdAt])
 }
 
 // Persistent push rate-limit window. One row per allowed "ring" — a logical
@@ -560,6 +568,8 @@ model PushRingEvent {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+  // Userless range for the retention sweep (WHERE createdAt < cutoff).
+  @@index([createdAt])
 }
 
 // Daily classification-quality snapshot, written by the automation
@@ -1554,6 +1564,9 @@ model LlmCostLedger {
 model WebhookEvent {
   id          String   @id
   processedAt DateTime @default(now())
+
+  // Userless range for the retention sweep (WHERE processedAt < cutoff).
+  @@index([processedAt])
 }
 
 // ─── LLM usage log ─────────────────────────────────────────────────────────

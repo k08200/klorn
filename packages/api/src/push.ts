@@ -173,7 +173,10 @@ export async function sendPushNotification(
     notificationType: authoredSurface(category),
   });
   if (suppression) {
-    console.log(`[PUSH] Suppressed (${suppression}) for ${userId}: "${payload.title}"`);
+    // Log the category, never payload.title — the title is "Klorn — {sender}"
+    // for mail interrupts, i.e. a third party's identity + evidence of the
+    // user's private correspondence, which must not reach stdout/log drains.
+    console.log(`[PUSH] Suppressed (${suppression}) for ${userId} (${category})`);
     await recordSkipped(userId, payload.title, category, `policy_${suppression}`);
     return skipped(`policy_${suppression}`);
   }
@@ -194,7 +197,7 @@ export async function sendPushNotification(
   if (category === "agent_proposal") {
     const cooldownHit = await hasRecentAgentProposalPush(userId);
     if (cooldownHit) {
-      console.log(`[PUSH] Suppressed agent proposal cooldown for ${userId}: "${payload.title}"`);
+      console.log(`[PUSH] Suppressed agent proposal cooldown for ${userId} (${category})`);
       await recordSkipped(userId, payload.title, category, "agent_proposal_cooldown");
       return skipped("agent_proposal_cooldown");
     }
@@ -205,7 +208,7 @@ export async function sendPushNotification(
   // still surfaces this event.
   const rate = await recordPushAttempt(userId);
   if (!rate.allowed) {
-    console.log(`[PUSH] Rate-limited for ${userId}: ${rate.reason} — "${payload.title}"`);
+    console.log(`[PUSH] Rate-limited for ${userId} (${category}): ${rate.reason}`);
     await recordSkipped(
       userId,
       payload.title,
@@ -274,8 +277,11 @@ export async function sendPushNotification(
     await recordSkipped(userId, payload.title, category, "no_subscriptions");
     return skipped("no_subscriptions");
   }
+  // Category only, never payload.title (== "Klorn — {sender}" for mail) — this
+  // fires on every successful send, so it is the highest-volume leak of the
+  // three suppression-path lines already redacted above.
   console.log(
-    `[PUSH] Sending to ${subscriptions.length} subscription(s) for ${userId}: "${payload.title}"`,
+    `[PUSH] Sending to ${subscriptions.length} subscription(s) for ${userId} (${category})`,
   );
 
   // Fan out with bounded concurrency (same Semaphore util gmail-fetch.ts uses).

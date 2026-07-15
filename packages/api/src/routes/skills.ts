@@ -9,6 +9,7 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { requireEntitled } from "../entitlement-guard.js";
+import { MAX_SKILL_PROMPT_LENGTH, renderSkillTemplate } from "../skill-render.js";
 
 interface SkillPayload {
   name: string;
@@ -60,6 +61,11 @@ export async function skillRoutes(app: FastifyInstance) {
     if (!name?.trim() || !prompt?.trim()) {
       return reply.code(400).send({ error: "Name and prompt are required" });
     }
+    if (prompt.length > MAX_SKILL_PROMPT_LENGTH) {
+      return reply
+        .code(400)
+        .send({ error: `Prompt must be at most ${MAX_SKILL_PROMPT_LENGTH} characters` });
+    }
 
     const key = slugify(name);
     const skill = await prisma.skill.upsert({
@@ -101,12 +107,7 @@ export async function skillRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Skill not found" });
     }
 
-    let prompt = skill.prompt;
-    if (variables) {
-      for (const [k, v] of Object.entries(variables)) {
-        prompt = prompt.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v);
-      }
-    }
+    const prompt = renderSkillTemplate(skill.prompt, variables);
 
     return { prompt, skillName: skill.name };
   });

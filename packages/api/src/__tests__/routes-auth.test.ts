@@ -201,6 +201,7 @@ function resetStores() {
   delete process.env.BETA_GATE_ENABLED;
   delete process.env.BETA_AUTO_PRO_ENABLED;
   delete process.env.BETA_AUTO_PRO_LIMIT;
+  delete process.env.ENABLE_DEMO_USER;
 }
 
 /** Register a user via the route and return the JWT token. */
@@ -370,6 +371,18 @@ describe("desktop /google/login — appScheme relay binding", () => {
 
 describe("POST /api/auth/register", () => {
   beforeEach(resetStores);
+
+  it("stores only a SHA-256 hash of the verification token at register", async () => {
+    const app = await buildApp();
+    await registerAndGetToken(app, "vhash@example.com");
+
+    const rawToken = sendVerificationEmailSpy.mock.calls[0]?.[1] as string;
+    const stored = userStore.get("user-1")?.verifyToken;
+    expect(rawToken).toMatch(/^[0-9a-f]{64}$/);
+    expect(stored).toBe(crypto.createHash("sha256").update(rawToken).digest("hex"));
+    expect(stored).not.toBe(rawToken);
+    await app.close();
+  });
 
   it("creates a user, returns a valid JWT, and fires a verification email", async () => {
     const app = await buildApp();
@@ -746,6 +759,57 @@ describe("POST /api/auth/login", () => {
   });
 });
 
+// ── Demo account lockout (public fixed-credential auth bypass) ─────
+// The seeded demo-user (demo@klorn.ai / "demo") must not be a login target
+// unless demo access is explicitly enabled in a non-prod environment.
+describe("POST /api/auth/login — demo account lockout", () => {
+  beforeEach(resetStores);
+
+  async function seedDemoUser() {
+    // Mirror ensureDemoUser's seeded row: fixed id/email + bcrypt("demo").
+    const { hashPassword } = await import("../auth.js");
+    userStore.set("demo-user", {
+      id: "demo-user",
+      email: "demo@klorn.ai",
+      passwordHash: await hashPassword("demo"),
+      name: "Demo User",
+      plan: "FREE",
+      role: "USER",
+    });
+    userByEmail.set("demo@klorn.ai", "demo-user");
+  }
+
+  it("rejects demo@klorn.ai/demo with a generic 401 when demo access is disabled", async () => {
+    // ENABLE_DEMO_USER unset (resetStores) → disabled. This is the prod default
+    // and the exact public-credential exploit that must be closed.
+    await seedDemoUser();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "demo@klorn.ai", password: "demo" },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error).toBe("Invalid email or password");
+    await app.close();
+  });
+
+  it("allows the demo login only when ENABLE_DEMO_USER=true in a non-prod env", async () => {
+    // vitest runs with NODE_ENV=test (≠ production), so the opt-in flag is the
+    // only remaining gate here.
+    process.env.ENABLE_DEMO_USER = "true";
+    await seedDemoUser();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "demo@klorn.ai", password: "demo" },
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
 // ── GET /api/auth/me ──────────────────────────────────────────────
 
 describe("GET /api/auth/me", () => {
@@ -1053,6 +1117,26 @@ describe("POST /api/auth/forgot-password", () => {
     await app.close();
   });
 
+  it("stores only a SHA-256 hash of the reset token, never the raw token", async () => {
+    // Same standard as Device.tokenHash: a DB read (backup leak, replica,
+    // SQLi elsewhere) must never yield a directly usable reset link.
+    const app = await buildApp();
+    await registerAndGetToken(app, "hash@example.com");
+
+    await app.inject({
+      method: "POST",
+      url: "/api/auth/forgot-password",
+      payload: { email: "hash@example.com" },
+    });
+
+    const rawToken = sendPasswordResetEmailSpy.mock.calls[0]?.[1] as string;
+    const stored = userStore.get("user-1")?.resetToken;
+    expect(rawToken).toMatch(/^[0-9a-f]{64}$/);
+    expect(stored).toBe(crypto.createHash("sha256").update(rawToken).digest("hex"));
+    expect(stored).not.toBe(rawToken);
+    await app.close();
+  });
+
   it("returns success even for non-existent email (prevents enumeration)", async () => {
     const app = await buildApp();
     const res = await app.inject({
@@ -1107,13 +1191,14 @@ describe("POST /api/auth/reset-password", () => {
     const app = await buildApp();
     await registerAndGetToken(app, "reset@example.com", "oldpassword1");
 
-    // Trigger forgot-password to set resetToken
+    // Trigger forgot-password to set resetToken. Use the token from the
+    // email (the raw secret) — the DB row only holds its SHA-256 hash.
     await app.inject({
       method: "POST",
       url: "/api/auth/forgot-password",
       payload: { email: "reset@example.com" },
     });
-    const resetToken = userStore.get("user-1")?.resetToken;
+    const resetToken = sendPasswordResetEmailSpy.mock.calls[0]?.[1] as string;
 
     const res = await app.inject({
       method: "POST",
@@ -1197,8 +1282,9 @@ describe("GET /api/auth/verify-email", () => {
     const app = await buildApp();
     await registerAndGetToken(app, "verify@example.com");
 
-    const user = userStore.get("user-1");
-    const vToken = user?.verifyToken;
+    // Use the token from the verification email (the raw secret) — the DB
+    // row only holds its SHA-256 hash.
+    const vToken = sendVerificationEmailSpy.mock.calls[0]?.[1] as string;
 
     const res = await app.inject({
       method: "GET",
