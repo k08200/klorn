@@ -99,7 +99,9 @@ function runFinalize(draftPath: string, finalOut: string | undefined): number {
   const items = draft.items.map(({ reviewed: _r, scrubNotes: _n, ...rest }) => rest);
   const out = {
     metadata: {
-      userEmail: "scrubbed@domain-0.example",
+      // Must match the leak-linter's placeholder shape (person-N@domain-N
+      // .example) — the linter scans this file's own metadata too.
+      userEmail: "person-0@domain-0.example",
       extractedAt: new Date().toISOString(),
       count: items.length,
       provenance:
