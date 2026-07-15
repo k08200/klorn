@@ -49,6 +49,17 @@ export function isClearMarketing(email: {
  */
 export const URGENT_WORDS_RE = /urgent|asap|긴급|중요|action required|today|tomorrow|deadline|due/i;
 
+// Account/security vocabularies — single source. Two consumers key off these
+// and must never diverge: the routine-confirmation urgency cap
+// (poc-judge.ts:applyRoutineConfirmationCap, founder decision 2026-06-30) and
+// the CI-noise SILENT floor's security carve-out (ci-noise.ts, #793).
+/** A change that already happened to the account (subject + snippet). */
+export const ACCOUNT_CONFIRMATION_RE =
+  /\b(new sign[-\s]?in|signed in|sign[-\s]?in (from|on|detected|notice)|phone(\s+number)?\s+(was\s+)?added|number added as|device\s+(was\s+)?added|new device added|passkey added|password\s+(was\s+)?(reset|changed|updated)|two[-\s]?factor|2fa|recovery (email|phone)\s+added|verification method (was\s+)?added)\b/i;
+/** An explicit ask to act on something suspicious/unauthorized (also scans body). */
+export const ACCOUNT_ALERT_ACTION_RE =
+  /\b(action required|verify|confirm it was you|wasn'?t you|was this you|unauthorized|unusual|suspicious|we blocked|blocked a sign|secure your account|if you did(n'?t| not))\b/i;
+
 // Pattern vocabulary read by the keyword scorer. Each matches a different field
 // (noted), so they stay separate rather than merged into one alternation.
 /** Narrow marketing signal (from + subject) → the founder permanently silences. */
