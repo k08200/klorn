@@ -130,3 +130,22 @@ a gating check and/or tightens a committed floor. Floors are ratchets: a
 default-gating floor (overall, push-recall, silent-precision) can only be set
 at or above its committed value; report-only tiers (queue-recall, auto-recall)
 may gate at any floor once a stable baseline exists.
+
+## Model canary (#526 — the non-judge surfaces)
+
+`model-canary.yml` (Mondays 02:00 UTC) extends the same flip-alarm machinery to
+the models the judge canary cannot see: **chat (`MODEL`)** and
+**agent (`AGENT_MODEL`)**, with **vision (`VISION_MODEL`) via manual dispatch**
+(its default pin is a `:free` SKU whose quota flakiness would false-alarm a
+schedule). These have no ground-truth labels, so instead of accuracy floors the
+probe set (`src/llm/model-canary-probes.ts`) mixes:
+
+- **objective probes** — micro-tasks with one canonical answer (arithmetic,
+  extraction, date math, logic) → a report-only accuracy readout, and
+- **fingerprint probes** — tasks with many valid answers where a
+  temperature-0 model makes a stable idiosyncratic choice → a different model
+  behind the same SKU id almost certainly picks differently.
+
+Any answer flip on an identical probe fails the workflow (same
+`scripts/canary-compare.ts`, same baseline lifecycle and
+`accept-baseline=true` procedure as the judge canary).
