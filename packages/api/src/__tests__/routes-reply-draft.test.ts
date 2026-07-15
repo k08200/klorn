@@ -102,6 +102,29 @@ describe("POST /api/email/:id/reply-draft", () => {
     await app.close();
   });
 
+  it("maps a user-quota trip to 429 + Retry-After, not a captured provider-outage 503", async () => {
+    // Self-throttling (quota-limiter's UserRateLimitedError) is the user going
+    // fast, not the provider being down: Sentry must stay quiet and the client
+    // must get an actionable back-off signal instead of "temporarily unavailable".
+    createCompletion.mockRejectedValue(
+      Object.assign(new Error("You're sending requests too fast. Try again in 12s."), {
+        name: "UserRateLimitedError",
+        retryAfterMs: 12_000,
+      }),
+    );
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/reply-draft",
+      payload: {},
+    });
+    expect(res.statusCode).toBe(429);
+    expect(res.headers["retry-after"]).toBe("12");
+    expect(res.json().error).toMatch(/too fast/i);
+    expect(captureError).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("404s when the email is not found", async () => {
     emailFindFirst.mockResolvedValue(null);
     const app = await buildApp();
