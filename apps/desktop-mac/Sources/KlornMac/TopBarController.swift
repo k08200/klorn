@@ -34,9 +34,10 @@ final class TopBarController {
     }
 
     /// New PUSH arrived: the live count already updates via observation; also post
-    /// an OS banner as a fallback for when the bar isn't on the user's current Space
-    /// (a no-op on unbundled `swift run`, which has no bundle id).
-    func handleNewPush(_ items: [FirewallItem]) {
+    /// an OS banner as a fallback (a no-op on unbundled `swift run`, which has no
+    /// bundle id). `bannerFallback` is false when the PushCard is on screen — the
+    /// card is the primary surface, so a banner on top of it would double-notify.
+    func handleNewPush(_ items: [FirewallItem], bannerFallback: Bool = true) {
         guard !items.isEmpty else { return }
         // Announce for VoiceOver (WCAG 4.1.3 Status Messages): the AT-equivalent of
         // the always-live pill count, so it fires regardless of the OS-banner
@@ -44,7 +45,7 @@ final class TopBarController {
         AccessibilityNotification.Announcement(Self.pushAnnouncement(newCount: items.count)).post()
         // The pill's live count already updated via observation; the OS banner is
         // the opt-out-able extra (Preferences → Notifications).
-        guard model.settings.notificationsEnabled else { return }
+        guard bannerFallback, model.settings.notificationsEnabled else { return }
         items.forEach { PushNotifier.post($0) }
     }
 

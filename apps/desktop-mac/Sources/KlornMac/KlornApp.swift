@@ -26,18 +26,31 @@ enum Entry {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     private var topBar: TopBarController?
+    private var pushCard: PushCardController?
     private var hotKey: HotKey?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Reassert accessory policy post-launch; do NOT activate or foreground.
         NSApp.setActivationPolicy(.accessory)
         let bar = TopBarController(model: model)
-        model.onNewPush = { [weak bar] items in bar?.handleNewPush(items) }
+        let card = PushCardController(model: model)
+        // The card is the primary PUSH surface; the OS banner stays as the
+        // fallback for when a card can't draw (headless). The VoiceOver
+        // announcement in handleNewPush fires either way.
+        model.onNewPush = { [weak bar, weak card] items in
+            let cardShown = card?.present(items) ?? false
+            bar?.handleNewPush(items, bannerFallback: !cardShown)
+        }
         bar.show()
         topBar = bar
+        pushCard = card
 
-        // ⌥⌘K from anywhere expands/collapses the bar (no focus, no permission).
-        let key = HotKey(onFire: { [weak bar] in bar?.toggle() })
+        // ⌥⌘K from anywhere: while a card is up it arms/releases the card's
+        // keyboard (1/2/3/⏎/esc); otherwise it expands/collapses the bar.
+        // No focus steal, no permission either way.
+        let key = HotKey(onFire: { [weak bar, weak card] in
+            if card?.isVisible == true { card?.armKeyboard() } else { bar?.toggle() }
+        })
         key.register()
         hotKey = key
 

@@ -185,6 +185,34 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     }
 }
 
+// MARK: - Reply options (PushCard quick reply)
+
+/// One of the 3 tone-differentiated drafts from POST /api/email/:id/reply-options.
+/// Mirrors packages/contract reply-options.ts — the array order (accept /
+/// decline / info) is wire contract: the card binds keys 1/2/3 positionally.
+struct ReplyOption: Codable, Sendable, Hashable {
+    let tone: String
+    let body: String
+
+    /// Display chip for the tone; unknown tones fall back to the capitalized raw
+    /// value so a server-side tone addition degrades gracefully.
+    var toneLabel: String {
+        switch tone {
+        case "accept": return "Accept"
+        case "decline": return "Decline"
+        case "info": return "Ask info"
+        default: return tone.capitalized
+        }
+    }
+}
+
+/// POST /api/email/:id/reply-options response.
+struct ReplyOptionsResponse: Codable, Sendable {
+    let to: String
+    let subject: String
+    let options: [ReplyOption]
+}
+
 // MARK: - Snooze options
 
 /// User-selectable snooze targets for a PUSH item; each resolves to a concrete
