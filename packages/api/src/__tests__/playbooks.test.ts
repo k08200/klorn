@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { listKlornPlaybooks, recommendPlaybooksFromGraph } from "../agentcore/playbooks.js";
 import type { WorkGraphContext, WorkGraphSummary } from "../pim/work-graph.js";
-import { listKlornPlaybooks, recommendPlaybooksFromGraph } from "../playbooks.js";
 
 function context(over: Partial<WorkGraphContext> = {}): WorkGraphContext {
   return {

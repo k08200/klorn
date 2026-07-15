@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isUserIdleForAgent } from "../agent-idle.js";
+import { isUserIdleForAgent } from "../agentcore/agent-idle.js";
 
 const NOW = Date.UTC(2026, 4, 25, 13, 0, 0);
 const HOUR = 60 * 60 * 1000;

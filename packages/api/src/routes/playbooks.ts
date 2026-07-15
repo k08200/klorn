@@ -6,15 +6,15 @@
  */
 
 import type { FastifyInstance } from "fastify";
-import { getUserId, requireAuth } from "../auth.js";
-import { requireEntitled } from "../billing/entitlement-guard.js";
 import {
   activatePlaybook,
   buildPlaybookRecommendations,
   deactivatePlaybook,
   listActivePlaybookIds,
   listKlornPlaybooks,
-} from "../playbooks.js";
+} from "../agentcore/playbooks.js";
+import { getUserId, requireAuth } from "../auth.js";
+import { requireEntitled } from "../billing/entitlement-guard.js";
 
 const playbookIdParamSchema = {
   type: "object",

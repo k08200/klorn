@@ -554,7 +554,7 @@ try {
 
   // Start autonomous LLM reasoning agent
   if (!BG_DISABLED) {
-    import("./autonomous-agent-scheduler.js")
+    import("./agentcore/autonomous-agent-scheduler.js")
       .then(({ startAutonomousAgent }) => {
         startAutonomousAgent();
       })

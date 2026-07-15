@@ -8,21 +8,21 @@
  * Public callers (index.ts) import startAutonomousAgent from this file.
  */
 
-import { isUserIdleForAgent } from "./agent-idle.js";
-import { type AgentMode, normalizeAgentMode } from "./agent-mode.js";
-import { bulkResolveAttentionForPendingActions } from "./attention-mirror.js";
-import { runAgentForUser } from "./autonomous-agent.js";
-import { planHasFeature } from "./billing/stripe.js";
-import { AGENT_CHECK_INTERVAL_MS, AGENT_IDLE_THRESHOLD_MS } from "./config.js";
-import { db, prisma } from "./db.js";
-import { recipientFromToolArgs, recordFeedback } from "./learning/feedback.js";
-import { openai } from "./llm/openai.js";
+import { bulkResolveAttentionForPendingActions } from "../attention-mirror.js";
+import { planHasFeature } from "../billing/stripe.js";
+import { AGENT_CHECK_INTERVAL_MS, AGENT_IDLE_THRESHOLD_MS } from "../config.js";
+import { db, prisma } from "../db.js";
+import { recipientFromToolArgs, recordFeedback } from "../learning/feedback.js";
+import { openai } from "../llm/openai.js";
 import {
   markSchedulerDisabled,
   recordSchedulerTick,
   registerScheduler,
-} from "./scheduler-heartbeat.js";
-import { captureError } from "./sentry.js";
+} from "../scheduler-heartbeat.js";
+import { captureError } from "../sentry.js";
+import { isUserIdleForAgent } from "./agent-idle.js";
+import { type AgentMode, normalizeAgentMode } from "./agent-mode.js";
+import { runAgentForUser } from "./autonomous-agent.js";
 
 const CHECK_INTERVAL_MS = AGENT_CHECK_INTERVAL_MS;
 const CONCURRENCY_LIMIT = 5; // Max users to run concurrently

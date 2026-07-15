@@ -1,4 +1,4 @@
-import { mintReceipt, sendEmailPayloadHash } from "./attention-floor.js";
+import { mintReceipt, sendEmailPayloadHash } from "../attention-floor.js";
 import { executeToolCall } from "./tool-executor.js";
 
 // A single RFC-ish email address: no whitespace, comma, semicolon, or angle

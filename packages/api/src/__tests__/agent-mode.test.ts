@@ -4,7 +4,7 @@ import {
   getAgentModePolicy,
   listAgentModePolicies,
   normalizeAgentMode,
-} from "../agent-mode.js";
+} from "../agentcore/agent-mode.js";
 
 describe("normalizeAgentMode", () => {
   it("accepts the supported agent modes", () => {

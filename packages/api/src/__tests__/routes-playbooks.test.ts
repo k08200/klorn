@@ -27,8 +27,8 @@ vi.mock("../db.js", () => ({
   },
 }));
 
-vi.mock("../playbooks.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../playbooks.js")>();
+vi.mock("../agentcore/playbooks.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../agentcore/playbooks.js")>();
   return {
     ...actual,
     buildPlaybookRecommendations: vi.fn(async () => ({

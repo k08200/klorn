@@ -8,7 +8,7 @@
  * should be batched. The caller is responsible for partitioning tool calls.
  */
 
-import { Semaphore } from "./semaphore.js";
+import { Semaphore } from "../semaphore.js";
 import { executeToolCall } from "./tool-executor.js";
 
 /** Default max concurrent tool executions */

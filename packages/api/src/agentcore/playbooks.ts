@@ -6,12 +6,12 @@
  * activating automations or creating durable playbook state.
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 import {
   buildWorkGraphSummary,
   type WorkGraphContext,
   type WorkGraphSummary,
-} from "./pim/work-graph.js";
+} from "../pim/work-graph.js";
 
 export type KlornPlaybookId =
   | "investment_ops"

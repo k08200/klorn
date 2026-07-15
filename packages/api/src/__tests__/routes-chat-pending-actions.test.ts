@@ -9,7 +9,7 @@ vi.mock("../auth.js", () => ({
 }));
 
 const executeToolCallSpy = vi.fn();
-vi.mock("../tool-executor.js", () => ({
+vi.mock("../agentcore/tool-executor.js", () => ({
   executeToolCall: (...args: unknown[]) => executeToolCallSpy(...args),
 }));
 
@@ -17,7 +17,7 @@ vi.mock("../attention-mirror.js", () => ({
   upsertAttentionForPendingAction: vi.fn(async () => {}),
 }));
 
-vi.mock("../action-target.js", () => ({
+vi.mock("../agentcore/action-target.js", () => ({
   resolveActionTarget: vi.fn(async () => null),
 }));
 

@@ -10,9 +10,9 @@
 
 import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
+import { runChatTurn } from "../agentcore/chat-engine.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess } from "../billing/entitlement-guard.js";
-import { runChatTurn } from "../chat-engine.js";
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
 

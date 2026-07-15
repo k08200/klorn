@@ -13,7 +13,7 @@ vi.mock("../gmail.js", () => ({
   getGoogleUserInfo: vi.fn(),
   getOAuth2Client: vi.fn(),
 }));
-vi.mock("../action-target.js", () => ({
+vi.mock("../agentcore/action-target.js", () => ({
   resolveActionTarget: vi.fn(async () => null),
 }));
 

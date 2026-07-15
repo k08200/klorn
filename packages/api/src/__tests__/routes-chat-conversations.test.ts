@@ -9,7 +9,7 @@ const runChatTurn = vi.fn(async () => ({
   reply: "assistant says hi",
   eventDraft: null as unknown,
 }));
-vi.mock("../chat-engine.js", () => ({
+vi.mock("../agentcore/chat-engine.js", () => ({
   runChatTurn: (...args: unknown[]) => runChatTurn(...args),
 }));
 

@@ -6,10 +6,10 @@
  */
 
 import type { FastifyInstance } from "fastify";
+import { MAX_SKILL_PROMPT_LENGTH, renderSkillTemplate } from "../agentcore/skill-render.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
-import { MAX_SKILL_PROMPT_LENGTH, renderSkillTemplate } from "../skill-render.js";
 
 interface SkillPayload {
   name: string;

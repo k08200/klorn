@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../tool-executor.js", () => ({
+vi.mock("../agentcore/tool-executor.js", () => ({
   executeToolCall: vi.fn(async (_userId: string, fnName: string, args: Record<string, unknown>) => {
     return JSON.stringify({ tool: fnName, args, success: true });
   }),
 }));
 
-const { executeBatch, isBatchable } = await import("../batch-tools.js");
+const { executeBatch, isBatchable } = await import("../agentcore/batch-tools.js");
 
 describe("executeBatch", () => {
   it("returns empty array for empty input", async () => {
@@ -36,7 +36,7 @@ describe("executeBatch", () => {
   });
 
   it("preserves order even when tasks complete at different times", async () => {
-    const { executeToolCall } = await import("../tool-executor.js");
+    const { executeToolCall } = await import("../agentcore/tool-executor.js");
     const mock = vi.mocked(executeToolCall);
     mock.mockImplementation(async (_u, fn) => {
       const delays: Record<string, number> = { slow: 30, fast: 5 };

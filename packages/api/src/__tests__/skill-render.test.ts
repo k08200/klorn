@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_SKILL_VARIABLE_LENGTH, renderSkillTemplate } from "../skill-render.js";
+import { MAX_SKILL_VARIABLE_LENGTH, renderSkillTemplate } from "../agentcore/skill-render.js";
 
 describe("renderSkillTemplate", () => {
   it("substitutes {{key}} placeholders with their values", () => {

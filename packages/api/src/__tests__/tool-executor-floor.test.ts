@@ -55,22 +55,22 @@ vi.mock("../learning/memory.js", () => ({
   remember: vi.fn(),
 }));
 vi.mock("../search.js", () => ({ SEARCH_TOOLS: [], webSearch: vi.fn() }));
-vi.mock("../skill-executor.js", () => ({
+vi.mock("../agentcore/skill-executor.js", () => ({
   SKILL_TOOLS: [],
   executeSkill: vi.fn(),
   listUserSkills: vi.fn(),
 }));
-vi.mock("../skill-recorder.js", () => ({ recordSkill: vi.fn() }));
+vi.mock("../agentcore/skill-recorder.js", () => ({ recordSkill: vi.fn() }));
 vi.mock("../attention-mirror.js", () => ({
   upsertAttentionForCalendarEvent: vi.fn(),
 }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
-vi.mock("../agent-mode.js", () => ({ AGENT_MODES: [] }));
+vi.mock("../agentcore/agent-mode.js", () => ({ AGENT_MODES: [] }));
 vi.mock("../billing/stripe.js", () => ({
   planHasFeature: () => true,
   TOOL_FEATURE_MAP: {},
 }));
-vi.mock("../tool-result-budget.js", () => ({
+vi.mock("../agentcore/tool-result-budget.js", () => ({
   capToolResult: (s: string) => s,
 }));
 vi.mock("../untrusted.js", () => ({
@@ -85,7 +85,9 @@ vi.mock("../utilities.js", () => ({
   translate: vi.fn(),
 }));
 
-const { executeToolCall, FloorReceiptRequiredError } = await import("../tool-executor.js");
+const { executeToolCall, FloorReceiptRequiredError } = await import(
+  "../agentcore/tool-executor.js"
+);
 const { ActionReceiptMismatchError } = await import("../attention-floor.js");
 
 const userId = "user-1";

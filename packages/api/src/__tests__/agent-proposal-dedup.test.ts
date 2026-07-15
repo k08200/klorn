@@ -5,7 +5,7 @@ import {
   type RecentProposalSuppression,
   safeJson,
   shouldSuppressContextText,
-} from "../agent-proposal-dedup.js";
+} from "../agentcore/agent-proposal-dedup.js";
 
 function suppression(
   overrides: Partial<RecentProposalSuppression> = {},

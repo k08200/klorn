@@ -11,7 +11,7 @@ vi.mock("../auth.js", () => ({
 
 // Mock the autonomous-agent module so importing the route doesn't pull in
 // openai/googleapis/etc.
-vi.mock("../autonomous-agent.js", () => ({
+vi.mock("../agentcore/autonomous-agent.js", () => ({
   runAgentForUser: vi.fn(),
 }));
 

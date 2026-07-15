@@ -41,12 +41,12 @@
  */
 
 import { createHash } from "node:crypto";
-import type { ActionReceipt } from "./attention-floor.js";
-import { db } from "./db.js";
-import { isConnectionError, isKeyLimitError } from "./llm/model-fallback.js";
-import { captureError } from "./sentry.js";
+import type { ActionReceipt } from "../attention-floor.js";
+import { db } from "../db.js";
+import { isConnectionError, isKeyLimitError } from "../llm/model-fallback.js";
+import { captureError } from "../sentry.js";
+import { pushNotification } from "../websocket.js";
 import { executeToolCall } from "./tool-executor.js";
-import { pushNotification } from "./websocket.js";
 
 export type OutboxStatus = "QUEUED" | "IN_PROGRESS" | "COMPLETED" | "DEAD";
 
@@ -415,7 +415,7 @@ async function onOutboxCompleted(row: OutboxRow, result: string): Promise<void> 
       message: "",
       createdAt: new Date().toISOString(),
     });
-    import("./learning/pattern-learner.js")
+    import("../learning/pattern-learner.js")
       .then(({ learnFromApproval }) =>
         learnFromApproval(row.userId, row.toolName, asRecord(row.toolArgs)),
       )
@@ -427,7 +427,7 @@ async function onOutboxCompleted(row: OutboxRow, result: string): Promise<void> 
     // with the FAILED signal in onOutboxDead), matching the pre-outbox
     // coupling — so a transient-failed-then-retried action records exactly
     // one terminal signal, not a conflicting APPROVED+FAILED pair.
-    const { recordFeedback, recipientFromToolArgs } = await import("./learning/feedback.js");
+    const { recordFeedback, recipientFromToolArgs } = await import("../learning/feedback.js");
     await recordFeedback({
       userId: row.userId,
       source: "PENDING_ACTION",
@@ -449,7 +449,7 @@ async function onOutboxDead(row: OutboxRow, error: string): Promise<void> {
       where: { id: row.pendingActionId },
       data: { status: "FAILED", result: error },
     });
-    const { upsertAttentionForPendingAction } = await import("./attention-mirror.js");
+    const { upsertAttentionForPendingAction } = await import("../attention-mirror.js");
     const pa = (await db.pendingAction.findUnique({ where: { id: row.pendingActionId } })) as {
       id: string;
       userId: string;
@@ -469,7 +469,7 @@ async function onOutboxDead(row: OutboxRow, error: string): Promise<void> {
         },
       });
     }
-    const { recordFeedback, recipientFromToolArgs } = await import("./learning/feedback.js");
+    const { recordFeedback, recipientFromToolArgs } = await import("../learning/feedback.js");
     await recordFeedback({
       userId: row.userId,
       source: "PENDING_ACTION",

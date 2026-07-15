@@ -176,7 +176,7 @@ describe("skills routes", () => {
   });
 
   it("rejects a prompt over the length cap with 400", async () => {
-    const { MAX_SKILL_PROMPT_LENGTH } = await import("../skill-render.js");
+    const { MAX_SKILL_PROMPT_LENGTH } = await import("../agentcore/skill-render.js");
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",

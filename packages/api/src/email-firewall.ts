@@ -8,9 +8,9 @@
  * cycle. Must NOT import email-sync.ts (the sync orchestrator imports THIS).
  */
 
+import { scheduleAgentForActionableEmail } from "./agentcore/email-action-trigger.js";
 import { upsertAttentionForEmailJudgement } from "./attention-mirror.js";
 import { prisma } from "./db.js";
-import { scheduleAgentForActionableEmail } from "./email-action-trigger.js";
 import { extractEmailAddress } from "./email-address.js";
 import { analyzePendingEmailAttachments, upsertEmailAttachments } from "./email-attachments.js";
 import { classifyNeedsReplyFromSignals, classifyPriority } from "./email-priority.js";

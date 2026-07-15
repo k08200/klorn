@@ -9,9 +9,10 @@
  * Runs every 60 seconds, checks all users with active automation configs.
  */
 
-import { drainActionOutbox } from "./action-outbox.js";
+import { drainActionOutbox } from "./agentcore/action-outbox.js";
+import { sendAutoReplyViaFloor } from "./agentcore/auto-reply-send.js";
+import { runProactiveActions } from "./agentcore/proactive-actions.js";
 import { findOpenEmailAttentionItemId } from "./attention-override.js";
-import { sendAutoReplyViaFloor } from "./auto-reply-send.js";
 import { isEntitled, planHasFeature } from "./billing/stripe.js";
 import {
   MULTI_INBOX_SYNC_ENABLED,
@@ -41,7 +42,6 @@ import { sendPushNotification } from "./notify/push.js";
 import { sendSms } from "./notify/sms.js";
 import { buildUrgentDedupMessage, parseNotifiedGmailIds } from "./notify/urgent-dedup.js";
 import { createDailyBriefingDelivery } from "./pim/briefing.js";
-import { runProactiveActions } from "./proactive-actions.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
 import {

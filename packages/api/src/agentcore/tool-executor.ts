@@ -11,10 +11,10 @@ import {
   isFloorAction,
   sendEmailPayloadHash,
   verifyReceipt,
-} from "./attention-floor.js";
-import { upsertAttentionForCalendarEvent } from "./attention-mirror.js";
-import { planHasFeature, TOOL_FEATURE_MAP } from "./billing/stripe.js";
-import { prisma } from "./db.js";
+} from "../attention-floor.js";
+import { upsertAttentionForCalendarEvent } from "../attention-mirror.js";
+import { planHasFeature, TOOL_FEATURE_MAP } from "../billing/stripe.js";
+import { prisma } from "../db.js";
 import {
   classifyEmails,
   GMAIL_TOOLS,
@@ -22,26 +22,26 @@ import {
   markAsRead,
   readEmail,
   sendEmail,
-} from "./gmail.js";
-import { forget, MEMORY_TOOLS, recall, remember } from "./learning/memory.js";
-import { BRIEFING_TOOLS } from "./pim/briefing.js";
+} from "../gmail.js";
+import { forget, MEMORY_TOOLS, recall, remember } from "../learning/memory.js";
+import { BRIEFING_TOOLS } from "../pim/briefing.js";
 import {
   CALENDAR_TOOLS,
   checkConflicts,
   createEvent,
   deleteEvent,
   listEvents,
-} from "./pim/calendar.js";
+} from "../pim/calendar.js";
 import {
   getUpcomingMeetings,
   joinMeeting,
   MEETING_TOOLS,
   summarizeMeeting,
-} from "./pim/meeting.js";
-import { captureError } from "./sentry.js";
+} from "../pim/meeting.js";
+import { captureError } from "../sentry.js";
+import { calculate, generatePassword, UTILITY_TOOLS } from "../utilities.js";
 import { executeSkill, listUserSkills, SKILL_TOOLS } from "./skill-executor.js";
 import { capToolResult } from "./tool-result-budget.js";
-import { calculate, generatePassword, UTILITY_TOOLS } from "./utilities.js";
 
 const TIME_TOOL = {
   type: "function" as const,
@@ -355,7 +355,7 @@ async function executeToolCallInternal(
           ),
         );
       case "generate_briefing": {
-        const { createDailyBriefingDelivery } = await import("./pim/briefing.js");
+        const { createDailyBriefingDelivery } = await import("../pim/briefing.js");
         const { briefing, note, notification, reused } = await createDailyBriefingDelivery(userId);
         return JSON.stringify({ briefing, note, notification, reused });
       }

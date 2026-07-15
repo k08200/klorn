@@ -29,19 +29,19 @@
  *     would bust the cache for the entire context every tick.
  */
 
+import { AGENT_MAX_CONTEXT_ITEMS } from "../config.js";
+import { db, prisma } from "../db.js";
+import { isNoReplyAddress } from "../gmail.js";
+import { captureError } from "../sentry.js";
+import { offsetStringFor } from "../time-zone.js";
+import { wrapUntrusted } from "../untrusted.js";
+import { getUserTimeZone } from "../user-timezone.js";
 import { buildAgentEmailWhere } from "./agent-email-context-filter.js";
 import {
   filterSuppressedContextItems,
   formatRecentProposalSuppressions,
   getRecentProposalSuppressions,
 } from "./agent-proposal-dedup.js";
-import { AGENT_MAX_CONTEXT_ITEMS } from "./config.js";
-import { db, prisma } from "./db.js";
-import { isNoReplyAddress } from "./gmail.js";
-import { captureError } from "./sentry.js";
-import { offsetStringFor } from "./time-zone.js";
-import { wrapUntrusted } from "./untrusted.js";
-import { getUserTimeZone } from "./user-timezone.js";
 
 const MAX_CONTEXT_ITEMS = AGENT_MAX_CONTEXT_ITEMS;
 

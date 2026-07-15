@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAgentContextEmpty } from "../autonomous-agent.js";
+import { isAgentContextEmpty } from "../agentcore/autonomous-agent.js";
 
 /**
  * A total gatherUserContext failure (its own outer catch fires, see
