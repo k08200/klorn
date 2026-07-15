@@ -7,6 +7,7 @@
  * paths stay byte-identical.
  */
 
+import type { ReplyOptionsResponseWire, ReplyOptionTone } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
@@ -167,6 +168,26 @@ ${wrapUntrusted((input.body || "").slice(0, 3000), "email:body")}`,
   return response.choices[0]?.message?.content?.trim() || "";
 }
 
+// Fixed tone presets for /reply-options. The order is wire contract: clients
+// (desktop PushCard) bind keys 1/2/3 positionally, so accept/decline/info must
+// never be reordered. The "Accept"/"decline" wording also steers the draft LLM
+// via the existing intent channel — no new prompt surface.
+const REPLY_OPTION_PRESETS: ReadonlyArray<{ tone: ReplyOptionTone; intent: string }> = [
+  {
+    tone: "accept",
+    intent: "Accept or agree to the sender's request. Keep it short and positive.",
+  },
+  {
+    tone: "decline",
+    intent: "Politely decline or defer the sender's request without over-apologizing.",
+  },
+  {
+    tone: "info",
+    intent:
+      "Ask one concise clarifying question or request the missing information needed to proceed.",
+  },
+];
+
 // ─── Routes ──────────────────────────────────────────────────────────────
 
 export async function registerEmailRepliesRoutes(app: FastifyInstance) {
@@ -228,6 +249,80 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         body,
         candidateProfile,
       };
+    },
+  );
+
+  // POST /api/email/:id/reply-options
+  // Three tone-differentiated drafts (accept / decline / info) for
+  // one-keystroke reply surfaces. Every call is 3 concurrent LLM completions,
+  // so 3/min keeps the worst-case spend (9 LLM calls/min) inside /reply-draft's
+  // 10/min budget — a higher route limit would quietly raise the per-user LLM
+  // ceiling. All-or-nothing: a partial set would silently remap the client's
+  // fixed 1/2/3 key bindings.
+  app.post(
+    "/:id/reply-options",
+    {
+      preHandler: [requireAuth, requireEntitled],
+      config: { rateLimit: { max: 3, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const uid = getUserId(request);
+
+      const dbEmail = await prisma.emailMessage.findFirst({
+        where: { userId: uid, OR: [{ id }, { gmailId: id }] },
+      });
+      if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
+
+      const actionItems = parseJsonArray(dbEmail.actionItems);
+      const attachments = await listEmailAttachments([dbEmail.id], uid);
+      const candidateProfile = buildAttachmentCandidateProfile(attachments);
+
+      let bodies: string[];
+      try {
+        bodies = await Promise.all(
+          REPLY_OPTION_PRESETS.map((preset) =>
+            generateReplyDraft({
+              userId: uid,
+              from: dbEmail.from,
+              subject: dbEmail.subject,
+              body: dbEmail.body,
+              summary: dbEmail.summary,
+              actionItems,
+              candidateProfile,
+              intent: preset.intent,
+            }),
+          ),
+        );
+      } catch (err) {
+        // A per-user quota trip (quota-limiter, thrown inside createCompletion)
+        // is self-throttling, not a provider outage: give the client a real
+        // back-off signal and keep Sentry quiet — an alert here is pure noise.
+        // Name check (not instanceof) matches the autonomous-agent precedent
+        // and survives the LLM layer being mocked in tests.
+        if (err instanceof Error && err.name === "UserRateLimitedError") {
+          const retryAfterMs = (err as { retryAfterMs?: number }).retryAfterMs ?? 1_000;
+          reply.header("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
+          return reply.code(429).send({ error: err.message });
+        }
+        captureError(err, {
+          tags: { scope: "reply-options" },
+          extra: { userId: uid, emailId: dbEmail.id, model: DRAFT_MODEL },
+        });
+        return reply
+          .code(503)
+          .send({ error: "Reply drafting is temporarily unavailable. Please try again shortly." });
+      }
+
+      const response: ReplyOptionsResponseWire = {
+        to: extractReplyAddress(dbEmail.from),
+        subject: dbEmail.subject.startsWith("Re:") ? dbEmail.subject : `Re: ${dbEmail.subject}`,
+        options: REPLY_OPTION_PRESETS.map((preset, i) => ({
+          tone: preset.tone,
+          body: bodies[i],
+        })),
+      };
+      return response;
     },
   );
 
