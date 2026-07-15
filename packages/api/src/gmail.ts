@@ -1430,7 +1430,7 @@ export async function classifyEmails(userId: string, maxResults = 10) {
   const result = await listEmails(userId, maxResults);
   if ("error" in result) return result;
 
-  const { classifyEmailBatch, sortByPriority } = await import("./email-classifier.js");
+  const { classifyEmailBatch, sortByPriority } = await import("./judge/email-classifier.js");
   // BYOK: this user's classify-tool run bills their own key when set.
   const credentials = await getUserLlmCredentials(userId);
   const labels = await classifyEmailBatch(

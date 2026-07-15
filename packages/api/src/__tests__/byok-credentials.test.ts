@@ -28,9 +28,9 @@ vi.mock("../llm/openai.js", async (importOriginal) => {
 
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { classifyEmailBatch } from "../email-classifier.js";
-import { __resetJudgeCache } from "../judge-cache.js";
-import { judgeEmail } from "../poc-judge.js";
+import { classifyEmailBatch } from "../judge/email-classifier.js";
+import { __resetJudgeCache } from "../judge/judge-cache.js";
+import { judgeEmail } from "../judge/poc-judge.js";
 import type { ProviderCredentials } from "../providers/index.js";
 
 const USER_KEY: ProviderCredentials = {

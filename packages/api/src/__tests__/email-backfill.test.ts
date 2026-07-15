@@ -35,14 +35,14 @@ vi.mock("../db.js", () => {
   };
   return { prisma, db: prisma };
 });
-vi.mock("../poc-judge.js", () => ({ judgeEmail }));
-vi.mock("../judge-context.js", () => ({ buildJudgeContext }));
-vi.mock("../attention-mirror.js", () => ({ upsertAttentionForEmailJudgement: upsert }));
+vi.mock("../judge/poc-judge.js", () => ({ judgeEmail }));
+vi.mock("../judge/judge-context.js", () => ({ buildJudgeContext }));
+vi.mock("../judge/attention-mirror.js", () => ({ upsertAttentionForEmailJudgement: upsert }));
 vi.mock("../sentry.js", () => ({ captureError }));
 // Dynamically imported by the PUSH-tier push path.
 vi.mock("../notify/push.js", () => ({ sendPushNotification }));
 vi.mock("../websocket.js", () => ({ pushNotification }));
-vi.mock("../attention-override.js", () => ({ findOpenEmailAttentionItemId }));
+vi.mock("../judge/attention-override.js", () => ({ findOpenEmailAttentionItemId }));
 
 import { backfillEmailAttentionItems, judgeAndMirrorEmail } from "../email-sync.js";
 

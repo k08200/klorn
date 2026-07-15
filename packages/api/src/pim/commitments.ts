@@ -7,11 +7,11 @@
  */
 
 import type { Commitment, CommitmentKind, CommitmentOwner, CommitmentSource } from "@prisma/client";
+import { prisma } from "../db.js";
 import {
   deleteAttentionForCommitments,
   upsertAttentionForCommitment,
-} from "../attention-mirror.js";
-import { prisma } from "../db.js";
+} from "../judge/attention-mirror.js";
 
 export interface CommitmentInput {
   title: string;

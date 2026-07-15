@@ -4,15 +4,6 @@
  * Extracts executeToolCall from chat.ts so background agents can use the same tools.
  */
 
-import {
-  type ActionReceipt,
-  ActionReceiptMismatchError,
-  ActionReceiptSchemaError,
-  isFloorAction,
-  sendEmailPayloadHash,
-  verifyReceipt,
-} from "../attention-floor.js";
-import { upsertAttentionForCalendarEvent } from "../attention-mirror.js";
 import { planHasFeature, TOOL_FEATURE_MAP } from "../billing/stripe.js";
 import { prisma } from "../db.js";
 import {
@@ -23,6 +14,15 @@ import {
   readEmail,
   sendEmail,
 } from "../gmail.js";
+import {
+  type ActionReceipt,
+  ActionReceiptMismatchError,
+  ActionReceiptSchemaError,
+  isFloorAction,
+  sendEmailPayloadHash,
+  verifyReceipt,
+} from "../judge/attention-floor.js";
+import { upsertAttentionForCalendarEvent } from "../judge/attention-mirror.js";
 import { forget, MEMORY_TOOLS, recall, remember } from "../learning/memory.js";
 import { BRIEFING_TOOLS } from "../pim/briefing.js";
 import {

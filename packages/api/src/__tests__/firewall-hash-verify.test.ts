@@ -12,7 +12,7 @@
 
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { computeAttentionInputHash } from "../attention-input-hash.js";
+import { computeAttentionInputHash } from "../judge/attention-input-hash.js";
 
 const baseEmailFields = {
   from: "alice@example.com",
@@ -77,7 +77,7 @@ vi.mock("../learning/trust-score.js", () => ({
 
 // poc-judge is stubbed so the classifier read-path invariant
 // (firewall-classifier-readpath.test.ts) continues to be respected here.
-vi.mock("../poc-judge.js", () => ({
+vi.mock("../judge/poc-judge.js", () => ({
   judgeEmail: vi.fn(() => {
     throw new Error("invariant violated: read path invoked poc-judge");
   }),

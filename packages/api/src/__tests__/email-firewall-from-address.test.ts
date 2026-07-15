@@ -24,7 +24,7 @@ vi.mock("../db.js", () => ({
 
 // Stub every collaborator persistGmailEmail touches so nothing hits a real DB
 // or LLM; we only care about the create/update data shape.
-vi.mock("../attention-mirror.js", () => ({ upsertAttentionForEmailJudgement: vi.fn() }));
+vi.mock("../judge/attention-mirror.js", () => ({ upsertAttentionForEmailJudgement: vi.fn() }));
 vi.mock("../pim/commitment-ingestion.js", () => ({
   extractAndUpsertCommitmentsFromText: vi.fn(() => Promise.resolve()),
 }));
@@ -44,19 +44,21 @@ vi.mock("../email-priority.js", () => ({
   classifyPriority: vi.fn(() => "NORMAL"),
 }));
 vi.mock("../gmail.js", () => ({ markAsRead: vi.fn(() => Promise.resolve()) }));
-vi.mock("../judge-context.js", () => ({ buildJudgeContext: vi.fn(() => Promise.resolve({})) }));
-vi.mock("../judge-health.js", () => ({ recordJudgeSource: vi.fn() }));
-vi.mock("../keyword-policy.js", () => ({ isClearMarketing: vi.fn(() => false) }));
+vi.mock("../judge/judge-context.js", () => ({
+  buildJudgeContext: vi.fn(() => Promise.resolve({})),
+}));
+vi.mock("../judge/judge-health.js", () => ({ recordJudgeSource: vi.fn() }));
+vi.mock("../judge/keyword-policy.js", () => ({ isClearMarketing: vi.fn(() => false) }));
 vi.mock("../llm/llm-credentials.js", () => ({
   getUserLlmCredentials: vi.fn(() => Promise.resolve(null)),
 }));
-vi.mock("../poc-judge.js", () => ({ judgeEmail: vi.fn(() => Promise.resolve("QUEUE")) }));
+vi.mock("../judge/poc-judge.js", () => ({ judgeEmail: vi.fn(() => Promise.resolve("QUEUE")) }));
 vi.mock("../resolve-user-email.js", () => ({
   resolveUserEmail: vi.fn(() => Promise.resolve("me@example.com")),
 }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { persistGmailEmail } from "../email-firewall.js";
+import { persistGmailEmail } from "../judge/email-firewall.js";
 
 function rawEmail(overrides: Record<string, unknown> = {}) {
   return {

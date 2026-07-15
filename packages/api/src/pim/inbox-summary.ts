@@ -12,14 +12,14 @@
  */
 
 import { resolveActionTarget } from "../agentcore/action-target.js";
+import { prisma } from "../db.js";
 import {
   upsertAttentionForCalendarEvent,
   upsertAttentionForCommitment,
   upsertAttentionForNotification,
   upsertAttentionForPendingAction,
   upsertAttentionForTask,
-} from "../attention-mirror.js";
-import { prisma } from "../db.js";
+} from "../judge/attention-mirror.js";
 import { captureError } from "../sentry.js";
 
 export interface TaskInput {

@@ -24,7 +24,7 @@ vi.mock("../learning/contact-engagement.js", () => ({
   recordContactEngagement: (u: string, e: string, k: string) => recordContactEngagement(u, e, k),
 }));
 
-import { dismissAttentionItem } from "../attention-dismiss.js";
+import { dismissAttentionItem } from "../judge/attention-dismiss.js";
 
 describe("dismissAttentionItem — per-sender dismiss engagement", () => {
   beforeEach(() => {

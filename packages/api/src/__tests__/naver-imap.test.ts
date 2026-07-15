@@ -35,10 +35,10 @@ vi.mock("../crypto-tokens.js", () => ({
   encryptToken: (s: string) => `enc:${s}`,
   decryptToken: (s: string) => s.replace(/^enc:/, ""),
 }));
-vi.mock("../attention-mirror.js", () => ({
+vi.mock("../judge/attention-mirror.js", () => ({
   upsertAttentionForEmailJudgement: vi.fn(),
 }));
-vi.mock("../poc-judge.js", () => ({
+vi.mock("../judge/poc-judge.js", () => ({
   judgeEmail: vi.fn().mockResolvedValue({
     tier: "QUEUE",
     reason: "stub",

@@ -21,7 +21,7 @@
  */
 
 import { extractEmailAddress } from "../email-address.js";
-import type { Tier } from "../tiers.js";
+import type { Tier } from "../judge/tiers.js";
 
 /** The deterministic generalisations a learned rule can express. */
 export type RulePattern = "sender-domain" | "subject-keyword";

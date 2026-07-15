@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { dogfoodEmailClassificationFixtures } from "../__fixtures__/email-classification/dogfood.js";
-import { fastClassify } from "../email-classifier.js";
+import { fastClassify } from "../judge/email-classifier.js";
 
 /**
  * fastClassify is the keep-the-LLM-out-of-this gate.

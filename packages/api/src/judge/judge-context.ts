@@ -21,28 +21,28 @@ import {
   CONTACT_ENGAGEMENT_IN_JUDGE,
   LEARNED_RULES_IN_JUDGE,
   SENDER_TRAITS_IN_JUDGE,
-} from "./config.js";
-import { db } from "./db.js";
-import { extractEmailAddress } from "./email-address.js";
-import { embedTexts, isEmbeddingEnabled, rankBySimilarity } from "./embedding.js";
+} from "../config.js";
+import { db } from "../db.js";
+import { extractEmailAddress } from "../email-address.js";
+import { embedTexts, isEmbeddingEnabled, rankBySimilarity } from "../embedding.js";
 import {
   getCachedInteractionGraph,
   getCachedInteractionNode,
   nodeMatchesEmail,
   propagatedImportanceForDomain,
-} from "./learning/interaction-graph.js";
-import { getAppliedRulesForMatch } from "./learning/learned-rule-store.js";
-import type { LearnedRule } from "./learning/learned-rules.js";
+} from "../learning/interaction-graph.js";
+import { getAppliedRulesForMatch } from "../learning/learned-rule-store.js";
+import type { LearnedRule } from "../learning/learned-rules.js";
 import {
   type CorrectionExample,
   SENDER_PRIOR_POLICY,
   type SenderFacts,
   type SenderPrior,
-} from "./learning/sender-policy.js";
-import { getActiveSenderTraits, type SenderTraitFact } from "./learning/sender-trait-store.js";
-import { getTrustScore } from "./learning/trust-score.js";
+} from "../learning/sender-policy.js";
+import { getActiveSenderTraits, type SenderTraitFact } from "../learning/sender-trait-store.js";
+import { getTrustScore } from "../learning/trust-score.js";
+import { captureError } from "../sentry.js";
 import { EMPTY_JUDGE_CONTEXT, type JudgeContext } from "./poc-judge.js";
-import { captureError } from "./sentry.js";
 import { isTier } from "./tiers.js";
 
 // Sender-prior thresholds live in sender-policy.ts (the single source). Aliased

@@ -40,7 +40,7 @@ const judgeEmailsMock = vi.fn(() => {
   throw new Error("invariant violated: read path invoked poc-judge classifier (bulk)");
 });
 
-vi.mock("../poc-judge.js", () => ({
+vi.mock("../judge/poc-judge.js", () => ({
   judgeEmail: judgeEmailMock,
   judgeEmails: judgeEmailsMock,
   POC_TIERS: ["SILENT", "QUEUE", "PUSH", "AUTO"],

@@ -9,12 +9,12 @@
  * never silently stops classifying.
  */
 
-import { asEnum } from "./llm/llm-coerce.js";
-import { parseLlmJson } from "./llm/llm-json.js";
-import { createCompletion, JUDGE_MODEL } from "./llm/openai.js";
-import type { ProviderCredentials } from "./providers/index.js";
-import { captureError } from "./sentry.js";
-import { wrapUntrusted } from "./untrusted.js";
+import { asEnum } from "../llm/llm-coerce.js";
+import { parseLlmJson } from "../llm/llm-json.js";
+import { createCompletion, JUDGE_MODEL } from "../llm/openai.js";
+import type { ProviderCredentials } from "../providers/index.js";
+import { captureError } from "../sentry.js";
+import { wrapUntrusted } from "../untrusted.js";
 
 export type EmailPriority = "high" | "medium" | "low";
 export type EmailCategory =

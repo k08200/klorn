@@ -17,8 +17,8 @@ vi.mock("../sentry.js", () => ({
   captureError: vi.fn(),
 }));
 
-import { __resetJudgeCache } from "../judge-cache.js";
-import { type JudgeContext, judgeEmail } from "../poc-judge.js";
+import { __resetJudgeCache } from "../judge/judge-cache.js";
+import { type JudgeContext, judgeEmail } from "../judge/poc-judge.js";
 
 const PLAIN_EMAIL = {
   from: "Acme Updates <updates@acme.example>",

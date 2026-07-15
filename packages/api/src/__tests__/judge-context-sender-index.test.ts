@@ -33,7 +33,7 @@ vi.mock("../learning/interaction-graph.js", () => ({
   getCachedInteractionNode: vi.fn(() => Promise.resolve(null)),
 }));
 
-import { buildJudgeContext } from "../judge-context.js";
+import { buildJudgeContext } from "../judge/judge-context.js";
 
 const ORIGINAL_FLAG = process.env.SENDER_ADDRESS_INDEX_ENABLED;
 

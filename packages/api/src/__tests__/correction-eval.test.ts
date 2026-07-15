@@ -23,11 +23,11 @@ vi.mock("../db.js", () => ({
   db: {},
 }));
 
-vi.mock("../judge-context.js", () => ({
+vi.mock("../judge/judge-context.js", () => ({
   buildJudgeContext: buildJudgeContextMock,
 }));
 
-vi.mock("../poc-judge.js", () => ({
+vi.mock("../judge/poc-judge.js", () => ({
   judgeEmail: judgeEmailMock,
 }));
 

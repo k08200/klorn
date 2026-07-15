@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const judgeEmail = vi.hoisted(() => vi.fn());
 
-vi.mock("../poc-judge.js", () => ({ judgeEmail }));
+vi.mock("../judge/poc-judge.js", () => ({ judgeEmail }));
 
 import { playgroundRoutes } from "../routes/playground.js";
 

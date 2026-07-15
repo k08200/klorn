@@ -5,10 +5,10 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { KEYWORD_SCORES } from "../keyword-policy.js";
+import { KEYWORD_SCORES } from "../judge/keyword-policy.js";
+import { TIER_THRESHOLDS } from "../judge/tier-policy.js";
 import { describePolicy } from "../learning/ontology.js";
 import { PRIOR_SHORTCIRCUIT_TIERS, SENDER_PRIOR_POLICY } from "../learning/sender-policy.js";
-import { TIER_THRESHOLDS } from "../tier-policy.js";
 
 const ENV_KEY = "JUDGE_ESCALATION_MODEL";
 

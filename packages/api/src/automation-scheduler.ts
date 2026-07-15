@@ -12,7 +12,6 @@
 import { drainActionOutbox } from "./agentcore/action-outbox.js";
 import { sendAutoReplyViaFloor } from "./agentcore/auto-reply-send.js";
 import { runProactiveActions } from "./agentcore/proactive-actions.js";
-import { findOpenEmailAttentionItemId } from "./attention-override.js";
 import { isEntitled, planHasFeature } from "./billing/stripe.js";
 import {
   MULTI_INBOX_SYNC_ENABLED,
@@ -36,6 +35,7 @@ import {
 } from "./email-sync.js";
 import { getAuthedClient, getLinkedInboxClients, renewExpiringGmailWatches } from "./gmail.js";
 import { parseGoogleDateTime } from "./google-calendar-time.js";
+import { findOpenEmailAttentionItemId } from "./judge/attention-override.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
 import { sendPushNotification } from "./notify/push.js";
@@ -751,7 +751,7 @@ async function runAutomations() {
     // trend the product KPI instead of waiting for a manual CLI run.
     if (lastCalibrationSnapshotDate !== todayUtc) {
       lastCalibrationSnapshotDate = todayUtc;
-      import("./calibration-snapshot.js")
+      import("./judge/calibration-snapshot.js")
         .then(({ runDailyCalibrationSnapshots }) => runDailyCalibrationSnapshots())
         .catch((err) => {
           console.warn("[AUTOMATION] Calibration snapshot failed:", err);
@@ -773,7 +773,7 @@ async function runAutomations() {
       // died" — both leave its rolling window frozen and reading as healthy.
       // This is the canary of the canary (#742): alarms if NO judge decision
       // has been recorded fleet-wide (per dyno) within the max-silence window.
-      import("./judge-health.js")
+      import("./judge/judge-health.js")
         .then(({ runJudgeHeartbeatCheck }) => runJudgeHeartbeatCheck())
         .catch((err) => {
           console.warn("[AUTOMATION] Judge heartbeat check failed:", err);

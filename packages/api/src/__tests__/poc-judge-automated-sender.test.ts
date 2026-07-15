@@ -28,8 +28,8 @@ vi.mock("../llm/openai.js", async (importOriginal) => {
   };
 });
 
-import { isAutomatedSender } from "../keyword-policy.js";
-import { judgeEmail } from "../poc-judge.js";
+import { isAutomatedSender } from "../judge/keyword-policy.js";
+import { judgeEmail } from "../judge/poc-judge.js";
 
 describe("isAutomatedSender", () => {
   it("matches machine-generated senders (no-reply / notifications@ / subdomains)", () => {

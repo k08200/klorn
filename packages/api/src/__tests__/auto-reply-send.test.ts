@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sendEmailPayloadHash } from "../attention-floor.js";
+import { sendEmailPayloadHash } from "../judge/attention-floor.js";
 
 // Capture executeToolCall calls; the helper must route the send through it
 // (the single gated floor path) instead of calling gmail.sendEmail directly.

@@ -12,7 +12,6 @@ import { type gmail_v1, google } from "googleapis";
 import { planHasFeature } from "./billing/stripe.js";
 import { MULTI_INBOX_SYNC_ENABLED } from "./config.js";
 import { prisma } from "./db.js";
-import { persistGmailEmail } from "./email-firewall.js";
 import { summarizeUnsummarizedEmails } from "./email-summarize.js";
 import {
   getAuthedClient,
@@ -30,6 +29,7 @@ import {
   fetchGmailHistory,
   type GmailRawEmail,
 } from "./gmail-fetch.js";
+import { persistGmailEmail } from "./judge/email-firewall.js";
 import { resolveUserEmail } from "./resolve-user-email.js";
 import { Semaphore } from "./semaphore.js";
 import { captureError } from "./sentry.js";
@@ -50,8 +50,6 @@ const INBOX_PARAM_CAP = 10000;
 // extractEmailAddress lives in ./email-address.js; re-export preserved here for
 // back-compat (judge-context and tests import it via ./email-sync.js).
 export { extractEmailAddress } from "./email-address.js";
-// Persist + firewall (judge/push/backfill) moved to ./email-firewall.js (M3 step 6).
-export { backfillEmailAttentionItems, judgeAndMirrorEmail } from "./email-firewall.js";
 // Back-compat barrel: priority/reply classification moved to ./email-priority.js
 // (M3 decomposition). External importers and tests still resolve these through
 // ./email-sync.js, so re-export them here.
@@ -68,6 +66,8 @@ export { checkAutoReplyRules, generateSmartReply } from "./email-reply.js";
 export { parseAiSummary, summarizeUnsummarizedEmails } from "./email-summarize.js";
 // Thread grouping moved to ./email-threads.js (M3 step 3).
 export { type EmailThread, getEmailThreads } from "./email-threads.js";
+// Persist + firewall (judge/push/backfill) moved to ./email-firewall.js (M3 step 6).
+export { backfillEmailAttentionItems, judgeAndMirrorEmail } from "./judge/email-firewall.js";
 
 // ─── Gmail → DB Sync ──────────────────────────────────────────────────────
 

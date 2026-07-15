@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isRoutineAccountConfirmation } from "../poc-judge.js";
+import { isRoutineAccountConfirmation } from "../judge/poc-judge.js";
 
 const email = (subject: string, snippet = "", body = "") => ({
   from: "security@service.example.com",

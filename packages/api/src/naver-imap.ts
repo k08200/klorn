@@ -23,14 +23,14 @@
 
 import { ImapFlow } from "imapflow";
 import sanitizeHtml from "sanitize-html";
-import { upsertAttentionForEmailJudgement } from "./attention-mirror.js";
 import { decryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
 import { isAllowedImapHost } from "./is-allowed-imap-host.js";
-import { buildJudgeContext } from "./judge-context.js";
+import { upsertAttentionForEmailJudgement } from "./judge/attention-mirror.js";
+import { buildJudgeContext } from "./judge/judge-context.js";
+import { judgeEmail } from "./judge/poc-judge.js";
 import { engagementKindOf } from "./learning/sender-policy.js";
 import { getUserLlmCredentials } from "./llm/llm-credentials.js";
-import { judgeEmail } from "./poc-judge.js";
 import { captureError } from "./sentry.js";
 
 interface VerifyArgs {

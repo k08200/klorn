@@ -6,7 +6,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ESCALATION_CONFIDENCE_FLOOR, escalationModel, resolveEscalation } from "../judge-dial.js";
+import {
+  ESCALATION_CONFIDENCE_FLOOR,
+  escalationModel,
+  resolveEscalation,
+} from "../judge/judge-dial.js";
 
 const ENV_KEY = "JUDGE_ESCALATION_MODEL";
 const BASE = "google/gemini-2.5-flash";

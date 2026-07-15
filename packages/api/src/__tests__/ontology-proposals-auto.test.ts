@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import type { ScoredOutcome } from "../judge/selective-threshold.js";
 import { proposeAutoConfidenceAdjustment } from "../learning/ontology-proposals.js";
-import type { ScoredOutcome } from "../selective-threshold.js";
 
 // Base auto.confidence gate is 0.85 (tier-policy TIER_THRESHOLDS.auto.confidence).
 // Defaults: minSample 20, maxStep 0.05, autoErrorTarget 0.05.

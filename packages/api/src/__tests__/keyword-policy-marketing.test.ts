@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { isClearMarketing } from "../keyword-policy.js";
+import { isClearMarketing } from "../judge/keyword-policy.js";
 
 describe("isClearMarketing", () => {
   it("flags Gmail's CATEGORY_PROMOTIONS label (the BetaList digest case)", () => {

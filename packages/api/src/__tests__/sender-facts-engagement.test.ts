@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSenderFactsBlock, type SenderFacts } from "../poc-judge.js";
+import { buildSenderFactsBlock, type SenderFacts } from "../judge/poc-judge.js";
 
 const base: SenderFacts = {
   tierHistory: {},

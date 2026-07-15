@@ -412,7 +412,7 @@ describe("admin routes", () => {
   });
 
   it("reports fleet judge health via /judge-health", async () => {
-    const { recordJudgeSource, __resetJudgeHealth } = await import("../judge-health.js");
+    const { recordJudgeSource, __resetJudgeHealth } = await import("../judge/judge-health.js");
     __resetJudgeHealth();
     for (let i = 0; i < 10; i++) recordJudgeSource("llm");
     const app = await buildApp();

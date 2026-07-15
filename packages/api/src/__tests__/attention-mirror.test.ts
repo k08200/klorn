@@ -25,7 +25,7 @@ const {
   bulkResolveAttentionForPendingActions,
   deleteAttentionForCalendarEvents,
   deleteAttentionForCommitments,
-} = await import("../attention-mirror.js");
+} = await import("../judge/attention-mirror.js");
 
 beforeEach(() => {
   upsertSpy.mockClear();

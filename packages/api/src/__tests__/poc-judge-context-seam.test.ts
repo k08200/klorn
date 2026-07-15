@@ -22,7 +22,7 @@ vi.mock("../sentry.js", () => ({
   captureError: vi.fn(),
 }));
 
-import { EMPTY_JUDGE_CONTEXT, type JudgeContext, judgeEmails } from "../poc-judge.js";
+import { EMPTY_JUDGE_CONTEXT, type JudgeContext, judgeEmails } from "../judge/poc-judge.js";
 
 /** Neutral system email: no marketing markers, no urgency vocabulary. */
 function neutralEmail(i: number) {

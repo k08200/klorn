@@ -4,15 +4,15 @@
  * Provides local calendar events stored in DB + optional Google Calendar sync.
  */
 import type { FastifyInstance } from "fastify";
-import {
-  deleteAttentionForCalendarEvents,
-  upsertAttentionForCalendarEvent,
-} from "../attention-mirror.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
 import { getAuthedClient, isGoogleAuthError, markGoogleTokenForReconnect } from "../gmail.js";
 import { parseGoogleDateTime } from "../google-calendar-time.js";
+import {
+  deleteAttentionForCalendarEvents,
+  upsertAttentionForCalendarEvent,
+} from "../judge/attention-mirror.js";
 import {
   createEvent as googleCreateEvent,
   deleteEvent as googleDeleteEvent,

@@ -13,7 +13,7 @@
  * editable, reviewable surface instead of literals scattered through the judge.
  */
 
-import { extractEmailAddress } from "./email-address.js";
+import { extractEmailAddress } from "../email-address.js";
 import type { ClassifiableEmail } from "./email-classifier.js";
 import type { TierFeatures } from "./tier-policy.js";
 

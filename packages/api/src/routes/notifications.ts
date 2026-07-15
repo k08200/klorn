@@ -1,5 +1,4 @@
 import type { FastifyInstance } from "fastify";
-import { overrideAttentionTier } from "../attention-override.js";
 import { getUserId, requireAuth } from "../auth.js";
 import {
   clearNotifications,
@@ -9,11 +8,12 @@ import {
 } from "../background.js";
 import { verifyTierOverrideToken } from "../billing/tier-override-token.js";
 import { prisma } from "../db.js";
+import { overrideAttentionTier } from "../judge/attention-override.js";
+import type { Tier } from "../judge/tiers.js";
 import { getVapidPublicKey, sendPushNotification } from "../notify/push.js";
 import { getPushDeliveryStats, recordPushReceipt } from "../notify/push-delivery.js";
 import { sendDevicePush } from "../notify/push-device.js";
 import { isAllowedPushOrigin } from "../notify/push-origin-allowlist.js";
-import type { Tier } from "../tiers.js";
 
 export async function notificationRoutes(app: FastifyInstance) {
   // POST /api/notifications/push/receipts/:deliveryId — public, high-entropy

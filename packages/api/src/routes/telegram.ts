@@ -23,8 +23,8 @@
  */
 
 import type { FastifyInstance } from "fastify";
-import { overrideAttentionTier } from "../attention-override.js";
 import { getUserId, requireAuth } from "../auth.js";
+import { overrideAttentionTier } from "../judge/attention-override.js";
 import {
   answerTelegramCallback,
   isTelegramConfigured,

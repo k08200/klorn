@@ -25,9 +25,9 @@
  */
 
 import { prisma } from "../db.js";
-import { buildJudgeContext } from "../judge-context.js";
-import { judgeEmail } from "../poc-judge.js";
-import { isTier, TIERS, type Tier } from "../tiers.js";
+import { buildJudgeContext } from "../judge/judge-context.js";
+import { judgeEmail } from "../judge/poc-judge.js";
+import { isTier, TIERS, type Tier } from "../judge/tiers.js";
 
 export const CORRECTION_EVAL_LIMIT = 50;
 const DEFAULT_INTER_CALL_DELAY_MS = 1000;

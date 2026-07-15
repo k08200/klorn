@@ -17,22 +17,22 @@
  */
 
 import type { FastifyInstance } from "fastify";
-import { dismissAttentionItem } from "../attention-dismiss.js";
-import { checkAttentionInputHash } from "../attention-input-hash.js";
-import { confirmAttentionTier, overrideAttentionTier } from "../attention-override.js";
-import { snoozeAttentionItem } from "../attention-snooze.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
-import { getDecisionMetrics } from "../decision-metrics.js";
-import { collapseEmailThreads } from "../firewall-thread-collapse.js";
 import { ensureFreshGmailWatch } from "../gmail.js";
+import { dismissAttentionItem } from "../judge/attention-dismiss.js";
+import { checkAttentionInputHash } from "../judge/attention-input-hash.js";
+import { confirmAttentionTier, overrideAttentionTier } from "../judge/attention-override.js";
+import { snoozeAttentionItem } from "../judge/attention-snooze.js";
+import { getDecisionMetrics } from "../judge/decision-metrics.js";
+import { collapseEmailThreads } from "../judge/firewall-thread-collapse.js";
+import { manualOverrideReason, normalizeTier, TIERS, type Tier } from "../judge/tiers.js";
 import { getInteractionGraph } from "../learning/interaction-graph.js";
 import { describePolicy } from "../learning/ontology.js";
 import { getTrustScoresBulk } from "../learning/trust-score.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { captureError } from "../sentry.js";
-import { manualOverrideReason, normalizeTier, TIERS, type Tier } from "../tiers.js";
 
 // Tool args that carry a Gmail message id we can map back to a stored
 // EmailMessage row. Other tools (create_event, send_email, etc.) carry

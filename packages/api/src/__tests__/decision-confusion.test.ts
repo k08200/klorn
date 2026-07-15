@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type DecisionRow, summarizeConfusion } from "../decision-metrics.js";
+import { type DecisionRow, summarizeConfusion } from "../judge/decision-metrics.js";
 
 const row = (shownTier: string, outcome: string | null): DecisionRow => ({ shownTier, outcome });
 

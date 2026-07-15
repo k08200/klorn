@@ -22,7 +22,7 @@ vi.mock("../gmail-fetch.js", () => ({
   fetchGmailEmailById: m.fetchGmailEmailById,
   fetchGmailEmails: vi.fn(),
 }));
-vi.mock("../email-firewall.js", () => ({ persistGmailEmail: m.persistGmailEmail }));
+vi.mock("../judge/email-firewall.js", () => ({ persistGmailEmail: m.persistGmailEmail }));
 vi.mock("../resolve-user-email.js", () => ({ resolveUserEmail: vi.fn() }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 vi.mock("../db.js", () => ({ prisma: {} }));

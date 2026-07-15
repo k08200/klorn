@@ -13,7 +13,7 @@ vi.mock("../gmail.js", () => ({
   getGoogleUserInfo: vi.fn(),
   getOAuth2Client: vi.fn(),
 }));
-vi.mock("../attention-mirror.js", () => ({
+vi.mock("../judge/attention-mirror.js", () => ({
   upsertAttentionForCommitment: vi.fn(async () => undefined),
   deleteAttentionForCommitments: vi.fn(async () => undefined),
 }));

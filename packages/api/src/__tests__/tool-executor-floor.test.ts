@@ -12,7 +12,11 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import { mintReceipt, RECEIPT_SCHEMA_VERSION, sendEmailPayloadHash } from "../attention-floor.js";
+import {
+  mintReceipt,
+  RECEIPT_SCHEMA_VERSION,
+  sendEmailPayloadHash,
+} from "../judge/attention-floor.js";
 
 // Mock everything tool-executor pulls in that would touch external state.
 // We only care about the floor guard at the send_email seam.
@@ -61,7 +65,7 @@ vi.mock("../agentcore/skill-executor.js", () => ({
   listUserSkills: vi.fn(),
 }));
 vi.mock("../agentcore/skill-recorder.js", () => ({ recordSkill: vi.fn() }));
-vi.mock("../attention-mirror.js", () => ({
+vi.mock("../judge/attention-mirror.js", () => ({
   upsertAttentionForCalendarEvent: vi.fn(),
 }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
@@ -88,7 +92,7 @@ vi.mock("../utilities.js", () => ({
 const { executeToolCall, FloorReceiptRequiredError } = await import(
   "../agentcore/tool-executor.js"
 );
-const { ActionReceiptMismatchError } = await import("../attention-floor.js");
+const { ActionReceiptMismatchError } = await import("../judge/attention-floor.js");
 
 const userId = "user-1";
 

@@ -17,8 +17,8 @@
  */
 
 import { prisma } from "../db.js";
+import { type ThresholdConfig, TIER_THRESHOLDS } from "../judge/tier-policy.js";
 import { captureError } from "../sentry.js";
-import { type ThresholdConfig, TIER_THRESHOLDS } from "../tier-policy.js";
 
 export interface AppliedOverride {
   knob: string;

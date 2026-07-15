@@ -12,7 +12,7 @@ vi.mock("../db.js", () => ({
   },
 }));
 
-import { snoozeAttentionItem } from "../attention-snooze.js";
+import { snoozeAttentionItem } from "../judge/attention-snooze.js";
 
 describe("snoozeAttentionItem", () => {
   beforeEach(() => {

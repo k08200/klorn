@@ -24,11 +24,11 @@ vi.mock("../crypto-tokens.js", () => ({
   // provider keys; absent keys decrypt to null → keyless, shared-env path.
   decryptOptional: (v: string | null | undefined) => (v ? decryptMock(v) : null),
 }));
-vi.mock("../poc-judge.js", () => ({
+vi.mock("../judge/poc-judge.js", () => ({
   judgeEmail: judgeEmailMock,
   EMPTY_JUDGE_CONTEXT: { corrections: [], senderPrior: null, senderFacts: null },
 }));
-vi.mock("../attention-mirror.js", () => ({
+vi.mock("../judge/attention-mirror.js", () => ({
   upsertAttentionForGitHubNotification: upsertGitHubMock,
 }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));

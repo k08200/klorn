@@ -40,6 +40,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { prisma } from "../src/db.js";
 import {
   type AttentionRow,
   type CalibrationReport,
@@ -50,8 +51,7 @@ import {
   type GroundTruthFile,
   isTier,
   type Tier,
-} from "../src/calibration.js";
-import { prisma } from "../src/db.js";
+} from "../src/judge/calibration.js";
 
 interface CliArgs {
   user: string;

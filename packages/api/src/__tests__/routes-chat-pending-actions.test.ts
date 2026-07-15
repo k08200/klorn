@@ -13,7 +13,7 @@ vi.mock("../agentcore/tool-executor.js", () => ({
   executeToolCall: (...args: unknown[]) => executeToolCallSpy(...args),
 }));
 
-vi.mock("../attention-mirror.js", () => ({
+vi.mock("../judge/attention-mirror.js", () => ({
   upsertAttentionForPendingAction: vi.fn(async () => {}),
 }));
 

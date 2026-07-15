@@ -16,7 +16,7 @@ vi.mock("../db.js", () => ({
 import {
   type GitHubNotificationLike,
   upsertAttentionForGitHubNotification,
-} from "../attention-mirror.js";
+} from "../judge/attention-mirror.js";
 
 const NOW = new Date("2026-06-13T10:00:00.000Z");
 

@@ -36,7 +36,7 @@ vi.mock("../learning/sender-trait-store.js", () => ({
   getActiveSenderTraits: getActiveSenderTraitsMock,
 }));
 
-import { buildJudgeContext } from "../judge-context.js";
+import { buildJudgeContext } from "../judge/judge-context.js";
 
 const investorTrait = {
   factKind: "relationship" as const,

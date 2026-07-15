@@ -7,8 +7,8 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { buildSenderFactsBlock } from "../judge/poc-judge.js";
 import { engagementKindOf, type SenderFacts } from "../learning/sender-policy.js";
-import { buildSenderFactsBlock } from "../poc-judge.js";
 
 const facts = (engagement: SenderFacts["engagement"]): SenderFacts => ({
   tierHistory: {} as SenderFacts["tierHistory"],

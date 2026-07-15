@@ -24,12 +24,12 @@ vi.mock("../db.js", () => {
 
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
+import { prisma } from "../db.js";
 import {
   confirmAttentionTier,
   findOpenEmailAttentionItemId,
   overrideAttentionTier,
-} from "../attention-override.js";
-import { prisma } from "../db.js";
+} from "../judge/attention-override.js";
 
 type AttentionItemMock = {
   findFirst: ReturnType<typeof vi.fn>;
