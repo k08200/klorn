@@ -127,7 +127,7 @@ function ChatView() {
   }, [messages.length, pendingText]);
 
   return (
-    <main className="mx-auto flex h-[calc(100dvh-4rem)] w-full max-w-3xl flex-col px-4 pb-24 pt-4 md:pb-6">
+    <section className="mx-auto flex h-[calc(100dvh-4rem)] w-full max-w-3xl flex-col px-4 pb-24 pt-4 md:pb-6">
       <div className="mb-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-white">{t("nav.assistant")}</h1>
         <button
@@ -225,7 +225,7 @@ function ChatView() {
           {t("chat.send")}
         </button>
       </form>
-    </main>
+    </section>
   );
 }
 

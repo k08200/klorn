@@ -730,6 +730,7 @@ function EmailView() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t("mail.searchMail")}
+            aria-label={t("mail.searchMail")}
             className="h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-stone-900/60 px-4 text-sm text-stone-200 outline-none transition placeholder:text-stone-400 focus:border-accent/45"
           />
           {appliedSearch && (
@@ -887,6 +888,7 @@ function EmailView() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t("mail.searchPlaceholder")}
+            aria-label={t("mail.searchPlaceholder")}
             className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-stone-950/60 px-3 text-sm text-stone-200 outline-none transition placeholder:text-stone-400 focus:border-accent/45"
           />
           <button
