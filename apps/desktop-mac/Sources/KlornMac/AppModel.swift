@@ -137,26 +137,66 @@ final class AppModel {
         }
     }
 
-    /// Send a threaded reply to the selected email's sender in-app
-    /// (POST /api/email/:id/reply). Returns true on success. A 403 means the
-    /// account isn't entitled (Pro) — surfaced, NOT treated as a sign-out.
-    func reply(_ item: FirewallItem, body: String) async -> Bool {
-        guard let emailDbId = item.email?.emailDbId, !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return false }
-        replyError = nil
+    /// Outcome of fetching the 3 quick-reply drafts for the PushCard. Its own
+    /// type (not replyError) because the card owns its state independently of
+    /// the reading pane.
+    enum ReplyOptionsFetch: Sendable {
+        case ready(ReplyOptionsResponse)
+        case needsPro
+        case failed(String)
+    }
+
+    /// Fetch the 3 tone-differentiated drafts for a PUSH item's card
+    /// (POST /api/email/:id/reply-options). 403 = free tier → the card shows
+    /// its Pro hint instead of an error.
+    func fetchReplyOptions(_ item: FirewallItem) async -> ReplyOptionsFetch {
+        guard let emailDbId = item.email?.emailDbId else {
+            return .failed("Quick replies only work for email items.")
+        }
         do {
-            try await api.post("/api/email/\(emailDbId)/reply", json: ["body": body])
-            return true
+            let options: ReplyOptionsResponse = try await api.post(
+                "/api/email/\(emailDbId)/reply-options", json: [:], as: ReplyOptionsResponse.self)
+            return .ready(options)
         } catch APIError.unauthorized {
             signOut()
-            return false
+            return .failed("Session expired. Please sign in again.")
         } catch APIError.forbidden {
-            replyError = "Replying from the app needs Klorn Pro."
-            return false
+            return .needsPro
         } catch {
-            replyError = Self.describe(error)
-            return false
+            return .failed(Self.describe(error))
         }
+    }
+
+    /// Send a threaded reply to an email's sender (POST /api/email/:id/reply).
+    /// Returns nil on success or a user-facing error message. Deliberately does
+    /// NOT touch the shared `replyError` slot: the PushCard and the reading-pane
+    /// composer can both be mid-send for DIFFERENT emails at once, and a shared
+    /// slot would let one surface clear or overwrite the other's live error.
+    /// A 403 means the account isn't entitled (Pro) — surfaced, NOT a sign-out.
+    func sendReply(_ item: FirewallItem, body: String) async -> String? {
+        guard let emailDbId = item.email?.emailDbId,
+              !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return "Nothing to send." }
+        do {
+            try await api.post("/api/email/\(emailDbId)/reply", json: ["body": body])
+            return nil
+        } catch APIError.unauthorized {
+            signOut()
+            return "Session expired. Please sign in again."
+        } catch APIError.forbidden {
+            return "Replying from the app needs Klorn Pro."
+        } catch {
+            return Self.describe(error)
+        }
+    }
+
+    /// Reading-pane composer wrapper: same send, but publishes the outcome to
+    /// the live-bound `replyError` the full view renders. Returns true on success.
+    func reply(_ item: FirewallItem, body: String) async -> Bool {
+        replyError = nil
+        let error = await sendReply(item, body: body)
+        replyError = error
+        return error == nil
     }
 
     /// Dismiss a PUSH item: clear it from the firewall queue (status DISMISSED,
