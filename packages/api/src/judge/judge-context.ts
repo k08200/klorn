@@ -23,7 +23,6 @@ import {
   SENDER_TRAITS_IN_JUDGE,
 } from "../config.js";
 import { db } from "../db.js";
-import { extractEmailAddress } from "../email-address.js";
 import { embedTexts, isEmbeddingEnabled, rankBySimilarity } from "../embedding.js";
 import {
   getCachedInteractionGraph,
@@ -41,6 +40,7 @@ import {
 } from "../learning/sender-policy.js";
 import { getActiveSenderTraits, type SenderTraitFact } from "../learning/sender-trait-store.js";
 import { getTrustScore } from "../learning/trust-score.js";
+import { extractEmailAddress } from "../mail/email-address.js";
 import { captureError } from "../sentry.js";
 import { EMPTY_JUDGE_CONTEXT, type JudgeContext } from "./poc-judge.js";
 import { isTier } from "./tiers.js";

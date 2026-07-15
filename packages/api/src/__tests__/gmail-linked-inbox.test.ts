@@ -44,7 +44,7 @@ import {
   getAuthedInboxClient,
   getLinkedInboxClients,
   markLinkedInboxForReconnect,
-} from "../gmail.js";
+} from "../mail/gmail.js";
 
 describe("getLinkedInboxClients", () => {
   beforeEach(() => {
@@ -138,7 +138,7 @@ describe("mail actions route to the correct account (P2b)", () => {
     // primary userToken. Proves the linkedInboxAccountId routes to the linked
     // client (getAuthedInboxClient), not getAuthedClient.
     m.findFirst.mockResolvedValue(null);
-    const { archiveEmail } = await import("../gmail.js");
+    const { archiveEmail } = await import("../mail/gmail.js");
     const result = await archiveEmail("u1", "gmail-123", "acc-1");
     expect(result).toEqual({ error: "Gmail not connected." });
     expect(m.findFirst).toHaveBeenCalledWith({ where: { id: "acc-1", userId: "u1" } });
@@ -147,7 +147,7 @@ describe("mail actions route to the correct account (P2b)", () => {
 
   it("archiveEmail without a linkedInboxAccountId uses the PRIMARY token path", async () => {
     m.userTokenFindFirst.mockResolvedValue(null); // primary not connected → early return
-    const { archiveEmail } = await import("../gmail.js");
+    const { archiveEmail } = await import("../mail/gmail.js");
     const result = await archiveEmail("u1", "gmail-123");
     expect(result).toEqual({ error: "Gmail not connected." });
     expect(m.userTokenFindFirst).toHaveBeenCalled();

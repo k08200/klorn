@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { htmlToPlainText } from "../email-text.js";
+import { htmlToPlainText } from "../mail/email-text.js";
 
 // HTML-only emails used to persist body=null and fall out of the summarizer
 // forever ("Klorn has not analyzed this email yet"). htmlToPlainText is the

@@ -4,7 +4,7 @@
  * DB-only leaf; must NOT import email-sync.ts (would cycle).
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 
 // ─── Thread Grouping ──────────────────────────────────────────────────────
 

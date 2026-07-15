@@ -6,7 +6,7 @@ import {
   attachDuplicateHints,
   type CandidateIntakeView,
   candidateIdentity,
-} from "../email-candidate-intake.js";
+} from "../mail/email-candidate-intake.js";
 
 function candidate(
   patch: Partial<CandidateIntakeView> & Pick<CandidateIntakeView, "emailId">,

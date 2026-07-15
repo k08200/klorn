@@ -90,7 +90,7 @@ vi.mock("../db.js", () => ({
   },
 }));
 
-import { getFeedback, recordFeedback } from "../email-label-feedback.js";
+import { getFeedback, recordFeedback } from "../mail/email-label-feedback.js";
 
 const seedEmail = (overrides: Partial<EmailRow> = {}): EmailRow => ({
   id: "email-1",

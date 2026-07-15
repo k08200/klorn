@@ -18,7 +18,7 @@ vi.mock("../db.js", () => {
 
 vi.mock("../sentry.js", () => ({ captureError }));
 
-import { ensureFreshGmailWatch } from "../gmail.js";
+import { ensureFreshGmailWatch } from "../mail/gmail.js";
 
 const HOUR_MS = 60 * 60 * 1000;
 let userSeq = 0;

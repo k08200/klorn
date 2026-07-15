@@ -1,13 +1,6 @@
 import { type calendar_v3, google } from "googleapis";
 import { prisma } from "../db.js";
 import {
-  getAuthedClient,
-  getLinkedCalendarClients,
-  isGoogleAuthError,
-  markGoogleTokenForReconnect,
-  markLinkedCalendarForReconnect,
-} from "../gmail.js";
-import {
   type BusyConflict,
   type CalendarConflictItem,
   calendarLabelMap,
@@ -16,6 +9,13 @@ import {
   summarizeFreeBusy,
   toAbsoluteInstant,
 } from "../google-calendar-time.js";
+import {
+  getAuthedClient,
+  getLinkedCalendarClients,
+  isGoogleAuthError,
+  markGoogleTokenForReconnect,
+  markLinkedCalendarForReconnect,
+} from "../mail/gmail.js";
 import { captureError } from "../sentry.js";
 import { normalizeTimeZone } from "../time-zone.js";
 import { wrapUntrusted } from "../untrusted.js";

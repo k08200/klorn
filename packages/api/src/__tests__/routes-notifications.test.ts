@@ -6,8 +6,11 @@ import { mintTierOverrideToken } from "../billing/tier-override-token.js";
 // Set before importing push-origin-allowlist (loaded transitively via routes).
 process.env.PUSH_ALLOWED_ORIGINS = "https://app.klorn.ai,http://localhost:8001";
 
-vi.mock("../email.js", () => ({ sendVerificationEmail: vi.fn(), sendPasswordResetEmail: vi.fn() }));
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/email.js", () => ({
+  sendVerificationEmail: vi.fn(),
+  sendPasswordResetEmail: vi.fn(),
+}));
+vi.mock("../mail/gmail.js", () => ({
   getAuthUrl: vi.fn(),
   getLoginAuthUrl: vi.fn(),
   getAuthedClient: vi.fn(),

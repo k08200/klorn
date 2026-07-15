@@ -11,14 +11,14 @@ const m = vi.hoisted(() => ({
   persistGmailEmail: vi.fn(async () => ({ emailId: "e1", isNew: true })),
 }));
 
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/gmail.js", () => ({
   getAuthedClient: vi.fn(async () => ({})),
   getAuthedInboxAccount: m.getAuthedInboxAccount,
   isGoogleAuthError: () => false,
   isGoogleNotFoundError: () => false,
   markGoogleTokenForReconnect: vi.fn(async () => {}),
 }));
-vi.mock("../gmail-fetch.js", () => ({
+vi.mock("../mail/gmail-fetch.js", () => ({
   fetchGmailEmailById: m.fetchGmailEmailById,
   fetchGmailEmails: vi.fn(),
 }));
@@ -27,7 +27,7 @@ vi.mock("../resolve-user-email.js", () => ({ resolveUserEmail: vi.fn() }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 vi.mock("../db.js", () => ({ prisma: {} }));
 
-import { syncEmailByGmailId } from "../email-sync.js";
+import { syncEmailByGmailId } from "../mail/email-sync.js";
 
 const RAW = { gmailId: "g1" } as never;
 

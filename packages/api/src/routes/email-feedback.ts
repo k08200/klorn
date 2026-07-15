@@ -24,14 +24,14 @@ import type { FastifyInstance } from "fastify";
 import { getUserId } from "../auth.js";
 import { prisma } from "../db.js";
 import { evaluateUserCorrectionFixtures } from "../email-classification-eval.js";
-import { listUserFeedbackFixtures } from "../email-feedback-fixtures.js";
+import { recordFeedback as recordLedgerFeedback } from "../learning/feedback.js";
+import { listUserFeedbackFixtures } from "../mail/email-feedback-fixtures.js";
 import {
   type EmailPriorityValue,
   FeedbackError,
   getFeedback,
   recordFeedback,
-} from "../email-label-feedback.js";
-import { recordFeedback as recordLedgerFeedback } from "../learning/feedback.js";
+} from "../mail/email-label-feedback.js";
 import {
   looksReplyNeeded,
   parseJsonArray,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isGoogleAuthError } from "../gmail.js";
+import { isGoogleAuthError } from "../mail/gmail.js";
 
 describe("isGoogleAuthError", () => {
   it("detects revoked OAuth refresh tokens", () => {

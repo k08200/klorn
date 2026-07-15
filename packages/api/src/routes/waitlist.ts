@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { db } from "../db.js";
-import { sendWaitlistAdminAlert } from "../email.js";
+import { sendWaitlistAdminAlert } from "../mail/email.js";
 
 const waitlistBodySchema = {
   type: "object",

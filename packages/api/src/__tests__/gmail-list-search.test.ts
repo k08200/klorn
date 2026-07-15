@@ -46,7 +46,7 @@ vi.mock("../crypto-tokens.js", () => ({
   encryptOptional: (v: string | null) => v,
 }));
 
-import { listEmails } from "../gmail.js";
+import { listEmails } from "../mail/gmail.js";
 
 beforeEach(() => {
   listMock.mockReset();

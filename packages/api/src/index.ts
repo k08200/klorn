@@ -530,7 +530,7 @@ try {
 
   // Start Naver IMAP polling scheduler (5min interval per connected user)
   if (!BG_DISABLED) {
-    import("./naver-imap-scheduler.js")
+    import("./mail/naver-imap-scheduler.js")
       .then(({ startNaverImapScheduler }) => {
         startNaverImapScheduler();
       })
@@ -542,7 +542,7 @@ try {
 
   // Start GitHub notifications polling scheduler (5min interval per connected user)
   if (!BG_DISABLED) {
-    import("./github-scheduler.js")
+    import("./mail/github-scheduler.js")
       .then(({ startGitHubScheduler }) => {
         startGitHubScheduler();
       })

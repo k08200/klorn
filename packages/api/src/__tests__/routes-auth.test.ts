@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken, verifyToken } from "../auth.js";
-import { getLoginAuthUrl, getOAuth2Client } from "../gmail.js";
+import { getLoginAuthUrl, getOAuth2Client } from "../mail/gmail.js";
 import { isAllowedNativeScheme } from "../routes/auth.js";
 
 // Stub email sender — auth register fires it non-blocking and swallows errors,
@@ -10,7 +10,7 @@ import { isAllowedNativeScheme } from "../routes/auth.js";
 const sendVerificationEmailSpy = vi.fn(async () => true);
 const sendPasswordResetEmailSpy = vi.fn(async () => true);
 const sendBetaInviteEmailSpy = vi.fn(async () => true);
-vi.mock("../email.js", () => ({
+vi.mock("../mail/email.js", () => ({
   sendVerificationEmail: (...args: unknown[]) => sendVerificationEmailSpy(...args),
   sendPasswordResetEmail: (...args: unknown[]) => sendPasswordResetEmailSpy(...args),
   sendBetaInviteEmail: (...args: unknown[]) => sendBetaInviteEmailSpy(...args),
@@ -18,14 +18,14 @@ vi.mock("../email.js", () => ({
 
 // Stub email-sync so init-sync's linked-inbox fan-out is a no-op in tests
 // (and its transitive gmail.js imports don't need mocking here).
-vi.mock("../email-sync.js", () => ({
+vi.mock("../mail/email-sync.js", () => ({
   syncLinkedInboxesForUser: vi.fn(async () => ({ newCount: 0 })),
   syncEmails: vi.fn(async () => ({ synced: 0, newCount: 0, source: "gmail" })),
   summarizeUnsummarizedEmails: vi.fn(async () => 0),
 }));
 
 // Stub gmail OAuth helpers so we don't hit googleapis in tests.
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/gmail.js", () => ({
   getAuthUrl: vi.fn(() => "https://example.com/oauth"),
   getLoginAuthUrl: vi.fn(() => "https://example.com/oauth-login"),
   getAuthedClient: vi.fn(),

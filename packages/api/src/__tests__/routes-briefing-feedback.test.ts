@@ -2,11 +2,11 @@ import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 
-vi.mock("../email.js", () => ({
+vi.mock("../mail/email.js", () => ({
   sendVerificationEmail: vi.fn(),
   sendPasswordResetEmail: vi.fn(),
 }));
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/gmail.js", () => ({
   listEmails: vi.fn(async () => ({ emails: [] })),
   getAuthUrl: vi.fn(),
   getLoginAuthUrl: vi.fn(),

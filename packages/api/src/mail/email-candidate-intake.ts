@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 import {
   type AttachmentCandidateProfile,
   buildAttachmentCandidateProfile,

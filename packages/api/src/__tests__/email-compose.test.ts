@@ -5,7 +5,7 @@ import { signToken } from "../auth.js";
 // Spy on the Gmail send boundary so no real network/OAuth is touched.
 const { sendEmailMock } = vi.hoisted(() => ({ sendEmailMock: vi.fn() }));
 
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/gmail.js", () => ({
   sendEmail: sendEmailMock,
   archiveEmail: vi.fn(),
   toggleReadGmail: vi.fn(),
@@ -17,7 +17,7 @@ vi.mock("../gmail.js", () => ({
 
 // email-mutations imports syncEmailByGmailId transitively; stub it so the
 // import graph stays light and side-effect free.
-vi.mock("../email-sync.js", () => ({ syncEmailByGmailId: vi.fn() }));
+vi.mock("../mail/email-sync.js", () => ({ syncEmailByGmailId: vi.fn() }));
 
 // requireAuth touches user + device rows. A valid session has a registered
 // device (every login calls registerDevice), so the device lookup must resolve

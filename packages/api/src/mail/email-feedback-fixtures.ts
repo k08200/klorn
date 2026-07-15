@@ -11,7 +11,7 @@
  * inspection of the row.
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 
 export type EmailPriorityValue = "URGENT" | "NORMAL" | "LOW";
 

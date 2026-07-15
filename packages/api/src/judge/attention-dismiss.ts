@@ -6,9 +6,9 @@
  */
 
 import { prisma } from "../db.js";
-import { extractEmailAddress } from "../email-address.js";
 import { recordContactEngagement } from "../learning/contact-engagement.js";
 import { recordFeedback } from "../learning/feedback.js";
+import { extractEmailAddress } from "../mail/email-address.js";
 
 export type AttentionDismissResult = { ok: true } | { ok: false; reason: "not_found" };
 

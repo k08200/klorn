@@ -7,7 +7,7 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 
-import { sendEmail } from "../gmail.js";
+import { sendEmail } from "../mail/gmail.js";
 
 // The recipient guard is the first check in sendEmail and returns before any
 // network/DB access, so these cases exercise the real function with no mocks.

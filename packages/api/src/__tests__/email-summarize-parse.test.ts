@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseAiSummary } from "../email-summarize.js";
+import { parseAiSummary } from "../mail/email-summarize.js";
 
 /**
  * parseAiSummary is the pure parse seam for the email summary LLM call. It must

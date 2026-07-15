@@ -20,7 +20,7 @@ vi.mock("googleapis", () => ({
   },
 }));
 
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/gmail.js", () => ({
   getAuthedClient: vi.fn(async () => ({})),
   isGoogleAuthError: () => false,
   markGoogleTokenForReconnect: vi.fn(async () => {}),

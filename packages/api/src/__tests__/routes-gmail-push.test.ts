@@ -2,8 +2,11 @@ import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 
-vi.mock("../email.js", () => ({ sendVerificationEmail: vi.fn(), sendPasswordResetEmail: vi.fn() }));
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/email.js", () => ({
+  sendVerificationEmail: vi.fn(),
+  sendPasswordResetEmail: vi.fn(),
+}));
+vi.mock("../mail/gmail.js", () => ({
   getAuthUrl: vi.fn(),
   getLoginAuthUrl: vi.fn(),
   getAuthedClient: vi.fn(),
@@ -12,7 +15,7 @@ vi.mock("../gmail.js", () => ({
   registerGmailWatch: vi.fn(async () => ({ expiration: Date.now() + 86400000 })),
   stopGmailWatch: vi.fn(async () => ({ ok: true })),
 }));
-vi.mock("../email-sync.js", () => ({
+vi.mock("../mail/email-sync.js", () => ({
   syncEmails: vi.fn(async () => ({ synced: 0, newCount: 0, source: "gmail" })),
 }));
 vi.mock("../google-oidc.js", () => ({

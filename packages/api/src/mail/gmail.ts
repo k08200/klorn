@@ -1,10 +1,10 @@
 import { google } from "googleapis";
-import { MULTI_INBOX_SYNC_ENABLED } from "./config.js";
-import { decryptOptional, decryptToken, encryptOptional, encryptToken } from "./crypto-tokens.js";
-import { prisma } from "./db.js";
-import { getUserLlmCredentials } from "./llm/llm-credentials.js";
-import { captureError } from "./sentry.js";
-import { wrapUntrusted } from "./untrusted.js";
+import { MULTI_INBOX_SYNC_ENABLED } from "../config.js";
+import { decryptOptional, decryptToken, encryptOptional, encryptToken } from "../crypto-tokens.js";
+import { prisma } from "../db.js";
+import { getUserLlmCredentials } from "../llm/llm-credentials.js";
+import { captureError } from "../sentry.js";
+import { wrapUntrusted } from "../untrusted.js";
 
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
@@ -1430,7 +1430,7 @@ export async function classifyEmails(userId: string, maxResults = 10) {
   const result = await listEmails(userId, maxResults);
   if ("error" in result) return result;
 
-  const { classifyEmailBatch, sortByPriority } = await import("./judge/email-classifier.js");
+  const { classifyEmailBatch, sortByPriority } = await import("../judge/email-classifier.js");
   // BYOK: this user's classify-tool run bills their own key when set.
   const credentials = await getUserLlmCredentials(userId);
   const labels = await classifyEmailBatch(

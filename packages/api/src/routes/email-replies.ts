@@ -11,19 +11,22 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
-import { buildAttachmentCandidateProfile, listEmailAttachments } from "../email-attachments.js";
-import { updateCandidateIntake } from "../email-candidate-intake.js";
+import { recordContactEngagement } from "../learning/contact-engagement.js";
+import { buildVoicePromptHint } from "../learning/voice-profile-extractor.js";
+import { getUserLlmCredentials } from "../llm/llm-credentials.js";
+import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
+import {
+  buildAttachmentCandidateProfile,
+  listEmailAttachments,
+} from "../mail/email-attachments.js";
+import { updateCandidateIntake } from "../mail/email-candidate-intake.js";
 import {
   createEmailDraft,
   type GmailDraftAttachment,
   getReplyHeaders,
   resolveMailClient,
   sendEmail,
-} from "../gmail.js";
-import { recordContactEngagement } from "../learning/contact-engagement.js";
-import { buildVoicePromptHint } from "../learning/voice-profile-extractor.js";
-import { getUserLlmCredentials } from "../llm/llm-credentials.js";
-import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
+} from "../mail/gmail.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { parseJsonArray, safeAttachmentFilename } from "./email.js";

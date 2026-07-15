@@ -8,7 +8,7 @@ import {
   listConversionResults,
   saveConversionQualityReport,
   saveConversionResult,
-} from "../file-conversion-store.js";
+} from "../mail/file-conversion-store.js";
 
 describe("file conversion store", () => {
   const previousDir = process.env.EVE_CONVERSION_STORAGE_DIR;

@@ -9,7 +9,7 @@
  */
 
 import { prisma } from "../db.js";
-import { extractEmailAddress } from "../email-address.js";
+import { extractEmailAddress } from "../mail/email-address.js";
 
 export type Engagement = "outbound" | "dismiss";
 

@@ -7,10 +7,10 @@
  * NAT need no public endpoint — the same trade-off the Naver poller makes.
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
+import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
+import { captureError } from "../sentry.js";
 import { syncGitHubForUser } from "./github-source.js";
-import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
-import { captureError } from "./sentry.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let firstTickTimer: ReturnType<typeof setTimeout> | null = null;

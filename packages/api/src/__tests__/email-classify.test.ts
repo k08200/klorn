@@ -7,7 +7,7 @@ import {
   classifyPriorityDetailed,
   extractEmailAddress,
   parseAiSummary,
-} from "../email-sync.js";
+} from "../mail/email-sync.js";
 
 describe("classifyPriority — heuristic gate before LLM", () => {
   describe("Gmail category labels (highest precedence)", () => {

@@ -1,5 +1,5 @@
-import type { UserCorrectionFixture } from "./email-feedback-fixtures.js";
-import { classifyPriorityDetailed } from "./email-sync.js";
+import type { UserCorrectionFixture } from "./mail/email-feedback-fixtures.js";
+import { classifyPriorityDetailed } from "./mail/email-sync.js";
 
 export type EmailPriorityValue = "URGENT" | "NORMAL" | "LOW";
 

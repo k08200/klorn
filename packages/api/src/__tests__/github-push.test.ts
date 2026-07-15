@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isGitHubNotificationPushable } from "../github-push.js";
+import { isGitHubNotificationPushable } from "../mail/github-push.js";
 
 describe("isGitHubNotificationPushable — recency guard", () => {
   const now = new Date("2026-06-16T12:00:00.000Z").getTime();

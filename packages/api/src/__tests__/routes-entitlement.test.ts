@@ -39,8 +39,8 @@ vi.mock("../db.js", () => {
   };
   return { prisma, db: prisma };
 });
-vi.mock("../email-sync.js", () => ({ syncEmailByGmailId: vi.fn(async () => ({})) }));
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/email-sync.js", () => ({ syncEmailByGmailId: vi.fn(async () => ({})) }));
+vi.mock("../mail/gmail.js", () => ({
   sendEmail: vi.fn(async () => ({ id: "sent-1" })),
   archiveEmail: vi.fn(async () => ({})),
   toggleReadGmail: vi.fn(async () => ({})),

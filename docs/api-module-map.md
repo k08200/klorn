@@ -32,13 +32,21 @@ it at the src root next to `index.ts` until last.
 
 ## Slice order (each slice = one PR, full gate)
 
-1. **notify/** — highest cohesion (0.34), only 17 external importer files. ← this PR
-2. **billing/** — small (9 files), clean boundary.
-3. **llm/** — 10 files but 28 importer files; mechanical.
-4. **pim/**, **learning/**, **agentcore/** — medium coupling.
-5. **judge/** + **mail/** — the intertwined core, last, one at a time.
-6. `infra/` — optional; 103 importer files means maximal churn for the least
-   semantic gain. Decide after 1–5.
+1. **notify/** ✅ #808 (21 files)
+2. **billing/** ✅ #810 (9)
+3. **llm/** ✅ #812 (9)
+4. **pim/** ✅ #813 (20) · **learning/** ✅ #815 (24) · **agentcore/** ✅ #816 (24)
+5. **judge/** ✅ #817 (22 — all R100 byte-identical; eval.yml trigger replaced
+   with `src/judge/**`) · **mail/** ✅ (26; `search.ts` deleted — dead code, its
+   two stale defensive `vi.mock` lines removed with it)
+6. `infra/` — **deliberately skipped**: what remains at the src root is the
+   composition root (`index.ts`), cross-cutting infra (db*, config, auth,
+   websocket, sentry, crypto-tokens, error-handler, small utils), scheduler
+   straddlers (`automation-scheduler`, `background`, `scheduler-heartbeat`),
+   and root eval infra (`eval-context`, `eval-floors`,
+   `email-classification-eval`, `canary-compare` — the eval track's active
+   work area). Moving these is maximal churn (100+ importer files) for the
+   least semantic gain; revisit only if the root grows again.
 
 ## Move checklist (learned on slice 1)
 

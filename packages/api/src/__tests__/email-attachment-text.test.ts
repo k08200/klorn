@@ -4,7 +4,7 @@ import {
   extractAttachmentContent,
   inflateRawCapped,
   isReadableEmailAttachment,
-} from "../email-attachment-text.js";
+} from "../mail/email-attachment-text.js";
 
 describe("inflateRawCapped — decompression-bomb guard", () => {
   it("inflates a normal stream back to the original", () => {

@@ -17,7 +17,7 @@ vi.mock("../db.js", () => ({
   prisma: { user: { findUnique: userFindUnique, update: userUpdate } },
   db: {},
 }));
-vi.mock("../github-client.js", () => ({ fetchGitHubNotifications: fetchNotifsMock }));
+vi.mock("../mail/github-client.js", () => ({ fetchGitHubNotifications: fetchNotifsMock }));
 vi.mock("../crypto-tokens.js", () => ({
   decryptToken: decryptMock,
   // getUserLlmCredentials (BYOK resolution) decrypts the optional per-user
@@ -33,7 +33,7 @@ vi.mock("../judge/attention-mirror.js", () => ({
 }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { syncGitHubForUser } from "../github-source.js";
+import { syncGitHubForUser } from "../mail/github-source.js";
 
 const NOW = new Date("2026-06-13T12:00:00.000Z");
 

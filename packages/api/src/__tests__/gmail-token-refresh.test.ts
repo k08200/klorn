@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decideRefreshTokenWrite } from "../gmail.js";
+import { decideRefreshTokenWrite } from "../mail/gmail.js";
 
 describe("decideRefreshTokenWrite", () => {
   it("skips an empty callback (no access_token and no refresh_token)", () => {

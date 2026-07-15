@@ -11,7 +11,7 @@ import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/gmail.js", () => ({
   getAuthUrl: vi.fn(() => "https://example.com/oauth"),
   getLoginAuthUrl: vi.fn(() => "https://example.com/oauth-login"),
   getLinkInboxAuthUrl: vi.fn(() => "https://example.com/oauth-link-inbox"),
@@ -28,7 +28,7 @@ vi.mock("../gmail.js", () => ({
   })),
 }));
 
-vi.mock("../email.js", () => ({
+vi.mock("../mail/email.js", () => ({
   sendVerificationEmail: vi.fn(async () => true),
   sendPasswordResetEmail: vi.fn(async () => true),
   sendBetaInviteEmail: vi.fn(async () => true),
@@ -36,7 +36,7 @@ vi.mock("../email.js", () => ({
 
 // init-sync's linked-inbox fan-out is a no-op here (also avoids mocking
 // email-sync's transitive gmail.js imports).
-vi.mock("../email-sync.js", () => ({
+vi.mock("../mail/email-sync.js", () => ({
   syncLinkedInboxesForUser: vi.fn(async () => ({ newCount: 0 })),
   syncEmails: vi.fn(async () => ({ synced: 0, newCount: 0, source: "gmail" })),
   summarizeUnsummarizedEmails: vi.fn(async () => 0),

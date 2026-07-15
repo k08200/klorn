@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { GmailRawEmail } from "../gmail-fetch.js";
+import type { GmailRawEmail } from "../mail/gmail-fetch.js";
 
 // syncEmails is history-aware: it reads a stored watermark, fetches either the
 // incremental History slice or a first-sync snapshot, persists, and only THEN
@@ -10,7 +10,7 @@ const fetchGmailEmails = vi.fn();
 const fetchGmailHistory = vi.fn();
 const fetchCurrentHistoryId = vi.fn();
 const fetchGmailEmailById = vi.fn();
-vi.mock("../gmail-fetch.js", () => ({
+vi.mock("../mail/gmail-fetch.js", () => ({
   fetchGmailEmails: (...a: unknown[]) => fetchGmailEmails(...a),
   fetchGmailHistory: (...a: unknown[]) => fetchGmailHistory(...a),
   fetchCurrentHistoryId: (...a: unknown[]) => fetchCurrentHistoryId(...a),
@@ -63,7 +63,7 @@ function raw(id: string): GmailRawEmail {
   };
 }
 
-const { syncEmails } = await import("../email-sync.js");
+const { syncEmails } = await import("../mail/email-sync.js");
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -21,7 +21,7 @@ vi.mock("googleapis", () => ({
 
 // Attachment extraction is irrelevant here (no attachment parts) — stub it out
 // so the module loads without its heavy text-extraction deps.
-vi.mock("../email-attachment-text.js", () => ({
+vi.mock("../mail/email-attachment-text.js", () => ({
   extractAttachmentContent: vi.fn(() => ({ text: "" })),
   isReadableEmailAttachment: vi.fn(() => false),
 }));
@@ -29,7 +29,7 @@ vi.mock("../email-attachment-text.js", () => ({
 // Keep the real classification logic of the error helpers (that branch behaviour
 // is exactly what we're testing) but stub auth/connection side effects.
 const markGoogleTokenForReconnect = vi.fn(async () => {});
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/gmail.js", () => ({
   getAuthedClient: vi.fn(async () => ({})),
   isGoogleAuthError: (e: { response?: { status?: number } }) => e?.response?.status === 401,
   isGoogleNotFoundError: (e: { response?: { status?: number } }) =>
@@ -101,7 +101,7 @@ describe("fetchGmailEmails — parallel fetch with per-message isolation", () =>
       return detailFor(id);
     });
 
-    const { fetchGmailEmails } = await import("../gmail-fetch.js");
+    const { fetchGmailEmails } = await import("../mail/gmail-fetch.js");
     const emails = await fetchGmailEmails("user-1", 30);
 
     expect(emails?.map((e) => e.gmailId)).toEqual(["a", "b", "c"]);
@@ -114,7 +114,7 @@ describe("fetchGmailEmails — parallel fetch with per-message isolation", () =>
       return detailFor(id);
     });
 
-    const { fetchGmailEmails } = await import("../gmail-fetch.js");
+    const { fetchGmailEmails } = await import("../mail/gmail-fetch.js");
     const emails = await fetchGmailEmails("user-1", 30);
 
     expect(emails?.map((e) => e.gmailId)).toEqual(["a", "c"]);
@@ -129,7 +129,7 @@ describe("fetchGmailEmails — parallel fetch with per-message isolation", () =>
       return detailFor(id);
     });
 
-    const { fetchGmailEmails } = await import("../gmail-fetch.js");
+    const { fetchGmailEmails } = await import("../mail/gmail-fetch.js");
     const emails = await fetchGmailEmails("user-1", 30);
 
     // One bad message must not abort the other in-flight fetches.
@@ -149,7 +149,7 @@ describe("fetchGmailEmails — parallel fetch with per-message isolation", () =>
       return detailFor(id);
     });
 
-    const { fetchGmailEmails } = await import("../gmail-fetch.js");
+    const { fetchGmailEmails } = await import("../mail/gmail-fetch.js");
     const result = await fetchGmailEmails("user-1", 30);
 
     // Auth failure must surface as a reconnect signal, not a partial result.
@@ -173,7 +173,7 @@ describe("fetchGmailHistory — incremental gap-fill via the History API", () =>
       .mockResolvedValueOnce(historyPage(["h3"], "1020"));
     getMock.mockImplementation(async ({ id }: { id: string }) => detailFor(id));
 
-    const { fetchGmailHistory } = await import("../gmail-fetch.js");
+    const { fetchGmailHistory } = await import("../mail/gmail-fetch.js");
     const result = await fetchGmailHistory("user-1", "1000");
 
     expect(historyListMock).toHaveBeenCalledTimes(2);
@@ -199,7 +199,7 @@ describe("fetchGmailHistory — incremental gap-fill via the History API", () =>
     historyListMock.mockResolvedValueOnce(historyPage(["dup", "dup", "other"], "2000"));
     getMock.mockImplementation(async ({ id }: { id: string }) => detailFor(id));
 
-    const { fetchGmailHistory } = await import("../gmail-fetch.js");
+    const { fetchGmailHistory } = await import("../mail/gmail-fetch.js");
     const result = await fetchGmailHistory("user-1", "1999");
 
     // Each unique id is fetched exactly once.
@@ -210,7 +210,7 @@ describe("fetchGmailHistory — incremental gap-fill via the History API", () =>
   it("returns { expired, emails: [] } when startHistoryId aged out (404)", async () => {
     historyListMock.mockRejectedValue(httpError(404));
 
-    const { fetchGmailHistory } = await import("../gmail-fetch.js");
+    const { fetchGmailHistory } = await import("../mail/gmail-fetch.js");
     const result = await fetchGmailHistory("user-1", "old-id");
 
     expect(result).toEqual({ emails: [], newHistoryId: null, expired: true });
@@ -221,7 +221,7 @@ describe("fetchGmailHistory — incremental gap-fill via the History API", () =>
   it("returns null and flags reconnect on an auth error (primary account)", async () => {
     historyListMock.mockRejectedValue(httpError(401));
 
-    const { fetchGmailHistory } = await import("../gmail-fetch.js");
+    const { fetchGmailHistory } = await import("../mail/gmail-fetch.js");
     const result = await fetchGmailHistory("user-1", "1000");
 
     expect(result).toBeNull();
@@ -231,7 +231,7 @@ describe("fetchGmailHistory — incremental gap-fill via the History API", () =>
   it("does NOT touch the primary token on an auth error when a linked authClient is passed", async () => {
     historyListMock.mockRejectedValue(httpError(401));
 
-    const { fetchGmailHistory } = await import("../gmail-fetch.js");
+    const { fetchGmailHistory } = await import("../mail/gmail-fetch.js");
     const result = await fetchGmailHistory("user-1", "1000", {} as never);
 
     expect(result).toBeNull();
@@ -248,7 +248,7 @@ describe("fetchCurrentHistoryId — baseline the watermark via getProfile", () =
   it("returns the profile historyId as a string", async () => {
     getProfileMock.mockResolvedValue({ data: { historyId: "5000" } });
 
-    const { fetchCurrentHistoryId } = await import("../gmail-fetch.js");
+    const { fetchCurrentHistoryId } = await import("../mail/gmail-fetch.js");
     const id = await fetchCurrentHistoryId("user-1");
 
     expect(id).toBe("5000");
@@ -257,14 +257,14 @@ describe("fetchCurrentHistoryId — baseline the watermark via getProfile", () =
   it("returns null when the profile has no historyId", async () => {
     getProfileMock.mockResolvedValue({ data: {} });
 
-    const { fetchCurrentHistoryId } = await import("../gmail-fetch.js");
+    const { fetchCurrentHistoryId } = await import("../mail/gmail-fetch.js");
     expect(await fetchCurrentHistoryId("user-1")).toBeNull();
   });
 
   it("returns null on an auth error", async () => {
     getProfileMock.mockRejectedValue(httpError(401));
 
-    const { fetchCurrentHistoryId } = await import("../gmail-fetch.js");
+    const { fetchCurrentHistoryId } = await import("../mail/gmail-fetch.js");
     expect(await fetchCurrentHistoryId("user-1")).toBeNull();
   });
 });
@@ -278,7 +278,7 @@ describe("fetchGmailEmailById — primary vs linked auth handling", () => {
   it("flags PRIMARY reconnect on a primary auth error (no linked client)", async () => {
     getMock.mockRejectedValue(httpError(401));
 
-    const { fetchGmailEmailById } = await import("../gmail-fetch.js");
+    const { fetchGmailEmailById } = await import("../mail/gmail-fetch.js");
     const result = await fetchGmailEmailById("user-1", "g1");
 
     expect(result).toBeNull();
@@ -289,7 +289,7 @@ describe("fetchGmailEmailById — primary vs linked auth handling", () => {
     getMock.mockRejectedValue(httpError(401));
     const linkedClient = {} as never;
 
-    const { fetchGmailEmailById } = await import("../gmail-fetch.js");
+    const { fetchGmailEmailById } = await import("../mail/gmail-fetch.js");
     const result = await fetchGmailEmailById("user-1", "g1", linkedClient);
 
     expect(result).toBeNull();
@@ -306,7 +306,7 @@ describe("fetchGmailEmailById — primary vs linked auth handling", () => {
   it("returns the parsed email on success", async () => {
     getMock.mockResolvedValue(detailFor("g1"));
 
-    const { fetchGmailEmailById } = await import("../gmail-fetch.js");
+    const { fetchGmailEmailById } = await import("../mail/gmail-fetch.js");
     const email = await fetchGmailEmailById("user-1", "g1");
 
     expect(email?.gmailId).toBe("g1");

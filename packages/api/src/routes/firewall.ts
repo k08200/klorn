@@ -20,7 +20,6 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
-import { ensureFreshGmailWatch } from "../gmail.js";
 import { dismissAttentionItem } from "../judge/attention-dismiss.js";
 import { checkAttentionInputHash } from "../judge/attention-input-hash.js";
 import { confirmAttentionTier, overrideAttentionTier } from "../judge/attention-override.js";
@@ -31,6 +30,7 @@ import { manualOverrideReason, normalizeTier, TIERS, type Tier } from "../judge/
 import { getInteractionGraph } from "../learning/interaction-graph.js";
 import { describePolicy } from "../learning/ontology.js";
 import { getTrustScoresBulk } from "../learning/trust-score.js";
+import { ensureFreshGmailWatch } from "../mail/gmail.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { captureError } from "../sentry.js";
 

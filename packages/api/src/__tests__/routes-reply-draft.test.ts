@@ -25,12 +25,12 @@ vi.mock("../llm/llm-credentials.js", () => ({ getUserLlmCredentials: vi.fn(async
 vi.mock("../learning/voice-profile-extractor.js", () => ({
   buildVoicePromptHint: vi.fn(async () => ""),
 }));
-vi.mock("../email-attachments.js", () => ({
+vi.mock("../mail/email-attachments.js", () => ({
   listEmailAttachments: vi.fn(async () => []),
   buildAttachmentCandidateProfile: vi.fn(() => null),
 }));
-vi.mock("../email-candidate-intake.js", () => ({ updateCandidateIntake: vi.fn() }));
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/email-candidate-intake.js", () => ({ updateCandidateIntake: vi.fn() }));
+vi.mock("../mail/gmail.js", () => ({
   createEmailDraft: vi.fn(),
   getAuthedClient: vi.fn(),
   // Transitively imported by autonomous-agent (via the route's import graph);

@@ -8,7 +8,7 @@ import {
   normalizeConversionTarget,
   requiresOriginalAttachment,
   runFileConversionQualitySuite,
-} from "../file-conversions.js";
+} from "../mail/file-conversions.js";
 
 describe("file conversions", () => {
   it("normalizes supported conversion targets", () => {

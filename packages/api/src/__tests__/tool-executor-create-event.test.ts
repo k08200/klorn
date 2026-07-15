@@ -23,7 +23,7 @@ vi.mock("../db.js", () => ({
   },
   db: {},
 }));
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/gmail.js", () => ({
   GMAIL_TOOLS: [],
   sendEmail: vi.fn(),
   listEmails: vi.fn(),
@@ -51,7 +51,6 @@ vi.mock("../learning/memory.js", () => ({
   recall: vi.fn(),
   remember: vi.fn(),
 }));
-vi.mock("../search.js", () => ({ SEARCH_TOOLS: [], webSearch: vi.fn() }));
 vi.mock("../agentcore/skill-executor.js", () => ({
   SKILL_TOOLS: [],
   executeSkill: vi.fn(),
