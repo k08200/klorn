@@ -8,11 +8,11 @@
  * 4. Updates reminder status to SENT
  */
 
-import { prisma } from "./db.js";
-import { sendPushNotification } from "./notify/push.js";
-import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
-import { captureError } from "./sentry.js";
-import { pushNotification } from "./websocket.js";
+import { prisma } from "../db.js";
+import { sendPushNotification } from "../notify/push.js";
+import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
+import { captureError } from "../sentry.js";
+import { pushNotification } from "../websocket.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 

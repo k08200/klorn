@@ -35,7 +35,7 @@ vi.mock("../db.js", () => ({
   },
 }));
 
-import { buildMeetingPrepPack } from "../meeting-prep-pack.js";
+import { buildMeetingPrepPack } from "../pim/meeting-prep-pack.js";
 
 const NOW = new Date("2026-04-28T10:00:00.000Z").getTime();
 

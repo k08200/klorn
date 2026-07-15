@@ -103,7 +103,7 @@ vi.mock("../db.js", () => ({
   },
 }));
 
-import { getBriefingStatus } from "../briefing-status.js";
+import { getBriefingStatus } from "../pim/briefing-status.js";
 
 type Range = { gte: Date; lt: Date };
 

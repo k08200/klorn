@@ -32,7 +32,7 @@ vi.mock("../email-priority.js", () => ({
   classifyPriority: vi.fn(() => "NORMAL"),
   classifyNeedsReplyFromSignals: vi.fn(() => ({ needsReply: false, reason: null, confidence: 0 })),
 }));
-vi.mock("../commitment-ingestion.js", () => ({
+vi.mock("../pim/commitment-ingestion.js", () => ({
   extractAndUpsertCommitmentsFromText: vi.fn(async () => {}),
 }));
 vi.mock("../email-attachments.js", () => ({

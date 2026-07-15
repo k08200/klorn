@@ -9,7 +9,6 @@
  */
 
 import { upsertAttentionForEmailJudgement } from "./attention-mirror.js";
-import { extractAndUpsertCommitmentsFromText } from "./commitment-ingestion.js";
 import { prisma } from "./db.js";
 import { scheduleAgentForActionableEmail } from "./email-action-trigger.js";
 import { extractEmailAddress } from "./email-address.js";
@@ -21,6 +20,7 @@ import { buildJudgeContext } from "./judge-context.js";
 import { recordJudgeSource } from "./judge-health.js";
 import { isClearMarketing } from "./keyword-policy.js";
 import { getUserLlmCredentials } from "./llm/llm-credentials.js";
+import { extractAndUpsertCommitmentsFromText } from "./pim/commitment-ingestion.js";
 import { judgeEmail, type PocTier } from "./poc-judge.js";
 import type { ProviderCredentials } from "./providers/index.js";
 import { resolveUserEmail } from "./resolve-user-email.js";

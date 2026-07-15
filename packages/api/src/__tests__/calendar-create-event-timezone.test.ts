@@ -34,7 +34,7 @@ vi.mock("../db.js", () => ({
 
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { createEvent } from "../calendar.js";
+import { createEvent } from "../pim/calendar.js";
 
 beforeEach(() => {
   vi.clearAllMocks();

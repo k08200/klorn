@@ -24,8 +24,8 @@
 import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { hasBriefingBeenSentToday, isBriefingDue } from "../automation-scheduler.js";
-import { createDailyBriefingDelivery } from "../briefing.js";
 import { prisma } from "../db.js";
+import { createDailyBriefingDelivery } from "../pim/briefing.js";
 import { captureError } from "../sentry.js";
 import { normalizeTimeZone } from "../time-zone.js";
 

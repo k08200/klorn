@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
-import { getBriefingStatus } from "../briefing-status.js";
 import { prisma } from "../db.js";
 import { snapshotUserProviderCooldowns } from "../llm/model-fallback.js";
+import { getBriefingStatus } from "../pim/briefing-status.js";
 
 type CheckStatus = "ok" | "warning" | "error";
 

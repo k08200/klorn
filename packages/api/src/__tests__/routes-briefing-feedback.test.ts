@@ -14,13 +14,13 @@ vi.mock("../gmail.js", () => ({
   getGoogleUserInfo: vi.fn(),
   getOAuth2Client: vi.fn(),
 }));
-vi.mock("../calendar.js", () => ({
+vi.mock("../pim/calendar.js", () => ({
   listEvents: vi.fn(async () => ({ events: [] })),
 }));
-vi.mock("../tasks.js", () => ({
+vi.mock("../pim/tasks.js", () => ({
   listTasks: vi.fn(async () => ({ tasks: [] })),
 }));
-vi.mock("../notes.js", () => ({
+vi.mock("../pim/notes.js", () => ({
   listNotes: vi.fn(async () => ({ notes: [] })),
 }));
 vi.mock("../llm/openai.js", () => ({
@@ -29,7 +29,7 @@ vi.mock("../llm/openai.js", () => ({
   openai: null,
   createCompletion: vi.fn(),
 }));
-vi.mock("../briefing-status.js", () => ({
+vi.mock("../pim/briefing-status.js", () => ({
   getBriefingStatus: vi.fn(async () => ({
     generated: false,
     note: null,
@@ -184,7 +184,7 @@ function auth() {
 }
 
 async function buildApp() {
-  const { briefingRoutes } = await import("../briefing.js");
+  const { briefingRoutes } = await import("../pim/briefing.js");
   const app = Fastify();
   await app.register(briefingRoutes, { prefix: "/api/briefing" });
   return app;

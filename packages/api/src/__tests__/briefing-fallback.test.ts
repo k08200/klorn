@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildSignalOnlyBriefing } from "../briefing.js";
-import type { BriefingSignals } from "../briefing-signals.js";
+import { buildSignalOnlyBriefing } from "../pim/briefing.js";
+import type { BriefingSignals } from "../pim/briefing-signals.js";
 
 const EMPTY_SIGNALS: BriefingSignals = {
   deadlines: [],

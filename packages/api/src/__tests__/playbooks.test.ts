@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import type { WorkGraphContext, WorkGraphSummary } from "../pim/work-graph.js";
 import { listKlornPlaybooks, recommendPlaybooksFromGraph } from "../playbooks.js";
-import type { WorkGraphContext, WorkGraphSummary } from "../work-graph.js";
 
 function context(over: Partial<WorkGraphContext> = {}): WorkGraphContext {
   return {

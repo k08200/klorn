@@ -17,7 +17,7 @@ vi.mock("../sentry.js", () => ({
 import {
   isCommitmentLlmRefinementEnabled,
   maybeRefineCommitmentCandidateWithLlm,
-} from "../commitment-refiner.js";
+} from "../pim/commitment-refiner.js";
 
 const ORIGINAL_FLAG = process.env.COMMITMENT_LLM_REFINEMENT;
 

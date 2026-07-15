@@ -17,7 +17,7 @@ vi.mock("../db.js", () => ({
     },
   },
 }));
-vi.mock("../briefing.js", () => ({
+vi.mock("../pim/briefing.js", () => ({
   createDailyBriefingDelivery: vi.fn(),
 }));
 vi.mock("../automation-scheduler.js", () => ({

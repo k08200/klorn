@@ -8,20 +8,20 @@
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
+import { prisma } from "../db.js";
+import { recordFeedback } from "../feedback.js";
 import {
   buildPath,
   getOrBuildPath,
   materializeAllSteps,
   materializeStepAsTask,
-} from "../commitment-path.js";
+} from "../pim/commitment-path.js";
 import {
   deleteCommitment as deleteCommitmentService,
   getCommitment,
   listCommitments,
   updateCommitment,
-} from "../commitments.js";
-import { prisma } from "../db.js";
-import { recordFeedback } from "../feedback.js";
+} from "../pim/commitments.js";
 import { getTrustScoresBulk, updateTrustScore } from "../trust-score.js";
 
 const ALLOWED_STATUSES = new Set(["OPEN", "DONE", "DISMISSED", "SNOOZED"]);

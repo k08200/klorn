@@ -1,12 +1,12 @@
 import { type calendar_v3, google } from "googleapis";
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 import {
   getAuthedClient,
   getLinkedCalendarClients,
   isGoogleAuthError,
   markGoogleTokenForReconnect,
   markLinkedCalendarForReconnect,
-} from "./gmail.js";
+} from "../gmail.js";
 import {
   type BusyConflict,
   type CalendarConflictItem,
@@ -15,10 +15,10 @@ import {
   summarizeConflicts,
   summarizeFreeBusy,
   toAbsoluteInstant,
-} from "./google-calendar-time.js";
-import { captureError } from "./sentry.js";
-import { normalizeTimeZone } from "./time-zone.js";
-import { wrapUntrusted } from "./untrusted.js";
+} from "../google-calendar-time.js";
+import { captureError } from "../sentry.js";
+import { normalizeTimeZone } from "../time-zone.js";
+import { wrapUntrusted } from "../untrusted.js";
 
 /**
  * The user's configured IANA timezone (defaults to the product default). Used to

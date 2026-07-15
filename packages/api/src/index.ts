@@ -11,11 +11,11 @@ import {
   revokeDemoAccessIfDisabled,
 } from "./auth.js";
 import { startBackgroundAgent } from "./background.js";
-import { briefingRoutes } from "./briefing.js";
 import { db, prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
 import { handleError } from "./error-handler.js";
 import { attachPerfMonitor } from "./perf-monitor.js";
+import { briefingRoutes } from "./pim/briefing.js";
 import { adminRoutes } from "./routes/admin.js";
 import { authRoutes } from "./routes/auth.js";
 import { automationRoutes } from "./routes/automations.js";
@@ -506,7 +506,7 @@ try {
 
   // Start reminder notification scheduler
   if (!BG_DISABLED) {
-    import("./reminder-scheduler.js")
+    import("./pim/reminder-scheduler.js")
       .then(({ startReminderScheduler }) => {
         startReminderScheduler();
       })

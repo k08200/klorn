@@ -11,7 +11,7 @@
  * cleanup matches live dedup behavior.
  */
 import { prisma } from "../db.js";
-import { titleSimilarity } from "../tasks.js";
+import { titleSimilarity } from "../pim/tasks.js";
 
 const SIMILARITY_THRESHOLD = 0.5;
 
