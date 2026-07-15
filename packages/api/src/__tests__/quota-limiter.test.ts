@@ -1,15 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   _resetAllUserWindowsForTests,
+  awaitUserCallSlot,
   checkAndRecordUserCall,
   getUserUsage,
+  rpmCeilingFor,
   UserRateLimitedError,
 } from "../billing/quota-limiter.js";
 import {
+  LLM_RPM_FOREGROUND_RESERVE,
   LLM_USER_BACKGROUND_DAILY_CAP,
   LLM_USER_FOREGROUND_DAILY_CAP,
   LLM_USER_RPM,
 } from "../config.js";
+
+const BG_RPM_CEILING = Math.max(1, LLM_USER_RPM - LLM_RPM_FOREGROUND_RESERVE);
 
 describe("quota-limiter", () => {
   beforeEach(() => {
@@ -78,7 +83,7 @@ describe("quota-limiter", () => {
     // Background workers burn their entire daily allocation
     for (let i = 0; i < LLM_USER_BACKGROUND_DAILY_CAP; i++) {
       checkAndRecordUserCall("victim", { priority: "background" });
-      if (i % LLM_USER_RPM === LLM_USER_RPM - 1) vi.advanceTimersByTime(61_000);
+      if (i % BG_RPM_CEILING === BG_RPM_CEILING - 1) vi.advanceTimersByTime(61_000);
     }
 
     // Background is now exhausted
@@ -109,7 +114,7 @@ describe("quota-limiter", () => {
   it("daily-limit error reports the priority that tripped it", () => {
     for (let i = 0; i < LLM_USER_BACKGROUND_DAILY_CAP; i++) {
       checkAndRecordUserCall("bg-user", { priority: "background" });
-      if (i % LLM_USER_RPM === LLM_USER_RPM - 1) vi.advanceTimersByTime(61_000);
+      if (i % BG_RPM_CEILING === BG_RPM_CEILING - 1) vi.advanceTimersByTime(61_000);
     }
     let caught: unknown;
     try {
@@ -121,6 +126,28 @@ describe("quota-limiter", () => {
     const err = caught as UserRateLimitedError;
     expect(err.priority).toBe("background");
     expect(err.message).toMatch(/background/i);
+  });
+
+  it("reserves the last RPM slots for foreground: background trips early, chat still fits", () => {
+    // Background may only consume RPM - reserve slots of the shared window…
+    for (let i = 0; i < BG_RPM_CEILING; i++) {
+      checkAndRecordUserCall("u1", { priority: "background" });
+    }
+    expect(() => checkAndRecordUserCall("u1", { priority: "background" })).toThrow(
+      UserRateLimitedError,
+    );
+    // …so foreground chat still has headroom during a background burst.
+    for (let i = 0; i < LLM_RPM_FOREGROUND_RESERVE; i++) {
+      expect(() => checkAndRecordUserCall("u1", { priority: "foreground" })).not.toThrow();
+    }
+    expect(() => checkAndRecordUserCall("u1", { priority: "foreground" })).toThrow(
+      UserRateLimitedError,
+    );
+  });
+
+  it("rpmCeilingFor exposes the per-priority admission limits", () => {
+    expect(rpmCeilingFor("foreground")).toBe(LLM_USER_RPM);
+    expect(rpmCeilingFor("background")).toBe(BG_RPM_CEILING);
   });
 
   it("getUserUsage reports per-bucket counts and a combined total", () => {
@@ -139,5 +166,84 @@ describe("quota-limiter", () => {
     expect(snap.backgroundDailyCap).toBe(LLM_USER_BACKGROUND_DAILY_CAP);
     expect(snap.dailyCap).toBe(LLM_USER_FOREGROUND_DAILY_CAP + LLM_USER_BACKGROUND_DAILY_CAP);
     expect(snap.dailyResetAt.getUTCHours()).toBe(0);
+  });
+
+  describe("awaitUserCallSlot", () => {
+    function fillRpmWindow(userId: string): void {
+      for (let i = 0; i < LLM_USER_RPM; i++) {
+        checkAndRecordUserCall(userId, { priority: "foreground" });
+      }
+    }
+
+    it("background call waits for the sliding window instead of failing", async () => {
+      fillRpmWindow("u1");
+      let resolved = false;
+      const slot = awaitUserCallSlot("u1", { priority: "background" }).then(() => {
+        resolved = true;
+      });
+      // Still parked while the window is full…
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(resolved).toBe(false);
+      // …admitted once the 60 s window slides past the burst.
+      await vi.advanceTimersByTimeAsync(60_000);
+      await slot;
+      expect(resolved).toBe(true);
+      expect(getUserUsage("u1").backgroundDailyUsed).toBe(1);
+    });
+
+    it("a queued burst drains across window turns in order of arrival", async () => {
+      fillRpmWindow("u1");
+      const waiters = BG_RPM_CEILING + 2;
+      let done = 0;
+      const slots = Array.from({ length: waiters }, () =>
+        awaitUserCallSlot("u1", { priority: "background", maxWaitMs: 10 * 60_000 }).then(() => {
+          done++;
+        }),
+      );
+      // First window turn admits up to the background ceiling…
+      await vi.advanceTimersByTimeAsync(62_000);
+      expect(done).toBe(BG_RPM_CEILING);
+      // …the rest drain on the next turn instead of falling back.
+      await vi.advanceTimersByTimeAsync(62_000);
+      await Promise.all(slots);
+      expect(done).toBe(waiters);
+    });
+
+    it("fails fast when the next slot is beyond maxWaitMs", async () => {
+      fillRpmWindow("u1");
+      await expect(
+        awaitUserCallSlot("u1", { priority: "background", maxWaitMs: 10 }),
+      ).rejects.toBeInstanceOf(UserRateLimitedError);
+    });
+
+    it("maxWaitMs: 0 disables waiting entirely (pre-queue fail-fast behavior)", async () => {
+      fillRpmWindow("u1");
+      await expect(
+        awaitUserCallSlot("u1", { priority: "background", maxWaitMs: 0 }),
+      ).rejects.toBeInstanceOf(UserRateLimitedError);
+    });
+
+    it("daily-cap exhaustion rejects immediately — waiting cannot help until UTC midnight", async () => {
+      for (let i = 0; i < LLM_USER_BACKGROUND_DAILY_CAP; i++) {
+        checkAndRecordUserCall("u1", { priority: "background" });
+        if (i % BG_RPM_CEILING === BG_RPM_CEILING - 1) vi.advanceTimersByTime(61_000);
+      }
+      vi.advanceTimersByTime(61_000); // RPM window is fresh; only the daily cap blocks
+      let caught: unknown;
+      try {
+        await awaitUserCallSlot("u1", { priority: "background", maxWaitMs: 60_000 });
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(UserRateLimitedError);
+      expect((caught as UserRateLimitedError).reason).toBe("daily");
+    });
+
+    it("foreground calls never queue — chat fails fast for responsive UX", async () => {
+      fillRpmWindow("u1");
+      await expect(
+        awaitUserCallSlot("u1", { priority: "foreground", maxWaitMs: 60_000 }),
+      ).rejects.toBeInstanceOf(UserRateLimitedError);
+    });
   });
 });
