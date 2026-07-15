@@ -254,14 +254,16 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
 
   // POST /api/email/:id/reply-options
   // Three tone-differentiated drafts (accept / decline / info) for
-  // one-keystroke reply surfaces. Every call is 3 LLM completions, so the
-  // rate limit is tighter than /reply-draft's. All-or-nothing: a partial set
-  // would silently remap the client's fixed 1/2/3 key bindings.
+  // one-keystroke reply surfaces. Every call is 3 concurrent LLM completions,
+  // so 3/min keeps the worst-case spend (9 LLM calls/min) inside /reply-draft's
+  // 10/min budget — a higher route limit would quietly raise the per-user LLM
+  // ceiling. All-or-nothing: a partial set would silently remap the client's
+  // fixed 1/2/3 key bindings.
   app.post(
     "/:id/reply-options",
     {
       preHandler: [requireAuth, requireEntitled],
-      config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: 3, timeWindow: "1 minute" } },
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
@@ -293,6 +295,16 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
           ),
         );
       } catch (err) {
+        // A per-user quota trip (quota-limiter, thrown inside createCompletion)
+        // is self-throttling, not a provider outage: give the client a real
+        // back-off signal and keep Sentry quiet — an alert here is pure noise.
+        // Name check (not instanceof) matches the autonomous-agent precedent
+        // and survives the LLM layer being mocked in tests.
+        if (err instanceof Error && err.name === "UserRateLimitedError") {
+          const retryAfterMs = (err as { retryAfterMs?: number }).retryAfterMs ?? 1_000;
+          reply.header("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
+          return reply.code(429).send({ error: err.message });
+        }
         captureError(err, {
           tags: { scope: "reply-options" },
           extra: { userId: uid, emailId: dbEmail.id, model: DRAFT_MODEL },
