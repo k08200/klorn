@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { fixtureToJudgeContext } from "../eval-context.js";
+import { fixtureToJudgeContext, judgeContextToFixture } from "../eval-context.js";
 import { EMPTY_JUDGE_CONTEXT } from "../judge/poc-judge.js";
 
 describe("fixtureToJudgeContext", () => {
@@ -130,5 +130,58 @@ describe("fixtureToJudgeContext", () => {
         "i",
       ),
     ).toThrow(/pattern/);
+  });
+});
+
+describe("judgeContextToFixture (ledger snapshot for the committed eval set)", () => {
+  it("keeps only the numeric knowledge (prior + facts) and strips text carriers", () => {
+    const fixture = judgeContextToFixture({
+      corrections: [{ from: "real@leak.com", subject: "REAL SUBJECT", tier: "QUEUE" }],
+      senderPrior: { tier: "PUSH", count: 3, kind: "override" },
+      senderFacts: {
+        tierHistory: { QUEUE: 5 },
+        manualOverrides: 3,
+        interaction: null,
+        commitments: null,
+        engagement: null,
+      },
+      senderTraits: [{ factKind: "role", factValue: "x", confidence: 1, evidenceText: "raw text" }],
+      learnedRules: [{ pattern: "sender-domain", value: "leak.com", tier: "SILENT" }],
+    });
+    expect(fixture).toEqual({
+      senderPrior: { tier: "PUSH", count: 3, kind: "override" },
+      senderFacts: {
+        tierHistory: { QUEUE: 5 },
+        manualOverrides: 3,
+        interaction: null,
+        commitments: null,
+        engagement: null,
+      },
+    });
+    expect(JSON.stringify(fixture)).not.toMatch(/leak|REAL|raw text/);
+  });
+
+  it("returns null when there is no prior and no facts (no fixture to commit)", () => {
+    expect(
+      judgeContextToFixture({
+        corrections: [],
+        senderPrior: null,
+        senderFacts: null,
+        senderTraits: [],
+        learnedRules: [],
+      }),
+    ).toBeNull();
+  });
+
+  it("round-trips through the strict fixture parser", () => {
+    const fixture = judgeContextToFixture({
+      corrections: [],
+      senderPrior: { tier: "PUSH", count: 2, kind: "override" },
+      senderFacts: null,
+      senderTraits: [],
+      learnedRules: [],
+    });
+    const context = fixtureToJudgeContext(fixture, "row-x");
+    expect(context.senderPrior).toEqual({ tier: "PUSH", count: 2, kind: "override" });
   });
 });

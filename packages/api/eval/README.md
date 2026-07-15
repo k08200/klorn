@@ -96,6 +96,11 @@ Wiring, until PUSH support matures:
   judge PR (a floor breach is a `::warning`, never a fail).
 - **`judge-canary.yml`** runs the real set weekly for FLIP detection only —
   floor breaches are expected (warning), drift alarms are not.
+- **Warm-start fixtures**: items carry `context` snapshots (senderPrior +
+  senderFacts, numeric-only) taken from the production `buildJudgeContext`
+  via `--emit-context` — so the readout measures the judge the way prod runs
+  it (the founder's OVERRIDE:PUSH priors short-circuit). Re-emit after
+  ledger-heavy dogfood stretches.
 - **Ratchet condition**: when the regenerated set reaches **PUSH support
   ≥10** (every in-app override/confirm adds ledger rows for the next
   `draft-real-eval-set.ts` run), repoint the gate step at
