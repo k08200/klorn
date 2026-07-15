@@ -2,48 +2,22 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+// Wire shape comes from @klorn/contract — the same type the server builds
+// (pim/briefing-status.ts), so a response-shape change fails to compile here
+// instead of silently desyncing.
+import type { BriefingPushState, BriefingStatus } from "@klorn/contract";
 import { apiFetch } from "../lib/api";
 import { captureClientError } from "../lib/sentry";
 
-type PushState =
-  | "received"
-  | "accepted"
-  | "failed"
-  | "skipped"
-  | "pending"
-  | "not_sent"
-  | "no_subscription";
-
-interface BriefingStatus {
-  generated: boolean;
-  note: {
-    id: string;
-    content: string;
-    preview: string;
-    createdAt: string;
-  } | null;
-  push: {
-    state: PushState;
-    reason: string | null;
-    acceptedAt: string | null;
-    receivedAt: string | null;
-    clickedAt: string | null;
-  };
-  automation: {
-    configured: boolean;
-    enabled: boolean;
-    briefingTime: string | null;
-    timezone: string;
-    reason: "no_config" | "disabled" | null;
-  };
-}
-
 const EMPTY_STATUS: BriefingStatus = {
+  date: "",
   generated: false,
   note: null,
+  notification: null,
   push: {
     state: "not_sent",
     reason: null,
+    deliveryId: null,
     acceptedAt: null,
     receivedAt: null,
     clickedAt: null,
@@ -169,7 +143,7 @@ function emptyMessage(status: BriefingStatus): string {
 }
 
 function pushMeta(
-  state: PushState,
+  state: BriefingPushState,
   reason: string | null,
 ): { label: string; className: string; dotClassName: string } {
   switch (state) {

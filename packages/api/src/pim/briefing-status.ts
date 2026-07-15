@@ -6,49 +6,14 @@
  * for the Command Center.
  */
 
+// The status wire shape lives in @klorn/contract (single source of truth
+// with the web briefing page and Command Center card). Re-exported so
+// existing importers keep working.
+import type { BriefingPushState, BriefingStatus } from "@klorn/contract";
 import { prisma } from "../db.js";
 import { localDayUtcRange, normalizeTimeZone } from "../time-zone.js";
 
-export type BriefingPushState =
-  | "received"
-  | "accepted"
-  | "failed"
-  | "skipped"
-  | "pending"
-  | "not_sent"
-  | "no_subscription";
-
-export interface BriefingStatus {
-  date: string;
-  generated: boolean;
-  note: {
-    id: string;
-    content: string;
-    preview: string;
-    createdAt: string;
-  } | null;
-  notification: {
-    id: string;
-    title: string;
-    message: string;
-    createdAt: string;
-  } | null;
-  push: {
-    state: BriefingPushState;
-    reason: string | null;
-    deliveryId: string | null;
-    acceptedAt: string | null;
-    receivedAt: string | null;
-    clickedAt: string | null;
-  };
-  automation: {
-    configured: boolean;
-    enabled: boolean;
-    briefingTime: string | null;
-    timezone: string;
-    reason: "no_config" | "disabled" | null;
-  };
-}
+export type { BriefingPushState, BriefingStatus };
 
 type NoteRow = { id: string; content: string; createdAt: Date };
 type NotificationRow = { id: string; title: string; message: string; createdAt: Date };
