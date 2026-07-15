@@ -71,7 +71,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile>({
     name: "",
-    language: "auto",
+    language: "en",
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   });
   const [profileSaved, setProfileSaved] = useState(false);
@@ -858,7 +858,6 @@ export default function SettingsPage() {
                   }
                   className="w-full bg-stone-900 border border-stone-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-300 transition"
                 >
-                  <option value="auto">Auto-detect</option>
                   <option value="en">English</option>
                   <option value="ko">한국어</option>
                 </select>
