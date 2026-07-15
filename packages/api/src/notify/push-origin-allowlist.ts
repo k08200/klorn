@@ -11,6 +11,8 @@
  * to WEB_URL (single origin) and then to localhost for dev.
  */
 
+import { isDevOrTestEnv } from "../env.js";
+
 function parseList(value: string | undefined): string[] {
   if (!value) return [];
   return value
@@ -33,8 +35,9 @@ function normalize(origin: string): string | null {
 function loadAllowlist(): Set<string> {
   const explicit = parseList(process.env.PUSH_ALLOWED_ORIGINS);
   const webUrl = process.env.WEB_URL ? [process.env.WEB_URL] : [];
-  const devFallback =
-    process.env.NODE_ENV === "production" ? [] : ["http://localhost:8001", "http://127.0.0.1:8001"];
+  // localhost is only a valid push origin in dev/test — never on a real
+  // deployment where NODE_ENV might be unset/"staging"/a "prod" typo.
+  const devFallback = isDevOrTestEnv() ? ["http://localhost:8001", "http://127.0.0.1:8001"] : [];
 
   const raw = explicit.length > 0 ? explicit : [...webUrl, ...devFallback];
   const normalized = new Set<string>();
