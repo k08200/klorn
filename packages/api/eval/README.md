@@ -73,34 +73,69 @@ actions/cache key); on an alarm it is kept, so the flip keeps firing weekly
 until investigated. To accept a new normal, run the workflow manually with
 `accept-baseline=true`.
 
-## Planned: repoint the canary at real mail
+## 2026-07-16: real mail is measured on every PR (report-only, ratchet pending)
 
-`judge-canary.yml` runs the **synthetic** set, so a green canary proves
-"the model didn't silently drift", NOT "the thesis holds on real mail". The
-launch GO/NO-GO bar (POC.md) is ≥80% on the founder's real 50 — and that
-number has never been the thing CI measures.
+The judge was measured on **`eval/real-eval-set.json`** — 53 founder-labeled
+real emails (18 SILENT / 31 QUEUE / 4 PUSH, 50 with bodies) — for the first
+time. Cold-start (no sender context), with role-preserving scrub so the
+deterministic sender floors fire:
 
-The repoint is one line once the data exists:
+- **Overall 81.1% (43/53)** — the original POC GO/NO-GO bar (≥80% on real
+  mail) PASSES. QUEUE recall 80.6%, SILENT recall 100%.
+- **PUSH recall 0/4** — 3 of 4 are the founder's own `OVERRIDE:PUSH` senders
+  (waitlist notifications): in prod those overrides form a sender-prior that
+  short-circuits to PUSH; the cold-start eval can't see it. The context-aware
+  fix is per-item fixtures from the ledger (`--context=fixture`).
+- **SILENT precision 78.3%** — newsletters the founder actually reads,
+  buried by the generic rule. This is the gap the (dark) engagement flag
+  exists to close; these numbers are its flip evidence.
 
-```diff
-- run: ... poc-accuracy.ts --in=eval/judge-eval-set.json ...
-+ run: ... poc-accuracy.ts --in=eval/real-eval-set.json ...
-```
+Wiring, until PUSH support matures:
+- **`eval.yml`**: the synthetic set stays the GATE; a second
+  "Real-mail readout (report-only)" step prints the real numbers on every
+  judge PR (a floor breach is a `::warning`, never a fail).
+- **`judge-canary.yml`** runs the real set weekly for FLIP detection only —
+  floor breaches are expected (warning), drift alarms are not.
+- **Ratchet condition**: when the regenerated set reaches **PUSH support
+  ≥10** (every in-app override/confirm adds ledger rows for the next
+  `draft-real-eval-set.ts` run), repoint the gate step at
+  `real-eval-set.json` and delete the report-only step.
+- The synthetic 50-item set stays committed — the deterministic no-LLM test
+  (`judge-eval-set.test.ts`) still pins it.
 
-**The blocker is the data, not the wiring** — and it is deliberately a manual,
-human-reviewed step, not automation:
+**The blocker is the data, not the wiring** — and the review step is
+deliberately manual. The drafting kit (`scripts/draft-real-eval-set.ts`, #648)
+automates everything AROUND that step, never the step itself:
 
-1. `eval/real-eval-set.json` must be a PII-scrubbed extract of the private
-   `poc-ground-truth.json` (same schema), scrubbed per the "Adding cases" rules
-   above: fictional sender/domain, no real names or addresses, structural
-   signal preserved.
-2. Because this repo is **public**, every row must be eyeballed by the founder
-   before commit. An auto-scrubber must not commit real mail to a public repo —
-   one missed address is an irreversible leak. There is intentionally no script
-   here that does this for you.
-3. Once committed and reviewed, flip the `--in=` above. Then "green canary" and
-   "thesis proven on real mail" become the **same auditable event** — the whole
-   point of the gate.
+1. **DRAFT** (local, never committed — the output name matches the gitignored
+   `poc-*.json` pattern):
+   ```bash
+   npx tsx scripts/draft-real-eval-set.ts --user=<founder email> \
+     --in=../../poc-ground-truth.json
+   ```
+   Collects real labeled mail from the POC ground-truth file (bodies joined
+   from the DB) **plus** the DecisionLabel ledger (`OVERRIDE:<tier>` /
+   `CONFIRM:<tier>` rows — every override/confirm in the app grows this set),
+   then mechanically scrubs addresses/URLs/phones with deterministic,
+   sender-consistent placeholders (`src/eval-scrub.ts`).
+2. **REVIEW** — the founder eyeballs every row: fix names/orgs the patterns
+   can't see (each row carries `scrubNotes` showing what was replaced), then
+   set `reviewed: true`. This step stays human; an auto-scrubber must never
+   commit real mail to a public repo — one missed address is an irreversible
+   leak.
+3. **FINALIZE + VERIFY**:
+   ```bash
+   npx tsx scripts/draft-real-eval-set.ts \
+     --finalize=../../poc-real-eval-set.draft.json --final-out=eval/real-eval-set.json
+   npx tsx scripts/draft-real-eval-set.ts --verify=eval/real-eval-set.json
+   ```
+   Finalize refuses unless every row is `reviewed:true`, strips the review
+   fields, and runs the leak-linter; verify is the standalone pre-commit
+   tripwire (exit 2 on any address/URL/phone-shaped remnant). Run verify
+   before every commit that touches the file.
+4. Once committed, flip the `--in=` above. Then "green canary" and "thesis
+   proven on real mail" become the **same auditable event** — the whole point
+   of the gate.
 
 Keep the deterministic floor + safety invariants identical; only the data set
 changes.

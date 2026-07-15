@@ -164,6 +164,50 @@ func runSelfChecks() async -> Bool {
                                      pushItems: [push("a"), push("b")])
     check("no new PUSH = no notifications", none.toNotify.isEmpty)
 
+    print("PushCard:")
+    // Keymap — only an explicit arm gives the card the keyboard, and these are
+    // the only keys it may consume (1/2/3 send, Return open, Esc dismiss).
+    check("key 1 sends option 0", PushCardKeymap.action(chars: "1", keyCode: 18) == .send(0))
+    check("key 2 sends option 1", PushCardKeymap.action(chars: "2", keyCode: 19) == .send(1))
+    check("key 3 sends option 2", PushCardKeymap.action(chars: "3", keyCode: 20) == .send(2))
+    check("return opens on web", PushCardKeymap.action(chars: "\r", keyCode: 36) == .open)
+    check("esc dismisses", PushCardKeymap.action(chars: nil, keyCode: 53) == .dismiss)
+    check("key 4 is not consumed", PushCardKeymap.action(chars: "4", keyCode: 21) == nil)
+    check("letters are not consumed", PushCardKeymap.action(chars: "a", keyCode: 0) == nil)
+
+    // Card queue — FIFO, deduped by id, one card at a time.
+    var cardQueue = PushCardQueue()
+    cardQueue.enqueue([push("a"), push("b")])
+    check("queue presents first item", cardQueue.current?.id == "a" && cardQueue.pendingCount == 1)
+    cardQueue.enqueue([push("b"), push("c")])
+    check("queue dedups by id", cardQueue.items.map(\.id) == ["a", "b", "c"])
+    cardQueue.advance()
+    check("advance moves to next", cardQueue.current?.id == "b" && cardQueue.pendingCount == 1)
+    cardQueue.advance()
+    cardQueue.advance()
+    check("advance past end empties", cardQueue.current == nil && cardQueue.pendingCount == 0)
+    cardQueue.advance()  // must not trap on empty
+    check("advance on empty is safe", cardQueue.current == nil)
+
+    // Reply options — wire shape from POST /api/email/:id/reply-options
+    // (packages/contract reply-options.ts): exactly 3 drafts, fixed tone order.
+    let optJSON = """
+    {"to":"boss@co.com","subject":"Re: Invoice due","options":[
+    {"tone":"accept","body":"Yes, works for me."},
+    {"tone":"decline","body":"Sorry, I can't."},
+    {"tone":"info","body":"Which invoice?"}]}
+    """
+    if let opts = try? JSONDecoder().decode(ReplyOptionsResponse.self, from: Data(optJSON.utf8)) {
+        check("ReplyOptions decodes 3 drafts", opts.options.count == 3 && opts.to == "boss@co.com")
+        check("ReplyOptions keeps tone order",
+              opts.options.map(\.tone) == ["accept", "decline", "info"])
+        check("tone labels", opts.options.map(\.toneLabel) == ["Accept", "Decline", "Ask info"])
+    } else {
+        check("ReplyOptions decodes", false)
+    }
+    check("unknown tone label falls back",
+          ReplyOption(tone: "urgent", body: "x").toneLabel == "Urgent")
+
     print("Top bar open URL:")
     func item(href: String?) -> FirewallItem {
         FirewallItem(id: "x", source: "email", sourceId: "x", type: "email", title: "t",
