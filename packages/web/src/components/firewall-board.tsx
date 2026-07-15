@@ -7,40 +7,18 @@ import { captureClientError } from "../lib/sentry";
 import { useToast } from "./toast";
 import { TrustDot, type TrustScoreData } from "./trust-badge";
 
-export type Tier = "SILENT" | "QUEUE" | "PUSH" | "AUTO";
+// Wire shapes come from @klorn/contract — the same types the server builds
+// (routes/firewall.ts), so a response-shape change fails to compile here
+// instead of silently desyncing. The old hand-mirrored copy had already
+// drifted: it was missing `hashStale`.
+export type { FirewallItem, FirewallResponse, Tier } from "@klorn/contract";
+
+import type { FirewallItem, FirewallResponse, Tier } from "@klorn/contract";
+
 type ColumnTier = "PUSH" | "QUEUE" | "SILENT";
 
 // How often the firewall view re-pulls while the tab is focused.
 export const FIREWALL_REFRESH_MS = 45_000;
-
-interface EmailContext {
-  emailDbId: string;
-  subject: string | null;
-  from: string | null;
-  snippet: string | null;
-  trust: TrustScoreData | null;
-}
-
-export interface FirewallItem {
-  id: string;
-  source: string;
-  sourceId: string;
-  type: string;
-  title: string;
-  tier: Tier;
-  tierReason: string | null;
-  priority: number;
-  surfacedAt: string;
-  toolName?: string;
-  toolArgs?: Record<string, unknown>;
-  email?: EmailContext;
-  href?: string;
-}
-
-export interface FirewallResponse {
-  tiers: Record<Tier, FirewallItem[]>;
-  summary: Record<Tier, number> & { total: number };
-}
 
 interface DailyReceiptSummary {
   totalSeen: number;
