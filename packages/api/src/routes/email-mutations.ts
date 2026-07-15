@@ -8,6 +8,7 @@
  */
 
 import multipart from "@fastify/multipart";
+import type { EmailUndoActionResponse } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
@@ -296,7 +297,8 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         return reply.code(409).send({ error: result.error });
       }
       const synced = await syncEmailByGmailId(uid, gmailId, linkedInboxAccountId);
-      return { success: true, gmailId, emailId: synced.emailId };
+      const payload: EmailUndoActionResponse = { success: true, gmailId, emailId: synced.emailId };
+      return payload;
     } catch (err) {
       const gErr = err as { message?: string };
       return reply.code(502).send({ error: `Gmail undo failed: ${gErr.message || "unknown"}` });
@@ -341,7 +343,8 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         return reply.code(409).send({ error: result.error });
       }
       const synced = await syncEmailByGmailId(uid, gmailId, linkedInboxAccountId);
-      return { success: true, gmailId, emailId: synced.emailId };
+      const payload: EmailUndoActionResponse = { success: true, gmailId, emailId: synced.emailId };
+      return payload;
     } catch (err) {
       const gErr = err as { message?: string };
       return reply.code(502).send({ error: `Gmail undo failed: ${gErr.message || "unknown"}` });

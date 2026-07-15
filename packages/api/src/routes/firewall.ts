@@ -16,6 +16,7 @@
  * poc-judge.
  */
 
+import type { FirewallItem, FirewallResponse } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess } from "../billing/entitlement-guard.js";
@@ -57,60 +58,11 @@ const overrideBodySchema = {
   },
 } as const;
 
-interface TrustWire {
-  badge: "reliable" | "mostly_reliable" | "unreliable" | "unknown";
-  label: string;
-  onTimeRate: number;
-  totalCount: number;
-}
-
-interface EmailContext {
-  // EmailMessage.id (DB id) — used by /email/[id]
-  emailDbId: string;
-  subject: string | null;
-  from: string | null;
-  snippet: string | null;
-  // Sender trust signal (null when no ContactTrustScore row exists for
-  // this address yet). Heavy email users said this is the single most
-  // useful per-row signal — render via <TrustDot /> on the firewall card.
-  trust: TrustWire | null;
-}
-
-interface FirewallItem {
-  id: string;
-  source: string;
-  sourceId: string;
-  type: string;
-  title: string;
-  tier: Tier;
-  tierReason: string | null;
-  priority: number;
-  surfacedAt: string;
-  // Source-specific enrichment for the preview / drill-down. Populated
-  // best-effort; missing fields just mean "no extra context to show".
-  toolName?: string;
-  toolArgs?: Record<string, unknown>;
-  email?: EmailContext;
-  href?: string; // where the firewall card should link on click
-  // True iff the stored AttentionItem.inputHash does NOT match a fresh hash
-  // of the email's current bytes (from/subject/snippet/labels). Means the
-  // input was mutated after classification and the cached tier may be
-  // stale. Soft signal — the row is still shown, but the UI can render
-  // a "stale, re-classifying" badge and clients shouldn't trust the tier.
-  // See attention-input-hash.ts doctrine.
-  hashStale?: boolean;
-}
-
-interface FirewallResponse {
-  tiers: Record<Tier, FirewallItem[]>;
-  summary: {
-    SILENT: number;
-    QUEUE: number;
-    PUSH: number;
-    AUTO: number;
-    total: number;
-  };
-}
+// The response wire shapes live in @klorn/contract (single source of truth
+// shared with the web board, which used to hand-mirror them — and had drifted:
+// its copy was missing hashStale). The classifier's internal Tier (judge/tiers)
+// and the contract's wire Tier are structurally identical; the typed literals
+// below (tiers record, summary) let tsc enforce that on every build.
 
 function safeRecord(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;

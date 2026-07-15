@@ -9,6 +9,9 @@
  * GET /api/inbox/reply-needed returns emails where needsReply=true, ordered
  * by confidence desc then receivedAt desc — used by the Command Center sidebar.
  */
+// The reply-needed wire shape lives in @klorn/contract (single source of
+// truth with the Command Center sidebar).
+import type { ReplyNeededResponse } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess } from "../billing/entitlement-guard.js";
@@ -34,7 +37,7 @@ export function inboxRoutes(app: FastifyInstance) {
     return buildOperatingPlan(userId);
   });
 
-  app.get("/reply-needed", async (request) => {
+  app.get("/reply-needed", async (request): Promise<ReplyNeededResponse> => {
     const userId = getUserId(request);
     const rows = await prisma.emailMessage.findMany({
       where: { userId, needsReply: true },

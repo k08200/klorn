@@ -11,4 +11,9 @@
  * drift in the same commit that introduces it.
  */
 
+export type * from "./briefing.js";
+export type * from "./email.js";
+export type * from "./firewall.js";
 export type * from "./inbox-summary.js";
+export type * from "./receipt.js";
+export type * from "./reply-needed.js";

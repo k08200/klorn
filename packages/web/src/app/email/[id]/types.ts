@@ -7,9 +7,11 @@
  * Nothing here imports React or any runtime — pure types only.
  */
 
+// Shapes shared with the list surface live in @klorn/contract — single source.
+import type { CandidateIntakeStatus, EmailPriority } from "@klorn/contract";
 import type { TrustScoreData } from "../../../components/trust-badge";
 
-export type EmailPriority = "URGENT" | "NORMAL" | "LOW";
+export type { CandidateIntakeStatus, EmailPriority };
 
 export interface EmailAttachment {
   id: string;
@@ -56,16 +58,6 @@ export interface AttachmentCandidateProfile {
   confidence: number;
 }
 
-export type CandidateIntakeStatus =
-  | "NEEDS_ANALYSIS"
-  | "NEEDS_INFO"
-  | "READY_TO_REVIEW"
-  | "REVIEWING"
-  | "CONTACTED"
-  | "SHORTLISTED"
-  | "REJECTED"
-  | "ARCHIVED";
-
 export interface CandidateIntake {
   id: string;
   emailId: string;
@@ -81,11 +73,8 @@ export interface ReplyDraft {
   candidateProfile: AttachmentCandidateProfile | null;
 }
 
-export interface UndoActionResponse {
-  success: boolean;
-  gmailId: string;
-  emailId: string;
-}
+// Undo payload is the same wire shape the list page consumes.
+export type { EmailUndoActionResponse as UndoActionResponse } from "@klorn/contract";
 
 /**
  * EmailDetail is the response shape from GET /api/email/:id. Several

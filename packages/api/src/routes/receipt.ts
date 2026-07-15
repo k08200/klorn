@@ -21,38 +21,12 @@
  *   - EmailProcessingLog for silenced email signals
  */
 
+import type { DailyReceipt, ReceiptItem, ReceiptUndoResponse } from "@klorn/contract";
 import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
-
-interface ReceiptItem {
-  id: string;
-  title: string;
-  source: string;
-  type: string;
-  tierReason: string | null;
-  surfacedAt: string;
-  // For pushed items: push delivery outcome
-  pushStatus?: string;
-  pushClickedAt?: string | null;
-}
-
-interface DailyReceipt {
-  date: string; // YYYY-MM-DD in user's timezone
-  silenced: ReceiptItem[];
-  queued: ReceiptItem[];
-  pushed: ReceiptItem[];
-  auto: ReceiptItem[];
-  summary: {
-    totalSeen: number; // signals EVE evaluated
-    totalInterrupted: number; // pushed + pending that user saw
-    savedFromInbox: number; // silenced (would have been noise)
-    autoHandled: number; // executed without asking
-    narrative: string; // 1-2 sentence human summary
-  };
-}
 
 export async function receiptRoutes(app: FastifyInstance) {
   // Plugin-level auth + paywall gate (the per-route requireAuth below is kept
@@ -214,7 +188,7 @@ export async function receiptRoutes(app: FastifyInstance) {
   app.post(
     "/undo/:pendingActionId",
     { preHandler: requireAuth },
-    async (request): Promise<{ ok: boolean; message: string }> => {
+    async (request): Promise<ReceiptUndoResponse> => {
       const userId = getUserId(request);
       const { pendingActionId } = request.params as { pendingActionId: string };
 
