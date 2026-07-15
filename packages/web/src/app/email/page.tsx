@@ -1,5 +1,20 @@
 "use client";
 
+// Wire shapes come from @klorn/contract — the same types the server builds
+// (routes/email.ts and friends), so a response-shape change fails to compile
+// here instead of silently desyncing. The old hand-mirrored ThreadRow had
+// already drifted: it declared a `summary` the Gmail path never sent.
+import type {
+  EmailBulkActionResponse as BulkActionResponse,
+  CandidateProfilePreview,
+  EmailListItem as EmailRow,
+  InboxesResponse,
+  InboxOption,
+  EmailListResponse as ListResponse,
+  EmailThreadListResponse as ThreadListResponse,
+  EmailThreadRow as ThreadRow,
+  EmailUndoActionResponse as UndoActionResponse,
+} from "@klorn/contract";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -13,22 +28,6 @@ import { useT } from "../../lib/i18n";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { formatRelative } from "../../lib/text";
-
-// Wire shapes come from @klorn/contract — the same types the server builds
-// (routes/email.ts and friends), so a response-shape change fails to compile
-// here instead of silently desyncing. The old hand-mirrored ThreadRow had
-// already drifted: it declared a `summary` the Gmail path never sent.
-import type {
-  CandidateProfilePreview,
-  EmailBulkActionResponse as BulkActionResponse,
-  EmailListItem as EmailRow,
-  EmailListResponse as ListResponse,
-  EmailThreadListResponse as ThreadListResponse,
-  EmailThreadRow as ThreadRow,
-  EmailUndoActionResponse as UndoActionResponse,
-  InboxesResponse,
-  InboxOption,
-} from "@klorn/contract";
 
 type Filter =
   | "all"

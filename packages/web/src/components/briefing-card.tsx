@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
 // Wire shape comes from @klorn/contract — the same type the server builds
 // (pim/briefing-status.ts), so a response-shape change fails to compile here
 // instead of silently desyncing.
 import type { BriefingPushState, BriefingStatus } from "@klorn/contract";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
 import { captureClientError } from "../lib/sentry";
 

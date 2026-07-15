@@ -58,7 +58,6 @@ export interface AttachmentCandidateProfile {
   confidence: number;
 }
 
-
 export interface CandidateIntake {
   id: string;
   emailId: string;

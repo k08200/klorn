@@ -1,5 +1,9 @@
 "use client";
 
+// Wire shapes come from @klorn/contract — the same types the server builds
+// (routes/receipt.ts), so a response-shape change fails to compile here
+// instead of silently desyncing.
+import type { DailyReceipt, ReceiptItem, ReceiptUndoResponse } from "@klorn/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
@@ -8,11 +12,6 @@ import { useToast } from "../../../components/toast";
 import { apiFetch } from "../../../lib/api";
 import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
-
-// Wire shapes come from @klorn/contract — the same types the server builds
-// (routes/receipt.ts), so a response-shape change fails to compile here
-// instead of silently desyncing.
-import type { DailyReceipt, ReceiptItem, ReceiptUndoResponse } from "@klorn/contract";
 
 export default function ReceiptPage() {
   return (
