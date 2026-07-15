@@ -171,7 +171,7 @@ function CandidateDetailView() {
       )}
 
       {email && profile && (
-        <main className="grid gap-4 lg:grid-cols-[1fr_320px]">
+        <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <section className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -282,10 +282,10 @@ function CandidateDetailView() {
               <p className="mt-1 text-[11px] text-stone-400">{email.from}</p>
             </div>
           </aside>
-        </main>
+        </section>
       )}
       {email && !profile && !loading && (
-        <main className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6">
+        <section className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-light/80">
             Candidate CRM
           </p>
@@ -313,7 +313,7 @@ function CandidateDetailView() {
             <p className="text-xs text-stone-300">{email.subject || "Untitled"}</p>
             <p className="mt-1 text-[11px] text-stone-400">{email.from}</p>
           </div>
-        </main>
+        </section>
       )}
     </div>
   );
