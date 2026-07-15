@@ -234,6 +234,17 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
           intent,
         });
       } catch (err) {
+        // A per-user quota trip (quota-limiter self-throttling) is the user
+        // going fast, not a provider outage: return the standard 429 +
+        // Retry-After back-off signal and keep Sentry quiet — an alert here
+        // is pure noise. Name check (not instanceof) matches the
+        // autonomous-agent precedent and survives the LLM layer being mocked
+        // in tests.
+        if (err instanceof Error && err.name === "UserRateLimitedError") {
+          const retryAfterMs = (err as { retryAfterMs?: number }).retryAfterMs ?? 1_000;
+          reply.header("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
+          return reply.code(429).send({ error: err.message });
+        }
         captureError(err, {
           tags: { scope: "reply-draft" },
           extra: { userId: uid, emailId: dbEmail.id, model: DRAFT_MODEL },
