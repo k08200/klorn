@@ -7,7 +7,7 @@ import {
   isKeyLimited,
   markKeyLimited,
   nextDailyResetMs,
-} from "../model-fallback.js";
+} from "../llm/model-fallback.js";
 
 describe("model fallback error classification", () => {
   it("treats provider 429s as quota/rate-limit errors", () => {

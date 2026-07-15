@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createCompletionMock = vi.hoisted(() => vi.fn());
 
-vi.mock("../openai.js", () => ({
+vi.mock("../llm/openai.js", () => ({
   createCompletion: createCompletionMock,
   MODEL: "test-chat-model",
   JUDGE_MODEL: "test-judge-model",

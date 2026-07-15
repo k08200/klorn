@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_OPENROUTER_FALLBACK_CHAIN,
   parseFallbackChain,
-} from "../openrouter-fallback-chain.js";
+} from "../llm/openrouter-fallback-chain.js";
 
 describe("parseFallbackChain", () => {
   it("returns the default chain when no env value is set", () => {
@@ -38,7 +38,7 @@ describe("parseFallbackChain", () => {
   });
 });
 
-import { walkFallbackChain } from "../openrouter-fallback-chain.js";
+import { walkFallbackChain } from "../llm/openrouter-fallback-chain.js";
 
 describe("walkFallbackChain", () => {
   it("returns the first success result and stops walking", async () => {

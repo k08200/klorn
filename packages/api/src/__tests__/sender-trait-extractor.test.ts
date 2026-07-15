@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createCompletionMock = vi.hoisted(() => vi.fn());
-vi.mock("../openai.js", () => ({
+vi.mock("../llm/openai.js", () => ({
   createCompletion: createCompletionMock,
   JUDGE_MODEL: "test-judge-model",
 }));
@@ -23,7 +23,9 @@ const prismaMock = vi.hoisted(() => {
   return mock;
 });
 vi.mock("../db.js", () => ({ prisma: prismaMock }));
-vi.mock("../llm-credentials.js", () => ({ getUserLlmCredentials: vi.fn(async () => undefined) }));
+vi.mock("../llm/llm-credentials.js", () => ({
+  getUserLlmCredentials: vi.fn(async () => undefined),
+}));
 
 import { extractSenderTraitsForUser, extractTraitsFromEmails } from "../sender-trait-extractor.js";
 import { computeTraitSourceSig } from "../sender-trait-signature.js";

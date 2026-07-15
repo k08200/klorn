@@ -18,10 +18,16 @@
 import { google } from "googleapis";
 import { decryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
-import { asBoundedNumber, asEnum, asString, asStringArray, asUnitInterval } from "./llm-coerce.js";
-import { parseLlmJson } from "./llm-json.js";
+import {
+  asBoundedNumber,
+  asEnum,
+  asString,
+  asStringArray,
+  asUnitInterval,
+} from "./llm/llm-coerce.js";
+import { parseLlmJson } from "./llm/llm-json.js";
+import { createCompletion, MODEL } from "./llm/openai.js";
 import { remember } from "./memory.js";
-import { createCompletion, MODEL } from "./openai.js";
 
 const VOICE_PROFILE_KEY = "voice_profile_v1";
 const REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days

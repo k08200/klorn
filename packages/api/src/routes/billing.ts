@@ -18,9 +18,9 @@ import {
 import { TRIAL_DAYS } from "../config.js";
 import { encryptOptional } from "../crypto-tokens.js";
 import { db, prisma } from "../db.js";
-import { CURATED_MODELS, isCuratedModel } from "../model-catalog.js";
-import { clearFallbackState } from "../model-fallback.js";
-import { MODEL } from "../openai.js";
+import { CURATED_MODELS, isCuratedModel } from "../llm/model-catalog.js";
+import { clearFallbackState } from "../llm/model-fallback.js";
+import { MODEL } from "../llm/openai.js";
 import { captureError } from "../sentry.js";
 
 function keyHash(apiKey: string | null | undefined): string | null {

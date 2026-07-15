@@ -18,8 +18,8 @@ import { describe, expect, it, vi } from "vitest";
 // Force the LLM path unavailable so judgeEmail takes the deterministic keyword
 // fallback — where a system-notification sender with an urgent word ("action
 // required") scores PUSH and the floor must demote it to QUEUE.
-vi.mock("../openai.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../openai.js")>();
+vi.mock("../llm/openai.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../llm/openai.js")>();
   return {
     ...actual,
     createCompletion: vi.fn(async () => {

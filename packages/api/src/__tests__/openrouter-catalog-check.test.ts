@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { JUDGE_MODEL, VISION_MODEL } from "../openai.js";
+import { JUDGE_MODEL, VISION_MODEL } from "../llm/openai.js";
 import {
   classifyCatalogDrift,
   classifyFingerprintDrift,
@@ -9,7 +9,7 @@ import {
   parseCatalogExpirations,
   parseCatalogFingerprints,
   parseCatalogIds,
-} from "../openrouter-catalog-check.js";
+} from "../llm/openrouter-catalog-check.js";
 
 describe("parseCatalogIds", () => {
   it("extracts model ids from the OpenRouter /models response shape", () => {

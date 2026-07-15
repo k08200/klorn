@@ -16,7 +16,7 @@
  */
 
 import { prisma } from "./db.js";
-import { createCompletion, MODEL } from "./openai.js";
+import { createCompletion, MODEL } from "./llm/openai.js";
 
 const MIN_REPEAT = 3; // sequence must repeat this many times
 const LOOK_BACK_DAYS = 30;

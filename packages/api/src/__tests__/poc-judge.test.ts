@@ -21,8 +21,8 @@ import { describe, expect, it, vi } from "vitest";
 // flake (a live model scores a deploy-fail notice PUSH, not QUEUE). Forcing
 // createCompletion to throw makes the LLM path deterministically unavailable →
 // keyword fallback, exactly what these tests claim to exercise.
-vi.mock("../openai.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../openai.js")>();
+vi.mock("../llm/openai.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../llm/openai.js")>();
   return {
     ...actual,
     createCompletion: vi.fn(async () => {

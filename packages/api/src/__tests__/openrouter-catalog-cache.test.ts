@@ -4,7 +4,7 @@ import {
   getCachedCatalogIds,
   isModelKnownAbsent,
   setCachedCatalogIds,
-} from "../openrouter-catalog-cache.js";
+} from "../llm/openrouter-catalog-cache.js";
 
 afterEach(() => {
   __resetCatalogCache();

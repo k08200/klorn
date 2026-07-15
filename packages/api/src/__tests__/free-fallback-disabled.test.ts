@@ -8,8 +8,11 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { isFreeModelFallbackDisabled } from "../model-fallback.js";
-import { activeFallbackChain, OPENROUTER_FALLBACK_CHAIN } from "../openrouter-fallback-chain.js";
+import { isFreeModelFallbackDisabled } from "../llm/model-fallback.js";
+import {
+  activeFallbackChain,
+  OPENROUTER_FALLBACK_CHAIN,
+} from "../llm/openrouter-fallback-chain.js";
 
 const ORIGINAL = process.env.DISABLE_FREE_MODEL_FALLBACK;
 

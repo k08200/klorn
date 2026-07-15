@@ -7,9 +7,9 @@
  * BYOK credentials ride along so key-holders bill their own account.
  */
 
-import { getUserLlmCredentials } from "./llm-credentials.js";
-import { parseLlmJson } from "./llm-json.js";
-import { createCompletion, JUDGE_MODEL } from "./openai.js";
+import { getUserLlmCredentials } from "./llm/llm-credentials.js";
+import { parseLlmJson } from "./llm/llm-json.js";
+import { createCompletion, JUDGE_MODEL } from "./llm/openai.js";
 import { captureError } from "./sentry.js";
 import { offsetStringFor } from "./time-zone.js";
 import { getUserTimeZone } from "./user-timezone.js";

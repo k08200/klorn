@@ -27,10 +27,10 @@
  * routing decision to the operator / the behavioral canary.
  */
 
+import { captureError } from "../sentry.js";
 import { AGENT_MODEL, JUDGE_MODEL, MODEL, VISION_MODEL } from "./openai.js";
 import { setCachedCatalogIds } from "./openrouter-catalog-cache.js";
 import { OPENROUTER_FALLBACK_CHAIN } from "./openrouter-fallback-chain.js";
-import { captureError } from "./sentry.js";
 
 const CATALOG_URL = "https://openrouter.ai/api/v1/models";
 const FETCH_TIMEOUT_MS = 15_000;

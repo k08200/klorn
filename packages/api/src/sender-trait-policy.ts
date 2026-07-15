@@ -1,4 +1,4 @@
-import { asEnum } from "./llm-coerce.js";
+import { asEnum } from "./llm/llm-coerce.js";
 
 export type SenderTraitKind = "relationship" | "recurring_intent";
 

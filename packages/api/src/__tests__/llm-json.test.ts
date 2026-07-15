@@ -7,7 +7,7 @@
  * ```json … ``` while the paid gemini default returns bare JSON.
  */
 import { describe, expect, it } from "vitest";
-import { parseLlmJson } from "../llm-json.js";
+import { parseLlmJson } from "../llm/llm-json.js";
 
 describe("parseLlmJson", () => {
   it("parses bare JSON (the paid-model happy path)", () => {

@@ -17,7 +17,7 @@
  * gate; this table never gates anything.
  */
 
-import { estimateModelCostUsd } from "../model-fallback.js";
+import { estimateModelCostUsd } from "../llm/model-fallback.js";
 import { captureError } from "../sentry.js";
 // NOTE: db.js (Prisma) is imported LAZILY inside the async functions below.
 // openai.ts imports this module statically, and a static db.js import here

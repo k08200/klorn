@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   captureError: vi.fn(),
 }));
 
-vi.mock("../openai.js", () => ({
+vi.mock("../llm/openai.js", () => ({
   MODEL: "test-model",
   createCompletion: mocks.createCompletion,
 }));

@@ -16,7 +16,7 @@ import { planHasFeature } from "./billing/stripe.js";
 import { AGENT_CHECK_INTERVAL_MS, AGENT_IDLE_THRESHOLD_MS } from "./config.js";
 import { db, prisma } from "./db.js";
 import { recipientFromToolArgs, recordFeedback } from "./feedback.js";
-import { openai } from "./openai.js";
+import { openai } from "./llm/openai.js";
 import {
   markSchedulerDisabled,
   recordSchedulerTick,

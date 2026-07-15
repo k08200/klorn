@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isModelUnavailableError } from "../model-fallback.js";
+import { isModelUnavailableError } from "../llm/model-fallback.js";
 
 describe("isModelUnavailableError — provider returned 404 / model retired", () => {
   it("matches a status-404 error object whose message mentions an endpoint", () => {

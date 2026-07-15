@@ -16,7 +16,7 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 
-vi.mock("../llm-credentials.js", () => ({
+vi.mock("../llm/llm-credentials.js", () => ({
   getUserLlmCredentials: vi.fn(async () => ({})),
 }));
 vi.mock("../providers/index.js", () => ({
@@ -39,7 +39,7 @@ const createCompletion = vi.fn(async () => ({
     },
   ],
 }));
-vi.mock("../openai.js", () => ({
+vi.mock("../llm/openai.js", () => ({
   createCompletion: (...a: unknown[]) => createCompletion(...a),
   MODEL: "test-model",
 }));

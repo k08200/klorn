@@ -15,7 +15,8 @@ import {
   listOpenLearnedRules,
   recomputeLearnedRules,
 } from "../learned-rule-store.js";
-import { clearFallbackState, getProviderCooldownInfo } from "../model-fallback.js";
+import { clearFallbackState, getProviderCooldownInfo } from "../llm/model-fallback.js";
+import { MODEL } from "../llm/openai.js";
 import { describePolicy } from "../ontology.js";
 import { refreshOverrideCache } from "../ontology-overrides.js";
 import {
@@ -23,7 +24,6 @@ import {
   listOpenProposals,
   recomputeOntologyProposals,
 } from "../ontology-proposals-store.js";
-import { MODEL } from "../openai.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { getProviderChain } from "../providers/index.js";
 import { getTraitMetrics } from "../sender-trait-metrics.js";

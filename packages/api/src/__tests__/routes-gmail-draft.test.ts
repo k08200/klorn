@@ -22,9 +22,9 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
-vi.mock("../llm-credentials.js", () => ({ getUserLlmCredentials: vi.fn(async () => ({})) }));
+vi.mock("../llm/llm-credentials.js", () => ({ getUserLlmCredentials: vi.fn(async () => ({})) }));
 vi.mock("../voice-profile-extractor.js", () => ({ buildVoicePromptHint: vi.fn(async () => "") }));
-vi.mock("../openai.js", () => ({ createCompletion: vi.fn(), DRAFT_MODEL: "test-draft-model" }));
+vi.mock("../llm/openai.js", () => ({ createCompletion: vi.fn(), DRAFT_MODEL: "test-draft-model" }));
 vi.mock("../email-attachments.js", () => ({
   listEmailAttachments: vi.fn(async () => []),
   buildAttachmentCandidateProfile: vi.fn(() => null),

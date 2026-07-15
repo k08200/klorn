@@ -11,8 +11,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createCompletionMock = vi.hoisted(() => vi.fn());
 
-vi.mock("../openai.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../openai.js")>();
+vi.mock("../llm/openai.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../llm/openai.js")>();
   return { ...actual, createCompletion: createCompletionMock };
 });
 

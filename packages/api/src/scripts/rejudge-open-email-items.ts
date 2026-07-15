@@ -24,7 +24,7 @@
 import { upsertAttentionForEmailJudgement } from "../attention-mirror.js";
 import { prisma } from "../db.js";
 import { buildJudgeContext } from "../judge-context.js";
-import { getUserLlmCredentials } from "../llm-credentials.js";
+import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { judgeEmail } from "../poc-judge.js";
 import { engagementKindOf } from "../sender-policy.js";
 import { normalizeTier } from "../tiers.js";

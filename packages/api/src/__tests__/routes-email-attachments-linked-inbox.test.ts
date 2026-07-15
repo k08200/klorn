@@ -55,8 +55,11 @@ vi.mock("../file-conversions.js", () => ({
   requiresOriginalAttachment: vi.fn(() => true),
   SUPPORTED_CONVERSION_TARGETS: ["pdf"],
 }));
-vi.mock("../llm-credentials.js", () => ({ getUserLlmCredentials: vi.fn() }));
-vi.mock("../openai.js", () => ({ createVisionCompletion: vi.fn(), VISION_MODEL: "test-vision" }));
+vi.mock("../llm/llm-credentials.js", () => ({ getUserLlmCredentials: vi.fn() }));
+vi.mock("../llm/openai.js", () => ({
+  createVisionCompletion: vi.fn(),
+  VISION_MODEL: "test-vision",
+}));
 vi.mock("../vision-attachment-policy.js", () => ({
   isDecorativeImage: vi.fn(() => false),
   isVisionAttachment: vi.fn(() => false),

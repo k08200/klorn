@@ -21,8 +21,8 @@ import {
   resolveMailClient,
   sendEmail,
 } from "../gmail.js";
-import { getUserLlmCredentials } from "../llm-credentials.js";
-import { createCompletion, DRAFT_MODEL } from "../openai.js";
+import { getUserLlmCredentials } from "../llm/llm-credentials.js";
+import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { buildVoicePromptHint } from "../voice-profile-extractor.js";

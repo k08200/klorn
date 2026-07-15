@@ -18,7 +18,7 @@ vi.mock("../crypto-tokens.js", () => ({
   decryptOptional: vi.fn(),
 }));
 vi.mock("../memory.js", () => ({ remember: vi.fn() }));
-vi.mock("../openai.js", () => ({ createCompletion: vi.fn(), MODEL: "test-model" }));
+vi.mock("../llm/openai.js", () => ({ createCompletion: vi.fn(), MODEL: "test-model" }));
 
 import { getVoiceProfile } from "../voice-profile-extractor.js";
 

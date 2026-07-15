@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 import { prisma } from "./db.js";
-import { getUserLlmCredentials } from "./llm-credentials.js";
-import { parseLlmJson } from "./llm-json.js";
-import { createCompletion, MODEL } from "./openai.js";
+import { getUserLlmCredentials } from "./llm/llm-credentials.js";
+import { parseLlmJson } from "./llm/llm-json.js";
+import { createCompletion, MODEL } from "./llm/openai.js";
 import { wrapUntrusted } from "./untrusted.js";
 
 const MAX_STORED_TEXT = 24_000;

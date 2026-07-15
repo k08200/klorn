@@ -12,8 +12,8 @@
  */
 
 import { prisma } from "./db.js";
-import { parseLlmJson } from "./llm-json.js";
-import { createCompletion, MODEL } from "./openai.js";
+import { parseLlmJson } from "./llm/llm-json.js";
+import { createCompletion, MODEL } from "./llm/openai.js";
 
 export interface PathStep {
   step: string;

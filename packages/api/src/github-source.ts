@@ -32,7 +32,7 @@ import { prisma } from "./db.js";
 import type { ClassifiableEmail } from "./email-classifier.js";
 import { fetchGitHubNotifications } from "./github-client.js";
 import { pushForFirewallGitHubNotification } from "./github-push.js";
-import { getUserLlmCredentials } from "./llm-credentials.js";
+import { getUserLlmCredentials } from "./llm/llm-credentials.js";
 import { judgeEmail } from "./poc-judge.js";
 import { captureError } from "./sentry.js";
 

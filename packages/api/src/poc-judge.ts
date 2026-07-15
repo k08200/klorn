@@ -25,10 +25,10 @@ import {
   looksUrgent,
 } from "./keyword-policy.js";
 import { type LearnedRule, matchLearnedRules } from "./learned-rules.js";
-import { asString, asUnitInterval, isNonFinitePresent } from "./llm-coerce.js";
-import { parseLlmJson } from "./llm-json.js";
+import { asString, asUnitInterval, isNonFinitePresent } from "./llm/llm-coerce.js";
+import { parseLlmJson } from "./llm/llm-json.js";
+import { createCompletion, JUDGE_MODEL } from "./llm/openai.js";
 import { getEffectiveThresholds } from "./ontology-overrides.js";
-import { createCompletion, JUDGE_MODEL } from "./openai.js";
 import type { ProviderCredentials } from "./providers/index.js";
 import {
   type CorrectionExample,

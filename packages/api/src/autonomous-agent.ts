@@ -54,12 +54,12 @@ import { AGENT_MAX_CONTEXT_ITEMS, AGENT_MAX_TOOLS_PER_LOOP } from "./config.js";
 import { db, prisma } from "./db.js";
 import { recipientFromToolArgs, recordFeedback } from "./feedback.js";
 import { isNoReplyAddress, markAsRead } from "./gmail.js";
+import { AGENT_MODEL, createCompletion } from "./llm/openai.js";
 import { loadMemoriesForPrompt } from "./memory.js";
 import { humanizeAutoExec } from "./notify/notification-format.js";
 import { notificationSuppressionReason } from "./notify/notification-policy.js";
 import type { NotifCategory } from "./notify/notification-prefs.js";
 import { sendPushNotification } from "./notify/push.js";
-import { AGENT_MODEL, createCompletion } from "./openai.js";
 import { getFeedbackPolicyContextForPrompt } from "./policy-extraction.js";
 import { captureError } from "./sentry.js";
 import { ALL_TOOLS, executeToolCall, isToolAllowedForPlan } from "./tool-executor.js";
@@ -300,7 +300,7 @@ export async function runAgentForUser(
     // frontier chat model applies here (their agent talks in the model they
     // trust). Unset → the pinned AGENT_MODEL. BYOK keys ride along so a
     // key-holder's cycles bill their own account.
-    const { getUserLlmCredentials } = await import("./llm-credentials.js");
+    const { getUserLlmCredentials } = await import("./llm/llm-credentials.js");
     const agentCredentials = await getUserLlmCredentials(userId);
     const agentModelForUser = agentCredentials.userModel ?? AGENT_MODEL;
 

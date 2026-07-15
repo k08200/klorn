@@ -9,8 +9,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { getAuthedClient } from "./gmail.js";
-import { parseLlmJson } from "./llm-json.js";
-import { createCompletion, MODEL } from "./openai.js";
+import { parseLlmJson } from "./llm/llm-json.js";
+import { createCompletion, MODEL } from "./llm/openai.js";
 import { captureError } from "./sentry.js";
 
 const exec = promisify(execFile);

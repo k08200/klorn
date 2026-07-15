@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { redactQuotaKey } from "../openai.js";
+import { redactQuotaKey } from "../llm/openai.js";
 
 describe("redactQuotaKey", () => {
   it("strips a user UUID after :user: so chat errors do not leak the inbox owner", () => {

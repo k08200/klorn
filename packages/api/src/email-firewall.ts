@@ -20,7 +20,7 @@ import type { GmailRawEmail } from "./gmail-fetch.js";
 import { buildJudgeContext } from "./judge-context.js";
 import { recordJudgeSource } from "./judge-health.js";
 import { isClearMarketing } from "./keyword-policy.js";
-import { getUserLlmCredentials } from "./llm-credentials.js";
+import { getUserLlmCredentials } from "./llm/llm-credentials.js";
 import { judgeEmail, type PocTier } from "./poc-judge.js";
 import type { ProviderCredentials } from "./providers/index.js";
 import { resolveUserEmail } from "./resolve-user-email.js";

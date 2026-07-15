@@ -9,7 +9,7 @@
  * SMS to non-admins, this needs to move to a DB-backed counter.
  */
 
-import { nextDailyResetMs } from "../model-fallback.js";
+import { nextDailyResetMs } from "../llm/model-fallback.js";
 
 function intEnv(name: string, fallback: number): number {
   const raw = process.env[name];

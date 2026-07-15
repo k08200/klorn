@@ -19,9 +19,9 @@ vi.mock("../db.js", () => {
   const prisma = { emailMessage: { findFirst: emailFindFirst } };
   return { prisma, db: prisma };
 });
-vi.mock("../openai.js", () => ({ createCompletion, DRAFT_MODEL: "test-draft-model" }));
+vi.mock("../llm/openai.js", () => ({ createCompletion, DRAFT_MODEL: "test-draft-model" }));
 vi.mock("../sentry.js", () => ({ captureError }));
-vi.mock("../llm-credentials.js", () => ({ getUserLlmCredentials: vi.fn(async () => ({})) }));
+vi.mock("../llm/llm-credentials.js", () => ({ getUserLlmCredentials: vi.fn(async () => ({})) }));
 vi.mock("../voice-profile-extractor.js", () => ({ buildVoicePromptHint: vi.fn(async () => "") }));
 vi.mock("../email-attachments.js", () => ({
   listEmailAttachments: vi.fn(async () => []),

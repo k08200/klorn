@@ -3,12 +3,19 @@ import type {
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
 } from "openai/resources/chat/completions";
-import { estimatePrebillCents, recordLlmUsage, trueUpCostLedgers } from "./billing/llm-usage.js";
+import { estimatePrebillCents, recordLlmUsage, trueUpCostLedgers } from "../billing/llm-usage.js";
 import {
   type CallPriority,
   checkAndRecordUserCall,
   UserRateLimitedError,
-} from "./billing/quota-limiter.js";
+} from "../billing/quota-limiter.js";
+import {
+  getProvider,
+  getProviderChain,
+  type Provider,
+  type ProviderCredentials,
+} from "../providers/index.js";
+import { captureError } from "../sentry.js";
 import {
   FALLBACK_MODEL,
   getProviderCooldownInfo,
@@ -24,13 +31,6 @@ import {
 } from "./model-fallback.js";
 import { isModelKnownAbsent } from "./openrouter-catalog-cache.js";
 import { activeFallbackChain, walkFallbackChain } from "./openrouter-fallback-chain.js";
-import {
-  getProvider,
-  getProviderChain,
-  type Provider,
-  type ProviderCredentials,
-} from "./providers/index.js";
-import { captureError } from "./sentry.js";
 
 export { UserRateLimitedError };
 
@@ -157,7 +157,7 @@ async function enforceCostGates(
   if (playgroundOnly) return;
 
   const { checkCostGate, recordCostUsage, checkGlobalCostGate, recordGlobalCostUsage } =
-    await import("./billing/cost-guard.js");
+    await import("../billing/cost-guard.js");
   // Single source of truth for the pre-bill arithmetic lives in llm-usage.ts
   // (nominal-token floor; the post-call true-up settles against actuals).
   const estCents = estimatePrebillCents(model);

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // fail-closed without touching executeToolCall.
 
 const createCompletion = vi.fn();
-vi.mock("../openai.js", () => ({
+vi.mock("../llm/openai.js", () => ({
   createCompletion: (...args: unknown[]) => createCompletion(...args),
   AGENT_MODEL: "pinned/agent-model",
 }));
@@ -34,7 +34,7 @@ vi.mock("../tool-executor.js", () => ({
   })),
 }));
 
-vi.mock("../llm-credentials.js", () => ({
+vi.mock("../llm/llm-credentials.js", () => ({
   getUserLlmCredentials: vi.fn(async () => ({ userModel: "anthropic/claude-sonnet-5" })),
 }));
 

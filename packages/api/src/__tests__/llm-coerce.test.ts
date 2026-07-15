@@ -6,7 +6,7 @@ import {
   asStringArray,
   asUnitInterval,
   isNonFinitePresent,
-} from "../llm-coerce.js";
+} from "../llm/llm-coerce.js";
 
 describe("asEnum", () => {
   const TIERS = ["high", "medium", "low"] as const;

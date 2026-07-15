@@ -15,7 +15,7 @@ vi.mock("../db.js", () => ({ prisma: { user: { findUnique } }, db: {} }));
 vi.mock("../crypto-tokens.js", () => ({ decryptOptional }));
 vi.mock("../sentry.js", () => ({ captureError }));
 
-import { getUserLlmCredentials } from "../llm-credentials.js";
+import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 
 beforeEach(() => {
   findUnique.mockReset();
