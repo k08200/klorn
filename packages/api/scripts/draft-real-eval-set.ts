@@ -27,6 +27,11 @@
  *              phone-shaped (non-placeholder) remains. Run it on
  *              eval/real-eval-set.json before every commit of that file.
  *
+ *   5. EMIT-CONTEXT --emit-context=<final file> --user=<email>
+ *              Snapshot each item's PRODUCTION judge context (numeric
+ *              knowledge only) into `context` fixtures so the eval judges
+ *              warm-start. Re-run after ledger-heavy dogfood stretches.
+ *
  * Read-only against the DB. Never persists anything server-side.
  */
 
@@ -47,6 +52,7 @@ interface CliArgs {
   verify?: string;
   finalize?: string;
   finalOut?: string;
+  emitContext?: string;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -62,10 +68,80 @@ function parseArgs(argv: string[]): CliArgs {
     verify: map.get("verify"),
     finalize: map.get("finalize"),
     finalOut: map.get("final-out"),
+    emitContext: map.get("emit-context"),
   };
 }
 
 const TIERS = new Set(["PUSH", "QUEUE", "SILENT", "AUTO"]);
+
+/**
+ * Warm-start fixtures (#648 follow-up): for each item in a finalized eval
+ * file, look up its ORIGINAL sender in the DB (by gmailId — the scrubbed file
+ * keeps it) and snapshot the PRODUCTION buildJudgeContext's numeric knowledge
+ * (senderPrior + senderFacts, never text — judgeContextToFixture) into the
+ * item's `context` field. poc-accuracy's default --context=fixture mode then
+ * judges warm-start, the way prod actually runs: the first cold-start
+ * measurement scored PUSH 0/4 precisely because the founder's OVERRIDE:PUSH
+ * priors were invisible to a contextless eval.
+ */
+async function runEmitContext(path: string, userEmail: string | undefined): Promise<number> {
+  if (!userEmail) throw new Error("--emit-context requires --user=<founder email>");
+  const [{ buildJudgeContext }, { prisma }, { judgeContextToFixture }] = await Promise.all([
+    import("../src/judge/judge-context.js"),
+    import("../src/db.js"),
+    import("../src/eval-context.js"),
+  ]);
+  const user = await prisma.user.findUnique({ where: { email: userEmail }, select: { id: true } });
+  if (!user) throw new Error(`no user found for email=${userEmail}`);
+
+  const filePath = resolve(path);
+  const doc = JSON.parse(readFileSync(filePath, "utf8")) as {
+    items: Array<Record<string, unknown>>;
+  };
+  let withPrior = 0;
+  let withFacts = 0;
+  const priorTiers: Record<string, number> = {};
+  for (const item of doc.items) {
+    const gmailId = String(item.gmailId ?? "");
+    const email = gmailId
+      ? await prisma.emailMessage.findFirst({
+          where: { userId: user.id, gmailId },
+          select: { from: true },
+        })
+      : null;
+    if (!email) {
+      delete item.context;
+      continue;
+    }
+    const context = await buildJudgeContext(user.id, { from: email.from });
+    const fixture = judgeContextToFixture(context);
+    if (fixture) {
+      item.context = fixture;
+      if (fixture.senderPrior) {
+        withPrior++;
+        priorTiers[fixture.senderPrior.tier] = (priorTiers[fixture.senderPrior.tier] ?? 0) + 1;
+      }
+      if (fixture.senderFacts) withFacts++;
+    } else {
+      delete item.context;
+    }
+  }
+  await prisma.$disconnect();
+  writeFileSync(filePath, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+  console.log(
+    `Emitted context fixtures → ${filePath}: ${withPrior} item(s) with a senderPrior (${JSON.stringify(priorTiers)}), ${withFacts} with senderFacts.`,
+  );
+  const findings = lintPii(readFileSync(filePath, "utf8"));
+  if (findings.length > 0) {
+    console.error(
+      `LEAK GUARD FAIL after emit — ${findings.length} finding(s); NOT safe to commit:`,
+    );
+    for (const f of findings.slice(0, 10)) console.error(`  ${f}`);
+    return 2;
+  }
+  console.log("Leak guard PASS — fixtures are numeric-only.");
+  return 0;
+}
 
 function runVerify(path: string): number {
   const text = readFileSync(resolve(path), "utf8");
@@ -261,6 +337,7 @@ async function runDraft(args: CliArgs): Promise<number> {
 
 async function main(): Promise<number> {
   const args = parseArgs(process.argv.slice(2));
+  if (args.emitContext) return await runEmitContext(args.emitContext, args.user);
   if (args.verify) return runVerify(args.verify);
   if (args.finalize) return runFinalize(args.finalize, args.finalOut);
   return await runDraft(args);

@@ -216,3 +216,25 @@ export function fixtureToJudgeContext(fixture: unknown, itemId: string): JudgeCo
     learnedRules: parseLearnedRules(fixture.learnedRules, itemId),
   };
 }
+
+/**
+ * Snapshot a live JudgeContext (built by the production buildJudgeContext
+ * against the founder's DB) into a committable fixture. Deliberately keeps
+ * ONLY the numeric knowledge — senderPrior (tier/count/kind) and senderFacts
+ * (all-count record) — because the other channels carry raw text from real
+ * mail (correction few-shots quote subjects, traits quote evidence, learned
+ * rules quote values) and this fixture lands in a PUBLIC repo. Null when the
+ * sender has no prior and no facts: absent fixture = empty context, so we
+ * never commit noise.
+ */
+export function judgeContextToFixture(
+  context: JudgeContext,
+): { senderPrior?: SenderPrior; senderFacts?: SenderFacts } | null {
+  const senderPrior = context.senderPrior ?? null;
+  const senderFacts = context.senderFacts ?? null;
+  if (!senderPrior && !senderFacts) return null;
+  return {
+    ...(senderPrior ? { senderPrior } : {}),
+    ...(senderFacts ? { senderFacts } : {}),
+  };
+}
