@@ -13,3 +13,4 @@
 
 export type * from "./firewall.js";
 export type * from "./inbox-summary.js";
+export type * from "./receipt.js";

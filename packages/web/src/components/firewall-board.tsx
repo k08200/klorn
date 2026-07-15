@@ -13,25 +13,12 @@ import { TrustDot, type TrustScoreData } from "./trust-badge";
 // drifted: it was missing `hashStale`.
 export type { FirewallItem, FirewallResponse, Tier } from "@klorn/contract";
 
-import type { FirewallItem, FirewallResponse, Tier } from "@klorn/contract";
+import type { DailyReceipt, FirewallItem, FirewallResponse, Tier } from "@klorn/contract";
 
 type ColumnTier = "PUSH" | "QUEUE" | "SILENT";
 
 // How often the firewall view re-pulls while the tab is focused.
 export const FIREWALL_REFRESH_MS = 45_000;
-
-interface DailyReceiptSummary {
-  totalSeen: number;
-  totalInterrupted: number;
-  savedFromInbox: number;
-  autoHandled: number;
-  narrative: string;
-}
-
-interface DailyReceipt {
-  date: string;
-  summary: DailyReceiptSummary;
-}
 
 const TIER_ORDER: Tier[] = ["PUSH", "QUEUE", "SILENT"];
 
