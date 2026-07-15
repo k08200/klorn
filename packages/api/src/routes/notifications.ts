@@ -10,6 +10,7 @@ import { verifyTierOverrideToken } from "../billing/tier-override-token.js";
 import { prisma } from "../db.js";
 import { overrideAttentionTier } from "../judge/attention-override.js";
 import type { Tier } from "../judge/tiers.js";
+import { isSafePushEndpoint } from "../notify/is-safe-push-endpoint.js";
 import { getVapidPublicKey, sendPushNotification } from "../notify/push.js";
 import { getPushDeliveryStats, recordPushReceipt } from "../notify/push-delivery.js";
 import { sendDevicePush } from "../notify/push-device.js";
@@ -159,9 +160,11 @@ export async function notificationRoutes(app: FastifyInstance) {
     }
     const normalizedOrigin = new URL(claimedOrigin).origin;
 
-    const endpointError = validatePushEndpointUrl(endpoint);
-    if (endpointError) {
-      return reply.code(400).send({ error: endpointError });
+    // Single source of truth for the SSRF check — shared with delivery time
+    // (notify/is-safe-push-endpoint.ts), which has the complete 127/8 + IPv6 +
+    // IPv4-mapped coverage a second local copy kept drifting from.
+    if (!isSafePushEndpoint(endpoint)) {
+      return reply.code(400).send({ error: "Invalid or disallowed push endpoint" });
     }
 
     const safeEndpointForLog = endpoint.replace(/[\r\n]/g, "").slice(0, 60);
@@ -204,9 +207,11 @@ export async function notificationRoutes(app: FastifyInstance) {
     if (!oldEndpoint || !endpoint || !keys?.p256dh || !keys?.auth) {
       return reply.code(400).send({ error: "Invalid rotate payload" });
     }
-    const endpointError = validatePushEndpointUrl(endpoint);
-    if (endpointError) {
-      return reply.code(400).send({ error: endpointError });
+    // Single source of truth for the SSRF check — shared with delivery time
+    // (notify/is-safe-push-endpoint.ts), which has the complete 127/8 + IPv6 +
+    // IPv4-mapped coverage a second local copy kept drifting from.
+    if (!isSafePushEndpoint(endpoint)) {
+      return reply.code(400).send({ error: "Invalid or disallowed push endpoint" });
     }
 
     const existing = await prisma.pushSubscription.findUnique({
@@ -337,42 +342,6 @@ export async function notificationRoutes(app: FastifyInstance) {
     });
     return { sent: result.status === "sent" && result.accepted > 0, result };
   });
-}
-
-/**
- * Validate a Web Push endpoint URL (HTTPS, no private/internal hosts) to
- * prevent SSRF via attacker-supplied endpoints. Returns an error message or
- * null when valid. Shared by subscribe and rotate.
- */
-function validatePushEndpointUrl(endpoint: string): string | null {
-  let parsedEndpoint: URL;
-  try {
-    parsedEndpoint = new URL(endpoint);
-  } catch {
-    return "Invalid endpoint URL";
-  }
-  if (parsedEndpoint.protocol !== "https:") {
-    return "Push endpoints must use HTTPS";
-  }
-  const host = parsedEndpoint.hostname.toLowerCase();
-  const blockedHosts = ["localhost", "127.0.0.1", "::1", "metadata.google.internal"];
-  if (blockedHosts.includes(host) || host.endsWith(".internal") || host.endsWith(".local")) {
-    return "Invalid push endpoint host";
-  }
-  const ipMatch = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  if (ipMatch) {
-    const [, a, b] = ipMatch.map(Number);
-    if (
-      a === 10 ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 169 && b === 254) ||
-      a === 0
-    ) {
-      return "Invalid push endpoint host";
-    }
-  }
-  return null;
 }
 
 function parseOptionalInteger(value: string | undefined): number | undefined {

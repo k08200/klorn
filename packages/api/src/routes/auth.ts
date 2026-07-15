@@ -758,7 +758,11 @@ export function authRoutes(app: FastifyInstance) {
     if (isDemoUser(userId)) {
       return reply.code(403).send({ error: "Authentication required to connect Google" });
     }
-    const signedState = signToken({ userId, email: "__oauth_state__" });
+    // Short-lived (10m), matching link-calendar/link-inbox: the callback attaches
+    // a credential-bearing Google token to this user's row, so an intercepted
+    // state URL (access logs, Referer) must not be replayable for the default
+    // 7-day token window.
+    const signedState = signToken({ userId, email: "__oauth_state__" }, "10m");
     const url = getAuthUrl(signedState);
     return reply.send({ url });
   });
