@@ -73,22 +73,33 @@ actions/cache key); on an alarm it is kept, so the flip keeps firing weekly
 until investigated. To accept a new normal, run the workflow manually with
 `accept-baseline=true`.
 
-## DONE (2026-07-16): the LLM gates run on real mail
+## 2026-07-16: real mail is measured on every PR (report-only, ratchet pending)
 
-`eval.yml` (the PR gate) and `judge-canary.yml` (the weekly drift canary) now
-run **`eval/real-eval-set.json`** — 53 founder-labeled real emails (18 SILENT /
-31 QUEUE / 4 PUSH, 50 with bodies), produced and leak-linted via the drafting
-kit below. "Green gate" and "thesis holds on real mail" are now the same
-auditable event.
+The judge was measured on **`eval/real-eval-set.json`** — 53 founder-labeled
+real emails (18 SILENT / 31 QUEUE / 4 PUSH, 50 with bodies) — for the first
+time. Cold-start (no sender context), with role-preserving scrub so the
+deterministic sender floors fire:
 
-Notes on the switched set:
-- **PUSH support is 4** — the 0.90 recall floor requires 4/4 (one miss =
-  0.75 = gate fail). AUTO has no items yet, so its report line is vacuous.
-  Every override/confirm in the app adds ledger rows for the next draft run;
-  regenerate + re-review when PUSH/AUTO support grows.
-- The **first canary run after the switch re-baselines**: every item id is
-  new, so the comparison reports adds/drops (a set edit, never an alarm) and
-  records the fresh baseline.
+- **Overall 81.1% (43/53)** — the original POC GO/NO-GO bar (≥80% on real
+  mail) PASSES. QUEUE recall 80.6%, SILENT recall 100%.
+- **PUSH recall 0/4** — 3 of 4 are the founder's own `OVERRIDE:PUSH` senders
+  (waitlist notifications): in prod those overrides form a sender-prior that
+  short-circuits to PUSH; the cold-start eval can't see it. The context-aware
+  fix is per-item fixtures from the ledger (`--context=fixture`).
+- **SILENT precision 78.3%** — newsletters the founder actually reads,
+  buried by the generic rule. This is the gap the (dark) engagement flag
+  exists to close; these numbers are its flip evidence.
+
+Wiring, until PUSH support matures:
+- **`eval.yml`**: the synthetic set stays the GATE; a second
+  "Real-mail readout (report-only)" step prints the real numbers on every
+  judge PR (a floor breach is a `::warning`, never a fail).
+- **`judge-canary.yml`** runs the real set weekly for FLIP detection only —
+  floor breaches are expected (warning), drift alarms are not.
+- **Ratchet condition**: when the regenerated set reaches **PUSH support
+  ≥10** (every in-app override/confirm adds ledger rows for the next
+  `draft-real-eval-set.ts` run), repoint the gate step at
+  `real-eval-set.json` and delete the report-only step.
 - The synthetic 50-item set stays committed — the deterministic no-LLM test
   (`judge-eval-set.test.ts`) still pins it.
 

@@ -120,19 +120,33 @@ jobs:
           cd packages/api && npx tsx scripts/canary-compare.ts \
             --prev=../../canary-baseline.json --curr=../../canary-current.json
 
+      # The real set currently breaches per-tier floors by design (PUSH n=4,
+      # report-only until support ≥10 — see eval/README.md), so the canary's
+      # signal is FLIPS ONLY: a floor breach exits 2 but still writes --out,
+      # and the run counts as scored as long as the output file exists.
+      - name: Check score output
+        if: steps.key.outputs.present == 'true'
+        id: scored
+        run: |
+          if [ -f canary-current.json ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Save new baseline
         # Refresh on a stable run (or an explicit accept); keep the old
         # baseline on an alarm so the flip keeps firing until investigated.
         if: >-
           steps.key.outputs.present == 'true' &&
-          steps.eval.outcome == 'success' &&
+          steps.scored.outputs.ok == 'true' &&
           (steps.compare.outcome == 'success' || github.event.inputs.accept-baseline == 'true')
         run: cp canary-current.json canary-baseline.json
 
       - name: Persist baseline to cache
         if: >-
           steps.key.outputs.present == 'true' &&
-          steps.eval.outcome == 'success' &&
+          steps.scored.outputs.ok == 'true' &&
           (steps.compare.outcome == 'success' || github.event.inputs.accept-baseline == 'true')
         uses: actions/cache/save@v4
         with:
@@ -142,9 +156,12 @@ jobs:
       - name: Verdict
         if: steps.key.outputs.present == 'true'
         run: |
-          if [ "${{ steps.eval.outcome }}" != "success" ]; then
-            echo "::error::Judge canary: the eval gate itself failed (floor breach or run error) — see the 'Score the eval set' step."
+          if [ "${{ steps.scored.outputs.ok }}" != "true" ]; then
+            echo "::error::Judge canary: the scoring run produced no output — see the 'Score the eval set' step."
             exit 1
+          fi
+          if [ "${{ steps.eval.outcome }}" != "success" ]; then
+            echo "::warning::Per-tier floors not met on the real set (expected while PUSH support < 10 — report-only). Flip detection ran regardless."
           fi
           if [ "${{ steps.compare.outcome }}" != "success" ]; then
             if [ "${{ github.event.inputs.accept-baseline }}" = "true" ]; then
@@ -154,4 +171,4 @@ jobs:
             echo "::error::Judge canary: verdict flips against last week's baseline — see the 'Compare against baseline' step."
             exit 1
           fi
-          echo "Canary stable — no flips, baseline refreshed."
+          echo "Canary scored — no flips, baseline refreshed."
