@@ -20,8 +20,8 @@
  * isolation, exactly like proposeThresholdAdjustments.
  */
 
-import { extractEmailAddress } from "../email-address.js";
 import type { Tier } from "../judge/tiers.js";
+import { extractEmailAddress } from "../mail/email-address.js";
 
 /** The deterministic generalisations a learned rule can express. */
 export type RulePattern = "sender-domain" | "subject-keyword";

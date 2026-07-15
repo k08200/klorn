@@ -15,7 +15,7 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
-import { verifyGitHubToken } from "../github-client.js";
+import { verifyGitHubToken } from "../mail/github-client.js";
 
 const connectBodySchema = {
   type: "object",

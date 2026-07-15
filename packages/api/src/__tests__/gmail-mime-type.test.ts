@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeMimeType } from "../gmail.js";
+import { safeMimeType } from "../mail/gmail.js";
 
 // safeMimeType reduces a client-supplied attachment Content-Type to a clean
 // RFC 2045 type/subtype token before it is interpolated into a MIME header.

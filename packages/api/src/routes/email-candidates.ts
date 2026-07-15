@@ -16,7 +16,7 @@ import {
   syncRecentCandidateIntakes,
   updateCandidateIntake,
   updateCandidateIntakes,
-} from "../email-candidate-intake.js";
+} from "../mail/email-candidate-intake.js";
 import {
   type CandidateIntakeStatus,
   openCommitmentForCandidateTransition,

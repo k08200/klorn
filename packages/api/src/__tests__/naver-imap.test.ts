@@ -47,7 +47,7 @@ vi.mock("../judge/poc-judge.js", () => ({
   }),
 }));
 
-const { verifyNaverImapCredentials } = await import("../naver-imap.js");
+const { verifyNaverImapCredentials } = await import("../mail/naver-imap.js");
 
 describe("verifyNaverImapCredentials", () => {
   it("returns ok=true when LOGIN + INBOX lock succeed", async () => {

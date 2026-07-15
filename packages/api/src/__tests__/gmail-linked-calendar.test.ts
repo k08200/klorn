@@ -36,7 +36,7 @@ vi.mock("googleapis", () => ({
   },
 }));
 
-import { getLinkedCalendarClients, markLinkedCalendarForReconnect } from "../gmail.js";
+import { getLinkedCalendarClients, markLinkedCalendarForReconnect } from "../mail/gmail.js";
 
 describe("getLinkedCalendarClients", () => {
   beforeEach(() => {

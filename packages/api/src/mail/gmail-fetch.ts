@@ -6,6 +6,8 @@
  */
 
 import { type gmail_v1, google } from "googleapis";
+import { Semaphore } from "../semaphore.js";
+import { captureError } from "../sentry.js";
 import { extractAttachmentContent, isReadableEmailAttachment } from "./email-attachment-text.js";
 import type { RawEmailAttachment } from "./email-attachments.js";
 import { htmlToPlainText } from "./email-text.js";
@@ -15,8 +17,6 @@ import {
   isGoogleNotFoundError,
   markGoogleTokenForReconnect,
 } from "./gmail.js";
-import { Semaphore } from "./semaphore.js";
-import { captureError } from "./sentry.js";
 
 // Gmail has no batch endpoint for messages.get, so each message is a separate
 // round-trip. Fetching them serially makes a 30-message sync take 30× the

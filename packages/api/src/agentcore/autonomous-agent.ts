@@ -31,13 +31,13 @@ import { AGENT_SYSTEM_PROMPT, NOTIFY_TOOL, PROPOSE_ACTION_TOOL } from "../agent/
 import { trackTokenUsage } from "../billing/token-usage.js";
 import { AGENT_MAX_CONTEXT_ITEMS, AGENT_MAX_TOOLS_PER_LOOP } from "../config.js";
 import { db, prisma } from "../db.js";
-import { isNoReplyAddress, markAsRead } from "../gmail.js";
 import { isFloorAction } from "../judge/attention-floor.js";
 import { upsertAttentionForPendingAction } from "../judge/attention-mirror.js";
 import { recipientFromToolArgs, recordFeedback } from "../learning/feedback.js";
 import { loadMemoriesForPrompt } from "../learning/memory.js";
 import { getFeedbackPolicyContextForPrompt } from "../learning/policy-extraction.js";
 import { AGENT_MODEL, createCompletion } from "../llm/openai.js";
+import { isNoReplyAddress, markAsRead } from "../mail/gmail.js";
 import { humanizeAutoExec } from "../notify/notification-format.js";
 import { notificationSuppressionReason } from "../notify/notification-policy.js";
 import type { NotifCategory } from "../notify/notification-prefs.js";

@@ -47,7 +47,7 @@ vi.mock("../llm/openai.js", () => ({
 vi.mock("../resolve-user-email.js", () => ({ resolveUserEmail: vi.fn(async () => "me@x.com") }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { summarizeUnsummarizedEmails } from "../email-summarize.js";
+import { summarizeUnsummarizedEmails } from "../mail/email-summarize.js";
 
 beforeEach(() => {
   findMany.mockClear();

@@ -34,21 +34,21 @@ vi.mock("googleapis", () => ({
     }),
   },
 }));
-vi.mock("../gmail.js", () => ({ resolveMailClient, GMAIL_TOOLS: [] }));
-vi.mock("../email-attachments.js", () => ({
+vi.mock("../mail/gmail.js", () => ({ resolveMailClient, GMAIL_TOOLS: [] }));
+vi.mock("../mail/email-attachments.js", () => ({
   analyzeEmailAttachmentsForEmail: vi.fn(),
   analyzePendingEmailAttachments: vi.fn(),
   buildAttachmentCandidateProfile: vi.fn(() => null),
   buildAttachmentCorrectionGuidance: vi.fn(),
   listEmailAttachments: vi.fn(async () => []),
 }));
-vi.mock("../email-candidate-intake.js", () => ({
+vi.mock("../mail/email-candidate-intake.js", () => ({
   syncCandidateIntakeForEmail: vi.fn(),
   syncRecentCandidateIntakes: vi.fn(),
 }));
 vi.mock("../learning/feedback.js", () => ({ recordFeedback: vi.fn() }));
-vi.mock("../file-conversion-store.js", () => ({ saveConversionResult: vi.fn() }));
-vi.mock("../file-conversions.js", () => ({
+vi.mock("../mail/file-conversion-store.js", () => ({ saveConversionResult: vi.fn() }));
+vi.mock("../mail/file-conversions.js", () => ({
   convertEmailAttachment: vi.fn(),
   FileConversionError: class extends Error {},
   normalizeConversionTarget: vi.fn(() => "pdf"),
@@ -60,7 +60,7 @@ vi.mock("../llm/openai.js", () => ({
   createVisionCompletion: vi.fn(),
   VISION_MODEL: "test-vision",
 }));
-vi.mock("../vision-attachment-policy.js", () => ({
+vi.mock("../mail/vision-attachment-policy.js", () => ({
   isDecorativeImage: vi.fn(() => false),
   isVisionAttachment: vi.fn(() => false),
   MAX_VISION_ATTACHMENT_BYTES: 10_000_000,

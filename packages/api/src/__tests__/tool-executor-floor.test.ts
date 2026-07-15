@@ -26,7 +26,7 @@ const findFirstMock = vi.fn(
   async (): Promise<{ linkedInboxAccountId: string | null } | null> => null,
 );
 
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/gmail.js", () => ({
   GMAIL_TOOLS: [],
   sendEmail: (...args: unknown[]) => sendEmailMock(...args),
   listEmails: vi.fn(),
@@ -58,7 +58,6 @@ vi.mock("../learning/memory.js", () => ({
   recall: vi.fn(),
   remember: vi.fn(),
 }));
-vi.mock("../search.js", () => ({ SEARCH_TOOLS: [], webSearch: vi.fn() }));
 vi.mock("../agentcore/skill-executor.js", () => ({
   SKILL_TOOLS: [],
   executeSkill: vi.fn(),

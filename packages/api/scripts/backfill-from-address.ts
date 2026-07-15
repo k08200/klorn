@@ -20,7 +20,7 @@
  */
 
 import { prisma } from "../src/db.js";
-import { extractEmailAddress } from "../src/email-address.js";
+import { extractEmailAddress } from "../src/mail/email-address.js";
 import { captureError } from "../src/sentry.js";
 
 const BATCH_SIZE = 1000;

@@ -44,7 +44,7 @@ vi.mock("../notify/push.js", () => ({ sendPushNotification }));
 vi.mock("../websocket.js", () => ({ pushNotification }));
 vi.mock("../judge/attention-override.js", () => ({ findOpenEmailAttentionItemId }));
 
-import { backfillEmailAttentionItems, judgeAndMirrorEmail } from "../email-sync.js";
+import { backfillEmailAttentionItems, judgeAndMirrorEmail } from "../mail/email-sync.js";
 
 const T0 = new Date("2026-06-14T00:00:00Z");
 

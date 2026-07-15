@@ -21,7 +21,7 @@ vi.mock("../db.js", () => {
   const prisma = { emailMessage: { findUnique, create, update } };
   return { prisma, db: prisma };
 });
-vi.mock("../gmail.js", () => ({ markAsRead }));
+vi.mock("../mail/gmail.js", () => ({ markAsRead }));
 vi.mock("../judge/poc-judge.js", () => ({ judgeEmail }));
 vi.mock("../judge/judge-context.js", () => ({ buildJudgeContext: vi.fn(async () => ({})) }));
 vi.mock("../judge/attention-mirror.js", () => ({ upsertAttentionForEmailJudgement: upsert }));
@@ -30,14 +30,14 @@ vi.mock("../agentcore/email-action-trigger.js", () => ({
 }));
 vi.mock("../llm/llm-credentials.js", () => ({ getUserLlmCredentials: vi.fn(async () => ({})) }));
 vi.mock("../resolve-user-email.js", () => ({ resolveUserEmail: vi.fn(async () => "me@x.com") }));
-vi.mock("../email-priority.js", () => ({
+vi.mock("../mail/email-priority.js", () => ({
   classifyPriority: vi.fn(() => "NORMAL"),
   classifyNeedsReplyFromSignals: vi.fn(() => ({ needsReply: false, reason: null, confidence: 0 })),
 }));
 vi.mock("../pim/commitment-ingestion.js", () => ({
   extractAndUpsertCommitmentsFromText: vi.fn(async () => {}),
 }));
-vi.mock("../email-attachments.js", () => ({
+vi.mock("../mail/email-attachments.js", () => ({
   upsertEmailAttachments: vi.fn(async () => {}),
   analyzePendingEmailAttachments: vi.fn(async () => 0),
 }));

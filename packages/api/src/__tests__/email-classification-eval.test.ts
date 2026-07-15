@@ -4,7 +4,7 @@ import {
   evaluateEmailPriorityFixtures,
   evaluateUserCorrectionFixtures,
 } from "../email-classification-eval.js";
-import type { UserCorrectionFixture } from "../email-feedback-fixtures.js";
+import type { UserCorrectionFixture } from "../mail/email-feedback-fixtures.js";
 
 describe("email classification eval", () => {
   it("replays curated dogfood fixtures through the same heuristic gate", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAllowedImapHost } from "../is-allowed-imap-host.js";
+import { isAllowedImapHost } from "../mail/is-allowed-imap-host.js";
 
 describe("isAllowedImapHost — SSRF allowlist", () => {
   it("allows the Naver IMAP host with and without the IMAPS port", () => {

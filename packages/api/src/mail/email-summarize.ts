@@ -6,17 +6,17 @@
  * for the reply signal; must NOT import email-sync.ts (would cycle).
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
+import { asEnum, asString, asStringArray } from "../llm/llm-coerce.js";
+import { getUserLlmCredentials } from "../llm/llm-credentials.js";
+import { parseLlmJson } from "../llm/llm-json.js";
+import { createCompletion, MODEL } from "../llm/openai.js";
+import { getProviderChain, type ProviderCredentials } from "../providers/index.js";
+import { resolveUserEmail } from "../resolve-user-email.js";
+import { captureError } from "../sentry.js";
+import { wrapUntrusted } from "../untrusted.js";
 import { classifyNeedsReplyFromSignals } from "./email-priority.js";
 import { htmlToPlainText } from "./email-text.js";
-import { asEnum, asString, asStringArray } from "./llm/llm-coerce.js";
-import { getUserLlmCredentials } from "./llm/llm-credentials.js";
-import { parseLlmJson } from "./llm/llm-json.js";
-import { createCompletion, MODEL } from "./llm/openai.js";
-import { getProviderChain, type ProviderCredentials } from "./providers/index.js";
-import { resolveUserEmail } from "./resolve-user-email.js";
-import { captureError } from "./sentry.js";
-import { wrapUntrusted } from "./untrusted.js";
 
 // ─── AI Summarization ─────────────────────────────────────────────────────
 

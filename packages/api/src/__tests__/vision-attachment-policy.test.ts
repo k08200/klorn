@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { isDecorativeImage, isVisionAttachment } from "../vision-attachment-policy.js";
+import { isDecorativeImage, isVisionAttachment } from "../mail/vision-attachment-policy.js";
 
 describe("isDecorativeImage", () => {
   it("treats a tiny image (the 558-byte logo.png repro) as decorative", () => {

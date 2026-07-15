@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { captureError } from "./sentry.js";
+import { captureError } from "../sentry.js";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 

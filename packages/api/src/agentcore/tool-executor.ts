@@ -7,14 +7,6 @@
 import { planHasFeature, TOOL_FEATURE_MAP } from "../billing/stripe.js";
 import { prisma } from "../db.js";
 import {
-  classifyEmails,
-  GMAIL_TOOLS,
-  listEmails,
-  markAsRead,
-  readEmail,
-  sendEmail,
-} from "../gmail.js";
-import {
   type ActionReceipt,
   ActionReceiptMismatchError,
   ActionReceiptSchemaError,
@@ -24,6 +16,14 @@ import {
 } from "../judge/attention-floor.js";
 import { upsertAttentionForCalendarEvent } from "../judge/attention-mirror.js";
 import { forget, MEMORY_TOOLS, recall, remember } from "../learning/memory.js";
+import {
+  classifyEmails,
+  GMAIL_TOOLS,
+  listEmails,
+  markAsRead,
+  readEmail,
+  sendEmail,
+} from "../mail/gmail.js";
 import { BRIEFING_TOOLS } from "../pim/briefing.js";
 import {
   CALENDAR_TOOLS,

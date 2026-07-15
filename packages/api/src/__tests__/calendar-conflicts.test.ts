@@ -34,7 +34,7 @@ vi.mock("googleapis", () => ({
   },
 }));
 
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/gmail.js", () => ({
   getAuthedClient: vi.fn(async () => ({})),
   getLinkedCalendarClients: m.linkedClientsMock,
   isGoogleAuthError: (e: { response?: { status?: number } }) => e?.response?.status === 401,

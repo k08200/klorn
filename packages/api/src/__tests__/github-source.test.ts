@@ -25,7 +25,7 @@ vi.mock("../judge/attention-mirror.js", () => ({
   upsertAttentionForGitHubNotification: upsertGitHubMock,
 }));
 
-vi.mock("../github-push.js", () => ({
+vi.mock("../mail/github-push.js", () => ({
   pushForFirewallGitHubNotification: pushGitHubMock,
 }));
 
@@ -33,7 +33,7 @@ import {
   type GitHubNotification,
   githubNotificationToClassifiable,
   ingestGitHubNotifications,
-} from "../github-source.js";
+} from "../mail/github-source.js";
 
 const NOW = new Date("2026-06-13T10:00:00.000Z");
 

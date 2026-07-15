@@ -18,8 +18,9 @@ import { INIT_SYNC_EMAIL_COUNT } from "../config.js";
 import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
-import { sendPasswordResetEmail, sendVerificationEmail } from "../email.js";
-import { syncLinkedInboxesForUser } from "../email-sync.js";
+import { mapGoogleEventTimes } from "../google-calendar-time.js";
+import { sendPasswordResetEmail, sendVerificationEmail } from "../mail/email.js";
+import { syncLinkedInboxesForUser } from "../mail/email-sync.js";
 import {
   getAuthedClient,
   getAuthUrl,
@@ -31,8 +32,7 @@ import {
   getOAuth2Client,
   isGoogleAuthError,
   markGoogleTokenForReconnect,
-} from "../gmail.js";
-import { mapGoogleEventTimes } from "../google-calendar-time.js";
+} from "../mail/gmail.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
 import { captureError } from "../sentry.js";
@@ -1688,7 +1688,7 @@ export function authRoutes(app: FastifyInstance) {
     // snapshot is what the onboarding "review your classifications" step shows,
     // so the count doubles as the onboarding sample size (env-tunable).
     try {
-      const { syncEmails, summarizeUnsummarizedEmails } = await import("../email-sync.js");
+      const { syncEmails, summarizeUnsummarizedEmails } = await import("../mail/email-sync.js");
       const emailResult = await syncEmails(userId, INIT_SYNC_EMAIL_COUNT);
       results.emails = emailResult.newCount;
       // Summarize in the background so freshly-synced mail doesn't sit as

@@ -10,13 +10,16 @@
 
 import { scheduleAgentForActionableEmail } from "../agentcore/email-action-trigger.js";
 import { prisma } from "../db.js";
-import { extractEmailAddress } from "../email-address.js";
-import { analyzePendingEmailAttachments, upsertEmailAttachments } from "../email-attachments.js";
-import { classifyNeedsReplyFromSignals, classifyPriority } from "../email-priority.js";
-import { markAsRead } from "../gmail.js";
-import type { GmailRawEmail } from "../gmail-fetch.js";
 import { engagementKindOf } from "../learning/sender-policy.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
+import { extractEmailAddress } from "../mail/email-address.js";
+import {
+  analyzePendingEmailAttachments,
+  upsertEmailAttachments,
+} from "../mail/email-attachments.js";
+import { classifyNeedsReplyFromSignals, classifyPriority } from "../mail/email-priority.js";
+import { markAsRead } from "../mail/gmail.js";
+import type { GmailRawEmail } from "../mail/gmail-fetch.js";
 import { extractAndUpsertCommitmentsFromText } from "../pim/commitment-ingestion.js";
 import type { ProviderCredentials } from "../providers/index.js";
 import { resolveUserEmail } from "../resolve-user-email.js";

@@ -27,12 +27,12 @@ vi.mock("../learning/voice-profile-extractor.js", () => ({
   buildVoicePromptHint: vi.fn(async () => ""),
 }));
 vi.mock("../llm/openai.js", () => ({ createCompletion: vi.fn(), DRAFT_MODEL: "test-draft-model" }));
-vi.mock("../email-attachments.js", () => ({
+vi.mock("../mail/email-attachments.js", () => ({
   listEmailAttachments: vi.fn(async () => []),
   buildAttachmentCandidateProfile: vi.fn(() => null),
 }));
-vi.mock("../email-candidate-intake.js", () => ({ updateCandidateIntake }));
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/email-candidate-intake.js", () => ({ updateCandidateIntake }));
+vi.mock("../mail/gmail.js", () => ({
   createEmailDraft,
   sendEmail: vi.fn(),
   getReplyHeaders: vi.fn(),

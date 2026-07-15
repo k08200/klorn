@@ -12,7 +12,7 @@ import {
   buildAttachmentCandidateProfile,
   buildAttachmentCorrectionGuidance,
   type EmailAttachmentView,
-} from "../email-attachments.js";
+} from "../mail/email-attachments.js";
 
 describe("email attachment candidate profile", () => {
   beforeEach(() => {

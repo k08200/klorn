@@ -9,8 +9,8 @@
  * / Telegram gates, so we don't re-check them here.
  */
 
-import { prisma } from "./db.js";
-import type { GitHubNotificationLike } from "./judge/attention-mirror.js";
+import { prisma } from "../db.js";
+import type { GitHubNotificationLike } from "../judge/attention-mirror.js";
 
 const GITHUB_PUSH_RECENCY_MS = 6 * 60 * 60 * 1000;
 const GITHUB_PUSH_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -55,8 +55,8 @@ export async function pushForFirewallGitHubNotification(n: GitHubNotificationLik
   });
 
   const [{ pushNotification }, { sendPushNotification }] = await Promise.all([
-    import("./websocket.js"),
-    import("./notify/push.js"),
+    import("../websocket.js"),
+    import("../notify/push.js"),
   ]);
 
   pushNotification(n.userId, {

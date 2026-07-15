@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // expired access token is refreshed AND persisted. These tests pin that
 // contract and prove the calendar-fetch failure path is no longer silent.
 
-vi.mock("../gmail.js", () => ({ getAuthedClient: vi.fn() }));
+vi.mock("../mail/gmail.js", () => ({ getAuthedClient: vi.fn() }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 // Keep the unit isolated from heavy top-level imports in meeting.ts.
 vi.mock("../llm/openai.js", () => ({ createCompletion: vi.fn(), MODEL: {} }));
@@ -15,7 +15,7 @@ vi.mock("googleapis", () => ({
   google: { calendar: vi.fn(() => ({ events: { list: eventsList } })) },
 }));
 
-import { getAuthedClient } from "../gmail.js";
+import { getAuthedClient } from "../mail/gmail.js";
 import { getUpcomingMeetings } from "../pim/meeting.js";
 import { captureError } from "../sentry.js";
 

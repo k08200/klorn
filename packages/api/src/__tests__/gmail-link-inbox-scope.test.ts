@@ -20,7 +20,7 @@ vi.mock("googleapis", () => ({
   },
 }));
 
-import { getLinkInboxAuthUrl } from "../gmail.js";
+import { getLinkInboxAuthUrl } from "../mail/gmail.js";
 
 describe("getLinkInboxAuthUrl", () => {
   it("requests the full gmail scopes + identity, and NO calendar scope", () => {

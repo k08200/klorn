@@ -31,11 +31,11 @@ vi.mock("../pim/commitment-ingestion.js", () => ({
 vi.mock("../agentcore/email-action-trigger.js", () => ({
   scheduleAgentForActionableEmail: vi.fn(() => Promise.resolve()),
 }));
-vi.mock("../email-attachments.js", () => ({
+vi.mock("../mail/email-attachments.js", () => ({
   analyzePendingEmailAttachments: vi.fn(() => Promise.resolve()),
   upsertEmailAttachments: vi.fn(() => Promise.resolve()),
 }));
-vi.mock("../email-priority.js", () => ({
+vi.mock("../mail/email-priority.js", () => ({
   classifyNeedsReplyFromSignals: vi.fn(() => ({
     needsReply: false,
     reason: null,
@@ -43,7 +43,7 @@ vi.mock("../email-priority.js", () => ({
   })),
   classifyPriority: vi.fn(() => "NORMAL"),
 }));
-vi.mock("../gmail.js", () => ({ markAsRead: vi.fn(() => Promise.resolve()) }));
+vi.mock("../mail/gmail.js", () => ({ markAsRead: vi.fn(() => Promise.resolve()) }));
 vi.mock("../judge/judge-context.js", () => ({
   buildJudgeContext: vi.fn(() => Promise.resolve({})),
 }));

@@ -5,7 +5,6 @@ import { runAllScenarios, summarizeEval } from "../agentcore/agent-eval.js";
 import { getUserId, requireAdmin } from "../auth.js";
 import { getUsageSummary } from "../billing/llm-usage.js";
 import { db, prisma } from "../db.js";
-import { sendBetaInviteEmail } from "../email.js";
 import type { CalibrationSnapshotPayload } from "../judge/calibration-snapshot.js";
 import { getDecisionMetrics } from "../judge/decision-metrics.js";
 import { getJudgeHealth } from "../judge/judge-health.js";
@@ -25,6 +24,7 @@ import {
 import { getTraitMetrics } from "../learning/sender-trait-metrics.js";
 import { clearFallbackState, getProviderCooldownInfo } from "../llm/model-fallback.js";
 import { MODEL } from "../llm/openai.js";
+import { sendBetaInviteEmail } from "../mail/email.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { getProviderChain } from "../providers/index.js";
 

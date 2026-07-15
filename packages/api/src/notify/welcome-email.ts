@@ -1,5 +1,5 @@
 import { prisma } from "../db.js";
-import { sendWelcomeEmail } from "../email.js";
+import { sendWelcomeEmail } from "../mail/email.js";
 import { captureError } from "../sentry.js";
 
 export interface WelcomeRecipient {

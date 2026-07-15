@@ -2,8 +2,11 @@ import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 
-vi.mock("../email.js", () => ({ sendVerificationEmail: vi.fn(), sendPasswordResetEmail: vi.fn() }));
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/email.js", () => ({
+  sendVerificationEmail: vi.fn(),
+  sendPasswordResetEmail: vi.fn(),
+}));
+vi.mock("../mail/gmail.js", () => ({
   getAuthUrl: vi.fn(),
   getLoginAuthUrl: vi.fn(),
   getGoogleUserInfo: vi.fn(),
@@ -18,7 +21,7 @@ vi.mock("../gmail.js", () => ({
   unarchiveEmail: vi.fn(async () => ({ success: true })),
   untrashEmail: vi.fn(async () => ({ success: true })),
 }));
-vi.mock("../email-sync.js", () => ({
+vi.mock("../mail/email-sync.js", () => ({
   syncEmails: vi.fn(async () => ({ synced: 0, newCount: 0, source: "gmail" })),
   syncEmailByGmailId: vi.fn(async () => ({
     synced: 1,
@@ -269,7 +272,7 @@ describe("email routes (demo mode)", () => {
   });
 
   it("force-sync returns immediately and runs reconcile in the background", async () => {
-    const emailSync = await import("../email-sync.js");
+    const emailSync = await import("../mail/email-sync.js");
     const app = await buildApp();
     vi.mocked(emailSync.reconcileEmails).mockClear();
     // A reconcile that never resolves. The route attaches its .catch
@@ -582,8 +585,8 @@ describe("email routes (demo mode)", () => {
   });
 
   it("restores an archived Gmail email and resyncs it locally", async () => {
-    const gmail = await import("../gmail.js");
-    const emailSync = await import("../email-sync.js");
+    const gmail = await import("../mail/gmail.js");
+    const emailSync = await import("../mail/email-sync.js");
     vi.mocked(gmail.unarchiveEmail).mockClear();
     vi.mocked(emailSync.syncEmailByGmailId).mockClear();
 
@@ -605,8 +608,8 @@ describe("email routes (demo mode)", () => {
   });
 
   it("restores a trashed Gmail email and resyncs it locally", async () => {
-    const gmail = await import("../gmail.js");
-    const emailSync = await import("../email-sync.js");
+    const gmail = await import("../mail/gmail.js");
+    const emailSync = await import("../mail/email-sync.js");
     vi.mocked(gmail.untrashEmail).mockClear();
     vi.mocked(emailSync.syncEmailByGmailId).mockClear();
 

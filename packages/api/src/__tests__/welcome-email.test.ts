@@ -35,8 +35,8 @@ vi.mock("../db.js", () => ({
 }));
 
 // Keep the real buildWelcomeEmail (pure, tested below); stub only the network send.
-vi.mock("../email.js", async (importActual) => {
-  const actual = await importActual<typeof import("../email.js")>();
+vi.mock("../mail/email.js", async (importActual) => {
+  const actual = await importActual<typeof import("../mail/email.js")>();
   return {
     ...actual,
     sendWelcomeEmail: vi.fn((email: string, name?: string | null) => {
@@ -49,7 +49,7 @@ vi.mock("../email.js", async (importActual) => {
 
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { buildWelcomeEmail, type FounderIdentity } from "../email.js";
+import { buildWelcomeEmail, type FounderIdentity } from "../mail/email.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import { captureError } from "../sentry.js";
 

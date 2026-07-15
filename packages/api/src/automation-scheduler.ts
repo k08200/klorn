@@ -23,7 +23,9 @@ import {
 } from "./config.js";
 import { prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
-import { syncRecentCandidateIntakes } from "./email-candidate-intake.js";
+import { parseGoogleDateTime } from "./google-calendar-time.js";
+import { findOpenEmailAttentionItemId } from "./judge/attention-override.js";
+import { syncRecentCandidateIntakes } from "./mail/email-candidate-intake.js";
 import {
   backfillEmailAttentionItems,
   checkAutoReplyRules,
@@ -32,10 +34,8 @@ import {
   reconcileLinkedInboxes,
   summarizeUnsummarizedEmails,
   syncEmails,
-} from "./email-sync.js";
-import { getAuthedClient, getLinkedInboxClients, renewExpiringGmailWatches } from "./gmail.js";
-import { parseGoogleDateTime } from "./google-calendar-time.js";
-import { findOpenEmailAttentionItemId } from "./judge/attention-override.js";
+} from "./mail/email-sync.js";
+import { getAuthedClient, getLinkedInboxClients, renewExpiringGmailWatches } from "./mail/gmail.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
 import { sendPushNotification } from "./notify/push.js";

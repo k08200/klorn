@@ -43,7 +43,7 @@ vi.mock("../db.js", () => ({
   },
 }));
 
-import { feedbackToFixture, listUserFeedbackFixtures } from "../email-feedback-fixtures.js";
+import { feedbackToFixture, listUserFeedbackFixtures } from "../mail/email-feedback-fixtures.js";
 
 const seedRow = (overrides: Partial<FeedbackRow> = {}): FeedbackRow => ({
   id: "fb-1",

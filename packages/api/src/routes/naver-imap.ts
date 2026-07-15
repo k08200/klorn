@@ -17,8 +17,8 @@ import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
-import { isAllowedImapHost } from "../is-allowed-imap-host.js";
-import { verifyNaverImapCredentials } from "../naver-imap.js";
+import { isAllowedImapHost } from "../mail/is-allowed-imap-host.js";
+import { verifyNaverImapCredentials } from "../mail/naver-imap.js";
 
 const DEFAULT_NAVER_IMAP_HOST = "imap.naver.com:993";
 

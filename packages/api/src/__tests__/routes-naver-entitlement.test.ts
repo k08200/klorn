@@ -33,8 +33,8 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 vi.mock("../crypto-tokens.js", () => ({ encryptToken: vi.fn(() => "cipher") }));
-vi.mock("../is-allowed-imap-host.js", () => ({ isAllowedImapHost: vi.fn(() => true) }));
-vi.mock("../naver-imap.js", () => ({
+vi.mock("../mail/is-allowed-imap-host.js", () => ({ isAllowedImapHost: vi.fn(() => true) }));
+vi.mock("../mail/naver-imap.js", () => ({
   verifyNaverImapCredentials: vi.fn(async () => ({ ok: true })),
 }));
 

@@ -11,10 +11,10 @@
  * once we move off free tier.
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
+import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
+import { captureError } from "../sentry.js";
 import { syncNaverImapForUser } from "./naver-imap.js";
-import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
-import { captureError } from "./sentry.js";
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let firstTickTimer: ReturnType<typeof setTimeout> | null = null;

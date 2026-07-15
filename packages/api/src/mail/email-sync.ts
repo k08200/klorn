@@ -9,9 +9,13 @@
  */
 
 import { type gmail_v1, google } from "googleapis";
-import { planHasFeature } from "./billing/stripe.js";
-import { MULTI_INBOX_SYNC_ENABLED } from "./config.js";
-import { prisma } from "./db.js";
+import { planHasFeature } from "../billing/stripe.js";
+import { MULTI_INBOX_SYNC_ENABLED } from "../config.js";
+import { prisma } from "../db.js";
+import { persistGmailEmail } from "../judge/email-firewall.js";
+import { resolveUserEmail } from "../resolve-user-email.js";
+import { Semaphore } from "../semaphore.js";
+import { captureError } from "../sentry.js";
 import { summarizeUnsummarizedEmails } from "./email-summarize.js";
 import {
   getAuthedClient,
@@ -29,10 +33,6 @@ import {
   fetchGmailHistory,
   type GmailRawEmail,
 } from "./gmail-fetch.js";
-import { persistGmailEmail } from "./judge/email-firewall.js";
-import { resolveUserEmail } from "./resolve-user-email.js";
-import { Semaphore } from "./semaphore.js";
-import { captureError } from "./sentry.js";
 
 // Reconcile refreshes read/star status with one messages.get per stored email.
 // Bound concurrency so a few-hundred-email mailbox doesn't serialize hundreds of
@@ -47,6 +47,8 @@ const RECONCILE_REFRESH_CAP = 500;
 // single huge NOT IN can never crash the reconcile.
 const INBOX_PARAM_CAP = 10000;
 
+// Persist + firewall (judge/push/backfill) moved to ./email-firewall.js (M3 step 6).
+export { backfillEmailAttentionItems, judgeAndMirrorEmail } from "../judge/email-firewall.js";
 // extractEmailAddress lives in ./email-address.js; re-export preserved here for
 // back-compat (judge-context and tests import it via ./email-sync.js).
 export { extractEmailAddress } from "./email-address.js";
@@ -66,8 +68,6 @@ export { checkAutoReplyRules, generateSmartReply } from "./email-reply.js";
 export { parseAiSummary, summarizeUnsummarizedEmails } from "./email-summarize.js";
 // Thread grouping moved to ./email-threads.js (M3 step 3).
 export { type EmailThread, getEmailThreads } from "./email-threads.js";
-// Persist + firewall (judge/push/backfill) moved to ./email-firewall.js (M3 step 6).
-export { backfillEmailAttentionItems, judgeAndMirrorEmail } from "./judge/email-firewall.js";
 
 // ─── Gmail → DB Sync ──────────────────────────────────────────────────────
 

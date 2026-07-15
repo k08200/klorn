@@ -11,6 +11,9 @@
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
+import { recordFeedback as recordLedgerFeedback } from "../learning/feedback.js";
+import { getUserLlmCredentials } from "../llm/llm-credentials.js";
+import { createVisionCompletion, VISION_MODEL } from "../llm/openai.js";
 import {
   analyzeEmailAttachmentsForEmail,
   analyzePendingEmailAttachments,
@@ -18,28 +21,25 @@ import {
   buildAttachmentCorrectionGuidance,
   type EmailAttachmentView,
   listEmailAttachments,
-} from "../email-attachments.js";
+} from "../mail/email-attachments.js";
 import {
   syncCandidateIntakeForEmail,
   syncRecentCandidateIntakes,
-} from "../email-candidate-intake.js";
-import { saveConversionResult } from "../file-conversion-store.js";
+} from "../mail/email-candidate-intake.js";
+import { saveConversionResult } from "../mail/file-conversion-store.js";
 import {
   convertEmailAttachment,
   FileConversionError,
   normalizeConversionTarget,
   requiresOriginalAttachment,
   SUPPORTED_CONVERSION_TARGETS,
-} from "../file-conversions.js";
-import { resolveMailClient } from "../gmail.js";
-import { recordFeedback as recordLedgerFeedback } from "../learning/feedback.js";
-import { getUserLlmCredentials } from "../llm/llm-credentials.js";
-import { createVisionCompletion, VISION_MODEL } from "../llm/openai.js";
+} from "../mail/file-conversions.js";
+import { resolveMailClient } from "../mail/gmail.js";
 import {
   isDecorativeImage,
   isVisionAttachment,
   MAX_VISION_ATTACHMENT_BYTES,
-} from "../vision-attachment-policy.js";
+} from "../mail/vision-attachment-policy.js";
 import { parseJsonArray, parseJsonRecord, safeAttachmentFilename } from "./email.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────

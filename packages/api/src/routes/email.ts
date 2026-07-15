@@ -13,34 +13,34 @@ import { requireAppAccess } from "../billing/entitlement-guard.js";
 import { planHasFeature } from "../billing/stripe.js";
 import { MULTI_INBOX_SYNC_ENABLED } from "../config.js";
 import { prisma } from "../db.js";
-import {
-  analyzePendingEmailAttachments,
-  buildAttachmentCandidateProfile,
-  listCandidateProfilesByEmail,
-  listEmailAttachments,
-  summarizeEmailAttachmentsByEmail,
-} from "../email-attachments.js";
-import {
-  listCandidateIntakesByEmail,
-  syncCandidateIntakeForEmail,
-  syncRecentCandidateIntakes,
-} from "../email-candidate-intake.js";
-import type { FeedbackRecord } from "../email-label-feedback.js";
-import {
-  getEmailThreads,
-  reconcileEmails,
-  summarizeUnsummarizedEmails,
-  syncEmails,
-  syncLinkedInboxesForUser,
-} from "../email-sync.js";
-import { htmlToPlainText } from "../email-text.js";
-import { getLinkedInboxClients, toggleReadGmail } from "../gmail.js";
 import { getCachedInteractionNode } from "../learning/interaction-graph.js";
 import {
   getTrustScore,
   getTrustScoresBulk,
   type TrustScoreResult,
 } from "../learning/trust-score.js";
+import {
+  analyzePendingEmailAttachments,
+  buildAttachmentCandidateProfile,
+  listCandidateProfilesByEmail,
+  listEmailAttachments,
+  summarizeEmailAttachmentsByEmail,
+} from "../mail/email-attachments.js";
+import {
+  listCandidateIntakesByEmail,
+  syncCandidateIntakeForEmail,
+  syncRecentCandidateIntakes,
+} from "../mail/email-candidate-intake.js";
+import type { FeedbackRecord } from "../mail/email-label-feedback.js";
+import {
+  getEmailThreads,
+  reconcileEmails,
+  summarizeUnsummarizedEmails,
+  syncEmails,
+  syncLinkedInboxesForUser,
+} from "../mail/email-sync.js";
+import { htmlToPlainText } from "../mail/email-text.js";
+import { getLinkedInboxClients, toggleReadGmail } from "../mail/gmail.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { createTask } from "../pim/tasks.js";
 import { captureError } from "../sentry.js";

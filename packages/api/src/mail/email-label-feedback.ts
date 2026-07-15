@@ -9,7 +9,7 @@
  * exact inputs that fooled the heuristic.
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 import { classifyPriorityDetailed } from "./email-sync.js";
 
 export type EmailPriorityValue = "URGENT" | "NORMAL" | "LOW";

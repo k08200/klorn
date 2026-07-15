@@ -40,7 +40,7 @@ vi.mock("../agentcore/agent-email-context-filter.js", () => ({
   buildAgentEmailWhere: vi.fn(() => ({})),
 }));
 
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/gmail.js", () => ({
   isNoReplyAddress: vi.fn(() => false),
 }));
 

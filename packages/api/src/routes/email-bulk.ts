@@ -12,8 +12,8 @@ import type { EmailMessage } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
-import type { EmailPriorityValue } from "../email-label-feedback.js";
-import { archiveEmail, toggleReadGmail } from "../gmail.js";
+import type { EmailPriorityValue } from "../mail/email-label-feedback.js";
+import { archiveEmail, toggleReadGmail } from "../mail/gmail.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 

@@ -31,7 +31,7 @@
 
 import { AGENT_MAX_CONTEXT_ITEMS } from "../config.js";
 import { db, prisma } from "../db.js";
-import { isNoReplyAddress } from "../gmail.js";
+import { isNoReplyAddress } from "../mail/gmail.js";
 import { captureError } from "../sentry.js";
 import { offsetStringFor } from "../time-zone.js";
 import { wrapUntrusted } from "../untrusted.js";

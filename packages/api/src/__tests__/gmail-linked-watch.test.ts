@@ -73,7 +73,7 @@ describe("renewExpiringGmailWatches — linked inboxes", () => {
       expiresAt: null,
     });
     vi.resetModules();
-    const { renewExpiringGmailWatches } = await import("../gmail.js");
+    const { renewExpiringGmailWatches } = await import("../mail/gmail.js");
     const result = await renewExpiringGmailWatches();
 
     expect(m.linkedFindMany).toHaveBeenCalled(); // the landmine fix: linked queried
@@ -87,7 +87,7 @@ describe("renewExpiringGmailWatches — linked inboxes", () => {
     process.env.GMAIL_PUBSUB_TOPIC = "projects/p/topics/t";
     m.userTokenFindMany.mockResolvedValue([]);
     vi.resetModules();
-    const { renewExpiringGmailWatches } = await import("../gmail.js");
+    const { renewExpiringGmailWatches } = await import("../mail/gmail.js");
     await renewExpiringGmailWatches();
     expect(m.linkedFindMany).not.toHaveBeenCalled();
     expect(m.watch).not.toHaveBeenCalled();
@@ -99,7 +99,7 @@ describe("renewExpiringGmailWatches — linked inboxes", () => {
     m.userTokenFindMany.mockResolvedValue([]);
     m.linkedFindMany.mockResolvedValue([]);
     vi.resetModules();
-    const { renewExpiringGmailWatches } = await import("../gmail.js");
+    const { renewExpiringGmailWatches } = await import("../mail/gmail.js");
     await renewExpiringGmailWatches();
 
     // The renewal query must exclude reconnect-flagged inboxes — otherwise a
@@ -125,7 +125,7 @@ describe("renewExpiringGmailWatches — linked inboxes", () => {
     });
     m.watch.mockRejectedValueOnce({ response: { status: 401 } });
     vi.resetModules();
-    const { renewExpiringGmailWatches } = await import("../gmail.js");
+    const { renewExpiringGmailWatches } = await import("../mail/gmail.js");
     const result = await renewExpiringGmailWatches();
 
     // A 401 on renewal durably flags the inbox (so the UI prompts a re-link and

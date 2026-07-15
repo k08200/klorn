@@ -22,19 +22,19 @@
  * calls syncGitHubForUser lives in github-scheduler.ts.
  */
 
-import { decryptToken } from "./crypto-tokens.js";
-import { prisma } from "./db.js";
-import { fetchGitHubNotifications } from "./github-client.js";
-import { pushForFirewallGitHubNotification } from "./github-push.js";
+import { decryptToken } from "../crypto-tokens.js";
+import { prisma } from "../db.js";
 import {
   type EmailJudgementLike,
   type GitHubNotificationLike,
   upsertAttentionForGitHubNotification,
-} from "./judge/attention-mirror.js";
-import type { ClassifiableEmail } from "./judge/email-classifier.js";
-import { judgeEmail } from "./judge/poc-judge.js";
-import { getUserLlmCredentials } from "./llm/llm-credentials.js";
-import { captureError } from "./sentry.js";
+} from "../judge/attention-mirror.js";
+import type { ClassifiableEmail } from "../judge/email-classifier.js";
+import { judgeEmail } from "../judge/poc-judge.js";
+import { getUserLlmCredentials } from "../llm/llm-credentials.js";
+import { captureError } from "../sentry.js";
+import { fetchGitHubNotifications } from "./github-client.js";
+import { pushForFirewallGitHubNotification } from "./github-push.js";
 
 /** A GitHub notification thread, normalized from the Notifications API. */
 export interface GitHubNotification {

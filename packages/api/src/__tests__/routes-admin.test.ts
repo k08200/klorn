@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 
 const sendBetaInviteEmailSpy = vi.fn(async () => true);
-vi.mock("../email.js", () => ({
+vi.mock("../mail/email.js", () => ({
   sendVerificationEmail: vi.fn(),
   sendPasswordResetEmail: vi.fn(),
   sendBetaInviteEmail: (...args: unknown[]) => sendBetaInviteEmailSpy(...args),
@@ -17,7 +17,7 @@ type StoredWaitlist = {
   approvedAt: Date | null;
 };
 const waitlistById = new Map<string, StoredWaitlist>();
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/gmail.js", () => ({
   getAuthUrl: vi.fn(),
   getLoginAuthUrl: vi.fn(),
   getAuthedClient: vi.fn(),

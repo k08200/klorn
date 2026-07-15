@@ -12,7 +12,8 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
-import { syncEmailByGmailId } from "../email-sync.js";
+import { recordContactEngagement } from "../learning/contact-engagement.js";
+import { syncEmailByGmailId } from "../mail/email-sync.js";
 import {
   archiveEmail,
   type GmailDraftAttachment,
@@ -22,8 +23,7 @@ import {
   trashEmail,
   unarchiveEmail,
   untrashEmail,
-} from "../gmail.js";
-import { recordContactEngagement } from "../learning/contact-engagement.js";
+} from "../mail/gmail.js";
 import { captureError } from "../sentry.js";
 import { safeAttachmentFilename } from "./email.js";
 

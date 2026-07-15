@@ -24,7 +24,7 @@ vi.mock("googleapis", () => ({
     gmail: vi.fn(() => ({ users: { messages: { list: m.listMock, get: m.getMock } } })),
   },
 }));
-vi.mock("../gmail.js", () => ({
+vi.mock("../mail/gmail.js", () => ({
   getAuthedClient: vi.fn(async () => ({})),
   getLinkedInboxClients: m.getLinkedInboxClients,
   isGoogleAuthError: m.isGoogleAuthError,
@@ -35,7 +35,10 @@ vi.mock("../gmail.js", () => ({
 vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
 // Stub heavy import chains pulled in by email-sync.ts but unused by reconcileEmails.
 vi.mock("../judge/email-firewall.js", () => ({ persistGmailEmail: vi.fn() }));
-vi.mock("../gmail-fetch.js", () => ({ fetchGmailEmails: vi.fn(), fetchGmailEmailById: vi.fn() }));
+vi.mock("../mail/gmail-fetch.js", () => ({
+  fetchGmailEmails: vi.fn(),
+  fetchGmailEmailById: vi.fn(),
+}));
 vi.mock("../resolve-user-email.js", () => ({ resolveUserEmail: vi.fn() }));
 vi.mock("../db.js", () => ({
   prisma: {
@@ -44,7 +47,7 @@ vi.mock("../db.js", () => ({
   },
 }));
 
-import { reconcileEmails, reconcileLinkedInboxes } from "../email-sync.js";
+import { reconcileEmails, reconcileLinkedInboxes } from "../mail/email-sync.js";
 
 function inboxListing(ids: string[]) {
   return { data: { messages: ids.map((id) => ({ id })), nextPageToken: undefined } };
