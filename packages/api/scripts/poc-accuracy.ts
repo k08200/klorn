@@ -11,19 +11,42 @@
  *   DATABASE_URL=... OPENROUTER_API_KEY=... npx tsx scripts/poc-accuracy.ts \
  *     --in=./poc-ground-truth.json
  *
+ * Context (#650 — the eval runs the judge's real context-consumption path):
+ *   --context=fixture (default)  per-item `context` fixtures from the JSON
+ *                                (items without one get the empty context,
+ *                                byte-identical to the pre-#650 eval)
+ *   --context=empty              force the empty context (A/B baseline)
+ *   --context=db --user=<email>  assemble each item's context through the
+ *                                PRODUCTION buildJudgeContext against a real
+ *                                DB — the instrument for measuring context
+ *                                flags (LEARNED_RULES_IN_JUDGE etc.) offline
+ *
+ * Gating floors (#650): --gate-floor=auto-recall=0.5,push-recall=0.95
+ * promotes/tightens per-tier floors (ratchet: committed gates only tighten).
+ *
  * The script does not persist anything. It only reads the JSON and calls
  * the LLM via poc-judge.ts.
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import type { ClassifiableEmail } from "../src/email-classifier.js";
+import { fixtureToJudgeContext } from "../src/eval-context.js";
 import {
   computePerTierMetrics,
   diffTierMetrics,
   evaluateTierFloors,
+  type FloorOverrides,
+  parseGateFloorOverrides,
   type TierMetric,
 } from "../src/eval-floors.js";
-import { judgeEmails, POC_TIERS, type PocJudgement, type PocTier } from "../src/poc-judge.js";
+import {
+  type JudgeContext,
+  judgeEmails,
+  POC_TIERS,
+  type PocJudgement,
+  type PocTier,
+} from "../src/poc-judge.js";
 import { TIERS, type Tier } from "../src/tiers.js";
 
 interface GroundTruthItem {
@@ -43,12 +66,22 @@ interface GroundTruthItem {
   receivedAt: string;
   label: null | PocTier;
   note?: string;
+  /**
+   * Optional per-item JudgeContext fixture (#650) — corrections, senderPrior,
+   * senderFacts, senderTraits, learnedRules — fed to the judge in
+   * --context=fixture mode so the context-consumption path is exercised
+   * deterministically. Validated strictly (eval-context.ts): a typo'd fixture
+   * fails the run instead of silently degrading to the empty context.
+   */
+  context?: unknown;
 }
 
 interface GroundTruthFile {
   metadata: { userEmail: string; extractedAt: string; count: number };
   items: GroundTruthItem[];
 }
+
+type ContextMode = "empty" | "fixture" | "db";
 
 interface CliArgs {
   in: string;
@@ -57,6 +90,12 @@ interface CliArgs {
   delayMs: number;
   /** Run the set twice (JUDGE_INCLUDE_BODY off then on) and print the delta. */
   compareBody: boolean;
+  /** Where each item's JudgeContext comes from (#650). */
+  contextMode: ContextMode;
+  /** Account email for --context=db (resolved to a userId against the DB). */
+  user?: string;
+  /** Per-tier gating floor overrides (#650), e.g. auto-recall=0.5. */
+  gateFloors: FloorOverrides;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -84,12 +123,23 @@ function parseArgs(argv: string[]): CliArgs {
   if (!Number.isFinite(delayMs) || delayMs < 0 || delayMs > 60000) {
     throw new Error("--delay must be 0–60000 (ms)");
   }
+  const contextMode = (map.get("context") ?? "fixture") as ContextMode;
+  if (!["empty", "fixture", "db"].includes(contextMode)) {
+    throw new Error("--context must be empty, fixture, or db");
+  }
+  const user = map.get("user");
+  if (contextMode === "db" && !user) {
+    throw new Error("--context=db requires --user=<account email>");
+  }
   return {
     in: input,
     out: map.get("out"),
     concurrency,
     delayMs,
     compareBody: flags.has("compare-body"),
+    contextMode,
+    user,
+    gateFloors: map.has("gate-floor") ? parseGateFloorOverrides(map.get("gate-floor") ?? "") : {},
   };
 }
 
@@ -267,8 +317,45 @@ function loadLabelledSet(inArg: string): LoadedSet {
   return { file, labelled, skipped, inPath };
 }
 
+type ContextFor = (email: ClassifiableEmail, index: number) => JudgeContext | Promise<JudgeContext>;
+
+/**
+ * Build the per-item context source for the run (#650).
+ *  - empty:   undefined → judgeEmail's EMPTY_JUDGE_CONTEXT default (baseline)
+ *  - fixture: strict per-item fixtures from the eval JSON (DB-free, CI-safe)
+ *  - db:      the PRODUCTION buildJudgeContext against a real DB — imported
+ *             lazily so the CI path never touches the Prisma client's env.
+ */
+async function resolveContextFor(
+  labelled: LabelledItem[],
+  args: CliArgs,
+): Promise<ContextFor | undefined> {
+  if (args.contextMode === "empty") return undefined;
+  if (args.contextMode === "fixture") {
+    return (_email, index) => fixtureToJudgeContext(labelled[index].context, labelled[index].id);
+  }
+  const [{ buildJudgeContext }, { prisma }] = await Promise.all([
+    import("../src/judge-context.js"),
+    import("../src/db.js"),
+  ]);
+  const account = await prisma.user.findUnique({
+    where: { email: args.user },
+    select: { id: true },
+  });
+  if (!account) throw new Error(`--context=db: no user found for email=${args.user}`);
+  return (_email, index) =>
+    buildJudgeContext(account.id, {
+      from: labelled[index].from,
+      subject: labelled[index].subject,
+    });
+}
+
 /** Run the judge over the labelled set and pair predictions with truth. */
-async function runJudge(labelled: LabelledItem[], args: CliArgs): Promise<Row[]> {
+async function runJudge(
+  labelled: LabelledItem[],
+  args: CliArgs,
+  contextFor: ContextFor | undefined,
+): Promise<Row[]> {
   const judgements = await judgeEmails(
     labelled.map((i) => ({
       id: i.id,
@@ -278,7 +365,7 @@ async function runJudge(labelled: LabelledItem[], args: CliArgs): Promise<Row[]>
       body: i.body ?? null,
       labels: i.labels,
     })),
-    { concurrency: args.concurrency, interCallDelayMs: args.delayMs },
+    { concurrency: args.concurrency, interCallDelayMs: args.delayMs, contextFor },
   );
   return labelled.map((item, i) => {
     const j = judgements[i];
@@ -306,7 +393,11 @@ function tierPairs(rows: Row[]): Array<{ truth: Tier; predicted: Tier }> {
  * per-tier metric tables and a DELTA table. Requires a provider key — skips
  * cleanly (exit 0) when none is present, mirroring eval.yml.
  */
-async function runBodyComparison(loaded: LoadedSet, args: CliArgs): Promise<void> {
+async function runBodyComparison(
+  loaded: LoadedSet,
+  args: CliArgs,
+  contextFor: ContextFor | undefined,
+): Promise<void> {
   if (!hasProviderKey()) {
     console.log(
       "\nno provider key — comparison skipped. Set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL to run the body off-vs-on eval.",
@@ -318,13 +409,15 @@ async function runBodyComparison(loaded: LoadedSet, args: CliArgs): Promise<void
   console.log(
     `\nBody off-vs-on comparison over ${labelled.length} labelled item(s) from ${inPath}`,
   );
-  console.log(`concurrency=${args.concurrency}, delay=${args.delayMs}ms per run`);
+  console.log(
+    `concurrency=${args.concurrency}, delay=${args.delayMs}ms per run, context=${args.contextMode}`,
+  );
 
   const priorBodyFlag = process.env.JUDGE_INCLUDE_BODY;
   try {
     console.log("\n--- RUN 1/2: JUDGE_INCLUDE_BODY off (judge blind to body) ---");
     process.env.JUDGE_INCLUDE_BODY = "false";
-    const offRows = await runJudge(labelled, args);
+    const offRows = await runJudge(labelled, args, contextFor);
     const offMetrics = computePerTierMetrics(tierPairs(offRows));
     const offAccuracy = offRows.filter((r) => r.truth === r.predicted).length / offRows.length;
     printPerTierMetrics(offMetrics);
@@ -332,7 +425,7 @@ async function runBodyComparison(loaded: LoadedSet, args: CliArgs): Promise<void
 
     console.log("\n--- RUN 2/2: JUDGE_INCLUDE_BODY on (body fed to judge) ---");
     process.env.JUDGE_INCLUDE_BODY = "true";
-    const onRows = await runJudge(labelled, args);
+    const onRows = await runJudge(labelled, args, contextFor);
     const onMetrics = computePerTierMetrics(tierPairs(onRows));
     const onAccuracy = onRows.filter((r) => r.truth === r.predicted).length / onRows.length;
     printPerTierMetrics(onMetrics);
@@ -350,15 +443,19 @@ async function runBodyComparison(loaded: LoadedSet, args: CliArgs): Promise<void
   }
 }
 
-async function runSingle(loaded: LoadedSet, args: CliArgs): Promise<void> {
+async function runSingle(
+  loaded: LoadedSet,
+  args: CliArgs,
+  contextFor: ContextFor | undefined,
+): Promise<void> {
   const { file, labelled, skipped } = loaded;
 
   console.log(`Loaded ${file.items.length} item(s) from ${loaded.inPath}`);
   console.log(`  ${labelled.length} labelled, ${skipped} skipped (label: null)`);
-  console.log(`Running judge with concurrency=${args.concurrency}...`);
+  console.log(`Running judge with concurrency=${args.concurrency}, context=${args.contextMode}...`);
 
   const startedAt = Date.now();
-  const rows = await runJudge(labelled, args);
+  const rows = await runJudge(labelled, args, contextFor);
   const elapsedMs = Date.now() - startedAt;
 
   const right = rows.filter((r) => r.truth === r.predicted).length;
@@ -368,7 +465,10 @@ async function runSingle(loaded: LoadedSet, args: CliArgs): Promise<void> {
   // Per-tier floors on top of the overall bar — asymmetric failure costs:
   // a missed PUSH is the worst failure, a real mail buried in SILENT is
   // second. See src/eval-floors.ts for the floor rationale.
-  const floors = evaluateTierFloors(rows.map((r) => ({ truth: r.truth, predicted: r.predicted })));
+  const floors = evaluateTierFloors(
+    rows.map((r) => ({ truth: r.truth, predicted: r.predicted })),
+    args.gateFloors,
+  );
   const passed = floors.pass;
 
   console.log(`\nOverall accuracy: ${right}/${rows.length} = ${accuracyPct}%`);
@@ -419,6 +519,8 @@ async function runSingle(loaded: LoadedSet, args: CliArgs): Promise<void> {
             accuracyPct,
             passed,
             floorChecks: floors.checks,
+            contextMode: args.contextMode,
+            gateFloorOverrides: args.gateFloors,
             labelledCount: labelled.length,
             skippedCount: skipped,
           },
@@ -438,11 +540,21 @@ async function runSingle(loaded: LoadedSet, args: CliArgs): Promise<void> {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const loaded = loadLabelledSet(args.in);
-  if (args.compareBody) {
-    await runBodyComparison(loaded, args);
-    return;
+  const contextFor = await resolveContextFor(loaded.labelled, args);
+  try {
+    if (args.compareBody) {
+      await runBodyComparison(loaded, args, contextFor);
+      return;
+    }
+    await runSingle(loaded, args, contextFor);
+  } finally {
+    // db mode keeps a Prisma pool open, which would hold the event loop
+    // hostage after a successful run — disconnect so the script can exit.
+    if (args.contextMode === "db") {
+      const { prisma } = await import("../src/db.js");
+      await prisma.$disconnect();
+    }
   }
-  await runSingle(loaded, args);
 }
 
 main().catch((err) => {

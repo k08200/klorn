@@ -83,3 +83,29 @@ human-reviewed step, not automation:
 
 Keep the deterministic floor + safety invariants identical; only the data set
 changes.
+
+## Context modes (#650 — eval runs the judge's real context path)
+
+`poc-accuracy.ts` used to judge every item with `EMPTY_JUDGE_CONTEXT`, so the
+context flags (`LEARNED_RULES_IN_JUDGE`, `CONTACT_ENGAGEMENT_IN_JUDGE`,
+`SENDER_TRAITS_IN_JUDGE`) were structurally invisible to the eval — an ON/OFF
+A/B was a no-op by construction. Three modes close that hole:
+
+| Mode | Flag | What feeds the judge |
+| --- | --- | --- |
+| `fixture` (default) | `--context=fixture` | per-item `context` fixtures from the eval JSON (strictly validated — a typo fails the run); items without one get the empty context, byte-identical to the old eval |
+| `empty` | `--context=empty` | forces the empty context — the A/B baseline |
+| `db` | `--context=db --user=<email>` | the **production** `buildJudgeContext` against a real `DATABASE_URL` — the offline instrument for measuring a context flag on a real account before flipping it in prod |
+
+A fixture may carry `corrections`, `senderPrior`, `senderFacts`,
+`senderTraits`, and `learnedRules` (see `src/eval-context.ts` for the exact
+shapes). The CI gate runs with `JUDGE_INCLUDE_BODY=true` to match prod (#653);
+this is inert on the committed set until items carry `body` fields (#648).
+
+## Per-tier gating floors
+
+`--gate-floor=auto-recall=0.5,push-recall=0.95` promotes a report-only tier to
+a gating check and/or tightens a committed floor. Floors are ratchets: a
+default-gating floor (overall, push-recall, silent-precision) can only be set
+at or above its committed value; report-only tiers (queue-recall, auto-recall)
+may gate at any floor once a stable baseline exists.

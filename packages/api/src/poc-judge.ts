@@ -716,7 +716,17 @@ export async function judgeEmail(
  */
 export async function judgeEmails(
   emails: ClassifiableEmail[],
-  options: { userId?: string; concurrency?: number; interCallDelayMs?: number } = {},
+  options: {
+    userId?: string;
+    concurrency?: number;
+    interCallDelayMs?: number;
+    /**
+     * Per-item JudgeContext for the offline eval (#650) — lets the accuracy
+     * script feed the judge the same context shape prod assembles via
+     * judge-context.ts. Absent → EMPTY_JUDGE_CONTEXT, exactly as before.
+     */
+    contextFor?: (email: ClassifiableEmail, index: number) => JudgeContext | Promise<JudgeContext>;
+  } = {},
 ): Promise<PocJudgement[]> {
   const concurrency = Math.max(1, options.concurrency ?? 4);
   const delayMs = Math.max(0, options.interCallDelayMs ?? 0);
@@ -727,7 +737,8 @@ export async function judgeEmails(
     while (true) {
       const i = cursor++;
       if (i >= emails.length) return;
-      results[i] = await judgeEmail(emails[i], options.userId);
+      const context = options.contextFor ? await options.contextFor(emails[i], i) : undefined;
+      results[i] = await judgeEmail(emails[i], options.userId, context);
       // Throttle for free-tier RPM caps. Only sleep when there's more
       // work in the queue — saves the final wait at the end of the run.
       if (delayMs > 0 && cursor < emails.length) {

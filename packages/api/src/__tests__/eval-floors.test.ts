@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { evaluateTierFloors, type TierPair } from "../eval-floors.js";
+import { evaluateTierFloors, parseGateFloorOverrides, type TierPair } from "../eval-floors.js";
 
 function pairs(spec: Array<[truth: string, predicted: string, count: number]>): TierPair[] {
   const out: TierPair[] = [];
@@ -142,5 +142,73 @@ describe("evaluateTierFloors", () => {
     // No data must never green-light a gate.
     const empty = evaluateTierFloors([]);
     expect(empty.pass).toBe(false);
+  });
+});
+
+describe("evaluateTierFloors overrides (#650 — configurable per-tier gating)", () => {
+  it("promotes a report-only check to gating at the given floor", () => {
+    // 3/4 AUTO caught (0.75): passes a 0.5 floor, fails a 0.8 one.
+    const data = pairs([
+      ["AUTO", "AUTO", 3],
+      ["AUTO", "QUEUE", 1],
+      ["QUEUE", "QUEUE", 46],
+    ]);
+
+    const promoted = evaluateTierFloors(data, { "auto-recall": 0.5 });
+    const auto = check(promoted, "AUTO recall");
+    expect(auto.gating).toBe(true);
+    expect(auto.floor).toBe(0.5);
+    expect(promoted.pass).toBe(true);
+
+    const strict = evaluateTierFloors(data, { "auto-recall": 0.8 });
+    expect(check(strict, "AUTO recall").pass).toBe(false);
+    expect(strict.pass).toBe(false);
+  });
+
+  it("tightens an already-gating floor", () => {
+    // 12/13 PUSH (0.923): passes the default 0.90, fails a 0.95 override.
+    const data = pairs([
+      ["PUSH", "PUSH", 12],
+      ["PUSH", "QUEUE", 1],
+      ["QUEUE", "QUEUE", 37],
+    ]);
+    expect(evaluateTierFloors(data).pass).toBe(true);
+    const tightened = evaluateTierFloors(data, { "push-recall": 0.95 });
+    expect(check(tightened, "PUSH recall").pass).toBe(false);
+    expect(tightened.pass).toBe(false);
+  });
+
+  it("leaves untouched checks at their defaults", () => {
+    const report = evaluateTierFloors(pairs([["QUEUE", "QUEUE", 50]]), { "auto-recall": 0.5 });
+    expect(check(report, "PUSH recall").floor).toBe(0.9);
+    expect(check(report, "QUEUE recall").gating).toBe(false);
+  });
+});
+
+describe("parseGateFloorOverrides", () => {
+  it("parses a comma-separated list", () => {
+    expect(parseGateFloorOverrides("auto-recall=0.5,push-recall=0.95")).toEqual({
+      "auto-recall": 0.5,
+      "push-recall": 0.95,
+    });
+  });
+
+  it("rejects unknown check ids", () => {
+    expect(() => parseGateFloorOverrides("spam-recall=0.5")).toThrow(/spam-recall/);
+  });
+
+  it("rejects values outside [0, 1] and malformed tokens", () => {
+    expect(() => parseGateFloorOverrides("auto-recall=1.5")).toThrow(/auto-recall/);
+    expect(() => parseGateFloorOverrides("auto-recall")).toThrow(/auto-recall/);
+    expect(() => parseGateFloorOverrides("auto-recall=high")).toThrow(/auto-recall/);
+  });
+
+  it("enforces the ratchet: a default-gating floor can only tighten", () => {
+    expect(() => parseGateFloorOverrides("push-recall=0.5")).toThrow(/ratchet/i);
+    expect(() => parseGateFloorOverrides("overall=0.7")).toThrow(/ratchet/i);
+    // Equal to the default is allowed (no-op), and report-only checks may
+    // gate at any floor — they had no committed floor to lower.
+    expect(parseGateFloorOverrides("push-recall=0.9")).toEqual({ "push-recall": 0.9 });
+    expect(parseGateFloorOverrides("queue-recall=0.1")).toEqual({ "queue-recall": 0.1 });
   });
 });

@@ -35,6 +35,10 @@ jobs:
       # poc-accuracy never queries the DB, but the Prisma client is
       # constructed at import time and needs a syntactically valid URL.
       DATABASE_URL: "postgresql://eval:eval@localhost:5432/eval"
+      # Match prod's flag state (#653 flipped body ON): the gate measures the
+      # judge as deployed. Inert on the committed 50-item set (no `body`
+      # fields) until the body-bearing eval set (#648) lands — see #650.
+      JUDGE_INCLUDE_BODY: "true"
     steps:
       - name: Check for provider key
         id: key

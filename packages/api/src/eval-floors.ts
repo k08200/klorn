@@ -53,11 +53,70 @@ export const SILENT_PRECISION_FLOOR = 0.9;
 export const QUEUE_RECALL_TARGET = 0.8;
 export const AUTO_RECALL_TARGET = 0.5;
 
+/**
+ * Configurable per-tier gating (#650). Each check has a stable id; an
+ * override sets its floor AND makes it gating. The parser enforces the
+ * ratchet doctrine: a default-gating floor may only tighten (≥ default) —
+ * report-only checks may be promoted at any floor, since they had no
+ * committed floor to lower.
+ */
+export const FLOOR_CHECK_IDS = [
+  "overall",
+  "push-recall",
+  "silent-precision",
+  "queue-recall",
+  "auto-recall",
+] as const;
+export type FloorCheckId = (typeof FLOOR_CHECK_IDS)[number];
+export type FloorOverrides = Partial<Record<FloorCheckId, number>>;
+
+const DEFAULT_FLOORS: Record<FloorCheckId, { floor: number; gating: boolean }> = {
+  overall: { floor: OVERALL_ACCURACY_FLOOR, gating: true },
+  "push-recall": { floor: PUSH_RECALL_FLOOR, gating: true },
+  "silent-precision": { floor: SILENT_PRECISION_FLOOR, gating: true },
+  "queue-recall": { floor: QUEUE_RECALL_TARGET, gating: false },
+  "auto-recall": { floor: AUTO_RECALL_TARGET, gating: false },
+};
+
+/** Parse "auto-recall=0.5,push-recall=0.95" into overrides. Throws on typos. */
+export function parseGateFloorOverrides(raw: string): FloorOverrides {
+  const overrides: FloorOverrides = {};
+  for (const token of raw.split(",")) {
+    const m = token.trim().match(/^([\w-]+)=([\d.]+)$/);
+    if (!m || !(FLOOR_CHECK_IDS as readonly string[]).includes(m[1])) {
+      throw new Error(
+        `invalid gate-floor "${token.trim()}" — expected <check>=<0..1> with check one of ${FLOOR_CHECK_IDS.join(", ")}`,
+      );
+    }
+    const id = m[1] as FloorCheckId;
+    const value = Number(m[2]);
+    if (!Number.isFinite(value) || value < 0 || value > 1) {
+      throw new Error(`gate-floor ${id} must be within [0, 1], got "${m[2]}"`);
+    }
+    const dflt = DEFAULT_FLOORS[id];
+    if (dflt.gating && value < dflt.floor) {
+      throw new Error(
+        `gate-floor ${id}=${value} is below the committed default ${dflt.floor} — floors are ratchets, they only tighten`,
+      );
+    }
+    overrides[id] = value;
+  }
+  return overrides;
+}
+
+function resolveFloor(
+  id: FloorCheckId,
+  overrides: FloorOverrides,
+): { floor: number; gating: boolean } {
+  const override = overrides[id];
+  return override === undefined ? DEFAULT_FLOORS[id] : { floor: override, gating: true };
+}
+
 function ratio(numerator: number, denominator: number): number {
   return denominator === 0 ? 1 : numerator / denominator;
 }
 
-export function evaluateTierFloors(pairs: TierPair[]): FloorReport {
+export function evaluateTierFloors(pairs: TierPair[], overrides: FloorOverrides = {}): FloorReport {
   const valid = pairs.filter((p) => TIERS.includes(p.truth) && TIERS.includes(p.predicted));
   const total = valid.length;
   const correct = valid.filter((p) => p.truth === p.predicted).length;
@@ -82,21 +141,27 @@ export function evaluateTierFloors(pairs: TierPair[]): FloorReport {
   const autoHit = autoTruth.filter((p) => p.predicted === "AUTO").length;
   const autoRecall = ratio(autoHit, autoTruth.length);
 
+  const overallFloor = resolveFloor("overall", overrides);
+  const pushFloor = resolveFloor("push-recall", overrides);
+  const silentFloor = resolveFloor("silent-precision", overrides);
+  const queueFloor = resolveFloor("queue-recall", overrides);
+  const autoFloor = resolveFloor("auto-recall", overrides);
+
   const checks: FloorCheck[] = [
     {
       name: "overall accuracy",
       value: overall,
-      floor: OVERALL_ACCURACY_FLOOR,
-      pass: overall >= OVERALL_ACCURACY_FLOOR,
-      gating: true,
+      floor: overallFloor.floor,
+      pass: overall >= overallFloor.floor,
+      gating: overallFloor.gating,
       detail: `${correct}/${total}`,
     },
     {
       name: "PUSH recall",
       value: pushRecall,
-      floor: PUSH_RECALL_FLOOR,
-      pass: pushRecall >= PUSH_RECALL_FLOOR,
-      gating: true,
+      floor: pushFloor.floor,
+      pass: pushRecall >= pushFloor.floor,
+      gating: pushFloor.gating,
       detail:
         pushTruth.length === 0
           ? "no PUSH items — vacuous"
@@ -105,9 +170,9 @@ export function evaluateTierFloors(pairs: TierPair[]): FloorReport {
     {
       name: "SILENT precision",
       value: silentPrecision,
-      floor: SILENT_PRECISION_FLOOR,
-      pass: silentPrecision >= SILENT_PRECISION_FLOOR,
-      gating: true,
+      floor: silentFloor.floor,
+      pass: silentPrecision >= silentFloor.floor,
+      gating: silentFloor.gating,
       detail:
         silentPredicted.length === 0
           ? "nothing predicted SILENT — vacuous"
@@ -116,24 +181,24 @@ export function evaluateTierFloors(pairs: TierPair[]): FloorReport {
     {
       name: "QUEUE recall",
       value: queueRecall,
-      floor: QUEUE_RECALL_TARGET,
-      pass: queueRecall >= QUEUE_RECALL_TARGET,
-      gating: false,
+      floor: queueFloor.floor,
+      pass: queueRecall >= queueFloor.floor,
+      gating: queueFloor.gating,
       detail:
         queueTruth.length === 0
           ? "no QUEUE items — vacuous"
-          : `${queueHit}/${queueTruth.length} (report-only)`,
+          : `${queueHit}/${queueTruth.length}${queueFloor.gating ? "" : " (report-only)"}`,
     },
     {
       name: "AUTO recall",
       value: autoRecall,
-      floor: AUTO_RECALL_TARGET,
-      pass: autoRecall >= AUTO_RECALL_TARGET,
-      gating: false,
+      floor: autoFloor.floor,
+      pass: autoRecall >= autoFloor.floor,
+      gating: autoFloor.gating,
       detail:
         autoTruth.length === 0
           ? "no AUTO items — vacuous"
-          : `${autoHit}/${autoTruth.length} (report-only — low recall is a threshold-tuning target)`,
+          : `${autoHit}/${autoTruth.length}${autoFloor.gating ? "" : " (report-only — low recall is a threshold-tuning target)"}`,
     },
   ];
 
