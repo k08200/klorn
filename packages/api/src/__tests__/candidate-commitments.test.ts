@@ -4,14 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 // without ever touching a real DB.
 const upsertCalls: unknown[] = [];
 
-vi.mock("../commitments.js", () => ({
+vi.mock("../pim/commitments.js", () => ({
   upsertCommitment: vi.fn(async (userId: string, input: unknown) => {
     upsertCalls.push({ userId, input });
     return { id: "c-1" };
   }),
 }));
 
-import { openCommitmentForCandidateTransition } from "../candidate-commitments.js";
+import { openCommitmentForCandidateTransition } from "../pim/candidate-commitments.js";
 
 const baseCandidate = {
   id: "intake-1",

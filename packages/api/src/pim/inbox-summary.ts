@@ -11,16 +11,16 @@
  * AttentionItem is the wrong substrate for it.
  */
 
-import { resolveActionTarget } from "./action-target.js";
+import { resolveActionTarget } from "../action-target.js";
 import {
   upsertAttentionForCalendarEvent,
   upsertAttentionForCommitment,
   upsertAttentionForNotification,
   upsertAttentionForPendingAction,
   upsertAttentionForTask,
-} from "./attention-mirror.js";
-import { prisma } from "./db.js";
-import { captureError } from "./sentry.js";
+} from "../attention-mirror.js";
+import { prisma } from "../db.js";
+import { captureError } from "../sentry.js";
 
 export interface TaskInput {
   id: string;

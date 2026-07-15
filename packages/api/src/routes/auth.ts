@@ -181,7 +181,7 @@ function triggerDueLoginBriefing(userId: string, delayMs = 0): void {
     if (!config.dailyBriefing || !isLoginBriefingDue(config.briefingTime, configAny.timezone)) {
       return;
     }
-    const { createDailyBriefingDelivery } = await import("../briefing.js");
+    const { createDailyBriefingDelivery } = await import("../pim/briefing.js");
     await createDailyBriefingDelivery(userId);
   };
 

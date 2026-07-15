@@ -6,21 +6,21 @@
  */
 
 import type { FastifyInstance } from "fastify";
-import { AGENT_SYSTEM_PROMPT } from "./agent/prompt.js";
-import { getUserId } from "./auth.js";
+import { AGENT_SYSTEM_PROMPT } from "../agent/prompt.js";
+import { getUserId } from "../auth.js";
+import { prisma } from "../db.js";
+import { recordFeedback } from "../feedback.js";
+import { listEmails } from "../gmail.js";
+import { getUserLlmCredentials } from "../llm/llm-credentials.js";
+import { createCompletion, MODEL } from "../llm/openai.js";
+import { sendPushNotification } from "../notify/push.js";
+import { localDayUtcRange, normalizeTimeZone } from "../time-zone.js";
+import { stripUntrusted } from "../untrusted.js";
+import { pushNotification } from "../websocket.js";
 import { type BriefingSignals, buildBriefingSignals } from "./briefing-signals.js";
 import { getBriefingStatus } from "./briefing-status.js";
-import { prisma } from "./db.js";
-import { recordFeedback } from "./feedback.js";
-import { listEmails } from "./gmail.js";
-import { getUserLlmCredentials } from "./llm/llm-credentials.js";
-import { createCompletion, MODEL } from "./llm/openai.js";
 import { listNotes } from "./notes.js";
-import { sendPushNotification } from "./notify/push.js";
 import { listTasks } from "./tasks.js";
-import { localDayUtcRange, normalizeTimeZone } from "./time-zone.js";
-import { stripUntrusted } from "./untrusted.js";
-import { pushNotification } from "./websocket.js";
 
 const BRIEFING_CALENDAR_WINDOW_DAYS = 14;
 // The briefing is the founder's first read of the day. Five emails was too

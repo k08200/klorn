@@ -13,8 +13,8 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
-import { buildInboxSummary } from "../inbox-summary.js";
-import { buildOperatingPlan } from "../operating-plan.js";
+import { buildInboxSummary } from "../pim/inbox-summary.js";
+import { buildOperatingPlan } from "../pim/operating-plan.js";
 
 const REPLY_NEEDED_LIMIT = 8;
 

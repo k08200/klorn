@@ -1,7 +1,7 @@
 /**
  * Type contract for the inbox Command Center summary returned by
  * `GET /api/inbox/summary`. The server owns the ranking — the frontend just
- * renders. Keep this file in sync with `packages/api/src/inbox-summary.ts`.
+ * renders. Keep this file in sync with `packages/api/src/pim/inbox-summary.ts`.
  */
 
 export type AttentionItem =

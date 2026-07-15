@@ -7,11 +7,11 @@
  */
 
 import type { CommitmentKind, CommitmentOwner, CommitmentSource } from "@prisma/client";
+import { parseLlmJson } from "../llm/llm-json.js";
+import { createCompletion, MODEL } from "../llm/openai.js";
+import { captureError } from "../sentry.js";
+import { wrapUntrusted } from "../untrusted.js";
 import type { CommitmentCandidate } from "./commitment-extractor.js";
-import { parseLlmJson } from "./llm/llm-json.js";
-import { createCompletion, MODEL } from "./llm/openai.js";
-import { captureError } from "./sentry.js";
-import { wrapUntrusted } from "./untrusted.js";
 
 const FLAG = "COMMITMENT_LLM_REFINEMENT";
 const MAX_CONTEXT_CHARS = 1800;

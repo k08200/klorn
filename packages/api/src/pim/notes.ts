@@ -1,4 +1,4 @@
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 
 export async function listNotes(userId: string, search?: string) {
   const where: Record<string, unknown> = { userId };

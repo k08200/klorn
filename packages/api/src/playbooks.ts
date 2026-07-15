@@ -11,7 +11,7 @@ import {
   buildWorkGraphSummary,
   type WorkGraphContext,
   type WorkGraphSummary,
-} from "./work-graph.js";
+} from "./pim/work-graph.js";
 
 export type KlornPlaybookId =
   | "investment_ops"

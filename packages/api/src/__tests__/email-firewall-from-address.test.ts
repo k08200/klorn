@@ -25,7 +25,7 @@ vi.mock("../db.js", () => ({
 // Stub every collaborator persistGmailEmail touches so nothing hits a real DB
 // or LLM; we only care about the create/update data shape.
 vi.mock("../attention-mirror.js", () => ({ upsertAttentionForEmailJudgement: vi.fn() }));
-vi.mock("../commitment-ingestion.js", () => ({
+vi.mock("../pim/commitment-ingestion.js", () => ({
   extractAndUpsertCommitmentsFromText: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("../email-action-trigger.js", () => ({

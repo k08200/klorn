@@ -6,8 +6,8 @@
  * for the Command Center.
  */
 
-import { prisma } from "./db.js";
-import { localDayUtcRange, normalizeTimeZone } from "./time-zone.js";
+import { prisma } from "../db.js";
+import { localDayUtcRange, normalizeTimeZone } from "../time-zone.js";
 
 export type BriefingPushState =
   | "received"

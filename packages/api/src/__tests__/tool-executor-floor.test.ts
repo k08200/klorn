@@ -34,20 +34,20 @@ vi.mock("../db.js", () => ({
   prisma: { emailMessage: { findFirst: (...args: unknown[]) => findFirstMock(...args) } },
   db: {},
 }));
-vi.mock("../calendar.js", () => ({
+vi.mock("../pim/calendar.js", () => ({
   CALENDAR_TOOLS: [],
   createEvent: vi.fn(),
   deleteEvent: vi.fn(),
   listEvents: vi.fn(),
   checkConflicts: vi.fn(),
 }));
-vi.mock("../meeting.js", () => ({
+vi.mock("../pim/meeting.js", () => ({
   MEETING_TOOLS: [],
   getUpcomingMeetings: vi.fn(),
   joinMeeting: vi.fn(),
   summarizeMeeting: vi.fn(),
 }));
-vi.mock("../briefing.js", () => ({ BRIEFING_TOOLS: [] }));
+vi.mock("../pim/briefing.js", () => ({ BRIEFING_TOOLS: [] }));
 vi.mock("../memory.js", () => ({
   MEMORY_TOOLS: [],
   forget: vi.fn(),
