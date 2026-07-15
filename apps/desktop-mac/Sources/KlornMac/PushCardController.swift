@@ -47,7 +47,14 @@ final class PushCardController {
     func armKeyboard() {
         guard let panel, panel.isVisible else { return }
         if panel.isKeyWindow {
-            panel.resignKey()
+            // resignKey() is an AppKit notification hook, not an action: it
+            // flips our isKeyWindow flag but the WindowServer never returns
+            // real key status to the user's previous app, so their next
+            // keystrokes are silently lost. orderOut IS a window-server
+            // action that hands the keyboard back; re-fronting without
+            // makeKey keeps the card visible but unarmed.
+            panel.orderOut(nil)
+            panel.orderFrontRegardless()
             state.keysArmed = false
         } else {
             panel.makeKey()  // nonactivating: our app stays in the background
@@ -120,17 +127,20 @@ final class PushCardController {
         state.sendError = nil
         Task { [weak self] in
             guard let self else { return }
-            let sent = await self.model.reply(item, body: options[index].body)
+            // sendReply (not reply): the card owns its own error channel and
+            // must never clear/overwrite the reading-pane composer's live
+            // replyError while that surface is mid-send for another email.
+            let error = await self.model.sendReply(item, body: options[index].body)
             guard self.state.item?.id == item.id else { return }
             self.state.sendingIndex = nil
-            if sent {
+            if let error {
+                self.state.sendError = error
+            } else {
                 self.state.sentIndex = index
                 AccessibilityNotification.Announcement("Reply sent").post()
                 try? await Task.sleep(for: .seconds(1.2))  // let the ✓ land
                 guard self.state.item?.id == item.id else { return }
                 self.advance()
-            } else {
-                self.state.sendError = self.model.replyError ?? "Couldn't send — try again."
             }
         }
     }
