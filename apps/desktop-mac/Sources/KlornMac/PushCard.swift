@@ -15,6 +15,11 @@ final class PushCardState {
     var item: FirewallItem?
     var pendingCount = 0
     var drafts: Drafts = .loading
+    /// compact ↔ expanded (click toggles; expanding also arms the keyboard).
+    var layout: CardLayout = .compact
+    /// Email detail (Klorn summary) prefetched for the expanded view; nil until
+    /// loaded or when the fetch failed (the view falls back to the snippet).
+    var detail: EmailDetail?
     /// Index mid-send (spinner on that row); nil when idle.
     var sendingIndex: Int?
     /// Index that was sent (checkmark) just before the card advances.
@@ -30,12 +35,31 @@ struct PushCardActions {
     let onOpen: () -> Void
     let onDismiss: () -> Void
     let onRetry: () -> Void
-    let onArm: () -> Void
+    /// Click on the card: toggle compact ↔ expanded (expanding arms the keys).
+    let onToggleExpand: () -> Void
 }
 
 enum PushCardMetrics {
-    static let size = NSSize(width: 460, height: 344)
+    static let compact = NSSize(width: 460, height: 344)
+    static let expanded = NSSize(width: 560, height: 470)
     static let corner: CGFloat = 16
+
+    static func size(for layout: CardLayout) -> NSSize {
+        layout == .compact ? compact : expanded
+    }
+
+    /// Where the present-morph begins: a thin strip hugging the target's top
+    /// edge (so the card appears to unroll downward from the pill), centered on
+    /// the same axis. Pure for testing.
+    static func presentStartFrame(target: NSRect) -> NSRect {
+        let height: CGFloat = 60
+        let width = target.width * 0.8
+        return NSRect(
+            x: target.midX - width / 2,
+            y: target.maxY - height,
+            width: width,
+            height: height)
+    }
 }
 
 /// The interrupt card for one PUSH email: sender · subject · why-PUSH, then the
@@ -47,15 +71,17 @@ struct PushCard: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
+        let size = PushCardMetrics.size(for: state.layout)
         VStack(alignment: .leading, spacing: 10) {
             header
             Divider().overlay(Theme.line)
+            if state.layout == .expanded { summarySection }
             content
             Spacer(minLength: 0)
             footer
         }
         .padding(14)
-        .frame(width: PushCardMetrics.size.width, height: PushCardMetrics.size.height, alignment: .top)
+        .frame(width: size.width, height: size.height, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: PushCardMetrics.corner)
                 .fill(Color.black.opacity(Theme.panelOpacity(reduceTransparency: reduceTransparency)))
@@ -65,9 +91,31 @@ struct PushCard: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: PushCardMetrics.corner))
         .contentShape(RoundedRectangle(cornerRadius: PushCardMetrics.corner))
-        .onTapGesture { actions.onArm() }
+        .onTapGesture { actions.onToggleExpand() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Urgent email card")
+        .accessibilityHint(state.layout == .compact ? "Click to expand" : "Click to collapse")
+    }
+
+    /// Expanded-only: Klorn's AI summary of the email (snippet fallback while
+    /// the detail loads or when the email has no summary).
+    @ViewBuilder
+    private var summarySection: some View {
+        if let text = cardDetailText(
+            summary: state.detail?.summary, snippet: state.item?.email?.snippet)
+        {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Summary")
+                    .font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
+                Text(text)
+                    .font(.caption).foregroundStyle(Theme.text)
+                    .lineLimit(5).multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(10)
+            .background(Color.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
+            Divider().overlay(Theme.line)
+        }
     }
 
     private var header: some View {
@@ -128,6 +176,7 @@ struct PushCard: View {
                     OptionRow(
                         index: index,
                         option: option,
+                        bodyLines: state.layout == .expanded ? 4 : 2,
                         isSending: state.sendingIndex == index,
                         isSent: state.sentIndex == index,
                         disabled: state.sendingIndex != nil || state.sentIndex != nil,
@@ -145,7 +194,9 @@ struct PushCard: View {
         HStack {
             Text(state.keysArmed
                  ? "1 · 2 · 3 send   ⏎ open   esc dismiss"
-                 : "click card for keys · ⏎ open on web")
+                 : state.layout == .compact
+                     ? "click to expand · ⏎ open on web"
+                     : "click to collapse · ⏎ open on web")
                 .font(.caption2).foregroundStyle(Theme.textDim)
             Spacer()
             Button("Open", action: actions.onOpen)
@@ -160,6 +211,7 @@ struct PushCard: View {
 private struct OptionRow: View {
     let index: Int
     let option: ReplyOption
+    let bodyLines: Int
     let isSending: Bool
     let isSent: Bool
     let disabled: Bool
@@ -190,7 +242,7 @@ private struct OptionRow: View {
                         .background(toneColor.opacity(0.15), in: Capsule())
                     Text(option.body)
                         .font(.caption).foregroundStyle(Theme.text)
-                        .lineLimit(2).multilineTextAlignment(.leading)
+                        .lineLimit(bodyLines).multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 0)
                 if isSending {

@@ -31,6 +31,22 @@ enum PushCardKeymap {
     }
 }
 
+/// The card's two sizes: the glanceable compact card, and the click-to-expand
+/// detail view (Klorn summary + full drafts) echoing the reference video.
+enum CardLayout: Equatable, Sendable {
+    case compact, expanded
+}
+
+/// Detail text for the expanded card: Klorn's AI summary when the email detail
+/// has loaded, else the wire snippet, else nothing. Whitespace-only counts as
+/// empty so a blank server field can't render an empty section. Pure for testing.
+func cardDetailText(summary: String?, snippet: String?) -> String? {
+    let trimmedSummary = summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    if !trimmedSummary.isEmpty { return trimmedSummary }
+    let trimmedSnippet = snippet?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return trimmedSnippet.isEmpty ? nil : trimmedSnippet
+}
+
 /// FIFO of PUSH items awaiting a card, deduped by AttentionItem id. One card
 /// shows at a time ("1 of N"); a burst of PUSH enqueues behind the current one.
 struct PushCardQueue: Equatable, Sendable {

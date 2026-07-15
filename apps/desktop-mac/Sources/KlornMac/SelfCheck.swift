@@ -208,6 +208,35 @@ func runSelfChecks() async -> Bool {
     check("unknown tone label falls back",
           ReplyOption(tone: "urgent", body: "x").toneLabel == "Urgent")
 
+    // Layout metrics + morph math (reference-video parity: present-morph,
+    // click-to-expand). All pure so the harness can pin the geometry.
+    check("compact size", PushCardMetrics.size(for: .compact) == PushCardMetrics.compact)
+    check("expanded size", PushCardMetrics.size(for: .expanded) == PushCardMetrics.expanded)
+    check("expanded is strictly larger",
+          PushCardMetrics.expanded.width > PushCardMetrics.compact.width
+          && PushCardMetrics.expanded.height > PushCardMetrics.compact.height)
+    let morphTarget = NSRect(x: 100, y: 100, width: 460, height: 360)
+    let morphStart = PushCardMetrics.presentStartFrame(target: morphTarget)
+    check("present-morph starts hugging the top edge",
+          morphStart.maxY == morphTarget.maxY && morphStart.height < morphTarget.height)
+    check("present-morph start stays horizontally centered",
+          abs(morphStart.midX - morphTarget.midX) < 0.5)
+    let screen = NSRect(x: 0, y: 0, width: 1512, height: 950)
+    let compactFrame = PushCardController.cardFrame(
+        size: PushCardMetrics.compact, visible: screen)
+    let expandedFrame = PushCardController.cardFrame(
+        size: PushCardMetrics.expanded, visible: screen)
+    check("card pinned top-center below the pill",
+          compactFrame.midX == screen.midX
+          && compactFrame.maxY == screen.maxY - PushCardController.topOffset)
+    check("expand keeps the top edge anchored (grows downward)",
+          expandedFrame.maxY == compactFrame.maxY && expandedFrame.midX == compactFrame.midX)
+
+    // Expanded-view detail text: Klorn summary first, snippet fallback, nil when empty.
+    check("detail prefers Klorn summary", cardDetailText(summary: "S", snippet: "sn") == "S")
+    check("detail falls back to snippet", cardDetailText(summary: "", snippet: "sn") == "sn")
+    check("detail nil when both empty", cardDetailText(summary: nil, snippet: " ") == nil)
+
     print("Top bar open URL:")
     func item(href: String?) -> FirewallItem {
         FirewallItem(id: "x", source: "email", sourceId: "x", type: "email", title: "t",
