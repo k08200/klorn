@@ -7,7 +7,7 @@ Guidance for AI coding agents (and humans) working in this repo.
 Klorn — an AI email chief-of-staff. Emails are triaged into exactly **4 tiers: PUSH / QUEUE / SILENT / AUTO** (AUTO = classification only — never invent a 5th tier). pnpm-workspaces monorepo:
 
 - `packages/api` — Fastify 5 + Prisma backend (deployed on Render)
-- `packages/core` — shared domain logic (classification engine, ontology)
+- `packages/contract` — type-only API wire contract shared by api and its clients
 - `packages/web` — Next.js 15 app (Vercel; prod deploys from `main`)
 - `apps/mobile` — Capacitor shell wrapping the hosted web app
 - `apps/desktop-mac` — native SwiftUI macOS app
@@ -19,7 +19,7 @@ Klorn — an AI email chief-of-staff. Emails are triaged into exactly **4 tiers:
 pnpm install --frozen-lockfile
 (cd packages/api && npx prisma generate)         # ALWAYS before typecheck/tests; re-run after every rebase
 biome check --diagnostic-level=error packages/   # lint gate is errors-only
-(cd packages/api && npx tsc --noEmit)            # repeat for packages/core and packages/web
+(cd packages/api && npx tsc --noEmit)            # repeat for packages/web
 (cd packages/api && npx vitest run)
 pnpm -r build
 ```
