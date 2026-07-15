@@ -87,20 +87,39 @@ The repoint is one line once the data exists:
 + run: ... poc-accuracy.ts --in=eval/real-eval-set.json ...
 ```
 
-**The blocker is the data, not the wiring** — and it is deliberately a manual,
-human-reviewed step, not automation:
+**The blocker is the data, not the wiring** — and the review step is
+deliberately manual. The drafting kit (`scripts/draft-real-eval-set.ts`, #648)
+automates everything AROUND that step, never the step itself:
 
-1. `eval/real-eval-set.json` must be a PII-scrubbed extract of the private
-   `poc-ground-truth.json` (same schema), scrubbed per the "Adding cases" rules
-   above: fictional sender/domain, no real names or addresses, structural
-   signal preserved.
-2. Because this repo is **public**, every row must be eyeballed by the founder
-   before commit. An auto-scrubber must not commit real mail to a public repo —
-   one missed address is an irreversible leak. There is intentionally no script
-   here that does this for you.
-3. Once committed and reviewed, flip the `--in=` above. Then "green canary" and
-   "thesis proven on real mail" become the **same auditable event** — the whole
-   point of the gate.
+1. **DRAFT** (local, never committed — the output name matches the gitignored
+   `poc-*.json` pattern):
+   ```bash
+   npx tsx scripts/draft-real-eval-set.ts --user=<founder email> \
+     --in=../../poc-ground-truth.json
+   ```
+   Collects real labeled mail from the POC ground-truth file (bodies joined
+   from the DB) **plus** the DecisionLabel ledger (`OVERRIDE:<tier>` /
+   `CONFIRM:<tier>` rows — every override/confirm in the app grows this set),
+   then mechanically scrubs addresses/URLs/phones with deterministic,
+   sender-consistent placeholders (`src/eval-scrub.ts`).
+2. **REVIEW** — the founder eyeballs every row: fix names/orgs the patterns
+   can't see (each row carries `scrubNotes` showing what was replaced), then
+   set `reviewed: true`. This step stays human; an auto-scrubber must never
+   commit real mail to a public repo — one missed address is an irreversible
+   leak.
+3. **FINALIZE + VERIFY**:
+   ```bash
+   npx tsx scripts/draft-real-eval-set.ts \
+     --finalize=../../poc-real-eval-set.draft.json --final-out=eval/real-eval-set.json
+   npx tsx scripts/draft-real-eval-set.ts --verify=eval/real-eval-set.json
+   ```
+   Finalize refuses unless every row is `reviewed:true`, strips the review
+   fields, and runs the leak-linter; verify is the standalone pre-commit
+   tripwire (exit 2 on any address/URL/phone-shaped remnant). Run verify
+   before every commit that touches the file.
+4. Once committed, flip the `--in=` above. Then "green canary" and "thesis
+   proven on real mail" become the **same auditable event** — the whole point
+   of the gate.
 
 Keep the deterministic floor + safety invariants identical; only the data set
 changes.
