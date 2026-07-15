@@ -69,6 +69,57 @@ describe("crypto-tokens — legacy v1 (no keyring configured)", () => {
   });
 });
 
+describe("crypto-tokens — dev-key fallback gating", () => {
+  // The deterministic dev key is public (hash of a fixed string). It must only
+  // ever back local development/test, never a real deployment — encrypting live
+  // OAuth tokens with a guessable key is a full secret compromise. Prod already
+  // throws; these tests pin that "not production but also not dev/test" (unset,
+  // "staging", a typo like "prod") also throws instead of silently using it.
+  beforeEach(clearCryptoEnv);
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+  });
+
+  it("allows the keyless dev fallback in development and test", async () => {
+    for (const env of ["development", "test"]) {
+      process.env.NODE_ENV = env;
+      const { encryptToken, decryptToken } = await loadFresh();
+      const ct = encryptToken("local-secret");
+      expect(ct.startsWith("v1:")).toBe(true);
+      expect(decryptToken(ct)).toBe("local-secret");
+    }
+  });
+
+  it("throws (no silent dev key) when NODE_ENV is unset and no key is set", async () => {
+    delete process.env.NODE_ENV;
+    await expect(loadFresh()).rejects.toThrow(/TOKEN_ENCRYPTION_KEY/);
+  });
+
+  it("throws for a non-dev/test/prod NODE_ENV (e.g. staging) with no key", async () => {
+    process.env.NODE_ENV = "staging";
+    await expect(loadFresh()).rejects.toThrow(/TOKEN_ENCRYPTION_KEY/);
+  });
+
+  it("throws for a 'prod' typo (not exactly 'production') with no key", async () => {
+    // The old guard keyed on `=== "production"`, so "prod" slipped through to
+    // the dev key. Now it fails closed like any other non-dev/test env.
+    process.env.NODE_ENV = "prod";
+    await expect(loadFresh()).rejects.toThrow(/TOKEN_ENCRYPTION_KEY/);
+  });
+
+  it("still throws in production with no key (unchanged)", async () => {
+    process.env.NODE_ENV = "production";
+    await expect(loadFresh()).rejects.toThrow(/required in production/i);
+  });
+
+  it("uses the configured key in any env, so a real key overrides the gate", async () => {
+    process.env.NODE_ENV = "staging";
+    process.env.TOKEN_ENCRYPTION_KEY = LEGACY_KEY;
+    const { encryptToken, decryptToken } = await loadFresh();
+    expect(decryptToken(encryptToken("x"))).toBe("x");
+  });
+});
+
 describe("crypto-tokens — keyring v2 (rotation)", () => {
   beforeEach(clearCryptoEnv);
   afterEach(() => {

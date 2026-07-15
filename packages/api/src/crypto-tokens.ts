@@ -46,7 +46,13 @@ interface Keyring {
  * a weaker mode.
  */
 function loadKeyring(): Keyring {
-  const isProd = process.env.NODE_ENV === "production";
+  // The deterministic dev fallback below is public (a hash of a fixed string),
+  // so it may only ever back local development/test. Gate it on an explicit
+  // allowlist rather than "not production": the old `=== "production"` check
+  // let any other value (unset, "staging", a "prod" typo) silently encrypt real
+  // secrets with a guessable key. Anything outside dev/test with no key throws.
+  const nodeEnv = process.env.NODE_ENV;
+  const devFallbackAllowed = nodeEnv === "development" || nodeEnv === "test";
   const legacyRaw = process.env.TOKEN_ENCRYPTION_KEY;
   const keysRaw = process.env.TOKEN_ENCRYPTION_KEYS;
   const activeKeyId = process.env.TOKEN_ENCRYPTION_ACTIVE_KEY_ID ?? null;
@@ -94,13 +100,21 @@ function loadKeyring(): Keyring {
 
   // No keyring configured — legacy single-key mode.
   if (!legacyKey) {
-    if (isProd) {
+    if (nodeEnv === "production") {
       throw new Error(
         "TOKEN_ENCRYPTION_KEY (or a TOKEN_ENCRYPTION_KEYS keyring) is required in production. " +
           "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\"",
       );
     }
-    // Dev-only deterministic fallback so local runs work without config.
+    if (!devFallbackAllowed) {
+      throw new Error(
+        `TOKEN_ENCRYPTION_KEY is required when NODE_ENV is "${nodeEnv ?? "unset"}". ` +
+          "The keyless dev fallback is only allowed for NODE_ENV=development or test — " +
+          "any other environment must set a real key so secrets are never encrypted " +
+          "with the public dev key.",
+      );
+    }
+    // Dev/test-only deterministic fallback so local runs work without config.
     legacyKey = crypto.createHash("sha256").update("klorn-dev-only-not-for-production").digest();
   }
   return { keys, activeKeyId: null, legacyKey };
