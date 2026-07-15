@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { listAgentModePolicies, normalizeAgentMode } from "../agent-mode.js";
+import { listAgentModePolicies, normalizeAgentMode } from "../agentcore/agent-mode.js";
+import { runAgentForUser } from "../agentcore/autonomous-agent.js";
 import { getUserId, requireAuth } from "../auth.js";
-import { runAgentForUser } from "../autonomous-agent.js";
 import { db, prisma } from "../db.js";
 import { normalizeTimeZone } from "../time-zone.js";
 

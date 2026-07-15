@@ -11,8 +11,8 @@
 
 import type { ActionStatus } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
-import { claimAndRunOutboxRow, enqueueAction, type OutboxRow } from "../action-outbox.js";
-import { resolveActionTarget } from "../action-target.js";
+import { claimAndRunOutboxRow, enqueueAction, type OutboxRow } from "../agentcore/action-outbox.js";
+import { resolveActionTarget } from "../agentcore/action-target.js";
 import {
   type ActionReceipt,
   isFloorAction,

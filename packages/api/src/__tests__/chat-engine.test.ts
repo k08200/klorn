@@ -12,7 +12,7 @@ vi.mock("../llm/openai.js", () => ({
 }));
 
 const executeToolCall = vi.fn(async () => JSON.stringify({ ok: true }));
-vi.mock("../tool-executor.js", () => ({
+vi.mock("../agentcore/tool-executor.js", () => ({
   executeToolCall: (...args: unknown[]) => executeToolCall(...args),
   ALL_TOOLS: [
     "list_emails",
@@ -46,7 +46,7 @@ vi.mock("../billing/token-usage.js", () => ({
 const captureError = vi.fn();
 vi.mock("../sentry.js", () => ({ captureError: (...args: unknown[]) => captureError(...args) }));
 
-import { CHAT_TOOL_NAMES, runChatTurn } from "../chat-engine.js";
+import { CHAT_TOOL_NAMES, runChatTurn } from "../agentcore/chat-engine.js";
 
 function textResponse(content: string) {
   return {

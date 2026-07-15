@@ -30,13 +30,13 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 
-vi.mock("../agent-proposal-dedup.js", () => ({
+vi.mock("../agentcore/agent-proposal-dedup.js", () => ({
   getRecentProposalSuppressions: vi.fn(async () => []),
   formatRecentProposalSuppressions: vi.fn(() => ""),
   filterSuppressedContextItems: vi.fn((items: unknown[]) => ({ visible: items, hidden: 0 })),
 }));
 
-vi.mock("../agent-email-context-filter.js", () => ({
+vi.mock("../agentcore/agent-email-context-filter.js", () => ({
   buildAgentEmailWhere: vi.fn(() => ({})),
 }));
 
@@ -48,7 +48,7 @@ vi.mock("../untrusted.js", () => ({
   wrapUntrusted: vi.fn((s: string) => s),
 }));
 
-import { gatherUserContext } from "../agent-context.js";
+import { gatherUserContext } from "../agentcore/agent-context.js";
 
 beforeEach(() => {
   emptyMany.mockClear();

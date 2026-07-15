@@ -17,8 +17,8 @@
  */
 
 import type { AttentionSource, AttentionStatus, AttentionType } from "@prisma/client";
-import { getToolRisk } from "./agent-logic.js";
-import { AUTOPILOT_LEVEL, type AutopilotLevel } from "./agent-mode.js";
+import { getToolRisk } from "./agentcore/agent-logic.js";
+import { AUTOPILOT_LEVEL, type AutopilotLevel } from "./agentcore/agent-mode.js";
 import { computeAttentionInputHash } from "./attention-input-hash.js";
 import { prisma } from "./db.js";
 import { recordDecision, recordEmailDecision } from "./decision-label.js";

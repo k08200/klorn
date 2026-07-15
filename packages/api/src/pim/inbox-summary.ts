@@ -11,7 +11,7 @@
  * AttentionItem is the wrong substrate for it.
  */
 
-import { resolveActionTarget } from "../action-target.js";
+import { resolveActionTarget } from "../agentcore/action-target.js";
 import {
   upsertAttentionForCalendarEvent,
   upsertAttentionForCommitment,

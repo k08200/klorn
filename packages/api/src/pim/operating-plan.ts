@@ -1,9 +1,9 @@
-import { db } from "../db.js";
 import {
   listActivePlaybookIds,
   type PlaybookRecommendation,
   recommendPlaybooksFromGraph,
-} from "../playbooks.js";
+} from "../agentcore/playbooks.js";
+import { db } from "../db.js";
 import type { AttentionItem, InboxSummary } from "./inbox-summary.js";
 import { buildInboxSummary } from "./inbox-summary.js";
 import {

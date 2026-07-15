@@ -6,7 +6,7 @@ import {
   isHousekeepingProposalToolName,
   proposalIssueTokens,
   TOOL_RISK_LEVELS,
-} from "../agent-logic.js";
+} from "../agentcore/agent-logic.js";
 
 describe("getToolRisk", () => {
   it("returns LOW for safe, reversible tools", () => {

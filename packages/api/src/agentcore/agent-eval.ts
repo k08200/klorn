@@ -12,8 +12,8 @@
  * and missing approval gates.
  */
 
+import { planHasFeature, TOOL_FEATURE_MAP } from "../billing/stripe.js";
 import { getNotifKey, getToolRisk, type RiskLevel } from "./agent-logic.js";
-import { planHasFeature, TOOL_FEATURE_MAP } from "./billing/stripe.js";
 
 function isToolAllowedForPlan(toolName: string, plan: string): boolean {
   const featureKey = TOOL_FEATURE_MAP[toolName];

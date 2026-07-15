@@ -4,11 +4,11 @@ import { sendEmailPayloadHash } from "../attention-floor.js";
 // Capture executeToolCall calls; the helper must route the send through it
 // (the single gated floor path) instead of calling gmail.sendEmail directly.
 const executeToolCall = vi.fn(async () => JSON.stringify({ ok: true }));
-vi.mock("../tool-executor.js", () => ({
+vi.mock("../agentcore/tool-executor.js", () => ({
   executeToolCall: (...args: unknown[]) => executeToolCall(...args),
 }));
 
-const { sendAutoReplyViaFloor } = await import("../auto-reply-send.js");
+const { sendAutoReplyViaFloor } = await import("../agentcore/auto-reply-send.js");
 
 describe("sendAutoReplyViaFloor — autonomous AUTO_REPLY routes through the floor (W1)", () => {
   beforeEach(() => executeToolCall.mockClear());

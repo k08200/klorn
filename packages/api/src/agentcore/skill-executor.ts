@@ -5,7 +5,7 @@
  * and run user-defined skills during chat and autonomous mode.
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 import { renderSkillTemplate } from "./skill-render.js";
 
 export const SKILL_TOOLS = [

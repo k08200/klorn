@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the heavy dependencies BEFORE importing the module under test
-vi.mock("../autonomous-agent.js", () => ({
+vi.mock("../agentcore/autonomous-agent.js", () => ({
   runAgentForUser: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -13,12 +13,12 @@ vi.mock("../db.js", () => ({
   },
 }));
 
-import { runAgentForUser } from "../autonomous-agent.js";
-import { prisma } from "../db.js";
+import { runAgentForUser } from "../agentcore/autonomous-agent.js";
 import {
   __resetEmailActionTriggerState,
   scheduleAgentForActionableEmail,
-} from "../email-action-trigger.js";
+} from "../agentcore/email-action-trigger.js";
+import { prisma } from "../db.js";
 
 const flushImmediate = () => new Promise<void>((resolve) => setImmediate(resolve));
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EVAL_SCENARIOS, runAllScenarios, summarizeEval } from "../agent-eval.js";
+import { EVAL_SCENARIOS, runAllScenarios, summarizeEval } from "../agentcore/agent-eval.js";
 
 describe("agent-eval", () => {
   it("has a non-empty scenario catalog", () => {

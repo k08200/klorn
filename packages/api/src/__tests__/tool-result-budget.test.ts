@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capToolResult, MAX_TOOL_RESULT_CHARS } from "../tool-result-budget.js";
+import { capToolResult, MAX_TOOL_RESULT_CHARS } from "../agentcore/tool-result-budget.js";
 
 describe("capToolResult", () => {
   it("passes short results through unchanged", () => {

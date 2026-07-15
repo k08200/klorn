@@ -18,8 +18,8 @@
  *     auto-propose another for the same subject
  */
 
+import { db, prisma } from "../db.js";
 import { areSimilarProposalIssues, getNotifKey, proposalIssueTokens } from "./agent-logic.js";
-import { db, prisma } from "./db.js";
 
 export const NOTIFY_DEDUP_HOURS = 2;
 export const PROPOSAL_DEDUP_HOURS = 24;

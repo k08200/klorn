@@ -27,8 +27,24 @@
  */
 import type { Prisma } from "@prisma/client";
 import type OpenAI from "openai";
+import { AGENT_SYSTEM_PROMPT, NOTIFY_TOOL, PROPOSE_ACTION_TOOL } from "../agent/prompt.js";
+import { isFloorAction } from "../attention-floor.js";
+import { upsertAttentionForPendingAction } from "../attention-mirror.js";
+import { trackTokenUsage } from "../billing/token-usage.js";
+import { AGENT_MAX_CONTEXT_ITEMS, AGENT_MAX_TOOLS_PER_LOOP } from "../config.js";
+import { db, prisma } from "../db.js";
+import { isNoReplyAddress, markAsRead } from "../gmail.js";
+import { recipientFromToolArgs, recordFeedback } from "../learning/feedback.js";
+import { loadMemoriesForPrompt } from "../learning/memory.js";
+import { getFeedbackPolicyContextForPrompt } from "../learning/policy-extraction.js";
+import { AGENT_MODEL, createCompletion } from "../llm/openai.js";
+import { humanizeAutoExec } from "../notify/notification-format.js";
+import { notificationSuppressionReason } from "../notify/notification-policy.js";
+import type { NotifCategory } from "../notify/notification-prefs.js";
+import { sendPushNotification } from "../notify/push.js";
+import { captureError } from "../sentry.js";
+import { pushNotification } from "../websocket.js";
 import { resolveActionTarget } from "./action-target.js";
-import { AGENT_SYSTEM_PROMPT, NOTIFY_TOOL, PROPOSE_ACTION_TOOL } from "./agent/prompt.js";
 import { gatherUserContext } from "./agent-context.js";
 import { recordDedupKey, wasRecentlyDeduped } from "./agent-dedup.js";
 import {
@@ -47,23 +63,7 @@ import {
   LEGACY_AGENT_NOTIFICATION_PREFIX,
   safeJson,
 } from "./agent-proposal-dedup.js";
-import { isFloorAction } from "./attention-floor.js";
-import { upsertAttentionForPendingAction } from "./attention-mirror.js";
-import { trackTokenUsage } from "./billing/token-usage.js";
-import { AGENT_MAX_CONTEXT_ITEMS, AGENT_MAX_TOOLS_PER_LOOP } from "./config.js";
-import { db, prisma } from "./db.js";
-import { isNoReplyAddress, markAsRead } from "./gmail.js";
-import { recipientFromToolArgs, recordFeedback } from "./learning/feedback.js";
-import { loadMemoriesForPrompt } from "./learning/memory.js";
-import { getFeedbackPolicyContextForPrompt } from "./learning/policy-extraction.js";
-import { AGENT_MODEL, createCompletion } from "./llm/openai.js";
-import { humanizeAutoExec } from "./notify/notification-format.js";
-import { notificationSuppressionReason } from "./notify/notification-policy.js";
-import type { NotifCategory } from "./notify/notification-prefs.js";
-import { sendPushNotification } from "./notify/push.js";
-import { captureError } from "./sentry.js";
 import { ALL_TOOLS, executeToolCall, isToolAllowedForPlan } from "./tool-executor.js";
-import { pushNotification } from "./websocket.js";
 
 const MAX_TOOL_CALLS = AGENT_MAX_TOOLS_PER_LOOP;
 const MAX_CONTEXT_ITEMS = AGENT_MAX_CONTEXT_ITEMS;
@@ -300,15 +300,15 @@ export async function runAgentForUser(
     // frontier chat model applies here (their agent talks in the model they
     // trust). Unset → the pinned AGENT_MODEL. BYOK keys ride along so a
     // key-holder's cycles bill their own account.
-    const { getUserLlmCredentials } = await import("./llm/llm-credentials.js");
+    const { getUserLlmCredentials } = await import("../llm/llm-credentials.js");
     const agentCredentials = await getUserLlmCredentials(userId);
     const agentModelForUser = agentCredentials.userModel ?? AGENT_MODEL;
 
-    const { analyzePatterns } = await import("./learning/pattern-learner.js");
-    const { buildTrustHintForPrompt } = await import("./learning/trust-score.js");
-    const { buildInteractionHintForPrompt } = await import("./learning/interaction-graph.js");
+    const { analyzePatterns } = await import("../learning/pattern-learner.js");
+    const { buildTrustHintForPrompt } = await import("../learning/trust-score.js");
+    const { buildInteractionHintForPrompt } = await import("../learning/interaction-graph.js");
     const { buildPlaybookHintForPrompt } = await import("./playbooks.js");
-    const { buildRejectionHintForPrompt } = await import("./learning/rejection-hint.js");
+    const { buildRejectionHintForPrompt } = await import("../learning/rejection-hint.js");
     const [
       context,
       feedback,

@@ -3,7 +3,7 @@ import {
   AGENT_EMAIL_RECENT_WINDOW_MS,
   AGENT_EMAIL_UNREAD_WINDOW_MS,
   buildAgentEmailWhere,
-} from "../agent-email-context-filter.js";
+} from "../agentcore/agent-email-context-filter.js";
 
 const NOW = new Date("2026-06-04T12:00:00.000Z");
 

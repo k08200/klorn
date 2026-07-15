@@ -28,7 +28,7 @@ vi.mock("../attention-mirror.js", () => ({ upsertAttentionForEmailJudgement: vi.
 vi.mock("../pim/commitment-ingestion.js", () => ({
   extractAndUpsertCommitmentsFromText: vi.fn(() => Promise.resolve()),
 }));
-vi.mock("../email-action-trigger.js", () => ({
+vi.mock("../agentcore/email-action-trigger.js", () => ({
   scheduleAgentForActionableEmail: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("../email-attachments.js", () => ({

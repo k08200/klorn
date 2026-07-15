@@ -25,7 +25,9 @@ vi.mock("../gmail.js", () => ({ markAsRead }));
 vi.mock("../poc-judge.js", () => ({ judgeEmail }));
 vi.mock("../judge-context.js", () => ({ buildJudgeContext: vi.fn(async () => ({})) }));
 vi.mock("../attention-mirror.js", () => ({ upsertAttentionForEmailJudgement: upsert }));
-vi.mock("../email-action-trigger.js", () => ({ scheduleAgentForActionableEmail: scheduleAgent }));
+vi.mock("../agentcore/email-action-trigger.js", () => ({
+  scheduleAgentForActionableEmail: scheduleAgent,
+}));
 vi.mock("../llm/llm-credentials.js", () => ({ getUserLlmCredentials: vi.fn(async () => ({})) }));
 vi.mock("../resolve-user-email.js", () => ({ resolveUserEmail: vi.fn(async () => "me@x.com") }));
 vi.mock("../email-priority.js", () => ({

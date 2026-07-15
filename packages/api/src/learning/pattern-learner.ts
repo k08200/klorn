@@ -12,11 +12,11 @@
  */
 
 import type { MemoryType } from "@prisma/client";
+import { detectSkillsForAllUsers } from "../agentcore/skill-recorder.js";
 import { planHasFeature } from "../billing/stripe.js";
 import { PATTERN_ANALYSIS_HOURS as CFG_PATTERN_HOURS, PATTERN_MIN_OCCURRENCES } from "../config.js";
 import { db, prisma } from "../db.js";
 import { recordSchedulerTick, registerScheduler } from "../scheduler-heartbeat.js";
-import { detectSkillsForAllUsers } from "../skill-recorder.js";
 import { runFeedbackAdaptationForAllUsers } from "./feedback-adaptor.js";
 import { buildInteractionGraphsForAllUsers } from "./interaction-graph.js";
 import { remember } from "./memory.js";

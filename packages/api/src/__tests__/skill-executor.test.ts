@@ -22,7 +22,7 @@ vi.mock("../db.js", () => {
   return { prisma: { skill }, db: { skill } };
 });
 
-const { executeSkill, listUserSkills } = await import("../skill-executor.js");
+const { executeSkill, listUserSkills } = await import("../agentcore/skill-executor.js");
 
 function addSkill(userId: string, name: string, prompt: string, description = "") {
   const key = `skill_${name.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`;

@@ -1,7 +1,7 @@
 import type { WaitlistStatus } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { Resend } from "resend";
-import { runAllScenarios, summarizeEval } from "../agent-eval.js";
+import { runAllScenarios, summarizeEval } from "../agentcore/agent-eval.js";
 import { getUserId, requireAdmin } from "../auth.js";
 import { getUsageSummary } from "../billing/llm-usage.js";
 import type { CalibrationSnapshotPayload } from "../calibration-snapshot.js";

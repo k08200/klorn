@@ -9,7 +9,7 @@
  * loops every minute. Skipping idle users cuts that fan-out by an order of
  * magnitude with no impact on people actively using Klorn.
  */
-import { AGENT_IDLE_THRESHOLD_MS } from "./config.js";
+import { AGENT_IDLE_THRESHOLD_MS } from "../config.js";
 
 /**
  * Returns true when the agent should skip this user's cycle because they

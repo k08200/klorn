@@ -5,12 +5,12 @@ const executeToolCallMock = vi.fn(async (_userId: string, fn: string) => {
   return JSON.stringify({ tool: fn, ok: true });
 });
 
-vi.mock("../tool-executor.js", () => ({
+vi.mock("../agentcore/tool-executor.js", () => ({
   executeToolCall: (...args: unknown[]) =>
     executeToolCallMock(...(args as [string, string, Record<string, unknown>])),
 }));
 
-import { executeBatchToolCalls } from "../batch-executor.js";
+import { executeBatchToolCalls } from "../agentcore/batch-executor.js";
 
 describe("executeBatchToolCalls", () => {
   it("returns empty array for empty input", async () => {

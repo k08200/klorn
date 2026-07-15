@@ -81,7 +81,7 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 
-vi.mock("../tool-executor.js", () => ({
+vi.mock("../agentcore/tool-executor.js", () => ({
   executeToolCall: (...a: unknown[]) => executeToolCall(...a),
 }));
 vi.mock("../websocket.js", () => ({ pushNotification }));
@@ -102,7 +102,7 @@ import {
   formatOutboxError,
   isTransientToolError,
   type OutboxRow,
-} from "../action-outbox.js";
+} from "../agentcore/action-outbox.js";
 
 const NOW = new Date("2026-06-12T12:00:00Z");
 

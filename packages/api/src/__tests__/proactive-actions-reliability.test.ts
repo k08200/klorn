@@ -47,7 +47,7 @@ vi.mock("../websocket.js", () => ({ pushNotification: vi.fn() }));
 vi.mock("../notify/notification-format.js", () => ({ senderName: vi.fn(() => "Sender") }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { runProactiveActions } from "../proactive-actions.js";
+import { runProactiveActions } from "../agentcore/proactive-actions.js";
 import { captureError } from "../sentry.js";
 
 describe("runProactiveActions reliability (F2)", () => {
