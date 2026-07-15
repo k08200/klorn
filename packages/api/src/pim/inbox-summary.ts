@@ -11,6 +11,18 @@
  * AttentionItem is the wrong substrate for it.
  */
 
+// The wire shapes live in @klorn/contract — the single source of truth shared
+// with the web client (which used to hand-mirror them behind a "keep in sync"
+// comment). Type-only imports; the contract package ships no runtime code.
+import type {
+  AttentionItem,
+  DecisionDetails,
+  DecisionEvidenceFact,
+  EventItem as EventInput,
+  InboxSummary,
+  TaskItem as TaskInput,
+  TodaySection,
+} from "@klorn/contract";
 import { resolveActionTarget } from "../agentcore/action-target.js";
 import { prisma } from "../db.js";
 import {
@@ -22,94 +34,11 @@ import {
 } from "../judge/attention-mirror.js";
 import { captureError } from "../sentry.js";
 
-export interface TaskInput {
-  id: string;
-  title: string;
-  status: string;
-  priority: string;
-  dueDate: string | null;
-}
-
-export interface EventInput {
-  id: string;
-  title: string;
-  startTime: string;
-  endTime?: string;
-  location?: string | null;
-}
-
-export type AttentionItem =
-  | {
-      kind: "pending_action";
-      id: string;
-      toolName: string;
-      label: string;
-      conversationId: string;
-      reasoning: string | null;
-      decision: DecisionDetails;
-    }
-  | {
-      kind: "overdue_task";
-      id: string;
-      title: string;
-      dueDate: string;
-      daysOverdue: number;
-      decision: DecisionDetails;
-    }
-  | {
-      kind: "today_event";
-      id: string;
-      title: string;
-      startTime: string;
-      minutesAway: number;
-      location: string | null;
-      decision: DecisionDetails;
-    }
-  | {
-      kind: "agent_proposal";
-      id: string;
-      title: string;
-      message: string;
-      link: string | null;
-      decision: DecisionDetails;
-    }
-  | {
-      kind: "commitment";
-      id: string;
-      title: string;
-      description: string | null;
-      commitmentKind: string;
-      owner: string;
-      dueAt: string | null;
-      dueText: string | null;
-      confidence: number;
-      attentionType: "COMMITMENT_DUE" | "COMMITMENT_OVERDUE" | "COMMITMENT_UNCONFIRMED";
-      decision: DecisionDetails;
-    };
-
-export interface DecisionEvidenceFact {
-  label: string;
-  value: string;
-}
-
-export interface DecisionDetails {
-  priority: number;
-  confidence: number;
-  suggestedAction: string | null;
-  costOfIgnoring: string | null;
-  evidence: DecisionEvidenceFact[];
-}
-
-export interface TodaySection {
-  events: EventInput[];
-  overdueTasks: TaskInput[];
-  todayTasks: TaskInput[];
-}
-
-export interface InboxSummary {
-  top3: AttentionItem[];
-  today: TodaySection;
-}
+export type { EventItem as EventInput, TaskItem as TaskInput } from "@klorn/contract";
+// Re-export for existing importers (routes, operating-plan, tests) so the
+// contract move is churn-free. TaskInput/EventInput are this file's historical
+// names for the contract's TaskItem/EventItem.
+export type { AttentionItem, DecisionDetails, DecisionEvidenceFact, InboxSummary, TodaySection };
 
 const TOP_LIMIT = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
