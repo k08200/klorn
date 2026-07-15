@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ProposalCandidate } from "../ontology-proposals.js";
+import type { ProposalCandidate } from "../learning/ontology-proposals.js";
 import {
   type ProposalStore,
   persistProposals,
   toAutoScoredOutcomes,
-} from "../ontology-proposals-store.js";
+} from "../learning/ontology-proposals-store.js";
 
 function candidate(knob: string): ProposalCandidate {
   return {

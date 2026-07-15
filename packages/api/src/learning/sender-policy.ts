@@ -17,7 +17,7 @@
  * — tuned from accumulated overrides — will adjust; keep them data.
  */
 
-import type { Tier } from "./tiers.js";
+import type { Tier } from "../tiers.js";
 
 /**
  * One past manual tier correction, rendered into the judge prompt as a

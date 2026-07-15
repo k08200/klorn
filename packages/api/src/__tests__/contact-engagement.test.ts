@@ -5,7 +5,7 @@ vi.mock("../db.js", () => ({
   prisma: { contactEngagementScore: { upsert: (a: unknown) => upsert(a) } },
 }));
 
-import { recordContactEngagement } from "../contact-engagement.js";
+import { recordContactEngagement } from "../learning/contact-engagement.js";
 
 describe("recordContactEngagement", () => {
   beforeEach(() => upsert.mockReset());

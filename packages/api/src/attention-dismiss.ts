@@ -5,10 +5,10 @@
  * source. Mirrors the ownership-checked mutation shape of attention-override.ts.
  */
 
-import { recordContactEngagement } from "./contact-engagement.js";
 import { prisma } from "./db.js";
 import { extractEmailAddress } from "./email-address.js";
-import { recordFeedback } from "./feedback.js";
+import { recordContactEngagement } from "./learning/contact-engagement.js";
+import { recordFeedback } from "./learning/feedback.js";
 
 export type AttentionDismissResult = { ok: true } | { ok: false; reason: "not_found" };
 

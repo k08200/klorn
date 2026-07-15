@@ -4,7 +4,7 @@ import {
   MIN_RULE_EVIDENCE,
   mineLearnedRules,
   type OverrideObservation,
-} from "../learned-rule-mining.js";
+} from "../learning/learned-rule-mining.js";
 
 const NOW = 1_700_000_000_000;
 const DAY = 24 * 60 * 60 * 1000;

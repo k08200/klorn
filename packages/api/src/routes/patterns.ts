@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { db } from "../db.js";
-import { getLearnedPatterns } from "../pattern-learner.js";
+import { getLearnedPatterns } from "../learning/pattern-learner.js";
 
 export async function patternRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);

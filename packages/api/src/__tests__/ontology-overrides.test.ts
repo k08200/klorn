@@ -4,7 +4,7 @@ import {
   buildEffectiveThresholds,
   getEffectiveThresholds,
   resetOverrideCache,
-} from "../ontology-overrides.js";
+} from "../learning/ontology-overrides.js";
 import { TIER_THRESHOLDS, tierFromFeatures } from "../tier-policy.js";
 
 const BASE = TIER_THRESHOLDS;

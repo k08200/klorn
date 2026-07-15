@@ -26,8 +26,10 @@ vi.mock("../db.js", () => ({
 }));
 
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
-vi.mock("../trust-score.js", () => ({ getTrustScore: vi.fn(() => Promise.resolve(null)) }));
-vi.mock("../interaction-graph.js", () => ({
+vi.mock("../learning/trust-score.js", () => ({
+  getTrustScore: vi.fn(() => Promise.resolve(null)),
+}));
+vi.mock("../learning/interaction-graph.js", () => ({
   getCachedInteractionNode: vi.fn(() => Promise.resolve(null)),
 }));
 

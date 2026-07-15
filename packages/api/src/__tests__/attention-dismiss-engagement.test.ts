@@ -19,8 +19,8 @@ vi.mock("../db.js", () => ({
     emailMessage: { findUnique: (a: unknown) => findUnique(a) },
   },
 }));
-vi.mock("../feedback.js", () => ({ recordFeedback: (a: unknown) => recordFeedback(a) }));
-vi.mock("../contact-engagement.js", () => ({
+vi.mock("../learning/feedback.js", () => ({ recordFeedback: (a: unknown) => recordFeedback(a) }));
+vi.mock("../learning/contact-engagement.js", () => ({
   recordContactEngagement: (u: string, e: string, k: string) => recordContactEngagement(u, e, k),
 }));
 

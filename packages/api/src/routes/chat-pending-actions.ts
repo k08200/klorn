@@ -23,7 +23,7 @@ import { upsertAttentionForPendingAction } from "../attention-mirror.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { db, prisma } from "../db.js";
-import { recipientFromToolArgs, recordFeedback } from "../feedback.js";
+import { recipientFromToolArgs, recordFeedback } from "../learning/feedback.js";
 
 /**
  * Mint an ActionReceipt for the about-to-execute floor action. The receipt
@@ -380,7 +380,7 @@ export async function chatRoutes(app: FastifyInstance) {
       });
 
       // Learn from rejection for pattern detection
-      import("../pattern-learner.js")
+      import("../learning/pattern-learner.js")
         .then(({ learnFromRejection }) =>
           learnFromRejection(userId, action.toolName, action.reasoning || "", trimmedReason || ""),
         )
@@ -400,7 +400,7 @@ export async function chatRoutes(app: FastifyInstance) {
       // Never suggest this tool type again if requested
       const { neverSuggest } = (request.body as { neverSuggest?: boolean }) || {};
       if (neverSuggest && action.toolName) {
-        import("../memory.js")
+        import("../learning/memory.js")
           .then(({ remember }) =>
             remember(
               userId,
@@ -450,7 +450,7 @@ export async function chatRoutes(app: FastifyInstance) {
       });
 
       // Record the snooze signal for policy learning
-      import("../feedback.js")
+      import("../learning/feedback.js")
         .then(({ recordFeedback }) =>
           recordFeedback({
             userId,

@@ -4,7 +4,7 @@ import {
   type LearnedRule,
   matchLearnedRules,
   subjectTokens,
-} from "../learned-rules.js";
+} from "../learning/learned-rules.js";
 
 describe("domainOfAddress", () => {
   it("extracts the lowercased domain from a 'Name <addr>' header", () => {

@@ -8,8 +8,8 @@
  * that triggered it.
  */
 
-import { prisma } from "./db.js";
-import { extractEmailAddress } from "./email-address.js";
+import { prisma } from "../db.js";
+import { extractEmailAddress } from "../email-address.js";
 
 export type Engagement = "outbound" | "dismiss";
 

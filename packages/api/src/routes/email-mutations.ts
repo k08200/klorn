@@ -11,7 +11,6 @@ import multipart from "@fastify/multipart";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
-import { recordContactEngagement } from "../contact-engagement.js";
 import { prisma } from "../db.js";
 import { syncEmailByGmailId } from "../email-sync.js";
 import {
@@ -24,6 +23,7 @@ import {
   unarchiveEmail,
   untrashEmail,
 } from "../gmail.js";
+import { recordContactEngagement } from "../learning/contact-engagement.js";
 import { captureError } from "../sentry.js";
 import { safeAttachmentFilename } from "./email.js";
 

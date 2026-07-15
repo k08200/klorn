@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { proposeAutoConfidenceAdjustment } from "../ontology-proposals.js";
+import { proposeAutoConfidenceAdjustment } from "../learning/ontology-proposals.js";
 import type { ScoredOutcome } from "../selective-threshold.js";
 
 // Base auto.confidence gate is 0.85 (tier-policy TIER_THRESHOLDS.auto.confidence).

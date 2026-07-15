@@ -8,7 +8,7 @@ import type { FeedbackSignal, FeedbackSource } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
-import { getFeedbackPolicyCandidates } from "../policy-extraction.js";
+import { getFeedbackPolicyCandidates } from "../learning/policy-extraction.js";
 
 const ALLOWED_SOURCES = new Set<FeedbackSource>([
   "PENDING_ACTION",

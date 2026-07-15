@@ -3,7 +3,7 @@ import {
   RECURRING_INTENT_VALUES,
   RELATIONSHIP_VALUES,
   validateTraitValue,
-} from "../sender-trait-policy.js";
+} from "../learning/sender-trait-policy.js";
 
 describe("validateTraitValue", () => {
   it("accepts an allowed relationship value", () => {

@@ -29,7 +29,7 @@ vi.mock("../gmail.js", () => ({
 // override cache. Mock the cache so we can assert it's called and drive the
 // cacheRefreshed=false path; the read fns keep ontology.js's import happy.
 const refreshOverrideCacheSpy = vi.fn(async () => true);
-vi.mock("../ontology-overrides.js", () => ({
+vi.mock("../learning/ontology-overrides.js", () => ({
   refreshOverrideCache: (...args: unknown[]) => refreshOverrideCacheSpy(...args),
   getEffectiveThresholds: vi.fn(() => ({})),
   overriddenKnobs: vi.fn(() => []),
@@ -73,7 +73,7 @@ const buildInteractionGraphSpy = vi.fn(async (_userId: string) => ({
     },
   ],
 }));
-vi.mock("../interaction-graph.js", () => ({
+vi.mock("../learning/interaction-graph.js", () => ({
   buildInteractionGraph: (...args: [string]) => buildInteractionGraphSpy(...args),
 }));
 

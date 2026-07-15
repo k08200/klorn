@@ -7,7 +7,7 @@
  */
 
 import type { FeedbackSignal, FeedbackSource } from "@prisma/client";
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 
 export interface FeedbackInput {
   userId: string;

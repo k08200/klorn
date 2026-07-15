@@ -15,7 +15,7 @@ vi.mock("../db.js", () => ({
   db: {},
 }));
 
-vi.mock("../memory.js", () => ({
+vi.mock("../learning/memory.js", () => ({
   remember: vi.fn(),
 }));
 
@@ -23,7 +23,7 @@ import {
   getCachedInteractionNode,
   type InteractionGraph,
   propagatedImportanceForDomain,
-} from "../interaction-graph.js";
+} from "../learning/interaction-graph.js";
 
 const NOW = new Date("2026-06-12T00:00:00Z");
 const HOURS = (n: number) => new Date(NOW.getTime() - n * 60 * 60 * 1000).toISOString();

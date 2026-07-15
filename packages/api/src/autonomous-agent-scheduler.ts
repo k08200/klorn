@@ -15,7 +15,7 @@ import { runAgentForUser } from "./autonomous-agent.js";
 import { planHasFeature } from "./billing/stripe.js";
 import { AGENT_CHECK_INTERVAL_MS, AGENT_IDLE_THRESHOLD_MS } from "./config.js";
 import { db, prisma } from "./db.js";
-import { recipientFromToolArgs, recordFeedback } from "./feedback.js";
+import { recipientFromToolArgs, recordFeedback } from "./learning/feedback.js";
 import { openai } from "./llm/openai.js";
 import {
   markSchedulerDisabled,

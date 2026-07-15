@@ -12,7 +12,7 @@
  * path returns "" so a broken query can never break an agent run.
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 
 /** How many recent rejection reasons to inject (newest first). */
 export const REJECTION_HINT_LIMIT = 5;

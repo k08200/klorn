@@ -695,7 +695,7 @@ async function runAutomations() {
     // skipped automatically if their profile was updated within the last 7 days.
     if (isSunday && lastVoiceProfileDate !== todayUtc) {
       lastVoiceProfileDate = todayUtc;
-      import("./voice-profile-extractor.js")
+      import("./learning/voice-profile-extractor.js")
         .then(({ extractVoiceProfilesForAllUsers }) => extractVoiceProfilesForAllUsers())
         .catch((err) => {
           console.error("[AUTOMATION] Voice profile extraction failed:", err);
@@ -708,7 +708,7 @@ async function runAutomations() {
     // (consumed by the judge only behind the SENDER_TRAITS_IN_JUDGE flag).
     if (isSunday && lastSenderTraitDate !== todayUtc) {
       lastSenderTraitDate = todayUtc;
-      import("./sender-trait-extractor.js")
+      import("./learning/sender-trait-extractor.js")
         .then(({ extractSenderTraitsForAllUsers }) => extractSenderTraitsForAllUsers())
         .catch((err) => {
           console.error("[AUTOMATION] Sender trait extraction failed:", err);
@@ -722,7 +722,7 @@ async function runAutomations() {
     // classifier reads only APPLIED rules, so this never changes classification.
     if (isSunday && lastLearnedRuleDate !== todayUtc) {
       lastLearnedRuleDate = todayUtc;
-      import("./learned-rule-store.js")
+      import("./learning/learned-rule-store.js")
         .then(({ recomputeLearnedRulesForAllUsers }) => recomputeLearnedRulesForAllUsers())
         .catch((err) => {
           console.error("[AUTOMATION] Learned-rule recompute failed:", err);
@@ -761,7 +761,7 @@ async function runAutomations() {
       // Turn the same override ledger into advisory threshold-change proposals
       // (the read/write ontology's write side). Best-effort: never throws, never
       // mutates the classifier — proposals are applied by a human via a code PR.
-      import("./ontology-proposals-store.js")
+      import("./learning/ontology-proposals-store.js")
         .then(({ recomputeOntologyProposalsSafe }) => recomputeOntologyProposalsSafe())
         .catch((err) => {
           console.warn("[AUTOMATION] Ontology proposal recompute failed:", err);

@@ -12,7 +12,7 @@
  */
 
 import { prisma } from "../db.js";
-import { remember } from "../memory.js";
+import { remember } from "../learning/memory.js";
 
 const PHONE_KEY = "phone_number_e164";
 const PHONE_TYPE = "CONTEXT";

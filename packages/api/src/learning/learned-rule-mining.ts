@@ -22,9 +22,9 @@
  * caller passes `now` — so age-gating is deterministic under test.
  */
 
-import { extractEmailAddress } from "./email-address.js";
+import { extractEmailAddress } from "../email-address.js";
+import type { Tier } from "../tiers.js";
 import { domainOfAddress, type RulePattern, subjectTokens } from "./learned-rules.js";
-import type { Tier } from "./tiers.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

@@ -25,7 +25,7 @@
  *   4. getSuppressionSet(userId) — cached 10-min TTL, read by attention-mirror
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 import { remember } from "./memory.js";
 
 const SUPPRESSION_KEY = "attention_suppression_v2";

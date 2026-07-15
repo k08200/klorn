@@ -17,7 +17,7 @@
  *   - Call getTrustScoreHint() to inject context into agent prompts.
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 
 export type TrustBadge = "reliable" | "mostly_reliable" | "unreliable" | "unknown";
 
@@ -38,7 +38,7 @@ import {
   TRUST_MIN_DATA_POINTS,
   TRUST_MOSTLY_RELIABLE_THRESHOLD,
   TRUST_RELIABLE_THRESHOLD,
-} from "./config.js";
+} from "../config.js";
 
 const MIN_DATA_POINTS = TRUST_MIN_DATA_POINTS;
 const STALE_THRESHOLD_DAYS = Math.max(30, TRUST_HALF_LIFE_DAYS * 2);

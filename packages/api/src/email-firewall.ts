@@ -19,12 +19,12 @@ import type { GmailRawEmail } from "./gmail-fetch.js";
 import { buildJudgeContext } from "./judge-context.js";
 import { recordJudgeSource } from "./judge-health.js";
 import { isClearMarketing } from "./keyword-policy.js";
+import { engagementKindOf } from "./learning/sender-policy.js";
 import { getUserLlmCredentials } from "./llm/llm-credentials.js";
 import { extractAndUpsertCommitmentsFromText } from "./pim/commitment-ingestion.js";
 import { judgeEmail, type PocTier } from "./poc-judge.js";
 import type { ProviderCredentials } from "./providers/index.js";
 import { resolveUserEmail } from "./resolve-user-email.js";
-import { engagementKindOf } from "./sender-policy.js";
 import { captureError } from "./sentry.js";
 
 /**

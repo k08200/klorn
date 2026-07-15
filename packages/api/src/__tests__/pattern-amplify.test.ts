@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { amplifiedPriority, MAX_AMPLIFIED_PRIORITY } from "../pattern-learner.js";
+import { amplifiedPriority, MAX_AMPLIFIED_PRIORITY } from "../learning/pattern-learner.js";
 
 // Regression tests for the stale attention-item priority amplifier. The old
 // version (newPriority = item.priority + floor(ageDays * 3), cap 120) compounded

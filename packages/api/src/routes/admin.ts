@@ -8,25 +8,25 @@ import type { CalibrationSnapshotPayload } from "../calibration-snapshot.js";
 import { db, prisma } from "../db.js";
 import { getDecisionMetrics } from "../decision-metrics.js";
 import { sendBetaInviteEmail } from "../email.js";
-import { buildInteractionGraph } from "../interaction-graph.js";
 import { getJudgeHealth } from "../judge-health.js";
+import { buildInteractionGraph } from "../learning/interaction-graph.js";
 import {
   listAppliedLearnedRules,
   listOpenLearnedRules,
   recomputeLearnedRules,
-} from "../learned-rule-store.js";
-import { clearFallbackState, getProviderCooldownInfo } from "../llm/model-fallback.js";
-import { MODEL } from "../llm/openai.js";
-import { describePolicy } from "../ontology.js";
-import { refreshOverrideCache } from "../ontology-overrides.js";
+} from "../learning/learned-rule-store.js";
+import { describePolicy } from "../learning/ontology.js";
+import { refreshOverrideCache } from "../learning/ontology-overrides.js";
 import {
   listAppliedProposals,
   listOpenProposals,
   recomputeOntologyProposals,
-} from "../ontology-proposals-store.js";
+} from "../learning/ontology-proposals-store.js";
+import { getTraitMetrics } from "../learning/sender-trait-metrics.js";
+import { clearFallbackState, getProviderCooldownInfo } from "../llm/model-fallback.js";
+import { MODEL } from "../llm/openai.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { getProviderChain } from "../providers/index.js";
-import { getTraitMetrics } from "../sender-trait-metrics.js";
 
 type FeedbackGroup = { signal: string; _count: { signal: number } };
 

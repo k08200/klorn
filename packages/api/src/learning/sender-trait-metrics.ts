@@ -45,7 +45,7 @@ export function summarizeTraits(rows: TraitRow[], activeSenderCount: number): Tr
 }
 
 /** Read traits + the distinct-sender universe for a user (or all) and summarize. */
-export async function getTraitMetrics(prisma: typeof import("./db.js").prisma, userId?: string) {
+export async function getTraitMetrics(prisma: typeof import("../db.js").prisma, userId?: string) {
   const where = userId ? { userId } : {};
   const [rows, senderGroups] = await Promise.all([
     prisma.senderTrait.findMany({

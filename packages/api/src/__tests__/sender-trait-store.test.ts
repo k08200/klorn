@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CandidateTrait } from "../sender-trait-policy.js";
+import type { CandidateTrait } from "../learning/sender-trait-policy.js";
 
 const findManyMock = vi.hoisted(() => vi.fn());
 const findUniqueMock = vi.hoisted(() => vi.fn());
@@ -26,7 +26,7 @@ import {
   MIN_TRAIT_CONFIDENCE_FOR_JUDGE,
   resolveTraitUpsert,
   upsertSenderTrait,
-} from "../sender-trait-store.js";
+} from "../learning/sender-trait-store.js";
 
 const challenger: CandidateTrait = {
   factKind: "relationship",
