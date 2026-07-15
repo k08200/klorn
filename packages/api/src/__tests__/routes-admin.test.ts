@@ -440,7 +440,7 @@ describe("admin routes", () => {
 
   it("clears provider cooldown state via POST /llm-state/clear", async () => {
     const { markKeyLimited, isKeyLimited, clearFallbackState } = await import(
-      "../model-fallback.js"
+      "../llm/model-fallback.js"
     );
     clearFallbackState();
     markKeyLimited("openrouter:user:test-admin", new Error("429 per day"));
@@ -474,7 +474,7 @@ describe("admin routes", () => {
 
   it("clears every provider when /llm-state/clear is called without a quotaKey", async () => {
     const { markKeyLimited, isKeyLimited, clearFallbackState } = await import(
-      "../model-fallback.js"
+      "../llm/model-fallback.js"
     );
     clearFallbackState();
     markKeyLimited("openrouter:test-all", new Error("429 per day"));

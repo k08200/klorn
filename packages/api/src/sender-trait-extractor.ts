@@ -1,8 +1,8 @@
 import { prisma } from "./db.js";
-import { asString, asUnitInterval } from "./llm-coerce.js";
-import { getUserLlmCredentials } from "./llm-credentials.js";
-import { parseLlmJson } from "./llm-json.js";
-import { createCompletion, JUDGE_MODEL } from "./openai.js";
+import { asString, asUnitInterval } from "./llm/llm-coerce.js";
+import { getUserLlmCredentials } from "./llm/llm-credentials.js";
+import { parseLlmJson } from "./llm/llm-json.js";
+import { createCompletion, JUDGE_MODEL } from "./llm/openai.js";
 import type { ProviderCredentials } from "./providers/index.js";
 import type { CandidateTrait } from "./sender-trait-policy.js";
 import { TRAIT_KINDS, validateTraitValue } from "./sender-trait-policy.js";

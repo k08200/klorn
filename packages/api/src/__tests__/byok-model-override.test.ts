@@ -41,7 +41,7 @@ vi.mock("../billing/llm-usage.js", () => ({
   trueUpCostLedgers: vi.fn(async () => {}),
 }));
 
-import { createCompletion, createVisionCompletion, VISION_MODEL } from "../openai.js";
+import { createCompletion, createVisionCompletion, VISION_MODEL } from "../llm/openai.js";
 
 describe("createCompletion — chat-surface model override (useUserModel)", () => {
   it("applies credentials.userModel ONLY when the call opts in via useUserModel", async () => {

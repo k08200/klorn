@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
-import { clearFallbackState, markKeyLimited } from "../model-fallback.js";
+import { clearFallbackState, markKeyLimited } from "../llm/model-fallback.js";
 
 vi.mock("../email.js", () => ({ sendVerificationEmail: vi.fn(), sendPasswordResetEmail: vi.fn() }));
 vi.mock("../gmail.js", () => ({

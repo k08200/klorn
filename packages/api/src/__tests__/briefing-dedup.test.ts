@@ -45,7 +45,7 @@ vi.mock("../db.js", () => ({
 // returns deterministic text without any network call, and so we can assert it
 // is NOT invoked on the reuse paths.
 const generateSpy = vi.hoisted(() => ({ calls: 0 }));
-vi.mock("../openai.js", () => ({
+vi.mock("../llm/openai.js", () => ({
   MODEL: "test-model",
   createCompletion: vi.fn(() => {
     generateSpy.calls++;
@@ -55,7 +55,7 @@ vi.mock("../openai.js", () => ({
 vi.mock("../tasks.js", () => ({ listTasks: vi.fn(() => Promise.resolve({ tasks: [] })) }));
 vi.mock("../gmail.js", () => ({ listEmails: vi.fn(() => Promise.resolve({ emails: [] })) }));
 vi.mock("../notes.js", () => ({ listNotes: vi.fn(() => Promise.resolve({ notes: [] })) }));
-vi.mock("../llm-credentials.js", () => ({
+vi.mock("../llm/llm-credentials.js", () => ({
   getUserLlmCredentials: vi.fn(() => Promise.resolve(undefined)),
 }));
 vi.mock("../notify/push.js", () => ({

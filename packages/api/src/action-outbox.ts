@@ -43,7 +43,7 @@
 import { createHash } from "node:crypto";
 import type { ActionReceipt } from "./attention-floor.js";
 import { db } from "./db.js";
-import { isConnectionError, isKeyLimitError } from "./model-fallback.js";
+import { isConnectionError, isKeyLimitError } from "./llm/model-fallback.js";
 import { captureError } from "./sentry.js";
 import { executeToolCall } from "./tool-executor.js";
 import { pushNotification } from "./websocket.js";

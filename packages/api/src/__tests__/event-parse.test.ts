@@ -4,12 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // client prefILLS into the New event modal. Parsing only — never writes.
 
 const createCompletion = vi.fn();
-vi.mock("../openai.js", () => ({
+vi.mock("../llm/openai.js", () => ({
   createCompletion: (...args: unknown[]) => createCompletion(...args),
   JUDGE_MODEL: "google/gemini-2.5-flash",
 }));
 
-vi.mock("../llm-credentials.js", () => ({
+vi.mock("../llm/llm-credentials.js", () => ({
   getUserLlmCredentials: vi.fn(async () => ({ userModel: "anthropic/claude-sonnet-5" })),
 }));
 

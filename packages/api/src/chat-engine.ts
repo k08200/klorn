@@ -14,8 +14,8 @@
 
 import type OpenAI from "openai";
 import { trackTokenUsage } from "./billing/token-usage.js";
-import { getUserLlmCredentials } from "./llm-credentials.js";
-import { AGENT_MODEL, createCompletion } from "./openai.js";
+import { getUserLlmCredentials } from "./llm/llm-credentials.js";
+import { AGENT_MODEL, createCompletion } from "./llm/openai.js";
 import { captureError } from "./sentry.js";
 import { ALL_TOOLS, executeToolCall } from "./tool-executor.js";
 

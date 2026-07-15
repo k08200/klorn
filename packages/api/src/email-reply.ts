@@ -4,7 +4,7 @@
  */
 
 import { prisma } from "./db.js";
-import { createCompletion, DRAFT_MODEL, openai } from "./openai.js";
+import { createCompletion, DRAFT_MODEL, openai } from "./llm/openai.js";
 import { wrapUntrusted } from "./untrusted.js";
 
 // ─── Auto-Reply Engine ────────────────────────────────────────────────────

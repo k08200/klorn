@@ -736,7 +736,7 @@ async function runAutomations() {
     // alert instead of mystery 404s in the agent logs.
     if (lastCatalogCheckDate !== todayUtc) {
       lastCatalogCheckDate = todayUtc;
-      import("./openrouter-catalog-check.js")
+      import("./llm/openrouter-catalog-check.js")
         .then(({ runOpenRouterCatalogCheck }) => runOpenRouterCatalogCheck())
         .catch((err) => {
           console.warn("[AUTOMATION] Catalog check failed:", err);

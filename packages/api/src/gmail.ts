@@ -2,7 +2,7 @@ import { google } from "googleapis";
 import { MULTI_INBOX_SYNC_ENABLED } from "./config.js";
 import { decryptOptional, decryptToken, encryptOptional, encryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
-import { getUserLlmCredentials } from "./llm-credentials.js";
+import { getUserLlmCredentials } from "./llm/llm-credentials.js";
 import { captureError } from "./sentry.js";
 import { wrapUntrusted } from "./untrusted.js";
 

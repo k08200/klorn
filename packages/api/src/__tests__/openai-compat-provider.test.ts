@@ -8,7 +8,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isConnectionError } from "../model-fallback.js";
+import { isConnectionError } from "../llm/model-fallback.js";
 
 describe("isConnectionError", () => {
   it.each([
@@ -127,14 +127,14 @@ describe("createCompletion failover when the local endpoint is down", () => {
         fakeProvider("openrouter", cloudCall),
       ],
     }));
-    vi.doMock("../model-fallback.js", async (importOriginal) => ({
+    vi.doMock("../llm/model-fallback.js", async (importOriginal) => ({
       ...(await importOriginal<Record<string, unknown>>()),
       markKeyLimited,
       isProviderUnavailable: () => false,
     }));
     vi.doMock("../db.js", () => ({ prisma: {}, db: {} }));
 
-    const { createCompletion } = await import("../openai.js");
+    const { createCompletion } = await import("../llm/openai.js");
     const result = (await createCompletion({
       model: "google/gemma-4-31b-it:free",
       messages: [{ role: "user", content: "hi" }],
@@ -160,14 +160,14 @@ describe("createCompletion failover when the local endpoint is down", () => {
         fakeProvider("gemini", neverCall),
       ],
     }));
-    vi.doMock("../model-fallback.js", async (importOriginal) => ({
+    vi.doMock("../llm/model-fallback.js", async (importOriginal) => ({
       ...(await importOriginal<Record<string, unknown>>()),
       markKeyLimited,
       isProviderUnavailable: () => false,
     }));
     vi.doMock("../db.js", () => ({ prisma: {}, db: {} }));
 
-    const { createCompletion } = await import("../openai.js");
+    const { createCompletion } = await import("../llm/openai.js");
     await expect(
       createCompletion({
         model: "google/gemma-4-31b-it:free",

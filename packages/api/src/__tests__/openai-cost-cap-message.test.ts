@@ -3,7 +3,7 @@ import {
   DAILY_COST_CAP_MESSAGE,
   DAILY_COST_CAP_UPGRADE_MESSAGE,
   dailyCostCapMessageFor,
-} from "../openai.js";
+} from "../llm/openai.js";
 
 describe("dailyCostCapMessageFor", () => {
   it("nudges an upgrade when the FREE-tier cap tripped (paywall on, non-entitled)", () => {

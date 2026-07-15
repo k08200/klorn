@@ -91,14 +91,14 @@ beforeEach(async () => {
   chain.length = 0;
   recorded.length = 0;
   trueUpSpy.mockClear();
-  const { clearFallbackState } = await import("../model-fallback.js");
+  const { clearFallbackState } = await import("../llm/model-fallback.js");
   clearFallbackState();
 });
 
 describe("createCompletion — usage ledger threading", () => {
   it("records the first provider+model when the first call succeeds", async () => {
     chain.push(makeProvider("openrouter", "openrouter:env", async () => COMPLETION));
-    const { createCompletion } = await import("../openai.js");
+    const { createCompletion } = await import("../llm/openai.js");
 
     const result = await createCompletion(PARAMS);
 
@@ -120,7 +120,7 @@ describe("createCompletion — usage ledger threading", () => {
       }),
       makeProvider("gemini", "gemini:env", async () => COMPLETION),
     );
-    const { createCompletion } = await import("../openai.js");
+    const { createCompletion } = await import("../llm/openai.js");
 
     await createCompletion(PARAMS, { userId: "user-1", priority: "background" });
 
@@ -138,7 +138,7 @@ describe("createCompletion — usage ledger threading", () => {
       yield { choices: [{ delta: { content: "ok" } }] };
     }
     chain.push(makeProvider("openrouter", "openrouter:env-stream", async () => stream()));
-    const { createCompletion } = await import("../openai.js");
+    const { createCompletion } = await import("../llm/openai.js");
 
     await createCompletion({ ...PARAMS, stream: true });
 
@@ -156,7 +156,7 @@ describe("createCompletion — usage ledger threading", () => {
         throw { status: 429, message: "Key limit exceeded" };
       }),
     );
-    const { createCompletion, AllProvidersExhaustedError } = await import("../openai.js");
+    const { createCompletion, AllProvidersExhaustedError } = await import("../llm/openai.js");
 
     await expect(createCompletion(PARAMS)).rejects.toBeInstanceOf(AllProvidersExhaustedError);
     expect(recorded).toHaveLength(0);
@@ -168,7 +168,7 @@ describe("createCompletion — usage ledger threading", () => {
     const userProvider = makeProvider("openrouter", "openrouter:user:u9", async () => COMPLETION);
     userProvider.ownedByUser = true;
     chain.push(userProvider);
-    const { createCompletion } = await import("../openai.js");
+    const { createCompletion } = await import("../llm/openai.js");
 
     await createCompletion(PARAMS, { userId: "u9" });
 
@@ -188,7 +188,7 @@ describe("createCompletion — usage ledger threading", () => {
       makeProvider("gemini", "gemini:env", async () => COMPLETION),
     );
     chain[0].ownedByUser = true; // the user key (which rate-limits and fails over)
-    const { createCompletion } = await import("../openai.js");
+    const { createCompletion } = await import("../llm/openai.js");
 
     await createCompletion(PARAMS, { userId: "u9" });
 
@@ -200,7 +200,7 @@ describe("createCompletion — usage ledger threading", () => {
 describe("createVisionCompletion — usage ledger threading", () => {
   it("records the provider+model that served the vision call", async () => {
     chain.push(makeProvider("gemini", "gemini:env-vision", async () => COMPLETION));
-    const { createVisionCompletion } = await import("../openai.js");
+    const { createVisionCompletion } = await import("../llm/openai.js");
 
     await createVisionCompletion(PARAMS, { userId: "user-2" });
 
@@ -218,7 +218,7 @@ describe("createVisionCompletion — usage ledger threading", () => {
     // bucket (priority ?? "background"), so the usage ledger must agree —
     // otherwise the same call gates as background but bills as foreground.
     chain.push(makeProvider("gemini", "gemini:env-vision", async () => COMPLETION));
-    const { createVisionCompletion } = await import("../openai.js");
+    const { createVisionCompletion } = await import("../llm/openai.js");
 
     await createVisionCompletion(PARAMS, { userId: "user-3" });
 
@@ -227,7 +227,7 @@ describe("createVisionCompletion — usage ledger threading", () => {
 
   it("honors an explicit foreground priority on the ledger", async () => {
     chain.push(makeProvider("gemini", "gemini:env-vision", async () => COMPLETION));
-    const { createVisionCompletion } = await import("../openai.js");
+    const { createVisionCompletion } = await import("../llm/openai.js");
 
     await createVisionCompletion(PARAMS, { userId: "user-4", priority: "foreground" });
 
@@ -251,7 +251,7 @@ describe("createVisionCompletion — usage ledger threading", () => {
         return COMPLETION;
       }),
     );
-    const { createVisionCompletion, VISION_MODEL } = await import("../openai.js");
+    const { createVisionCompletion, VISION_MODEL } = await import("../llm/openai.js");
     // Test premise: the default vision SKU is the :free one that 404s.
     expect(VISION_MODEL.endsWith(":free")).toBe(true);
     const paid = VISION_MODEL.replace(/:free$/, "");
@@ -289,7 +289,7 @@ describe("createVisionCompletion — usage ledger threading", () => {
       userOR,
       makeProvider("gemini", "gemini:env-vision", async () => COMPLETION),
     );
-    const { createVisionCompletion } = await import("../openai.js");
+    const { createVisionCompletion } = await import("../llm/openai.js");
 
     const result = await createVisionCompletion(PARAMS, { userId: "u7" });
 
@@ -314,7 +314,7 @@ describe("createVisionCompletion — usage ledger threading", () => {
       userOR,
       makeProvider("gemini", "gemini:env-vision", async () => COMPLETION),
     );
-    const { createVisionCompletion } = await import("../openai.js");
+    const { createVisionCompletion } = await import("../llm/openai.js");
 
     const result = await createVisionCompletion(PARAMS, { userId: "u6" });
 

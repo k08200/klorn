@@ -5,8 +5,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../db.js", () => ({ prisma: { feedbackEvent: { findMany: mocks.feedbackFindMany } } }));
-vi.mock("../llm-credentials.js", () => ({ getUserLlmCredentials: vi.fn() }));
-vi.mock("../openai.js", () => ({ createCompletion: vi.fn(), MODEL: "test-model" }));
+vi.mock("../llm/llm-credentials.js", () => ({ getUserLlmCredentials: vi.fn() }));
+vi.mock("../llm/openai.js", () => ({ createCompletion: vi.fn(), MODEL: "test-model" }));
 
 import {
   buildAttachmentCandidateProfile,

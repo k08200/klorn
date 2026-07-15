@@ -47,7 +47,7 @@ vi.mock("../gmail.js", () => ({ markAsRead: vi.fn(() => Promise.resolve()) }));
 vi.mock("../judge-context.js", () => ({ buildJudgeContext: vi.fn(() => Promise.resolve({})) }));
 vi.mock("../judge-health.js", () => ({ recordJudgeSource: vi.fn() }));
 vi.mock("../keyword-policy.js", () => ({ isClearMarketing: vi.fn(() => false) }));
-vi.mock("../llm-credentials.js", () => ({
+vi.mock("../llm/llm-credentials.js", () => ({
   getUserLlmCredentials: vi.fn(() => Promise.resolve(null)),
 }));
 vi.mock("../poc-judge.js", () => ({ judgeEmail: vi.fn(() => Promise.resolve("QUEUE")) }));

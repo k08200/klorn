@@ -8,8 +8,8 @@
 
 import type { CommitmentKind, CommitmentOwner, CommitmentSource } from "@prisma/client";
 import type { CommitmentCandidate } from "./commitment-extractor.js";
-import { parseLlmJson } from "./llm-json.js";
-import { createCompletion, MODEL } from "./openai.js";
+import { parseLlmJson } from "./llm/llm-json.js";
+import { createCompletion, MODEL } from "./llm/openai.js";
 import { captureError } from "./sentry.js";
 import { wrapUntrusted } from "./untrusted.js";
 

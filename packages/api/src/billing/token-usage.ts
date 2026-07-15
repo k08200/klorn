@@ -1,5 +1,5 @@
 import { db } from "../db.js";
-import { estimateModelCostUsd } from "../model-fallback.js";
+import { estimateModelCostUsd } from "../llm/model-fallback.js";
 import { captureError } from "../sentry.js";
 
 /** OpenAI-shaped usage block returned alongside a completion. */

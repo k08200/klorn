@@ -23,7 +23,7 @@ vi.mock("../tasks.js", () => ({
 vi.mock("../notes.js", () => ({
   listNotes: vi.fn(async () => ({ notes: [] })),
 }));
-vi.mock("../openai.js", () => ({
+vi.mock("../llm/openai.js", () => ({
   CHAT_SYSTEM_PROMPT: "system",
   MODEL: "test-model",
   openai: null,

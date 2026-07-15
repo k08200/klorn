@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../gmail.js", () => ({ getAuthedClient: vi.fn() }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 // Keep the unit isolated from heavy top-level imports in meeting.ts.
-vi.mock("../openai.js", () => ({ createCompletion: vi.fn(), MODEL: {} }));
+vi.mock("../llm/openai.js", () => ({ createCompletion: vi.fn(), MODEL: {} }));
 vi.mock("../db.js", () => ({ prisma: {} }));
 
 const eventsList = vi.fn();

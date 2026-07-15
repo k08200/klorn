@@ -14,7 +14,7 @@ describe("shared default model", () => {
     process.env.NODE_ENV = "production";
     delete process.env.CHAT_MODEL;
     vi.resetModules();
-    const { MODEL } = await import("../openai.js");
+    const { MODEL } = await import("../llm/openai.js");
     expect(MODEL).toBe("google/gemini-2.5-flash");
   });
 
@@ -22,7 +22,7 @@ describe("shared default model", () => {
     process.env.NODE_ENV = "test";
     delete process.env.CHAT_MODEL;
     vi.resetModules();
-    const { MODEL } = await import("../openai.js");
+    const { MODEL } = await import("../llm/openai.js");
     expect(MODEL).toBe("google/gemma-4-31b-it:free");
   });
 
@@ -30,7 +30,7 @@ describe("shared default model", () => {
     process.env.NODE_ENV = "production";
     process.env.CHAT_MODEL = "openai/gpt-4o";
     vi.resetModules();
-    const { MODEL } = await import("../openai.js");
+    const { MODEL } = await import("../llm/openai.js");
     expect(MODEL).toBe("openai/gpt-4o");
   });
 });

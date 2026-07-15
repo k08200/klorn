@@ -33,8 +33,8 @@ import {
   SUPPORTED_CONVERSION_TARGETS,
 } from "../file-conversions.js";
 import { resolveMailClient } from "../gmail.js";
-import { getUserLlmCredentials } from "../llm-credentials.js";
-import { createVisionCompletion, VISION_MODEL } from "../openai.js";
+import { getUserLlmCredentials } from "../llm/llm-credentials.js";
+import { createVisionCompletion, VISION_MODEL } from "../llm/openai.js";
 import {
   isDecorativeImage,
   isVisionAttachment,

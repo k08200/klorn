@@ -28,7 +28,7 @@ import { decryptToken } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
 import { isAllowedImapHost } from "./is-allowed-imap-host.js";
 import { buildJudgeContext } from "./judge-context.js";
-import { getUserLlmCredentials } from "./llm-credentials.js";
+import { getUserLlmCredentials } from "./llm/llm-credentials.js";
 import { judgeEmail } from "./poc-judge.js";
 import { engagementKindOf } from "./sender-policy.js";
 import { captureError } from "./sentry.js";

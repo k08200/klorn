@@ -4,7 +4,7 @@ import {
   CURATED_MODELS,
   DEFAULT_CHAT_MODEL,
   isCuratedModel,
-} from "../model-catalog.js";
+} from "../llm/model-catalog.js";
 
 describe("model catalog (chat surface, frontier-only)", () => {
   it("recommends Claude Sonnet 5 first and lists only frontier models", () => {
