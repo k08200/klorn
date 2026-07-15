@@ -4,8 +4,15 @@ services:
     runtime: node
     region: singapore
     plan: free
+    # Pin Node's heap for the build. The api `tsc` build needs >2GB; Render's
+    # builder sizes Node's default heap around 2GB (CI/GitHub runners have more
+    # RAM, so their auto-default is higher — which is why CI passed while Render
+    # failed with "JavaScript heap out of memory" once the codebase grew past
+    # ~2GB, deploy log 2026-07-14). Setting it explicitly makes the build
+    # independent of the builder's RAM-derived default.
     buildCommand: |
       corepack enable &&
+      export NODE_OPTIONS=--max-old-space-size=4096 &&
       pnpm install --frozen-lockfile --prod=false &&
       cd packages/core && pnpm build &&
       cd ../api && npx prisma generate && pnpm build
