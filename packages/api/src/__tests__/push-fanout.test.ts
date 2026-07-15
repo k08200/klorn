@@ -24,34 +24,34 @@ vi.mock("../db.js", () => ({
     pushDeliveryLog: { findFirst: vi.fn(async () => null) },
   },
 }));
-vi.mock("../push-delivery.js", () => ({
+vi.mock("../notify/push-delivery.js", () => ({
   createPushDeliveryAttempt: mocks.createPushDeliveryAttempt,
   createSkippedPushDelivery: mocks.createSkippedPushDelivery,
   markPushAccepted: mocks.markPushAccepted,
   markPushFailed: mocks.markPushFailed,
 }));
-vi.mock("../notification-policy.js", () => ({
+vi.mock("../notify/notification-policy.js", () => ({
   notificationSuppressionReason: vi.fn(() => null),
 }));
-vi.mock("../notification-prefs.js", () => ({
+vi.mock("../notify/notification-prefs.js", () => ({
   evaluateNotificationGate: vi.fn(async () => ({ allowed: true as const })),
 }));
-vi.mock("../push-rate-limit.js", () => ({
+vi.mock("../notify/push-rate-limit.js", () => ({
   recordPushAttempt: vi.fn(async () => ({ allowed: true })),
 }));
-vi.mock("../is-safe-push-endpoint.js", () => ({
+vi.mock("../notify/is-safe-push-endpoint.js", () => ({
   isSafePushEndpoint: vi.fn(() => true),
 }));
-vi.mock("../push-origin-allowlist.js", () => ({
+vi.mock("../notify/push-origin-allowlist.js", () => ({
   isAllowedPushOrigin: vi.fn(() => true),
 }));
-vi.mock("../telegram-notify.js", () => ({
+vi.mock("../notify/telegram-notify.js", () => ({
   sendTelegramForPush: vi.fn(async () => "sent"),
 }));
-vi.mock("../push-device.js", () => ({
+vi.mock("../notify/push-device.js", () => ({
   sendDevicePush: vi.fn(async () => ({ status: "skipped" })),
 }));
-vi.mock("../push-apns.js", () => ({
+vi.mock("../notify/push-apns.js", () => ({
   sendApnsPush: vi.fn(async () => ({ status: "skipped" })),
 }));
 vi.mock("web-push", () => ({
@@ -82,7 +82,7 @@ beforeAll(async () => {
   // web-push send fan-out actually runs.
   process.env.VAPID_PUBLIC_KEY = "test-public-key";
   process.env.VAPID_PRIVATE_KEY = "test-private-key";
-  ({ sendPushNotification } = await import("../push.js"));
+  ({ sendPushNotification } = await import("../notify/push.js"));
 });
 
 beforeEach(() => {

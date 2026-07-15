@@ -41,10 +41,10 @@ vi.mock("../db.js", () => {
   return { prisma };
 });
 
-vi.mock("../push.js", () => ({ sendPushNotification: vi.fn(async () => undefined) }));
-vi.mock("../sms.js", () => ({ sendSms: vi.fn(async () => undefined) }));
+vi.mock("../notify/push.js", () => ({ sendPushNotification: vi.fn(async () => undefined) }));
+vi.mock("../notify/sms.js", () => ({ sendSms: vi.fn(async () => undefined) }));
 vi.mock("../websocket.js", () => ({ pushNotification: vi.fn() }));
-vi.mock("../notification-format.js", () => ({ senderName: vi.fn(() => "Sender") }));
+vi.mock("../notify/notification-format.js", () => ({ senderName: vi.fn(() => "Sender") }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { runProactiveActions } from "../proactive-actions.js";

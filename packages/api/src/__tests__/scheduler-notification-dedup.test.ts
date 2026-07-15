@@ -30,7 +30,7 @@ vi.mock("../db.js", () => ({
   },
 }));
 
-vi.mock("../push.js", () => ({
+vi.mock("../notify/push.js", () => ({
   sendPushNotification: vi.fn(() => {
     state.webPushCalls++;
     return Promise.resolve();
@@ -47,7 +47,7 @@ import {
   ensureCalendarDisconnectNotification,
   ensureUrgentEmailNotification,
 } from "../automation-scheduler.js";
-import { sendPushNotification } from "../push.js";
+import { sendPushNotification } from "../notify/push.js";
 
 const USER = "user-1";
 const DAY_KEY = "2026-07-01";

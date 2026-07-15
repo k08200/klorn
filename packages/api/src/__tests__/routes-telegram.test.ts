@@ -17,13 +17,13 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 
-vi.mock("../telegram.js", () => ({
+vi.mock("../notify/telegram.js", () => ({
   isTelegramConfigured: vi.fn(() => true),
   sendTelegramMessage: vi.fn(async () => ({ ok: true })),
   answerTelegramCallback: vi.fn(async () => ({ ok: true })),
 }));
 
-vi.mock("../telegram-link.js", () => ({
+vi.mock("../notify/telegram-link.js", () => ({
   createTelegramLinkCode: vi.fn(async () => ({
     code: "test-code-123",
     expiresAt: new Date("2026-06-12T00:10:00Z"),
@@ -40,13 +40,17 @@ vi.mock("../attention-override.js", () => ({
 }));
 
 import { overrideAttentionTier } from "../attention-override.js";
-import { answerTelegramCallback, isTelegramConfigured, sendTelegramMessage } from "../telegram.js";
+import {
+  answerTelegramCallback,
+  isTelegramConfigured,
+  sendTelegramMessage,
+} from "../notify/telegram.js";
 import {
   consumeTelegramLinkCode,
   findUserIdByTelegramChatId,
   getLinkedTelegramChatId,
   unlinkTelegram,
-} from "../telegram-link.js";
+} from "../notify/telegram-link.js";
 
 const TOKEN = signToken({ userId: "user-1", email: "t@e.com" });
 const auth = () => ({ authorization: `Bearer ${TOKEN}` });

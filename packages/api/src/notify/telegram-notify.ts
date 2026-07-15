@@ -12,7 +12,7 @@
  * skew the dogfooding stats. Revisit if Telegram graduates from v1.
  */
 
-import { captureError } from "./sentry.js";
+import { captureError } from "../sentry.js";
 import {
   isTelegramConfigured,
   sendTelegramMessage,

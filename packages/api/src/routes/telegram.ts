@@ -25,15 +25,19 @@
 import type { FastifyInstance } from "fastify";
 import { overrideAttentionTier } from "../attention-override.js";
 import { getUserId, requireAuth } from "../auth.js";
-import { captureError } from "../sentry.js";
-import { answerTelegramCallback, isTelegramConfigured, sendTelegramMessage } from "../telegram.js";
+import {
+  answerTelegramCallback,
+  isTelegramConfigured,
+  sendTelegramMessage,
+} from "../notify/telegram.js";
 import {
   consumeTelegramLinkCode,
   createTelegramLinkCode,
   findUserIdByTelegramChatId,
   getLinkedTelegramChatId,
   unlinkTelegram,
-} from "../telegram-link.js";
+} from "../notify/telegram-link.js";
+import { captureError } from "../sentry.js";
 import { timingSafeEqualStr } from "../timing-safe-equal.js";
 
 // Override buttons can only move DOWN the interrupt ladder (QUEUE/SILENT).

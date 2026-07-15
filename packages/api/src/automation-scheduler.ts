@@ -35,13 +35,14 @@ import {
 } from "./email-sync.js";
 import { getAuthedClient, getLinkedInboxClients, renewExpiringGmailWatches } from "./gmail.js";
 import { parseGoogleDateTime } from "./google-calendar-time.js";
-import { formatUrgentEmailBody, senderName } from "./notification-format.js";
-import { escalateUnackedPush } from "./phone-escalation.js";
+import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
+import { escalateUnackedPush } from "./notify/phone-escalation.js";
+import { sendPushNotification } from "./notify/push.js";
+import { sendSms } from "./notify/sms.js";
+import { buildUrgentDedupMessage, parseNotifiedGmailIds } from "./notify/urgent-dedup.js";
 import { runProactiveActions } from "./proactive-actions.js";
-import { sendPushNotification } from "./push.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
-import { sendSms } from "./sms.js";
 import { isEntitled, planHasFeature } from "./stripe.js";
 import {
   localDateKey,
@@ -49,7 +50,6 @@ import {
   localMinuteOfDay,
   normalizeTimeZone,
 } from "./time-zone.js";
-import { buildUrgentDedupMessage, parseNotifiedGmailIds } from "./urgent-dedup.js";
 import { pushNotification } from "./websocket.js";
 import { withTimeout } from "./with-timeout.js";
 

@@ -56,7 +56,7 @@ export async function pushForFirewallGitHubNotification(n: GitHubNotificationLik
 
   const [{ pushNotification }, { sendPushNotification }] = await Promise.all([
     import("./websocket.js"),
-    import("./push.js"),
+    import("./notify/push.js"),
   ]);
 
   pushNotification(n.userId, {

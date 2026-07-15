@@ -9,7 +9,7 @@
  */
 
 import { prisma } from "./db.js";
-import { sendPushNotification } from "./push.js";
+import { sendPushNotification } from "./notify/push.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
 import { pushNotification } from "./websocket.js";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildUrgentDedupMessage, parseNotifiedGmailIds } from "../urgent-dedup.js";
+import { buildUrgentDedupMessage, parseNotifiedGmailIds } from "../notify/urgent-dedup.js";
 
 describe("urgent-email dedup marker", () => {
   it("round-trips every gmailId in a multi-email notification", () => {

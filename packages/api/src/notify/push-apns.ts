@@ -19,10 +19,10 @@
 
 import http2 from "node:http2";
 import jwt from "jsonwebtoken";
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
+import { captureError } from "../sentry.js";
 import type { NotifCategory } from "./notification-prefs.js";
 import type { DevicePushPayload, DevicePushSummary } from "./push-device.js";
-import { captureError } from "./sentry.js";
 
 const APNS_KEY_P8 = (process.env.APNS_KEY_P8 || "").replace(/\\n/g, "\n");
 const APNS_KEY_ID = process.env.APNS_KEY_ID || "";

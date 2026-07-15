@@ -388,7 +388,7 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
   const [{ pushNotification }, { sendPushNotification }, { findOpenEmailAttentionItemId }] =
     await Promise.all([
       import("./websocket.js"),
-      import("./push.js"),
+      import("./notify/push.js"),
       import("./attention-override.js"),
     ]);
 

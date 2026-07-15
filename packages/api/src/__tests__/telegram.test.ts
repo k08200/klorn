@@ -4,7 +4,7 @@ import {
   isTelegramConfigured,
   redactBotToken,
   sendTelegramMessage,
-} from "../telegram.js";
+} from "../notify/telegram.js";
 
 const TOKEN = "12345:AAFakeBotTokenForTests_abc-def";
 

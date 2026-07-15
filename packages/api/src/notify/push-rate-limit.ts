@@ -25,8 +25,8 @@ import {
   PUSH_CAP_60MIN as CFG_PUSH_CAP_60MIN,
   PUSH_WINDOW_10MIN_MS as CFG_WINDOW_10MIN,
   PUSH_WINDOW_60MIN_MS as CFG_WINDOW_60MIN,
-} from "./config.js";
-import { prisma } from "./db.js";
+} from "../config.js";
+import { prisma } from "../db.js";
 
 // Re-export so existing callers (and tests) keep their named imports working.
 export const PUSH_WINDOW_10MIN_MS = CFG_WINDOW_10MIN;

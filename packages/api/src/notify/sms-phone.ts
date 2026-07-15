@@ -11,8 +11,8 @@
  * obvious garbage from ever reaching the DB.
  */
 
-import { prisma } from "./db.js";
-import { remember } from "./memory.js";
+import { prisma } from "../db.js";
+import { remember } from "../memory.js";
 
 const PHONE_KEY = "phone_number_e164";
 const PHONE_TYPE = "CONTEXT";

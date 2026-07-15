@@ -25,7 +25,7 @@
  */
 
 import twilio from "twilio";
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 import { isUserInQuietHours } from "./notification-prefs.js";
 import { checkAndRecordSmsSend } from "./sms-limiter.js";
 import { getPhoneNumber } from "./sms-phone.js";

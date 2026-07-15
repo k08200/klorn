@@ -28,7 +28,7 @@ import { requireAppAccess } from "../entitlement-guard.js";
 import { collapseEmailThreads } from "../firewall-thread-collapse.js";
 import { ensureFreshGmailWatch } from "../gmail.js";
 import { getInteractionGraph } from "../interaction-graph.js";
-import { senderEmail } from "../notification-format.js";
+import { senderEmail } from "../notify/notification-format.js";
 import { describePolicy } from "../ontology.js";
 import { captureError } from "../sentry.js";
 import { manualOverrideReason, normalizeTier, TIERS, type Tier } from "../tiers.js";

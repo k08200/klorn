@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import Fastify from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../push.js", () => ({ sendPushNotification: vi.fn(async () => {}) }));
+vi.mock("../notify/push.js", () => ({ sendPushNotification: vi.fn(async () => {}) }));
 vi.mock("../websocket.js", () => ({ pushNotification: vi.fn() }));
 
 let processedEvent: { id: string } | null = null;

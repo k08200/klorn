@@ -19,7 +19,7 @@ import {
   getLinkedTelegramChatId,
   TELEGRAM_LINK_CODE_TTL_MS,
   unlinkTelegram,
-} from "../telegram-link.js";
+} from "../notify/telegram-link.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
