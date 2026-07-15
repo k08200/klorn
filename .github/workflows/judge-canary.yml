@@ -1,0 +1,157 @@
+# Weekly judge canary (#769) — run-over-run drift + margin-erosion tripwire.
+#
+# The PR-gate eval (eval.yml) only fires when a PR touches judge files, so it
+# cannot see two failure modes on an UNCHANGED codebase:
+#   1. provider-side model drift silently moving verdicts, and
+#   2. floors still cleared every run but by a shrinking margin.
+# This canary re-scores the committed eval set weekly and compares per-item
+# verdicts + per-floor margins against the previous run's baseline
+# (scripts/canary-compare.ts). Any verdict flip on an identical item fails the
+# workflow — on a fixed set with a temperature-0 judge, a flip means the
+# decision boundary itself moved.
+#
+# Cost: one eval run per week (~50 LLM calls on the pinned judge model) — the
+# same as a single PR-gate run. The 2026-06-17 canary removal (#537) argued
+# the PR gate already covered this; #769 (founder) identified the two signals
+# above that it cannot cover, which is exactly what this workflow measures.
+#
+# Baseline lifecycle: stored via actions/cache (rolling key). On a STABLE run
+# the baseline refreshes; on an ALARM run it is kept, so the alarm repeats
+# weekly until the drift is investigated. To accept a new normal, run this
+# workflow manually with accept-baseline=true.
+
+name: Judge canary
+
+on:
+  schedule:
+    - cron: "0 1 * * 1" # Mondays 01:00 UTC
+  workflow_dispatch:
+    inputs:
+      accept-baseline:
+        description: "Save this run's verdicts as the new baseline even if flips were detected"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: judge-canary
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    name: Weekly drift canary (verdict flips + floor margins)
+    runs-on: ubuntu-latest
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # poc-accuracy never queries the DB in fixture mode, but the Prisma
+      # client is constructed at import time and needs a syntactically valid URL.
+      DATABASE_URL: "postgresql://eval:eval@localhost:5432/eval"
+      # Match prod's flag state (#653) and the PR-gate eval (eval.yml).
+      JUDGE_INCLUDE_BODY: "true"
+    steps:
+      - name: Check for provider key
+        id: key
+        run: |
+          if [ -n "$OPENROUTER_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No provider key — skipping the judge canary."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.key.outputs.present == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.present == 'true'
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+        if: steps.key.outputs.present == 'true'
+
+      - name: Install dependencies
+        if: steps.key.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma types
+        if: steps.key.outputs.present == 'true'
+        run: cd packages/api && npx prisma generate
+
+      - name: Restore previous baseline
+        if: steps.key.outputs.present == 'true'
+        id: baseline
+        uses: actions/cache/restore@v4
+        with:
+          path: canary-baseline.json
+          # The exact key never matches (run_id is unique); the prefix
+          # restore-key resolves to the most recently saved baseline.
+          key: judge-canary-baseline-${{ github.run_id }}
+          restore-keys: |
+            judge-canary-baseline-
+
+      - name: Score the eval set
+        if: steps.key.outputs.present == 'true'
+        id: eval
+        # The gate can exit 2 (floor breach) and still write --out; keep going
+        # so the flip comparison and the final verdict step see the full picture.
+        continue-on-error: true
+        run: |
+          cd packages/api && npx tsx scripts/poc-accuracy.ts \
+            --in=eval/judge-eval-set.json --concurrency=2 --delay=500 \
+            --out=../../canary-current.json
+
+      - name: Compare against baseline
+        if: steps.key.outputs.present == 'true'
+        id: compare
+        continue-on-error: true
+        run: |
+          if [ ! -f canary-current.json ]; then
+            echo "::error::eval produced no output — cannot compare"
+            exit 1
+          fi
+          if [ ! -f canary-baseline.json ]; then
+            echo "::notice::No baseline found — recording this run as the first baseline."
+            exit 0
+          fi
+          cd packages/api && npx tsx scripts/canary-compare.ts \
+            --prev=../../canary-baseline.json --curr=../../canary-current.json
+
+      - name: Save new baseline
+        # Refresh on a stable run (or an explicit accept); keep the old
+        # baseline on an alarm so the flip keeps firing until investigated.
+        if: >-
+          steps.key.outputs.present == 'true' &&
+          steps.eval.outcome == 'success' &&
+          (steps.compare.outcome == 'success' || github.event.inputs.accept-baseline == 'true')
+        run: cp canary-current.json canary-baseline.json
+
+      - name: Persist baseline to cache
+        if: >-
+          steps.key.outputs.present == 'true' &&
+          steps.eval.outcome == 'success' &&
+          (steps.compare.outcome == 'success' || github.event.inputs.accept-baseline == 'true')
+        uses: actions/cache/save@v4
+        with:
+          path: canary-baseline.json
+          key: judge-canary-baseline-${{ github.run_id }}
+
+      - name: Verdict
+        if: steps.key.outputs.present == 'true'
+        run: |
+          if [ "${{ steps.eval.outcome }}" != "success" ]; then
+            echo "::error::Judge canary: the eval gate itself failed (floor breach or run error) — see the 'Score the eval set' step."
+            exit 1
+          fi
+          if [ "${{ steps.compare.outcome }}" != "success" ]; then
+            if [ "${{ github.event.inputs.accept-baseline }}" = "true" ]; then
+              echo "::warning::Flips detected but accept-baseline=true — new baseline saved."
+              exit 0
+            fi
+            echo "::error::Judge canary: verdict flips against last week's baseline — see the 'Compare against baseline' step."
+            exit 1
+          fi
+          echo "Canary stable — no flips, baseline refreshed."
