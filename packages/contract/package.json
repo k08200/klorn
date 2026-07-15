@@ -1,0 +1,12 @@
+{
+  "name": "@klorn/contract",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Type-only API wire contract shared by the api server and its clients. No runtime code, no build step — consumers must use `import type` only.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts"
+    }
+  }
+}

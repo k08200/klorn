@@ -36,7 +36,8 @@
     "eslint-config-next": "^15.5.16",
     "postcss": "^8.5.4",
     "tailwindcss": "^4.1.8",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@klorn/contract": "workspace:*"
   },
   "type": "module"
 }
