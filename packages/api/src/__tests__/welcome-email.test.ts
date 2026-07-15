@@ -50,8 +50,8 @@ vi.mock("../email.js", async (importActual) => {
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { buildWelcomeEmail, type FounderIdentity } from "../email.js";
+import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import { captureError } from "../sentry.js";
-import { maybeSendWelcomeEmail } from "../welcome-email.js";
 
 const FOUNDER: FounderIdentity = { name: "Ada", title: "Founder", communityUrl: null };
 const TEAM: FounderIdentity = { name: "", title: "Founder", communityUrl: null };

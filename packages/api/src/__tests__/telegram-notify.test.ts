@@ -1,20 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../telegram.js", () => ({
+vi.mock("../notify/telegram.js", () => ({
   isTelegramConfigured: vi.fn(() => true),
   sendTelegramMessage: vi.fn(async () => ({ ok: true })),
 }));
-vi.mock("../telegram-link.js", () => ({
+vi.mock("../notify/telegram-link.js", () => ({
   getLinkedTelegramChatId: vi.fn(async () => "777"),
 }));
 vi.mock("../sentry.js", () => ({
   captureError: vi.fn(),
 }));
 
+import { isTelegramConfigured, sendTelegramMessage } from "../notify/telegram.js";
+import { getLinkedTelegramChatId } from "../notify/telegram-link.js";
+import { buildOverrideCallbackData, sendTelegramForPush } from "../notify/telegram-notify.js";
 import { captureError } from "../sentry.js";
-import { isTelegramConfigured, sendTelegramMessage } from "../telegram.js";
-import { getLinkedTelegramChatId } from "../telegram-link.js";
-import { buildOverrideCallbackData, sendTelegramForPush } from "../telegram-notify.js";
 
 beforeEach(() => {
   vi.clearAllMocks();

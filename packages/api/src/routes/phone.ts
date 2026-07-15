@@ -14,7 +14,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import twilio from "twilio";
 import { prisma } from "../db.js";
-import { buildEscalationTwiml, buildSayHangupTwiml, publicBaseUrl } from "../phone-twiml.js";
+import { buildEscalationTwiml, buildSayHangupTwiml, publicBaseUrl } from "../notify/phone-twiml.js";
 
 /** Twilio terminal CallStatus values that mean the call never connected. */
 const TERMINAL_FAILURE_STATUSES: ReadonlySet<string> = new Set([

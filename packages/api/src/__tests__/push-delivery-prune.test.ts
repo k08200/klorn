@@ -18,7 +18,7 @@ vi.mock("../db.js", () => ({
   db: {},
 }));
 
-import { pruneOldPushDeliveryLogs } from "../push-delivery.js";
+import { pruneOldPushDeliveryLogs } from "../notify/push-delivery.js";
 
 beforeEach(() => {
   findManyMock.mockReset();

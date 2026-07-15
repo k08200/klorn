@@ -6,9 +6,9 @@
  * in quiet-hours.ts; this module only loads config and combines the checks.
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
+import { normalizeTimeZone } from "../time-zone.js";
 import { isWithinQuietHours } from "./quiet-hours.js";
-import { normalizeTimeZone } from "./time-zone.js";
 
 export type NotifCategory =
   | "email_urgent"

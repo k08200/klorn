@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { formatUrgentEmailBody, humanizeAutoExec, senderName } from "../notification-format.js";
+import {
+  formatUrgentEmailBody,
+  humanizeAutoExec,
+  senderName,
+} from "../notify/notification-format.js";
 
 describe("senderName", () => {
   it("extracts display name from RFC-style address", () => {

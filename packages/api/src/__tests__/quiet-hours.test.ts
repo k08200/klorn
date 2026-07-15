@@ -23,19 +23,19 @@ vi.mock("../db.js", () => ({
     pushDeliveryLog: { findFirst: vi.fn(async () => null) },
   },
 }));
-vi.mock("../push-delivery.js", () => ({
+vi.mock("../notify/push-delivery.js", () => ({
   createPushDeliveryAttempt: mocks.createPushDeliveryAttempt,
   createSkippedPushDelivery: mocks.createSkippedPushDelivery,
   markPushAccepted: mocks.markPushAccepted,
   markPushFailed: mocks.markPushFailed,
 }));
-vi.mock("../push-rate-limit.js", () => ({
+vi.mock("../notify/push-rate-limit.js", () => ({
   recordPushAttempt: vi.fn(async () => ({ allowed: true })),
 }));
-vi.mock("../is-safe-push-endpoint.js", () => ({
+vi.mock("../notify/is-safe-push-endpoint.js", () => ({
   isSafePushEndpoint: vi.fn(() => true),
 }));
-vi.mock("../push-origin-allowlist.js", () => ({
+vi.mock("../notify/push-origin-allowlist.js", () => ({
   isAllowedPushOrigin: vi.fn(() => true),
 }));
 vi.mock("web-push", () => ({
@@ -44,7 +44,7 @@ vi.mock("web-push", () => ({
   sendNotification: mocks.webPushSend,
 }));
 
-import { isWithinQuietHours } from "../quiet-hours.js";
+import { isWithinQuietHours } from "../notify/quiet-hours.js";
 
 const WINDOW_OVERNIGHT = { quietHoursStart: "22:00", quietHoursEnd: "08:00" };
 const WINDOW_SAME_DAY = { quietHoursStart: "13:00", quietHoursEnd: "17:00" };
@@ -162,7 +162,7 @@ describe("sendPushNotification quiet-hours enforcement", () => {
     // push.ts reads VAPID env at module load — set before importing.
     process.env.VAPID_PUBLIC_KEY = "test-public-key";
     process.env.VAPID_PRIVATE_KEY = "test-private-key";
-    ({ sendPushNotification } = await import("../push.js"));
+    ({ sendPushNotification } = await import("../notify/push.js"));
   });
 
   beforeEach(() => {

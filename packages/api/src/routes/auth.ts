@@ -32,11 +32,11 @@ import {
   markGoogleTokenForReconnect,
 } from "../gmail.js";
 import { mapGoogleEventTimes } from "../google-calendar-time.js";
+import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
 import { captureError } from "../sentry.js";
 import { isEntitled, isHardPaywalled, isWebCheckoutAvailable } from "../stripe.js";
 import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
-import { maybeSendWelcomeEmail } from "../welcome-email.js";
 
 // Allowlisted native app URL schemes for the OAuth deep-link relay. The token is
 // delivered by redirecting the browser to `<scheme>://oauth-callback?code=…`,

@@ -98,7 +98,7 @@ import {
   markPushAccepted,
   markPushFailed,
   recordPushReceipt,
-} from "../push-delivery.js";
+} from "../notify/push-delivery.js";
 
 describe("push delivery observability", () => {
   beforeEach(() => {

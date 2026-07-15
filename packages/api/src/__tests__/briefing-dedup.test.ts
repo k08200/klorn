@@ -58,7 +58,7 @@ vi.mock("../notes.js", () => ({ listNotes: vi.fn(() => Promise.resolve({ notes: 
 vi.mock("../llm-credentials.js", () => ({
   getUserLlmCredentials: vi.fn(() => Promise.resolve(undefined)),
 }));
-vi.mock("../push.js", () => ({
+vi.mock("../notify/push.js", () => ({
   sendPushNotification: vi.fn(() => {
     state.webPushCalls++;
     return Promise.resolve();
@@ -71,7 +71,7 @@ vi.mock("../websocket.js", () => ({
 }));
 
 import { createDailyBriefingDelivery, ensureDailyBriefingNotification } from "../briefing.js";
-import { sendPushNotification } from "../push.js";
+import { sendPushNotification } from "../notify/push.js";
 
 const USER = "user-1";
 const DAY_KEY = "2026-07-01";

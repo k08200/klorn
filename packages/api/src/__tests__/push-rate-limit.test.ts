@@ -38,7 +38,7 @@ vi.mock("../db.js", () => ({
 }));
 
 async function loadLimiter() {
-  return await import("../push-rate-limit.js");
+  return await import("../notify/push-rate-limit.js");
 }
 
 describe("push-rate-limit (DB-backed)", () => {

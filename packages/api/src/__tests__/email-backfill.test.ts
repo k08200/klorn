@@ -40,7 +40,7 @@ vi.mock("../judge-context.js", () => ({ buildJudgeContext }));
 vi.mock("../attention-mirror.js", () => ({ upsertAttentionForEmailJudgement: upsert }));
 vi.mock("../sentry.js", () => ({ captureError }));
 // Dynamically imported by the PUSH-tier push path.
-vi.mock("../push.js", () => ({ sendPushNotification }));
+vi.mock("../notify/push.js", () => ({ sendPushNotification }));
 vi.mock("../websocket.js", () => ({ pushNotification }));
 vi.mock("../attention-override.js", () => ({ findOpenEmailAttentionItemId }));
 

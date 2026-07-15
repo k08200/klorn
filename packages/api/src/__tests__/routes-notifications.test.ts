@@ -22,7 +22,7 @@ vi.mock("../background.js", () => ({
   markAllNotificationsRead: vi.fn(async () => {}),
   clearNotifications: vi.fn(async () => {}),
 }));
-vi.mock("../push.js", () => ({
+vi.mock("../notify/push.js", () => ({
   getVapidPublicKey: vi.fn(() => "test-vapid-key"),
   sendPushNotification: vi.fn(async () => ({
     status: "sent",
@@ -32,7 +32,7 @@ vi.mock("../push.js", () => ({
     failed: 0,
   })),
 }));
-vi.mock("../push-device.js", () => ({
+vi.mock("../notify/push-device.js", () => ({
   sendDevicePush: vi.fn(async () => ({
     status: "sent",
     tokens: 1,
@@ -40,7 +40,7 @@ vi.mock("../push-device.js", () => ({
     failed: 0,
   })),
 }));
-vi.mock("../push-delivery.js", () => ({
+vi.mock("../notify/push-delivery.js", () => ({
   recordPushReceipt: vi.fn(async () => true),
   getPushDeliveryStats: vi.fn(async () => ({
     since: "2026-04-28T00:00:00.000Z",

@@ -11,22 +11,22 @@ vi.mock("../db.js", () => ({
     pushDeliveryLog: { findFirst: vi.fn(async () => null) },
   },
 }));
-vi.mock("../push-delivery.js", () => ({
+vi.mock("../notify/push-delivery.js", () => ({
   createPushDeliveryAttempt: vi.fn(async () => "delivery-id"),
   createSkippedPushDelivery: vi.fn(async () => {}),
   markPushAccepted: vi.fn(async () => {}),
   markPushFailed: vi.fn(async () => {}),
 }));
-vi.mock("../notification-policy.js", () => ({
+vi.mock("../notify/notification-policy.js", () => ({
   notificationSuppressionReason: vi.fn(() => null),
 }));
-vi.mock("../notification-prefs.js", () => ({
+vi.mock("../notify/notification-prefs.js", () => ({
   evaluateNotificationGate: vi.fn(async () => ({ allowed: true as const })),
 }));
-vi.mock("../push-rate-limit.js", () => ({
+vi.mock("../notify/push-rate-limit.js", () => ({
   recordPushAttempt: vi.fn(async () => ({ allowed: true })),
 }));
-vi.mock("../is-safe-push-endpoint.js", () => ({
+vi.mock("../notify/is-safe-push-endpoint.js", () => ({
   isSafePushEndpoint: vi.fn(() => true),
 }));
 vi.mock("web-push", () => ({
@@ -34,14 +34,14 @@ vi.mock("web-push", () => ({
   setVapidDetails: vi.fn(),
   sendNotification: vi.fn(),
 }));
-vi.mock("../telegram-notify.js", () => ({
+vi.mock("../notify/telegram-notify.js", () => ({
   sendTelegramForPush: vi.fn(async () => "sent"),
 }));
 
-import { evaluateNotificationGate } from "../notification-prefs.js";
-import { sendPushNotification } from "../push.js";
-import { recordPushAttempt } from "../push-rate-limit.js";
-import { sendTelegramForPush } from "../telegram-notify.js";
+import { evaluateNotificationGate } from "../notify/notification-prefs.js";
+import { sendPushNotification } from "../notify/push.js";
+import { recordPushAttempt } from "../notify/push-rate-limit.js";
+import { sendTelegramForPush } from "../notify/telegram-notify.js";
 
 beforeEach(() => {
   vi.clearAllMocks();

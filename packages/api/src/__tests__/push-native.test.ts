@@ -14,8 +14,8 @@ vi.mock("../db.js", () => {
 });
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { isApnsConfigured, sendApnsPush } from "../push-apns.js";
-import { isDevicePushConfigured, sendDevicePush } from "../push-device.js";
+import { isApnsConfigured, sendApnsPush } from "../notify/push-apns.js";
+import { isDevicePushConfigured, sendDevicePush } from "../notify/push-device.js";
 
 describe("native push guards (unconfigured)", () => {
   it("APNs reports not-configured without keys", () => {

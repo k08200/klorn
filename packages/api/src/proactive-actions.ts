@@ -24,11 +24,11 @@ import {
   WEEKLY_REVIEW_DAY,
 } from "./config.js";
 import { prisma } from "./db.js";
-import { senderName } from "./notification-format.js";
-import type { NotifCategory } from "./notification-prefs.js";
-import { sendPushNotification } from "./push.js";
+import { senderName } from "./notify/notification-format.js";
+import type { NotifCategory } from "./notify/notification-prefs.js";
+import { sendPushNotification } from "./notify/push.js";
+import { sendSms } from "./notify/sms.js";
 import { captureError } from "./sentry.js";
-import { sendSms } from "./sms.js";
 import {
   isLocalTimeWithin,
   localDayOfWeek,

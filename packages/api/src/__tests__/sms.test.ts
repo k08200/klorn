@@ -23,11 +23,11 @@ vi.mock("../db.js", () => ({
   },
 }));
 
-vi.mock("../sms-phone.js", () => ({
+vi.mock("../notify/sms-phone.js", () => ({
   getPhoneNumber: vi.fn(async (userId: string) => phones.get(userId) ?? null),
 }));
 
-vi.mock("../notification-prefs.js", () => ({
+vi.mock("../notify/notification-prefs.js", () => ({
   isUserInQuietHours: vi.fn(async (userId: string) => quietUsers.has(userId)),
 }));
 
@@ -66,9 +66,9 @@ beforeEach(async () => {
   twilioError = null;
 
   vi.resetModules();
-  const limiter = await import("../sms-limiter.js");
+  const limiter = await import("../notify/sms-limiter.js");
   limiter._resetAllSmsWindowsForTests();
-  const sms = await import("../sms.js");
+  const sms = await import("../notify/sms.js");
   sms._resetSmsClientForTests();
 });
 
@@ -83,7 +83,7 @@ describe("sendSms — admin gate", () => {
   it("skips non-admin users with reason=not_admin", async () => {
     users.set("u-normal", { role: "USER", email: "normal@example.com" });
     phones.set("u-normal", "+821012345678");
-    const { sendSms } = await import("../sms.js");
+    const { sendSms } = await import("../notify/sms.js");
     const result = await sendSms("u-normal", "hello");
     expect(result).toEqual({ sent: false, reason: "not_admin" });
     expect(createCalls).toHaveLength(0);
@@ -92,7 +92,7 @@ describe("sendSms — admin gate", () => {
   it("allows users in ADMIN_EMAILS even without role=ADMIN", async () => {
     users.set("u-env-admin", { role: "USER", email: "admin@klorn.ai" });
     phones.set("u-env-admin", "+821012345678");
-    const { sendSms } = await import("../sms.js");
+    const { sendSms } = await import("../notify/sms.js");
     const result = await sendSms("u-env-admin", "hello");
     expect(result).toEqual({ sent: true });
     expect(createCalls).toHaveLength(1);
@@ -101,13 +101,13 @@ describe("sendSms — admin gate", () => {
   it("allows users with role=ADMIN regardless of email", async () => {
     users.set("u-role-admin", { role: "ADMIN", email: "founder@elsewhere.com" });
     phones.set("u-role-admin", "+821012345678");
-    const { sendSms } = await import("../sms.js");
+    const { sendSms } = await import("../notify/sms.js");
     const result = await sendSms("u-role-admin", "hello");
     expect(result.sent).toBe(true);
   });
 
   it("returns not_admin when the user row is missing", async () => {
-    const { sendSms } = await import("../sms.js");
+    const { sendSms } = await import("../notify/sms.js");
     const result = await sendSms("ghost", "hello");
     expect(result).toEqual({ sent: false, reason: "not_admin" });
   });
@@ -116,7 +116,7 @@ describe("sendSms — admin gate", () => {
 describe("sendSms — phone gate", () => {
   it("returns no_phone when the user has no stored number", async () => {
     users.set("u1", { role: "ADMIN", email: "admin@klorn.ai" });
-    const { sendSms } = await import("../sms.js");
+    const { sendSms } = await import("../notify/sms.js");
     const result = await sendSms("u1", "hello");
     expect(result).toEqual({ sent: false, reason: "no_phone" });
     expect(createCalls).toHaveLength(0);
@@ -129,9 +129,9 @@ describe("sendSms — daily cap", () => {
     users.set("u1", { role: "ADMIN", email: "admin@klorn.ai" });
     phones.set("u1", "+821012345678");
     vi.resetModules();
-    const limiter = await import("../sms-limiter.js");
+    const limiter = await import("../notify/sms-limiter.js");
     limiter._resetAllSmsWindowsForTests();
-    const sms = await import("../sms.js");
+    const sms = await import("../notify/sms.js");
     sms._resetSmsClientForTests();
 
     expect((await sms.sendSms("u1", "1")).sent).toBe(true);
@@ -147,7 +147,7 @@ describe("sendSms — quiet hours", () => {
     users.set("u1", { role: "ADMIN", email: "admin@klorn.ai" });
     phones.set("u1", "+821012345678");
     quietUsers.add("u1");
-    const { sendSms } = await import("../sms.js");
+    const { sendSms } = await import("../notify/sms.js");
     const result = await sendSms("u1", "Urgent: 2am newsletter");
     expect(result).toEqual({ sent: false, reason: "quiet_hours" });
     expect(createCalls).toHaveLength(0);
@@ -158,9 +158,9 @@ describe("sendSms — quiet hours", () => {
     users.set("u1", { role: "ADMIN", email: "admin@klorn.ai" });
     phones.set("u1", "+821012345678");
     vi.resetModules();
-    const limiter = await import("../sms-limiter.js");
+    const limiter = await import("../notify/sms-limiter.js");
     limiter._resetAllSmsWindowsForTests();
-    const sms = await import("../sms.js");
+    const sms = await import("../notify/sms.js");
     sms._resetSmsClientForTests();
 
     quietUsers.add("u1");
@@ -177,9 +177,9 @@ describe("sendSms — twilio behavior", () => {
     users.set("u1", { role: "ADMIN", email: "admin@klorn.ai" });
     phones.set("u1", "+821012345678");
     vi.resetModules();
-    const limiter = await import("../sms-limiter.js");
+    const limiter = await import("../notify/sms-limiter.js");
     limiter._resetAllSmsWindowsForTests();
-    const sms = await import("../sms.js");
+    const sms = await import("../notify/sms.js");
     sms._resetSmsClientForTests();
 
     const result = await sms.sendSms("u1", "hello");
@@ -191,13 +191,13 @@ describe("sendSms — twilio behavior", () => {
     users.set("u1", { role: "ADMIN", email: "admin@klorn.ai" });
     phones.set("u1", "+821012345678");
     twilioError = new Error("invalid To number");
-    const { sendSms } = await import("../sms.js");
+    const { sendSms } = await import("../notify/sms.js");
     const result = await sendSms("u1", "hello");
     expect(result).toEqual({ sent: false, reason: "twilio_error" });
   });
 
   it("rejects empty bodies before touching admin/phone/twilio", async () => {
-    const { sendSms } = await import("../sms.js");
+    const { sendSms } = await import("../notify/sms.js");
     expect(await sendSms("u1", "")).toEqual({ sent: false, reason: "empty_body" });
     expect(await sendSms("u1", "   ")).toEqual({ sent: false, reason: "empty_body" });
   });
@@ -206,7 +206,7 @@ describe("sendSms — twilio behavior", () => {
     users.set("u1", { role: "ADMIN", email: "admin@klorn.ai" });
     phones.set("u1", "+821012345678");
     const longBody = "x".repeat(500);
-    const { sendSms } = await import("../sms.js");
+    const { sendSms } = await import("../notify/sms.js");
     const result = await sendSms("u1", longBody);
     expect(result.sent).toBe(true);
     expect(createCalls[0]?.body.length).toBeLessThanOrEqual(320);
@@ -217,7 +217,7 @@ describe("sendSms — twilio behavior", () => {
     users.set("u1", { role: "ADMIN", email: "admin@klorn.ai" });
     phones.set("u1", "+821012345678");
     const body = "Urgent: subject — from somebody";
-    const { sendSms } = await import("../sms.js");
+    const { sendSms } = await import("../notify/sms.js");
     await sendSms("u1", body);
     expect(createCalls[0]?.body).toBe(body);
     expect(createCalls[0]?.to).toBe("+821012345678");

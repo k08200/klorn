@@ -14,7 +14,7 @@
  */
 
 import { prisma } from "../src/db.js";
-import { pruneOldPushDeliveryLogs } from "../src/push-delivery.js";
+import { pruneOldPushDeliveryLogs } from "../src/notify/push-delivery.js";
 
 const RETENTION_DAYS = 90;
 

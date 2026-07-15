@@ -4,7 +4,7 @@ import {
   checkAndRecordSmsSend,
   getSmsUsage,
   smsDailyCap,
-} from "../sms-limiter.js";
+} from "../notify/sms-limiter.js";
 
 const ORIGINAL_CAP = process.env.SMS_DAILY_CAP_PER_USER;
 
