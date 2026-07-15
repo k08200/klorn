@@ -4,25 +4,15 @@
  * DB-only leaf; must NOT import email-sync.ts (would cycle).
  */
 
+import type { EmailThreadRow } from "@klorn/contract";
 import { prisma } from "../db.js";
 
 // ─── Thread Grouping ──────────────────────────────────────────────────────
 
-export interface EmailThread {
-  threadId: string;
-  subject: string;
-  participants: string[];
-  messageCount: number;
-  lastMessage: {
-    id: string;
-    from: string;
-    snippet: string;
-    receivedAt: Date;
-    isRead: boolean;
-  };
-  hasUnread: boolean;
-  latestPriority: "URGENT" | "NORMAL" | "LOW";
-}
+// The thread row is a wire shape shared with the web thread view — it lives
+// in @klorn/contract. The old local interface had drifted: it never carried
+// `summary` (only demo mode sent it) and used a pre-serialization Date.
+export type EmailThread = EmailThreadRow;
 
 /**
  * Get email threads for a user, grouped by Gmail threadId.
@@ -83,20 +73,23 @@ export async function getEmailThreads(
       subject: latest.subject,
       participants,
       messageCount: sorted.length,
+      summary: latest.summary,
       lastMessage: {
         id: latest.id,
         from: latest.from,
         snippet: latest.snippet || "",
-        receivedAt: latest.receivedAt,
+        // toISOString() matches what JSON serialization did to the Date —
+        // the wire bytes are identical.
+        receivedAt: latest.receivedAt.toISOString(),
         isRead: latest.isRead,
       },
       hasUnread: sorted.some((m) => !m.isRead),
-      latestPriority: latest.priority as "URGENT" | "NORMAL" | "LOW",
+      latestPriority: latest.priority,
     });
   }
 
-  // Sort threads by latest message date
-  threads.sort((a, b) => b.lastMessage.receivedAt.getTime() - a.lastMessage.receivedAt.getTime());
+  // Sort threads by latest message date (ISO-8601 UTC strings sort chronologically)
+  threads.sort((a, b) => b.lastMessage.receivedAt.localeCompare(a.lastMessage.receivedAt));
 
   const total = threads.length;
   const skip = options.skip || 0;

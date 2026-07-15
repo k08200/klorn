@@ -22,39 +22,10 @@ interface GenerateResponse {
   notification?: { id: string; createdAt: string } | null;
 }
 
-type BriefingPushState =
-  | "received"
-  | "accepted"
-  | "failed"
-  | "skipped"
-  | "pending"
-  | "not_sent"
-  | "no_subscription";
-
-interface BriefingStatus {
-  generated: boolean;
-  notification: {
-    id: string;
-    title: string;
-    message: string;
-    createdAt: string;
-  } | null;
-  push: {
-    state: BriefingPushState;
-    reason: string | null;
-    deliveryId: string | null;
-    acceptedAt: string | null;
-    receivedAt: string | null;
-    clickedAt: string | null;
-  };
-  automation: {
-    configured: boolean;
-    enabled: boolean;
-    briefingTime: string | null;
-    timezone?: string | null;
-    reason: "no_config" | "disabled" | null;
-  };
-}
+// Wire shape comes from @klorn/contract — the same type the server builds
+// (pim/briefing-status.ts), so a response-shape change fails to compile here
+// instead of silently desyncing.
+import type { BriefingPushState, BriefingStatus } from "@klorn/contract";
 
 type BriefingFeedbackChoice = "useful" | "wrong" | "later" | "done";
 

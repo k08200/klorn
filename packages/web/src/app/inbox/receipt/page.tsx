@@ -1,5 +1,9 @@
 "use client";
 
+// Wire shapes come from @klorn/contract — the same types the server builds
+// (routes/receipt.ts), so a response-shape change fails to compile here
+// instead of silently desyncing.
+import type { DailyReceipt, ReceiptItem, ReceiptUndoResponse } from "@klorn/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
@@ -8,32 +12,6 @@ import { useToast } from "../../../components/toast";
 import { apiFetch } from "../../../lib/api";
 import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
-
-interface ReceiptItem {
-  id: string;
-  title: string;
-  source: string;
-  type: string;
-  tierReason: string | null;
-  surfacedAt: string;
-  pushStatus?: string;
-  pushClickedAt?: string | null;
-}
-
-interface DailyReceipt {
-  date: string;
-  silenced: ReceiptItem[];
-  queued: ReceiptItem[];
-  pushed: ReceiptItem[];
-  auto: ReceiptItem[];
-  summary: {
-    totalSeen: number;
-    totalInterrupted: number;
-    savedFromInbox: number;
-    autoHandled: number;
-    narrative: string;
-  };
-}
 
 export default function ReceiptPage() {
   return (
@@ -65,7 +43,7 @@ function ReceiptView() {
 
   const undoMutation = useMutation({
     mutationFn: (pendingActionId: string) =>
-      apiFetch<{ ok: boolean; message: string }>(`/api/inbox/receipt/undo/${pendingActionId}`, {
+      apiFetch<ReceiptUndoResponse>(`/api/inbox/receipt/undo/${pendingActionId}`, {
         method: "POST",
       }),
     onMutate: (pendingActionId) => {

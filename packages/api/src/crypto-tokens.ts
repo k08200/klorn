@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { isDevFallbackSecretAllowed } from "./security-env.js";
+import { isDevOrTestEnv } from "./env.js";
 
 /**
  * Token encryption at rest (AES-256-GCM) with key rotation.
@@ -47,6 +47,12 @@ interface Keyring {
  * a weaker mode.
  */
 function loadKeyring(): Keyring {
+  // The deterministic dev fallback below is public (a hash of a fixed string),
+  // so it may only ever back local development/test — see env.ts isDevOrTestEnv,
+  // the single source of truth for insecure-default gating. Anything outside
+  // dev/test with no key throws (fails closed).
+  const nodeEnv = process.env.NODE_ENV;
+  const devFallbackAllowed = isDevOrTestEnv();
   const legacyRaw = process.env.TOKEN_ENCRYPTION_KEY;
   const keysRaw = process.env.TOKEN_ENCRYPTION_KEYS;
   const activeKeyId = process.env.TOKEN_ENCRYPTION_ACTIVE_KEY_ID ?? null;
@@ -94,16 +100,18 @@ function loadKeyring(): Keyring {
 
   // No keyring configured — legacy single-key mode.
   if (!legacyKey) {
-    // The keyless dev fallback below is a hash of a fixed string that is public
-    // in this repo, so it may only ever back local dev/test. Gate on the same
-    // explicit allowlist as the JWT key (security-env.ts): any other NODE_ENV
-    // with no key must fail to boot rather than encrypt real OAuth tokens/BYOK
-    // secrets with a guessable key.
-    if (!isDevFallbackSecretAllowed()) {
+    if (nodeEnv === "production") {
       throw new Error(
-        "TOKEN_ENCRYPTION_KEY (or a TOKEN_ENCRYPTION_KEYS keyring) is required unless " +
-          "NODE_ENV is development or test. Generate one with: " +
-          "node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\"",
+        "TOKEN_ENCRYPTION_KEY (or a TOKEN_ENCRYPTION_KEYS keyring) is required in production. " +
+          "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\"",
+      );
+    }
+    if (!devFallbackAllowed) {
+      throw new Error(
+        `TOKEN_ENCRYPTION_KEY is required when NODE_ENV is "${nodeEnv ?? "unset"}". ` +
+          "The keyless dev fallback is only allowed for NODE_ENV=development or test — " +
+          "any other environment must set a real key so secrets are never encrypted " +
+          "with the public dev key.",
       );
     }
     // Dev/test-only deterministic fallback so local runs work without config.

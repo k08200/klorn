@@ -4,24 +4,31 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { getEffectivePlan } from "./billing/stripe.js";
 import { db, prisma } from "./db.js";
-import { isDevFallbackSecretAllowed } from "./security-env.js";
+import { isDevOrTestEnv } from "./env.js";
 
-const JWT_SECRET = process.env.JWT_SECRET;
-// The hardcoded fallback below is public in this repo, so it may only ever back
-// local dev/test. Gate on an explicit allowlist (not "!= production"): the old
-// check let any other NODE_ENV — unset, "staging", a "prod" typo, a self-host
-// image that never sets it — silently sign JWTs with a guessable key, letting
-// anyone forge a session for any userId (incl. admin). Fail closed to boot.
-if (!JWT_SECRET && !isDevFallbackSecretAllowed()) {
-  throw new Error(
-    `JWT_SECRET is required when NODE_ENV is "${process.env.NODE_ENV ?? "unset"}". ` +
-      "The insecure dev fallback is only allowed for NODE_ENV=development or test.",
-  );
+/**
+ * The signing secret for every JWT. Falls back to a hardcoded string that is
+ * PUBLIC in this repo — so that fallback may only ever be reached in
+ * development/test. Any other environment with no JWT_SECRET throws at load:
+ * the old `NODE_ENV === "production"` gate failed open for unset/"staging"/a
+ * "prod" typo, letting anyone who reads the repo forge a valid token for any
+ * user (a full auth bypass). Exported so it is unit-testable without importing
+ * the whole module (which starts DB/side-effect imports at load).
+ */
+export function resolveEffectiveJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (secret) return secret;
+  if (!isDevOrTestEnv()) {
+    throw new Error(
+      `JWT_SECRET must be set when NODE_ENV is "${process.env.NODE_ENV ?? "unset"}". ` +
+        "Refusing to sign tokens with the public dev secret outside development/test.",
+    );
+  }
+  console.warn("[AUTH] JWT_SECRET not set — using the insecure public dev secret (dev/test only).");
+  return "klorn-dev-secret-do-not-use-in-production";
 }
-if (!JWT_SECRET) {
-  console.warn("[AUTH] WARNING: JWT_SECRET not set — using insecure default for development.");
-}
-const EFFECTIVE_SECRET = JWT_SECRET || "klorn-dev-secret-do-not-use-in-production";
+
+const EFFECTIVE_SECRET = resolveEffectiveJwtSecret();
 const TOKEN_EXPIRY = "7d";
 
 /**
@@ -35,7 +42,7 @@ const TOKEN_EXPIRY = "7d";
  * bypass into a real account).
  */
 export function isDemoAccessEnabled(): boolean {
-  return process.env.NODE_ENV !== "production" && process.env.ENABLE_DEMO_USER === "true";
+  return isDevOrTestEnv() && process.env.ENABLE_DEMO_USER === "true";
 }
 
 export function isAdminEmail(email: string | null | undefined): boolean {
@@ -131,7 +138,7 @@ export function getUserId(request: FastifyRequest): string {
     }
   }
   // Demo-user fallback is OFF by default (see isDemoAccessEnabled): requires
-  // NODE_ENV !== "production" AND ENABLE_DEMO_USER === "true". This prevents
+  // NODE_ENV in {development,test} AND ENABLE_DEMO_USER === "true". This prevents
   // accidental anonymous access on staging/preview/prod deploys.
   if (isDemoAccessEnabled()) {
     return "demo-user";

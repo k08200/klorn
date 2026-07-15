@@ -7,7 +7,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "NODE_OPTIONS=--max-old-space-size=4096 tsc",
-    "dev": "tsx watch src/index.ts",
+    "dev": "NODE_ENV=development tsx watch src/index.ts",
     "start": "node dist/index.js",
     "start:prod": "sh scripts/start.sh",
     "lint": "biome check src/",

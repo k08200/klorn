@@ -12,6 +12,7 @@ import {
 import { startBackgroundAgent } from "./background.js";
 import { db, prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
+import { isDevOrTestEnv } from "./env.js";
 import { handleError } from "./error-handler.js";
 import { attachPerfMonitor } from "./perf-monitor.js";
 import { briefingRoutes } from "./pim/briefing.js";
@@ -107,7 +108,9 @@ const ALLOWED_ORIGINS = [
 ];
 
 function isAllowedDevOrigin(origin: string): boolean {
-  if (process.env.NODE_ENV === "production") return false;
+  // Only trust localhost origins (CORS with credentials) in dev/test — never on
+  // a real deployment where NODE_ENV might be unset/"staging"/a "prod" typo.
+  if (!isDevOrTestEnv()) return false;
   try {
     const parsed = new URL(origin);
     if (!["http:", "https:"].includes(parsed.protocol)) return false;

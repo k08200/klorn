@@ -1,7 +1,10 @@
 /**
- * POST /api/email/:id/reply-draft — Klorn drafts an approval-ready reply.
- * Focus: an LLM failure must surface as a captured 503 (not a silent 500 with
- * a blank "Could not draft a reply" and nothing in the logs).
+ * POST /api/email/:id/reply-options — three tone-differentiated reply drafts
+ * (accept / decline / info) the user picks from with one keystroke. Built for
+ * the desktop PushCard: no free typing, so the never-steal-focus panel can
+ * finally reply.
+ * Focus: exactly 3 options with stable tone order, all-or-nothing on LLM
+ * failure (a partial card would break the 1/2/3 key mapping), captured 503.
  */
 
 import Fastify from "fastify";
@@ -64,41 +67,47 @@ beforeEach(() => {
   emailFindFirst.mockResolvedValue(EMAIL);
 });
 
-describe("POST /api/email/:id/reply-draft", () => {
-  it("returns a drafted reply on the happy path", async () => {
-    createCompletion.mockResolvedValue({
-      choices: [{ message: { content: "Hi, 3pm works for me. — Yongrean" } }],
+describe("POST /api/email/:id/reply-options", () => {
+  it("returns exactly 3 drafts in stable tone order (accept, decline, info)", async () => {
+    createCompletion.mockImplementation(async (req: { messages: { content: string }[] }) => {
+      const user = req.messages[1].content;
+      const body = user.includes("Accept")
+        ? "Yes, 3pm works."
+        : user.includes("decline")
+          ? "Sorry, I can't make 3pm."
+          : "Which day did you have in mind?";
+      return { choices: [{ message: { content: body } }] };
     });
     const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/email/e1/reply-draft",
-      payload: { intent: "say yes to 3pm" },
-    });
+    const res = await app.inject({ method: "POST", url: "/api/email/e1/reply-options" });
     expect(res.statusCode).toBe(200);
     const json = res.json();
-    expect(json.body).toContain("3pm works");
+    expect(json.to).toBe("boss@corp.com");
     expect(json.subject).toBe("Re: Need your reply today");
-    expect(createCompletion.mock.calls[0][0].model).toBe("test-draft-model");
+    expect(json.options).toHaveLength(3);
+    expect(json.options.map((o: { tone: string }) => o.tone)).toEqual([
+      "accept",
+      "decline",
+      "info",
+    ]);
+    expect(json.options[0].body).toContain("3pm works");
+    expect(json.options[1].body).toContain("can't make");
+    expect(json.options[2].body).toContain("Which day");
+    expect(createCompletion).toHaveBeenCalledTimes(3);
     await app.close();
   });
 
-  it("returns 503 and captures the error when the LLM fails (not a silent 500)", async () => {
-    createCompletion.mockRejectedValue(
-      Object.assign(new Error("All AI providers are unavailable"), {
-        name: "AllProvidersExhaustedError",
-      }),
-    );
+  it("is all-or-nothing: one failed draft means a captured 503, not a partial card", async () => {
+    createCompletion
+      .mockResolvedValueOnce({ choices: [{ message: { content: "Yes." } }] })
+      .mockRejectedValueOnce(new Error("provider down"))
+      .mockResolvedValueOnce({ choices: [{ message: { content: "What time?" } }] });
     const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/email/e1/reply-draft",
-      payload: {},
-    });
+    const res = await app.inject({ method: "POST", url: "/api/email/e1/reply-options" });
     expect(res.statusCode).toBe(503);
     expect(res.json().error).toMatch(/temporarily unavailable/i);
     expect(captureError).toHaveBeenCalledTimes(1);
-    expect(captureError.mock.calls[0][1].tags.scope).toBe("reply-draft");
+    expect(captureError.mock.calls[0][1].tags.scope).toBe("reply-options");
     await app.close();
   });
 
@@ -113,11 +122,7 @@ describe("POST /api/email/:id/reply-draft", () => {
       }),
     );
     const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/email/e1/reply-draft",
-      payload: {},
-    });
+    const res = await app.inject({ method: "POST", url: "/api/email/e1/reply-options" });
     expect(res.statusCode).toBe(429);
     expect(res.headers["retry-after"]).toBe("12");
     expect(res.json().error).toMatch(/too fast/i);
@@ -125,14 +130,10 @@ describe("POST /api/email/:id/reply-draft", () => {
     await app.close();
   });
 
-  it("404s when the email is not found", async () => {
+  it("404s when the email is not found without spending LLM calls", async () => {
     emailFindFirst.mockResolvedValue(null);
     const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/email/nope/reply-draft",
-      payload: {},
-    });
+    const res = await app.inject({ method: "POST", url: "/api/email/nope/reply-options" });
     expect(res.statusCode).toBe(404);
     expect(createCompletion).not.toHaveBeenCalled();
     await app.close();
