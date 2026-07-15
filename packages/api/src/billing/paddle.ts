@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { timingSafeEqualStr } from "./timing-safe-equal.js";
+import { timingSafeEqualStr } from "../timing-safe-equal.js";
 
 /**
  * Paddle Billing (merchant-of-record) — the web payment provider.

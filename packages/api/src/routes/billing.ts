@@ -1,15 +1,12 @@
 import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
-import { TRIAL_DAYS } from "../config.js";
-import { encryptOptional } from "../crypto-tokens.js";
-import { db, prisma } from "../db.js";
-import { CURATED_MODELS, isCuratedModel } from "../model-catalog.js";
-import { clearFallbackState } from "../model-fallback.js";
-import { MODEL } from "../openai.js";
-import { createPaddleCheckout, createPaddlePortalUrl, isPaddleConfigured } from "../paddle.js";
-import { getUserUsage } from "../quota-limiter.js";
-import { captureError } from "../sentry.js";
+import {
+  createPaddleCheckout,
+  createPaddlePortalUrl,
+  isPaddleConfigured,
+} from "../billing/paddle.js";
+import { getUserUsage } from "../billing/quota-limiter.js";
 import {
   getEffectivePlan,
   isEntitled,
@@ -17,7 +14,14 @@ import {
   PLAN_FEATURES,
   PLANS,
   stripe,
-} from "../stripe.js";
+} from "../billing/stripe.js";
+import { TRIAL_DAYS } from "../config.js";
+import { encryptOptional } from "../crypto-tokens.js";
+import { db, prisma } from "../db.js";
+import { CURATED_MODELS, isCuratedModel } from "../model-catalog.js";
+import { clearFallbackState } from "../model-fallback.js";
+import { MODEL } from "../openai.js";
+import { captureError } from "../sentry.js";
 
 function keyHash(apiKey: string | null | undefined): string | null {
   if (!apiKey) return null;

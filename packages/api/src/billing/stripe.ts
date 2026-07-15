@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { PAYWALL_ENABLED } from "./config.js";
+import { PAYWALL_ENABLED } from "../config.js";
 import { isPaddleConfigured } from "./paddle.js";
 
 if (!process.env.STRIPE_SECRET_KEY) {

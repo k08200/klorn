@@ -14,7 +14,7 @@ vi.mock("../chat-engine.js", () => ({
 }));
 
 const requireAppAccess = vi.fn(async () => {});
-vi.mock("../entitlement-guard.js", () => ({
+vi.mock("../billing/entitlement-guard.js", () => ({
   requireAppAccess: (...args: unknown[]) => requireAppAccess(...args),
 }));
 

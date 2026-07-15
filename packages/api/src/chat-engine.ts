@@ -13,10 +13,10 @@
  */
 
 import type OpenAI from "openai";
+import { trackTokenUsage } from "./billing/token-usage.js";
 import { getUserLlmCredentials } from "./llm-credentials.js";
 import { AGENT_MODEL, createCompletion } from "./openai.js";
 import { captureError } from "./sentry.js";
-import { trackTokenUsage } from "./token-usage.js";
 import { ALL_TOOLS, executeToolCall } from "./tool-executor.js";
 
 export const CHAT_TOOL_NAMES: ReadonlySet<string> = new Set([

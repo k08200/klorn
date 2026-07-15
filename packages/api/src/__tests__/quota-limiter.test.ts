@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  LLM_USER_BACKGROUND_DAILY_CAP,
-  LLM_USER_FOREGROUND_DAILY_CAP,
-  LLM_USER_RPM,
-} from "../config.js";
-import {
   _resetAllUserWindowsForTests,
   checkAndRecordUserCall,
   getUserUsage,
   UserRateLimitedError,
-} from "../quota-limiter.js";
+} from "../billing/quota-limiter.js";
+import {
+  LLM_USER_BACKGROUND_DAILY_CAP,
+  LLM_USER_FOREGROUND_DAILY_CAP,
+  LLM_USER_RPM,
+} from "../config.js";
 
 describe("quota-limiter", () => {
   beforeEach(() => {

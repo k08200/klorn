@@ -15,7 +15,7 @@ const recordGlobalCostUsage = vi.hoisted(() => vi.fn());
 
 vi.mock("../db.js", () => ({ prisma: {}, db: {} }));
 
-vi.mock("../cost-guard.js", async (importOriginal) => ({
+vi.mock("../billing/cost-guard.js", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   recordCostUsage,
   recordGlobalCostUsage,
@@ -23,7 +23,7 @@ vi.mock("../cost-guard.js", async (importOriginal) => ({
 
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { estimatePrebillCents, trueUpCostLedgers } from "../llm-usage.js";
+import { estimatePrebillCents, trueUpCostLedgers } from "../billing/llm-usage.js";
 
 const PAID_MODEL = "anthropic/claude-sonnet-4-6";
 const FREE_MODEL = "google/gemma-4-31b-it:free";

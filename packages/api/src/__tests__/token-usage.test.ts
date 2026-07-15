@@ -23,9 +23,9 @@ vi.mock("../db.js", () => ({
 }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
+import { trackTokenUsage } from "../billing/token-usage.js";
 import { db } from "../db.js";
 import { captureError } from "../sentry.js";
-import { trackTokenUsage } from "../token-usage.js";
 
 const dataOf = (call: number) =>
   vi.mocked(db.tokenUsage.create).mock.calls[call]?.[0].data as Record<string, unknown>;

@@ -9,11 +9,11 @@
 
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { requireEntitled } from "../billing/entitlement-guard.js";
 import { recordContactEngagement } from "../contact-engagement.js";
 import { prisma } from "../db.js";
 import { buildAttachmentCandidateProfile, listEmailAttachments } from "../email-attachments.js";
 import { updateCandidateIntake } from "../email-candidate-intake.js";
-import { requireEntitled } from "../entitlement-guard.js";
 import {
   createEmailDraft,
   type GmailDraftAttachment,

@@ -63,7 +63,7 @@ beforeEach(() => {
 
 describe("recordLlmUsage — happy path", () => {
   it("writes one row with actual provider usage and the pre-bill estimate", async () => {
-    const { recordLlmUsage } = await import("../llm-usage.js");
+    const { recordLlmUsage } = await import("../billing/llm-usage.js");
     await recordLlmUsage({
       userId: "user-1",
       provider: "openrouter",
@@ -89,7 +89,7 @@ describe("recordLlmUsage — happy path", () => {
   });
 
   it("records system calls with userId=null", async () => {
-    const { recordLlmUsage } = await import("../llm-usage.js");
+    const { recordLlmUsage } = await import("../billing/llm-usage.js");
     await recordLlmUsage({
       userId: null,
       provider: "gemini",
@@ -104,7 +104,7 @@ describe("recordLlmUsage — happy path", () => {
   });
 
   it("records cached prompt tokens from prompt_tokens_details", async () => {
-    const { recordLlmUsage } = await import("../llm-usage.js");
+    const { recordLlmUsage } = await import("../billing/llm-usage.js");
     await recordLlmUsage({
       userId: "user-1",
       provider: "openrouter",
@@ -127,7 +127,7 @@ describe("recordLlmUsage — happy path", () => {
   });
 
   it("defaults cachedPromptTokens to 0 when the provider reports no details", async () => {
-    const { recordLlmUsage } = await import("../llm-usage.js");
+    const { recordLlmUsage } = await import("../billing/llm-usage.js");
     await recordLlmUsage({
       userId: "user-1",
       provider: "openrouter",
@@ -141,7 +141,7 @@ describe("recordLlmUsage — happy path", () => {
   });
 
   it("derives totalTokens from prompt+completion when the provider omits it", async () => {
-    const { recordLlmUsage } = await import("../llm-usage.js");
+    const { recordLlmUsage } = await import("../billing/llm-usage.js");
     await recordLlmUsage({
       userId: "user-1",
       provider: "openrouter",
@@ -162,7 +162,7 @@ describe("recordLlmUsage — happy path", () => {
 
 describe("recordLlmUsage — missing usage (defensive path)", () => {
   it("records zeros + usageMissing=true when usage is undefined", async () => {
-    const { recordLlmUsage } = await import("../llm-usage.js");
+    const { recordLlmUsage } = await import("../billing/llm-usage.js");
     await recordLlmUsage({
       userId: "user-1",
       provider: "openrouter",
@@ -183,7 +183,7 @@ describe("recordLlmUsage — missing usage (defensive path)", () => {
   });
 
   it("records usageMissing=true when usage exists but has no token fields", async () => {
-    const { recordLlmUsage } = await import("../llm-usage.js");
+    const { recordLlmUsage } = await import("../billing/llm-usage.js");
     await recordLlmUsage({
       userId: null,
       provider: "gemini",
@@ -200,7 +200,7 @@ describe("recordLlmUsage — missing usage (defensive path)", () => {
 describe("recordLlmUsage — ledger failure never propagates", () => {
   it("swallows DB write errors and reports them to Sentry", async () => {
     createShouldFail = true;
-    const { recordLlmUsage } = await import("../llm-usage.js");
+    const { recordLlmUsage } = await import("../billing/llm-usage.js");
 
     await expect(
       recordLlmUsage({
@@ -220,12 +220,12 @@ describe("recordLlmUsage — ledger failure never propagates", () => {
 
 describe("estimatePrebillCents", () => {
   it("matches the cost-gate pre-bill (free model → 0¢)", async () => {
-    const { estimatePrebillCents } = await import("../llm-usage.js");
+    const { estimatePrebillCents } = await import("../billing/llm-usage.js");
     expect(estimatePrebillCents("google/gemma-4-31b-it:free")).toBe(0);
   });
 
   it("charges a non-zero nominal-token floor for paid models (0\u00a2 pre-bill regression)", async () => {
-    const { estimatePrebillCents } = await import("../llm-usage.js");
+    const { estimatePrebillCents } = await import("../billing/llm-usage.js");
     const model = "anthropic/claude-sonnet-4";
     expect(estimatePrebillCents(model)).toBeGreaterThanOrEqual(1);
   });
@@ -271,7 +271,7 @@ describe("getUsageSummary — aggregation", () => {
     ];
     countResult = 3;
 
-    const { getUsageSummary } = await import("../llm-usage.js");
+    const { getUsageSummary } = await import("../billing/llm-usage.js");
     const summary = await getUsageSummary(undefined, 7);
 
     expect(summary.sinceDays).toBe(7);
@@ -316,7 +316,7 @@ describe("getUsageSummary — aggregation", () => {
   });
 
   it("scopes every query to the user when userId is provided", async () => {
-    const { getUsageSummary } = await import("../llm-usage.js");
+    const { getUsageSummary } = await import("../billing/llm-usage.js");
     const summary = await getUsageSummary("user-9", 30);
 
     expect(summary.userId).toBe("user-9");
@@ -330,7 +330,7 @@ describe("getUsageSummary — aggregation", () => {
   });
 
   it("normalizes null sums to 0 and falls back to the default window on bad input", async () => {
-    const { getUsageSummary } = await import("../llm-usage.js");
+    const { getUsageSummary } = await import("../billing/llm-usage.js");
     const summary = await getUsageSummary(undefined, Number.NaN);
 
     expect(summary.sinceDays).toBeGreaterThan(0);

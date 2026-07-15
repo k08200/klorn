@@ -12,7 +12,7 @@ vi.mock("../gmail.js", () => ({
   GMAIL_TOOLS: [],
 }));
 
-vi.mock("../stripe.js", () => ({
+vi.mock("../billing/stripe.js", () => ({
   stripe: {
     checkout: {
       sessions: { create: vi.fn(async () => ({ url: "https://checkout.stripe.com/test" })) },

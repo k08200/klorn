@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../notify/push.js", () => ({ sendPushNotification: vi.fn(async () => {}) }));
 vi.mock("../websocket.js", () => ({ pushNotification: vi.fn() }));
-vi.mock("../stripe.js", () => ({
+vi.mock("../billing/stripe.js", () => ({
   stripe: {
     webhooks: {
       constructEvent: vi.fn((_body: string, sig: string, _secret: string) => {

@@ -7,12 +7,12 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "../background.js";
+import { verifyTierOverrideToken } from "../billing/tier-override-token.js";
 import { prisma } from "../db.js";
 import { getVapidPublicKey, sendPushNotification } from "../notify/push.js";
 import { getPushDeliveryStats, recordPushReceipt } from "../notify/push-delivery.js";
 import { sendDevicePush } from "../notify/push-device.js";
 import { isAllowedPushOrigin } from "../notify/push-origin-allowlist.js";
-import { verifyTierOverrideToken } from "../tier-override-token.js";
 import type { Tier } from "../tiers.js";
 
 export async function notificationRoutes(app: FastifyInstance) {

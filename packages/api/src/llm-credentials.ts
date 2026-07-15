@@ -1,9 +1,9 @@
+import { isEntitled } from "./billing/stripe.js";
 import { decryptOptional } from "./crypto-tokens.js";
 import { prisma } from "./db.js";
 import { isCuratedModel } from "./model-catalog.js";
 import type { ProviderCredentials } from "./providers/index.js";
 import { captureError } from "./sentry.js";
-import { isEntitled } from "./stripe.js";
 
 type UserWithKeys = {
   openRouterApiKey?: string | null;

@@ -11,8 +11,8 @@
  */
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { requireAppAccess } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
-import { requireAppAccess } from "../entitlement-guard.js";
 import { buildInboxSummary } from "../inbox-summary.js";
 import { buildOperatingPlan } from "../operating-plan.js";
 

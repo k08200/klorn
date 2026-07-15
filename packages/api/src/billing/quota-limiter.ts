@@ -24,8 +24,8 @@ import {
   LLM_USER_BACKGROUND_DAILY_CAP,
   LLM_USER_FOREGROUND_DAILY_CAP,
   LLM_USER_RPM,
-} from "./config.js";
-import { nextDailyResetMs } from "./model-fallback.js";
+} from "../config.js";
+import { nextDailyResetMs } from "../model-fallback.js";
 
 export type CallPriority = "foreground" | "background";
 

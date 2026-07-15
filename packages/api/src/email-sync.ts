@@ -9,6 +9,7 @@
  */
 
 import { type gmail_v1, google } from "googleapis";
+import { planHasFeature } from "./billing/stripe.js";
 import { MULTI_INBOX_SYNC_ENABLED } from "./config.js";
 import { prisma } from "./db.js";
 import { persistGmailEmail } from "./email-firewall.js";
@@ -32,7 +33,6 @@ import {
 import { resolveUserEmail } from "./resolve-user-email.js";
 import { Semaphore } from "./semaphore.js";
 import { captureError } from "./sentry.js";
-import { planHasFeature } from "./stripe.js";
 
 // Reconcile refreshes read/star status with one messages.get per stored email.
 // Bound concurrency so a few-hundred-email mailbox doesn't serialize hundreds of

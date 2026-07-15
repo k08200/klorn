@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { PAYWALL_ENABLED } from "./config.js";
-import { prisma } from "./db.js";
-import { captureError } from "./sentry.js";
+import { PAYWALL_ENABLED } from "../config.js";
+import { prisma } from "../db.js";
+import { captureError } from "../sentry.js";
 import { isEntitled, isHardPaywalled } from "./stripe.js";
 
 async function loadPlanRole(

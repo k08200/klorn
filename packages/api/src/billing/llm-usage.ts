@@ -17,6 +17,8 @@
  * gate; this table never gates anything.
  */
 
+import { estimateModelCostUsd } from "../model-fallback.js";
+import { captureError } from "../sentry.js";
 // NOTE: db.js (Prisma) is imported LAZILY inside the async functions below.
 // openai.ts imports this module statically, and a static db.js import here
 // would run Prisma's .env autoload BEFORE providers/index.js initializes —
@@ -24,8 +26,6 @@
 // live-LLM on any machine with a local .env. cents.ts exists for the same
 // reason (usdToCents without the cost-guard → db.js chain).
 import { usdToCents } from "./cents.js";
-import { estimateModelCostUsd } from "./model-fallback.js";
-import { captureError } from "./sentry.js";
 
 export type LlmCallSource = "foreground" | "background";
 
@@ -170,7 +170,7 @@ export async function recordLlmUsage(input: RecordLlmUsageInput): Promise<void> 
     const completionTokens = usage?.completion_tokens ?? 0;
     const totalTokens = usage?.total_tokens ?? promptTokens + completionTokens;
 
-    const { prisma } = await import("./db.js");
+    const { prisma } = await import("../db.js");
     await prisma.llmUsageLog.create({
       data: {
         userId: input.userId,
@@ -238,7 +238,7 @@ export async function getUsageSummary(
     ...(userId ? { userId } : {}),
   };
 
-  const { prisma } = await import("./db.js");
+  const { prisma } = await import("../db.js");
   const [totals, byModel, usageMissingCalls] = await Promise.all([
     prisma.llmUsageLog.aggregate({
       where,

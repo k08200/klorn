@@ -71,13 +71,13 @@ afterEach(() => {
 
 describe("usdToCents", () => {
   it("returns 0 for zero/negative", async () => {
-    const { usdToCents } = await import("../cost-guard.js");
+    const { usdToCents } = await import("../billing/cost-guard.js");
     expect(usdToCents(0)).toBe(0);
     expect(usdToCents(-1)).toBe(0);
   });
 
   it("rounds up so sub-cent calls still register as 1¢", async () => {
-    const { usdToCents } = await import("../cost-guard.js");
+    const { usdToCents } = await import("../billing/cost-guard.js");
     expect(usdToCents(0.0001)).toBe(1); // 0.01¢ → 1¢ (paid-model floor)
     expect(usdToCents(0.012)).toBe(2); // 1.2¢ → 2¢
     expect(usdToCents(1.5)).toBe(150);
@@ -90,7 +90,7 @@ describe("checkCostGate", () => {
     // the module reading the current env at evaluation time.
     process.env.DAILY_COST_CAP_CENTS = "0";
     vi.resetModules();
-    const { checkCostGate } = await import("../cost-guard.js");
+    const { checkCostGate } = await import("../billing/cost-guard.js");
     const result = await checkCostGate("user-1");
     expect(result.allowed).toBe(true);
     expect(result.capCents).toBe(0);
@@ -100,7 +100,7 @@ describe("checkCostGate", () => {
     process.env.DAILY_COST_CAP_CENTS = "100";
     vi.resetModules();
     mockRow = { cents: 42 };
-    const { checkCostGate } = await import("../cost-guard.js");
+    const { checkCostGate } = await import("../billing/cost-guard.js");
     const result = await checkCostGate("user-1");
     expect(result.allowed).toBe(true);
     expect(result.remainingCents).toBe(58);
@@ -111,7 +111,7 @@ describe("checkCostGate", () => {
     process.env.DAILY_COST_CAP_CENTS = "100";
     vi.resetModules();
     mockRow = { cents: 100 };
-    const { checkCostGate } = await import("../cost-guard.js");
+    const { checkCostGate } = await import("../billing/cost-guard.js");
     const result = await checkCostGate("user-1");
     expect(result.allowed).toBe(false);
     expect(result.remainingCents).toBe(0);
@@ -122,7 +122,7 @@ describe("checkCostGate", () => {
     process.env.DAILY_COST_CAP_CENTS = "100";
     vi.resetModules();
     mockRow = { cents: 200 };
-    const { checkCostGate } = await import("../cost-guard.js");
+    const { checkCostGate } = await import("../billing/cost-guard.js");
     const result = await checkCostGate("user-1");
     expect(result.allowed).toBe(false);
   });
@@ -140,7 +140,7 @@ describe("checkCostGate — free-tier plan-aware cap (paywall on)", () => {
     enablePaywall();
     mockUser = { plan: "FREE", role: "USER" };
     mockRow = { cents: 5 };
-    const { checkCostGate } = await import("../cost-guard.js");
+    const { checkCostGate } = await import("../billing/cost-guard.js");
     const result = await checkCostGate("free-1");
     expect(result.capCents).toBe(10);
     expect(result.allowed).toBe(true);
@@ -151,7 +151,7 @@ describe("checkCostGate — free-tier plan-aware cap (paywall on)", () => {
     enablePaywall();
     mockUser = { plan: "FREE", role: "USER" };
     mockRow = { cents: 10 };
-    const { checkCostGate } = await import("../cost-guard.js");
+    const { checkCostGate } = await import("../billing/cost-guard.js");
     const result = await checkCostGate("free-1");
     expect(result.allowed).toBe(false);
     expect(result.capCents).toBe(10);
@@ -161,7 +161,7 @@ describe("checkCostGate — free-tier plan-aware cap (paywall on)", () => {
     enablePaywall();
     mockUser = { plan: "PRO", role: "USER" };
     mockRow = { cents: 50 };
-    const { checkCostGate } = await import("../cost-guard.js");
+    const { checkCostGate } = await import("../billing/cost-guard.js");
     const result = await checkCostGate("pro-1");
     expect(result.capCents).toBe(100);
     expect(result.allowed).toBe(true);
@@ -171,7 +171,7 @@ describe("checkCostGate — free-tier plan-aware cap (paywall on)", () => {
     enablePaywall();
     mockUser = { plan: "FREE", role: "ADMIN" };
     mockRow = { cents: 50 };
-    const { checkCostGate } = await import("../cost-guard.js");
+    const { checkCostGate } = await import("../billing/cost-guard.js");
     const result = await checkCostGate("admin-1");
     expect(result.capCents).toBe(100);
     expect(result.allowed).toBe(true);
@@ -181,7 +181,7 @@ describe("checkCostGate — free-tier plan-aware cap (paywall on)", () => {
     enablePaywall();
     userLookupShouldThrow = true;
     mockRow = { cents: 50 };
-    const { checkCostGate } = await import("../cost-guard.js");
+    const { checkCostGate } = await import("../billing/cost-guard.js");
     const result = await checkCostGate("free-1");
     // A DB blip must not wrongly block a free user nor throw on the hot path.
     expect(result.capCents).toBe(100);
@@ -195,7 +195,7 @@ describe("checkCostGate — free-tier plan-aware cap (paywall on)", () => {
     vi.resetModules();
     mockUser = { plan: "FREE", role: "USER" };
     mockRow = { cents: 50 };
-    const { checkCostGate } = await import("../cost-guard.js");
+    const { checkCostGate } = await import("../billing/cost-guard.js");
     const result = await checkCostGate("free-1");
     expect(result.capCents).toBe(100);
     expect(result.allowed).toBe(true);
@@ -214,7 +214,7 @@ describe("checkCostGate — freeCapApplied signal (drives the upgrade-vs-BYOK ca
     enablePaywall();
     mockUser = { plan: "FREE", role: "USER" };
     mockRow = { cents: 10 };
-    const { checkCostGate } = await import("../cost-guard.js");
+    const { checkCostGate } = await import("../billing/cost-guard.js");
     const result = await checkCostGate("free-1");
     expect(result.allowed).toBe(false);
     expect(result.freeCapApplied).toBe(true);
@@ -224,7 +224,7 @@ describe("checkCostGate — freeCapApplied signal (drives the upgrade-vs-BYOK ca
     enablePaywall();
     mockUser = { plan: "FREE", role: "USER" };
     mockRow = { cents: 3 };
-    const { checkCostGate } = await import("../cost-guard.js");
+    const { checkCostGate } = await import("../billing/cost-guard.js");
     const result = await checkCostGate("free-1");
     expect(result.allowed).toBe(true);
     expect(result.freeCapApplied).toBe(true);
@@ -234,7 +234,7 @@ describe("checkCostGate — freeCapApplied signal (drives the upgrade-vs-BYOK ca
     enablePaywall();
     mockUser = { plan: "PRO", role: "USER" };
     mockRow = { cents: 100 };
-    const { checkCostGate } = await import("../cost-guard.js");
+    const { checkCostGate } = await import("../billing/cost-guard.js");
     const result = await checkCostGate("pro-1");
     expect(result.freeCapApplied).toBe(false);
   });
@@ -246,7 +246,7 @@ describe("checkCostGate — freeCapApplied signal (drives the upgrade-vs-BYOK ca
     vi.resetModules();
     mockUser = { plan: "FREE", role: "USER" };
     mockRow = { cents: 100 };
-    const { checkCostGate } = await import("../cost-guard.js");
+    const { checkCostGate } = await import("../billing/cost-guard.js");
     const result = await checkCostGate("free-1");
     expect(result.freeCapApplied).toBe(false);
   });
@@ -255,7 +255,7 @@ describe("checkCostGate — freeCapApplied signal (drives the upgrade-vs-BYOK ca
     enablePaywall();
     userLookupShouldThrow = true;
     mockRow = { cents: 100 };
-    const { checkCostGate } = await import("../cost-guard.js");
+    const { checkCostGate } = await import("../billing/cost-guard.js");
     const result = await checkCostGate("free-1");
     // Fail-open resolves to the FULL cap, so the message must not claim a free
     // quota was exhausted.
@@ -268,7 +268,7 @@ describe("recordCostUsage — atomic pre-bill with post-increment over-cap signa
     process.env.DAILY_COST_CAP_CENTS = "100";
     vi.resetModules();
     mockUpsertCents = 130; // two concurrent calls both passed the read gate, total now 130
-    const { recordCostUsage } = await import("../cost-guard.js");
+    const { recordCostUsage } = await import("../billing/cost-guard.js");
     const usage = await recordCostUsage("user-1", 20, "gpt-x");
     expect(usage).toEqual({ totalCents: 130, overCap: true });
     // select cents so the caller can short-circuit on the real total
@@ -279,7 +279,7 @@ describe("recordCostUsage — atomic pre-bill with post-increment over-cap signa
     process.env.DAILY_COST_CAP_CENTS = "100";
     vi.resetModules();
     mockUpsertCents = 80;
-    const { recordCostUsage } = await import("../cost-guard.js");
+    const { recordCostUsage } = await import("../billing/cost-guard.js");
     expect(await recordCostUsage("user-1", 20, "gpt-x")).toEqual({
       totalCents: 80,
       overCap: false,
@@ -290,7 +290,7 @@ describe("recordCostUsage — atomic pre-bill with post-increment over-cap signa
     process.env.DAILY_COST_CAP_CENTS = "0";
     vi.resetModules();
     mockUpsertCents = 9999;
-    const { recordCostUsage } = await import("../cost-guard.js");
+    const { recordCostUsage } = await import("../billing/cost-guard.js");
     expect(await recordCostUsage("user-1", 20, "gpt-x")).toEqual({
       totalCents: 9999,
       overCap: false,
@@ -301,7 +301,7 @@ describe("recordCostUsage — atomic pre-bill with post-increment over-cap signa
     process.env.DAILY_COST_CAP_CENTS = "100";
     vi.resetModules();
     upsertShouldThrow = true;
-    const { recordCostUsage } = await import("../cost-guard.js");
+    const { recordCostUsage } = await import("../billing/cost-guard.js");
     expect(await recordCostUsage("user-1", 20, "gpt-x")).toBeNull();
   });
 });
@@ -310,7 +310,7 @@ describe("checkGlobalCostGate", () => {
   it("is disabled (infinite) when the global cap is 0", async () => {
     process.env.GLOBAL_DAILY_COST_CAP_CENTS = "0";
     vi.resetModules();
-    const { checkGlobalCostGate } = await import("../cost-guard.js");
+    const { checkGlobalCostGate } = await import("../billing/cost-guard.js");
     expect(checkGlobalCostGate().allowed).toBe(true);
     expect(checkGlobalCostGate().capCents).toBe(0);
   });
@@ -319,7 +319,7 @@ describe("checkGlobalCostGate", () => {
     process.env.GLOBAL_DAILY_COST_CAP_CENTS = "50";
     vi.resetModules();
     const { checkGlobalCostGate, recordGlobalCostUsage, __resetGlobalSpendForTest } = await import(
-      "../cost-guard.js"
+      "../billing/cost-guard.js"
     );
     __resetGlobalSpendForTest();
     expect(checkGlobalCostGate().allowed).toBe(true);

@@ -11,7 +11,7 @@ describe("paywall entitlement (stripe.ts)", () => {
   it("paywall OFF (default): FREE keeps its taster features and everyone is entitled", async () => {
     vi.stubEnv("PAYWALL_ENABLED", "");
     vi.resetModules();
-    const { planHasFeature, isEntitled } = await import("../stripe.js");
+    const { planHasFeature, isEntitled } = await import("../billing/stripe.js");
 
     // FREE keeps the historical taster set — nothing changes pre-launch.
     expect(planHasFeature("FREE", "email_auto_classify")).toBe(true);
@@ -26,7 +26,7 @@ describe("paywall entitlement (stripe.ts)", () => {
   it("paywall ON: FREE gets the usable taster tier; only paid/admin are entitled", async () => {
     vi.stubEnv("PAYWALL_ENABLED", "true");
     vi.resetModules();
-    const { planHasFeature, isEntitled, isHardPaywalled } = await import("../stripe.js");
+    const { planHasFeature, isEntitled, isHardPaywalled } = await import("../billing/stripe.js");
 
     // Usable free tier — the core firewall experience stays on for FREE
     // (bounded by the free daily cost cap, not by feature removal).
