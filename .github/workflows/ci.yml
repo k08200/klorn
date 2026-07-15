@@ -42,11 +42,9 @@ jobs:
         run: cd packages/api && pnpm exec prisma generate
       - name: Typecheck API
         run: cd packages/api && pnpm exec tsc --noEmit
-      - name: Typecheck Core
-        run: cd packages/core && pnpm exec tsc --noEmit
       # Web was previously unchecked here — a broken packages/web tsc slipped
       # through CI on 2026-07-03 (missing @capacitor/app types) because only
-      # api+core were gated. Next.js `build` type-checks too, but tsc is the
+      # only api was gated. Next.js `build` type-checks too, but tsc is the
       # cheap fast signal on every PR.
       - name: Typecheck Web
         run: cd packages/web && pnpm exec tsc --noEmit

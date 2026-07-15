@@ -9,7 +9,7 @@ is to surface what matters without knocking you out of your flow.
 This replaces the old Electron `packages/desktop` shell. It's a Swift Package
 (text-based, reproducible, diffable) rather than an `.xcodeproj` — a deliberate
 deviation from the repo's "TypeScript only" lock, chosen for a genuinely native
-app (`@klorn/core` stays the moat, served to every surface via the API).
+app (the classification engine in `@klorn/api` stays the moat, served to every surface via the API).
 
 ## What it looks like
 

@@ -14,8 +14,7 @@ services:
       corepack enable &&
       export NODE_OPTIONS=--max-old-space-size=4096 &&
       pnpm install --frozen-lockfile --prod=false &&
-      cd packages/core && pnpm build &&
-      cd ../api && npx prisma generate && pnpm build
+      cd packages/api && npx prisma generate && pnpm build
     # preDeployCommand intentionally omitted — start.sh runs prisma migrate
     # deploy with cold-start retry, so a separate preDeploy pass duplicates
     # that work AND its hang risk. The 2026-06-05 deploy timed out at 15min
