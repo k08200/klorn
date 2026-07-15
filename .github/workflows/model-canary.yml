@@ -1,0 +1,158 @@
+# Weekly model canary (#526) — behavioral drift tripwire for the NON-judge
+# models (MODEL/chat, AGENT_MODEL; VISION_MODEL via manual dispatch).
+#
+# The catalog check (openrouter-catalog-check.ts) only sees metadata diffs; the
+# judge canary (judge-canary.yml) only covers JUDGE_MODEL. A provider swapping
+# the model UNDER an unchanged SKU id is invisible for the other surfaces.
+# This canary runs a fixed probe set (src/llm/model-canary-probes.ts) at
+# temperature 0 against each surface's live pin and compares canonical answers
+# against last week's baseline with the SAME flip-alarm machinery as the judge
+# canary (scripts/canary-compare.ts): a verdict flip on an identical probe
+# means the model behind the SKU changed.
+#
+# NODE_ENV=production: MODEL resolves NODE_ENV-dependently (llm/openai.ts
+# SHARED_DEFAULT — paid in prod, :free otherwise). The canary must probe what
+# PROD serves, so the job pins production resolution explicitly.
+#
+# Vision is dispatch-only for now: VISION_MODEL's default pin is a :free SKU
+# whose daily quota flakiness would false-alarm a weekly schedule. Include it
+# manually (include-vision=true) until the pin moves off :free.
+#
+# Cost: ~24 tiny calls/week (12 probes × chat+agent) — a fraction of the
+# judge canary's 50.
+
+name: Model canary
+
+on:
+  schedule:
+    - cron: "0 2 * * 1" # Mondays 02:00 UTC (judge canary runs at 01:00)
+  workflow_dispatch:
+    inputs:
+      accept-baseline:
+        description: "Save this run's answers as the new baseline even if flips were detected"
+        type: boolean
+        default: false
+      include-vision:
+        description: "Also probe VISION_MODEL (default :free SKU — quota-flaky)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-canary
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    name: Weekly drift canary (chat/agent probe flips)
+    runs-on: ubuntu-latest
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # The probe runner never reads real data; the Prisma client just needs a
+      # syntactically valid URL (usage-ledger writes are fire-and-forget).
+      DATABASE_URL: "postgresql://eval:eval@localhost:5432/eval"
+      # Resolve model pins the way PROD does (see header comment).
+      NODE_ENV: "production"
+    steps:
+      - name: Check for provider key
+        id: key
+        run: |
+          if [ -n "$OPENROUTER_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No provider key — skipping the model canary."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.key.outputs.present == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.present == 'true'
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+        if: steps.key.outputs.present == 'true'
+
+      - name: Install dependencies
+        if: steps.key.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma types
+        if: steps.key.outputs.present == 'true'
+        run: cd packages/api && npx prisma generate
+
+      - name: Restore previous baseline
+        if: steps.key.outputs.present == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: model-canary-baseline.json
+          key: model-canary-baseline-${{ github.run_id }}
+          restore-keys: |
+            model-canary-baseline-
+
+      - name: Run the probe set
+        if: steps.key.outputs.present == 'true'
+        id: probes
+        continue-on-error: true
+        run: |
+          VISION_FLAG=""
+          if [ "${{ github.event.inputs.include-vision }}" = "true" ]; then
+            VISION_FLAG="--vision"
+          fi
+          cd packages/api && npx tsx scripts/model-canary.ts \
+            --out=../../model-canary-current.json $VISION_FLAG
+
+      - name: Compare against baseline
+        if: steps.key.outputs.present == 'true'
+        id: compare
+        continue-on-error: true
+        run: |
+          if [ ! -f model-canary-current.json ]; then
+            echo "::error::probe run produced no output — cannot compare"
+            exit 1
+          fi
+          if [ ! -f model-canary-baseline.json ]; then
+            echo "::notice::No baseline found — recording this run as the first baseline."
+            exit 0
+          fi
+          cd packages/api && npx tsx scripts/canary-compare.ts \
+            --prev=../../model-canary-baseline.json --curr=../../model-canary-current.json
+
+      - name: Save new baseline
+        if: >-
+          steps.key.outputs.present == 'true' &&
+          steps.probes.outcome == 'success' &&
+          (steps.compare.outcome == 'success' || github.event.inputs.accept-baseline == 'true')
+        run: cp model-canary-current.json model-canary-baseline.json
+
+      - name: Persist baseline to cache
+        if: >-
+          steps.key.outputs.present == 'true' &&
+          steps.probes.outcome == 'success' &&
+          (steps.compare.outcome == 'success' || github.event.inputs.accept-baseline == 'true')
+        uses: actions/cache/save@v4
+        with:
+          path: model-canary-baseline.json
+          key: model-canary-baseline-${{ github.run_id }}
+
+      - name: Verdict
+        if: steps.key.outputs.present == 'true'
+        run: |
+          if [ "${{ steps.probes.outcome }}" != "success" ]; then
+            echo "::error::Model canary: the probe run itself failed — see the 'Run the probe set' step."
+            exit 1
+          fi
+          if [ "${{ steps.compare.outcome }}" != "success" ]; then
+            if [ "${{ github.event.inputs.accept-baseline }}" = "true" ]; then
+              echo "::warning::Flips detected but accept-baseline=true — new baseline saved."
+              exit 0
+            fi
+            echo "::error::Model canary: probe answers flipped against last week's baseline — the model behind an unchanged SKU may have changed. See the 'Compare against baseline' step."
+            exit 1
+          fi
+          echo "Model canary stable — no probe flips, baseline refreshed."
