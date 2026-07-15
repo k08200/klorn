@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import type Stripe from "stripe";
 import { prisma } from "../db.js";
+import { sendPushNotification } from "../notify/push.js";
 import { verifyPaddleSignature } from "../paddle.js";
-import { sendPushNotification } from "../push.js";
 import { captureError } from "../sentry.js";
 import { PLANS, stripe } from "../stripe.js";
 import { timingSafeEqualStr } from "../timing-safe-equal.js";

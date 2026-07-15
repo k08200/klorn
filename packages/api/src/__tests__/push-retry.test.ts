@@ -11,19 +11,19 @@ vi.mock("../db.js", () => ({
     pushDeliveryLog: { findFirst: vi.fn(async () => null) },
   },
 }));
-vi.mock("../push-delivery.js", () => ({
+vi.mock("../notify/push-delivery.js", () => ({
   createPushDeliveryAttempt: vi.fn(async () => "delivery-id"),
   createSkippedPushDelivery: vi.fn(async () => {}),
   markPushAccepted: vi.fn(async () => {}),
   markPushFailed: vi.fn(async () => {}),
 }));
-vi.mock("../notification-prefs.js", () => ({
+vi.mock("../notify/notification-prefs.js", () => ({
   evaluateNotificationGate: vi.fn(async () => ({ allowed: true })),
 }));
-vi.mock("../push-rate-limit.js", () => ({
+vi.mock("../notify/push-rate-limit.js", () => ({
   recordPushAttempt: vi.fn(async () => ({ allowed: true })),
 }));
-vi.mock("../is-safe-push-endpoint.js", () => ({
+vi.mock("../notify/is-safe-push-endpoint.js", () => ({
   isSafePushEndpoint: vi.fn(() => true),
 }));
 vi.mock("web-push", () => ({
@@ -37,7 +37,7 @@ import {
   decidePushFailureAction,
   MAX_CONSECUTIVE_PUSH_FAILURES,
   shouldRetryPushError,
-} from "../push.js";
+} from "../notify/push.js";
 
 describe("authoredSurface — which push categories bypass the noise heuristic", () => {
   it("maps the firewall-judged email push to the 'firewall' authored surface", () => {

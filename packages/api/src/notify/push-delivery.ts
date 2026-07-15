@@ -6,7 +6,7 @@
  * dogfooding signal that the installed app actually received/clicked it.
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 
 export type PushDeliveryStatus = "PENDING" | "ACCEPTED" | "FAILED" | "SKIPPED";
 export type PushReceiptEvent = "received" | "clicked";

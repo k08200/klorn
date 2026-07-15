@@ -12,7 +12,7 @@
  */
 
 import { prisma } from "../db.js";
-import { getAllowedPushOrigins, isAllowedPushOrigin } from "../push-origin-allowlist.js";
+import { getAllowedPushOrigins, isAllowedPushOrigin } from "../notify/push-origin-allowlist.js";
 
 async function main() {
   const apply = process.argv.includes("--apply");

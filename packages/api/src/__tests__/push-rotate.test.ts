@@ -30,12 +30,12 @@ vi.mock("../background.js", () => ({
   markNotificationRead: vi.fn(),
 }));
 
-vi.mock("../push.js", () => ({
+vi.mock("../notify/push.js", () => ({
   getVapidPublicKey: vi.fn(() => null),
   sendPushNotification: vi.fn(),
 }));
 
-vi.mock("../push-delivery.js", () => ({
+vi.mock("../notify/push-delivery.js", () => ({
   getPushDeliveryStats: vi.fn(async () => ({})),
   recordPushReceipt: vi.fn(),
 }));

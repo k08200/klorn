@@ -12,7 +12,7 @@ vi.mock("../db.js", () => ({
   },
 }));
 
-import { evaluateNotificationGate } from "../notification-prefs.js";
+import { evaluateNotificationGate } from "../notify/notification-prefs.js";
 
 const NOON_UTC = new Date("2026-01-01T12:00:00Z");
 const NIGHT_UTC = new Date("2026-01-01T02:00:00Z");

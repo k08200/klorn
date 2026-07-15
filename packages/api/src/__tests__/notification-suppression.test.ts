@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { notificationSuppressionReason } from "../notification-policy.js";
+import { notificationSuppressionReason } from "../notify/notification-policy.js";
 
 describe("notificationSuppressionReason — housekeeping", () => {
   it("drops the exact prod-incident title", () => {

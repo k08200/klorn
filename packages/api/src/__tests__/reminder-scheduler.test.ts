@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sendPushNotification } from "../push.js";
+import { sendPushNotification } from "../notify/push.js";
 import { deliverDueReminderById, scheduleReminderDeliveryCheck } from "../reminder-scheduler.js";
 import { captureError } from "../sentry.js";
 import { pushNotification } from "../websocket.js";
@@ -34,7 +34,7 @@ const state = vi.hoisted(() => ({
   notifications: [] as NotificationRow[],
 }));
 
-vi.mock("../push.js", () => ({ sendPushNotification: vi.fn(async () => undefined) }));
+vi.mock("../notify/push.js", () => ({ sendPushNotification: vi.fn(async () => undefined) }));
 vi.mock("../websocket.js", () => ({ pushNotification: vi.fn() }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 vi.mock("../db.js", () => {

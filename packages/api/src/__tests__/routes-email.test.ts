@@ -38,7 +38,7 @@ vi.mock("../email-sync.js", () => ({
   checkAutoReplyRules: vi.fn(async () => null),
   getEmailThreads: vi.fn(async () => ({ threads: [], total: 0 })),
 }));
-vi.mock("../push.js", () => ({ sendPushNotification: vi.fn() }));
+vi.mock("../notify/push.js", () => ({ sendPushNotification: vi.fn() }));
 vi.mock("../websocket.js", () => ({ pushNotification: vi.fn() }));
 
 vi.mock("../db.js", () => {

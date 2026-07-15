@@ -21,9 +21,9 @@
 
 import { type App, cert, getApps, initializeApp } from "firebase-admin/app";
 import { type BatchResponse, getMessaging, type Message } from "firebase-admin/messaging";
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
+import { captureError } from "../sentry.js";
 import type { NotifCategory } from "./notification-prefs.js";
-import { captureError } from "./sentry.js";
 
 const FIREBASE_SERVICE_ACCOUNT = process.env.FIREBASE_SERVICE_ACCOUNT || "";
 

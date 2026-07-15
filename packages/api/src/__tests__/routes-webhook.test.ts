@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../push.js", () => ({ sendPushNotification: vi.fn(async () => {}) }));
+vi.mock("../notify/push.js", () => ({ sendPushNotification: vi.fn(async () => {}) }));
 vi.mock("../websocket.js", () => ({ pushNotification: vi.fn() }));
 vi.mock("../stripe.js", () => ({
   stripe: {

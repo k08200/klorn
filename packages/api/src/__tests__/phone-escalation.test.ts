@@ -165,7 +165,7 @@ vi.mock("../db.js", () => ({
   },
 }));
 
-vi.mock("../sms-phone.js", () => ({
+vi.mock("../notify/sms-phone.js", () => ({
   getPhoneNumber: vi.fn(async (userId: string) => phones.get(userId) ?? null),
 }));
 
@@ -195,7 +195,7 @@ const originalEnv: Record<string, string | undefined> = {};
 /** Re-import the module after env changes (mirrors sms.test.ts conventions). */
 async function loadModule() {
   vi.resetModules();
-  const mod = await import("../phone-escalation.js");
+  const mod = await import("../notify/phone-escalation.js");
   mod._resetPhoneClientForTests();
   return mod;
 }

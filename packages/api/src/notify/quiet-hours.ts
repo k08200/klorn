@@ -13,7 +13,7 @@
  * (AutomationConfig.timezone) via the shared time-zone helpers.
  */
 
-import { localMinuteOfDay, normalizeTimeZone } from "./time-zone.js";
+import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
 
 const MINUTES_PER_HOUR = 60;
 const MAX_HOUR = 23;

@@ -204,7 +204,7 @@ async function checkUpcomingMeetings() {
             // "meeting" category so a user with notifyMeeting=false isn't pushed
             // (the default "system" category bypasses that opt-out).
             try {
-              const { sendPushNotification } = await import("./push.js");
+              const { sendPushNotification } = await import("./notify/push.js");
               await sendPushNotification(
                 userId,
                 {

@@ -12,7 +12,7 @@
  */
 
 import crypto from "node:crypto";
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 import { getTelegramBotUsername } from "./telegram.js";
 
 export const TELEGRAM_LINK_CODE_TTL_MS = 10 * 60 * 1000;

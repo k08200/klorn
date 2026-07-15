@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSafePushEndpoint } from "../is-safe-push-endpoint.js";
+import { isSafePushEndpoint } from "../notify/is-safe-push-endpoint.js";
 
 describe("isSafePushEndpoint", () => {
   it("accepts a normal public HTTPS endpoint", () => {

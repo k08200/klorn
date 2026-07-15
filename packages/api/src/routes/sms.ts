@@ -13,9 +13,9 @@
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAdmin } from "../auth.js";
 import { prisma } from "../db.js";
-import { sendSms } from "../sms.js";
-import { getSmsUsage } from "../sms-limiter.js";
-import { getPhoneNumber, InvalidPhoneNumberError, setPhoneNumber } from "../sms-phone.js";
+import { sendSms } from "../notify/sms.js";
+import { getSmsUsage } from "../notify/sms-limiter.js";
+import { getPhoneNumber, InvalidPhoneNumberError, setPhoneNumber } from "../notify/sms-phone.js";
 
 const PHONE_TYPE = "CONTEXT";
 const PHONE_KEY = "phone_number_e164";
