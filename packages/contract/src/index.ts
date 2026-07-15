@@ -11,4 +11,5 @@
  * drift in the same commit that introduces it.
  */
 
+export type * from "./firewall.js";
 export type * from "./inbox-summary.js";

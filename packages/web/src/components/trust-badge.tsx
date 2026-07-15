@@ -11,16 +11,15 @@
  *
  * Both render nothing when badge === "unknown" so the inbox doesn't
  * accumulate grey dots next to every first-time sender.
+ *
+ * Wire shapes come from @klorn/contract (the server's TrustWire); the local
+ * TrustScoreData name is kept as an alias so existing importers are unchanged.
  */
 
-export type TrustBadge = "reliable" | "mostly_reliable" | "unreliable" | "unknown";
+import type { TrustBadge, TrustWire } from "@klorn/contract";
 
-export interface TrustScoreData {
-  badge: TrustBadge;
-  label: string;
-  onTimeRate: number;
-  totalCount: number;
-}
+export type { TrustBadge } from "@klorn/contract";
+export type TrustScoreData = TrustWire;
 
 interface BadgeStyle {
   label: string;
