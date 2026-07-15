@@ -20,7 +20,20 @@ final class PushCardController {
     private var resignObserver: NSObjectProtocol?
     /// Gap between the pill (52 high, 8 inset — TopBarMetrics/TopBarController)
     /// and the card, so the card visually hangs off the bar like the reference.
-    private static let topOffset: CGFloat = 8 + 52 + 8
+    /// Internal (not private) so the self-check harness can pin the geometry;
+    /// nonisolated so the pure cardFrame math can read it off the main actor.
+    nonisolated static let topOffset: CGFloat = 8 + 52 + 8
+
+    /// Card frame pinned top-center below the pill. The TOP edge is the anchor:
+    /// expanding grows the card downward (maxY stays put), matching the
+    /// reference video's unroll. Pure for testing.
+    nonisolated static func cardFrame(size: NSSize, visible: NSRect) -> NSRect {
+        NSRect(
+            x: visible.midX - size.width / 2,
+            y: visible.maxY - topOffset - size.height,
+            width: size.width,
+            height: size.height)
+    }
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
@@ -69,11 +82,26 @@ final class PushCardController {
         state.item = item
         state.pendingCount = queue.pendingCount
         state.drafts = .loading
+        state.layout = .compact  // every item starts glanceable
+        state.detail = nil
         state.sendingIndex = nil
         state.sentIndex = nil
         state.sendError = nil
         render()
         fetchDrafts(for: item)
+        fetchDetail(for: item)
+    }
+
+    /// Prefetch the email detail (Klorn summary) so the expanded view is ready
+    /// the moment the user clicks. Best-effort: on failure the expanded view
+    /// falls back to the wire snippet (cardDetailText).
+    private func fetchDetail(for item: FirewallItem) {
+        Task { [weak self] in
+            guard let self else { return }
+            let detail = await self.model.fetchEmailDetail(item)
+            guard self.state.item?.id == item.id else { return }
+            self.state.detail = detail
+        }
     }
 
     private func fetchDrafts(for item: FirewallItem) {
@@ -114,7 +142,19 @@ final class PushCardController {
                 self.state.drafts = .loading
                 self.fetchDrafts(for: item)
             },
-            onArm: { [weak self] in self?.armKeyboard() })
+            onToggleExpand: { [weak self] in self?.toggleLayout() })
+    }
+
+    /// Click on the card: compact ↔ expanded. Expanding also arms the keyboard
+    /// (the click is the explicit user intent the focus contract requires);
+    /// collapsing leaves arming as-is — esc/hotkey/click-elsewhere release it.
+    private func toggleLayout() {
+        state.layout = state.layout == .compact ? .expanded : .compact
+        if state.layout == .expanded, let panel, !panel.isKeyWindow {
+            panel.makeKey()
+            state.keysArmed = panel.isKeyWindow
+        }
+        if let panel { morph(panel, to: state.layout) }
     }
 
     private func send(_ index: Int) {
@@ -155,18 +195,49 @@ final class PushCardController {
     // MARK: - Panel
 
     private func render() {
+        let wasVisible = panel?.isVisible ?? false
         let panel = self.panel ?? makePanel()
         self.panel = panel
         if panel.contentView == nil || !(panel.contentView is NSHostingView<PushCardRoot>) {
             panel.contentView = NSHostingView(
                 rootView: PushCardRoot(state: state, actions: makeActions()))
         }
-        position(panel)
-        panel.orderFrontRegardless()  // never makeKey here — see focus contract
+        guard let visible = NSScreen.main?.visibleFrame else { return }
+        let target = Self.cardFrame(size: PushCardMetrics.size(for: state.layout), visible: visible)
+        if !wasVisible && Self.shouldAnimate() {
+            // Present-morph: unroll downward from a thin strip at the pill,
+            // fading in — the reference video's arrival. Suppressed under
+            // Reduce Motion (the card then just appears in place).
+            panel.setFrame(PushCardMetrics.presentStartFrame(target: target), display: false)
+            panel.alphaValue = 0
+            panel.orderFrontRegardless()  // never makeKey here — see focus contract
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.22
+                panel.animator().alphaValue = 1
+            }
+            panel.setFrame(target, display: true, animate: true)
+        } else {
+            panel.alphaValue = 1
+            panel.setFrame(target, display: true, animate: false)
+            panel.orderFrontRegardless()
+        }
+    }
+
+    /// Expand/collapse morph between the two layouts (top edge stays anchored).
+    private func morph(_ panel: NSPanel, to layout: CardLayout) {
+        guard let visible = NSScreen.main?.visibleFrame else { return }
+        let target = Self.cardFrame(size: PushCardMetrics.size(for: layout), visible: visible)
+        panel.setFrame(target, display: true, animate: Self.shouldAnimate())
+    }
+
+    /// Honor Reduce Motion (WCAG 2.3.3), same policy as the pill's morph.
+    private static func shouldAnimate() -> Bool {
+        TopBarController.shouldAnimateFrame(
+            reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     }
 
     private func makePanel() -> NSPanel {
-        let rect = NSRect(origin: .zero, size: PushCardMetrics.size)
+        let rect = NSRect(origin: .zero, size: PushCardMetrics.compact)
         // KeyablePanel + .nonactivatingPanel: CAN become key (for armed keys)
         // but only when we ask, and without activating the app.
         let panel = KeyablePanel(
@@ -184,15 +255,6 @@ final class PushCardController {
         panel.isMovableByWindowBackground = true
         installKeyHandling(panel)
         return panel
-    }
-
-    private func position(_ panel: NSPanel) {
-        guard let visible = NSScreen.main?.visibleFrame else { return }
-        let size = PushCardMetrics.size
-        let origin = NSPoint(
-            x: visible.midX - size.width / 2,
-            y: visible.maxY - Self.topOffset - size.height)
-        panel.setFrame(NSRect(origin: origin, size: size), display: true, animate: false)
     }
 
     private func installKeyHandling(_ panel: NSPanel) {

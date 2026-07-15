@@ -167,6 +167,20 @@ final class AppModel {
         }
     }
 
+    /// Load an email's detail for the card's expanded view — Klorn's AI summary
+    /// lives there, not on the firewall wire. Plain GET, never `markRead`: an
+    /// unattended card must not silently mark mail as read. Best-effort — the
+    /// expanded view falls back to the snippet when this returns nil.
+    func fetchEmailDetail(_ item: FirewallItem) async -> EmailDetail? {
+        guard let emailDbId = item.email?.emailDbId else { return nil }
+        do {
+            return try await api.get("/api/email/\(emailDbId)", as: EmailDetail.self)
+        } catch {
+            Log.app.debug("card detail fetch failed: \(String(describing: error), privacy: .private)")
+            return nil
+        }
+    }
+
     /// Send a threaded reply to an email's sender (POST /api/email/:id/reply).
     /// Returns nil on success or a user-facing error message. Deliberately does
     /// NOT touch the shared `replyError` slot: the PushCard and the reading-pane
