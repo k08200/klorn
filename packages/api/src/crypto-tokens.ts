@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { isDevOrTestEnv } from "./env.js";
 
 /**
  * Token encryption at rest (AES-256-GCM) with key rotation.
@@ -47,12 +48,11 @@ interface Keyring {
  */
 function loadKeyring(): Keyring {
   // The deterministic dev fallback below is public (a hash of a fixed string),
-  // so it may only ever back local development/test. Gate it on an explicit
-  // allowlist rather than "not production": the old `=== "production"` check
-  // let any other value (unset, "staging", a "prod" typo) silently encrypt real
-  // secrets with a guessable key. Anything outside dev/test with no key throws.
+  // so it may only ever back local development/test — see env.ts isDevOrTestEnv,
+  // the single source of truth for insecure-default gating. Anything outside
+  // dev/test with no key throws (fails closed).
   const nodeEnv = process.env.NODE_ENV;
-  const devFallbackAllowed = nodeEnv === "development" || nodeEnv === "test";
+  const devFallbackAllowed = isDevOrTestEnv();
   const legacyRaw = process.env.TOKEN_ENCRYPTION_KEY;
   const keysRaw = process.env.TOKEN_ENCRYPTION_KEYS;
   const activeKeyId = process.env.TOKEN_ENCRYPTION_ACTIVE_KEY_ID ?? null;
