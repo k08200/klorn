@@ -8,6 +8,7 @@
  * byte-identical.
  */
 
+import type { EmailBulkActionResponse } from "@klorn/contract";
 import type { EmailMessage } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
@@ -27,12 +28,9 @@ interface BulkEmailBody {
 
 interface BulkEmailActionResult {
   statusCode?: number;
-  payload: {
-    success?: boolean;
-    updatedCount?: number;
-    failed?: Array<{ id: string; error: string }>;
-    error?: string;
-  };
+  // Success payload is the @klorn/contract wire shape; failures are an
+  // `{ error }` body sent with a 4xx statusCode.
+  payload: EmailBulkActionResponse | { error: string };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────

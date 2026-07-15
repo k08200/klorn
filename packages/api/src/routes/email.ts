@@ -6,6 +6,15 @@
  * Falls back to demo data when Gmail isn't connected.
  */
 
+// The list-surface wire shapes live in @klorn/contract (single source of
+// truth with the web inbox) — annotating the handlers below means a response
+// change that would desync server and client fails to compile.
+import type {
+  EmailListResponse,
+  EmailThreadListResponse,
+  InboxesResponse,
+  TrustWire,
+} from "@klorn/contract";
 import type { EmailMessage, FeedbackSignal, Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
@@ -83,7 +92,7 @@ function projectHtmlBody(htmlBody: string | null, emailId: string, userId: strin
   }
 }
 
-function trustToWire(t: TrustScoreResult | undefined | null) {
+function trustToWire(t: TrustScoreResult | undefined | null): TrustWire | null {
   if (!t) return null;
   return {
     badge: t.badge,
@@ -578,7 +587,7 @@ export async function emailRoutes(app: FastifyInstance) {
 
   // ─── Sync & List Emails ───────────────────────────────────────────────
   // GET /api/email?filter=unread|urgent|reply-needed|attachments|candidates&search=keyword&category=billing&page=1
-  app.get("/", async (request) => {
+  app.get("/", async (request): Promise<EmailListResponse> => {
     const { filter, search, category, page, inbox } = request.query as {
       filter?: string;
       search?: string;
@@ -629,6 +638,7 @@ export async function emailRoutes(app: FastifyInstance) {
       return {
         emails: emails.map((e) => ({
           ...e,
+          linkedInboxAccountId: null,
           senderEmail: senderEmail(e.from) || null,
           trust: null,
           needsReply: looksReplyNeeded({
@@ -643,8 +653,8 @@ export async function emailRoutes(app: FastifyInstance) {
           attachmentFallbackCount: 0,
           attachmentUnsupportedCount: 0,
           attachmentCategories: [],
-          attachments: [],
           candidateProfilePreview: null,
+          candidateIntake: null,
         })),
         source: "demo",
         total: emails.length,
@@ -809,7 +819,7 @@ export async function emailRoutes(app: FastifyInstance) {
 
   // ─── Thread View ──────────────────────────────────────────────────────
   // GET /api/email/threads?search=keyword&priority=URGENT&unread=true&page=1
-  app.get("/threads", async (request) => {
+  app.get("/threads", async (request): Promise<EmailThreadListResponse> => {
     const { search, priority, unread, category, page } = request.query as {
       search?: string;
       priority?: string;
@@ -838,7 +848,7 @@ export async function emailRoutes(app: FastifyInstance) {
         latestPriority: e.priority,
         summary: e.summary,
       }));
-      return { threads, total: threads.length, source: "demo" };
+      return { threads, total: threads.length, source: "demo", page: 1 };
     }
 
     const pageNum = parsePageNum(page);
@@ -1155,7 +1165,7 @@ export async function emailRoutes(app: FastifyInstance) {
   // the primary Google account + every linked secondary inbox. Read-only,
   // self-scoped (userId from the JWT), and NO tokens are returned. Built entirely
   // from the user's own rows — nothing about any specific address is hardcoded.
-  app.get("/inboxes", async (request) => {
+  app.get("/inboxes", async (request): Promise<InboxesResponse> => {
     const uid = getUserId(request);
     const user = await prisma.user.findUnique({
       where: { id: uid },

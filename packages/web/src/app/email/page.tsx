@@ -14,6 +14,22 @@ import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { formatRelative } from "../../lib/text";
 
+// Wire shapes come from @klorn/contract — the same types the server builds
+// (routes/email.ts and friends), so a response-shape change fails to compile
+// here instead of silently desyncing. The old hand-mirrored ThreadRow had
+// already drifted: it declared a `summary` the Gmail path never sent.
+import type {
+  CandidateProfilePreview,
+  EmailBulkActionResponse as BulkActionResponse,
+  EmailListItem as EmailRow,
+  EmailListResponse as ListResponse,
+  EmailThreadListResponse as ThreadListResponse,
+  EmailThreadRow as ThreadRow,
+  EmailUndoActionResponse as UndoActionResponse,
+  InboxesResponse,
+  InboxOption,
+} from "@klorn/contract";
+
 type Filter =
   | "all"
   | "reply-needed"
@@ -28,94 +44,7 @@ type Filter =
   | "threads"
   | "automated";
 
-interface CandidateProfilePreview {
-  name: string | null;
-  role: string | null;
-  contact: string | null;
-  summary: string;
-  missingFields: string[];
-  confidence: number;
-  evidenceCount: number;
-  intakeStatus: string | null;
-}
-
-interface EmailRow {
-  id: string;
-  gmailId: string;
-  // null = the primary Google inbox; a string = the linked secondary inbox this
-  // message arrived in. Used to render a per-message inbox badge.
-  linkedInboxAccountId?: string | null;
-  from: string;
-  senderEmail?: string | null;
-  trust?: TrustScoreData | null;
-  subject: string;
-  snippet: string | null;
-  date: string;
-  isRead: boolean;
-  priority: "URGENT" | "NORMAL" | "LOW";
-  category: string | null;
-  summary: string | null;
-  needsReply?: boolean;
-  attachmentCount?: number;
-  attachmentCandidateCount?: number;
-  attachmentPendingCount?: number;
-  attachmentFallbackCount?: number;
-  attachmentUnsupportedCount?: number;
-  attachmentCategories?: string[];
-  candidateProfilePreview?: CandidateProfilePreview | null;
-}
-
-// A mailbox the user can scope the list to. `id === null` is the primary Google
-// inbox; a string id is a linked secondary inbox. Populated from GET
-// /api/email/inboxes — never hardcoded, so every user sees their own addresses.
-interface InboxOption {
-  id: string | null;
-  email: string | null;
-  kind: "primary" | "linked";
-  needsReconnect: boolean;
-}
-
-interface InboxesResponse {
-  inboxes: InboxOption[];
-}
-
-interface ThreadRow {
-  threadId: string;
-  subject: string;
-  participants: string[];
-  messageCount: number;
-  hasUnread: boolean;
-  latestPriority: "URGENT" | "NORMAL" | "LOW";
-  summary: string | null;
-  lastMessage: {
-    id: string;
-    from: string;
-    snippet: string | null;
-    receivedAt: string;
-    isRead: boolean;
-  };
-}
-
-interface ListResponse {
-  emails: EmailRow[];
-  source: "gmail" | "demo";
-  total: number;
-  unread: number;
-}
-
-interface ThreadListResponse {
-  threads: ThreadRow[];
-  source: "gmail" | "demo";
-  total: number;
-}
-
 type BulkAction = "mark-read" | "mark-unread" | "archive" | "set-priority";
-
-interface BulkActionResponse {
-  success: boolean;
-  updatedCount: number;
-  failed?: Array<{ id: string; error: string }>;
-}
 
 type UndoableEmailAction = "archive" | "delete";
 type EmailReminderKey = "later-today" | "tomorrow" | "next-week";
@@ -135,12 +64,6 @@ interface BulkUndoEmail {
 interface BulkUndoNotice {
   action: "archive";
   emails: BulkUndoEmail[];
-}
-
-interface UndoActionResponse {
-  success: boolean;
-  gmailId: string;
-  emailId: string;
 }
 
 interface EmailReminderOption {
