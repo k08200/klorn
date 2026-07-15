@@ -73,19 +73,24 @@ actions/cache key); on an alarm it is kept, so the flip keeps firing weekly
 until investigated. To accept a new normal, run the workflow manually with
 `accept-baseline=true`.
 
-## Planned: repoint the canary at real mail
+## DONE (2026-07-16): the LLM gates run on real mail
 
-`judge-canary.yml` runs the **synthetic** set, so a green canary proves
-"the model didn't silently drift", NOT "the thesis holds on real mail". The
-launch GO/NO-GO bar (POC.md) is ≥80% on the founder's real 50 — and that
-number has never been the thing CI measures.
+`eval.yml` (the PR gate) and `judge-canary.yml` (the weekly drift canary) now
+run **`eval/real-eval-set.json`** — 53 founder-labeled real emails (18 SILENT /
+31 QUEUE / 4 PUSH, 50 with bodies), produced and leak-linted via the drafting
+kit below. "Green gate" and "thesis holds on real mail" are now the same
+auditable event.
 
-The repoint is one line once the data exists:
-
-```diff
-- run: ... poc-accuracy.ts --in=eval/judge-eval-set.json ...
-+ run: ... poc-accuracy.ts --in=eval/real-eval-set.json ...
-```
+Notes on the switched set:
+- **PUSH support is 4** — the 0.90 recall floor requires 4/4 (one miss =
+  0.75 = gate fail). AUTO has no items yet, so its report line is vacuous.
+  Every override/confirm in the app adds ledger rows for the next draft run;
+  regenerate + re-review when PUSH/AUTO support grows.
+- The **first canary run after the switch re-baselines**: every item id is
+  new, so the comparison reports adds/drops (a set edit, never an alarm) and
+  records the fresh baseline.
+- The synthetic 50-item set stays committed — the deterministic no-LLM test
+  (`judge-eval-set.test.ts`) still pins it.
 
 **The blocker is the data, not the wiring** — and the review step is
 deliberately manual. The drafting kit (`scripts/draft-real-eval-set.ts`, #648)

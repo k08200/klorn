@@ -101,7 +101,7 @@ jobs:
         continue-on-error: true
         run: |
           cd packages/api && npx tsx scripts/poc-accuracy.ts \
-            --in=eval/judge-eval-set.json --concurrency=2 --delay=500 \
+            --in=eval/real-eval-set.json --concurrency=2 --delay=500 \
             --out=../../canary-current.json
 
       - name: Compare against baseline

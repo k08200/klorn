@@ -1,7 +1,7 @@
 name: Judge Eval
 
 # LLM accuracy gate for the 4-tier judge. Runs the committed synthetic
-# 50-email set (packages/api/eval/judge-eval-set.json) through the REAL
+# founder-labeled REAL set (packages/api/eval/real-eval-set.json) through the
 # LLM pipeline and fails when any gate is below its floor (poc-accuracy
 # exits 2): overall ≥80%, PUSH recall ≥90%, SILENT precision ≥90%
 # (see packages/api/src/eval-floors.ts for the floor rationale).
@@ -76,4 +76,4 @@ jobs:
         # The judge defaults to a paid model (JUDGE_MODEL, openai.ts), so the
         # run no longer competes with prod for :free daily quota and modest
         # parallelism is safe. ~1 min for 50 emails.
-        run: cd packages/api && npx tsx scripts/poc-accuracy.ts --in=eval/judge-eval-set.json --concurrency=2 --delay=500
+        run: cd packages/api && npx tsx scripts/poc-accuracy.ts --in=eval/real-eval-set.json --concurrency=2 --delay=500
