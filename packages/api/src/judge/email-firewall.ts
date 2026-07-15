@@ -8,24 +8,24 @@
  * cycle. Must NOT import email-sync.ts (the sync orchestrator imports THIS).
  */
 
-import { scheduleAgentForActionableEmail } from "./agentcore/email-action-trigger.js";
+import { scheduleAgentForActionableEmail } from "../agentcore/email-action-trigger.js";
+import { prisma } from "../db.js";
+import { extractEmailAddress } from "../email-address.js";
+import { analyzePendingEmailAttachments, upsertEmailAttachments } from "../email-attachments.js";
+import { classifyNeedsReplyFromSignals, classifyPriority } from "../email-priority.js";
+import { markAsRead } from "../gmail.js";
+import type { GmailRawEmail } from "../gmail-fetch.js";
+import { engagementKindOf } from "../learning/sender-policy.js";
+import { getUserLlmCredentials } from "../llm/llm-credentials.js";
+import { extractAndUpsertCommitmentsFromText } from "../pim/commitment-ingestion.js";
+import type { ProviderCredentials } from "../providers/index.js";
+import { resolveUserEmail } from "../resolve-user-email.js";
+import { captureError } from "../sentry.js";
 import { upsertAttentionForEmailJudgement } from "./attention-mirror.js";
-import { prisma } from "./db.js";
-import { extractEmailAddress } from "./email-address.js";
-import { analyzePendingEmailAttachments, upsertEmailAttachments } from "./email-attachments.js";
-import { classifyNeedsReplyFromSignals, classifyPriority } from "./email-priority.js";
-import { markAsRead } from "./gmail.js";
-import type { GmailRawEmail } from "./gmail-fetch.js";
 import { buildJudgeContext } from "./judge-context.js";
 import { recordJudgeSource } from "./judge-health.js";
 import { isClearMarketing } from "./keyword-policy.js";
-import { engagementKindOf } from "./learning/sender-policy.js";
-import { getUserLlmCredentials } from "./llm/llm-credentials.js";
-import { extractAndUpsertCommitmentsFromText } from "./pim/commitment-ingestion.js";
 import { judgeEmail, type PocTier } from "./poc-judge.js";
-import type { ProviderCredentials } from "./providers/index.js";
-import { resolveUserEmail } from "./resolve-user-email.js";
-import { captureError } from "./sentry.js";
 
 /**
  * Normalized sender address for the `fromAddress` column — the SINGLE source of
@@ -387,8 +387,8 @@ async function pushForFirewallEmail(userId: string, email: JudgeableEmailRow): P
 
   const [{ pushNotification }, { sendPushNotification }, { findOpenEmailAttentionItemId }] =
     await Promise.all([
-      import("./websocket.js"),
-      import("./notify/push.js"),
+      import("../websocket.js"),
+      import("../notify/push.js"),
       import("./attention-override.js"),
     ]);
 

@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 import { fixtureToJudgeContext } from "../eval-context.js";
-import { EMPTY_JUDGE_CONTEXT } from "../poc-judge.js";
+import { EMPTY_JUDGE_CONTEXT } from "../judge/poc-judge.js";
 
 describe("fixtureToJudgeContext", () => {
   it("returns the empty context for an absent fixture", () => {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { TIER_THRESHOLDS } from "../judge/tier-policy.js";
 import {
   MAX_STEP,
   MIN_SAMPLE,
@@ -7,7 +8,6 @@ import {
   proposeThresholdAdjustments,
   SILENT_OVERSUPPRESS_TARGET,
 } from "../learning/ontology-proposals.js";
-import { TIER_THRESHOLDS } from "../tier-policy.js";
 
 /** Signals with everything healthy (no proposal should fire). */
 const HEALTHY: ProposalSignals = {

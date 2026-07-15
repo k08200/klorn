@@ -10,7 +10,7 @@
 import { createHash } from "node:crypto";
 import type { CommitmentKind, CommitmentSource } from "@prisma/client";
 import { prisma } from "../db.js";
-import { isNoReplySender, isTransactionalSender } from "../keyword-policy.js";
+import { isNoReplySender, isTransactionalSender } from "../judge/keyword-policy.js";
 import { type CommitmentCandidate, extractCommitmentCandidates } from "./commitment-extractor.js";
 import {
   type CommitmentRefinement,

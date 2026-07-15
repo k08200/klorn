@@ -18,7 +18,7 @@ vi.mock("../pim/commitments.js", () => ({
   }),
 }));
 
-import { isNoReplySender, isTransactionalSender } from "../keyword-policy.js";
+import { isNoReplySender, isTransactionalSender } from "../judge/keyword-policy.js";
 import { extractCommitmentCandidates } from "../pim/commitment-extractor.js";
 import { extractAndUpsertCommitmentsFromText } from "../pim/commitment-ingestion.js";
 

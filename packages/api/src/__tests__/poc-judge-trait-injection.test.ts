@@ -16,7 +16,7 @@ vi.mock("../llm/openai.js", async (importOriginal) => {
   return { ...actual, createCompletion: createCompletionMock };
 });
 
-import { type JudgeContext, judgeEmail } from "../poc-judge.js";
+import { type JudgeContext, judgeEmail } from "../judge/poc-judge.js";
 
 const CONFIDENT_SCORE = {
   choices: [

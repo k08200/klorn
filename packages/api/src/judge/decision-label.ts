@@ -17,9 +17,9 @@
  */
 
 import type { Prisma } from "@prisma/client";
-import { prisma } from "./db.js";
-import type { EngagementKind } from "./learning/sender-policy.js";
-import { captureError } from "./sentry.js";
+import { prisma } from "../db.js";
+import type { EngagementKind } from "../learning/sender-policy.js";
+import { captureError } from "../sentry.js";
 import type { TierFeatures } from "./tier-policy.js";
 import type { Tier } from "./tiers.js";
 

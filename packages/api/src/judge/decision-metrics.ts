@@ -23,7 +23,7 @@
  * prove, label the rest unconfirmed, never paper a clean accuracy % over silence.
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 import type { AttentionSourceName } from "./decision-label.js";
 import { TIERS, type Tier } from "./tiers.js";
 

@@ -58,7 +58,7 @@ vi.mock("../agentcore/skill-executor.js", () => ({
   listUserSkills: vi.fn(),
 }));
 vi.mock("../agentcore/skill-recorder.js", () => ({ recordSkill: vi.fn() }));
-vi.mock("../attention-mirror.js", () => ({
+vi.mock("../judge/attention-mirror.js", () => ({
   upsertAttentionForCalendarEvent: vi.fn(),
 }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { riskCoverageThreshold, type ScoredOutcome } from "../selective-threshold.js";
+import { riskCoverageThreshold, type ScoredOutcome } from "../judge/selective-threshold.js";
 
 const rows = (spec: Array<[number, boolean]>): ScoredOutcome[] =>
   spec.map(([confidence, correct]) => ({ confidence, correct }));

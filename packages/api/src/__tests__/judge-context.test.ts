@@ -35,7 +35,7 @@ vi.mock("../learning/interaction-graph.js", () => ({
   propagatedImportanceForDomain: vi.fn(() => 0),
 }));
 
-import { buildJudgeContext } from "../judge-context.js";
+import { buildJudgeContext } from "../judge/judge-context.js";
 
 const NOW = new Date("2026-06-12T00:00:00Z");
 const DAYS = (n: number) => new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000);

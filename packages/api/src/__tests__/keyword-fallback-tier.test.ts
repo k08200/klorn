@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { keywordFeatures } from "../keyword-policy.js";
-import { type TierFeatures, tierFromFeatures } from "../tier-policy.js";
+import { keywordFeatures } from "../judge/keyword-policy.js";
+import { type TierFeatures, tierFromFeatures } from "../judge/tier-policy.js";
 
 /**
  * The keyword fallback (used when the LLM judge is unavailable) scores the four

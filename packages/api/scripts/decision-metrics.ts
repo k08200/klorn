@@ -24,7 +24,7 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { prisma } from "../src/db.js";
-import { getDecisionMetrics } from "../src/decision-metrics.js";
+import { getDecisionMetrics } from "../src/judge/decision-metrics.js";
 
 interface CliArgs {
   user?: string;

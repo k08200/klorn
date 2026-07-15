@@ -1,4 +1,4 @@
-import type { ClassifiedLabel } from "../../email-classifier.js";
+import type { ClassifiedLabel } from "../../judge/email-classifier.js";
 
 export interface EmailClassificationFixture {
   id: string;

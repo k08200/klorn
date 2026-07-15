@@ -30,7 +30,6 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { ClassifiableEmail } from "../src/email-classifier.js";
 import { fixtureToJudgeContext } from "../src/eval-context.js";
 import {
   computePerTierMetrics,
@@ -40,14 +39,15 @@ import {
   parseGateFloorOverrides,
   type TierMetric,
 } from "../src/eval-floors.js";
+import type { ClassifiableEmail } from "../src/judge/email-classifier.js";
 import {
   type JudgeContext,
   judgeEmails,
   POC_TIERS,
   type PocJudgement,
   type PocTier,
-} from "../src/poc-judge.js";
-import { TIERS, type Tier } from "../src/tiers.js";
+} from "../src/judge/poc-judge.js";
+import { TIERS, type Tier } from "../src/judge/tiers.js";
 
 interface GroundTruthItem {
   id: string;
@@ -335,7 +335,7 @@ async function resolveContextFor(
     return (_email, index) => fixtureToJudgeContext(labelled[index].context, labelled[index].id);
   }
   const [{ buildJudgeContext }, { prisma }] = await Promise.all([
-    import("../src/judge-context.js"),
+    import("../src/judge/judge-context.js"),
     import("../src/db.js"),
   ]);
   const account = await prisma.user.findUnique({

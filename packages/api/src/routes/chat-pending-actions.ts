@@ -13,16 +13,16 @@ import type { ActionStatus } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { claimAndRunOutboxRow, enqueueAction, type OutboxRow } from "../agentcore/action-outbox.js";
 import { resolveActionTarget } from "../agentcore/action-target.js";
+import { getUserId, requireAuth } from "../auth.js";
+import { requireEntitled } from "../billing/entitlement-guard.js";
+import { db, prisma } from "../db.js";
 import {
   type ActionReceipt,
   isFloorAction,
   mintReceipt,
   sendEmailPayloadHash,
-} from "../attention-floor.js";
-import { upsertAttentionForPendingAction } from "../attention-mirror.js";
-import { getUserId, requireAuth } from "../auth.js";
-import { requireEntitled } from "../billing/entitlement-guard.js";
-import { db, prisma } from "../db.js";
+} from "../judge/attention-floor.js";
+import { upsertAttentionForPendingAction } from "../judge/attention-mirror.js";
 import { recipientFromToolArgs, recordFeedback } from "../learning/feedback.js";
 
 /**

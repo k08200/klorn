@@ -15,7 +15,7 @@
  * never changes a classification, only surfaces that the pipeline is degraded.
  */
 
-import { captureError } from "./sentry.js";
+import { captureError } from "../sentry.js";
 
 export type JudgeSource =
   | "fast-path"

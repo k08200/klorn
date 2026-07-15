@@ -1,5 +1,5 @@
-import { upsertAttentionForTask } from "../attention-mirror.js";
 import { prisma } from "../db.js";
+import { upsertAttentionForTask } from "../judge/attention-mirror.js";
 
 const OPEN_STATUSES = ["TODO", "IN_PROGRESS"] as const;
 const DUPLICATE_WINDOW_MS = 24 * 60 * 60 * 1000;

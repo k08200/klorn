@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 import { computePerTierMetrics, diffTierMetrics, type TierMetric } from "../eval-floors.js";
-import { TIERS, type Tier } from "../tiers.js";
+import { TIERS, type Tier } from "../judge/tiers.js";
 
 function results(
   spec: Array<[truth: Tier, predicted: Tier, count: number]>,

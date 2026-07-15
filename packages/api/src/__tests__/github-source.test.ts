@@ -16,12 +16,12 @@ const judgeEmailMock = vi.hoisted(() => vi.fn());
 const upsertGitHubMock = vi.hoisted(() => vi.fn());
 const pushGitHubMock = vi.hoisted(() => vi.fn());
 
-vi.mock("../poc-judge.js", () => ({
+vi.mock("../judge/poc-judge.js", () => ({
   judgeEmail: judgeEmailMock,
   EMPTY_JUDGE_CONTEXT: { corrections: [], senderPrior: null, senderFacts: null },
 }));
 
-vi.mock("../attention-mirror.js", () => ({
+vi.mock("../judge/attention-mirror.js", () => ({
   upsertAttentionForGitHubNotification: upsertGitHubMock,
 }));
 

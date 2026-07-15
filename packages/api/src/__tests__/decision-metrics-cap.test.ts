@@ -15,7 +15,7 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 
-import { getDecisionMetrics } from "../decision-metrics.js";
+import { getDecisionMetrics } from "../judge/decision-metrics.js";
 
 const CAP = 50_000;
 const row = () => ({ userId: "u", shownTier: "QUEUE", outcome: null, decidedBy: "llm" });

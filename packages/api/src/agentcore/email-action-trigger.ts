@@ -15,7 +15,7 @@
  */
 
 import { prisma } from "../db.js";
-import type { PocTier } from "../poc-judge.js";
+import type { PocTier } from "../judge/poc-judge.js";
 import { normalizeAgentMode } from "./agent-mode.js";
 import { runAgentForUser } from "./autonomous-agent.js";
 

@@ -16,7 +16,7 @@ import {
   quantile,
   type Tier,
   tierStats,
-} from "../calibration.js";
+} from "../judge/calibration.js";
 
 const baseDate = new Date("2026-06-01T00:00:00Z");
 

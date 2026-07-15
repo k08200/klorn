@@ -15,15 +15,15 @@
  * from.
  */
 
-export * from "../judge-dial.js";
-export * from "../keyword-policy.js";
-export * from "../tier-policy.js";
+export * from "../judge/judge-dial.js";
+export * from "../judge/keyword-policy.js";
+export * from "../judge/tier-policy.js";
 export * from "./sender-policy.js";
 
-import { ESCALATION_CONFIDENCE_FLOOR, escalationModel } from "../judge-dial.js";
-import { KEYWORD_SCORES } from "../keyword-policy.js";
-import { TIER_THRESHOLDS } from "../tier-policy.js";
-import { TIERS } from "../tiers.js";
+import { ESCALATION_CONFIDENCE_FLOOR, escalationModel } from "../judge/judge-dial.js";
+import { KEYWORD_SCORES } from "../judge/keyword-policy.js";
+import { TIER_THRESHOLDS } from "../judge/tier-policy.js";
+import { TIERS } from "../judge/tiers.js";
 import { getEffectiveThresholds, overriddenKnobs } from "./ontology-overrides.js";
 import { PRIOR_SHORTCIRCUIT_TIERS, SENDER_PRIOR_POLICY } from "./sender-policy.js";
 

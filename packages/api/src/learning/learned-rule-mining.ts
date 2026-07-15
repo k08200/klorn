@@ -23,7 +23,7 @@
  */
 
 import { extractEmailAddress } from "../email-address.js";
-import type { Tier } from "../tiers.js";
+import type { Tier } from "../judge/tiers.js";
 import { domainOfAddress, type RulePattern, subjectTokens } from "./learned-rules.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;

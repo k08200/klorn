@@ -15,9 +15,11 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - "packages/api/src/poc-judge.ts"
-      - "packages/api/src/email-classifier.ts"
-      - "packages/api/src/tiers.ts"
+      # The classifier now lives under src/judge/ (module slice 7, see
+      # docs/api-module-map.md). Watch the whole module: any judge change
+      # must run the eval floor, and a per-file list here silently stops
+      # firing when a file moves.
+      - "packages/api/src/judge/**"
       - "packages/api/eval/**"
       - ".github/workflows/eval.yml"
 

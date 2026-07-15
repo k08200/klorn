@@ -4,8 +4,8 @@ import {
   getCachedJudgeFeatures,
   judgeCacheKey,
   setCachedJudgeFeatures,
-} from "../judge-cache.js";
-import type { TierFeatures } from "../tier-policy.js";
+} from "../judge/judge-cache.js";
+import type { TierFeatures } from "../judge/tier-policy.js";
 
 const feat = (confidence: number): TierFeatures => ({
   confidence,

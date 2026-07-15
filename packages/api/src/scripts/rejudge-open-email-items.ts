@@ -21,13 +21,13 @@
  * preview computes the real new tier). Uses the user's BYOK key when set.
  */
 
-import { upsertAttentionForEmailJudgement } from "../attention-mirror.js";
 import { prisma } from "../db.js";
-import { buildJudgeContext } from "../judge-context.js";
+import { upsertAttentionForEmailJudgement } from "../judge/attention-mirror.js";
+import { buildJudgeContext } from "../judge/judge-context.js";
+import { judgeEmail } from "../judge/poc-judge.js";
+import { normalizeTier } from "../judge/tiers.js";
 import { engagementKindOf } from "../learning/sender-policy.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
-import { judgeEmail } from "../poc-judge.js";
-import { normalizeTier } from "../tiers.js";
 
 interface JudgeableEmailRow {
   id: string;

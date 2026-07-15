@@ -17,7 +17,7 @@ vi.mock("../llm/openai.js", async (importOriginal) => {
 });
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
-import { judgeEmail } from "../poc-judge.js";
+import { judgeEmail } from "../judge/poc-judge.js";
 
 describe("judge feature extraction — temperature", () => {
   it("scores features at temperature 0 by default", async () => {

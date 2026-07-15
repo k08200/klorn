@@ -17,9 +17,9 @@
  */
 
 import type { FastifyInstance } from "fastify";
-import { judgeEmail } from "../poc-judge.js";
+import { judgeEmail } from "../judge/poc-judge.js";
+import { TIERS } from "../judge/tiers.js";
 import type { ProviderCredentials } from "../providers/index.js";
-import { TIERS } from "../tiers.js";
 
 // Strip CR/LF/control chars from any user-supplied value before it reaches a
 // log line, so a crafted model/source field can't forge or split log entries.

@@ -22,9 +22,9 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 vi.mock("../gmail.js", () => ({ markAsRead }));
-vi.mock("../poc-judge.js", () => ({ judgeEmail }));
-vi.mock("../judge-context.js", () => ({ buildJudgeContext: vi.fn(async () => ({})) }));
-vi.mock("../attention-mirror.js", () => ({ upsertAttentionForEmailJudgement: upsert }));
+vi.mock("../judge/poc-judge.js", () => ({ judgeEmail }));
+vi.mock("../judge/judge-context.js", () => ({ buildJudgeContext: vi.fn(async () => ({})) }));
+vi.mock("../judge/attention-mirror.js", () => ({ upsertAttentionForEmailJudgement: upsert }));
 vi.mock("../agentcore/email-action-trigger.js", () => ({
   scheduleAgentForActionableEmail: scheduleAgent,
 }));
@@ -43,7 +43,7 @@ vi.mock("../email-attachments.js", () => ({
 }));
 vi.mock("../sentry.js", () => ({ captureError }));
 
-import { persistGmailEmail } from "../email-firewall.js";
+import { persistGmailEmail } from "../judge/email-firewall.js";
 
 function rawEmail(overrides: Partial<Record<string, unknown>> = {}) {
   return {

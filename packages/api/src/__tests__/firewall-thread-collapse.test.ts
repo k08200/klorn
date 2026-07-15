@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collapseEmailThreads } from "../firewall-thread-collapse.js";
+import { collapseEmailThreads } from "../judge/firewall-thread-collapse.js";
 
 type Row = { id: string; source: string; threadId?: string | null };
 const threadOf = (r: Row) => r.threadId ?? null;

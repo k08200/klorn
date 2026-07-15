@@ -14,7 +14,7 @@
  * improves, never lower to make a PR pass.
  */
 
-import { TIERS, type Tier } from "./tiers.js";
+import { TIERS, type Tier } from "./judge/tiers.js";
 
 export interface TierPair {
   truth: Tier;

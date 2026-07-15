@@ -49,8 +49,8 @@ vi.mock("../learning/interaction-graph.js", async (importOriginal) => {
 });
 
 import { CONTACT_ENGAGEMENT_IN_JUDGE } from "../config.js";
-import { buildJudgeContext } from "../judge-context.js";
-import { buildSenderFactsBlock } from "../poc-judge.js";
+import { buildJudgeContext } from "../judge/judge-context.js";
+import { buildSenderFactsBlock } from "../judge/poc-judge.js";
 
 const BUILT_AT = new Date("2026-06-12T00:00:00Z").toISOString();
 

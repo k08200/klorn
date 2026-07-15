@@ -35,11 +35,11 @@ vi.mock("../notify/telegram-link.js", () => ({
   findUserIdByTelegramChatId: vi.fn(async () => null),
 }));
 
-vi.mock("../attention-override.js", () => ({
+vi.mock("../judge/attention-override.js", () => ({
   overrideAttentionTier: vi.fn(async () => ({ ok: true, tier: "QUEUE" })),
 }));
 
-import { overrideAttentionTier } from "../attention-override.js";
+import { overrideAttentionTier } from "../judge/attention-override.js";
 import {
   answerTelegramCallback,
   isTelegramConfigured,

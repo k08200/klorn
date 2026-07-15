@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { TIER_THRESHOLDS, type TierFeatures, tierFromFeatures } from "../tier-policy.js";
+import { TIER_THRESHOLDS, type TierFeatures, tierFromFeatures } from "../judge/tier-policy.js";
 
 /** Neutral baseline that lands in the default QUEUE; override per assertion. */
 const feat = (o: Partial<TierFeatures> = {}): TierFeatures => ({

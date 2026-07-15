@@ -18,7 +18,7 @@ vi.mock("../gmail-fetch.js", () => ({
 }));
 
 const persistGmailEmail = vi.fn(async () => ({ emailId: "e1", isNew: true }));
-vi.mock("../email-firewall.js", () => ({
+vi.mock("../judge/email-firewall.js", () => ({
   persistGmailEmail: (...a: unknown[]) => persistGmailEmail(...a),
   backfillEmailAttentionItems: vi.fn(),
   judgeAndMirrorEmail: vi.fn(),

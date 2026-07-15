@@ -21,7 +21,11 @@ vi.mock("../db.js", () => {
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import { prisma } from "../db.js";
-import { recordDecision, recordEmailDecision, stampDecisionOutcome } from "../decision-label.js";
+import {
+  recordDecision,
+  recordEmailDecision,
+  stampDecisionOutcome,
+} from "../judge/decision-label.js";
 import { captureError } from "../sentry.js";
 
 type DecisionLabelMock = {

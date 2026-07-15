@@ -44,7 +44,7 @@ import {
   buildSnapshotPayload,
   runDailyCalibrationSnapshots,
   snapshotUserCalibration,
-} from "../calibration-snapshot.js";
+} from "../judge/calibration-snapshot.js";
 
 const NOW = new Date("2026-06-13T01:00:00.000Z");
 const DAYS = (n: number) => new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000);

@@ -41,8 +41,8 @@
  */
 
 import { createHash } from "node:crypto";
-import type { ActionReceipt } from "../attention-floor.js";
 import { db } from "../db.js";
+import type { ActionReceipt } from "../judge/attention-floor.js";
 import { isConnectionError, isKeyLimitError } from "../llm/model-fallback.js";
 import { captureError } from "../sentry.js";
 import { pushNotification } from "../websocket.js";
@@ -449,7 +449,7 @@ async function onOutboxDead(row: OutboxRow, error: string): Promise<void> {
       where: { id: row.pendingActionId },
       data: { status: "FAILED", result: error },
     });
-    const { upsertAttentionForPendingAction } = await import("../attention-mirror.js");
+    const { upsertAttentionForPendingAction } = await import("../judge/attention-mirror.js");
     const pa = (await db.pendingAction.findUnique({ where: { id: row.pendingActionId } })) as {
       id: string;
       userId: string;

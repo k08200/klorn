@@ -14,8 +14,8 @@ vi.mock("../llm/openai.js", async (importOriginal) => {
   return { ...actual, createCompletion: createCompletionMock };
 });
 
-import { __resetJudgeCache } from "../judge-cache.js";
-import { judgeEmail } from "../poc-judge.js";
+import { __resetJudgeCache } from "../judge/judge-cache.js";
+import { judgeEmail } from "../judge/poc-judge.js";
 
 const SCORE = {
   choices: [

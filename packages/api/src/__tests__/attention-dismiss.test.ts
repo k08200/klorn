@@ -16,7 +16,7 @@ vi.mock("../learning/feedback.js", () => ({
   recordFeedback: (args: unknown) => recordFeedback(args),
 }));
 
-import { dismissAttentionItem } from "../attention-dismiss.js";
+import { dismissAttentionItem } from "../judge/attention-dismiss.js";
 
 describe("dismissAttentionItem", () => {
   beforeEach(() => {

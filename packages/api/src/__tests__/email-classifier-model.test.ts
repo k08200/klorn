@@ -19,7 +19,7 @@ vi.mock("../sentry.js", () => ({
   captureError: vi.fn(),
 }));
 
-import { classifyEmailBatch } from "../email-classifier.js";
+import { classifyEmailBatch } from "../judge/email-classifier.js";
 
 const HUMAN_EMAIL = {
   id: "e1",

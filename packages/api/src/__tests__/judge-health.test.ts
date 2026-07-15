@@ -5,7 +5,7 @@ import {
   getJudgeHealth,
   recordJudgeSource,
   runJudgeHeartbeatCheck,
-} from "../judge-health.js";
+} from "../judge/judge-health.js";
 
 afterEach(() => {
   __resetJudgeHealth();
@@ -84,7 +84,7 @@ describe("judge health — heartbeat (#742, canary of the canary)", () => {
     // could plausibly have been classified. lastRecordedAt must be seeded at
     // module load (not null) or runJudgeHeartbeatCheck alarms on every deploy.
     vi.resetModules();
-    const fresh = await import("../judge-health.js");
+    const fresh = await import("../judge/judge-health.js");
     const beat = fresh.checkJudgeHeartbeat(Date.now() + 1000);
     expect(beat.alive).toBe(true);
     fresh.__resetJudgeHealth();

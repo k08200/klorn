@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { TIER_THRESHOLDS, tierFromFeatures } from "../judge/tier-policy.js";
 import {
   applyOverrides,
   buildEffectiveThresholds,
   getEffectiveThresholds,
   resetOverrideCache,
 } from "../learning/ontology-overrides.js";
-import { TIER_THRESHOLDS, tierFromFeatures } from "../tier-policy.js";
 
 const BASE = TIER_THRESHOLDS;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTier, normalizeTier, TIERS } from "../tiers.js";
+import { isTier, normalizeTier, TIERS } from "../judge/tiers.js";
 
 describe("TIERS", () => {
   it("is exactly the canonical 4 tiers — no CALL", () => {

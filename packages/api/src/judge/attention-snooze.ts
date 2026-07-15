@@ -5,7 +5,7 @@
  * PENDING_ACTION-scoped snooze in chat-pending-actions.ts.
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 
 export type AttentionSnoozeResult = { ok: true } | { ok: false; reason: "not_found" };
 

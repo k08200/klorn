@@ -15,6 +15,23 @@
  * pure makes Day 7 GATE measurement and Day 6 prompt iteration cheap.
  */
 
+import { type LearnedRule, matchLearnedRules } from "../learning/learned-rules.js";
+import { getEffectiveThresholds } from "../learning/ontology-overrides.js";
+import {
+  type CorrectionExample,
+  PRIOR_SHORTCIRCUIT_TIERS,
+  SENDER_PRIOR_POLICY,
+  type SenderFacts,
+  type SenderPrior,
+} from "../learning/sender-policy.js";
+import type { SenderTraitKind } from "../learning/sender-trait-policy.js";
+import type { SenderTraitFact } from "../learning/sender-trait-store.js";
+import { asString, asUnitInterval, isNonFinitePresent } from "../llm/llm-coerce.js";
+import { parseLlmJson } from "../llm/llm-json.js";
+import { createCompletion, JUDGE_MODEL } from "../llm/openai.js";
+import type { ProviderCredentials } from "../providers/index.js";
+import { captureError } from "../sentry.js";
+import { wrapUntrusted } from "../untrusted.js";
 import type { ClassifiableEmail } from "./email-classifier.js";
 import { getCachedJudgeFeatures, judgeCacheKey, setCachedJudgeFeatures } from "./judge-cache.js";
 import { resolveEscalation } from "./judge-dial.js";
@@ -24,30 +41,13 @@ import {
   keywordFeatures,
   looksUrgent,
 } from "./keyword-policy.js";
-import { type LearnedRule, matchLearnedRules } from "./learning/learned-rules.js";
-import { getEffectiveThresholds } from "./learning/ontology-overrides.js";
-import {
-  type CorrectionExample,
-  PRIOR_SHORTCIRCUIT_TIERS,
-  SENDER_PRIOR_POLICY,
-  type SenderFacts,
-  type SenderPrior,
-} from "./learning/sender-policy.js";
-import type { SenderTraitKind } from "./learning/sender-trait-policy.js";
-import type { SenderTraitFact } from "./learning/sender-trait-store.js";
-import { asString, asUnitInterval, isNonFinitePresent } from "./llm/llm-coerce.js";
-import { parseLlmJson } from "./llm/llm-json.js";
-import { createCompletion, JUDGE_MODEL } from "./llm/openai.js";
-import type { ProviderCredentials } from "./providers/index.js";
-import { captureError } from "./sentry.js";
 import { type TierFeatures, tierFromFeatures } from "./tier-policy.js";
 import { TIERS, type Tier } from "./tiers.js";
-import { wrapUntrusted } from "./untrusted.js";
 
+export type { CorrectionExample, SenderFacts, SenderPrior } from "../learning/sender-policy.js";
 // The deterministic keyword/marketing patterns live in keyword-policy.ts.
 // looksUrgent is re-exported as it was previously part of this module's API.
 export { looksUrgent } from "./keyword-policy.js";
-export type { CorrectionExample, SenderFacts, SenderPrior } from "./learning/sender-policy.js";
 // The deterministic core now lives in two policy modules — the single sources
 // of truth. Re-exported here so existing importers keep working unchanged:
 //   - tier-policy.ts: the feature→tier rule and its thresholds

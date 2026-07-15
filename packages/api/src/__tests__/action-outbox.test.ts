@@ -87,7 +87,7 @@ vi.mock("../agentcore/tool-executor.js", () => ({
 vi.mock("../websocket.js", () => ({ pushNotification }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 vi.mock("../learning/pattern-learner.js", () => ({ learnFromApproval: vi.fn(async () => {}) }));
-vi.mock("../attention-mirror.js", () => ({
+vi.mock("../judge/attention-mirror.js", () => ({
   upsertAttentionForPendingAction: vi.fn(async () => {}),
 }));
 vi.mock("../learning/feedback.js", () => ({

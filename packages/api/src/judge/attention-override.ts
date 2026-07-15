@@ -9,7 +9,7 @@
  * agreement between auto-tier and user-override-tier).
  */
 
-import { prisma } from "./db.js";
+import { prisma } from "../db.js";
 import type { AttentionSourceName } from "./decision-label.js";
 import { manualOverrideReason, normalizeTier, type Tier } from "./tiers.js";
 

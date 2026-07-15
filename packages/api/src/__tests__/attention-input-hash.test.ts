@@ -23,7 +23,7 @@ import {
   computeAttentionInputHash,
   HASH_SCHEMA_VERSION,
   verifyAttentionInputHash,
-} from "../attention-input-hash.js";
+} from "../judge/attention-input-hash.js";
 
 const baseInput: AttentionHashInput = {
   from: "alice@example.com",

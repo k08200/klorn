@@ -37,7 +37,7 @@ import {
   type JudgeContext,
   judgeEmail,
   tierFromFeatures,
-} from "../poc-judge.js";
+} from "../judge/poc-judge.js";
 
 describe("learned-rule short-circuit (judgeEmail)", () => {
   const withRules = (rules: NonNullable<JudgeContext["learnedRules"]>): JudgeContext => ({

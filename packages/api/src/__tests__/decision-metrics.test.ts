@@ -14,7 +14,7 @@ import {
   dailySummaryOf,
   summarizeDecisions,
   summarizeEngagementGrounding,
-} from "../decision-metrics.js";
+} from "../judge/decision-metrics.js";
 
 // shownTier × outcome matrix exercising every classification branch.
 const ROWS: DecisionRow[] = [

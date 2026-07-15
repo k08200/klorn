@@ -28,7 +28,7 @@ import {
   RECEIPT_SCHEMA_VERSION,
   sendEmailPayloadHash,
   verifyReceipt,
-} from "../attention-floor.js";
+} from "../judge/attention-floor.js";
 
 const approvedAt = new Date("2026-06-04T09:00:00Z");
 const approvedBy = "approver@example.com";

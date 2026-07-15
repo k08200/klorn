@@ -28,12 +28,12 @@
 import type { Prisma } from "@prisma/client";
 import type OpenAI from "openai";
 import { AGENT_SYSTEM_PROMPT, NOTIFY_TOOL, PROPOSE_ACTION_TOOL } from "../agent/prompt.js";
-import { isFloorAction } from "../attention-floor.js";
-import { upsertAttentionForPendingAction } from "../attention-mirror.js";
 import { trackTokenUsage } from "../billing/token-usage.js";
 import { AGENT_MAX_CONTEXT_ITEMS, AGENT_MAX_TOOLS_PER_LOOP } from "../config.js";
 import { db, prisma } from "../db.js";
 import { isNoReplyAddress, markAsRead } from "../gmail.js";
+import { isFloorAction } from "../judge/attention-floor.js";
+import { upsertAttentionForPendingAction } from "../judge/attention-mirror.js";
 import { recipientFromToolArgs, recordFeedback } from "../learning/feedback.js";
 import { loadMemoriesForPrompt } from "../learning/memory.js";
 import { getFeedbackPolicyContextForPrompt } from "../learning/policy-extraction.js";

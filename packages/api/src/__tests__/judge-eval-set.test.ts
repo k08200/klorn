@@ -31,7 +31,7 @@ vi.mock("../sentry.js", () => ({
   captureError: vi.fn(),
 }));
 
-import { judgeEmail, POC_TIERS, type PocTier } from "../poc-judge.js";
+import { judgeEmail, POC_TIERS, type PocTier } from "../judge/poc-judge.js";
 
 const EVAL_SET_PATH = fileURLToPath(new URL("../../eval/judge-eval-set.json", import.meta.url));
 

@@ -30,7 +30,7 @@ vi.mock("../embedding.js", async (importOriginal) => {
   return { ...actual, isEmbeddingEnabled: () => true, embedTexts: embedTextsMock };
 });
 
-import { buildJudgeContext } from "../judge-context.js";
+import { buildJudgeContext } from "../judge/judge-context.js";
 
 beforeEach(() => {
   attentionFindMany.mockReset();

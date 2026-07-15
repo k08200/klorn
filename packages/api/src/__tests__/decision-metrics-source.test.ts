@@ -15,7 +15,7 @@ vi.mock("../db.js", () => {
 });
 
 import { prisma } from "../db.js";
-import { getDecisionDailySummary, getDecisionMetrics } from "../decision-metrics.js";
+import { getDecisionDailySummary, getDecisionMetrics } from "../judge/decision-metrics.js";
 
 const findMany = (prisma as unknown as { decisionLabel: { findMany: ReturnType<typeof vi.fn> } })
   .decisionLabel.findMany;
