@@ -103,11 +103,12 @@ export const TEXT_PROBES: TextProbe[] = [
       "In one word, is email triage primarily about filtering or ranking? Answer with one word.",
     expect: FINGERPRINT_TRUTH,
   },
-  {
-    id: "fp-color-seven",
-    prompt: "If the number 7 had a color, which one would it be? Answer with one color word.",
-    expect: FINGERPRINT_TRUTH,
-  },
+  // fp-color-seven ("what color is the number 7") was CUT after the first live
+  // run: with MODEL === AGENT_MODEL, the two surfaces are two temp-0 samples of
+  // the SAME model, and they answered PURPLE vs VIOLET in one run — empirically
+  // nondeterministic, i.e. a guaranteed false flip alarm. A fingerprint probe
+  // must be idiosyncratic BETWEEN models but stable WITHIN one; any probe whose
+  // chat/agent answers diverge while the pins are identical fails that bar.
 ];
 
 export const VISION_PROBES: VisionProbe[] = [
