@@ -125,3 +125,26 @@ describe("lintPii — JSON escape artifacts", () => {
     expect(lintPii(doc).some((f) => f.includes("real.leak@gmail.com"))).toBe(true);
   });
 });
+
+describe("role-preserving placeholders (instrument correctness)", () => {
+  it("keeps machine-role local-parts so sender floors still fire on the eval", () => {
+    const ctx = createScrubContext();
+    expect(scrubText("Vercel <notifications@vercel.com>", ctx).text).toBe(
+      "Vercel <notifications@domain-1.example>",
+    );
+    expect(scrubText("noreply@stripe.com", ctx).text).toBe("noreply@domain-2.example");
+    expect(scrubText("messages-noreply@linkedin.com", ctx).text).toBe(
+      "messages-noreply@domain-3.example",
+    );
+    // Human-looking locals stay anonymized as person-N.
+    expect(scrubText("jane@acme.com", ctx).text).toBe("person-4@domain-4.example");
+  });
+
+  it("the linter accepts role placeholders and still flags real addresses", () => {
+    const clean = JSON.stringify({
+      items: [{ from: "notifications@domain-1.example", body: "noreply@domain-2.example" }],
+    });
+    expect(lintPii(clean)).toEqual([]);
+    expect(lintPii(JSON.stringify({ from: "noreply@vercel.com" })).length).toBe(1);
+  });
+});

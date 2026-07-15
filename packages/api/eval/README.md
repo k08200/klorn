@@ -73,19 +73,35 @@ actions/cache key); on an alarm it is kept, so the flip keeps firing weekly
 until investigated. To accept a new normal, run the workflow manually with
 `accept-baseline=true`.
 
-## Planned: repoint the canary at real mail
+## 2026-07-16: real mail is measured on every PR (report-only, ratchet pending)
 
-`judge-canary.yml` runs the **synthetic** set, so a green canary proves
-"the model didn't silently drift", NOT "the thesis holds on real mail". The
-launch GO/NO-GO bar (POC.md) is ≥80% on the founder's real 50 — and that
-number has never been the thing CI measures.
+The judge was measured on **`eval/real-eval-set.json`** — 53 founder-labeled
+real emails (18 SILENT / 31 QUEUE / 4 PUSH, 50 with bodies) — for the first
+time. Cold-start (no sender context), with role-preserving scrub so the
+deterministic sender floors fire:
 
-The repoint is one line once the data exists:
+- **Overall 81.1% (43/53)** — the original POC GO/NO-GO bar (≥80% on real
+  mail) PASSES. QUEUE recall 80.6%, SILENT recall 100%.
+- **PUSH recall 0/4** — 3 of 4 are the founder's own `OVERRIDE:PUSH` senders
+  (waitlist notifications): in prod those overrides form a sender-prior that
+  short-circuits to PUSH; the cold-start eval can't see it. The context-aware
+  fix is per-item fixtures from the ledger (`--context=fixture`).
+- **SILENT precision 78.3%** — newsletters the founder actually reads,
+  buried by the generic rule. This is the gap the (dark) engagement flag
+  exists to close; these numbers are its flip evidence.
 
-```diff
-- run: ... poc-accuracy.ts --in=eval/judge-eval-set.json ...
-+ run: ... poc-accuracy.ts --in=eval/real-eval-set.json ...
-```
+Wiring, until PUSH support matures:
+- **`eval.yml`**: the synthetic set stays the GATE; a second
+  "Real-mail readout (report-only)" step prints the real numbers on every
+  judge PR (a floor breach is a `::warning`, never a fail).
+- **`judge-canary.yml`** runs the real set weekly for FLIP detection only —
+  floor breaches are expected (warning), drift alarms are not.
+- **Ratchet condition**: when the regenerated set reaches **PUSH support
+  ≥10** (every in-app override/confirm adds ledger rows for the next
+  `draft-real-eval-set.ts` run), repoint the gate step at
+  `real-eval-set.json` and delete the report-only step.
+- The synthetic 50-item set stays committed — the deterministic no-LLM test
+  (`judge-eval-set.test.ts`) still pins it.
 
 **The blocker is the data, not the wiring** — and the review step is
 deliberately manual. The drafting kit (`scripts/draft-real-eval-set.ts`, #648)
