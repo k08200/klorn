@@ -32,10 +32,13 @@ import { createCompletion, JUDGE_MODEL } from "../llm/openai.js";
 import type { ProviderCredentials } from "../providers/index.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
+import { detectCiNoise, isCiNoiseSilentEnabled } from "./ci-noise.js";
 import type { ClassifiableEmail } from "./email-classifier.js";
 import { getCachedJudgeFeatures, judgeCacheKey, setCachedJudgeFeatures } from "./judge-cache.js";
 import { resolveEscalation } from "./judge-dial.js";
 import {
+  ACCOUNT_ALERT_ACTION_RE,
+  ACCOUNT_CONFIRMATION_RE,
   isAutomatedSender,
   isClearMarketing,
   keywordFeatures,
@@ -548,11 +551,8 @@ function canShortCircuit(prior: SenderPrior, email: ClassifiableEmail): boolean 
 // classifier (and the eval gate) unperturbed — unlike a prompt change, which
 // measurably shifted unrelated tiers. Match is narrow (subject+snippet); the
 // action/suspicion EXCLUSION is broad (also scans the body) so a real alert is
-// never silenced.
-const ACCOUNT_CONFIRMATION_RE =
-  /\b(new sign[-\s]?in|signed in|sign[-\s]?in (from|on|detected|notice)|phone(\s+number)?\s+(was\s+)?added|number added as|device\s+(was\s+)?added|new device added|passkey added|password\s+(was\s+)?(reset|changed|updated)|two[-\s]?factor|2fa|recovery (email|phone)\s+added|verification method (was\s+)?added)\b/i;
-const ACCOUNT_ALERT_ACTION_RE =
-  /\b(action required|verify|confirm it was you|wasn'?t you|was this you|unauthorized|unusual|suspicious|we blocked|blocked a sign|secure your account|if you did(n'?t| not))\b/i;
+// never silenced. (Vocabularies live in keyword-policy.ts — shared with the
+// CI-noise floor's security carve-out.)
 const ROUTINE_CONFIRMATION_URGENCY_CAP = 0.3;
 
 /**
@@ -593,6 +593,34 @@ function applyAutomatedSenderPushFloor(
   if (decision.tier !== "PUSH") return decision;
   if (!isAutomatedSender(from ?? "")) return decision;
   return { tier: "QUEUE", reason: "Automated sender — queued for a glance, never interrupts" };
+}
+
+/**
+ * The automated-sender floor pair (#794 + #793), applied to the scoring paths
+ * only (LLM, keyword fallback) — prior/rule short-circuits are ground truth.
+ *
+ * Order matters: the CI-noise SILENT split (narrow: non-prod notices +
+ * monitoring pulses, see ci-noise.ts) runs before the PUSH→QUEUE floor.
+ * Flag-gated by CI_NOISE_SILENT_FLOOR (default OFF): when off, a detected
+ * noise candidate only logs a shadow line — grep "[FLOOR] ci-noise shadow"
+ * in prod logs to size the would-be silences before flipping (#795 pattern:
+ * measure first, consume behind the flag).
+ */
+function applyAutomatedSenderFloors(
+  email: ClassifiableEmail,
+  decision: { tier: Tier; reason: string },
+): { tier: Tier; reason: string } {
+  const noise = detectCiNoise(email);
+  if (noise) {
+    if (isCiNoiseSilentEnabled()) return { tier: "SILENT", reason: noise.reason };
+    if (decision.tier !== "SILENT") {
+      const domain = (email.from ?? "").split("@")[1]?.replace(/[>\s].*$/, "") ?? "unknown";
+      console.log(
+        `[FLOOR] ci-noise shadow (flag off): would SILENT, scored ${decision.tier} domain=${domain}`,
+      );
+    }
+  }
+  return applyAutomatedSenderPushFloor(email.from, decision);
 }
 
 /**
@@ -689,7 +717,7 @@ export async function judgeEmail(
     }
     const features = applyRoutineConfirmationCap(email, llm.features);
     const { tier, reason: ruleReason } = tierFromFeatures(features, getEffectiveThresholds());
-    const floored = applyAutomatedSenderPushFloor(email.from, {
+    const floored = applyAutomatedSenderFloors(email, {
       tier,
       reason: llm.reason || ruleReason,
     });
@@ -703,7 +731,7 @@ export async function judgeEmail(
 
   const features = applyRoutineConfirmationCap(email, keywordFeatures(email));
   const { tier, reason } = tierFromFeatures(features, getEffectiveThresholds());
-  const floored = applyAutomatedSenderPushFloor(email.from, { tier, reason });
+  const floored = applyAutomatedSenderFloors(email, { tier, reason });
   return { tier: floored.tier, reason: floored.reason, features, source: "keyword-fallback" };
 }
 
