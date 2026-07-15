@@ -7,12 +7,10 @@ WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/api/package.json packages/api/
 COPY packages/contract/package.json packages/contract/
-COPY packages/core/package.json packages/core/
 RUN pnpm install --frozen-lockfile --filter @klorn/api...
 
 # Copy source (contract is a type-only workspace dep of api — tsc needs it)
 COPY packages/contract/ packages/contract/
-COPY packages/core/ packages/core/
 COPY packages/api/ packages/api/
 
 # Generate Prisma client + build

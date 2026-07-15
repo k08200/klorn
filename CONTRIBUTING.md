@@ -40,7 +40,7 @@ docker compose up --build     # web :3000, api :3001, postgres :5432
 ```
 
 The workspace has three packages: `packages/api` (Fastify + Prisma backend),
-`packages/web` (Next.js frontend), `packages/core` (shared logic).
+`packages/web` (Next.js frontend), `packages/contract` (type-only API wire contract).
 
 ## Quality gates (CI enforces all of these)
 
