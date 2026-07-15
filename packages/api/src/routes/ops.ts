@@ -17,7 +17,7 @@ interface ReadinessCheck {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 interface ReadinessData {
-  db: { connected: boolean; error?: string };
+  db: { connected: boolean };
   devices: number;
   pushSubscriptions: number;
   recentPushDeliveries: Array<{ status: string; receivedAt: Date | null; clickedAt: Date | null }>;
@@ -155,7 +155,6 @@ function databaseCheck(data: ReadinessData): ReadinessCheck {
     label: "Database",
     status: data.db.connected ? "ok" : "error",
     message: data.db.connected ? "Connected" : "Unreachable",
-    detail: data.db.error ? { error: data.db.error } : undefined,
   };
 }
 
@@ -327,12 +326,16 @@ function syncedDataCheck(data: ReadinessData): ReadinessCheck {
   };
 }
 
-async function checkDatabase(): Promise<{ connected: boolean; error?: string }> {
+async function checkDatabase(): Promise<{ connected: boolean }> {
   try {
     await prisma.$queryRaw`SELECT 1`;
     return { connected: true };
   } catch (err) {
-    return { connected: false, error: err instanceof Error ? err.message : "unknown" };
+    // Log the driver error server-side (it can embed the DB host:port / pooler
+    // name) — never return it to the client: /ops/readiness is requireAuth, not
+    // admin, so any logged-in user can call it.
+    console.error("[OPS] readiness DB check failed:", err instanceof Error ? err.message : err);
+    return { connected: false };
   }
 }
 
