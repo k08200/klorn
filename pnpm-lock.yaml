@@ -111,6 +111,8 @@ importers:
 
   packages/contract: {}
 
+  packages/core: {}
+
   packages/web:
     dependencies:
       3d-force-graph:
