@@ -30,7 +30,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fixtureToJudgeContext } from "../src/eval-context.js";
+import { findScrubbedSenders, fixtureToJudgeContext } from "../src/eval-context.js";
 import {
   computePerTierMetrics,
   diffTierMetrics,
@@ -333,6 +333,20 @@ async function resolveContextFor(
   if (args.contextMode === "empty") return undefined;
   if (args.contextMode === "fixture") {
     return (_email, index) => fixtureToJudgeContext(labelled[index].context, labelled[index].id);
+  }
+  // db mode is only meaningful when the set's senders exist in the DB. On a
+  // scrubbed set (RFC 2606 placeholder senders) nothing resolves: sender-scoped
+  // channels come back empty while the user-scoped correction few-shots still
+  // land in every prompt — a context no real email ever gets. Refuse instead
+  // of reporting a structurally invalid number.
+  const scrubbed = findScrubbedSenders(labelled.map((i) => i.from));
+  if (scrubbed.length > 0) {
+    throw new Error(
+      `--context=db: ${scrubbed.length} sender(s) in the input are scrub placeholders ` +
+        `(e.g. ${scrubbed[0]}) that cannot resolve against a real DB. ` +
+        `Use --context=fixture on the committed set, or point --in at the private ` +
+        `unscrubbed file (poc-ground-truth.json / the local draft).`,
+    );
   }
   const [{ buildJudgeContext }, { prisma }] = await Promise.all([
     import("../src/judge/judge-context.js"),

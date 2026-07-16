@@ -185,6 +185,81 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     }
 }
 
+// MARK: - Calendar (today column)
+
+/// One calendar event as serialized by /api/calendar (prisma row → ISO dates).
+struct CalendarEventWire: Codable, Sendable, Identifiable, Hashable {
+    let id: String
+    let title: String
+    let startTime: String
+    let endTime: String
+    let location: String?
+    let meetingLink: String?
+    let allDay: Bool
+}
+
+/// GET /api/calendar/today/summary.
+struct TodaySummary: Codable, Sendable {
+    let total: Int
+    let current: CalendarEventWire?
+    let upcoming: [CalendarEventWire]
+    let nextEvent: CalendarEventWire?
+}
+
+/// "05:00–06:30" / "All day" — local-time label for an event row. Malformed
+/// ISO degrades to an empty string (row shows just the title), never a crash.
+/// Calendar injectable so the harness pins the math in UTC.
+func eventTimeLabel(
+    startISO: String,
+    endISO: String,
+    allDay: Bool,
+    calendar: Calendar = .current
+) -> String {
+    if allDay { return "All day" }
+    let parser = ISO8601DateFormatter()
+    parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    guard let start = parser.date(from: startISO), let end = parser.date(from: endISO) else {
+        return ""
+    }
+    func hhmm(_ date: Date) -> String {
+        let parts = calendar.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+    }
+    return "\(hhmm(start))–\(hhmm(end))"
+}
+
+// MARK: - Billing usage (ACCOUNT gauge)
+
+/// GET /api/billing/models → the slice the desktop renders (daily AI quota).
+struct BillingStatusWire: Codable, Sendable {
+    struct Usage: Codable, Sendable {
+        let rpmUsed: Int
+        let rpmCap: Int
+        let dailyUsed: Int
+        let dailyCap: Int
+    }
+
+    let usage: Usage
+}
+
+/// Gauge fill 0…1, clamped; a zero/negative cap renders empty, never NaN.
+func usageFillFraction(used: Int, cap: Int) -> Double {
+    guard cap > 0 else { return 0 }
+    return min(1, max(0, Double(used) / Double(cap)))
+}
+
+/// "137 / 500 today" — count label paired with the gauge (WCAG 1.4.1: the
+/// signal is never conveyed by the bar alone).
+func usageLabel(used: Int, cap: Int) -> String {
+    "\(used) / \(cap) today"
+}
+
+/// Card footer link mirroring the reference video's "Show all N sessions" —
+/// nil (hidden) unless more PUSH items wait behind the current card.
+func showAllLabel(pendingCount: Int) -> String? {
+    pendingCount > 0 ? "Show all \(pendingCount + 1)" : nil
+}
+
 // MARK: - Reply options (PushCard quick reply)
 
 /// One of the 3 tone-differentiated drafts from POST /api/email/:id/reply-options.
@@ -211,6 +286,22 @@ struct ReplyOptionsResponse: Codable, Sendable {
     let to: String
     let subject: String
     let options: [ReplyOption]
+}
+
+/// Email body for the expanded card's inline reader: trimmed, nil when blank
+/// (no empty scroll box), and capped so one card can't grow unbounded on a
+/// huge message. Pure for testing.
+func cardBodyText(_ body: String?) -> String? {
+    let trimmed = body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    if trimmed.isEmpty { return nil }
+    return String(trimmed.prefix(4000))
+}
+
+/// The snooze options the PushCard offers — the full SnoozeOption set, in
+/// display order. A single source of truth shared with the reading pane so the
+/// two surfaces never drift.
+enum PushCardSnooze {
+    static let options: [SnoozeOption] = SnoozeOption.allCases
 }
 
 // MARK: - Snooze options

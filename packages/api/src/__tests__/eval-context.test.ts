@@ -8,7 +8,11 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { fixtureToJudgeContext, judgeContextToFixture } from "../eval-context.js";
+import {
+  findScrubbedSenders,
+  fixtureToJudgeContext,
+  judgeContextToFixture,
+} from "../eval-context.js";
 import { EMPTY_JUDGE_CONTEXT } from "../judge/poc-judge.js";
 
 describe("fixtureToJudgeContext", () => {
@@ -67,6 +71,7 @@ describe("fixtureToJudgeContext", () => {
       interaction: null,
       commitments: null,
       engagement: null,
+      readBehavior: null,
     });
   });
 
@@ -183,5 +188,84 @@ describe("judgeContextToFixture (ledger snapshot for the committed eval set)", (
     });
     const context = fixtureToJudgeContext(fixture, "row-x");
     expect(context.senderPrior).toEqual({ tier: "PUSH", count: 2, kind: "override" });
+  });
+});
+
+describe("senderFacts.readBehavior fixture round-trip", () => {
+  it("parses a readBehavior record and round-trips through the serializer", () => {
+    const fixture = judgeContextToFixture({
+      corrections: [],
+      senderPrior: null,
+      senderFacts: {
+        tierHistory: { QUEUE: 3 },
+        manualOverrides: 0,
+        interaction: null,
+        commitments: null,
+        engagement: null,
+        readBehavior: { read: 12, total: 12 },
+      },
+      senderTraits: [],
+      learnedRules: [],
+    });
+    const context = fixtureToJudgeContext(fixture, "row-read");
+    expect(context.senderFacts?.readBehavior).toEqual({ read: 12, total: 12 });
+  });
+
+  it("rejects a malformed readBehavior instead of coercing", () => {
+    expect(() =>
+      fixtureToJudgeContext(
+        {
+          senderFacts: {
+            tierHistory: {},
+            manualOverrides: 0,
+            readBehavior: { read: -1, total: 5 },
+          },
+        },
+        "row-bad",
+      ),
+    ).toThrow(/readBehavior/);
+  });
+});
+
+describe("findScrubbedSenders (db-mode input guard)", () => {
+  it("flags scrub-placeholder senders on RFC 2606 reserved domains", () => {
+    expect(
+      findScrubbedSenders([
+        "LinkedIn <messages-noreply@domain-1.example>",
+        "person-2@domain-2.example",
+        "Support <help@sub.corp.invalid>",
+        "probe@unit.test",
+        "shop@example.com",
+      ]),
+    ).toEqual([
+      "messages-noreply@domain-1.example",
+      "person-2@domain-2.example",
+      "help@sub.corp.invalid",
+      "probe@unit.test",
+      "shop@example.com",
+    ]);
+  });
+
+  it("passes real senders through untouched", () => {
+    expect(
+      findScrubbedSenders([
+        "Indie Hackers <channing@indiehackers.com>",
+        "noreply@redditmail.com",
+        // real domains that merely CONTAIN a reserved label are not scrubbed
+        "news@exampledaily.com",
+        "dev@testing.io",
+      ]),
+    ).toEqual([]);
+  });
+
+  it("deduplicates repeated senders and ignores unparseable froms", () => {
+    expect(
+      findScrubbedSenders([
+        "A <person-1@domain-1.example>",
+        "B <person-1@domain-1.example>",
+        "no-address-here",
+        "",
+      ]),
+    ).toEqual(["person-1@domain-1.example"]);
   });
 });

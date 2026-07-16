@@ -347,6 +347,174 @@ func runSelfChecks() async -> Bool {
     check("expanded panel draws even in hidden-mode", TopBarController.shouldDraw(state: .expanded, pillVisible: false))
     check("full view draws even in hidden-mode", TopBarController.shouldDraw(state: .full, pillVisible: false))
 
+    print("Card chime:")
+    // The arrival sound plays once per NEW batch, only when alerts are on,
+    // and never for an empty diff (a reload with nothing new must be silent).
+    check("chimes for new PUSH when alerts on",
+          PushCardController.shouldChime(newCount: 2, alertsEnabled: true))
+    check("silent when alerts off",
+          !PushCardController.shouldChime(newCount: 2, alertsEnabled: false))
+    check("silent when nothing new",
+          !PushCardController.shouldChime(newCount: 0, alertsEnabled: true))
+
+    print("Calendar:")
+    // GET /api/calendar/today/summary wire — prisma dates arrive as ISO strings
+    // with millis; decoding must be resilient to null current/nextEvent.
+    let calJSON = """
+    {"total":2,"current":{"id":"c1","title":"Standup","startTime":"2026-07-16T00:30:00.000Z",
+    "endTime":"2026-07-16T01:00:00.000Z","location":null,"meetingLink":"https://meet.example/a",
+    "allDay":false},"upcoming":[{"id":"c2","title":"Design review","startTime":"2026-07-16T05:00:00.000Z",
+    "endTime":"2026-07-16T06:30:00.000Z","location":"Room 3","meetingLink":null,"allDay":false}],
+    "nextEvent":null}
+    """
+    if let today = try? JSONDecoder().decode(TodaySummary.self, from: Data(calJSON.utf8)) {
+        check("TodaySummary decodes", today.total == 2 && today.current?.title == "Standup")
+        check("TodaySummary upcoming", today.upcoming.first?.location == "Room 3"
+              && today.nextEvent == nil)
+    } else {
+        check("TodaySummary decodes", false)
+    }
+    var utc = Calendar(identifier: .gregorian)
+    utc.timeZone = TimeZone(identifier: "UTC")!
+    check("event time label — range",
+          eventTimeLabel(startISO: "2026-07-16T05:00:00.000Z", endISO: "2026-07-16T06:30:00.000Z",
+                         allDay: false, calendar: utc) == "05:00–06:30")
+    check("event time label — all day",
+          eventTimeLabel(startISO: "2026-07-16T00:00:00.000Z", endISO: "2026-07-17T00:00:00.000Z",
+                         allDay: true, calendar: utc) == "All day")
+    check("event time label — malformed ISO degrades",
+          eventTimeLabel(startISO: "not-a-date", endISO: "also-no", allDay: false, calendar: utc) == "")
+
+    print("Card body:")
+    // The expanded card shows the email body inline; whitespace-only bodies
+    // collapse to nil (no empty scroll box), real text is trimmed and passed
+    // through, and an over-long body is capped so one card can't grow unbounded.
+    check("body text passes real content",
+          cardBodyText("Hi,\n\nCan we move to 3pm?\n") == "Hi,\n\nCan we move to 3pm?")
+    check("blank body → nil", cardBodyText("   \n  ") == nil)
+    check("nil body → nil", cardBodyText(nil) == nil)
+    let long = String(repeating: "a", count: 5000)
+    check("over-long body is capped", (cardBodyText(long)?.count ?? 0) <= 4000)
+
+    print("Card snooze:")
+    // The card's snooze menu offers the same four options as the reading pane
+    // (one source of truth), each with a concrete future resurface time.
+    check("snooze menu = all four options",
+          PushCardSnooze.options.map(\.rawValue) == ["oneHour", "thisEvening", "tomorrow", "nextWeek"])
+    check("snooze menu labels are human",
+          PushCardSnooze.options.map(\.label) == ["In 1 hour", "This evening", "Tomorrow 9am", "Next week"])
+    check("snooze resurfaces in the future",
+          SnoozeOption.oneHour.resurface(from: noonJan1, calendar: cal) > noonJan1)
+
+    print("Usage gauge:")
+    // /api/billing/models usage → ACCOUNT column gauge (reference HUD's meter).
+    let usageJSON = #"{"usage":{"rpmUsed":3,"rpmCap":15,"dailyUsed":137,"dailyCap":500,"dailyResetAt":"2026-07-17T00:00:00.000Z"}}"#
+    if let status = try? JSONDecoder().decode(BillingStatusWire.self, from: Data(usageJSON.utf8)) {
+        check("usage wire decodes", status.usage.dailyUsed == 137 && status.usage.dailyCap == 500)
+    } else {
+        check("usage wire decodes", false)
+    }
+    check("usage fill fraction", usageFillFraction(used: 250, cap: 500) == 0.5)
+    check("usage fill clamps over-cap", usageFillFraction(used: 900, cap: 500) == 1.0)
+    check("usage fill safe on zero cap", usageFillFraction(used: 10, cap: 0) == 0)
+    check("usage label", usageLabel(used: 137, cap: 500) == "137 / 500 today")
+
+    // Card footer "Show all N" mirrors the reference video's session link:
+    // only when more items wait behind the current card, N = total queued.
+    check("show-all label counts the whole queue", showAllLabel(pendingCount: 2) == "Show all 3")
+    check("show-all hidden with an empty queue", showAllLabel(pendingCount: 0) == nil)
+
+    print("Meeting card:")
+    // Lead-window planner: surface the FIRST upcoming event whose start is
+    // within leadMinutes, once per event id — never one that already started,
+    // never twice, never outside the window.
+    func event(_ id: String, minutesAway: Int) -> CalendarEventWire {
+        let fmt = ISO8601DateFormatter()
+        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let now = fmt.date(from: "2026-07-16T09:00:00.000Z")!
+        let start = now.addingTimeInterval(Double(minutesAway) * 60)
+        return CalendarEventWire(
+            id: id, title: id,
+            startTime: fmt.string(from: start),
+            endTime: fmt.string(from: start.addingTimeInterval(1800)),
+            location: nil, meetingLink: nil, allDay: false)
+    }
+    let planNow = ISO8601DateFormatter().date(from: "2026-07-16T09:00:00Z")!
+    check("inside the lead window → surfaces",
+          meetingCardPlan(now: planNow, events: [event("m1", minutesAway: 8)],
+                          leadMinutes: 10, shown: [])?.id == "m1")
+    check("too early → nil",
+          meetingCardPlan(now: planNow, events: [event("m2", minutesAway: 45)],
+                          leadMinutes: 10, shown: []) == nil)
+    check("already started → nil",
+          meetingCardPlan(now: planNow, events: [event("m3", minutesAway: -5)],
+                          leadMinutes: 10, shown: []) == nil)
+    check("already shown → nil",
+          meetingCardPlan(now: planNow, events: [event("m4", minutesAway: 8)],
+                          leadMinutes: 10, shown: ["m4"]) == nil)
+    check("earliest qualifying event wins",
+          meetingCardPlan(now: planNow, events: [event("m6", minutesAway: 9), event("m5", minutesAway: 4)],
+                          leadMinutes: 10, shown: [])?.id == "m5")
+    check("all-day events never interrupt", {
+        var allDay = event("m7", minutesAway: 5)
+        allDay = CalendarEventWire(id: allDay.id, title: allDay.title, startTime: allDay.startTime,
+                                   endTime: allDay.endTime, location: nil, meetingLink: nil, allDay: true)
+        return meetingCardPlan(now: planNow, events: [allDay], leadMinutes: 10, shown: []) == nil
+    }())
+
+    // Readiness display mapping is fixed vocabulary (server enum).
+    check("readiness labels", readinessLabel("ready") == "Ready"
+          && readinessLabel("watch") == "Watch"
+          && readinessLabel("needs_review") == "Needs review"
+          && readinessLabel("???") == "Prep")
+
+    // Prep-pack wire decode (subset the card renders).
+    let packJSON = """
+    {"generatedAt":"2026-07-16T08:55:00.000Z","event":{"id":"m1","title":"Board sync",
+    "description":null,"startTime":"2026-07-16T09:10:00.000Z","endTime":"2026-07-16T10:00:00.000Z",
+    "location":"Zoom","meetingLink":"https://zoom.us/j/1"},"readiness":"watch",
+    "checklist":["Skim the term sheet","Reply to Alex"],"relatedEmails":[],
+    "openTasks":[],"openCommitments":[]}
+    """
+    if let pack = try? JSONDecoder().decode(MeetingPrepPack.self, from: Data(packJSON.utf8)) {
+        check("MeetingPrepPack decodes", pack.readiness == "watch"
+              && pack.checklist.count == 2 && pack.event.meetingLink != nil)
+    } else {
+        check("MeetingPrepPack decodes", false)
+    }
+
+    print("Launch at login:")
+    // Only a packaged .app can register as a login item (SMAppService needs a
+    // bundle); the unbundled `swift run` must degrade to a visible explanation,
+    // never a silent no-op toggle.
+    check("available for a bundled app", LoginItem.availability(hasBundleId: true) == .available)
+    check("unbundled run explains itself",
+          LoginItem.availability(hasBundleId: false) == .unavailable(reason: "Packaged app only"))
+
+    print("Update check:")
+    // Tag comparison: strict semver on the desktop-v prefix; equal or older
+    // tags are "up to date", malformed tags never claim an update exists.
+    check("newer tag → update", UpdateCheck.compare(current: "0.2.2", latestTag: "desktop-v0.3.0") == .updateAvailable("0.3.0"))
+    check("same tag → up to date", UpdateCheck.compare(current: "0.2.2", latestTag: "desktop-v0.2.2") == .upToDate)
+    check("older tag → up to date", UpdateCheck.compare(current: "0.3.0", latestTag: "desktop-v0.2.2") == .upToDate)
+    check("minor beats patch", UpdateCheck.compare(current: "0.2.9", latestTag: "desktop-v0.3.0") == .updateAvailable("0.3.0"))
+    check("malformed tag → unknown", UpdateCheck.compare(current: "0.2.2", latestTag: "v1") == .unknown)
+    check("dev build → unknown", UpdateCheck.compare(current: "dev", latestTag: "desktop-v9.9.9") == .unknown)
+
+    print("Status item:")
+    check("status line — signed out",
+          StatusItemController.statusLine(signedIn: false, pushCount: 9) == "Klorn — not signed in")
+    check("status line — clear inbox",
+          StatusItemController.statusLine(signedIn: true, pushCount: 0) == "Klorn — no urgent mail")
+    check("status line — push count",
+          StatusItemController.statusLine(signedIn: true, pushCount: 3) == "Klorn — 3 PUSH waiting")
+    // Exactly one anchor at a time: the pill OR the menu-bar icon, never both,
+    // never neither — hiding the pill is what makes the icon appear.
+    check("menu-bar icon appears when the pill is hidden",
+          StatusItemController.shouldShow(pillVisible: false))
+    check("menu-bar icon absent while the pill is visible",
+          !StatusItemController.shouldShow(pillVisible: true))
+
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0
 }

@@ -45,17 +45,25 @@ export async function overrideAttentionTier(
   // source simply matches 0 ledger rows (not an error) and commits cleanly. A
   // stamp failure now rolls back the tier write and surfaces (caller retries)
   // rather than being swallowed into a silent ledger loss.
-  await prisma.$transaction(async (tx) => {
-    await (tx.attentionItem as unknown as { update: (args: unknown) => Promise<unknown> }).update({
+  //
+  // BATCH form, not the interactive callback, deliberately: an interactive
+  // $transaction must acquire a DEDICATED connection within Prisma's maxWait
+  // (default 2s). On the small prod pool, concurrent firewall/sync reads hold
+  // every connection for seconds, so every override died with P2028 → HTTP 500
+  // while plain queries (which queue up to the 10s pool timeout) survived
+  // (prod outage, 2026-07-16). The two writes don't depend on each other's
+  // results, so the batch form gives the same atomicity while queueing for a
+  // connection like any other query.
+  await prisma.$transaction([
+    prisma.attentionItem.update({
       where: { id: itemId },
       // manualOverrideReason keeps the MANUAL_OVERRIDE_PREFIX marker that
       // judge-context.ts mines from ever drifting. isManualOverride is the
       // actual trust boundary (GHSA-cxc5-fmqv-pxv6) — this is the only call
       // site in the codebase allowed to set it true.
       data: { tier, tierReason: manualOverrideReason(tier), isManualOverride: true },
-    });
-
-    await tx.decisionLabel.updateMany({
+    }),
+    prisma.decisionLabel.updateMany({
       // userId scopes the stamp to the acting user's own row; outcome:null makes
       // the first action win (only an unstamped row is touched).
       where: {
@@ -65,8 +73,8 @@ export async function overrideAttentionTier(
         outcome: null,
       },
       data: { outcome: `OVERRIDE:${tier}`, outcomeAt: new Date() },
-    });
-  });
+    }),
+  ]);
 
   return { ok: true, tier };
 }

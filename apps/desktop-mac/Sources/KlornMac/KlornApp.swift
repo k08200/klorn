@@ -27,6 +27,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     private var topBar: TopBarController?
     private var pushCard: PushCardController?
+    private var meetingCard: MeetingCardController?
+    private var statusItem: StatusItemController?
     private var hotKey: HotKey?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -34,6 +36,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         let bar = TopBarController(model: model)
         let card = PushCardController(model: model)
+        // Menu-bar anchor while the pill is hidden (one-anchor rule): appears
+        // when the pill's ✕ / Preferences hides the bar, disappears when the
+        // bar comes back. Without it a hidden-pill accessory app is invisible
+        // AND unkillable from the UI (dogfood feedback 2026-07-16).
+        let status = StatusItemController(model: model, topBar: bar)
+        status.startSyncing()
+        statusItem = status
         // The card is the primary PUSH surface; the OS banner stays as the
         // fallback for when a card can't draw (headless). The VoiceOver
         // announcement in handleNewPush fires either way.
@@ -41,6 +50,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let cardShown = card?.present(items) ?? false
             bar?.handleNewPush(items, bannerFallback: !cardShown)
         }
+        card.onShowAll = { [weak bar] in bar?.expand() }
+        // Meeting-prep card shares the PushCard's slot; mail interrupts win
+        // and the planner re-offers the meeting on the next refresh tick.
+        let meetingCard = MeetingCardController(
+            model: model, isSlotBusy: { [weak card] in card?.isVisible ?? false })
+        model.onMeetingSoon = { [weak meetingCard] event in
+            meetingCard?.present(event) ?? false
+        }
+        self.meetingCard = meetingCard
         bar.show()
         topBar = bar
         pushCard = card

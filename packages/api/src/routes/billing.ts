@@ -15,6 +15,7 @@ import {
   PLANS,
   stripe,
 } from "../billing/stripe.js";
+import { verifyOpenRouterKey } from "../billing/verify-provider-key.js";
 import { TRIAL_DAYS } from "../config.js";
 import { encryptOptional } from "../crypto-tokens.js";
 import { db, prisma } from "../db.js";
@@ -32,72 +33,76 @@ export async function billingRoutes(app: FastifyInstance) {
   // All billing routes require authentication
   app.addHook("preHandler", requireAuth);
   // POST /api/billing/checkout — Create Stripe checkout session
-  app.post("/checkout", async (request, reply) => {
-    const userId = getUserId(request);
-    const { plan } = request.body as {
-      plan: "PRO";
-    };
+  app.post(
+    "/checkout",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const { plan } = request.body as {
+        plan: "PRO";
+      };
 
-    // Only PRO accepts new checkouts. Legacy TEAM subscriptions keep working
-    // via webhook/status routes but cannot be purchased from the UI.
-    if (plan !== "PRO") {
-      return reply.code(400).send({ error: "Invalid plan" });
-    }
-
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return reply.code(404).send({ error: "User not found" });
-
-    // Paddle (merchant of record) is the web provider when configured; the
-    // Stripe path below stays as the alternative for a future entity. Both
-    // return the same { url } contract the web client expects. The trial is
-    // configured on the Paddle price itself (dashboard), not passed here.
-    if (isPaddleConfigured()) {
-      const url = await createPaddleCheckout({ userId, email: user.email });
-      return { url };
-    }
-
-    const planConfig = PLANS[plan];
-    if (!planConfig?.priceId) {
-      return reply.code(400).send({ error: "Invalid plan" });
-    }
-
-    // Anti trial-farming: a user who deletes their account loses their stripeId,
-    // so a re-registration would otherwise mint a fresh Stripe customer and a
-    // fresh free trial. Reuse the existing customer for this email so Stripe's
-    // one-trial-per-customer guarantee survives delete + re-register.
-    let customerId = user.stripeId || undefined;
-    if (!customerId) {
-      try {
-        const existing = await stripe.customers.list({ email: user.email, limit: 1 });
-        customerId = existing.data[0]?.id;
-      } catch (err) {
-        // The fallback below mints a fresh customer + trial, so a flaky lookup
-        // here is a trial-farming hole — surface it (don't swallow) per the
-        // never-swallow rule. NOTE: email sub-addressing (you+1@) still creates
-        // a distinct customer and bypasses this guard; that needs Stripe Radar /
-        // address canonicalization (product control), not just code.
-        console.warn("[BILLING] customer lookup by email failed", err);
-        captureError(err, { tags: { scope: "billing.checkout.customer_lookup" } });
+      // Only PRO accepts new checkouts. Legacy TEAM subscriptions keep working
+      // via webhook/status routes but cannot be purchased from the UI.
+      if (plan !== "PRO") {
+        return reply.code(400).send({ error: "Invalid plan" });
       }
-    }
 
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      customer_email: customerId ? undefined : user.email,
-      customer: customerId,
-      line_items: [{ price: planConfig.priceId, quantity: 1 }],
-      // Card-required free trial: Stripe collects the card now, charges nothing
-      // until day TRIAL_DAYS, then auto-converts. The card requirement (and one
-      // trial per customer) is what makes this the high-conversion model and
-      // blocks re-signup trial farming on web.
-      subscription_data: TRIAL_DAYS > 0 ? { trial_period_days: TRIAL_DAYS } : undefined,
-      success_url: `${process.env.WEB_URL || "http://localhost:8001"}/billing?success=true`,
-      cancel_url: `${process.env.WEB_URL || "http://localhost:8001"}/billing?canceled=true`,
-      metadata: { userId, plan },
-    });
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) return reply.code(404).send({ error: "User not found" });
 
-    return { url: session.url };
-  });
+      // Paddle (merchant of record) is the web provider when configured; the
+      // Stripe path below stays as the alternative for a future entity. Both
+      // return the same { url } contract the web client expects. The trial is
+      // configured on the Paddle price itself (dashboard), not passed here.
+      if (isPaddleConfigured()) {
+        const url = await createPaddleCheckout({ userId, email: user.email });
+        return { url };
+      }
+
+      const planConfig = PLANS[plan];
+      if (!planConfig?.priceId) {
+        return reply.code(400).send({ error: "Invalid plan" });
+      }
+
+      // Anti trial-farming: a user who deletes their account loses their stripeId,
+      // so a re-registration would otherwise mint a fresh Stripe customer and a
+      // fresh free trial. Reuse the existing customer for this email so Stripe's
+      // one-trial-per-customer guarantee survives delete + re-register.
+      let customerId = user.stripeId || undefined;
+      if (!customerId) {
+        try {
+          const existing = await stripe.customers.list({ email: user.email, limit: 1 });
+          customerId = existing.data[0]?.id;
+        } catch (err) {
+          // The fallback below mints a fresh customer + trial, so a flaky lookup
+          // here is a trial-farming hole — surface it (don't swallow) per the
+          // never-swallow rule. NOTE: email sub-addressing (you+1@) still creates
+          // a distinct customer and bypasses this guard; that needs Stripe Radar /
+          // address canonicalization (product control), not just code.
+          console.warn("[BILLING] customer lookup by email failed", err);
+          captureError(err, { tags: { scope: "billing.checkout.customer_lookup" } });
+        }
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        customer_email: customerId ? undefined : user.email,
+        customer: customerId,
+        line_items: [{ price: planConfig.priceId, quantity: 1 }],
+        // Card-required free trial: Stripe collects the card now, charges nothing
+        // until day TRIAL_DAYS, then auto-converts. The card requirement (and one
+        // trial per customer) is what makes this the high-conversion model and
+        // blocks re-signup trial farming on web.
+        subscription_data: TRIAL_DAYS > 0 ? { trial_period_days: TRIAL_DAYS } : undefined,
+        success_url: `${process.env.WEB_URL || "http://localhost:8001"}/billing?success=true`,
+        cancel_url: `${process.env.WEB_URL || "http://localhost:8001"}/billing?canceled=true`,
+        metadata: { userId, plan },
+      });
+
+      return { url: session.url };
+    },
+  );
 
   // POST /api/billing/portal — customer portal (manage/cancel). Paddle when
   // the user subscribed via Paddle; Stripe otherwise.
@@ -217,9 +222,13 @@ export async function billingRoutes(app: FastifyInstance) {
           additionalProperties: false,
           properties: {
             chatModel: { type: "string", maxLength: 256 },
+            // Single-key policy (2026-07-16 outage): OpenRouter is THE BYOK
+            // slot — it routes every model we pin, including the Gemini
+            // family. New geminiApiKey writes are rejected by this schema
+            // (additionalProperties:false); clearGeminiApiKey stays so legacy
+            // users can remove a stored one.
             clearGeminiApiKey: { type: "boolean" },
             clearOpenRouterApiKey: { type: "boolean" },
-            geminiApiKey: { type: ["string", "null"], maxLength: 512 },
             openRouterApiKey: { type: ["string", "null"], maxLength: 512 },
           },
         },
@@ -227,19 +236,13 @@ export async function billingRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = getUserId(request);
-      const {
-        chatModel,
-        openRouterApiKey,
-        geminiApiKey,
-        clearOpenRouterApiKey,
-        clearGeminiApiKey,
-      } = request.body as {
-        chatModel?: string;
-        openRouterApiKey?: string | null;
-        geminiApiKey?: string | null;
-        clearOpenRouterApiKey?: boolean;
-        clearGeminiApiKey?: boolean;
-      };
+      const { chatModel, openRouterApiKey, clearOpenRouterApiKey, clearGeminiApiKey } =
+        request.body as {
+          chatModel?: string;
+          openRouterApiKey?: string | null;
+          clearOpenRouterApiKey?: boolean;
+          clearGeminiApiKey?: boolean;
+        };
 
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) return reply.code(404).send({ error: "User not found" });
@@ -250,10 +253,23 @@ export async function billingRoutes(app: FastifyInstance) {
       // downgraded user can remove theirs. The chat-model CHOICE is for
       // everyone — the per-user daily cost cap is the spend guard.
       const isSettingKey =
-        (typeof openRouterApiKey === "string" && openRouterApiKey.trim().length > 0) ||
-        (typeof geminiApiKey === "string" && geminiApiKey.trim().length > 0);
+        typeof openRouterApiKey === "string" && openRouterApiKey.trim().length > 0;
       if (isSettingKey && !isEntitled(user.plan, user.role)) {
         return reply.code(403).send({ error: "BYOK requires an active subscription" });
+      }
+
+      // Verify a NEW key upstream before storing it. A definitively-rejected
+      // key stored silently is exactly how the 2026-07-16 outage started —
+      // every later chain walk failed on it with zero signal to the user.
+      if (isSettingKey && openRouterApiKey) {
+        const verdict = await verifyOpenRouterKey(openRouterApiKey.trim());
+        if (verdict === "invalid") {
+          return reply.code(400).send({
+            error:
+              "That OpenRouter key was rejected by the provider — check it at openrouter.ai/keys and try again.",
+          });
+        }
+        // "unreachable" falls through: never block a save on provider noise.
       }
 
       const updateData: {
@@ -279,10 +295,8 @@ export async function billingRoutes(app: FastifyInstance) {
         updateData.openRouterApiKey = null;
       }
 
-      if (typeof geminiApiKey === "string") {
-        const trimmed = geminiApiKey.trim();
-        updateData.geminiApiKey = trimmed ? encryptOptional(trimmed) : null;
-      } else if (clearGeminiApiKey) {
+      // Legacy Gemini slot: clear-only (single-key policy — see the schema note).
+      if (clearGeminiApiKey) {
         updateData.geminiApiKey = null;
       }
 

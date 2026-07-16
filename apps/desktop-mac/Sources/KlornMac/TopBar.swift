@@ -24,12 +24,14 @@ struct TopBarActions {
     let onSelect: (FirewallItem) -> Void
     /// Open the Preferences overlay (switches to the full view first).
     let onOpenPreferences: () -> Void
+    /// Hide the bar entirely (pill ✕) — the menu-bar icon takes over as anchor.
+    let onHideBar: () -> Void
     let onQuit: () -> Void
 }
 
 enum TopBarMetrics {
     static let collapsed = NSSize(width: 400, height: 52)
-    static let expanded = NSSize(width: 900, height: 380)
+    static let expanded = NSSize(width: 1140, height: 380)
     static let full = NSSize(width: 1400, height: 860)
     static let corner: CGFloat = 16
 
@@ -150,6 +152,13 @@ struct CollapsedBar: View {
                 Button("Log In", action: actions.onSignIn)
                     .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
             }
+
+            Button(action: actions.onHideBar) {
+                Image(systemName: "xmark").font(.caption.weight(.semibold)).iconTarget(28)
+            }
+            .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+            .help("Hide the bar (it keeps running in the menu bar)")
+            .accessibilityLabel("Hide top bar")
         }
         .padding(.horizontal, 16)
         .frame(width: TopBarMetrics.collapsed.width, height: TopBarMetrics.collapsed.height)
@@ -171,6 +180,8 @@ struct ExpandedPanel: View {
                 InboxColumn(actions: actions)
                 columnDivider
                 RecentPushColumn(actions: actions)
+                columnDivider
+                TodayColumn()
                 columnDivider
                 AccountColumn(actions: actions)
             }
@@ -218,6 +229,70 @@ struct ExpandedPanel: View {
 }
 
 /// Column 1 — per-tier open counts; click opens the web inbox.
+/// TODAY — the day's calendar at a glance (current meeting + what's next).
+/// Rows with a meeting link open it directly; others are display-only.
+private struct TodayColumn: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ColumnHeader(title: "TODAY")
+            if let today = model.today, today.total > 0 {
+                if let current = today.current {
+                    eventRow(current, isNow: true)
+                }
+                ForEach(today.upcoming.prefix(4)) { event in
+                    eventRow(event, isNow: false)
+                }
+                if today.upcoming.count > 4 {
+                    Text("+\(today.upcoming.count - 4) more")
+                        .font(.caption2).foregroundStyle(Theme.textDim)
+                }
+            } else {
+                Text(model.today == nil ? "Loading…" : "No events today")
+                    .font(.caption).foregroundStyle(Theme.textDim)
+            }
+            Spacer()
+        }
+        .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func eventRow(_ event: CalendarEventWire, isNow: Bool) -> some View {
+        let time = eventTimeLabel(
+            startISO: event.startTime, endISO: event.endTime, allDay: event.allDay)
+        let row = HStack(alignment: .top, spacing: 8) {
+            if isNow {
+                Text("NOW")
+                    .font(.caption2.weight(.bold)).foregroundStyle(Theme.accent)
+                    .padding(.top, 2)
+            } else {
+                Text(time)
+                    .font(.caption.monospacedDigit()).foregroundStyle(Theme.textDim)
+                    .frame(width: 82, alignment: .leading)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(event.title).font(.callout).foregroundStyle(Theme.text).lineLimit(1)
+                if let location = event.location, !location.isEmpty {
+                    Text(location).font(.caption2).foregroundStyle(Theme.textDim).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+            if event.meetingLink != nil {
+                Image(systemName: "video").font(.caption).foregroundStyle(Theme.textDim)
+                    .accessibilityHidden(true)
+            }
+        }
+        if let link = event.meetingLink, let url = URL(string: link) {
+            Button { NSWorkspace.shared.open(url) } label: { row }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Join \(event.title)")
+        } else {
+            row.accessibilityElement(children: .combine)
+        }
+    }
+}
+
 private struct InboxColumn: View {
     @Environment(AppModel.self) private var model
     let actions: TopBarActions
@@ -319,6 +394,26 @@ private struct AccountColumn: View {
                     Text("Sign in with Google").font(.body).foregroundStyle(Theme.text)
                 }.buttonStyle(.plain)
             }
+            if model.phase == .signedIn, let usage = model.usage {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("AI TODAY").font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.08))
+                            Capsule().fill(Theme.accent)
+                                .frame(width: geo.size.width
+                                       * usageFillFraction(used: usage.dailyUsed, cap: usage.dailyCap))
+                        }
+                    }
+                    .frame(height: 5)
+                    Text(usageLabel(used: usage.dailyUsed, cap: usage.dailyCap))
+                        .font(.caption2.monospacedDigit()).foregroundStyle(Theme.textDim)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("AI usage today: \(usage.dailyUsed) of \(usage.dailyCap)")
+                .padding(.top, 4)
+            }
+
             Button(action: actions.onOpenPreferences) {
                 Text("Preferences").font(.body).foregroundStyle(Theme.textDim)
             }.buttonStyle(.plain)
@@ -405,6 +500,36 @@ private struct FullSidebar: View {
     @Binding var selected: Tier
     let actions: TopBarActions
 
+    /// Compact event row for the 220pt sidebar: NOW badge or start time,
+    /// title, and a click-through to the meeting link when present.
+    @ViewBuilder
+    private func sidebarEventRow(_ event: CalendarEventWire, isNow: Bool) -> some View {
+        let time = eventTimeLabel(
+            startISO: event.startTime, endISO: event.endTime, allDay: event.allDay)
+        let row = HStack(alignment: .top, spacing: 8) {
+            if isNow {
+                Text("NOW").font(.caption2.weight(.bold)).foregroundStyle(Theme.accent)
+            } else {
+                Text(String(time.prefix(5)))
+                    .font(.caption.monospacedDigit()).foregroundStyle(Theme.textDim)
+            }
+            Text(event.title).font(.caption).foregroundStyle(Theme.text).lineLimit(1)
+            Spacer(minLength: 0)
+            if event.meetingLink != nil {
+                Image(systemName: "video").font(.caption2).foregroundStyle(Theme.textDim)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 3)
+        if let link = event.meetingLink, let url = URL(string: link) {
+            Button { NSWorkspace.shared.open(url) } label: { row }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Join \(event.title)")
+        } else {
+            row.accessibilityElement(children: .combine)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ColumnHeader(title: "INBOX").padding(.horizontal, 20).padding(.bottom, 6)
@@ -423,6 +548,27 @@ private struct FullSidebar: View {
                                 in: RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
+            }
+
+            // TODAY lives in the full view too — the biggest surface must not
+            // know less about the day than the compact panel (dogfood 2026-07-16).
+            ColumnHeader(title: "TODAY").padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 6)
+            if let today = model.today, today.total > 0 {
+                if let current = today.current {
+                    sidebarEventRow(current, isNow: true)
+                }
+                ForEach(today.upcoming.prefix(3)) { event in
+                    sidebarEventRow(event, isNow: false)
+                }
+                if today.upcoming.count > 3 {
+                    Text("+\(today.upcoming.count - 3) more")
+                        .font(.caption2).foregroundStyle(Theme.textDim)
+                        .padding(.horizontal, 20)
+                }
+            } else {
+                Text(model.today == nil ? "Loading…" : "No events today")
+                    .font(.caption).foregroundStyle(Theme.textDim)
+                    .padding(.horizontal, 20)
             }
 
             Spacer()

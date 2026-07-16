@@ -15,6 +15,11 @@ vi.mock("../mail/gmail.js", () => ({
   GMAIL_TOOLS: [],
 }));
 
+vi.mock("../billing/verify-provider-key.js", () => ({
+  // Default "valid" so key-set tests pass; individual tests override per call.
+  verifyOpenRouterKey: vi.fn(async () => "valid"),
+}));
+
 vi.mock("../billing/stripe.js", () => ({
   stripe: {
     checkout: {
@@ -246,6 +251,100 @@ describe("billing routes", () => {
     const res = await app.inject({ method: "GET", url: "/api/billing/models", headers: auth() });
     expect(res.statusCode).toBe(200);
     expect(res.json().selectedModel).toBeNull();
+    await app.close();
+  });
+  it("PATCH /models rejects a NEW geminiApiKey — single-key policy (#today's outage)", async () => {
+    const { prisma } = await import("../db.js");
+    const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
+    updateMock.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/billing/models",
+      headers: auth(),
+      payload: { geminiApiKey: "AIza-legacy-key" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(updateMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("clearGeminiApiKey still clears the legacy slot", async () => {
+    const { prisma } = await import("../db.js");
+    const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
+    updateMock.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/billing/models",
+      headers: auth(),
+      payload: { clearGeminiApiKey: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(updateMock.mock.calls.some((call) => call[0]?.data?.geminiApiKey === null)).toBe(true);
+    await app.close();
+  });
+
+  it("a dead OpenRouter key is rejected upstream-verified, never stored silently", async () => {
+    const { verifyOpenRouterKey } = await import("../billing/verify-provider-key.js");
+    (verifyOpenRouterKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce("invalid");
+    const { prisma } = await import("../db.js");
+    const findMock = prisma.user.findUnique as ReturnType<typeof vi.fn>;
+    findMock.mockResolvedValueOnce({ sessionsInvalidatedAt: null });
+    findMock.mockResolvedValueOnce({
+      id: "user-1",
+      email: "t@e.com",
+      plan: "PRO",
+      role: "USER",
+      stripeId: null,
+      chatModel: null,
+      openRouterApiKey: null,
+      geminiApiKey: null,
+    });
+    const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
+    updateMock.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/billing/models",
+      headers: auth(),
+      payload: { openRouterApiKey: "sk-or-v1-dead" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/rejected|invalid/i);
+    expect(updateMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("provider unreachable → fail-open: the key stores (never block a save on provider noise)", async () => {
+    const { verifyOpenRouterKey } = await import("../billing/verify-provider-key.js");
+    (verifyOpenRouterKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce("unreachable");
+    const { prisma } = await import("../db.js");
+    const findMock = prisma.user.findUnique as ReturnType<typeof vi.fn>;
+    findMock.mockResolvedValueOnce({ sessionsInvalidatedAt: null });
+    findMock.mockResolvedValueOnce({
+      id: "user-1",
+      email: "t@e.com",
+      plan: "PRO",
+      role: "USER",
+      stripeId: null,
+      chatModel: null,
+      openRouterApiKey: null,
+      geminiApiKey: null,
+    });
+    const updateMock = prisma.user.update as ReturnType<typeof vi.fn>;
+    updateMock.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/billing/models",
+      headers: auth(),
+      payload: { openRouterApiKey: "sk-or-v1-fine" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(
+      updateMock.mock.calls.some((call) => typeof call[0]?.data?.openRouterApiKey === "string"),
+    ).toBe(true);
     await app.close();
   });
 });

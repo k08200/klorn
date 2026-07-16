@@ -37,6 +37,10 @@ final class PushCardController {
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
+    /// "Show all N": the AppDelegate wires this to the bar's expanded panel.
+    /// The card hides itself first — the panel lists the same PUSH items.
+    var onShowAll: (() -> Void)?
+
     init(model: AppModel) {
         self.model = model
     }
@@ -52,7 +56,19 @@ final class PushCardController {
         let hadCurrent = queue.current != nil
         queue.enqueue(items)
         if !hadCurrent { showCurrent() } else { state.pendingCount = queue.pendingCount }
+        // Arrival chime: the card is silent chrome without it, and the OS
+        // banner (which carries the system sound) is suppressed while a card
+        // draws. Same user switch as the banner (Preferences → Notifications).
+        if Self.shouldChime(newCount: items.count, alertsEnabled: model.settings.notificationsEnabled) {
+            NSSound(named: "Glass")?.play()
+        }
         return queue.current != nil
+    }
+
+    /// Chime once per new-PUSH batch; never for an empty diff, never when the
+    /// user turned alerts off. Pure for testing.
+    nonisolated static func shouldChime(newCount: Int, alertsEnabled: Bool) -> Bool {
+        newCount > 0 && alertsEnabled
     }
 
     /// Global-hotkey entry point while a card is visible: give the card the
@@ -130,6 +146,15 @@ final class PushCardController {
         panel?.orderOut(nil)
     }
 
+    /// Snooze the current item server-side (resurfaces at the chosen time),
+    /// then move to the next card. The model hides it optimistically and
+    /// reconciles on failure — the card just advances.
+    private func snooze(_ option: SnoozeOption) {
+        guard let item = state.item else { return }
+        Task { [weak self] in await self?.model.snooze(item, until: option.resurface()) }
+        advance()
+    }
+
     // MARK: - Actions
 
     private func makeActions() -> PushCardActions {
@@ -137,12 +162,18 @@ final class PushCardController {
             onSend: { [weak self] index in self?.send(index) },
             onOpen: { [weak self] in self?.openOnWeb() },
             onDismiss: { [weak self] in self?.advance() },  // local only — never archives
+            onSnooze: { [weak self] option in self?.snooze(option) },
             onRetry: { [weak self] in
                 guard let self, let item = self.state.item else { return }
                 self.state.drafts = .loading
                 self.fetchDrafts(for: item)
             },
-            onToggleExpand: { [weak self] in self?.toggleLayout() })
+            onToggleExpand: { [weak self] in self?.toggleLayout() },
+            onShowAll: { [weak self] in
+                guard let self else { return }
+                self.hide()
+                self.onShowAll?()
+            })
     }
 
     /// Click on the card: compact ↔ expanded. Expanding also arms the keyboard

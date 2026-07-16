@@ -79,6 +79,15 @@ export const LEARNED_RULES_IN_JUDGE = process.env.LEARNED_RULES_IN_JUDGE === "tr
 // affects the eval gate — the live guardrail is decision-metrics drift.
 export const CONTACT_ENGAGEMENT_IN_JUDGE = process.env.CONTACT_ENGAGEMENT_IN_JUDGE === "true";
 
+// Self-heal provider-outage residue: re-judge recent keyword-fallback
+// decisions (human-untouched, still OPEN) through the real judge once the
+// provider is back — without this a degraded tier is permanent (the backfill
+// sweep only judges emails with NO AttentionItem). OFF by default: flipping
+// re-tiers mail the user may have already seen. Measured 2026-07-16: one RPM
+// starvation window left 11.5% of the dogfood ledger (and 25 rows of a real
+// user's) on keyword-fallback tiers. Manual repair: scripts/rejudge-fallback.ts.
+export const FALLBACK_REJUDGE_SWEEP = process.env.FALLBACK_REJUDGE_SWEEP === "true";
+
 // ── Paywall / monetization ────────────────────────────────────────────
 // Master kill-switch for the subscription paywall. OFF by default so merging
 // to main (which auto-deploys to prod) changes NOTHING: FREE keeps its current

@@ -156,22 +156,26 @@ export async function automationRoutes(app: FastifyInstance) {
   });
 
   // POST /api/automations/run-now — Manually trigger agent for current user
-  app.post("/run-now", async (request) => {
-    const userId = getUserId(request);
-    if (userId === "demo-user") {
-      return { error: "Agent not available for demo user" };
-    }
+  app.post(
+    "/run-now",
+    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (request) => {
+      const userId = getUserId(request);
+      if (userId === "demo-user") {
+        return { error: "Agent not available for demo user" };
+      }
 
-    const config = await prisma.automationConfig.findUnique({ where: { userId } });
-    const mode = normalizeAgentMode((config as Record<string, unknown>)?.agentMode);
+      const config = await prisma.automationConfig.findUnique({ where: { userId } });
+      const mode = normalizeAgentMode((config as Record<string, unknown>)?.agentMode);
 
-    // Run in background so the response returns immediately
-    runAgentForUser(userId, mode).catch((err) => {
-      console.error(`[AGENT] Manual run failed for ${userId}:`, err);
-    });
+      // Run in background so the response returns immediately
+      runAgentForUser(userId, mode).catch((err) => {
+        console.error(`[AGENT] Manual run failed for ${userId}:`, err);
+      });
 
-    return { triggered: true, mode };
-  });
+      return { triggered: true, mode };
+    },
+  );
 
   // GET /api/automations/agent-logs — Get autonomous agent activity logs
   app.get("/agent-logs", async (request) => {

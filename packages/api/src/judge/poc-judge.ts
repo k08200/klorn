@@ -20,6 +20,7 @@ import { getEffectiveThresholds } from "../learning/ontology-overrides.js";
 import {
   type CorrectionExample,
   PRIOR_SHORTCIRCUIT_TIERS,
+  READ_BEHAVIOR,
   SENDER_PRIOR_POLICY,
   type SenderFacts,
   type SenderPrior,
@@ -203,6 +204,26 @@ export function buildSenderFactsBlock(facts?: SenderFacts | null): string {
       lines.push(
         `- The recipient ${strength} engages with this sender — has replied to or written them ${times} (a strong signal this sender matters to them)`,
       );
+    }
+  }
+
+  if (facts.readBehavior) {
+    // The passive half of the engagement channel: real read behavior synced
+    // from Gmail. Soft senderTrust grounding in both directions — the low
+    // branch is hedged so urgent content can still win (same contract as the
+    // dismissed-only line above).
+    const { read, total } = facts.readBehavior;
+    const rate = total > 0 ? read / total : 0;
+    if (rate >= READ_BEHAVIOR.highRate) {
+      lines.push(
+        `- The recipient reads nearly every email from this sender (${read} of the last ${total}) — measured attention; raise senderTrust accordingly`,
+      );
+    } else if (rate <= READ_BEHAVIOR.lowRate) {
+      lines.push(
+        `- The recipient rarely opens this sender's email (${read} of the last ${total}) — a measured low-attention signal; lower senderTrust unless the email itself is clearly urgent`,
+      );
+    } else {
+      lines.push(`- Reads ${read} of the last ${total} emails from this sender`);
     }
   }
 

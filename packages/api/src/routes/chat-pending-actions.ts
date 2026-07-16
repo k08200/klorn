@@ -15,7 +15,7 @@ import { claimAndRunOutboxRow, enqueueAction, type OutboxRow } from "../agentcor
 import { resolveActionTarget } from "../agentcore/action-target.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
-import { db, prisma } from "../db.js";
+import { db, INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
 import {
   type ActionReceipt,
   isFloorAction,
@@ -271,7 +271,7 @@ export async function chatRoutes(app: FastifyInstance) {
           });
         }
         return true;
-      });
+      }, INTERACTIVE_TX_OPTIONS); // interactive form required (claim.count gates the enqueue); pool-sized options per #845
       if (!claimed) {
         return reply.code(409).send({ error: "Action already processed by another request" });
       }

@@ -123,7 +123,7 @@ vi.mock("../db.js", () => {
     // mock runs the callback against the same prisma object (no real txn).
     $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
   };
-  return { prisma, db: prisma };
+  return { prisma, db: prisma, INTERACTIVE_TX_OPTIONS: { maxWait: 10_000, timeout: 15_000 } };
 });
 
 async function buildApp() {
@@ -259,6 +259,26 @@ describe("POST /api/chat/pending-actions/:actionId/approve — execution idempot
       { summary: "Standup", start_time: "2026-06-13T09:00:00Z" },
       null,
     );
+    await app.close();
+  });
+
+  it("claims with pool-sized $transaction options — the default maxWait (2s) turned pool starvation into P2028 500s (#845)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/chat/pending-actions/pa-1/approve",
+      payload: {},
+    });
+    expect(res.statusCode).toBe(200);
+
+    const { prisma } = (await import("../db.js")) as unknown as {
+      prisma: { $transaction: ReturnType<typeof vi.fn> };
+    };
+    const opts = prisma.$transaction.mock.calls[0][1] as
+      | { maxWait?: number; timeout?: number }
+      | undefined;
+    expect(opts?.maxWait).toBeGreaterThanOrEqual(10_000);
+    expect(opts?.timeout).toBeGreaterThanOrEqual(15_000);
     await app.close();
   });
 

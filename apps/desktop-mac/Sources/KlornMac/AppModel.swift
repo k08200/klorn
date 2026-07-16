@@ -278,9 +278,65 @@ final class AppModel {
         phase = .signedOut
     }
 
+    /// Today's calendar (expanded panel's TODAY column). Best-effort: a
+    /// calendar hiccup must never block the mail queue, so failures just keep
+    /// the previous value.
+    private(set) var today: TodaySummary?
+
+    /// Meeting-prep interrupt: fires once per event when its start enters the
+    /// lead window. The AppDelegate wires this to the meeting card; a false
+    /// return means "slot busy — offer it again on the next tick".
+    var onMeetingSoon: ((CalendarEventWire) -> Bool)?
+    static let meetingLeadMinutes = 10
+    private var shownMeetingIds: Set<String> = []
+
+    private func refreshToday() async {
+        do {
+            today = try await api.get("/api/calendar/today/summary", as: TodaySummary.self)
+        } catch {
+            Log.app.debug("today summary fetch failed: \(String(describing: error), privacy: .private)")
+        }
+        // Replan on every refresh tick (poll + WS wake — the same cadence that
+        // keeps the TODAY column fresh keeps the lead window honest).
+        if let upcoming = today?.upcoming,
+           let due = meetingCardPlan(
+               now: Date(), events: upcoming,
+               leadMinutes: Self.meetingLeadMinutes, shown: shownMeetingIds),
+           onMeetingSoon?(due) == true
+        {
+            shownMeetingIds.insert(due.id)
+        }
+    }
+
+    /// Daily AI quota for the ACCOUNT gauge. Best-effort on the same tick.
+    private(set) var usage: BillingStatusWire.Usage?
+
+    private func refreshUsage() async {
+        do {
+            let status: BillingStatusWire = try await api.get("/api/billing/models", as: BillingStatusWire.self)
+            usage = status.usage
+        } catch {
+            Log.app.debug("usage fetch failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    /// GET /api/calendar/:id/prep-pack for the meeting card. Best-effort.
+    func fetchPrepPack(eventId: String) async -> MeetingPrepPack? {
+        do {
+            return try await api.get("/api/calendar/\(eventId)/prep-pack", as: MeetingPrepPack.self)
+        } catch {
+            Log.app.debug("prep pack fetch failed: \(String(describing: error), privacy: .private)")
+            return nil
+        }
+    }
+
     func loadQueue() async {
         isLoadingQueue = true
         defer { isLoadingQueue = false }
+        // Piggyback on the same cadence as the queue (poll + WS wake) without
+        // serializing the fetches.
+        Task { await refreshToday() }
+        Task { await refreshUsage() }
         do {
             let fetched = try await api.get("/api/inbox/firewall", as: FirewallResponse.self)
             // Drop dismissed ids the server has since resolved; hide the rest.

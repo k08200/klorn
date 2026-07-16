@@ -572,13 +572,16 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
   );
 
   // POST /api/email/attachments/analyze
-  app.post("/attachments/analyze", { preHandler: requireAuth }, async (request) => {
-    const uid = getUserId(request);
-    const { limit, retryFallback } =
-      (request.body as { limit?: number; retryFallback?: boolean }) || {};
+  app.post(
+    "/attachments/analyze",
+    { preHandler: requireAuth, config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (request) => {
+      const uid = getUserId(request);
+      const { limit, retryFallback } =
+        (request.body as { limit?: number; retryFallback?: boolean }) || {};
 
-    if (retryFallback) {
-      await prisma.$executeRaw`
+      if (retryFallback) {
+        await prisma.$executeRaw`
         UPDATE "EmailAttachment"
         SET
           "analysisStatus" = 'PENDING',
@@ -588,180 +591,189 @@ export async function registerEmailAttachmentsRoutes(app: FastifyInstance) {
           AND "contentText" IS NOT NULL
           AND "analysisStatus" IN ('FALLBACK', 'FAILED')
       `;
-    }
+      }
 
-    const analyzed = await analyzePendingEmailAttachments(
-      uid,
-      Math.min(Math.max(limit || 25, 1), 100),
-    );
-    await syncRecentCandidateIntakes(uid, Math.min(Math.max(limit || 25, 1), 100));
-    return { analyzed };
-  });
+      const analyzed = await analyzePendingEmailAttachments(
+        uid,
+        Math.min(Math.max(limit || 25, 1), 100),
+      );
+      await syncRecentCandidateIntakes(uid, Math.min(Math.max(limit || 25, 1), 100));
+      return { analyzed };
+    },
+  );
 
   // POST /api/email/:id/attachments/analyze
-  app.post("/:id/attachments/analyze", { preHandler: requireAuth }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const uid = getUserId(request);
-    const { force } = (request.body as { force?: boolean }) || {};
+  app.post(
+    "/:id/attachments/analyze",
+    { preHandler: requireAuth, config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const uid = getUserId(request);
+      const { force } = (request.body as { force?: boolean }) || {};
 
-    const dbEmail = await prisma.emailMessage.findFirst({
-      where: { userId: uid, OR: [{ id }, { gmailId: id }] },
-      select: { id: true },
-    });
-    if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
+      const dbEmail = await prisma.emailMessage.findFirst({
+        where: { userId: uid, OR: [{ id }, { gmailId: id }] },
+        select: { id: true },
+      });
+      if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
 
-    const analyzed = await analyzeEmailAttachmentsForEmail({
-      userId: uid,
-      emailId: dbEmail.id,
-      force: force !== false,
-    });
-    const attachments = await listEmailAttachments([dbEmail.id], uid);
-    const candidateProfile = buildAttachmentCandidateProfile(attachments);
-    const candidateIntake = candidateProfile
-      ? await syncCandidateIntakeForEmail({ userId: uid, emailId: dbEmail.id })
-      : null;
-    return {
-      analyzed,
-      attachments,
-      candidateProfile,
-      candidateIntake,
-    };
-  });
-
-  // POST /api/email/:id/attachments/ocr
-  app.post("/:id/attachments/ocr", { preHandler: requireAuth }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const uid = getUserId(request);
-    const body = (request.body as { attachmentIds?: unknown; force?: boolean }) || {};
-    const attachmentIds = Array.isArray(body.attachmentIds)
-      ? body.attachmentIds.filter((value): value is string => typeof value === "string")
-      : [];
-
-    const dbEmail = await prisma.emailMessage.findFirst({
-      where: { userId: uid, OR: [{ id }, { gmailId: id }] },
-      select: { id: true, gmailId: true, linkedInboxAccountId: true },
-    });
-    if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
-
-    // Same linked-inbox fix as the download/convert routes above (#761).
-    const auth = await resolveMailClient(uid, dbEmail.linkedInboxAccountId);
-    if (!auth) return reply.code(409).send({ error: "Gmail not connected" });
-
-    const rows = await prisma.emailAttachment.findMany({
-      where: {
+      const analyzed = await analyzeEmailAttachmentsForEmail({
         userId: uid,
         emailId: dbEmail.id,
-        ...(attachmentIds.length > 0 ? { id: { in: attachmentIds } } : {}),
-      },
-      select: {
-        id: true,
-        gmailAttachmentId: true,
-        filename: true,
-        mimeType: true,
-        size: true,
-        contentText: true,
-        analysisStatus: true,
-      },
-      orderBy: { createdAt: "asc" },
-      take: 12,
-    });
+        force: force !== false,
+      });
+      const attachments = await listEmailAttachments([dbEmail.id], uid);
+      const candidateProfile = buildAttachmentCandidateProfile(attachments);
+      const candidateIntake = candidateProfile
+        ? await syncCandidateIntakeForEmail({ userId: uid, emailId: dbEmail.id })
+        : null;
+      return {
+        analyzed,
+        attachments,
+        candidateProfile,
+        candidateIntake,
+      };
+    },
+  );
 
-    const { google } = await import("googleapis");
-    const gmail = google.gmail({ version: "v1", auth });
-    const results: Array<{ attachmentId: string; filename: string; status: string }> = [];
+  // POST /api/email/:id/attachments/ocr
+  app.post(
+    "/:id/attachments/ocr",
+    { preHandler: requireAuth, config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const uid = getUserId(request);
+      const body = (request.body as { attachmentIds?: unknown; force?: boolean }) || {};
+      const attachmentIds = Array.isArray(body.attachmentIds)
+        ? body.attachmentIds.filter((value): value is string => typeof value === "string")
+        : [];
 
-    for (const row of rows) {
-      if (!body.force && !isVisionAttachment(row)) {
-        results.push({ attachmentId: row.id, filename: row.filename, status: "skipped" });
-        continue;
-      }
-      // Decorative chrome (logos, spacers, tracking pixels) carries no readable
-      // content — mark it analyzed-and-done with a clear summary instead of
-      // burning a vision call and surfacing a VISION_FAILED 404. `force` is the
-      // escape hatch: an explicit OCR request still runs vision on it.
-      if (!body.force && isDecorativeImage(row)) {
-        // Leave a detection trail: a misclassified content image silently skipped
-        // here would be permanently un-OCR'd with no signal. `force` re-runs it.
-        console.log(
-          `[ATTACHMENTS] decorative skip (no OCR): ${row.filename} (${row.size ?? "?"}B) attachment ${row.id}`,
-        );
-        await prisma.emailAttachment.update({
-          where: { id: row.id },
-          data: {
-            analysisStatus: "ANALYZED",
-            analysisError: null,
-            summary: `${row.filename}: decorative image (logo/icon/spacer) — skipped OCR`,
-            category: "image",
-            keyPoints: [],
-            extractedFields: {},
-          },
-        });
-        results.push({
-          attachmentId: row.id,
-          filename: row.filename,
-          status: "skipped_decorative",
-        });
-        continue;
-      }
-      if ((row.size ?? 0) > MAX_VISION_ATTACHMENT_BYTES) {
-        await prisma.emailAttachment.update({
-          where: { id: row.id },
-          data: {
-            analysisStatus: "VISION_FAILED",
-            analysisError: "Attachment is too large for vision OCR",
-          },
-        });
-        results.push({ attachmentId: row.id, filename: row.filename, status: "too_large" });
-        continue;
-      }
+      const dbEmail = await prisma.emailMessage.findFirst({
+        where: { userId: uid, OR: [{ id }, { gmailId: id }] },
+        select: { id: true, gmailId: true, linkedInboxAccountId: true },
+      });
+      if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
 
-      try {
-        const res = await gmail.users.messages.attachments.get({
-          userId: "me",
-          messageId: dbEmail.gmailId,
-          id: row.gmailAttachmentId,
-        });
-        const data = res.data.data;
-        if (!data) throw new Error("Attachment body not found");
-        const analysis = await analyzeVisualAttachment({
+      // Same linked-inbox fix as the download/convert routes above (#761).
+      const auth = await resolveMailClient(uid, dbEmail.linkedInboxAccountId);
+      if (!auth) return reply.code(409).send({ error: "Gmail not connected" });
+
+      const rows = await prisma.emailAttachment.findMany({
+        where: {
           userId: uid,
-          filename: row.filename,
-          mimeType: row.mimeType,
-          content: Buffer.from(data, "base64url"),
-        });
-        await prisma.emailAttachment.update({
-          where: { id: row.id },
-          data: {
-            contentText: analysis.ocrText || row.contentText,
-            summary: analysis.summary,
-            category: analysis.category,
-            // JSONB after migration 20260519050000.
-            keyPoints: analysis.keyPoints,
-            extractedFields: analysis.extractedFields,
-            analysisStatus: analysis.ocrText ? "ANALYZED" : "VISION_FAILED",
-            analysisError: analysis.ocrText ? null : "Vision OCR returned no readable text",
-          },
-        });
-        results.push({ attachmentId: row.id, filename: row.filename, status: "analyzed" });
-      } catch (err) {
-        await prisma.emailAttachment.update({
-          where: { id: row.id },
-          data: {
-            analysisStatus: "VISION_FAILED",
-            analysisError: err instanceof Error ? err.message.slice(0, 500) : "Vision OCR failed",
-          },
-        });
-        results.push({ attachmentId: row.id, filename: row.filename, status: "failed" });
-      }
-    }
+          emailId: dbEmail.id,
+          ...(attachmentIds.length > 0 ? { id: { in: attachmentIds } } : {}),
+        },
+        select: {
+          id: true,
+          gmailAttachmentId: true,
+          filename: true,
+          mimeType: true,
+          size: true,
+          contentText: true,
+          analysisStatus: true,
+        },
+        orderBy: { createdAt: "asc" },
+        take: 12,
+      });
 
-    const attachments = await listEmailAttachments([dbEmail.id], uid);
-    const candidateProfile = buildAttachmentCandidateProfile(attachments);
-    const candidateIntake = candidateProfile
-      ? await syncCandidateIntakeForEmail({ userId: uid, emailId: dbEmail.id })
-      : null;
-    return { results, attachments, candidateProfile, candidateIntake };
-  });
+      const { google } = await import("googleapis");
+      const gmail = google.gmail({ version: "v1", auth });
+      const results: Array<{ attachmentId: string; filename: string; status: string }> = [];
+
+      for (const row of rows) {
+        if (!body.force && !isVisionAttachment(row)) {
+          results.push({ attachmentId: row.id, filename: row.filename, status: "skipped" });
+          continue;
+        }
+        // Decorative chrome (logos, spacers, tracking pixels) carries no readable
+        // content — mark it analyzed-and-done with a clear summary instead of
+        // burning a vision call and surfacing a VISION_FAILED 404. `force` is the
+        // escape hatch: an explicit OCR request still runs vision on it.
+        if (!body.force && isDecorativeImage(row)) {
+          // Leave a detection trail: a misclassified content image silently skipped
+          // here would be permanently un-OCR'd with no signal. `force` re-runs it.
+          console.log(
+            `[ATTACHMENTS] decorative skip (no OCR): ${row.filename} (${row.size ?? "?"}B) attachment ${row.id}`,
+          );
+          await prisma.emailAttachment.update({
+            where: { id: row.id },
+            data: {
+              analysisStatus: "ANALYZED",
+              analysisError: null,
+              summary: `${row.filename}: decorative image (logo/icon/spacer) — skipped OCR`,
+              category: "image",
+              keyPoints: [],
+              extractedFields: {},
+            },
+          });
+          results.push({
+            attachmentId: row.id,
+            filename: row.filename,
+            status: "skipped_decorative",
+          });
+          continue;
+        }
+        if ((row.size ?? 0) > MAX_VISION_ATTACHMENT_BYTES) {
+          await prisma.emailAttachment.update({
+            where: { id: row.id },
+            data: {
+              analysisStatus: "VISION_FAILED",
+              analysisError: "Attachment is too large for vision OCR",
+            },
+          });
+          results.push({ attachmentId: row.id, filename: row.filename, status: "too_large" });
+          continue;
+        }
+
+        try {
+          const res = await gmail.users.messages.attachments.get({
+            userId: "me",
+            messageId: dbEmail.gmailId,
+            id: row.gmailAttachmentId,
+          });
+          const data = res.data.data;
+          if (!data) throw new Error("Attachment body not found");
+          const analysis = await analyzeVisualAttachment({
+            userId: uid,
+            filename: row.filename,
+            mimeType: row.mimeType,
+            content: Buffer.from(data, "base64url"),
+          });
+          await prisma.emailAttachment.update({
+            where: { id: row.id },
+            data: {
+              contentText: analysis.ocrText || row.contentText,
+              summary: analysis.summary,
+              category: analysis.category,
+              // JSONB after migration 20260519050000.
+              keyPoints: analysis.keyPoints,
+              extractedFields: analysis.extractedFields,
+              analysisStatus: analysis.ocrText ? "ANALYZED" : "VISION_FAILED",
+              analysisError: analysis.ocrText ? null : "Vision OCR returned no readable text",
+            },
+          });
+          results.push({ attachmentId: row.id, filename: row.filename, status: "analyzed" });
+        } catch (err) {
+          await prisma.emailAttachment.update({
+            where: { id: row.id },
+            data: {
+              analysisStatus: "VISION_FAILED",
+              analysisError: err instanceof Error ? err.message.slice(0, 500) : "Vision OCR failed",
+            },
+          });
+          results.push({ attachmentId: row.id, filename: row.filename, status: "failed" });
+        }
+      }
+
+      const attachments = await listEmailAttachments([dbEmail.id], uid);
+      const candidateProfile = buildAttachmentCandidateProfile(attachments);
+      const candidateIntake = candidateProfile
+        ? await syncCandidateIntakeForEmail({ userId: uid, emailId: dbEmail.id })
+        : null;
+      return { results, attachments, candidateProfile, candidateIntake };
+    },
+  );
 
   // PATCH /api/email/:id/attachments/:attachmentId/analysis
   app.patch(

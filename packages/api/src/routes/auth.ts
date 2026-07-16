@@ -523,6 +523,7 @@ export function authRoutes(app: FastifyInstance) {
     {
       preHandler: requireAuth,
       schema: { headers: authHeaderSchema, body: changePasswordBodySchema },
+      config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
     },
     async (request, reply) => {
       const userId = getUserId(request);
@@ -772,7 +773,10 @@ export function authRoutes(app: FastifyInstance) {
   // Returns {url} like /google/start so the session JWT never enters the redirect.
   app.post(
     "/google/link-calendar",
-    { preHandler: [requireAuth, requireEntitled] },
+    {
+      preHandler: [requireAuth, requireEntitled],
+      config: { rateLimit: { max: 10, timeWindow: "15 minutes" } },
+    },
     async (request, reply) => {
       const userId = getUserId(request);
       if (isDemoUser(userId)) {

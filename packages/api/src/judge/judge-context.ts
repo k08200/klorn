@@ -34,6 +34,7 @@ import { getAppliedRulesForMatch } from "../learning/learned-rule-store.js";
 import type { LearnedRule } from "../learning/learned-rules.js";
 import {
   type CorrectionExample,
+  READ_BEHAVIOR,
   SENDER_PRIOR_POLICY,
   type SenderFacts,
   type SenderPrior,
@@ -477,6 +478,42 @@ async function fetchSenderTraits(
 }
 
 /**
+ * Measured read behavior for the sender — the passive half of the engagement
+ * channel (CONTACT_ENGAGEMENT_IN_JUDGE). Counts the sender's mail in the
+ * READ_BEHAVIOR window and how much of it the user actually opened (isRead is
+ * synced from Gmail, so this reflects real reading wherever it happens).
+ * Suppressed below READ_BEHAVIOR.minSample — a tiny sample grounds nothing.
+ * Fail-soft in its OWN try/catch like the other flagged channels.
+ */
+async function fetchReadBehaviorFact(
+  userId: string,
+  senderAddress: string,
+): Promise<SenderFacts["readBehavior"]> {
+  if (!CONTACT_ENGAGEMENT_IN_JUDGE || !senderAddress) return null;
+  try {
+    const since = new Date(Date.now() - READ_BEHAVIOR.windowDays * DAY_MS);
+    const senderWindow = {
+      userId,
+      from: { contains: senderAddress, mode: "insensitive" as const },
+      receivedAt: { gte: since },
+    };
+    const [total, read] = await Promise.all([
+      db.emailMessage.count({ where: senderWindow }),
+      db.emailMessage.count({ where: { ...senderWindow, isRead: true } }),
+    ]);
+    if (total < READ_BEHAVIOR.minSample) return null;
+    return { read, total };
+  } catch (err) {
+    console.warn(
+      "[judge-context] read-behavior fetch failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    captureError(err, { tags: { scope: "judge-context-read-behavior" }, extra: { userId } });
+    return null;
+  }
+}
+
+/**
  * APPLIED learned rules for judge short-circuiting (Slice 4). Flag-gated
  * (LEARNED_RULES_IN_JUDGE, default off) and fail-soft in its OWN try/catch: a
  * rule-query error logs a signal and returns [] rather than bubbling to the
@@ -528,6 +565,7 @@ export async function buildJudgeContext(
       senderTraits,
       learnedRules,
       engagement,
+      readBehavior,
     ] = await Promise.all([
       fetchCorrections(userId, senderAddress, correctionExcludeId, incomingText),
       fetchSenderItems(userId, senderAddress, input.excludeEmailId),
@@ -536,18 +574,20 @@ export async function buildJudgeContext(
       fetchSenderTraits(userId, senderAddress),
       fetchLearnedRules(userId),
       fetchLearnedImportanceFact(userId, senderAddress),
+      fetchReadBehaviorFact(userId, senderAddress),
     ]);
 
     const senderPrior = senderItems.length > 0 ? buildPrior(senderItems) : null;
     const history = buildTierHistory(senderItems);
     const senderFacts: SenderFacts | null =
-      history || interaction || commitments || engagement
+      history || interaction || commitments || engagement || readBehavior
         ? {
             tierHistory: history?.tierHistory ?? {},
             manualOverrides: history?.manualOverrides ?? 0,
             interaction,
             commitments,
             engagement,
+            readBehavior,
           }
         : null;
 

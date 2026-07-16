@@ -67,7 +67,11 @@ jobs:
 
       - name: Build Klorn.app
         working-directory: apps/desktop-mac
-        run: scripts/make-app.sh release
+        # 3rd arg = bundle version from the tag, so the in-app update check
+        # compares real versions (a hardcoded one would nag forever).
+        run: scripts/make-app.sh release "https://klorn-api.onrender.com" "${TAG#desktop-v}"
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
 
       - name: Import Developer ID certificate
         if: steps.signing.outputs.enabled == 'true'
@@ -93,8 +97,17 @@ jobs:
         env:
           SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
         run: |
+          # Re-sign the whole bundle with the Developer ID over make-app.sh's
+          # ad-hoc signature. --options runtime (hardened runtime) + --timestamp
+          # (secure timestamp) are both notarization requirements. The app is a
+          # single Mach-O with no nested frameworks, so signing the bundle
+          # covers its only executable — no inside-out walk needed.
           codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" Klorn.app
           codesign --verify --strict --verbose=2 Klorn.app
+          # Fail early if the hardened runtime flag didn't take (notarization
+          # would reject it minutes later with a vaguer error).
+          codesign -d --verbose=2 Klorn.app 2>&1 | grep -q "flags=.*runtime" \
+            || { echo "::error::hardened runtime flag missing after signing"; exit 1; }
 
       - name: Notarize & staple
         if: steps.signing.outputs.enabled == 'true'
@@ -111,6 +124,18 @@ jobs:
             --password "$NOTARY_PASSWORD" \
             --wait
           xcrun stapler staple Klorn.app
+
+      - name: Verify Gatekeeper acceptance (the real double-click gate)
+        if: steps.signing.outputs.enabled == 'true'
+        working-directory: apps/desktop-mac
+        run: |
+          # notarytool "Accepted" only means Apple ingested the binary; it does
+          # NOT prove the stapled ticket + signature actually pass Gatekeeper on
+          # a user's Mac. Assert that here so a mis-signed build fails the
+          # release loudly instead of shipping a "notarized" app that still
+          # bounces at first launch. -vvv prints "source=Notarized Developer ID".
+          spctl --assess --type execute -vvv Klorn.app
+          stapler validate Klorn.app
 
       - name: Zip for download
         working-directory: apps/desktop-mac

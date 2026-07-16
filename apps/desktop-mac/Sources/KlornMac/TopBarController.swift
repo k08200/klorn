@@ -54,6 +54,26 @@ final class TopBarController {
         n == 1 ? "1 new message needs you" : "\(n) new messages need you"
     }
 
+    /// Re-render after an external settings change (menu-bar "Hide/Show top
+    /// bar" — the Preferences toggle only takes effect on the next state
+    /// change, but the menu item must apply immediately).
+    func refresh() {
+        render()
+    }
+
+    /// PushCard "Show all N": open the expanded panel (creating the bar if
+    /// hidden-pill mode has nothing on screen yet).
+    func expand() {
+        guard panel != nil else { show(); setState(.expanded); return }
+        setState(.expanded)
+    }
+
+    /// Menu-bar "Preferences…": jump to the full view with the overlay open.
+    func openPreferences() {
+        setState(.full)
+        model.showPreferences = true
+    }
+
     /// Global-hotkey entry point: expand the pill / collapse whatever is open,
     /// creating the bar first if it isn't on screen yet. Never steals focus.
     func toggle() {
@@ -131,6 +151,11 @@ final class TopBarController {
                 guard let self else { return }
                 self.setState(.full)          // the overlay lives in the full view
                 self.model.showPreferences = true
+            },
+            onHideBar: { [weak self] in
+                guard let self else { return }
+                self.model.settings.pillVisible = false  // status icon takes over
+                self.setState(.collapsed)                // render() hides the panel
             },
             onQuit: { NSApplication.shared.terminate(nil) })
     }

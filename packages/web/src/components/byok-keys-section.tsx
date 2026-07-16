@@ -22,41 +22,19 @@ interface ModelStatus {
   selectedModel: string | null;
 }
 
+// Single-key policy (2026-07-16 outage post-mortem): OpenRouter is THE BYOK
+// slot — it routes every model Klorn pins, including the Gemini family. A
+// second per-provider slot is exactly how a dead/free key ends up silently
+// poisoning the provider chain. The legacy Gemini slot renders as remove-only
+// while a stored key remains.
 type Provider = "openRouter" | "gemini";
 
-interface ProviderSpec {
-  id: Provider;
-  label: string;
-  placeholder: string;
-  helpUrl: string;
-  helpLabel: string;
-}
-
-// Field names match the PATCH /api/billing/models body (billing.ts).
-const PROVIDERS: ProviderSpec[] = [
-  {
-    id: "openRouter",
-    label: "OpenRouter",
-    placeholder: "sk-or-v1-…",
-    helpUrl: "https://openrouter.ai/keys",
-    helpLabel: "openrouter.ai/keys",
-  },
-  {
-    id: "gemini",
-    label: "Google Gemini",
-    placeholder: "AIza…",
-    helpUrl: "https://aistudio.google.com/apikey",
-    helpLabel: "aistudio.google.com/apikey",
-  },
-];
-
-const KEY_FIELD: Record<Provider, "openRouterApiKey" | "geminiApiKey"> = {
-  openRouter: "openRouterApiKey",
-  gemini: "geminiApiKey",
-};
-const CLEAR_FIELD: Record<Provider, "clearOpenRouterApiKey" | "clearGeminiApiKey"> = {
-  openRouter: "clearOpenRouterApiKey",
-  gemini: "clearGeminiApiKey",
+const OPENROUTER = {
+  id: "openRouter" as const,
+  label: "LLM key (OpenRouter)",
+  placeholder: "sk-or-v1-…",
+  helpUrl: "https://openrouter.ai/keys",
+  helpLabel: "openrouter.ai/keys",
 };
 
 export function ByokKeysSection() {
@@ -88,9 +66,6 @@ export function ByokKeysSection() {
     loadStatus();
   }, [loadStatus]);
 
-  const hasKey = (p: Provider) =>
-    p === "openRouter" ? !!status?.hasOpenRouterApiKey : !!status?.hasGeminiApiKey;
-
   const patchModels = useCallback(
     async (body: Record<string, string | boolean>, p: Provider) => {
       if (busy[p]) return;
@@ -113,10 +88,10 @@ export function ByokKeysSection() {
 
   // Errors are handled inside patchModels; void the promise so the click
   // handlers stay synchronous (no floating promise).
-  const saveKey = (p: Provider) => {
-    const key = inputs[p].trim();
+  const saveKey = () => {
+    const key = inputs.openRouter.trim();
     if (!key) return;
-    void patchModels({ [KEY_FIELD[p]]: key }, p);
+    void patchModels({ openRouterApiKey: key }, "openRouter");
   };
 
   const removeKey = async (p: Provider, label: string) => {
@@ -127,7 +102,10 @@ export function ByokKeysSection() {
       danger: true,
     });
     if (!ok) return;
-    void patchModels({ [CLEAR_FIELD[p]]: true }, p);
+    void patchModels(
+      p === "openRouter" ? { clearOpenRouterApiKey: true } : { clearGeminiApiKey: true },
+      p,
+    );
   };
 
   const [savingModel, setSavingModel] = useState(false);
@@ -171,68 +149,91 @@ export function ByokKeysSection() {
         <div className="text-xs text-stone-500">Loading…</div>
       ) : (
         <div className="space-y-4">
-          {PROVIDERS.map((p) => {
-            const set = hasKey(p.id);
-            const working = busy[p.id];
-            return (
-              <div key={p.id} className="rounded-md border border-stone-800 bg-stone-900/40 p-3">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-stone-200">{p.label}</span>
-                  {set && <StatusChip status="connected" label="Using your key" />}
-                </div>
-                {set ? (
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-mono text-xs text-stone-400">•••••••• stored</span>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => void removeKey(p.id, p.label)}
-                      disabled={working}
-                      loading={working}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                    <div className="flex-1">
-                      <Input
-                        id={`byok-key-${p.id}`}
-                        label={`${p.label} API key`}
-                        type="password"
-                        value={inputs[p.id]}
-                        onChange={(e) => setInputs((s) => ({ ...s, [p.id]: e.target.value }))}
-                        placeholder={p.placeholder}
-                        autoComplete="off"
-                        maxLength={512}
-                      />
-                    </div>
-                    <Button
-                      variant="primary"
-                      onClick={() => saveKey(p.id)}
-                      disabled={working || !inputs[p.id].trim()}
-                      loading={working}
-                      className="shrink-0"
-                    >
-                      Save
-                    </Button>
-                  </div>
-                )}
-                <p className="mt-1.5 text-[11px] text-stone-500">
-                  Get a key at{" "}
-                  <a
-                    href={p.helpUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline hover:text-stone-300"
-                  >
-                    {p.helpLabel}
-                  </a>
-                  .
-                </p>
+          <div className="rounded-md border border-stone-800 bg-stone-900/40 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-sm font-medium text-stone-200">{OPENROUTER.label}</span>
+              {status?.hasOpenRouterApiKey && (
+                <StatusChip status="connected" label="Using your key" />
+              )}
+            </div>
+            {status?.hasOpenRouterApiKey ? (
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-mono text-xs text-stone-400">•••••••• stored</span>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => void removeKey("openRouter", "OpenRouter")}
+                  disabled={busy.openRouter}
+                  loading={busy.openRouter}
+                >
+                  Remove
+                </Button>
               </div>
-            );
-          })}
+            ) : (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="flex-1">
+                  <Input
+                    id="byok-key-openRouter"
+                    label="OpenRouter API key"
+                    type="password"
+                    value={inputs.openRouter}
+                    onChange={(e) => setInputs((s) => ({ ...s, openRouter: e.target.value }))}
+                    placeholder={OPENROUTER.placeholder}
+                    autoComplete="off"
+                    maxLength={512}
+                  />
+                </div>
+                <Button
+                  variant="primary"
+                  onClick={saveKey}
+                  disabled={busy.openRouter || !inputs.openRouter.trim()}
+                  loading={busy.openRouter}
+                  className="shrink-0"
+                >
+                  Save
+                </Button>
+              </div>
+            )}
+            <p className="mt-1.5 text-[11px] text-stone-500">
+              One key covers every model Klorn uses — OpenRouter routes them all. The key is
+              verified with the provider before it&apos;s stored. Get one at{" "}
+              <a
+                href={OPENROUTER.helpUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:text-stone-300"
+              >
+                {OPENROUTER.helpLabel}
+              </a>
+              .
+            </p>
+          </div>
+
+          {status?.hasGeminiApiKey && (
+            <div className="rounded-md border border-amber-900/40 bg-stone-900/40 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-stone-200">
+                  Google Gemini <span className="text-[11px] text-amber-500">legacy</span>
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[11px] text-stone-400">
+                  Direct Gemini keys are retired — a free-tier key here silently starves
+                  classification when its daily quota runs out. Remove it and use one OpenRouter key
+                  instead.
+                </span>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => void removeKey("gemini", "Google Gemini")}
+                  disabled={busy.gemini}
+                  loading={busy.gemini}
+                >
+                  Remove
+                </Button>
+              </div>
+            </div>
+          )}
           {(() => {
             const options = status?.availableModels ?? [];
             return (
