@@ -93,9 +93,13 @@ vi.mock("../db.js", () => {
       update: vi.fn(async () => ({})),
     },
     decisionLabel: { updateMany: vi.fn(async () => ({ count: 1 })) },
-    // overrideAttentionTier now wraps the tier write + ledger stamp in one
-    // prisma.$transaction; run the callback with this mock as the tx client.
-    $transaction: vi.fn(async (cb: (tx: unknown) => unknown) => cb(prisma)),
+    // overrideAttentionTier wraps the tier write + ledger stamp in one
+    // prisma.$transaction (batch form since the 2026-07-16 P2028 fix). Support
+    // both forms: settle an operation array, or run a callback with this mock
+    // as the tx client.
+    $transaction: vi.fn(async (arg: unknown) =>
+      Array.isArray(arg) ? Promise.all(arg) : (arg as (tx: unknown) => unknown)(prisma),
+    ),
   };
   return { prisma, db: prisma };
 });
