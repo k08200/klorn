@@ -290,6 +290,18 @@ final class AppModel {
     static let meetingLeadMinutes = 10
     private var shownMeetingIds: Set<String> = []
 
+    /// Today's daily-briefing preview (TODAY column). Best-effort like the rest.
+    private(set) var briefing: String?
+
+    private func refreshBriefing() async {
+        do {
+            let today = try await api.get("/api/briefing/today", as: TodayBriefing.self)
+            briefing = briefingPreview(today.briefing?.content)
+        } catch {
+            Log.app.debug("briefing fetch failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
     private func refreshToday() async {
         do {
             today = try await api.get("/api/calendar/today/summary", as: TodaySummary.self)
@@ -337,6 +349,7 @@ final class AppModel {
         // serializing the fetches.
         Task { await refreshToday() }
         Task { await refreshUsage() }
+        Task { await refreshBriefing() }
         do {
             let fetched = try await api.get("/api/inbox/firewall", as: FirewallResponse.self)
             // Drop dismissed ids the server has since resolved; hide the rest.

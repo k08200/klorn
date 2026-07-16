@@ -237,6 +237,24 @@ private struct TodayColumn: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             ColumnHeader(title: "TODAY")
+            if let briefing = model.briefing {
+                Button { if let url = URL(string: Config.webBaseURL) { NSWorkspace.shared.open(url) } } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "sun.max").font(.caption2).foregroundStyle(Theme.accent)
+                                .accessibilityHidden(true)
+                            Text("BRIEFING").font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
+                        }
+                        Text(briefing).font(.caption).foregroundStyle(Theme.text)
+                            .lineLimit(3).multilineTextAlignment(.leading)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Today's briefing: \(briefing)")
+            }
             if let today = model.today, today.total > 0 {
                 if let current = today.current {
                     eventRow(current, isNow: true)

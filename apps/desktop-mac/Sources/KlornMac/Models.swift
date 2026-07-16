@@ -185,6 +185,27 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     }
 }
 
+// MARK: - Daily briefing
+
+/// GET /api/briefing/today → { briefing: { content } | null }.
+struct TodayBriefing: Codable, Sendable {
+    struct Note: Codable, Sendable { let content: String }
+    let briefing: Note?
+}
+
+/// One-line preview of the briefing note for the TODAY column: strip markdown
+/// bold, collapse whitespace/newlines to single spaces, cap length. nil when
+/// there's nothing to show. Pure for testing.
+func briefingPreview(_ content: String?) -> String? {
+    guard let content else { return nil }
+    let stripped = content.replacingOccurrences(of: "*", with: "")
+    let collapsed = stripped.split(whereSeparator: { $0.isWhitespace || $0.isNewline })
+        .joined(separator: " ")
+    let trimmed = collapsed.trimmingCharacters(in: .whitespaces)
+    if trimmed.isEmpty { return nil }
+    return String(trimmed.prefix(140))
+}
+
 // MARK: - Calendar (today column)
 
 /// One calendar event as serialized by /api/calendar (prisma row → ISO dates).
