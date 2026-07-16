@@ -24,6 +24,8 @@ struct TopBarActions {
     let onSelect: (FirewallItem) -> Void
     /// Open the Preferences overlay (switches to the full view first).
     let onOpenPreferences: () -> Void
+    /// Hide the bar entirely (pill ✕) — the menu-bar icon takes over as anchor.
+    let onHideBar: () -> Void
     let onQuit: () -> Void
 }
 
@@ -150,6 +152,13 @@ struct CollapsedBar: View {
                 Button("Log In", action: actions.onSignIn)
                     .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
             }
+
+            Button(action: actions.onHideBar) {
+                Image(systemName: "xmark").font(.caption.weight(.semibold)).iconTarget(28)
+            }
+            .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+            .help("Hide the bar (it keeps running in the menu bar)")
+            .accessibilityLabel("Hide top bar")
         }
         .padding(.horizontal, 16)
         .frame(width: TopBarMetrics.collapsed.width, height: TopBarMetrics.collapsed.height)
