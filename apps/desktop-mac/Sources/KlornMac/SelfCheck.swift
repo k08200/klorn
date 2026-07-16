@@ -385,6 +385,16 @@ func runSelfChecks() async -> Bool {
     check("event time label — malformed ISO degrades",
           eventTimeLabel(startISO: "not-a-date", endISO: "also-no", allDay: false, calendar: utc) == "")
 
+    print("Card snooze:")
+    // The card's snooze menu offers the same four options as the reading pane
+    // (one source of truth), each with a concrete future resurface time.
+    check("snooze menu = all four options",
+          PushCardSnooze.options.map(\.rawValue) == ["oneHour", "thisEvening", "tomorrow", "nextWeek"])
+    check("snooze menu labels are human",
+          PushCardSnooze.options.map(\.label) == ["In 1 hour", "This evening", "Tomorrow 9am", "Next week"])
+    check("snooze resurfaces in the future",
+          SnoozeOption.oneHour.resurface(from: noonJan1, calendar: cal) > noonJan1)
+
     print("Usage gauge:")
     // /api/billing/models usage → ACCOUNT column gauge (reference HUD's meter).
     let usageJSON = #"{"usage":{"rpmUsed":3,"rpmCap":15,"dailyUsed":137,"dailyCap":500,"dailyResetAt":"2026-07-17T00:00:00.000Z"}}"#
