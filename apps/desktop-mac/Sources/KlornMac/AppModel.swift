@@ -283,11 +283,38 @@ final class AppModel {
     /// the previous value.
     private(set) var today: TodaySummary?
 
+    /// Meeting-prep interrupt: fires once per event when its start enters the
+    /// lead window. The AppDelegate wires this to the meeting card; a false
+    /// return means "slot busy — offer it again on the next tick".
+    var onMeetingSoon: ((CalendarEventWire) -> Bool)?
+    static let meetingLeadMinutes = 10
+    private var shownMeetingIds: Set<String> = []
+
     private func refreshToday() async {
         do {
             today = try await api.get("/api/calendar/today/summary", as: TodaySummary.self)
         } catch {
             Log.app.debug("today summary fetch failed: \(String(describing: error), privacy: .private)")
+        }
+        // Replan on every refresh tick (poll + WS wake — the same cadence that
+        // keeps the TODAY column fresh keeps the lead window honest).
+        if let upcoming = today?.upcoming,
+           let due = meetingCardPlan(
+               now: Date(), events: upcoming,
+               leadMinutes: Self.meetingLeadMinutes, shown: shownMeetingIds),
+           onMeetingSoon?(due) == true
+        {
+            shownMeetingIds.insert(due.id)
+        }
+    }
+
+    /// GET /api/calendar/:id/prep-pack for the meeting card. Best-effort.
+    func fetchPrepPack(eventId: String) async -> MeetingPrepPack? {
+        do {
+            return try await api.get("/api/calendar/\(eventId)/prep-pack", as: MeetingPrepPack.self)
+        } catch {
+            Log.app.debug("prep pack fetch failed: \(String(describing: error), privacy: .private)")
+            return nil
         }
     }
 
