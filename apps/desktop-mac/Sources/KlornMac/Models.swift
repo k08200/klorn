@@ -228,6 +228,38 @@ func eventTimeLabel(
     return "\(hhmm(start))–\(hhmm(end))"
 }
 
+// MARK: - Billing usage (ACCOUNT gauge)
+
+/// GET /api/billing/models → the slice the desktop renders (daily AI quota).
+struct BillingStatusWire: Codable, Sendable {
+    struct Usage: Codable, Sendable {
+        let rpmUsed: Int
+        let rpmCap: Int
+        let dailyUsed: Int
+        let dailyCap: Int
+    }
+
+    let usage: Usage
+}
+
+/// Gauge fill 0…1, clamped; a zero/negative cap renders empty, never NaN.
+func usageFillFraction(used: Int, cap: Int) -> Double {
+    guard cap > 0 else { return 0 }
+    return min(1, max(0, Double(used) / Double(cap)))
+}
+
+/// "137 / 500 today" — count label paired with the gauge (WCAG 1.4.1: the
+/// signal is never conveyed by the bar alone).
+func usageLabel(used: Int, cap: Int) -> String {
+    "\(used) / \(cap) today"
+}
+
+/// Card footer link mirroring the reference video's "Show all N sessions" —
+/// nil (hidden) unless more PUSH items wait behind the current card.
+func showAllLabel(pendingCount: Int) -> String? {
+    pendingCount > 0 ? "Show all \(pendingCount + 1)" : nil
+}
+
 // MARK: - Reply options (PushCard quick reply)
 
 /// One of the 3 tone-differentiated drafts from POST /api/email/:id/reply-options.

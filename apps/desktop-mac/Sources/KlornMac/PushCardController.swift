@@ -37,6 +37,10 @@ final class PushCardController {
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
+    /// "Show all N": the AppDelegate wires this to the bar's expanded panel.
+    /// The card hides itself first — the panel lists the same PUSH items.
+    var onShowAll: (() -> Void)?
+
     init(model: AppModel) {
         self.model = model
     }
@@ -154,7 +158,12 @@ final class PushCardController {
                 self.state.drafts = .loading
                 self.fetchDrafts(for: item)
             },
-            onToggleExpand: { [weak self] in self?.toggleLayout() })
+            onToggleExpand: { [weak self] in self?.toggleLayout() },
+            onShowAll: { [weak self] in
+                guard let self else { return }
+                self.hide()
+                self.onShowAll?()
+            })
     }
 
     /// Click on the card: compact ↔ expanded. Expanding also arms the keyboard

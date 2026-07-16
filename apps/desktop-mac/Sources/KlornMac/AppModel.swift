@@ -308,6 +308,18 @@ final class AppModel {
         }
     }
 
+    /// Daily AI quota for the ACCOUNT gauge. Best-effort on the same tick.
+    private(set) var usage: BillingStatusWire.Usage?
+
+    private func refreshUsage() async {
+        do {
+            let status: BillingStatusWire = try await api.get("/api/billing/models", as: BillingStatusWire.self)
+            usage = status.usage
+        } catch {
+            Log.app.debug("usage fetch failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
     /// GET /api/calendar/:id/prep-pack for the meeting card. Best-effort.
     func fetchPrepPack(eventId: String) async -> MeetingPrepPack? {
         do {
@@ -322,8 +334,9 @@ final class AppModel {
         isLoadingQueue = true
         defer { isLoadingQueue = false }
         // Piggyback on the same cadence as the queue (poll + WS wake) without
-        // serializing the two fetches.
+        // serializing the fetches.
         Task { await refreshToday() }
+        Task { await refreshUsage() }
         do {
             let fetched = try await api.get("/api/inbox/firewall", as: FirewallResponse.self)
             // Drop dismissed ids the server has since resolved; hide the rest.

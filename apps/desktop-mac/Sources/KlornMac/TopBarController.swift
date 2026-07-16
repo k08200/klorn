@@ -61,6 +61,13 @@ final class TopBarController {
         render()
     }
 
+    /// PushCard "Show all N": open the expanded panel (creating the bar if
+    /// hidden-pill mode has nothing on screen yet).
+    func expand() {
+        guard panel != nil else { show(); setState(.expanded); return }
+        setState(.expanded)
+    }
+
     /// Menu-bar "Preferences…": jump to the full view with the overlay open.
     func openPreferences() {
         setState(.full)

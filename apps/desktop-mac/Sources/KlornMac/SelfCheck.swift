@@ -385,6 +385,24 @@ func runSelfChecks() async -> Bool {
     check("event time label — malformed ISO degrades",
           eventTimeLabel(startISO: "not-a-date", endISO: "also-no", allDay: false, calendar: utc) == "")
 
+    print("Usage gauge:")
+    // /api/billing/models usage → ACCOUNT column gauge (reference HUD's meter).
+    let usageJSON = #"{"usage":{"rpmUsed":3,"rpmCap":15,"dailyUsed":137,"dailyCap":500,"dailyResetAt":"2026-07-17T00:00:00.000Z"}}"#
+    if let status = try? JSONDecoder().decode(BillingStatusWire.self, from: Data(usageJSON.utf8)) {
+        check("usage wire decodes", status.usage.dailyUsed == 137 && status.usage.dailyCap == 500)
+    } else {
+        check("usage wire decodes", false)
+    }
+    check("usage fill fraction", usageFillFraction(used: 250, cap: 500) == 0.5)
+    check("usage fill clamps over-cap", usageFillFraction(used: 900, cap: 500) == 1.0)
+    check("usage fill safe on zero cap", usageFillFraction(used: 10, cap: 0) == 0)
+    check("usage label", usageLabel(used: 137, cap: 500) == "137 / 500 today")
+
+    // Card footer "Show all N" mirrors the reference video's session link:
+    // only when more items wait behind the current card, N = total queued.
+    check("show-all label counts the whole queue", showAllLabel(pendingCount: 2) == "Show all 3")
+    check("show-all hidden with an empty queue", showAllLabel(pendingCount: 0) == nil)
+
     print("Meeting card:")
     // Lead-window planner: surface the FIRST upcoming event whose start is
     // within leadMinutes, once per event id — never one that already started,
