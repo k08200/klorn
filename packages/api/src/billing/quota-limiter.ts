@@ -4,9 +4,11 @@
  * background workers.
  *
  * Two windows are enforced per user:
- *   1. RPM   — sliding 60 s window, capped at LLM_USER_RPM. Shared between
- *              foreground and background calls — it's an upstream protection,
- *              not a budget allocation.
+ *   1. RPM   — sliding 60 s window, capped at LLM_USER_RPM. Background may
+ *              only use LLM_USER_RPM − LLM_USER_FOREGROUND_RESERVED_RPM of it:
+ *              the reserved slice keeps interactive calls (chat, PushCard
+ *              drafts) working even while a background sweep is bursting.
+ *              Foreground may use the full window (upstream protection).
  *   2. Daily — calendar day (UTC). Split into two independent buckets so
  *              background work can never consume the entire daily cap:
  *                - "foreground" (user-initiated chat): LLM_USER_FOREGROUND_DAILY_CAP
@@ -23,6 +25,7 @@
 import {
   LLM_USER_BACKGROUND_DAILY_CAP,
   LLM_USER_FOREGROUND_DAILY_CAP,
+  LLM_USER_FOREGROUND_RESERVED_RPM,
   LLM_USER_RPM,
 } from "../config.js";
 import { nextDailyResetMs } from "../llm/model-fallback.js";
@@ -32,6 +35,8 @@ export type CallPriority = "foreground" | "background";
 interface UserWindow {
   /** Timestamps of recent calls (any priority) for the RPM window */
   recent: number[];
+  /** Timestamps of recent BACKGROUND calls — the fg-reserved-slice check */
+  recentBackground: number[];
   /** Calls within the current UTC day, per bucket */
   daily: { foreground: number; background: number };
   /** Epoch ms at which the daily counters reset to 0 */
@@ -51,6 +56,7 @@ function getWindow(userId: string, now: number): UserWindow {
   if (!w) {
     w = {
       recent: [],
+      recentBackground: [],
       daily: { foreground: 0, background: 0 },
       dailyResetAt: nextDailyResetMs(new Date(now)),
     };
@@ -64,6 +70,9 @@ function getWindow(userId: string, now: number): UserWindow {
   const cutoff = now - RPM_WINDOW_MS;
   while (w.recent.length > 0 && w.recent[0] < cutoff) {
     w.recent.shift();
+  }
+  while (w.recentBackground.length > 0 && w.recentBackground[0] < cutoff) {
+    w.recentBackground.shift();
   }
   return w;
 }
@@ -107,12 +116,24 @@ export function checkAndRecordUserCall(
     const retryAfter = Math.max(0, oldestRelevant + RPM_WINDOW_MS - now);
     throw new UserRateLimitedError("rpm", retryAfter, priority);
   }
+  // Background may not touch the foreground-reserved slice of the window —
+  // otherwise a sync-triggered sweep 429s the PushCard draft the user is
+  // literally waiting on (observed in prod 2026-07-16).
+  const backgroundRpmCap = Math.max(0, LLM_USER_RPM - LLM_USER_FOREGROUND_RESERVED_RPM);
+  if (priority === "background" && w.recentBackground.length + cost > backgroundRpmCap) {
+    const oldest = w.recentBackground[Math.max(0, w.recentBackground.length - backgroundRpmCap)];
+    const retryAfter = Math.max(0, (oldest ?? now) + RPM_WINDOW_MS - now);
+    throw new UserRateLimitedError("rpm", retryAfter, priority);
+  }
   const cap = dailyCap(priority);
   if (w.daily[priority] + cost > cap) {
     throw new UserRateLimitedError("daily", Math.max(0, w.dailyResetAt - now), priority);
   }
 
-  for (let i = 0; i < cost; i++) w.recent.push(now);
+  for (let i = 0; i < cost; i++) {
+    w.recent.push(now);
+    if (priority === "background") w.recentBackground.push(now);
+  }
   w.daily[priority] += cost;
 }
 

@@ -16,6 +16,7 @@ import {
   type ProviderCredentials,
 } from "../providers/index.js";
 import { captureError } from "../sentry.js";
+import { backgroundLlmPacer } from "./background-pacer.js";
 import {
   FALLBACK_MODEL,
   getProviderCooldownInfo,
@@ -105,6 +106,12 @@ export interface CompletionOptions {
    * user's chat preference never touches those.
    */
   useUserModel?: boolean;
+  /**
+   * Internal recursion guard for the background pacer — set only by
+   * createCompletion itself when re-entering through backgroundLlmPacer.
+   * Callers must never set this.
+   */
+  _paced?: boolean;
 }
 
 export class DailyCostCapExceededError extends Error {
@@ -293,6 +300,21 @@ export async function createCompletion(
   type Result =
     | OpenAI.Chat.Completions.ChatCompletion
     | AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+
+  // Background-priority calls go through the global pacer FIRST: a burst
+  // (summarize sweep, batch judge) launched concurrently trips the provider's
+  // own per-minute quota, and the resulting cooldown lockout takes interactive
+  // foreground calls down with it (PushCard drafts 503'd for 5+ min in prod).
+  if ((options.priority ?? "foreground") === "background" && !options._paced) {
+    const paced = { ...options, _paced: true };
+    return backgroundLlmPacer.run(
+      () =>
+        createCompletion(
+          params as ChatCompletionCreateParamsNonStreaming,
+          paced,
+        ) as Promise<Result>,
+    );
+  }
 
   const chain = getProviderChain(options.credentials);
   if (chain.length === 0) {

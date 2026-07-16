@@ -8,8 +8,12 @@ import {
 import {
   LLM_USER_BACKGROUND_DAILY_CAP,
   LLM_USER_FOREGROUND_DAILY_CAP,
+  LLM_USER_FOREGROUND_RESERVED_RPM,
   LLM_USER_RPM,
 } from "../config.js";
+
+/** Max background calls allowed inside one RPM window (the reserved slice is fg-only). */
+const BG_RPM_CAP = LLM_USER_RPM - LLM_USER_FOREGROUND_RESERVED_RPM;
 
 describe("quota-limiter", () => {
   beforeEach(() => {
@@ -50,6 +54,37 @@ describe("quota-limiter", () => {
     expect(() => checkAndRecordUserCall("u1")).not.toThrow();
   });
 
+  it("reserves foreground RPM headroom: a background burst trips early", () => {
+    // Background may only use the window minus the foreground reserve —
+    // this is the fix for "summarize sweep starves the PushCard's drafts".
+    for (let i = 0; i < BG_RPM_CAP; i++) {
+      expect(() => checkAndRecordUserCall("u1", { priority: "background" })).not.toThrow();
+    }
+    let caught: unknown;
+    try {
+      checkAndRecordUserCall("u1", { priority: "background" });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(UserRateLimitedError);
+    expect((caught as UserRateLimitedError).reason).toBe("rpm");
+    expect((caught as UserRateLimitedError).priority).toBe("background");
+  });
+
+  it("foreground can always claim its reserved slice during a background burst", () => {
+    for (let i = 0; i < BG_RPM_CAP; i++) {
+      checkAndRecordUserCall("u1", { priority: "background" });
+    }
+    // Background is now RPM-blocked, but the user pressing a button still works.
+    for (let i = 0; i < LLM_USER_FOREGROUND_RESERVED_RPM; i++) {
+      expect(() => checkAndRecordUserCall("u1", { priority: "foreground" })).not.toThrow();
+    }
+    // The full window is now spent — foreground trips too (upstream protection).
+    expect(() => checkAndRecordUserCall("u1", { priority: "foreground" })).toThrow(
+      UserRateLimitedError,
+    );
+  });
+
   it("keeps separate buckets per user", () => {
     for (let i = 0; i < LLM_USER_RPM; i++) checkAndRecordUserCall("u1");
     expect(() => checkAndRecordUserCall("u1")).toThrow();
@@ -78,7 +113,7 @@ describe("quota-limiter", () => {
     // Background workers burn their entire daily allocation
     for (let i = 0; i < LLM_USER_BACKGROUND_DAILY_CAP; i++) {
       checkAndRecordUserCall("victim", { priority: "background" });
-      if (i % LLM_USER_RPM === LLM_USER_RPM - 1) vi.advanceTimersByTime(61_000);
+      if (i % BG_RPM_CAP === BG_RPM_CAP - 1) vi.advanceTimersByTime(61_000);
     }
 
     // Background is now exhausted
@@ -109,7 +144,7 @@ describe("quota-limiter", () => {
   it("daily-limit error reports the priority that tripped it", () => {
     for (let i = 0; i < LLM_USER_BACKGROUND_DAILY_CAP; i++) {
       checkAndRecordUserCall("bg-user", { priority: "background" });
-      if (i % LLM_USER_RPM === LLM_USER_RPM - 1) vi.advanceTimersByTime(61_000);
+      if (i % BG_RPM_CAP === BG_RPM_CAP - 1) vi.advanceTimersByTime(61_000);
     }
     let caught: unknown;
     try {
