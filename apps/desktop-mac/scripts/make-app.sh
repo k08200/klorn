@@ -14,6 +14,12 @@ cd "$(dirname "$0")/.."   # → apps/desktop-mac
 
 CONFIG="${1:-release}"
 API_URL="${2:-https://klorn-api.onrender.com}"
+# Bundle version: 3rd arg (the release workflow passes the tag) → latest
+# desktop-v* tag → "dev". The in-app update check compares this against the
+# newest release tag, so a hardcoded value would nag about updates forever
+# (or never); "dev" makes the check answer "unknown" on local builds.
+VERSION="${3:-$(git describe --tags --match 'desktop-v*' --abbrev=0 2>/dev/null | sed 's/^desktop-v//')}"
+VERSION="${VERSION:-dev}"
 APP="Klorn.app"
 
 echo "▸ Building KlornMac ($CONFIG)…"
@@ -37,7 +43,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>KlornMac</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  <key>CFBundleShortVersionString</key><string>${VERSION}</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>

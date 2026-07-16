@@ -67,7 +67,11 @@ jobs:
 
       - name: Build Klorn.app
         working-directory: apps/desktop-mac
-        run: scripts/make-app.sh release
+        # 3rd arg = bundle version from the tag, so the in-app update check
+        # compares real versions (a hardcoded one would nag forever).
+        run: scripts/make-app.sh release "https://klorn-api.onrender.com" "${TAG#desktop-v}"
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
 
       - name: Import Developer ID certificate
         if: steps.signing.outputs.enabled == 'true'
