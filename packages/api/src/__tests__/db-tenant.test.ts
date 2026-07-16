@@ -26,7 +26,10 @@ const { rawCalls, fakeTx, prismaMock } = vi.hoisted(() => {
   };
 });
 
-vi.mock("../db.js", () => ({ prisma: prismaMock, INTERACTIVE_TX_OPTIONS: { maxWait: 10_000, timeout: 15_000 } }));
+vi.mock("../db.js", () => ({
+  prisma: prismaMock,
+  INTERACTIVE_TX_OPTIONS: { maxWait: 10_000, timeout: 15_000 },
+}));
 
 import { withSystem, withTenant } from "../db-tenant.js";
 

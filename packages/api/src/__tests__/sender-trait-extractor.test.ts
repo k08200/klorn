@@ -22,7 +22,10 @@ const prismaMock = vi.hoisted(() => {
   };
   return mock;
 });
-vi.mock("../db.js", () => ({ prisma: prismaMock, INTERACTIVE_TX_OPTIONS: { maxWait: 10_000, timeout: 15_000 } }));
+vi.mock("../db.js", () => ({
+  prisma: prismaMock,
+  INTERACTIVE_TX_OPTIONS: { maxWait: 10_000, timeout: 15_000 },
+}));
 vi.mock("../llm/llm-credentials.js", () => ({
   getUserLlmCredentials: vi.fn(async () => undefined),
 }));
