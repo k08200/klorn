@@ -480,6 +480,36 @@ private struct FullSidebar: View {
     @Binding var selected: Tier
     let actions: TopBarActions
 
+    /// Compact event row for the 220pt sidebar: NOW badge or start time,
+    /// title, and a click-through to the meeting link when present.
+    @ViewBuilder
+    private func sidebarEventRow(_ event: CalendarEventWire, isNow: Bool) -> some View {
+        let time = eventTimeLabel(
+            startISO: event.startTime, endISO: event.endTime, allDay: event.allDay)
+        let row = HStack(alignment: .top, spacing: 8) {
+            if isNow {
+                Text("NOW").font(.caption2.weight(.bold)).foregroundStyle(Theme.accent)
+            } else {
+                Text(String(time.prefix(5)))
+                    .font(.caption.monospacedDigit()).foregroundStyle(Theme.textDim)
+            }
+            Text(event.title).font(.caption).foregroundStyle(Theme.text).lineLimit(1)
+            Spacer(minLength: 0)
+            if event.meetingLink != nil {
+                Image(systemName: "video").font(.caption2).foregroundStyle(Theme.textDim)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 3)
+        if let link = event.meetingLink, let url = URL(string: link) {
+            Button { NSWorkspace.shared.open(url) } label: { row }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Join \(event.title)")
+        } else {
+            row.accessibilityElement(children: .combine)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ColumnHeader(title: "INBOX").padding(.horizontal, 20).padding(.bottom, 6)
@@ -498,6 +528,27 @@ private struct FullSidebar: View {
                                 in: RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
+            }
+
+            // TODAY lives in the full view too — the biggest surface must not
+            // know less about the day than the compact panel (dogfood 2026-07-16).
+            ColumnHeader(title: "TODAY").padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 6)
+            if let today = model.today, today.total > 0 {
+                if let current = today.current {
+                    sidebarEventRow(current, isNow: true)
+                }
+                ForEach(today.upcoming.prefix(3)) { event in
+                    sidebarEventRow(event, isNow: false)
+                }
+                if today.upcoming.count > 3 {
+                    Text("+\(today.upcoming.count - 3) more")
+                        .font(.caption2).foregroundStyle(Theme.textDim)
+                        .padding(.horizontal, 20)
+                }
+            } else {
+                Text(model.today == nil ? "Loading…" : "No events today")
+                    .font(.caption).foregroundStyle(Theme.textDim)
+                    .padding(.horizontal, 20)
             }
 
             Spacer()
