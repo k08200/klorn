@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import Foundation
 import os
 
@@ -395,6 +396,27 @@ func runSelfChecks() async -> Bool {
     check("nil body → nil", cardBodyText(nil) == nil)
     let long = String(repeating: "a", count: 5000)
     check("over-long body is capped", (cardBodyText(long)?.count ?? 0) <= 4000)
+
+    print("Shortcut:")
+    check("default toggle displays as ⌥⌘K", ShortcutFormat.display(.defaultToggle) == "⌥⌘K")
+    check("NS flags → carbon modifiers",
+          ShortcutFormat.carbonModifiers(from: [.command, .option]) == UInt32(cmdKey | optionKey))
+    check("control+shift maps both",
+          ShortcutFormat.carbonModifiers(from: [.control, .shift]) == UInt32(controlKey | shiftKey))
+    check("a command shortcut is valid", ShortcutFormat.isValid(carbonModifiers: UInt32(cmdKey)))
+    check("shift-only is rejected", !ShortcutFormat.isValid(carbonModifiers: UInt32(shiftKey)))
+    check("no modifier is rejected", !ShortcutFormat.isValid(carbonModifiers: 0))
+    check("glyph order is ⌃⌥⇧⌘",
+          ShortcutFormat.modifierSymbols(UInt32(cmdKey | shiftKey | optionKey | controlKey)) == "⌃⌥⇧⌘")
+    check("named key label", ShortcutFormat.keyLabel(UInt32(kVK_Space)) == "Space")
+    check("custom shortcut round-trips display",
+          ShortcutFormat.display(Shortcut(keyCode: UInt32(kVK_ANSI_J),
+                                          carbonModifiers: UInt32(controlKey | cmdKey))) == "⌃⌘J")
+    check("settings default shortcut is ⌥⌘K",
+          AppSettings.resolveShortcut(nil) == .defaultToggle)
+    check("settings restores a stored shortcut",
+          AppSettings.resolveShortcut(["keyCode": 38, "carbonModifiers": UInt32(cmdKey)])
+              == Shortcut(keyCode: 38, carbonModifiers: UInt32(cmdKey)))
 
     print("Single instance:")
     // A second launch must defer to the running one (the "two stacked bars"
