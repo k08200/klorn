@@ -15,10 +15,12 @@ vi.mock("../db.js", () => {
     },
     $transaction: vi.fn(),
   };
-  // Interactive-transaction shim: run the callback with the mock itself as the
-  // tx client, so tx.attentionItem / tx.decisionLabel resolve to the same spies
-  // and a callback rejection rejects the whole transaction (as real Prisma does).
-  prisma.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(prisma));
+  // Transaction shim supporting both Prisma forms: the batch form (array of
+  // operation promises — settle them all, reject if any rejects, like real
+  // Prisma) and the interactive form (callback receiving a tx client).
+  prisma.$transaction.mockImplementation(async (arg: unknown) =>
+    Array.isArray(arg) ? Promise.all(arg) : (arg as (tx: unknown) => unknown)(prisma),
+  );
   return { prisma, db: prisma };
 });
 
@@ -105,6 +107,19 @@ describe("overrideAttentionTier", () => {
     expect($transaction).toHaveBeenCalledTimes(1);
     expect(attentionItem.update).toHaveBeenCalledTimes(1);
     expect(decisionLabel.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the batch $transaction form, not an interactive callback (prod 500, 2026-07-16)", async () => {
+    // Regression: the interactive form must acquire a DEDICATED connection
+    // within Prisma's maxWait (default 2s). On the small prod pool, concurrent
+    // firewall/sync reads hold every connection for seconds, so every override
+    // died with P2028 → HTTP 500 while plain queries (10s pool queue) survived.
+    // The batch form queues like a normal query and stays atomic.
+    await overrideAttentionTier("user-1", "item-1", "PUSH");
+    expect($transaction).toHaveBeenCalledTimes(1);
+    const arg = $transaction.mock.calls[0][0];
+    expect(Array.isArray(arg)).toBe(true);
+    expect(arg).toHaveLength(2);
   });
 
   it("propagates a ledger-stamp failure instead of silently losing the override", async () => {
