@@ -31,8 +31,8 @@
  */
 
 import { prisma } from "../src/db.js";
-import { buildJudgeContext } from "../src/judge/judge-context.js";
 import { recordEmailDecision } from "../src/judge/decision-label.js";
+import { buildJudgeContext } from "../src/judge/judge-context.js";
 import { judgeEmail } from "../src/judge/poc-judge.js";
 import { engagementKindOf } from "../src/learning/sender-policy.js";
 
