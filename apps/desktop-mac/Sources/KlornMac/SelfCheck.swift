@@ -354,10 +354,12 @@ func runSelfChecks() async -> Bool {
           StatusItemController.statusLine(signedIn: true, pushCount: 0) == "Klorn — no urgent mail")
     check("status line — push count",
           StatusItemController.statusLine(signedIn: true, pushCount: 3) == "Klorn — 3 PUSH waiting")
-    check("bar toggle offers Hide when visible",
-          StatusItemController.barToggleTitle(pillVisible: true) == "Hide top bar")
-    check("bar toggle offers Show when hidden",
-          StatusItemController.barToggleTitle(pillVisible: false) == "Show top bar")
+    // Exactly one anchor at a time: the pill OR the menu-bar icon, never both,
+    // never neither — hiding the pill is what makes the icon appear.
+    check("menu-bar icon appears when the pill is hidden",
+          StatusItemController.shouldShow(pillVisible: false))
+    check("menu-bar icon absent while the pill is visible",
+          !StatusItemController.shouldShow(pillVisible: true))
 
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0

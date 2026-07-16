@@ -35,11 +35,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         let bar = TopBarController(model: model)
         let card = PushCardController(model: model)
-        // Menu-bar anchor: running-proof + the always-available Quit. Without
-        // it an accessory app with the pill hidden is invisible AND unkillable
-        // from the UI (dogfood feedback 2026-07-16).
+        // Menu-bar anchor while the pill is hidden (one-anchor rule): appears
+        // when the pill's ✕ / Preferences hides the bar, disappears when the
+        // bar comes back. Without it a hidden-pill accessory app is invisible
+        // AND unkillable from the UI (dogfood feedback 2026-07-16).
         let status = StatusItemController(model: model, topBar: bar)
-        status.install()
+        status.startSyncing()
         statusItem = status
         // The card is the primary PUSH surface; the OS banner stays as the
         // fallback for when a card can't draw (headless). The VoiceOver

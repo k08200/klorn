@@ -1,11 +1,11 @@
 import AppKit
 
-/// The macOS menu-bar anchor — proof the firewall is running, and the one
-/// place the app can ALWAYS be quit from. An `.accessory` app has no Dock
-/// icon, and with the pill hidden (Preferences → top bar) nothing else is
-/// visible at rest; dogfood feedback was literal: "once it's on there's no
-/// way to turn it off". The pill/panel/PushCard remain the primary surfaces —
-/// this is lifecycle chrome, not a second inbox.
+/// The macOS menu-bar anchor while the pill is OFF — proof the firewall is
+/// still running, and the place to quit or bring the bar back. Dogfood
+/// feedback (2026-07-16): hiding the pill must not mean "invisible AND
+/// unkillable"; the icon appears exactly when the pill disappears, so there
+/// is always ONE anchor on screen — never both, never neither. While the
+/// pill is visible it is the anchor (Quit lives in its expanded panel).
 @MainActor
 final class StatusItemController: NSObject, NSMenuDelegate {
     private let model: AppModel
@@ -18,7 +18,32 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         super.init()
     }
 
-    func install() {
+    /// The one-anchor rule. Pure for testing.
+    nonisolated static func shouldShow(pillVisible: Bool) -> Bool {
+        !pillVisible
+    }
+
+    /// Keep the icon's presence in sync with the pill setting, from wherever
+    /// it changes (pill ✕, Preferences toggle, this menu). @Observable
+    /// tracking re-arms after every change.
+    func startSyncing() {
+        withObservationTracking {
+            setInstalled(Self.shouldShow(pillVisible: model.settings.pillVisible))
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in self?.startSyncing() }
+        }
+    }
+
+    private func setInstalled(_ wanted: Bool) {
+        if wanted, statusItem == nil {
+            install()
+        } else if !wanted, let item = statusItem {
+            NSStatusBar.system.removeStatusItem(item)
+            statusItem = nil
+        }
+    }
+
+    private func install() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = item.button {
             // Template ring echoing the pill's LogoRing; template = correct
@@ -48,10 +73,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(status)
         menu.addItem(.separator())
 
-        menu.addItem(actionItem(
-            Self.barToggleTitle(pillVisible: model.settings.pillVisible), #selector(toggleBar)))
+        // The icon only exists while the pill is hidden, so this is always "Show".
+        menu.addItem(actionItem("Show top bar", #selector(showBar)))
         menu.addItem(actionItem("Open web inbox", #selector(openWeb)))
-        menu.addItem(actionItem("Preferences…", #selector(openPreferences)))
         menu.addItem(.separator())
         if model.phase == .signedIn {
             menu.addItem(actionItem("Sign out", #selector(signOut)))
@@ -76,24 +100,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         return pushCount == 0 ? "Klorn — no urgent mail" : "Klorn — \(pushCount) PUSH waiting"
     }
 
-    /// The toggle mirrors the pillVisible setting (Preferences has the same switch).
-    nonisolated static func barToggleTitle(pillVisible: Bool) -> String {
-        pillVisible ? "Hide top bar" : "Show top bar"
-    }
-
     // MARK: - Actions
 
-    @objc private func toggleBar() {
-        model.settings.pillVisible.toggle()
+    @objc private func showBar() {
+        model.settings.pillVisible = true  // observation removes the icon
         topBar.refresh()
     }
 
     @objc private func openWeb() {
         if let url = URL(string: Config.webBaseURL) { NSWorkspace.shared.open(url) }
-    }
-
-    @objc private func openPreferences() {
-        topBar.openPreferences()
     }
 
     @objc private func signOut() {

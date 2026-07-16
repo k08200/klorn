@@ -145,6 +145,11 @@ final class TopBarController {
                 self.setState(.full)          // the overlay lives in the full view
                 self.model.showPreferences = true
             },
+            onHideBar: { [weak self] in
+                guard let self else { return }
+                self.model.settings.pillVisible = false  // status icon takes over
+                self.setState(.collapsed)                // render() hides the panel
+            },
             onQuit: { NSApplication.shared.terminate(nil) })
     }
 
