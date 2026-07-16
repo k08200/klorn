@@ -33,6 +33,7 @@ vi.mock("../llm/llm-credentials.js", () => ({
 import {
   extractSenderTraitsForUser,
   extractTraitsFromEmails,
+  summarizeTraitRuns,
 } from "../learning/sender-trait-extractor.js";
 import { computeTraitSourceSig } from "../learning/sender-trait-signature.js";
 
@@ -190,5 +191,69 @@ describe("extractSenderTraitsForUser — per-sender isolation", () => {
     expect(createCompletionMock).not.toHaveBeenCalled(); // skipped — no LLM call
     expect(summary.traitsWritten).toBe(0);
     expect(summary.sendersProcessed).toBe(1);
+  });
+});
+
+describe("trait-run observability (the silent-failure gap, 2026-07-17)", () => {
+  // Measured on prod: the store sat EMPTY for weeks while weekly runs reported
+  // {failed: 0} — extractTraitsFromEmails swallows provider/quota errors into
+  // [] (a pinned contract, see above), so the per-sender failure counter never
+  // saw them. These lock the new observation channel.
+  beforeEach(() => {
+    prismaMock.emailMessage.findMany.mockReset();
+    prismaMock.senderTrait.findMany.mockReset().mockResolvedValue([]);
+    prismaMock.senderTrait.findUnique.mockReset().mockResolvedValue(null);
+    prismaMock.senderTrait.create.mockReset().mockResolvedValue({});
+    prismaMock.senderTrait.update.mockReset().mockResolvedValue({});
+  });
+
+  it("extractTraitsFromEmails reports a swallowed failure via onFailure (contract unchanged: no throw, [])", async () => {
+    createCompletionMock.mockRejectedValueOnce(new Error("quota exhausted"));
+    const seen: unknown[] = [];
+    const result = await extractTraitsFromEmails(emails, { onFailure: (err) => seen.push(err) });
+    expect(result).toEqual([]);
+    expect(seen).toHaveLength(1);
+    expect((seen[0] as Error).message).toContain("quota");
+  });
+
+  it("a quota-starved sender now counts into sendersFailed", async () => {
+    prismaMock.emailMessage.findMany.mockResolvedValue([
+      { from: "a@x.com", subject: "s", snippet: "b", labels: [] },
+    ]);
+    createCompletionMock.mockRejectedValueOnce(new Error("You've used today's AI quota."));
+    const summary = await extractSenderTraitsForUser("user-1");
+    expect(createCompletionMock).toHaveBeenCalledTimes(1);
+    expect(summary.sendersProcessed).toBe(1);
+    expect(summary.sendersFailed).toBe(1);
+    expect(summary.traitsWritten).toBe(0);
+  });
+
+  it("summarizeTraitRuns flags a degraded run (processed > 0, failures, nothing written)", () => {
+    const degraded = summarizeTraitRuns([
+      { sendersProcessed: 50, sendersFailed: 50, traitsWritten: 0 },
+    ]);
+    expect(degraded.degraded).toBe(true);
+    expect(degraded.line).toContain("senders=50");
+    expect(degraded.line).toContain("failed=50");
+    expect(degraded.line).toContain("written=0");
+  });
+
+  it("summarizeTraitRuns does NOT alarm on an idempotent no-op run (signature-gate skips, zero failures)", () => {
+    const quiet = summarizeTraitRuns([
+      { sendersProcessed: 50, sendersFailed: 0, traitsWritten: 0 },
+    ]);
+    expect(quiet.degraded).toBe(false);
+  });
+
+  it("summarizeTraitRuns aggregates across users", () => {
+    const s = summarizeTraitRuns([
+      { sendersProcessed: 10, sendersFailed: 2, traitsWritten: 5 },
+      { sendersProcessed: 5, sendersFailed: 0, traitsWritten: 1 },
+    ]);
+    expect(s.degraded).toBe(false);
+    expect(s.line).toContain("users=2");
+    expect(s.line).toContain("senders=15");
+    expect(s.line).toContain("failed=2");
+    expect(s.line).toContain("written=6");
   });
 });
