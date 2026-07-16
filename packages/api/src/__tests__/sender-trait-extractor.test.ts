@@ -22,7 +22,10 @@ const prismaMock = vi.hoisted(() => {
   };
   return mock;
 });
-vi.mock("../db.js", () => ({ prisma: prismaMock }));
+vi.mock("../db.js", () => ({
+  prisma: prismaMock,
+  INTERACTIVE_TX_OPTIONS: { maxWait: 10_000, timeout: 15_000 },
+}));
 vi.mock("../llm/llm-credentials.js", () => ({
   getUserLlmCredentials: vi.fn(async () => undefined),
 }));
@@ -145,6 +148,32 @@ describe("extractSenderTraitsForUser — per-sender isolation", () => {
     expect(summary.sendersFailed).toBe(1);
     expect(summary.traitsWritten).toBe(1); // only the surviving sender's write
     expect(prismaMock.senderTrait.create).toHaveBeenCalledTimes(2); // both attempted
+  });
+
+  it("persists with pool-sized $transaction options — default maxWait (2s) drops trait writes under pool starvation (#845)", async () => {
+    prismaMock.emailMessage.findMany.mockResolvedValue([
+      { from: "a@x.com", subject: "s", snippet: "b", labels: [] },
+    ]);
+    createCompletionMock.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              relationship: { value: "vendor", confidence: 0.8, evidence: "b" },
+            }),
+          },
+        },
+      ],
+    });
+
+    await extractSenderTraitsForUser("user-1");
+
+    expect(prismaMock.$transaction).toHaveBeenCalled();
+    const opts = prismaMock.$transaction.mock.calls[0][1] as
+      | { maxWait?: number; timeout?: number }
+      | undefined;
+    expect(opts?.maxWait).toBeGreaterThanOrEqual(10_000);
+    expect(opts?.timeout).toBeGreaterThanOrEqual(15_000);
   });
 
   it("skips a sender whose evidence signature is unchanged", async () => {

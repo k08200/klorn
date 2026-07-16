@@ -20,6 +20,7 @@ const getGraphMock = vi.hoisted(() => vi.fn());
 
 // Isolate the engagement branch: no corrections, no sender history, no traits.
 vi.mock("../db.js", () => ({
+  INTERACTIVE_TX_OPTIONS: { maxWait: 10_000, timeout: 15_000 },
   db: {
     attentionItem: { findMany: vi.fn(async () => []) },
     emailMessage: { findMany: vi.fn(async () => []) },
