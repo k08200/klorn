@@ -1,4 +1,4 @@
-import { prisma } from "../db.js";
+import { INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
 import {
   type CandidateTrait,
   type SenderTraitKind,
@@ -149,5 +149,5 @@ export async function upsertSenderTrait(props: {
       });
     }
     return action.type;
-  });
+  }, INTERACTIVE_TX_OPTIONS); // read-then-decide needs the interactive form; pool-sized options per #845
 }

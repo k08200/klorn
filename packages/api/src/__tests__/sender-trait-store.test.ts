@@ -7,6 +7,7 @@ const createMock = vi.hoisted(() => vi.fn());
 const updateMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../db.js", () => ({
+  INTERACTIVE_TX_OPTIONS: { maxWait: 10_000, timeout: 15_000 },
   prisma: {
     senderTrait: { findMany: findManyMock },
     $transaction: async (cb: (tx: unknown) => unknown) =>
