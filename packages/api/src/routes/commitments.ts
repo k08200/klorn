@@ -193,15 +193,19 @@ export async function commitmentRoutes(app: FastifyInstance) {
   });
 
   // POST /api/commitments/:id/path/rebuild — force a fresh plan from LLM
-  app.post("/:id/path/rebuild", async (request, reply) => {
-    const userId = getUserId(request);
-    const { id } = request.params as { id: string };
-    const existing = await getCommitment(id);
-    if (!existing) return reply.code(404).send({ error: "Commitment not found" });
-    if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
-    const path = await buildPath(userId, id);
-    return { success: true, path };
-  });
+  app.post(
+    "/:id/path/rebuild",
+    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const { id } = request.params as { id: string };
+      const existing = await getCommitment(id);
+      if (!existing) return reply.code(404).send({ error: "Commitment not found" });
+      if (existing.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+      const path = await buildPath(userId, id);
+      return { success: true, path };
+    },
+  );
 
   // POST /api/commitments/:id/path/steps/:index/materialize — create task for one step
   app.post("/:id/path/steps/:index/materialize", async (request, reply) => {
