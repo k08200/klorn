@@ -335,6 +335,17 @@ func runSelfChecks() async -> Bool {
     check("notifications honor stored false", !AppSettings.resolveNotifications(false))
     check("notifications honor stored true", AppSettings.resolveNotifications(true))
     check("notifications ignore non-bool", AppSettings.resolveNotifications("nope"))
+    check("pill default ON when unset", AppSettings.resolvePillVisible(nil))
+    check("pill honors stored false", !AppSettings.resolvePillVisible(false))
+    check("pill honors stored true", AppSettings.resolvePillVisible(true))
+    check("pill ignores non-bool", AppSettings.resolvePillVisible(3))
+
+    // Hidden-pill mode: the collapsed pill draws only when visible-mode is on
+    // or a bigger state is open (hiding must never eat the expanded panel).
+    check("collapsed pill draws when visible", TopBarController.shouldDraw(state: .collapsed, pillVisible: true))
+    check("collapsed pill hides when hidden-mode", !TopBarController.shouldDraw(state: .collapsed, pillVisible: false))
+    check("expanded panel draws even in hidden-mode", TopBarController.shouldDraw(state: .expanded, pillVisible: false))
+    check("full view draws even in hidden-mode", TopBarController.shouldDraw(state: .full, pillVisible: false))
 
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0
