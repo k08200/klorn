@@ -52,7 +52,19 @@ final class PushCardController {
         let hadCurrent = queue.current != nil
         queue.enqueue(items)
         if !hadCurrent { showCurrent() } else { state.pendingCount = queue.pendingCount }
+        // Arrival chime: the card is silent chrome without it, and the OS
+        // banner (which carries the system sound) is suppressed while a card
+        // draws. Same user switch as the banner (Preferences → Notifications).
+        if Self.shouldChime(newCount: items.count, alertsEnabled: model.settings.notificationsEnabled) {
+            NSSound(named: "Glass")?.play()
+        }
         return queue.current != nil
+    }
+
+    /// Chime once per new-PUSH batch; never for an empty diff, never when the
+    /// user turned alerts off. Pure for testing.
+    nonisolated static func shouldChime(newCount: Int, alertsEnabled: Bool) -> Bool {
+        newCount > 0 && alertsEnabled
     }
 
     /// Global-hotkey entry point while a card is visible: give the card the

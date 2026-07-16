@@ -347,6 +347,16 @@ func runSelfChecks() async -> Bool {
     check("expanded panel draws even in hidden-mode", TopBarController.shouldDraw(state: .expanded, pillVisible: false))
     check("full view draws even in hidden-mode", TopBarController.shouldDraw(state: .full, pillVisible: false))
 
+    print("Card chime:")
+    // The arrival sound plays once per NEW batch, only when alerts are on,
+    // and never for an empty diff (a reload with nothing new must be silent).
+    check("chimes for new PUSH when alerts on",
+          PushCardController.shouldChime(newCount: 2, alertsEnabled: true))
+    check("silent when alerts off",
+          !PushCardController.shouldChime(newCount: 2, alertsEnabled: false))
+    check("silent when nothing new",
+          !PushCardController.shouldChime(newCount: 0, alertsEnabled: true))
+
     print("Status item:")
     check("status line — signed out",
           StatusItemController.statusLine(signedIn: false, pushCount: 9) == "Klorn — not signed in")
