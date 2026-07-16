@@ -71,6 +71,7 @@ describe("fixtureToJudgeContext", () => {
       interaction: null,
       commitments: null,
       engagement: null,
+      readBehavior: null,
     });
   });
 
@@ -187,6 +188,42 @@ describe("judgeContextToFixture (ledger snapshot for the committed eval set)", (
     });
     const context = fixtureToJudgeContext(fixture, "row-x");
     expect(context.senderPrior).toEqual({ tier: "PUSH", count: 2, kind: "override" });
+  });
+});
+
+describe("senderFacts.readBehavior fixture round-trip", () => {
+  it("parses a readBehavior record and round-trips through the serializer", () => {
+    const fixture = judgeContextToFixture({
+      corrections: [],
+      senderPrior: null,
+      senderFacts: {
+        tierHistory: { QUEUE: 3 },
+        manualOverrides: 0,
+        interaction: null,
+        commitments: null,
+        engagement: null,
+        readBehavior: { read: 12, total: 12 },
+      },
+      senderTraits: [],
+      learnedRules: [],
+    });
+    const context = fixtureToJudgeContext(fixture, "row-read");
+    expect(context.senderFacts?.readBehavior).toEqual({ read: 12, total: 12 });
+  });
+
+  it("rejects a malformed readBehavior instead of coercing", () => {
+    expect(() =>
+      fixtureToJudgeContext(
+        {
+          senderFacts: {
+            tierHistory: {},
+            manualOverrides: 0,
+            readBehavior: { read: -1, total: 5 },
+          },
+        },
+        "row-bad",
+      ),
+    ).toThrow(/readBehavior/);
   });
 });
 
