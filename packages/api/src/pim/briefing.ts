@@ -6,7 +6,6 @@
  */
 
 import type { FastifyInstance } from "fastify";
-import { AGENT_SYSTEM_PROMPT } from "../agent/prompt.js";
 import { getUserId } from "../auth.js";
 import { prisma } from "../db.js";
 import { recordFeedback } from "../learning/feedback.js";
@@ -298,6 +297,20 @@ function findUserBriefingNote(userId: string, noteId: string) {
   });
 }
 
+/**
+ * System prompt for the daily briefing. Deliberately NOT the autonomous
+ * agent's prompt: that one mandates the `propose_action`/`notify_user` tools,
+ * so a tool-following model (e.g. claude-sonnet-5) returns an empty text
+ * response when the briefing call passes no tools — silently falling back to
+ * the rule-based view (observed in prod 2026-07-17). The briefing wants prose,
+ * not tool calls. The detailed format/voice lives in the user message.
+ */
+export const BRIEFING_SYSTEM_PROMPT =
+  "You write Klorn's one-minute morning briefing: calm, decision-first prose that " +
+  "names the single most important thing, connects related risks, and prunes noise. " +
+  "Respond only with the briefing text in plain markdown — never call tools, never " +
+  "return JSON, never explain yourself. Follow the format the user message specifies.";
+
 export default async function generateBriefing(userId: string): Promise<string> {
   const data = await gatherBriefingData(userId);
 
@@ -368,7 +381,7 @@ Recent Notes: ${JSON.stringify(data.notes)}`;
       {
         model: MODEL,
         messages: [
-          { role: "system", content: AGENT_SYSTEM_PROMPT },
+          { role: "system", content: BRIEFING_SYSTEM_PROMPT },
           { role: "user", content: briefingPrompt },
         ],
       },
