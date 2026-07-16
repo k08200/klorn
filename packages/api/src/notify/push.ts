@@ -28,6 +28,7 @@ import {
 import { sendDevicePush } from "./push-device.js";
 import { isAllowedPushOrigin } from "./push-origin-allowlist.js";
 import { recordPushAttempt } from "./push-rate-limit.js";
+import { ssrfSafeHttpsAgent } from "./ssrf-safe-agent.js";
 import { sendTelegramForPush } from "./telegram-notify.js";
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
@@ -369,7 +370,10 @@ async function deliverToSubscription(
           deliveryId,
           receiptUrl: pushReceiptUrl(deliveryId),
         }),
-        { topic },
+        // agent: re-validates the resolved IP at connect time (SSRF / DNS
+        // rebinding) — the hostname-string check alone can't catch a public
+        // name that resolves to an internal address.
+        { topic, agent: ssrfSafeHttpsAgent },
       );
       delivered = true;
       if (attempt > 0) {
