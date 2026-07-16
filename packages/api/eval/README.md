@@ -163,6 +163,13 @@ A fixture may carry `corrections`, `senderPrior`, `senderFacts`,
 shapes). The CI gate runs with `JUDGE_INCLUDE_BODY=true` to match prod (#653);
 this is inert on the committed set until items carry `body` fields (#648).
 
+**db mode requires an UNSCRUBBED input** (`poc-ground-truth.json` or the local
+draft) and refuses scrubbed sets. Placeholder senders (`*.example`) resolve to
+nothing in the DB, so every sender-scoped channel comes back empty while the
+user-scoped correction few-shots still land in every prompt — a context no
+real email ever gets. Measured 2026-07-16: the committed set under db mode
+scored 69.8% vs 84.9% in fixture mode — pure instrument artifact, not drift.
+
 ## Per-tier gating floors
 
 `--gate-floor=auto-recall=0.5,push-recall=0.95` promotes a report-only tier to

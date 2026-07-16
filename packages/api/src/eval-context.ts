@@ -238,3 +238,30 @@ export function judgeContextToFixture(
     ...(senderFacts ? { senderFacts } : {}),
   };
 }
+
+/** RFC 2606 reserved names the eval scrubber emits as sender placeholders. */
+const RESERVED_SENDER_RE =
+  /@(?:[a-z0-9-]+\.)*(?:[a-z0-9-]+\.(?:example|invalid|test)|example\.(?:com|org|net))$/i;
+
+/**
+ * Return the (deduplicated) sender addresses that are scrub placeholders —
+ * addresses on RFC 2606 reserved domains, which real mail can never use.
+ *
+ * Why this matters: `--context=db` resolves each item's sender against the
+ * real DB. On a scrubbed set no sender resolves, so every sender-scoped
+ * channel (prior, facts, traits) comes back empty while the user-scoped
+ * correction few-shot pool is still injected into EVERY item's prompt — a
+ * context that exists for no real email. The number that comes out is not a
+ * cold-start score and not a warm score; it is structurally invalid. Callers
+ * use a non-empty result to refuse the run instead of reporting garbage.
+ */
+export function findScrubbedSenders(froms: Iterable<string>): string[] {
+  const scrubbed = new Set<string>();
+  for (const from of froms) {
+    const angled = /<([^<>\s]+@[^<>\s]+)>/.exec(from);
+    const bare = /^([^<>\s]+@[^<>\s]+)$/.exec(from.trim());
+    const address = (angled?.[1] ?? bare?.[1])?.toLowerCase();
+    if (address && RESERVED_SENDER_RE.test(address)) scrubbed.add(address);
+  }
+  return [...scrubbed];
+}
