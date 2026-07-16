@@ -357,6 +357,34 @@ func runSelfChecks() async -> Bool {
     check("silent when nothing new",
           !PushCardController.shouldChime(newCount: 0, alertsEnabled: true))
 
+    print("Calendar:")
+    // GET /api/calendar/today/summary wire — prisma dates arrive as ISO strings
+    // with millis; decoding must be resilient to null current/nextEvent.
+    let calJSON = """
+    {"total":2,"current":{"id":"c1","title":"Standup","startTime":"2026-07-16T00:30:00.000Z",
+    "endTime":"2026-07-16T01:00:00.000Z","location":null,"meetingLink":"https://meet.example/a",
+    "allDay":false},"upcoming":[{"id":"c2","title":"Design review","startTime":"2026-07-16T05:00:00.000Z",
+    "endTime":"2026-07-16T06:30:00.000Z","location":"Room 3","meetingLink":null,"allDay":false}],
+    "nextEvent":null}
+    """
+    if let today = try? JSONDecoder().decode(TodaySummary.self, from: Data(calJSON.utf8)) {
+        check("TodaySummary decodes", today.total == 2 && today.current?.title == "Standup")
+        check("TodaySummary upcoming", today.upcoming.first?.location == "Room 3"
+              && today.nextEvent == nil)
+    } else {
+        check("TodaySummary decodes", false)
+    }
+    var utc = Calendar(identifier: .gregorian)
+    utc.timeZone = TimeZone(identifier: "UTC")!
+    check("event time label — range",
+          eventTimeLabel(startISO: "2026-07-16T05:00:00.000Z", endISO: "2026-07-16T06:30:00.000Z",
+                         allDay: false, calendar: utc) == "05:00–06:30")
+    check("event time label — all day",
+          eventTimeLabel(startISO: "2026-07-16T00:00:00.000Z", endISO: "2026-07-17T00:00:00.000Z",
+                         allDay: true, calendar: utc) == "All day")
+    check("event time label — malformed ISO degrades",
+          eventTimeLabel(startISO: "not-a-date", endISO: "also-no", allDay: false, calendar: utc) == "")
+
     print("Launch at login:")
     // Only a packaged .app can register as a login item (SMAppService needs a
     // bundle); the unbundled `swift run` must degrade to a visible explanation,

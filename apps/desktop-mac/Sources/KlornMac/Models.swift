@@ -185,6 +185,49 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     }
 }
 
+// MARK: - Calendar (today column)
+
+/// One calendar event as serialized by /api/calendar (prisma row → ISO dates).
+struct CalendarEventWire: Codable, Sendable, Identifiable, Hashable {
+    let id: String
+    let title: String
+    let startTime: String
+    let endTime: String
+    let location: String?
+    let meetingLink: String?
+    let allDay: Bool
+}
+
+/// GET /api/calendar/today/summary.
+struct TodaySummary: Codable, Sendable {
+    let total: Int
+    let current: CalendarEventWire?
+    let upcoming: [CalendarEventWire]
+    let nextEvent: CalendarEventWire?
+}
+
+/// "05:00–06:30" / "All day" — local-time label for an event row. Malformed
+/// ISO degrades to an empty string (row shows just the title), never a crash.
+/// Calendar injectable so the harness pins the math in UTC.
+func eventTimeLabel(
+    startISO: String,
+    endISO: String,
+    allDay: Bool,
+    calendar: Calendar = .current
+) -> String {
+    if allDay { return "All day" }
+    let parser = ISO8601DateFormatter()
+    parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    guard let start = parser.date(from: startISO), let end = parser.date(from: endISO) else {
+        return ""
+    }
+    func hhmm(_ date: Date) -> String {
+        let parts = calendar.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+    }
+    return "\(hhmm(start))–\(hhmm(end))"
+}
+
 // MARK: - Reply options (PushCard quick reply)
 
 /// One of the 3 tone-differentiated drafts from POST /api/email/:id/reply-options.

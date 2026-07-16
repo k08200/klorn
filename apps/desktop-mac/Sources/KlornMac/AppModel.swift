@@ -278,9 +278,25 @@ final class AppModel {
         phase = .signedOut
     }
 
+    /// Today's calendar (expanded panel's TODAY column). Best-effort: a
+    /// calendar hiccup must never block the mail queue, so failures just keep
+    /// the previous value.
+    private(set) var today: TodaySummary?
+
+    private func refreshToday() async {
+        do {
+            today = try await api.get("/api/calendar/today/summary", as: TodaySummary.self)
+        } catch {
+            Log.app.debug("today summary fetch failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
     func loadQueue() async {
         isLoadingQueue = true
         defer { isLoadingQueue = false }
+        // Piggyback on the same cadence as the queue (poll + WS wake) without
+        // serializing the two fetches.
+        Task { await refreshToday() }
         do {
             let fetched = try await api.get("/api/inbox/firewall", as: FirewallResponse.self)
             // Drop dismissed ids the server has since resolved; hide the rest.

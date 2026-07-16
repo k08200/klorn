@@ -31,7 +31,7 @@ struct TopBarActions {
 
 enum TopBarMetrics {
     static let collapsed = NSSize(width: 400, height: 52)
-    static let expanded = NSSize(width: 900, height: 380)
+    static let expanded = NSSize(width: 1140, height: 380)
     static let full = NSSize(width: 1400, height: 860)
     static let corner: CGFloat = 16
 
@@ -181,6 +181,8 @@ struct ExpandedPanel: View {
                 columnDivider
                 RecentPushColumn(actions: actions)
                 columnDivider
+                TodayColumn()
+                columnDivider
                 AccountColumn(actions: actions)
             }
         }
@@ -227,6 +229,70 @@ struct ExpandedPanel: View {
 }
 
 /// Column 1 — per-tier open counts; click opens the web inbox.
+/// TODAY — the day's calendar at a glance (current meeting + what's next).
+/// Rows with a meeting link open it directly; others are display-only.
+private struct TodayColumn: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ColumnHeader(title: "TODAY")
+            if let today = model.today, today.total > 0 {
+                if let current = today.current {
+                    eventRow(current, isNow: true)
+                }
+                ForEach(today.upcoming.prefix(4)) { event in
+                    eventRow(event, isNow: false)
+                }
+                if today.upcoming.count > 4 {
+                    Text("+\(today.upcoming.count - 4) more")
+                        .font(.caption2).foregroundStyle(Theme.textDim)
+                }
+            } else {
+                Text(model.today == nil ? "Loading…" : "No events today")
+                    .font(.caption).foregroundStyle(Theme.textDim)
+            }
+            Spacer()
+        }
+        .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func eventRow(_ event: CalendarEventWire, isNow: Bool) -> some View {
+        let time = eventTimeLabel(
+            startISO: event.startTime, endISO: event.endTime, allDay: event.allDay)
+        let row = HStack(alignment: .top, spacing: 8) {
+            if isNow {
+                Text("NOW")
+                    .font(.caption2.weight(.bold)).foregroundStyle(Theme.accent)
+                    .padding(.top, 2)
+            } else {
+                Text(time)
+                    .font(.caption.monospacedDigit()).foregroundStyle(Theme.textDim)
+                    .frame(width: 82, alignment: .leading)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(event.title).font(.callout).foregroundStyle(Theme.text).lineLimit(1)
+                if let location = event.location, !location.isEmpty {
+                    Text(location).font(.caption2).foregroundStyle(Theme.textDim).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+            if event.meetingLink != nil {
+                Image(systemName: "video").font(.caption).foregroundStyle(Theme.textDim)
+                    .accessibilityHidden(true)
+            }
+        }
+        if let link = event.meetingLink, let url = URL(string: link) {
+            Button { NSWorkspace.shared.open(url) } label: { row }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Join \(event.title)")
+        } else {
+            row.accessibilityElement(children: .combine)
+        }
+    }
+}
+
 private struct InboxColumn: View {
     @Environment(AppModel.self) private var model
     let actions: TopBarActions
