@@ -144,3 +144,23 @@ resumes with richer data. Safe to toggle freely.
   propagation is attacker-assertable. Bounded by the ≥2-contact gate + public-
   domain denylist + soft-grounding-only (never a decider), but a domain-reputation
   / tenure gate is the recommended hardening before heavy reliance.
+
+## 2026-07-16 addendum: read-behavior fact (flip is no longer cold-start)
+
+The first real-mail measurement found the flip would have been a **no-op** on
+day one: `contactEngagementScore` had a single row (the founder's own address)
+because outbound replies and dismisses are the only counted actions, and
+neither accrues without heavy in-app use. Meanwhile the mailbox itself already
+held a strong attention signal: the founder reads **100%** of two senders the
+judge was burying as SILENT, and **4%** of another (baseline 57%).
+
+The engagement channel now carries that passive half: `senderFacts.readBehavior`
+(`{ read, total }` over the last 90 days, suppressed under 3 mails, thresholds
+in `sender-policy.ts` `READ_BEHAVIOR`). Same flag, same soft-grounding doctrine
+— it feeds senderTrust wording, never a tier decision. `isRead` is synced from
+Gmail, so it measures real reading wherever it happens, not just in-app.
+
+Flip consequence: `CONTACT_ENGAGEMENT_IN_JUDGE=true` now has **data from the
+first classification** (every sender with ≥3 recent mails grounds a fact), and
+the effect is eval-visible — the fact is numeric, so `--emit-context` snapshots
+it into the committed fixtures and the readout measures it.
