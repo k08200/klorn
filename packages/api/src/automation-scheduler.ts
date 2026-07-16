@@ -25,6 +25,7 @@ import { prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
 import { parseGoogleDateTime } from "./google-calendar-time.js";
 import { findOpenEmailAttentionItemId } from "./judge/attention-override.js";
+import { sweepFallbackRejudge } from "./judge/fallback-rejudge.js";
 import { syncRecentCandidateIntakes } from "./mail/email-candidate-intake.js";
 import {
   backfillEmailAttentionItems,
@@ -1070,6 +1071,17 @@ async function runUserCycle(
         if (backfilled > 0) {
           console.log(
             `[EMAIL-BACKFILL] re-judged ${backfilled} stranded email(s) for ${config.userId}`,
+          );
+        }
+
+        // Self-heal provider-outage residue: recent keyword-fallback tiers
+        // (human-untouched, still OPEN) get re-judged through the real judge.
+        // Flag-gated (FALLBACK_REJUDGE_SWEEP, default OFF), bounded per tick,
+        // aborts while the provider is still degraded.
+        const repaired = await sweepFallbackRejudge(config.userId);
+        if (repaired > 0) {
+          console.log(
+            `[FALLBACK-REJUDGE] repaired ${repaired} fallback tier(s) for ${config.userId}`,
           );
         }
 
