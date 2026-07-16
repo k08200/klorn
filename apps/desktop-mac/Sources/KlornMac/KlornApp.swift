@@ -50,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let cardShown = card?.present(items) ?? false
             bar?.handleNewPush(items, bannerFallback: !cardShown)
         }
+        card.onShowAll = { [weak bar] in bar?.expand() }
         // Meeting-prep card shares the PushCard's slot; mail interrupts win
         // and the planner re-offers the meeting on the next refresh tick.
         let meetingCard = MeetingCardController(

@@ -37,6 +37,8 @@ struct PushCardActions {
     let onRetry: () -> Void
     /// Click on the card: toggle compact ↔ expanded (expanding arms the keys).
     let onToggleExpand: () -> Void
+    /// "Show all N" — open the bar's panel with the whole PUSH list.
+    let onShowAll: () -> Void
 }
 
 enum PushCardMetrics {
@@ -132,9 +134,11 @@ struct PushCard: View {
                 }
             }
             Spacer()
-            if state.pendingCount > 0 {
-                Text("+\(state.pendingCount) more")
-                    .font(.caption2).foregroundStyle(Theme.textDim)
+            if let label = showAllLabel(pendingCount: state.pendingCount) {
+                Button(label, action: actions.onShowAll)
+                    .buttonStyle(.plain).font(.caption2.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+                    .accessibilityLabel("Show all queued urgent emails")
             }
             Button(action: actions.onDismiss) {
                 Image(systemName: "xmark")

@@ -394,6 +394,26 @@ private struct AccountColumn: View {
                     Text("Sign in with Google").font(.body).foregroundStyle(Theme.text)
                 }.buttonStyle(.plain)
             }
+            if model.phase == .signedIn, let usage = model.usage {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("AI TODAY").font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.08))
+                            Capsule().fill(Theme.accent)
+                                .frame(width: geo.size.width
+                                       * usageFillFraction(used: usage.dailyUsed, cap: usage.dailyCap))
+                        }
+                    }
+                    .frame(height: 5)
+                    Text(usageLabel(used: usage.dailyUsed, cap: usage.dailyCap))
+                        .font(.caption2.monospacedDigit()).foregroundStyle(Theme.textDim)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("AI usage today: \(usage.dailyUsed) of \(usage.dailyCap)")
+                .padding(.top, 4)
+            }
+
             Button(action: actions.onOpenPreferences) {
                 Text("Preferences").font(.body).foregroundStyle(Theme.textDim)
             }.buttonStyle(.plain)
