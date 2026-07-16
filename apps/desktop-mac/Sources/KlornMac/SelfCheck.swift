@@ -385,6 +385,65 @@ func runSelfChecks() async -> Bool {
     check("event time label — malformed ISO degrades",
           eventTimeLabel(startISO: "not-a-date", endISO: "also-no", allDay: false, calendar: utc) == "")
 
+    print("Meeting card:")
+    // Lead-window planner: surface the FIRST upcoming event whose start is
+    // within leadMinutes, once per event id — never one that already started,
+    // never twice, never outside the window.
+    func event(_ id: String, minutesAway: Int) -> CalendarEventWire {
+        let fmt = ISO8601DateFormatter()
+        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let now = fmt.date(from: "2026-07-16T09:00:00.000Z")!
+        let start = now.addingTimeInterval(Double(minutesAway) * 60)
+        return CalendarEventWire(
+            id: id, title: id,
+            startTime: fmt.string(from: start),
+            endTime: fmt.string(from: start.addingTimeInterval(1800)),
+            location: nil, meetingLink: nil, allDay: false)
+    }
+    let planNow = ISO8601DateFormatter().date(from: "2026-07-16T09:00:00Z")!
+    check("inside the lead window → surfaces",
+          meetingCardPlan(now: planNow, events: [event("m1", minutesAway: 8)],
+                          leadMinutes: 10, shown: [])?.id == "m1")
+    check("too early → nil",
+          meetingCardPlan(now: planNow, events: [event("m2", minutesAway: 45)],
+                          leadMinutes: 10, shown: []) == nil)
+    check("already started → nil",
+          meetingCardPlan(now: planNow, events: [event("m3", minutesAway: -5)],
+                          leadMinutes: 10, shown: []) == nil)
+    check("already shown → nil",
+          meetingCardPlan(now: planNow, events: [event("m4", minutesAway: 8)],
+                          leadMinutes: 10, shown: ["m4"]) == nil)
+    check("earliest qualifying event wins",
+          meetingCardPlan(now: planNow, events: [event("m6", minutesAway: 9), event("m5", minutesAway: 4)],
+                          leadMinutes: 10, shown: [])?.id == "m5")
+    check("all-day events never interrupt", {
+        var allDay = event("m7", minutesAway: 5)
+        allDay = CalendarEventWire(id: allDay.id, title: allDay.title, startTime: allDay.startTime,
+                                   endTime: allDay.endTime, location: nil, meetingLink: nil, allDay: true)
+        return meetingCardPlan(now: planNow, events: [allDay], leadMinutes: 10, shown: []) == nil
+    }())
+
+    // Readiness display mapping is fixed vocabulary (server enum).
+    check("readiness labels", readinessLabel("ready") == "Ready"
+          && readinessLabel("watch") == "Watch"
+          && readinessLabel("needs_review") == "Needs review"
+          && readinessLabel("???") == "Prep")
+
+    // Prep-pack wire decode (subset the card renders).
+    let packJSON = """
+    {"generatedAt":"2026-07-16T08:55:00.000Z","event":{"id":"m1","title":"Board sync",
+    "description":null,"startTime":"2026-07-16T09:10:00.000Z","endTime":"2026-07-16T10:00:00.000Z",
+    "location":"Zoom","meetingLink":"https://zoom.us/j/1"},"readiness":"watch",
+    "checklist":["Skim the term sheet","Reply to Alex"],"relatedEmails":[],
+    "openTasks":[],"openCommitments":[]}
+    """
+    if let pack = try? JSONDecoder().decode(MeetingPrepPack.self, from: Data(packJSON.utf8)) {
+        check("MeetingPrepPack decodes", pack.readiness == "watch"
+              && pack.checklist.count == 2 && pack.event.meetingLink != nil)
+    } else {
+        check("MeetingPrepPack decodes", false)
+    }
+
     print("Launch at login:")
     // Only a packaged .app can register as a login item (SMAppService needs a
     // bundle); the unbundled `swift run` must degrade to a visible explanation,

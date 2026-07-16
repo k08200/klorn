@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     private var topBar: TopBarController?
     private var pushCard: PushCardController?
+    private var meetingCard: MeetingCardController?
     private var statusItem: StatusItemController?
     private var hotKey: HotKey?
 
@@ -49,6 +50,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let cardShown = card?.present(items) ?? false
             bar?.handleNewPush(items, bannerFallback: !cardShown)
         }
+        // Meeting-prep card shares the PushCard's slot; mail interrupts win
+        // and the planner re-offers the meeting on the next refresh tick.
+        let meetingCard = MeetingCardController(
+            model: model, isSlotBusy: { [weak card] in card?.isVisible ?? false })
+        model.onMeetingSoon = { [weak meetingCard] event in
+            meetingCard?.present(event) ?? false
+        }
+        self.meetingCard = meetingCard
         bar.show()
         topBar = bar
         pushCard = card
