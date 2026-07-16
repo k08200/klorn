@@ -146,6 +146,15 @@ final class PushCardController {
         panel?.orderOut(nil)
     }
 
+    /// Snooze the current item server-side (resurfaces at the chosen time),
+    /// then move to the next card. The model hides it optimistically and
+    /// reconciles on failure — the card just advances.
+    private func snooze(_ option: SnoozeOption) {
+        guard let item = state.item else { return }
+        Task { [weak self] in await self?.model.snooze(item, until: option.resurface()) }
+        advance()
+    }
+
     // MARK: - Actions
 
     private func makeActions() -> PushCardActions {
@@ -153,6 +162,7 @@ final class PushCardController {
             onSend: { [weak self] index in self?.send(index) },
             onOpen: { [weak self] in self?.openOnWeb() },
             onDismiss: { [weak self] in self?.advance() },  // local only — never archives
+            onSnooze: { [weak self] option in self?.snooze(option) },
             onRetry: { [weak self] in
                 guard let self, let item = self.state.item else { return }
                 self.state.drafts = .loading

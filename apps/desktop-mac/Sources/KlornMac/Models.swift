@@ -288,6 +288,13 @@ struct ReplyOptionsResponse: Codable, Sendable {
     let options: [ReplyOption]
 }
 
+/// The snooze options the PushCard offers — the full SnoozeOption set, in
+/// display order. A single source of truth shared with the reading pane so the
+/// two surfaces never drift.
+enum PushCardSnooze {
+    static let options: [SnoozeOption] = SnoozeOption.allCases
+}
+
 // MARK: - Snooze options
 
 /// User-selectable snooze targets for a PUSH item; each resolves to a concrete

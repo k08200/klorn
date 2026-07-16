@@ -34,6 +34,8 @@ struct PushCardActions {
     let onSend: (Int) -> Void
     let onOpen: () -> Void
     let onDismiss: () -> Void
+    /// Snooze the item server-side; it resurfaces at the chosen time.
+    let onSnooze: (SnoozeOption) -> Void
     let onRetry: () -> Void
     /// Click on the card: toggle compact ↔ expanded (expanding arms the keys).
     let onToggleExpand: () -> Void
@@ -140,6 +142,18 @@ struct PushCard: View {
                     .foregroundStyle(Theme.accent)
                     .accessibilityLabel("Show all queued urgent emails")
             }
+            Menu {
+                ForEach(PushCardSnooze.options) { option in
+                    Button(option.label) { actions.onSnooze(option) }
+                }
+            } label: {
+                Image(systemName: "moon.zzz")
+                    .font(.caption.weight(.semibold)).foregroundStyle(Theme.textDim)
+                    .frame(width: 28, height: 28)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("Snooze until later")
+            .accessibilityLabel("Snooze this email")
             Button(action: actions.onDismiss) {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.semibold)).foregroundStyle(Theme.textDim)
