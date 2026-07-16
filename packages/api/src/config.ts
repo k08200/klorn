@@ -214,6 +214,11 @@ export const LLM_BACKGROUND_RPM_MAX_WAIT_MS = intEnv("LLM_BACKGROUND_RPM_MAX_WAI
 // that foreground gets a reserved 300 even when background has burned its 200.
 export const LLM_USER_FOREGROUND_DAILY_CAP = intEnv("LLM_USER_FOREGROUND_DAILY_CAP", 300);
 export const LLM_USER_BACKGROUND_DAILY_CAP = intEnv("LLM_USER_BACKGROUND_DAILY_CAP", 200);
+// Burst control for background-priority LLM calls (global, not per-user):
+// bound concurrency and pace launches so background work can't slam the
+// provider's own per-minute quota and cool-down-lock interactive calls too.
+export const LLM_BACKGROUND_MAX_CONCURRENT = intEnv("LLM_BACKGROUND_MAX_CONCURRENT", 2);
+export const LLM_BACKGROUND_MIN_INTERVAL_MS = intEnv("LLM_BACKGROUND_MIN_INTERVAL_MS", 4_000);
 // Legacy env var, kept so existing deployments don't break — when set, it
 // overrides the combined-total view used by the deprecated single-bucket API.
 const legacyDailyCap = intEnv("LLM_USER_DAILY_CAP", 0);
