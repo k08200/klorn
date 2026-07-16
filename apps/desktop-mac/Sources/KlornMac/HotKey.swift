@@ -17,9 +17,17 @@ final class HotKey {
 
     init(onFire: @escaping () -> Void) { self.onFire = onFire }
 
-    /// Register the shortcut. Defaults to ⌥⌘K. Idempotent-ish: call once at launch.
+    /// Register (or re-register) the user's shortcut. Safe to call repeatedly —
+    /// it tears down any prior registration first, so changing the shortcut in
+    /// Preferences takes effect immediately.
+    func register(_ shortcut: Shortcut) {
+        register(keyCode: shortcut.keyCode, modifiers: shortcut.carbonModifiers)
+    }
+
+    /// Register the shortcut. Defaults to ⌥⌘K. Re-registers cleanly on repeat.
     func register(keyCode: UInt32 = UInt32(kVK_ANSI_K),
                   modifiers: UInt32 = UInt32(cmdKey | optionKey)) {
+        unregister()  // drop any prior hotkey so a re-register doesn't stack
         var eventSpec = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
             eventKind: UInt32(kEventHotKeyPressed))

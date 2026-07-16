@@ -87,14 +87,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         topBar = bar
         pushCard = card
 
-        // ⌥⌘K from anywhere: while a card is up it arms/releases the card's
-        // keyboard (1/2/3/⏎/esc); otherwise it expands/collapses the bar.
-        // No focus steal, no permission either way.
+        // Global toggle shortcut (default ⌥⌘K, user-configurable in Preferences):
+        // while a card is up it arms/releases the card's keyboard (1/2/3/⏎/esc);
+        // otherwise it expands/collapses the bar. No focus steal, no permission.
         let key = HotKey(onFire: { [weak bar, weak card] in
             if card?.isVisible == true { card?.armKeyboard() } else { bar?.toggle() }
         })
-        key.register()
+        key.register(model.settings.shortcut)
         hotKey = key
+        // Re-register live when the user records a new shortcut.
+        model.settings.onShortcutChanged = { [weak key] shortcut in key?.register(shortcut) }
 
         model.start()
     }

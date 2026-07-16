@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import SwiftUI
 
 /// The Preferences overlay shown over the full view. A self-contained dark card:
@@ -13,6 +14,7 @@ struct PreferencesView: View {
     @State private var loginItemError: String?
     @State private var updateChecking = false
     @State private var updateOutcome: UpdateCheck.Outcome?
+    @State private var recordingShortcut = false
 
     var body: some View {
         // Local @Bindable so the Toggle can write into the nested settings object.
@@ -96,7 +98,25 @@ struct PreferencesView: View {
             }
 
             section("KEYBOARD") {
-                infoRow("Expand / collapse", "⌥⌘K")
+                HStack {
+                    Text("Summon / expand").font(.body).foregroundStyle(Theme.text)
+                    Spacer()
+                    ShortcutRecorder(
+                        shortcut: model.settings.shortcut,
+                        recording: recordingShortcut,
+                        onStartRecording: { recordingShortcut = true },
+                        onCapture: { model.settings.shortcut = $0 },
+                        onFinished: { recordingShortcut = false },
+                        onReset: {
+                            recordingShortcut = false
+                            model.settings.shortcut = .defaultToggle
+                        })
+                }
+                Text(recordingShortcut
+                     ? "Type a shortcut — must include ⌘, ⌥, or ⌃. Esc to cancel."
+                     : "Global shortcut to summon the bar. Click to change.")
+                    .font(.caption).foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             section("ACCOUNT") {
@@ -141,5 +161,63 @@ struct PreferencesView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(label): \(value)")
+    }
+}
+
+/// A macOS-style shortcut recorder: shows the current chord (⌥⌘K); click to
+/// record, then the next valid key-with-modifier chord is captured via a local
+/// NSEvent monitor (the Preferences panel is key while open). Esc cancels; the
+/// ⌫ button resets to the default.
+private struct ShortcutRecorder: View {
+    let shortcut: Shortcut
+    let recording: Bool
+    let onStartRecording: () -> Void
+    let onCapture: (Shortcut) -> Void
+    let onFinished: () -> Void
+    let onReset: () -> Void
+    @State private var monitor: Any?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button(recording ? "Type shortcut…" : ShortcutFormat.display(shortcut)) {
+                onStartRecording()
+            }
+            .buttonStyle(.bordered).controlSize(.small)
+            .tint(recording ? Theme.accent : nil)
+            .frame(minWidth: 96)
+            .accessibilityLabel("Change summon shortcut, currently \(ShortcutFormat.display(shortcut))")
+
+            Button(action: onReset) {
+                Image(systemName: "arrow.uturn.backward").font(.caption)
+            }
+            .buttonStyle(.borderless).controlSize(.small)
+            .help("Reset to ⌥⌘K")
+            .accessibilityLabel("Reset shortcut to default")
+        }
+        .onChange(of: recording) { _, isRecording in
+            if isRecording { startCapture() } else { stopCapture() }
+        }
+        .onDisappear { stopCapture() }
+    }
+
+    private func startCapture() {
+        stopCapture()
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode == UInt16(kVK_Escape) {  // cancel, no change
+                onFinished()
+                return nil
+            }
+            let carbon = ShortcutFormat.carbonModifiers(from: event.modifierFlags)
+            guard ShortcutFormat.isValid(carbonModifiers: carbon) else {
+                return nil  // modifier-less / shift-only: ignore, keep listening
+            }
+            onCapture(Shortcut(keyCode: UInt32(event.keyCode), carbonModifiers: carbon))
+            onFinished()
+            return nil  // consume so the key doesn't leak into the app
+        }
+    }
+
+    private func stopCapture() {
+        if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
     }
 }
