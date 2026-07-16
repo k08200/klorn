@@ -29,6 +29,15 @@ struct PreferencesView: View {
                     .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
             }
 
+            section("TOP BAR") {
+                Toggle(isOn: $settings.pillVisible) {
+                    Text("Always show the top bar").foregroundStyle(Theme.text)
+                }
+                .toggleStyle(.switch).tint(Theme.accent)
+                Text("Off: the bar stays hidden until ⌥⌘K summons it. Urgent-email cards still appear.")
+                    .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
+            }
+
             section("KEYBOARD") {
                 infoRow("Expand / collapse", "⌥⌘K")
             }

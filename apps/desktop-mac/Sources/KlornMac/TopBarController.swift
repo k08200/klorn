@@ -66,7 +66,18 @@ final class TopBarController {
         render()
     }
 
+    /// Whether the bar draws at all for this state. Hidden-pill mode only
+    /// suppresses the COLLAPSED pill — the expanded/full states are always
+    /// user-summoned (☰, ⌥⌘K) and must never be eaten. Pure for testing.
+    nonisolated static func shouldDraw(state: BarState, pillVisible: Bool) -> Bool {
+        pillVisible || state != .collapsed
+    }
+
     private func render() {
+        guard Self.shouldDraw(state: state, pillVisible: model.settings.pillVisible) else {
+            panel?.orderOut(nil)
+            return
+        }
         let focusable = (state == .full)
         let size = TopBarMetrics.size(for: state)
         let root = TopBarRoot(state: state, actions: makeActions())
