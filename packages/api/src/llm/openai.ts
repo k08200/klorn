@@ -5,8 +5,8 @@ import type {
 } from "openai/resources/chat/completions";
 import { estimatePrebillCents, recordLlmUsage, trueUpCostLedgers } from "../billing/llm-usage.js";
 import {
+  awaitUserCallSlot,
   type CallPriority,
-  checkAndRecordUserCall,
   UserRateLimitedError,
 } from "../billing/quota-limiter.js";
 import {
@@ -341,9 +341,11 @@ export async function createCompletion(
   // Per-user RPM + daily-cap gate: trip before the call so a runaway loop
   // doesn't burn upstream provider quota. Charged against the foreground
   // bucket by default; background workers pass `priority: "background"` so
-  // they can never starve chat.
+  // they can never starve chat. A background call over the RPM window PARKS
+  // for a slot (bounded) instead of failing — instant failure demoted every
+  // email past the cap in a sync burst to the permanent keyword fallback.
   if (options.userId) {
-    checkAndRecordUserCall(options.userId, { priority: options.priority ?? "foreground" });
+    await awaitUserCallSlot(options.userId, { priority: options.priority ?? "foreground" });
   }
 
   // Daily-cost gate: enforce BEFORE the call so we don't burn budget twice
@@ -566,7 +568,7 @@ export async function createVisionCompletion(
   // limit and daily-call bucket. Charge it against the background bucket (it's
   // a worker-triggered batch) so it can never starve foreground chat.
   if (options.userId) {
-    checkAndRecordUserCall(options.userId, { priority: options.priority ?? "background" });
+    await awaitUserCallSlot(options.userId, { priority: options.priority ?? "background" });
   }
 
   // Daily-cost gate: vision/OCR calls bill the same ledgers as chat. Without
