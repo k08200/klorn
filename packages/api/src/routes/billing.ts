@@ -33,72 +33,76 @@ export async function billingRoutes(app: FastifyInstance) {
   // All billing routes require authentication
   app.addHook("preHandler", requireAuth);
   // POST /api/billing/checkout — Create Stripe checkout session
-  app.post("/checkout", async (request, reply) => {
-    const userId = getUserId(request);
-    const { plan } = request.body as {
-      plan: "PRO";
-    };
+  app.post(
+    "/checkout",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const { plan } = request.body as {
+        plan: "PRO";
+      };
 
-    // Only PRO accepts new checkouts. Legacy TEAM subscriptions keep working
-    // via webhook/status routes but cannot be purchased from the UI.
-    if (plan !== "PRO") {
-      return reply.code(400).send({ error: "Invalid plan" });
-    }
-
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return reply.code(404).send({ error: "User not found" });
-
-    // Paddle (merchant of record) is the web provider when configured; the
-    // Stripe path below stays as the alternative for a future entity. Both
-    // return the same { url } contract the web client expects. The trial is
-    // configured on the Paddle price itself (dashboard), not passed here.
-    if (isPaddleConfigured()) {
-      const url = await createPaddleCheckout({ userId, email: user.email });
-      return { url };
-    }
-
-    const planConfig = PLANS[plan];
-    if (!planConfig?.priceId) {
-      return reply.code(400).send({ error: "Invalid plan" });
-    }
-
-    // Anti trial-farming: a user who deletes their account loses their stripeId,
-    // so a re-registration would otherwise mint a fresh Stripe customer and a
-    // fresh free trial. Reuse the existing customer for this email so Stripe's
-    // one-trial-per-customer guarantee survives delete + re-register.
-    let customerId = user.stripeId || undefined;
-    if (!customerId) {
-      try {
-        const existing = await stripe.customers.list({ email: user.email, limit: 1 });
-        customerId = existing.data[0]?.id;
-      } catch (err) {
-        // The fallback below mints a fresh customer + trial, so a flaky lookup
-        // here is a trial-farming hole — surface it (don't swallow) per the
-        // never-swallow rule. NOTE: email sub-addressing (you+1@) still creates
-        // a distinct customer and bypasses this guard; that needs Stripe Radar /
-        // address canonicalization (product control), not just code.
-        console.warn("[BILLING] customer lookup by email failed", err);
-        captureError(err, { tags: { scope: "billing.checkout.customer_lookup" } });
+      // Only PRO accepts new checkouts. Legacy TEAM subscriptions keep working
+      // via webhook/status routes but cannot be purchased from the UI.
+      if (plan !== "PRO") {
+        return reply.code(400).send({ error: "Invalid plan" });
       }
-    }
 
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      customer_email: customerId ? undefined : user.email,
-      customer: customerId,
-      line_items: [{ price: planConfig.priceId, quantity: 1 }],
-      // Card-required free trial: Stripe collects the card now, charges nothing
-      // until day TRIAL_DAYS, then auto-converts. The card requirement (and one
-      // trial per customer) is what makes this the high-conversion model and
-      // blocks re-signup trial farming on web.
-      subscription_data: TRIAL_DAYS > 0 ? { trial_period_days: TRIAL_DAYS } : undefined,
-      success_url: `${process.env.WEB_URL || "http://localhost:8001"}/billing?success=true`,
-      cancel_url: `${process.env.WEB_URL || "http://localhost:8001"}/billing?canceled=true`,
-      metadata: { userId, plan },
-    });
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) return reply.code(404).send({ error: "User not found" });
 
-    return { url: session.url };
-  });
+      // Paddle (merchant of record) is the web provider when configured; the
+      // Stripe path below stays as the alternative for a future entity. Both
+      // return the same { url } contract the web client expects. The trial is
+      // configured on the Paddle price itself (dashboard), not passed here.
+      if (isPaddleConfigured()) {
+        const url = await createPaddleCheckout({ userId, email: user.email });
+        return { url };
+      }
+
+      const planConfig = PLANS[plan];
+      if (!planConfig?.priceId) {
+        return reply.code(400).send({ error: "Invalid plan" });
+      }
+
+      // Anti trial-farming: a user who deletes their account loses their stripeId,
+      // so a re-registration would otherwise mint a fresh Stripe customer and a
+      // fresh free trial. Reuse the existing customer for this email so Stripe's
+      // one-trial-per-customer guarantee survives delete + re-register.
+      let customerId = user.stripeId || undefined;
+      if (!customerId) {
+        try {
+          const existing = await stripe.customers.list({ email: user.email, limit: 1 });
+          customerId = existing.data[0]?.id;
+        } catch (err) {
+          // The fallback below mints a fresh customer + trial, so a flaky lookup
+          // here is a trial-farming hole — surface it (don't swallow) per the
+          // never-swallow rule. NOTE: email sub-addressing (you+1@) still creates
+          // a distinct customer and bypasses this guard; that needs Stripe Radar /
+          // address canonicalization (product control), not just code.
+          console.warn("[BILLING] customer lookup by email failed", err);
+          captureError(err, { tags: { scope: "billing.checkout.customer_lookup" } });
+        }
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        customer_email: customerId ? undefined : user.email,
+        customer: customerId,
+        line_items: [{ price: planConfig.priceId, quantity: 1 }],
+        // Card-required free trial: Stripe collects the card now, charges nothing
+        // until day TRIAL_DAYS, then auto-converts. The card requirement (and one
+        // trial per customer) is what makes this the high-conversion model and
+        // blocks re-signup trial farming on web.
+        subscription_data: TRIAL_DAYS > 0 ? { trial_period_days: TRIAL_DAYS } : undefined,
+        success_url: `${process.env.WEB_URL || "http://localhost:8001"}/billing?success=true`,
+        cancel_url: `${process.env.WEB_URL || "http://localhost:8001"}/billing?canceled=true`,
+        metadata: { userId, plan },
+      });
+
+      return { url: session.url };
+    },
+  );
 
   // POST /api/billing/portal — customer portal (manage/cancel). Paddle when
   // the user subscribed via Paddle; Stripe otherwise.

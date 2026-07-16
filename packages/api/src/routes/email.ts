@@ -1079,57 +1079,64 @@ export async function emailRoutes(app: FastifyInstance) {
 
   // ─── Force Sync ───────────────────────────────────────────────────────
   // POST /api/email/sync
-  app.post("/sync", async (request) => {
-    const uid = getUserId(request);
-    const { query, maxResults } = (request.body as { query?: string; maxResults?: number }) || {};
+  app.post(
+    "/sync",
+    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (request) => {
+      const uid = getUserId(request);
+      const { query, maxResults } = (request.body as { query?: string; maxResults?: number }) || {};
 
-    try {
-      const result = await syncEmails(uid, maxResults || 30, query);
+      try {
+        const result = await syncEmails(uid, maxResults || 30, query);
 
-      // Also fan out to LINKED secondary inboxes (gated by MULTI_INBOX_SYNC_ENABLED
-      // + the multi_account feature). Without this, a manual sync / opening Mail
-      // only refreshed the primary account and linked inboxes stayed
-      // "Not yet synced" until a scheduler tick (which needs automation enabled).
-      await syncLinkedInboxesForUser(uid).catch((err) => {
-        console.warn(`[EMAIL-SYNC] on-demand linked fan-out failed for user ${uid}`, err);
-        captureError(err, { tags: { scope: "email.sync.linked" }, extra: { userId: uid } });
-      });
-
-      // Reconcile (remove archived/deleted, refresh read-status) makes one Gmail
-      // call per stored email, which used to block this response by tens of
-      // seconds on a large mailbox. New mail is already persisted by syncEmails
-      // above, so the user sees it immediately; reconcile converges in the
-      // background and on the next scheduler tick. Fire-and-forget, but never
-      // swallowed — log a signal so a broken reconcile is visible.
-      reconcileEmails(uid).catch((err) => {
-        console.error(`[EMAIL-SYNC] Background reconcile failed for user ${uid}:`, err);
-        captureError(err, { tags: { scope: "email.sync.reconcile" }, extra: { userId: uid } });
-      });
-
-      // Trigger AI summarization (non-blocking, but never silent — the manual
-      // /sync path must match the scheduler's console+Sentry discipline).
-      // Sweep a floor of 10, not just newCount: mail ingested earlier (e.g. by
-      // login init-sync) that never got summarized would otherwise be stranded
-      // as "not analyzed" forever — pressing Sync with 0 new mail summarized 0.
-      summarizeUnsummarizedEmails(uid, Math.max(result.newCount, 10)).catch((err) => {
-        console.warn(`[EMAIL-SYNC] background summarize failed for user ${uid}`, err);
-        captureError(err, { tags: { scope: "email.sync.summarize" }, extra: { userId: uid } });
-      });
-      analyzePendingEmailAttachments(uid, Math.max(10, result.newCount * 3))
-        .then(() => syncRecentCandidateIntakes(uid, Math.max(10, result.newCount)))
-        .catch((err) => {
-          console.warn(
-            `[EMAIL-SYNC] background attachment/intake analysis failed for user ${uid}`,
-            err,
-          );
-          captureError(err, { tags: { scope: "email.sync.attachments" }, extra: { userId: uid } });
+        // Also fan out to LINKED secondary inboxes (gated by MULTI_INBOX_SYNC_ENABLED
+        // + the multi_account feature). Without this, a manual sync / opening Mail
+        // only refreshed the primary account and linked inboxes stayed
+        // "Not yet synced" until a scheduler tick (which needs automation enabled).
+        await syncLinkedInboxesForUser(uid).catch((err) => {
+          console.warn(`[EMAIL-SYNC] on-demand linked fan-out failed for user ${uid}`, err);
+          captureError(err, { tags: { scope: "email.sync.linked" }, extra: { userId: uid } });
         });
 
-      return result;
-    } catch (err) {
-      return { error: err instanceof Error ? err.message : "Sync failed" };
-    }
-  });
+        // Reconcile (remove archived/deleted, refresh read-status) makes one Gmail
+        // call per stored email, which used to block this response by tens of
+        // seconds on a large mailbox. New mail is already persisted by syncEmails
+        // above, so the user sees it immediately; reconcile converges in the
+        // background and on the next scheduler tick. Fire-and-forget, but never
+        // swallowed — log a signal so a broken reconcile is visible.
+        reconcileEmails(uid).catch((err) => {
+          console.error(`[EMAIL-SYNC] Background reconcile failed for user ${uid}:`, err);
+          captureError(err, { tags: { scope: "email.sync.reconcile" }, extra: { userId: uid } });
+        });
+
+        // Trigger AI summarization (non-blocking, but never silent — the manual
+        // /sync path must match the scheduler's console+Sentry discipline).
+        // Sweep a floor of 10, not just newCount: mail ingested earlier (e.g. by
+        // login init-sync) that never got summarized would otherwise be stranded
+        // as "not analyzed" forever — pressing Sync with 0 new mail summarized 0.
+        summarizeUnsummarizedEmails(uid, Math.max(result.newCount, 10)).catch((err) => {
+          console.warn(`[EMAIL-SYNC] background summarize failed for user ${uid}`, err);
+          captureError(err, { tags: { scope: "email.sync.summarize" }, extra: { userId: uid } });
+        });
+        analyzePendingEmailAttachments(uid, Math.max(10, result.newCount * 3))
+          .then(() => syncRecentCandidateIntakes(uid, Math.max(10, result.newCount)))
+          .catch((err) => {
+            console.warn(
+              `[EMAIL-SYNC] background attachment/intake analysis failed for user ${uid}`,
+              err,
+            );
+            captureError(err, {
+              tags: { scope: "email.sync.attachments" },
+              extra: { userId: uid },
+            });
+          });
+
+        return result;
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : "Sync failed" };
+      }
+    },
+  );
 
   // ─── Multi-inbox diagnostics ──────────────────────────────────────────
   // GET /api/email/multi-inbox-debug — self-scoped: report exactly which gate a
@@ -1214,13 +1221,17 @@ export async function emailRoutes(app: FastifyInstance) {
 
   // ─── AI Summarize ─────────────────────────────────────────────────────
   // POST /api/email/summarize
-  app.post("/summarize", async (request) => {
-    const uid = getUserId(request);
-    const { limit } = (request.body as { limit?: number }) || {};
+  app.post(
+    "/summarize",
+    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (request) => {
+      const uid = getUserId(request);
+      const { limit } = (request.body as { limit?: number }) || {};
 
-    const count = await summarizeUnsummarizedEmails(uid, limit || 10);
-    return { summarized: count };
-  });
+      const count = await summarizeUnsummarizedEmails(uid, limit || 10);
+      return { summarized: count };
+    },
+  );
 
   // ─── Email Stats ──────────────────────────────────────────────────────
   app.get("/stats/summary", async (request) => {
