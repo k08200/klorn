@@ -115,3 +115,14 @@ export function isSafePushEndpoint(endpoint: string): boolean {
 
   return true;
 }
+
+/**
+ * True when a RESOLVED IP literal is loopback/private/link-local/ULA/etc.
+ * Used at CONNECT time (from a DNS lookup) to close the rebinding gap that the
+ * hostname-string check in isSafePushEndpoint cannot: a public-looking name
+ * whose A/AAAA record points at an internal address (rebindable per query).
+ */
+export function isPrivateIp(address: string): boolean {
+  const host = normalizeHost(address);
+  return isPrivateIPv4(host) || isPrivateIPv6(host);
+}
