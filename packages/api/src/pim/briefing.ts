@@ -311,6 +311,15 @@ export const BRIEFING_SYSTEM_PROMPT =
   "Respond only with the briefing text in plain markdown — never call tools, never " +
   "return JSON, never explain yourself. Follow the format the user message specifies.";
 
+/**
+ * Last briefing LLM outcome, surfaced by POST /generate so "AI summary
+ * unavailable" is diagnosable in prod (which branch fired, and why) instead of
+ * being invisible in the server logs. Single-user dogfood scope — not a
+ * per-user store.
+ */
+export const lastBriefingLlm: { source: "ai" | "fallback"; reason: string | null; model: string } =
+  { source: "fallback", reason: "not generated yet", model: "" };
+
 export default async function generateBriefing(userId: string): Promise<string> {
   const data = await gatherBriefingData(userId);
 
@@ -389,7 +398,16 @@ Recent Notes: ${JSON.stringify(data.notes)}`;
     );
 
     const content = response.choices[0]?.message?.content?.trim();
-    if (content) return content;
+    if (content) {
+      lastBriefingLlm.source = "ai";
+      lastBriefingLlm.reason = null;
+      lastBriefingLlm.model = MODEL;
+      return content;
+    }
+    const finish = response.choices[0]?.finish_reason ?? "none";
+    lastBriefingLlm.source = "fallback";
+    lastBriefingLlm.reason = `empty content (finish_reason=${finish})`;
+    lastBriefingLlm.model = MODEL;
     console.warn(
       `[BRIEFING] LLM returned empty content for ${userId} — falling back to rule-based view`,
     );
@@ -401,6 +419,9 @@ Recent Notes: ${JSON.stringify(data.notes)}`;
     // Log the reason — without it, "AI summary unavailable" is invisible
     // in prod and the user has no idea whether the issue is credentials,
     // the cost cap, or a transient provider outage.
+    lastBriefingLlm.source = "fallback";
+    lastBriefingLlm.reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    lastBriefingLlm.model = MODEL;
     console.warn(
       `[BRIEFING] LLM call failed for ${userId} — falling back to rule-based view:`,
       err instanceof Error ? err.message : err,
@@ -644,7 +665,8 @@ export function briefingRoutes(app: FastifyInstance) {
   app.post("/generate", async (request) => {
     const userId = getUserId(request);
     const { briefing, note, notification, reused } = await createDailyBriefingDelivery(userId);
-    return { briefing, note, notification, reused };
+    // Surface the LLM outcome so a rule-based fallback is diagnosable in prod.
+    return { briefing, note, notification, reused, llm: { ...lastBriefingLlm } };
   });
 
   // GET /api/briefing/data — Get raw briefing data
