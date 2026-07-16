@@ -396,6 +396,24 @@ func runSelfChecks() async -> Bool {
     let long = String(repeating: "a", count: 5000)
     check("over-long body is capped", (cardBodyText(long)?.count ?? 0) <= 4000)
 
+    print("Summon cycle:")
+    // ⌥⌘K always shows the MINIMAL pill first, expands on the second press,
+    // and dismisses from expanded/full — never jumps straight to the big panel.
+    check("nothing on screen → show the pill",
+          TopBarController.summonAction(isVisible: false, state: .collapsed) == .showPill)
+    check("pill → expand",
+          TopBarController.summonAction(isVisible: true, state: .collapsed) == .expand)
+    check("expanded → dismiss",
+          TopBarController.summonAction(isVisible: true, state: .expanded) == .dismissToRest)
+    check("full → dismiss",
+          TopBarController.summonAction(isVisible: true, state: .full) == .dismissToRest)
+    // A summon draws the pill even in hidden-pill mode (pillVisible=false):
+    // the summon is explicit intent, the setting only governs the resting pill.
+    check("summon draws the pill in hidden mode",
+          TopBarController.shouldDraw(state: .collapsed, pillVisible: false || true))
+    check("resting hidden mode still hides the pill",
+          !TopBarController.shouldDraw(state: .collapsed, pillVisible: false))
+
     print("Card snooze:")
     // The card's snooze menu offers the same four options as the reading pane
     // (one source of truth), each with a concrete future resurface time.

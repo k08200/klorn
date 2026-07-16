@@ -20,6 +20,9 @@ final class TopBarController {
     private var panel: NSPanel?
     private var state: BarState = .collapsed
     private var panelIsFocusable = false
+    /// True while an explicit summon (⌥⌘K / Show-all) is showing the bar even
+    /// though hidden-pill mode suppresses the ambient pill. Cleared on dismiss.
+    private var summoned = false
     private static let topMargin: CGFloat = 8
 
     init(model: AppModel) {
@@ -64,21 +67,50 @@ final class TopBarController {
     /// PushCard "Show all N": open the expanded panel (creating the bar if
     /// hidden-pill mode has nothing on screen yet).
     func expand() {
-        guard panel != nil else { show(); setState(.expanded); return }
+        summoned = true
         setState(.expanded)
     }
 
     /// Menu-bar "Preferences…": jump to the full view with the overlay open.
     func openPreferences() {
+        summoned = true
         setState(.full)
         model.showPreferences = true
     }
 
-    /// Global-hotkey entry point: expand the pill / collapse whatever is open,
-    /// creating the bar first if it isn't on screen yet. Never steals focus.
+    /// What ⌥⌘K does, given whether the bar is on screen and its state. Pure so
+    /// the self-check pins the cycle: nothing → the MINIMAL pill (not the big
+    /// panel), pill → expanded, expanded/full → dismiss back to rest.
+    enum SummonAction: Equatable, Sendable { case showPill, expand, dismissToRest }
+    nonisolated static func summonAction(isVisible: Bool, state: BarState) -> SummonAction {
+        guard isVisible else { return .showPill }
+        return state == .collapsed ? .expand : .dismissToRest
+    }
+
+    /// Global-hotkey entry point. Never steals focus; always shows the minimal
+    /// pill first (a second press expands) instead of jumping to the big panel.
     func toggle() {
-        guard panel != nil else { show(); setState(.expanded); return }
-        setState(state == .collapsed ? .expanded : .collapsed)
+        switch Self.summonAction(isVisible: panel?.isVisible ?? false, state: state) {
+        case .showPill:
+            summoned = true          // draw the pill even in hidden-pill mode
+            setState(.collapsed)
+        case .expand:
+            setState(.expanded)
+        case .dismissToRest:
+            dismiss()
+        }
+    }
+
+    /// Return to the resting state: the ambient pill when it's enabled, else
+    /// nothing (the menu-bar icon is the anchor in hidden-pill mode).
+    private func dismiss() {
+        summoned = false
+        if model.settings.pillVisible {
+            setState(.collapsed)
+        } else {
+            state = .collapsed
+            panel?.orderOut(nil)
+        }
     }
 
     private func setState(_ newState: BarState) {
@@ -94,7 +126,10 @@ final class TopBarController {
     }
 
     private func render() {
-        guard Self.shouldDraw(state: state, pillVisible: model.settings.pillVisible) else {
+        // A summon (⌥⌘K / Show-all) draws the pill even in hidden-pill mode —
+        // pillVisible only governs the RESTING ambient pill, not explicit intent.
+        let effectiveVisible = model.settings.pillVisible || summoned
+        guard Self.shouldDraw(state: state, pillVisible: effectiveVisible) else {
             panel?.orderOut(nil)
             return
         }
@@ -132,7 +167,7 @@ final class TopBarController {
             onExpand: { [weak self] in self?.setState(.expanded) },
             onExpandFull: { [weak self] in self?.setState(.full) },
             onRestore: { [weak self] in self?.setState(.expanded) },
-            onCollapse: { [weak self] in self?.setState(.collapsed) },
+            onCollapse: { [weak self] in self?.dismiss() },  // "Close" → back to rest
             onSignIn: { [weak self] in guard let self else { return }; Task { await self.model.signIn() } },
             onSignOut: { [weak self] in self?.model.signOut() },
             onOpenWeb: { [weak self] item in self?.open(item) },
