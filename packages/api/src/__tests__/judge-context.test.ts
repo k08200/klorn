@@ -538,6 +538,7 @@ describe("buildJudgeContext — sender facts", () => {
       interaction: null,
       commitments: null,
       engagement: null,
+      readBehavior: null,
     });
   });
 
@@ -561,6 +562,7 @@ describe("buildJudgeContext — sender facts", () => {
       interaction: null,
       commitments: null,
       engagement: null,
+      readBehavior: null,
     });
   });
 
@@ -588,6 +590,7 @@ describe("buildJudgeContext — sender facts", () => {
       interaction: { emailCount: 14, lastEmailDaysAgo: 2, upcomingMeetings: 1 },
       commitments: null,
       engagement: null,
+      readBehavior: null,
     });
   });
 

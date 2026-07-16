@@ -91,7 +91,31 @@ export interface SenderFacts {
     dismissCount?: number;
     propagated: boolean;
   } | null;
+  /**
+   * Measured read behavior: of the sender's recent mail (READ_BEHAVIOR
+   * window), how much did the user actually open? The passive half of the
+   * engagement channel — replies/dismisses need an action, but a sender the
+   * user reads 100% vs 4% of is a real attention signal the outbound-only
+   * counters are blind to (measured 2026-07-16: two buried-as-SILENT senders
+   * at 100% read, one at 4%). Same flag (CONTACT_ENGAGEMENT_IN_JUDGE), same
+   * doctrine: a soft senderTrust grounding, never a hard tier decision.
+   * Optional so pre-existing fact literals stay valid; null/absent = no
+   * signal (sample too small, flag off, or fetch failed).
+   */
+  readBehavior?: { read: number; total: number } | null;
 }
+
+/**
+ * Read-behavior policy: the counting window, the minimum sample below which
+ * the fact is suppressed (1 of 2 read tells nothing), and the rate bands that
+ * pick the prompt wording (high = reads nearly everything, low = rarely opens).
+ */
+export const READ_BEHAVIOR = {
+  windowDays: 90,
+  minSample: 3,
+  highRate: 0.8,
+  lowRate: 0.2,
+} as const;
 
 /**
  * Which flavour of engagement grounding a decision used, for rollout

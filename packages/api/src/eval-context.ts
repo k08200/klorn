@@ -152,6 +152,15 @@ function parseSenderFacts(raw: unknown, itemId: string): SenderFacts | null {
         { key: "outboundCount", min: 0 },
       ],
     ),
+    readBehavior: parseNumericRecord<NonNullable<SenderFacts["readBehavior"]>>(
+      raw.readBehavior,
+      itemId,
+      "senderFacts.readBehavior",
+      [
+        { key: "read", min: 0 },
+        { key: "total", min: 0 },
+      ],
+    ),
   };
 }
 
