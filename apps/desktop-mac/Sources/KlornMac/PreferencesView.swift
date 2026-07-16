@@ -7,6 +7,13 @@ struct PreferencesView: View {
     @Environment(AppModel.self) private var model
     let actions: TopBarActions
 
+    // Login-item state is owned by the OS (System Settings can flip it behind
+    // our back), so it's read live on appear rather than persisted here.
+    @State private var launchAtLogin = false
+    @State private var loginItemError: String?
+    @State private var updateChecking = false
+    @State private var updateOutcome: UpdateCheck.Outcome?
+
     var body: some View {
         // Local @Bindable so the Toggle can write into the nested settings object.
         @Bindable var settings = model.settings
@@ -27,6 +34,56 @@ struct PreferencesView: View {
                 .toggleStyle(.switch).tint(Theme.accent)
                 Text("The top bar always updates its PUSH count — this only controls the system banner.")
                     .font(.caption).foregroundStyle(Theme.textDim).fixedSize(horizontal: false, vertical: true)
+            }
+
+            section("GENERAL") {
+                if LoginItem.isAvailable {
+                    Toggle(isOn: $launchAtLogin) {
+                        Text("Start Klorn at login").foregroundStyle(Theme.text)
+                    }
+                    .toggleStyle(.switch).tint(Theme.accent)
+                    .onChange(of: launchAtLogin) { _, wanted in
+                        guard wanted != LoginItem.isEnabled else { return }
+                        if let error = LoginItem.setEnabled(wanted) {
+                            loginItemError = error
+                            launchAtLogin = LoginItem.isEnabled  // revert to OS truth
+                        } else {
+                            loginItemError = nil
+                        }
+                    }
+                    if let loginItemError {
+                        Text(loginItemError).font(.caption).foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    infoRow("Start at login", "Packaged app only")
+                }
+
+                HStack {
+                    Text("Updates").font(.body).foregroundStyle(Theme.text)
+                    Spacer()
+                    switch updateOutcome {
+                    case .updateAvailable(let version):
+                        Button("Get v\(version)") { UpdateCheck.openReleasePage() }
+                            .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
+                    case .upToDate:
+                        Text("Up to date (v\(AppInfo.version))")
+                            .font(.caption).foregroundStyle(Theme.textDim)
+                    case .unknown:
+                        Text("Couldn't check — try the releases page")
+                            .font(.caption).foregroundStyle(Theme.textDim)
+                    case nil:
+                        EmptyView()
+                    }
+                    Button(updateChecking ? "Checking…" : "Check for updates") {
+                        updateChecking = true
+                        Task {
+                            updateOutcome = await UpdateCheck.run()
+                            updateChecking = false
+                        }
+                    }
+                    .buttonStyle(.bordered).controlSize(.small).disabled(updateChecking)
+                }
             }
 
             section("TOP BAR") {
@@ -55,6 +112,7 @@ struct PreferencesView: View {
                 infoRow("API", Config.apiBaseURL)
             }
         }
+        .onAppear { launchAtLogin = LoginItem.isEnabled }
         .padding(22)
         .frame(width: 440)
         .background(Theme.panel, in: RoundedRectangle(cornerRadius: 14))
