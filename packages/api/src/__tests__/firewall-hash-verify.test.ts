@@ -67,6 +67,7 @@ vi.mock("../db.js", () => ({
 }));
 
 vi.mock("../auth.js", () => ({
+  resolveEffectiveJwtSecret: () => "test-secret",
   requireAuth: vi.fn(async () => {}),
   getUserId: vi.fn(() => "user-1"),
 }));

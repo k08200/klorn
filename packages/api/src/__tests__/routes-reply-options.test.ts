@@ -15,6 +15,7 @@ const captureError = vi.hoisted(() => vi.fn());
 const emailFindFirst = vi.hoisted(() => vi.fn());
 
 vi.mock("../auth.js", () => ({
+  resolveEffectiveJwtSecret: () => "test-secret",
   requireAuth: async () => {},
   getUserId: () => "user-1",
 }));

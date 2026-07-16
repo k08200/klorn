@@ -18,11 +18,14 @@
 
 import { createHmac } from "node:crypto";
 import jwt from "jsonwebtoken";
+import { resolveEffectiveJwtSecret } from "../auth.js";
 
-// Resolve the base secret the same way auth.ts does. auth.ts already throws at
-// boot if JWT_SECRET is missing in production, so re-reading it here with the
-// dev fallback is safe (the process never starts in prod without it).
-const BASE_SECRET = process.env.JWT_SECRET || "klorn-dev-secret-do-not-use-in-production";
+// Go through the single gated resolver instead of re-reading process.env with
+// an inline `|| "<public dev secret>"` fallback: that duplicated the exact
+// fail-open the resolver exists to prevent (the repo-public secret would sign
+// override tokens in any misconfigured non-dev/test env). resolveEffectiveJwtSecret
+// throws outside development/test when JWT_SECRET is unset.
+const BASE_SECRET = resolveEffectiveJwtSecret();
 
 // Derived, purpose-bound secret. Versioned so the purpose string can be rotated
 // (invalidating outstanding override tokens) without touching session tokens.

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Auth passthrough — these tests target reject-with-feedback persistence and
 // the approve CAS, not the auth layer.
 vi.mock("../auth.js", () => ({
+  resolveEffectiveJwtSecret: () => "test-secret",
   requireAuth: async () => {},
   getUserId: () => "test-user-id",
 }));

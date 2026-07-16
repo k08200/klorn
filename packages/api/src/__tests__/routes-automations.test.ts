@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // deterministic id — the target of this test is the route's input validation,
 // not the auth layer (which has its own unit tests).
 vi.mock("../auth.js", () => ({
+  resolveEffectiveJwtSecret: () => "test-secret",
   requireAuth: async () => {},
   getUserId: () => "test-user-id",
 }));
