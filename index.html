@@ -1207,6 +1207,21 @@
     }
     .dl-dock-btn:hover { background: var(--brand-gold-bright); }
     .dl-dock-btn svg { width: 16px; height: 16px; }
+    .dl-dock-help {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      border: 1px solid var(--stone-600);
+      color: var(--stone-300, #d6d3d1);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: border-color 0.2s ease, color 0.2s ease;
+    }
+    .dl-dock-help:hover { border-color: var(--brand-gold); color: var(--brand-gold); }
     .dl-dock-lang { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px 0 2px; }
     .dl-dock-lang a,
     .dl-dock-lang .dl-dock-cur {
@@ -1655,6 +1670,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 11l5 5 5-5"></path><path d="M5 21h14"></path></svg>
       Download for Mac
     </a>
+    <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener" class="dl-dock-help" aria-label="First-launch help — macOS blocks unsigned apps once; the release notes show the one-time fix" title="macOS blocks the first launch — one-time fix in the release notes">?</a>
     <div class="dl-dock-lang" role="group" aria-label="Language">
       <span class="dl-dock-cur" aria-current="page">EN</span>
       <span class="dl-dock-sep" aria-hidden="true">·</span>

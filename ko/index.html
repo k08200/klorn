@@ -1206,6 +1206,21 @@
     }
     .dl-dock-btn:hover { background: var(--brand-gold-bright); }
     .dl-dock-btn svg { width: 16px; height: 16px; }
+    .dl-dock-help {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      border: 1px solid var(--stone-600);
+      color: var(--stone-300, #d6d3d1);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: border-color 0.2s ease, color 0.2s ease;
+    }
+    .dl-dock-help:hover { border-color: var(--brand-gold); color: var(--brand-gold); }
     .dl-dock-lang { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px 0 2px; }
     .dl-dock-lang a,
     .dl-dock-lang .dl-dock-cur {
@@ -1654,6 +1669,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 11l5 5 5-5"></path><path d="M5 21h14"></path></svg>
       Mac 앱 다운로드
     </a>
+    <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener" class="dl-dock-help" aria-label="첫 실행 도움말 — macOS가 서명 없는 앱을 한 번 차단합니다. 릴리즈 노트에 1회용 해결법이 있어요" title="macOS가 첫 실행을 차단하면 — 해결법은 릴리즈 노트에">?</a>
     <div class="dl-dock-lang" role="group" aria-label="언어">
       <a href="/" data-lang-switch="en" aria-label="View in English">EN</a>
       <span class="dl-dock-sep" aria-hidden="true">·</span>
