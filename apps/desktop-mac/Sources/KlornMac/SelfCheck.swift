@@ -385,6 +385,17 @@ func runSelfChecks() async -> Bool {
     check("event time label — malformed ISO degrades",
           eventTimeLabel(startISO: "not-a-date", endISO: "also-no", allDay: false, calendar: utc) == "")
 
+    print("Card body:")
+    // The expanded card shows the email body inline; whitespace-only bodies
+    // collapse to nil (no empty scroll box), real text is trimmed and passed
+    // through, and an over-long body is capped so one card can't grow unbounded.
+    check("body text passes real content",
+          cardBodyText("Hi,\n\nCan we move to 3pm?\n") == "Hi,\n\nCan we move to 3pm?")
+    check("blank body → nil", cardBodyText("   \n  ") == nil)
+    check("nil body → nil", cardBodyText(nil) == nil)
+    let long = String(repeating: "a", count: 5000)
+    check("over-long body is capped", (cardBodyText(long)?.count ?? 0) <= 4000)
+
     print("Card snooze:")
     // The card's snooze menu offers the same four options as the reading pane
     // (one source of truth), each with a concrete future resurface time.

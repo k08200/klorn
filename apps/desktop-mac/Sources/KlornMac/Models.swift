@@ -288,6 +288,15 @@ struct ReplyOptionsResponse: Codable, Sendable {
     let options: [ReplyOption]
 }
 
+/// Email body for the expanded card's inline reader: trimmed, nil when blank
+/// (no empty scroll box), and capped so one card can't grow unbounded on a
+/// huge message. Pure for testing.
+func cardBodyText(_ body: String?) -> String? {
+    let trimmed = body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    if trimmed.isEmpty { return nil }
+    return String(trimmed.prefix(4000))
+}
+
 /// The snooze options the PushCard offers — the full SnoozeOption set, in
 /// display order. A single source of truth shared with the reading pane so the
 /// two surfaces never drift.

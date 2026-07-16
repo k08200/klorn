@@ -45,7 +45,7 @@ struct PushCardActions {
 
 enum PushCardMetrics {
     static let compact = NSSize(width: 460, height: 344)
-    static let expanded = NSSize(width: 560, height: 470)
+    static let expanded = NSSize(width: 560, height: 600)
     static let corner: CGFloat = 16
 
     static func size(for layout: CardLayout) -> NSSize {
@@ -79,7 +79,10 @@ struct PushCard: View {
         VStack(alignment: .leading, spacing: 10) {
             header
             Divider().overlay(Theme.line)
-            if state.layout == .expanded { summarySection }
+            if state.layout == .expanded {
+                summarySection
+                bodySection
+            }
             content
             Spacer(minLength: 0)
             footer
@@ -118,6 +121,25 @@ struct PushCard: View {
             }
             .padding(10)
             .background(Color.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
+            Divider().overlay(Theme.line)
+        }
+    }
+
+    /// Expanded-only: the email body inline, so the user can read it in the
+    /// card without leaving for the web inbox. Scrolls; reading here never
+    /// marks the mail read (the detail fetch is a plain GET, no markRead).
+    @ViewBuilder
+    private var bodySection: some View {
+        if let body = cardBodyText(state.detail?.text) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Message").font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
+                ScrollView {
+                    Text(body).font(.caption).foregroundStyle(Theme.text)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                .frame(maxHeight: 120)
+            }
             Divider().overlay(Theme.line)
         }
     }
