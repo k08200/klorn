@@ -193,6 +193,19 @@ export const SCHEDULER_RECONCILE_INTERVAL_MS = intEnv(
 // agents can still progress under load.
 export const LLM_USER_RPM = intEnv("LLM_USER_RPM", 15);
 
+// Of the shared RPM window, this many slots are reserved for foreground chat —
+// background workers (classifier, summarizer, briefing) can never consume them.
+// Keeps chat responsive while a mail-sync burst drains through the queue below.
+export const LLM_RPM_FOREGROUND_RESERVE = intEnv("LLM_RPM_FOREGROUND_RESERVE", 3);
+
+// How long a BACKGROUND call may wait for a free RPM slot before giving up.
+// Before this knob existed, a background call over the RPM cap failed
+// instantly — a 58-email sync burst starved the judge and dropped 34 emails to
+// the keyword fallback (permanently: fallback rows are never re-judged),
+// measured on prod 2026-07-15. Waiting turns that burst into an ordered drain.
+// 0 restores the old fail-fast behavior (kill switch).
+export const LLM_BACKGROUND_RPM_MAX_WAIT_MS = intEnv("LLM_BACKGROUND_RPM_MAX_WAIT_MS", 300_000);
+
 // Daily quota is split into two independent buckets so background workers
 // (autonomous-agent, classifier, briefing, pattern-learner) can never starve
 // foreground chat. If background exhausts its cap, chat keeps working.
@@ -201,6 +214,11 @@ export const LLM_USER_RPM = intEnv("LLM_USER_RPM", 15);
 // that foreground gets a reserved 300 even when background has burned its 200.
 export const LLM_USER_FOREGROUND_DAILY_CAP = intEnv("LLM_USER_FOREGROUND_DAILY_CAP", 300);
 export const LLM_USER_BACKGROUND_DAILY_CAP = intEnv("LLM_USER_BACKGROUND_DAILY_CAP", 200);
+// Burst control for background-priority LLM calls (global, not per-user):
+// bound concurrency and pace launches so background work can't slam the
+// provider's own per-minute quota and cool-down-lock interactive calls too.
+export const LLM_BACKGROUND_MAX_CONCURRENT = intEnv("LLM_BACKGROUND_MAX_CONCURRENT", 2);
+export const LLM_BACKGROUND_MIN_INTERVAL_MS = intEnv("LLM_BACKGROUND_MIN_INTERVAL_MS", 4_000);
 // Legacy env var, kept so existing deployments don't break — when set, it
 // overrides the combined-total view used by the deprecated single-bucket API.
 const legacyDailyCap = intEnv("LLM_USER_DAILY_CAP", 0);

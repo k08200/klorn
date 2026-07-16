@@ -5,8 +5,8 @@ import type {
 } from "openai/resources/chat/completions";
 import { estimatePrebillCents, recordLlmUsage, trueUpCostLedgers } from "../billing/llm-usage.js";
 import {
+  awaitUserCallSlot,
   type CallPriority,
-  checkAndRecordUserCall,
   UserRateLimitedError,
 } from "../billing/quota-limiter.js";
 import {
@@ -16,6 +16,7 @@ import {
   type ProviderCredentials,
 } from "../providers/index.js";
 import { captureError } from "../sentry.js";
+import { backgroundLlmPacer } from "./background-pacer.js";
 import {
   FALLBACK_MODEL,
   getProviderCooldownInfo,
@@ -105,6 +106,12 @@ export interface CompletionOptions {
    * user's chat preference never touches those.
    */
   useUserModel?: boolean;
+  /**
+   * Internal recursion guard for the background pacer — set only by
+   * createCompletion itself when re-entering through backgroundLlmPacer.
+   * Callers must never set this.
+   */
+  _paced?: boolean;
 }
 
 export class DailyCostCapExceededError extends Error {
@@ -294,6 +301,21 @@ export async function createCompletion(
     | OpenAI.Chat.Completions.ChatCompletion
     | AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
 
+  // Background-priority calls go through the global pacer FIRST: a burst
+  // (summarize sweep, batch judge) launched concurrently trips the provider's
+  // own per-minute quota, and the resulting cooldown lockout takes interactive
+  // foreground calls down with it (PushCard drafts 503'd for 5+ min in prod).
+  if ((options.priority ?? "foreground") === "background" && !options._paced) {
+    const paced = { ...options, _paced: true };
+    return backgroundLlmPacer.run(
+      () =>
+        createCompletion(
+          params as ChatCompletionCreateParamsNonStreaming,
+          paced,
+        ) as Promise<Result>,
+    );
+  }
+
   const chain = getProviderChain(options.credentials);
   if (chain.length === 0) {
     throw new Error(
@@ -319,9 +341,11 @@ export async function createCompletion(
   // Per-user RPM + daily-cap gate: trip before the call so a runaway loop
   // doesn't burn upstream provider quota. Charged against the foreground
   // bucket by default; background workers pass `priority: "background"` so
-  // they can never starve chat.
+  // they can never starve chat. A background call over the RPM window PARKS
+  // for a slot (bounded) instead of failing — instant failure demoted every
+  // email past the cap in a sync burst to the permanent keyword fallback.
   if (options.userId) {
-    checkAndRecordUserCall(options.userId, { priority: options.priority ?? "foreground" });
+    await awaitUserCallSlot(options.userId, { priority: options.priority ?? "foreground" });
   }
 
   // Daily-cost gate: enforce BEFORE the call so we don't burn budget twice
@@ -544,7 +568,7 @@ export async function createVisionCompletion(
   // limit and daily-call bucket. Charge it against the background bucket (it's
   // a worker-triggered batch) so it can never starve foreground chat.
   if (options.userId) {
-    checkAndRecordUserCall(options.userId, { priority: options.priority ?? "background" });
+    await awaitUserCallSlot(options.userId, { priority: options.priority ?? "background" });
   }
 
   // Daily-cost gate: vision/OCR calls bill the same ledgers as chat. Without
