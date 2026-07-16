@@ -15,6 +15,7 @@ import {
   PLANS,
   stripe,
 } from "../billing/stripe.js";
+import { verifyOpenRouterKey } from "../billing/verify-provider-key.js";
 import { TRIAL_DAYS } from "../config.js";
 import { encryptOptional } from "../crypto-tokens.js";
 import { db, prisma } from "../db.js";
@@ -217,9 +218,13 @@ export async function billingRoutes(app: FastifyInstance) {
           additionalProperties: false,
           properties: {
             chatModel: { type: "string", maxLength: 256 },
+            // Single-key policy (2026-07-16 outage): OpenRouter is THE BYOK
+            // slot — it routes every model we pin, including the Gemini
+            // family. New geminiApiKey writes are rejected by this schema
+            // (additionalProperties:false); clearGeminiApiKey stays so legacy
+            // users can remove a stored one.
             clearGeminiApiKey: { type: "boolean" },
             clearOpenRouterApiKey: { type: "boolean" },
-            geminiApiKey: { type: ["string", "null"], maxLength: 512 },
             openRouterApiKey: { type: ["string", "null"], maxLength: 512 },
           },
         },
@@ -227,19 +232,13 @@ export async function billingRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const userId = getUserId(request);
-      const {
-        chatModel,
-        openRouterApiKey,
-        geminiApiKey,
-        clearOpenRouterApiKey,
-        clearGeminiApiKey,
-      } = request.body as {
-        chatModel?: string;
-        openRouterApiKey?: string | null;
-        geminiApiKey?: string | null;
-        clearOpenRouterApiKey?: boolean;
-        clearGeminiApiKey?: boolean;
-      };
+      const { chatModel, openRouterApiKey, clearOpenRouterApiKey, clearGeminiApiKey } =
+        request.body as {
+          chatModel?: string;
+          openRouterApiKey?: string | null;
+          clearOpenRouterApiKey?: boolean;
+          clearGeminiApiKey?: boolean;
+        };
 
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) return reply.code(404).send({ error: "User not found" });
@@ -250,10 +249,23 @@ export async function billingRoutes(app: FastifyInstance) {
       // downgraded user can remove theirs. The chat-model CHOICE is for
       // everyone — the per-user daily cost cap is the spend guard.
       const isSettingKey =
-        (typeof openRouterApiKey === "string" && openRouterApiKey.trim().length > 0) ||
-        (typeof geminiApiKey === "string" && geminiApiKey.trim().length > 0);
+        typeof openRouterApiKey === "string" && openRouterApiKey.trim().length > 0;
       if (isSettingKey && !isEntitled(user.plan, user.role)) {
         return reply.code(403).send({ error: "BYOK requires an active subscription" });
+      }
+
+      // Verify a NEW key upstream before storing it. A definitively-rejected
+      // key stored silently is exactly how the 2026-07-16 outage started —
+      // every later chain walk failed on it with zero signal to the user.
+      if (isSettingKey && openRouterApiKey) {
+        const verdict = await verifyOpenRouterKey(openRouterApiKey.trim());
+        if (verdict === "invalid") {
+          return reply.code(400).send({
+            error:
+              "That OpenRouter key was rejected by the provider — check it at openrouter.ai/keys and try again.",
+          });
+        }
+        // "unreachable" falls through: never block a save on provider noise.
       }
 
       const updateData: {
@@ -279,10 +291,8 @@ export async function billingRoutes(app: FastifyInstance) {
         updateData.openRouterApiKey = null;
       }
 
-      if (typeof geminiApiKey === "string") {
-        const trimmed = geminiApiKey.trim();
-        updateData.geminiApiKey = trimmed ? encryptOptional(trimmed) : null;
-      } else if (clearGeminiApiKey) {
+      // Legacy Gemini slot: clear-only (single-key policy — see the schema note).
+      if (clearGeminiApiKey) {
         updateData.geminiApiKey = null;
       }
 
