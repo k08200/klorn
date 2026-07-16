@@ -17,15 +17,23 @@
       "receivedAt": "2026-05-28T08:58:43.000Z",
       "label": "SILENT",
       "context": {
+        "senderPrior": {
+          "tier": "SILENT",
+          "count": 10,
+          "kind": "history"
+        },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 8,
-            "QUEUE": 2
+            "SILENT": 10
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 0,
+            "total": 44
+          }
         }
       }
     },
@@ -40,15 +48,27 @@
       "receivedAt": "2026-05-27T23:25:49.000Z",
       "label": "SILENT",
       "context": {
+        "senderPrior": {
+          "tier": "SILENT",
+          "count": 10,
+          "kind": "history"
+        },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 7,
-            "QUEUE": 3
+            "SILENT": 10
           },
           "manualOverrides": 0,
-          "interaction": null,
+          "interaction": {
+            "emailCount": 11,
+            "lastEmailDaysAgo": 6,
+            "upcomingMeetings": 0
+          },
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 1,
+            "total": 25
+          }
         }
       },
       "note": "[relabeled QUEUE->SILENT 2026-07-16: behavioral evidence — founder reads 1/25 (4%) of this sender vs 57% mailbox baseline; original QUEUE labels split from the SILENT two only by recency at review time]"
@@ -64,14 +84,23 @@
       "receivedAt": "2026-05-27T14:49:46.000Z",
       "label": "QUEUE",
       "context": {
+        "senderPrior": {
+          "tier": "QUEUE",
+          "count": 3,
+          "kind": "history"
+        },
         "senderFacts": {
           "tierHistory": {
-            "QUEUE": 1
+            "QUEUE": 3
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 2,
+            "total": 5
+          }
         }
       }
     },
@@ -98,7 +127,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 9,
+            "total": 20
+          }
         }
       }
     },
@@ -120,7 +153,8 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": null
         }
       }
     },
@@ -143,7 +177,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 3,
+            "total": 4
+          }
         }
       }
     },
@@ -168,9 +206,17 @@
             "SILENT": 10
           },
           "manualOverrides": 0,
-          "interaction": null,
+          "interaction": {
+            "emailCount": 13,
+            "lastEmailDaysAgo": 9,
+            "upcomingMeetings": 0
+          },
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 10,
+            "total": 29
+          }
         }
       }
     },
@@ -187,17 +233,25 @@
       "context": {
         "senderPrior": {
           "tier": "SILENT",
-          "count": 8,
+          "count": 9,
           "kind": "history"
         },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 8
+            "SILENT": 9
           },
           "manualOverrides": 0,
-          "interaction": null,
+          "interaction": {
+            "emailCount": 7,
+            "lastEmailDaysAgo": 7,
+            "upcomingMeetings": 0
+          },
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 7,
+            "total": 16
+          }
         }
       }
     },
@@ -212,15 +266,23 @@
       "receivedAt": "2026-05-26T08:58:40.000Z",
       "label": "SILENT",
       "context": {
+        "senderPrior": {
+          "tier": "SILENT",
+          "count": 10,
+          "kind": "history"
+        },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 8,
-            "QUEUE": 2
+            "SILENT": 10
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 0,
+            "total": 44
+          }
         }
       }
     },
@@ -235,15 +297,23 @@
       "receivedAt": "2026-05-26T06:22:21.000Z",
       "label": "SILENT",
       "context": {
+        "senderPrior": {
+          "tier": "SILENT",
+          "count": 10,
+          "kind": "history"
+        },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 8,
-            "QUEUE": 2
+            "SILENT": 10
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 0,
+            "total": 44
+          }
         }
       }
     },
@@ -266,7 +336,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 3,
+            "total": 3
+          }
         }
       }
     },
@@ -281,15 +355,27 @@
       "receivedAt": "2026-05-26T00:59:36.000Z",
       "label": "SILENT",
       "context": {
+        "senderPrior": {
+          "tier": "SILENT",
+          "count": 10,
+          "kind": "history"
+        },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 7,
-            "QUEUE": 3
+            "SILENT": 10
           },
           "manualOverrides": 0,
-          "interaction": null,
+          "interaction": {
+            "emailCount": 11,
+            "lastEmailDaysAgo": 6,
+            "upcomingMeetings": 0
+          },
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 1,
+            "total": 25
+          }
         }
       },
       "note": "[relabeled QUEUE->SILENT 2026-07-16: behavioral evidence — founder reads 1/25 (4%) of this sender vs 57% mailbox baseline; original QUEUE labels split from the SILENT two only by recency at review time]"
@@ -326,9 +412,17 @@
             "SILENT": 10
           },
           "manualOverrides": 0,
-          "interaction": null,
+          "interaction": {
+            "emailCount": 13,
+            "lastEmailDaysAgo": 9,
+            "upcomingMeetings": 0
+          },
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 10,
+            "total": 29
+          }
         }
       }
     },
@@ -345,17 +439,25 @@
       "context": {
         "senderPrior": {
           "tier": "SILENT",
-          "count": 8,
+          "count": 9,
           "kind": "history"
         },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 8
+            "SILENT": 9
           },
           "manualOverrides": 0,
-          "interaction": null,
+          "interaction": {
+            "emailCount": 7,
+            "lastEmailDaysAgo": 7,
+            "upcomingMeetings": 0
+          },
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 7,
+            "total": 16
+          }
         }
       }
     },
@@ -382,7 +484,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 9,
+            "total": 20
+          }
         }
       }
     },
@@ -399,13 +505,17 @@
       "context": {
         "senderFacts": {
           "tierHistory": {
-            "PUSH": 2,
-            "QUEUE": 8
+            "PUSH": 1,
+            "QUEUE": 9
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 14,
+            "total": 17
+          }
         }
       }
     },
@@ -422,13 +532,17 @@
       "context": {
         "senderFacts": {
           "tierHistory": {
-            "PUSH": 2,
-            "QUEUE": 8
+            "PUSH": 1,
+            "QUEUE": 9
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 14,
+            "total": 17
+          }
         }
       }
     },
@@ -453,9 +567,17 @@
             "SILENT": 10
           },
           "manualOverrides": 0,
-          "interaction": null,
+          "interaction": {
+            "emailCount": 13,
+            "lastEmailDaysAgo": 9,
+            "upcomingMeetings": 0
+          },
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 10,
+            "total": 29
+          }
         }
       }
     },
@@ -472,13 +594,17 @@
       "context": {
         "senderFacts": {
           "tierHistory": {
-            "QUEUE": 7,
-            "PUSH": 3
+            "QUEUE": 8,
+            "PUSH": 2
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 31,
+            "total": 42
+          }
         }
       }
     },
@@ -505,7 +631,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 10,
+            "total": 10
+          }
         }
       }
     },
@@ -522,13 +652,17 @@
       "context": {
         "senderFacts": {
           "tierHistory": {
-            "QUEUE": 7,
-            "PUSH": 3
+            "QUEUE": 8,
+            "PUSH": 2
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 31,
+            "total": 42
+          }
         }
       }
     },
@@ -545,17 +679,25 @@
       "context": {
         "senderPrior": {
           "tier": "SILENT",
-          "count": 8,
+          "count": 9,
           "kind": "history"
         },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 8
+            "SILENT": 9
           },
           "manualOverrides": 0,
-          "interaction": null,
+          "interaction": {
+            "emailCount": 7,
+            "lastEmailDaysAgo": 7,
+            "upcomingMeetings": 0
+          },
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 7,
+            "total": 16
+          }
         }
       }
     },
@@ -582,7 +724,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 10,
+            "total": 10
+          }
         }
       }
     },
@@ -609,7 +755,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 10,
+            "total": 10
+          }
         }
       }
     },
@@ -636,7 +786,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 10,
+            "total": 10
+          }
         }
       }
     },
@@ -651,14 +805,23 @@
       "receivedAt": "2026-05-23T13:19:52.000Z",
       "label": "QUEUE",
       "context": {
+        "senderPrior": {
+          "tier": "QUEUE",
+          "count": 3,
+          "kind": "history"
+        },
         "senderFacts": {
           "tierHistory": {
-            "QUEUE": 1
+            "QUEUE": 3
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 2,
+            "total": 5
+          }
         }
       }
     },
@@ -685,7 +848,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 9,
+            "total": 20
+          }
         }
       }
     },
@@ -711,15 +878,23 @@
       "receivedAt": "2026-05-23T08:58:40.000Z",
       "label": "SILENT",
       "context": {
+        "senderPrior": {
+          "tier": "SILENT",
+          "count": 10,
+          "kind": "history"
+        },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 8,
-            "QUEUE": 2
+            "SILENT": 10
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 0,
+            "total": 44
+          }
         }
       }
     },
@@ -736,13 +911,17 @@
       "context": {
         "senderFacts": {
           "tierHistory": {
-            "QUEUE": 7,
-            "PUSH": 3
+            "QUEUE": 8,
+            "PUSH": 2
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 31,
+            "total": 42
+          }
         }
       }
     },
@@ -759,13 +938,17 @@
       "context": {
         "senderFacts": {
           "tierHistory": {
-            "QUEUE": 7,
-            "PUSH": 3
+            "QUEUE": 8,
+            "PUSH": 2
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 31,
+            "total": 42
+          }
         }
       }
     },
@@ -792,7 +975,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 9,
+            "total": 20
+          }
         }
       }
     },
@@ -807,15 +994,27 @@
       "receivedAt": "2026-05-22T23:36:13.000Z",
       "label": "SILENT",
       "context": {
+        "senderPrior": {
+          "tier": "SILENT",
+          "count": 10,
+          "kind": "history"
+        },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 7,
-            "QUEUE": 3
+            "SILENT": 10
           },
           "manualOverrides": 0,
-          "interaction": null,
+          "interaction": {
+            "emailCount": 11,
+            "lastEmailDaysAgo": 6,
+            "upcomingMeetings": 0
+          },
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 1,
+            "total": 25
+          }
         }
       },
       "note": "[relabeled QUEUE->SILENT 2026-07-16: behavioral evidence — founder reads 1/25 (4%) of this sender vs 57% mailbox baseline; original QUEUE labels split from the SILENT two only by recency at review time]"
@@ -833,17 +1032,21 @@
       "context": {
         "senderPrior": {
           "tier": "QUEUE",
-          "count": 6,
+          "count": 8,
           "kind": "history"
         },
         "senderFacts": {
           "tierHistory": {
-            "QUEUE": 6
+            "QUEUE": 8
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 6,
+            "total": 9
+          }
         }
       }
     },
@@ -865,7 +1068,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 3,
+            "total": 3
+          }
         }
       }
     },
@@ -882,13 +1089,17 @@
       "context": {
         "senderFacts": {
           "tierHistory": {
-            "QUEUE": 7,
-            "PUSH": 3
+            "QUEUE": 8,
+            "PUSH": 2
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 31,
+            "total": 42
+          }
         }
       }
     },
@@ -910,7 +1121,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 3,
+            "total": 3
+          }
         }
       }
     },
@@ -943,7 +1158,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 12,
+            "total": 13
+          }
         }
       }
     },
@@ -958,15 +1177,23 @@
       "receivedAt": "2026-05-21T08:58:41.000Z",
       "label": "SILENT",
       "context": {
+        "senderPrior": {
+          "tier": "SILENT",
+          "count": 10,
+          "kind": "history"
+        },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 8,
-            "QUEUE": 2
+            "SILENT": 10
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 0,
+            "total": 44
+          }
         }
       }
     },
@@ -981,15 +1208,27 @@
       "receivedAt": "2026-05-20T20:09:25.000Z",
       "label": "SILENT",
       "context": {
+        "senderPrior": {
+          "tier": "SILENT",
+          "count": 10,
+          "kind": "history"
+        },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 7,
-            "QUEUE": 3
+            "SILENT": 10
           },
           "manualOverrides": 0,
-          "interaction": null,
+          "interaction": {
+            "emailCount": 11,
+            "lastEmailDaysAgo": 6,
+            "upcomingMeetings": 0
+          },
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 1,
+            "total": 25
+          }
         }
       }
     },
@@ -1004,15 +1243,27 @@
       "receivedAt": "2026-05-19T18:30:45.000Z",
       "label": "SILENT",
       "context": {
+        "senderPrior": {
+          "tier": "SILENT",
+          "count": 10,
+          "kind": "history"
+        },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 7,
-            "QUEUE": 3
+            "SILENT": 10
           },
           "manualOverrides": 0,
-          "interaction": null,
+          "interaction": {
+            "emailCount": 11,
+            "lastEmailDaysAgo": 6,
+            "upcomingMeetings": 0
+          },
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 1,
+            "total": 25
+          }
         }
       }
     },
@@ -1029,17 +1280,25 @@
       "context": {
         "senderPrior": {
           "tier": "SILENT",
-          "count": 8,
+          "count": 9,
           "kind": "history"
         },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 8
+            "SILENT": 9
           },
           "manualOverrides": 0,
-          "interaction": null,
+          "interaction": {
+            "emailCount": 7,
+            "lastEmailDaysAgo": 7,
+            "upcomingMeetings": 0
+          },
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 7,
+            "total": 16
+          }
         }
       }
     },
@@ -1054,15 +1313,23 @@
       "receivedAt": "2026-05-19T08:58:40.000Z",
       "label": "SILENT",
       "context": {
+        "senderPrior": {
+          "tier": "SILENT",
+          "count": 10,
+          "kind": "history"
+        },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 8,
-            "QUEUE": 2
+            "SILENT": 10
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 0,
+            "total": 44
+          }
         }
       }
     },
@@ -1077,15 +1344,23 @@
       "receivedAt": "2026-05-19T06:22:19.000Z",
       "label": "SILENT",
       "context": {
+        "senderPrior": {
+          "tier": "SILENT",
+          "count": 10,
+          "kind": "history"
+        },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 8,
-            "QUEUE": 2
+            "SILENT": 10
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 0,
+            "total": 44
+          }
         }
       }
     },
@@ -1109,7 +1384,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 12,
+            "total": 12
+          }
         }
       }
     },
@@ -1136,7 +1415,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 10,
+            "total": 10
+          }
         }
       }
     },
@@ -1163,7 +1446,11 @@
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 10,
+            "total": 10
+          }
         }
       }
     },
@@ -1178,15 +1465,23 @@
       "receivedAt": "2026-05-18T08:58:41.000Z",
       "label": "SILENT",
       "context": {
+        "senderPrior": {
+          "tier": "SILENT",
+          "count": 10,
+          "kind": "history"
+        },
         "senderFacts": {
           "tierHistory": {
-            "SILENT": 8,
-            "QUEUE": 2
+            "SILENT": 10
           },
           "manualOverrides": 0,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 0,
+            "total": 44
+          }
         }
       }
     },
@@ -1215,7 +1510,11 @@
           "manualOverrides": 3,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 1,
+            "total": 4
+          }
         }
       }
     },
@@ -1244,7 +1543,11 @@
           "manualOverrides": 3,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 1,
+            "total": 4
+          }
         }
       }
     },
@@ -1273,7 +1576,11 @@
           "manualOverrides": 3,
           "interaction": null,
           "commitments": null,
-          "engagement": null
+          "engagement": null,
+          "readBehavior": {
+            "read": 1,
+            "total": 4
+          }
         }
       }
     }
