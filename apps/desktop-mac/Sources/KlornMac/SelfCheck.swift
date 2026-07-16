@@ -347,6 +347,18 @@ func runSelfChecks() async -> Bool {
     check("expanded panel draws even in hidden-mode", TopBarController.shouldDraw(state: .expanded, pillVisible: false))
     check("full view draws even in hidden-mode", TopBarController.shouldDraw(state: .full, pillVisible: false))
 
+    print("Status item:")
+    check("status line — signed out",
+          StatusItemController.statusLine(signedIn: false, pushCount: 9) == "Klorn — not signed in")
+    check("status line — clear inbox",
+          StatusItemController.statusLine(signedIn: true, pushCount: 0) == "Klorn — no urgent mail")
+    check("status line — push count",
+          StatusItemController.statusLine(signedIn: true, pushCount: 3) == "Klorn — 3 PUSH waiting")
+    check("bar toggle offers Hide when visible",
+          StatusItemController.barToggleTitle(pillVisible: true) == "Hide top bar")
+    check("bar toggle offers Show when hidden",
+          StatusItemController.barToggleTitle(pillVisible: false) == "Show top bar")
+
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0
 }
