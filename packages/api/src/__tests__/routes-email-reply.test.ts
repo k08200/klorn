@@ -14,6 +14,7 @@ const emailFindFirst = vi.hoisted(() => vi.fn());
 vi.mock("../auth.js", () => ({
   requireAuth: async () => {},
   getUserId: () => "user-1",
+  resolveEffectiveJwtSecret: () => "test-secret",
 }));
 vi.mock("../db.js", () => {
   const prisma = { emailMessage: { findFirst: emailFindFirst } };
