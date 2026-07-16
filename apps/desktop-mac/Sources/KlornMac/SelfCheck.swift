@@ -357,6 +357,24 @@ func runSelfChecks() async -> Bool {
     check("silent when nothing new",
           !PushCardController.shouldChime(newCount: 0, alertsEnabled: true))
 
+    print("Launch at login:")
+    // Only a packaged .app can register as a login item (SMAppService needs a
+    // bundle); the unbundled `swift run` must degrade to a visible explanation,
+    // never a silent no-op toggle.
+    check("available for a bundled app", LoginItem.availability(hasBundleId: true) == .available)
+    check("unbundled run explains itself",
+          LoginItem.availability(hasBundleId: false) == .unavailable(reason: "Packaged app only"))
+
+    print("Update check:")
+    // Tag comparison: strict semver on the desktop-v prefix; equal or older
+    // tags are "up to date", malformed tags never claim an update exists.
+    check("newer tag → update", UpdateCheck.compare(current: "0.2.2", latestTag: "desktop-v0.3.0") == .updateAvailable("0.3.0"))
+    check("same tag → up to date", UpdateCheck.compare(current: "0.2.2", latestTag: "desktop-v0.2.2") == .upToDate)
+    check("older tag → up to date", UpdateCheck.compare(current: "0.3.0", latestTag: "desktop-v0.2.2") == .upToDate)
+    check("minor beats patch", UpdateCheck.compare(current: "0.2.9", latestTag: "desktop-v0.3.0") == .updateAvailable("0.3.0"))
+    check("malformed tag → unknown", UpdateCheck.compare(current: "0.2.2", latestTag: "v1") == .unknown)
+    check("dev build → unknown", UpdateCheck.compare(current: "dev", latestTag: "desktop-v9.9.9") == .unknown)
+
     print("Status item:")
     check("status line — signed out",
           StatusItemController.statusLine(signedIn: false, pushCount: 9) == "Klorn — not signed in")

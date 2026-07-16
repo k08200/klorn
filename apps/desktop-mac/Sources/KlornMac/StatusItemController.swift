@@ -76,6 +76,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         // The icon only exists while the pill is hidden, so this is always "Show".
         menu.addItem(actionItem("Show top bar", #selector(showBar)))
         menu.addItem(actionItem("Open web inbox", #selector(openWeb)))
+        menu.addItem(actionItem("Preferences…", #selector(openPreferences)))
         menu.addItem(.separator())
         if model.phase == .signedIn {
             menu.addItem(actionItem("Sign out", #selector(signOut)))
@@ -109,6 +110,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func openWeb() {
         if let url = URL(string: Config.webBaseURL) { NSWorkspace.shared.open(url) }
+    }
+
+    @objc private func openPreferences() {
+        topBar.openPreferences()
     }
 
     @objc private func signOut() {
