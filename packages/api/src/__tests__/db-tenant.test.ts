@@ -26,7 +26,7 @@ const { rawCalls, fakeTx, prismaMock } = vi.hoisted(() => {
   };
 });
 
-vi.mock("../db.js", () => ({ prisma: prismaMock }));
+vi.mock("../db.js", () => ({ prisma: prismaMock, INTERACTIVE_TX_OPTIONS: { maxWait: 10_000, timeout: 15_000 } }));
 
 import { withSystem, withTenant } from "../db-tenant.js";
 
@@ -46,6 +46,16 @@ describe("db-tenant", () => {
   it("withTenant runs inside one interactive transaction", async () => {
     await withTenant("user-123", async () => "ok");
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("withTenant and withSystem pass pool-sized $transaction options (#845 P2028 class)", async () => {
+    await withTenant("user-123", async () => "ok");
+    await withSystem(async () => "ok");
+    for (const call of prismaMock.$transaction.mock.calls) {
+      const opts = call[1] as { maxWait?: number; timeout?: number } | undefined;
+      expect(opts?.maxWait).toBeGreaterThanOrEqual(10_000);
+      expect(opts?.timeout).toBeGreaterThanOrEqual(15_000);
+    }
   });
 
   it("withTenant sets app.current_user_id to the userId, transaction-local", async () => {

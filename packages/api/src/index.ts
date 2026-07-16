@@ -10,7 +10,7 @@ import {
   revokeDemoAccessIfDisabled,
 } from "./auth.js";
 import { startBackgroundAgent } from "./background.js";
-import { db, prisma } from "./db.js";
+import { db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
 import { isDevOrTestEnv } from "./env.js";
 import { handleError } from "./error-handler.js";
@@ -294,7 +294,13 @@ app.delete("/api/user/me/data", { preHandler: requireAuth }, async (request, rep
   const userId = getUserId(request);
   // Exhaustive user-data wipe (keeps the account row). See purge-user-data.ts —
   // the list is CASA/Google "delete my data" critical and regression-tested.
-  await prisma.$transaction((tx) => purgeUserData(tx as unknown as typeof db, userId));
+  // Pool-sized maxWait (#845 P2028 class) + a 60s timeout of its own: a full
+  // purge of a large account is many deletes and must not die at the 5s
+  // interactive default on a compliance-critical endpoint.
+  await prisma.$transaction((tx) => purgeUserData(tx as unknown as typeof db, userId), {
+    ...INTERACTIVE_TX_OPTIONS,
+    timeout: 60_000,
+  });
   return reply.code(204).send();
 });
 

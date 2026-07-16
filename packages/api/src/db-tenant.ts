@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import { prisma } from "./db.js";
+import { INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
 
 /**
  * Tenant-scoped and system-scoped query execution for Postgres Row-Level
@@ -42,7 +42,7 @@ export function withTenant<T>(userId: string, fn: (tx: TxClient) => Promise<T>):
   return prisma.$transaction(async (tx) => {
     await setLocalConfig(tx as TxClient, "app.current_user_id", userId);
     return fn(tx as TxClient);
-  });
+  }, INTERACTIVE_TX_OPTIONS); // SET LOCAL requires the interactive form; pool-sized options per #845
 }
 
 /**
@@ -54,5 +54,5 @@ export function withSystem<T>(fn: (tx: TxClient) => Promise<T>): Promise<T> {
   return prisma.$transaction(async (tx) => {
     await setLocalConfig(tx as TxClient, "app.bypass_rls", "on");
     return fn(tx as TxClient);
-  });
+  }, INTERACTIVE_TX_OPTIONS); // SET LOCAL requires the interactive form; pool-sized options per #845
 }

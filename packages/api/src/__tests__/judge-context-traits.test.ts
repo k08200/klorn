@@ -20,6 +20,7 @@ vi.mock("../config.js", async (importOriginal) => {
 });
 
 vi.mock("../db.js", () => ({
+  INTERACTIVE_TX_OPTIONS: { maxWait: 10_000, timeout: 15_000 },
   db: {
     attentionItem: { findMany: attentionFindMany },
     emailMessage: { findMany: emailFindMany },
