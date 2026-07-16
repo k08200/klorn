@@ -396,6 +396,17 @@ func runSelfChecks() async -> Bool {
     let long = String(repeating: "a", count: 5000)
     check("over-long body is capped", (cardBodyText(long)?.count ?? 0) <= 4000)
 
+    print("Single instance:")
+    // A second launch must defer to the running one (the "two stacked bars"
+    // bug) — but only for a real bundle; unbundled `swift run` (nil id) never
+    // defers so the harness/dev loop keeps working.
+    check("defers when another instance is running",
+          Entry.shouldDeferToExistingInstance(bundleID: "ai.klorn.desktop", otherInstanceCount: 1))
+    check("launches when it's the only instance",
+          !Entry.shouldDeferToExistingInstance(bundleID: "ai.klorn.desktop", otherInstanceCount: 0))
+    check("unbundled run never defers",
+          !Entry.shouldDeferToExistingInstance(bundleID: nil, otherInstanceCount: 2))
+
     print("Summon cycle:")
     // ⌥⌘K always shows the MINIMAL pill first, expands on the second press,
     // and dismisses from expanded/full — never jumps straight to the big panel.

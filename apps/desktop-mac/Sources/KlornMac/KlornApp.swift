@@ -11,11 +11,35 @@ enum Entry {
         if CommandLine.arguments.contains("--self-check") {
             exit(runSelfChecksBlocking() ? 0 : 1)
         }
+        // Single instance: an accessory app draws no window on re-launch, so a
+        // second copy silently stacks a second top bar (the "two bars" dogfood
+        // bug, 2026-07-16). If Klorn is already running, hand focus to it and
+        // exit instead of launching a duplicate.
+        if let existing = existingInstance() {
+            existing.activate()
+            return
+        }
         // Ambient firewall: no Dock icon, no system menu bar, and never steal focus
         // from whatever the user is working in. `.accessory` gives a chrome-less
         // process; the custom top bar (an NSPanel) is the app's entire surface.
         NSApplication.shared.setActivationPolicy(.accessory)
         KlornApp.main()
+    }
+
+    /// The already-running Klorn, if any (excludes this process). nil for an
+    /// unbundled `swift run` (no bundle id) so the dev loop never self-blocks.
+    private static func existingInstance() -> NSRunningApplication? {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return nil }
+        return NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            .first { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
+    }
+
+    /// Pure decision for the self-check: defer to an existing instance only for
+    /// a real bundle with another copy already running.
+    nonisolated static func shouldDeferToExistingInstance(
+        bundleID: String?, otherInstanceCount: Int
+    ) -> Bool {
+        bundleID != nil && otherInstanceCount > 0
     }
 }
 
