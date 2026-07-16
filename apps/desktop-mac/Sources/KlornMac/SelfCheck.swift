@@ -358,6 +358,17 @@ func runSelfChecks() async -> Bool {
     check("silent when nothing new",
           !PushCardController.shouldChime(newCount: 0, alertsEnabled: true))
 
+    print("Briefing:")
+    // The TODAY column shows a one-line preview of the day's briefing note:
+    // markdown bold stripped, whitespace collapsed, capped; nil when empty.
+    check("briefing preview strips markdown + collapses",
+          briefingPreview("**Top 3 Today**\n1. Handle the contract email\n2. Reply to Alex")
+              == "Top 3 Today 1. Handle the contract email 2. Reply to Alex")
+    check("briefing preview caps length",
+          (briefingPreview(String(repeating: "word ", count: 100))?.count ?? 999) <= 140)
+    check("briefing preview nil when blank", briefingPreview("  \n  ") == nil)
+    check("briefing preview nil when absent", briefingPreview(nil) == nil)
+
     print("Calendar:")
     // GET /api/calendar/today/summary wire — prisma dates arrive as ISO strings
     // with millis; decoding must be resilient to null current/nextEvent.
