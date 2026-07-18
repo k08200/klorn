@@ -20,8 +20,10 @@ vi.mock("../sentry.js", () => ({
 import { __resetJudgeCache } from "../judge/judge-cache.js";
 import { type JudgeContext, judgeEmail } from "../judge/poc-judge.js";
 
+// noreply@ = clearly automated (isAutomatedSender): history priors only
+// short-circuit machine senders since the #654 leak-#5 hardening.
 const PLAIN_EMAIL = {
-  from: "Acme Updates <updates@acme.example>",
+  from: "Acme Updates <noreply@acme.example>",
   subject: "Changelog for June",
   snippet: "What shipped this month",
   labels: [],
@@ -217,7 +219,13 @@ describe("LLM retry", () => {
     createCompletionMock
       .mockRejectedValueOnce(new Error("502 upstream"))
       .mockResolvedValueOnce(valid());
-    const result = await judgeEmail(PLAIN_EMAIL, undefined, ctx({}));
+    // Human sender: PLAIN_EMAIL is noreply@ now, and the automated-sender
+    // floor (#794) would cap the asserted PUSH to QUEUE regardless of retry.
+    const result = await judgeEmail(
+      { ...PLAIN_EMAIL, from: "Jamie Cho <jamie@corp.example>" },
+      undefined,
+      ctx({}),
+    );
     expect(result.source).toBe("llm");
     expect(result.tier).toBe("PUSH");
     expect(createCompletionMock).toHaveBeenCalledTimes(2);
@@ -286,5 +294,66 @@ describe("sender-facts grounding", () => {
     expect(prompt).not.toContain("manual corrections");
     expect(prompt).not.toContain("Active correspondent");
     expect(prompt).not.toContain("Commitment track record");
+  });
+});
+
+describe("sender-prior short-circuit — urgency-guard hardening (#654 leak #5)", () => {
+  // Two measured gaps (2026-07-17): the urgency guard's vocabulary had no
+  // Korean deadline patterns (the founder's real buried-urgent mail read
+  // "오늘 6시까지 회신 필요" — zero trigger words), and a HISTORY prior (model-
+  // authored, never a human decision) could short-circuit mail from a real
+  // person, whose content is heterogeneous by nature. Override priors are
+  // explicit human ground truth and keep their existing behavior.
+
+  it("Korean deadline vocabulary defeats a QUEUE short-circuit (goes to the LLM path)", async () => {
+    createCompletionMock.mockRejectedValue(new Error("provider down"));
+    const result = await judgeEmail(
+      { ...PLAIN_EMAIL, subject: "오늘 6시까지 회신 필요 — 계약 최종 확인" },
+      undefined,
+      ctx({ senderPrior: { tier: "QUEUE", count: 4, kind: "history" } }),
+    );
+    expect(result.source).not.toBe("sender-prior");
+    expect(createCompletionMock).toHaveBeenCalled();
+  });
+
+  it("a history prior never short-circuits mail from a human sender", async () => {
+    createCompletionMock.mockRejectedValue(new Error("provider down"));
+    const result = await judgeEmail(
+      {
+        from: "Kim Minsu <minsu@partnercorp.example>",
+        subject: "Quarterly numbers",
+        snippet: "sharing the sheet",
+        labels: [],
+      },
+      undefined,
+      ctx({ senderPrior: { tier: "QUEUE", count: 5, kind: "history" } }),
+    );
+    expect(result.source).not.toBe("sender-prior");
+    expect(createCompletionMock).toHaveBeenCalled();
+  });
+
+  it("a history prior still short-circuits an automated sender (the cost path this prior exists for)", async () => {
+    const result = await judgeEmail(
+      PLAIN_EMAIL, // updates@acme.example — automated
+      undefined,
+      ctx({ senderPrior: { tier: "QUEUE", count: 4, kind: "history" } }),
+    );
+    expect(result.source).toBe("sender-prior");
+    expect(createCompletionMock).not.toHaveBeenCalled();
+  });
+
+  it("an override prior on a human sender keeps short-circuiting (explicit human ground truth)", async () => {
+    const result = await judgeEmail(
+      {
+        from: "Kim Minsu <minsu@partnercorp.example>",
+        subject: "Quarterly numbers",
+        snippet: "sharing the sheet",
+        labels: [],
+      },
+      undefined,
+      ctx({ senderPrior: { tier: "QUEUE", count: 2, kind: "override" } }),
+    );
+    expect(result.tier).toBe("QUEUE");
+    expect(result.source).toBe("sender-prior");
   });
 });

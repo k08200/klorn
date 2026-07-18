@@ -47,7 +47,14 @@ export function isClearMarketing(email: {
  * urgency guard (poc-judge.ts:canShortCircuit). Case-insensitive — callers pass
  * raw subject/snippet.
  */
-export const URGENT_WORDS_RE = /urgent|asap|긴급|중요|action required|today|tomorrow|deadline|due/i;
+// Korean deadline patterns added 2026-07-17 (#654 leak #5): the founder's real
+// buried-urgent mail read "오늘 6시까지 회신 필요" — zero matches in the old
+// vocabulary. Mirrors of the English terms already present (today/tomorrow/
+// deadline/reply-needed); bare "까지" is deliberately excluded — it appears in
+// ordinary Korean prose and would let the keyword FALLBACK path score random
+// mail urgency 0.85 (a false-PUSH risk during provider outages).
+export const URGENT_WORDS_RE =
+  /urgent|asap|긴급|중요|action required|today|tomorrow|deadline|due|오늘|내일|마감|시급|회신\s*(필요|부탁|요망)|답장\s*부탁/i;
 
 // Account/security vocabularies — single source. Two consumers key off these
 // and must never diverge: the routine-confirmation urgency cap

@@ -28,11 +28,13 @@ vi.mock("../sentry.js", () => ({
 
 import { EMPTY_JUDGE_CONTEXT, type JudgeContext, judgeEmails } from "../judge/poc-judge.js";
 
-/** Neutral system email: no marketing markers, no urgency vocabulary. */
+/** Neutral system email: no marketing markers, no urgency vocabulary.
+ * notifications@ = clearly automated, so a history prior may short-circuit
+ * (the #654 leak-#5 hardening restricts history priors to machine senders). */
 function neutralEmail(i: number) {
   return {
     id: `mail-${i}`,
-    from: `builds@ci.example.com`,
+    from: `notifications@ci.example.com`,
     subject: `Nightly build report ${i}`,
     snippet: "All 214 checks completed.",
     body: null,

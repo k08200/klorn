@@ -557,6 +557,13 @@ function priorFeatures(tier: PocTier): PocFeatures {
 function canShortCircuit(prior: SenderPrior, email: ClassifiableEmail): boolean {
   const allowed = PRIOR_SHORTCIRCUIT_TIERS[prior.kind];
   if (!allowed.has(prior.tier)) return false;
+  // A HISTORY prior is model-authored (unanimous past classifications, never a
+  // human decision) and exists to save LLM cost on repetitive automated mail.
+  // A real person's mail is heterogeneous by nature — one urgent message with
+  // no trigger vocabulary would be buried by the bypass (#654 leak #5), and a
+  // missed PUSH is the worst failure. Override priors are explicit human
+  // ground truth (≥2 manual corrections) and keep their reach.
+  if (prior.kind === "history" && !isAutomatedSender(email.from)) return false;
   if (prior.tier !== "PUSH" && looksUrgent(email)) return false;
   return true;
 }
