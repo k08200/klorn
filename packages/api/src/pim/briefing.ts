@@ -664,6 +664,15 @@ export function briefingRoutes(app: FastifyInstance) {
   // POST /api/briefing/generate — Generate daily briefing
   app.post("/generate", async (request) => {
     const userId = getUserId(request);
+    // `force` regenerates from scratch: today's briefing is deduped to one note
+    // per local day, so without this a user who wants a fresh briefing (e.g.
+    // after new mail, or when the first run fell back) always gets the cached
+    // one. Deleting the day's note lets createDailyBriefingDelivery re-run.
+    const { force } = (request.body as { force?: boolean } | null) ?? {};
+    if (force) {
+      const dayKey = await briefingDayKeyForUser(userId);
+      await prisma.note.deleteMany({ where: { userId, dayKey } });
+    }
     const { briefing, note, notification, reused } = await createDailyBriefingDelivery(userId);
     // Surface the LLM outcome so a rule-based fallback is diagnosable in prod.
     return { briefing, note, notification, reused, llm: { ...lastBriefingLlm } };
