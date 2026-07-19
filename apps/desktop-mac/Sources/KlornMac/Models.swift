@@ -306,7 +306,12 @@ func canSendChat(_ text: String, busy: Bool) -> Bool {
 
 // MARK: - Commitments (promises made / replies awaited)
 
-/// GET /api/commitments — one tracked promise. `owner == "USER"` is something
+/// GET /api/commitments → { commitments: [...] } envelope.
+struct CommitmentsResponse: Codable, Sendable {
+    let commitments: [CommitmentItem]
+}
+
+/// One tracked promise. `owner == "USER"` is something
 /// the user promised ("I owe"); `owner == "COUNTERPARTY"` is something the
 /// other side promised ("waiting on"). Subset decode.
 struct CommitmentItem: Codable, Sendable, Identifiable, Hashable {

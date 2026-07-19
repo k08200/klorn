@@ -314,13 +314,19 @@ final class AppModel {
 
     /// OPEN commitments (nil until first load). Best-effort like today/usage.
     private(set) var commitments: [CommitmentItem]?
+    /// True when the last fetch failed AND nothing has ever loaded — the view
+    /// shows an honest error instead of an infinite spinner.
+    private(set) var commitmentsFailed = false
 
     private func refreshCommitments() async {
         do {
-            commitments = try await api.get(
-                "/api/commitments?status=OPEN&limit=50", as: [CommitmentItem].self)
+            let resp: CommitmentsResponse = try await api.get(
+                "/api/commitments?status=OPEN&limit=50", as: CommitmentsResponse.self)
+            commitments = resp.commitments
+            commitmentsFailed = false
         } catch {
-            Log.app.debug("commitments fetch failed: \(String(describing: error), privacy: .private)")
+            commitmentsFailed = true
+            Log.app.warning("commitments fetch failed: \(String(describing: error), privacy: .private)")
         }
     }
 
