@@ -82,6 +82,11 @@ final class MeetingCardController {
             panel.setFrame(target, display: true, animate: false)
             panel.orderFrontRegardless()
         }
+        panel.applyGlassShape(cornerRadius: PushCardMetrics.corner)
+        let settle = panel.animationResizeTime(target) + 0.05
+        DispatchQueue.main.asyncAfter(deadline: .now() + settle) { [weak panel] in
+            panel?.invalidateShadow()
+        }
     }
 
     private func makePanel() -> NSPanel {

@@ -252,6 +252,7 @@ final class PushCardController {
             panel.setFrame(target, display: true, animate: false)
             panel.orderFrontRegardless()
         }
+        settleGlassShape(panel, frame: target)
     }
 
     /// Expand/collapse morph between the two layouts (top edge stays anchored).
@@ -259,6 +260,17 @@ final class PushCardController {
         guard let visible = NSScreen.main?.visibleFrame else { return }
         let target = Self.cardFrame(size: PushCardMetrics.size(for: layout), visible: visible)
         panel.setFrame(target, display: true, animate: Self.shouldAnimate())
+        settleGlassShape(panel, frame: target)
+    }
+
+    /// Round the window + re-derive its shadow now and again after the morph
+    /// animation lands (mid-animation shadows are square — corner artifact).
+    private func settleGlassShape(_ panel: NSPanel, frame: NSRect) {
+        panel.applyGlassShape(cornerRadius: PushCardMetrics.corner)
+        let settle = panel.animationResizeTime(frame) + 0.05
+        DispatchQueue.main.asyncAfter(deadline: .now() + settle) { [weak panel] in
+            panel?.invalidateShadow()
+        }
     }
 
     /// Honor Reduce Motion (WCAG 2.3.3), same policy as the pill's morph.

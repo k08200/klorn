@@ -152,6 +152,7 @@ final class TopBarController {
         panel.contentView = NSHostingView(rootView: root)
         self.panel = panel
         setFrame(panel, size: size)
+        panel.applyGlassShape(cornerRadius: TopBarMetrics.corner(for: state))
         if focusable {
             // Full is a real, focusable app window: switch to a regular activation
             // policy (Dock icon + menu + real focus) so the reply field can type.
@@ -232,7 +233,16 @@ final class TopBarController {
         // 1400px is exactly the large motion the setting exists to suppress.
         let animate = Self.shouldAnimateFrame(
             reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
-        panel.setFrame(NSRect(origin: origin, size: size), display: true, animate: animate)
+        let frame = NSRect(origin: origin, size: size)
+        panel.setFrame(frame, display: true, animate: animate)
+        if animate {
+            // The shadow computed mid-morph is stale (square) — re-derive it
+            // once the frame animation lands.
+            let settle = panel.animationResizeTime(frame) + 0.05
+            DispatchQueue.main.asyncAfter(deadline: .now() + settle) { [weak panel] in
+                panel?.invalidateShadow()
+            }
+        }
     }
 
     /// Animate the panel morph unless the user asked for reduced motion. Pure for testing.
