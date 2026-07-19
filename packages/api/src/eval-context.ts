@@ -264,6 +264,24 @@ const RESERVED_SENDER_RE =
  * cold-start score and not a warm score; it is structurally invalid. Callers
  * use a non-empty result to refuse the run instead of reporting garbage.
  */
+/**
+ * Instrument-integrity verdict over a run's judge sources. A transient
+ * provider failure (quota trip, lockout, connection error) silently degrades
+ * judgements to the keyword fallback — and the run still prints an accuracy
+ * number that measures the FALLBACK, not the judge under test (observed four
+ * times in one week: three CI false-fails and a local "75.5%" artifact).
+ * Any keyword-fallback verdict poisons the run: callers must refuse to
+ * present the numbers as a measurement.
+ */
+export function assessInstrumentIntegrity(sources: readonly string[]): {
+  fallbackCount: number;
+  total: number;
+  degraded: boolean;
+} {
+  const fallbackCount = sources.filter((s) => s === "keyword-fallback").length;
+  return { fallbackCount, total: sources.length, degraded: fallbackCount > 0 };
+}
+
 export function findScrubbedSenders(froms: Iterable<string>): string[] {
   const scrubbed = new Set<string>();
   for (const from of froms) {

@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  assessInstrumentIntegrity,
   findScrubbedSenders,
   fixtureToJudgeContext,
   judgeContextToFixture,
@@ -267,5 +268,28 @@ describe("findScrubbedSenders (db-mode input guard)", () => {
         "",
       ]),
     ).toEqual(["person-1@domain-1.example"]);
+  });
+});
+
+describe("assessInstrumentIntegrity (fallback-poisoned runs are not measurements)", () => {
+  // Burned four times in one week: a transient provider failure (quota, 1h
+  // lockout, connection error) silently degrades every judgement to the
+  // keyword fallback and the run still reports an accuracy number — 75.5%
+  // "measured" on 2026-07-18 was pure instrument artifact.
+  it("flags a run containing any keyword-fallback verdicts", () => {
+    const verdict = assessInstrumentIntegrity(["llm", "keyword-fallback", "sender-prior", "llm"]);
+    expect(verdict).toEqual({ fallbackCount: 1, total: 4, degraded: true });
+  });
+
+  it("passes a clean run (llm/prior/fast-path only)", () => {
+    expect(
+      assessInstrumentIntegrity(["llm", "sender-prior", "fast-path", "learned-rule"]).degraded,
+    ).toBe(false);
+  });
+
+  it("counts every poisoned item", () => {
+    expect(
+      assessInstrumentIntegrity(["keyword-fallback", "keyword-fallback", "llm"]).fallbackCount,
+    ).toBe(2);
   });
 });
