@@ -43,8 +43,14 @@ final class HotKey {
         }, 1, &eventSpec, context, &handler)
 
         let hotKeyID = EventHotKeyID(signature: Self.signature, id: Self.idValue)
-        RegisterEventHotKey(keyCode, modifiers, hotKeyID,
-                            GetApplicationEventTarget(), 0, &ref)
+        let status = RegisterEventHotKey(keyCode, modifiers, hotKeyID,
+                                         GetApplicationEventTarget(), 0, &ref)
+        if status != noErr {
+            // Combo claimed by another app / invalid: the binding is silently
+            // dead otherwise — log so a "shortcut doesn't work" report is
+            // diagnosable. UI-level feedback can build on this later.
+            Log.app.warning("hotkey registration failed: OSStatus \(status, privacy: .public)")
+        }
     }
 
     /// Explicit teardown. Not called from deinit: this object lives for the whole
