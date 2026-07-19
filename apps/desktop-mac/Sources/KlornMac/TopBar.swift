@@ -1201,16 +1201,18 @@ private struct FullRow: View {
             // stays quiet (the tier dot alone carries state). Opacity keeps
             // them clickable-by-position and fully present to VoiceOver.
             HStack(spacing: 12) {
-                TierMenu(item: item, onSetTier: actions.onSetTier) {
-                    // A Shape, not an SF Symbol: the borderless menu style
-                    // template-renders Images and strips their color (the dot
-                    // showed WHITE in prod, v0.4.4 screenshots) — a filled
-                    // Circle keeps the tier tint, the row's core signal.
-                    Circle().fill(Theme.tint(item.tier))
-                        .frame(width: 8, height: 8)
-                        .iconTarget()
+                // The tier dot lives OUTSIDE the menu label: the AppKit
+                // borderless menu renders SF Symbols as colorless templates
+                // (white dot, v0.4.4) and drops SwiftUI Shapes entirely (no
+                // dot, v0.4.5). A sibling Circle under a transparent menu hit
+                // area is the only variant that keeps the tint AND the menu.
+                ZStack {
+                    Circle().fill(Theme.tint(item.tier)).frame(width: 8, height: 8)
+                    TierMenu(item: item, onSetTier: actions.onSetTier) {
+                        Color.clear.iconTarget()
+                    }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                 }
-                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                 .help("Move to tier… (teaches Klorn)")
                 .accessibilityLabel("Change tier for message from \(sender), currently \(item.tier.label)")
                 SnoozeMenu(item: item, onSnooze: actions.onSnooze) {
