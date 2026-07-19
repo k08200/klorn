@@ -1,3 +1,4 @@
+import AppKit
 import Carbon.HIToolbox
 import Foundation
 import os
@@ -743,6 +744,22 @@ func runSelfChecks() async -> Bool {
           StatusItemController.shouldShow(pillVisible: false))
     check("menu-bar icon absent while the pill is visible",
           !StatusItemController.shouldShow(pillVisible: true))
+
+    print("Glass mask:")
+    // The stretchable blur mask must stay non-degenerate on EVERY surface:
+    // capInsets summing to ≥ the masked dimension breaks NSImage stretching
+    // and the square blur backdrop bleeds past the corner (pill capsule,
+    // dogfood zoom 2026-07-20).
+    for state in [BarState.collapsed, .expanded, .full] {
+        let mask = NSImage.roundedCornerMask(radius: TopBarMetrics.corner(for: state))
+        let minSide = min(TopBarMetrics.size(for: state).width, TopBarMetrics.size(for: state).height)
+        check("mask caps fit \(state) surface",
+              mask.capInsets.top + mask.capInsets.bottom < minSide
+              && mask.capInsets.left + mask.capInsets.right < minSide)
+    }
+    let cardMask = NSImage.roundedCornerMask(radius: PushCardMetrics.corner)
+    check("mask caps fit PushCard",
+          cardMask.capInsets.top + cardMask.capInsets.bottom < PushCardMetrics.compact.height)
 
     print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
     return failures == 0
