@@ -420,6 +420,29 @@ func runSelfChecks() async -> Bool {
     let long = String(repeating: "a", count: 5000)
     check("over-long body is capped", (cardBodyText(long)?.count ?? 0) <= 4000)
 
+    print("Self update:")
+    check("release zip URL is tag-scoped",
+          SelfUpdate.releaseZipURL(version: "0.4.1")?.absoluteString
+              == "https://github.com/k08200/klorn/releases/download/desktop-v0.4.1/Klorn-macos.zip")
+    check("translocated path detected",
+          SelfUpdate.isTranslocated(bundlePath: "/private/var/folders/x/T/AppTranslocation/ID/d/Klorn.app"))
+    check("real path not flagged", !SelfUpdate.isTranslocated(bundlePath: "/Applications/Klorn.app"))
+    check("real bundle is its own install target",
+          SelfUpdate.installTarget(bundlePath: "/Applications/Klorn.app",
+                                   homeDirectory: "/Users/u", exists: { _ in false })
+              == "/Applications/Klorn.app")
+    check("translocated resolves to existing known location",
+          SelfUpdate.installTarget(
+              bundlePath: "/x/AppTranslocation/y/d/Klorn.app", homeDirectory: "/Users/u",
+              exists: { $0 == "/Users/u/Applications/Klorn.app" })
+              == "/Users/u/Applications/Klorn.app")
+    check("translocated with no known install → nil (fallback path)",
+          SelfUpdate.installTarget(bundlePath: "/x/AppTranslocation/y/d/Klorn.app",
+                                   homeDirectory: "/Users/u", exists: { _ in false }) == nil)
+    check("team id parsed from codesign output",
+          SelfUpdate.parseTeamID("Format=app bundle\nTeamIdentifier=P89M32649C\n") == "P89M32649C")
+    check("unset team id rejected", SelfUpdate.parseTeamID("TeamIdentifier=not set\n") == nil)
+
     print("Calendar write:")
     var utcCal = Calendar(identifier: .gregorian)
     utcCal.timeZone = TimeZone(identifier: "UTC")!

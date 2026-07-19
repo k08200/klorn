@@ -453,6 +453,7 @@ private struct RecentPushColumn: View {
 private struct AccountColumn: View {
     @Environment(AppModel.self) private var model
     let actions: TopBarActions
+    @State private var updating = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -460,13 +461,26 @@ private struct AccountColumn: View {
             if model.phase == .signedIn {
                 if let version = model.updateAvailable {
                     // Quiet update signal (auto-checked every 6h) — a normal
-                    // row, never a popup. Opens the notarized release page.
-                    Button { UpdateCheck.openReleasePage() } label: {
-                        Label("Update to v\(version)", systemImage: "arrow.down.circle")
+                    // row, never a popup. One click downloads the notarized
+                    // build, verifies its signature, swaps, and relaunches;
+                    // any failure falls back to the release page.
+                    Button {
+                        guard !updating else { return }
+                        updating = true
+                        Task {
+                            _ = await SelfUpdate.run(version: version)
+                            updating = false  // reached only on fallback
+                        }
+                    } label: {
+                        Label(updating ? "Updating…" : "Update to v\(version)",
+                              systemImage: updating ? "arrow.triangle.2.circlepath" : "arrow.down.circle")
                             .font(.body).foregroundStyle(Theme.accent)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Update available: version \(version). Opens the download page.")
+                    .disabled(updating)
+                    .accessibilityLabel(updating
+                        ? "Updating to version \(version)"
+                        : "Update available: version \(version). Installs and relaunches.")
                 }
                 Button { actions.onOpenWeb(nil) } label: {
                     Text("Open web inbox").font(.body).foregroundStyle(Theme.text)
