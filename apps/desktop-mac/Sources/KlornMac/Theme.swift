@@ -109,14 +109,21 @@ struct GlassMaterial: NSViewRepresentable {
 
 extension NSImage {
     /// A stretchable rounded-rect mask for NSVisualEffectView.maskImage.
+    ///
+    /// capInsets must sum to LESS than the smallest dimension being masked. A
+    /// true capsule view is exactly radius×2 tall, so full-radius caps are
+    /// degenerate there (52pt pill vs 53px mask image → the mask fails and the
+    /// square blur backdrop bleeds out as a light corner line — dogfood zoom
+    /// 2026-07-20). Half-point caps keep the stretch valid for every surface.
     static func roundedCornerMask(radius: CGFloat) -> NSImage {
-        let edge = radius * 2 + 1
+        let cap = radius - 0.5
+        let edge = cap * 2 + 1
         let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
             NSColor.black.setFill()
             NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
             return true
         }
-        image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
+        image.capInsets = NSEdgeInsets(top: cap, left: cap, bottom: cap, right: cap)
         image.resizingMode = .stretch
         return image
     }
