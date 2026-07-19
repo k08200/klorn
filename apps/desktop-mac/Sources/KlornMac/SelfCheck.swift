@@ -420,6 +420,32 @@ func runSelfChecks() async -> Bool {
     let long = String(repeating: "a", count: 5000)
     check("over-long body is capped", (cardBodyText(long)?.count ?? 0) <= 4000)
 
+    print("Calendar write:")
+    var utcCal = Calendar(identifier: .gregorian)
+    utcCal.timeZone = TimeZone(identifier: "UTC")!
+    let draft = EventDraft(
+        title: "Sync with Sarah", startTime: "2026-07-21T05:00:00.000Z",
+        endTime: "2026-07-21T06:00:00.000Z", location: "Zoom")
+    check("draft label = title · time · location",
+          eventDraftLabel(draft, calendar: utcCal) == "Sync with Sarah · 05:00–06:00 · Zoom")
+    check("draft label omits missing location",
+          eventDraftLabel(
+              EventDraft(title: "T", startTime: "2026-07-21T05:00:00.000Z",
+                         endTime: "2026-07-21T06:00:00.000Z", location: nil),
+              calendar: utcCal) == "T · 05:00–06:00")
+    check("draft label survives malformed time",
+          eventDraftLabel(
+              EventDraft(title: "T", startTime: "not-a-date", endTime: "nope", location: nil),
+              calendar: utcCal) == "T")
+    let draftTurn = try? JSONDecoder().decode(ChatTurnResponse.self, from: Data("""
+    {"reply":"일정 잡을까요?","eventDraft":{"title":"Sync","startTime":"2026-07-21T05:00:00Z",
+    "endTime":"2026-07-21T06:00:00Z","location":null}}
+    """.utf8))
+    check("turn decodes an event draft", draftTurn?.eventDraft?.title == "Sync")
+    check("turn without a draft stays nil-draft",
+          (try? JSONDecoder().decode(ChatTurnResponse.self,
+                                     from: Data(#"{"reply":"ok"}"#.utf8)))?.eventDraft == nil)
+
     print("Agent activity:")
     func totals(_ e: Int, _ p: Int, _ r: Int) -> TodayActions.Totals {
         TodayActions.Totals(executed: e, rejected: r, pending: p, urgent: 0)
