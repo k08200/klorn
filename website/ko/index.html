@@ -1055,6 +1055,100 @@
     .demo-tier.silent .tier-name { color: var(--stone-300); }
     .demo-tier.auto .tier-name { color: var(--emerald-200); }
 
+    /* ── Measured stats ───────────────────────── */
+    .stats-section .section-eyebrow,
+    .stats-section .section-h { text-align: center; }
+    .stats-section .section-lead {
+      max-width: 640px;
+      margin-left: auto;
+      margin-right: auto;
+      text-align: center;
+    }
+    .stats-grid {
+      margin-top: 40px;
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 768px) {
+      .stats-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    }
+    .stat-tile {
+      border: 1px solid var(--border-soft);
+      background: var(--surface-panel);
+      border-radius: 12px;
+      padding: 28px 24px;
+    }
+    .stat-tile.featured {
+      border-color: rgba(216,164,93,0.3);
+      background: var(--surface-translucent);
+    }
+    .stats-grid .stat-tile.reveal:nth-child(2) { transition-delay: 0.1s; }
+    .stats-grid .stat-tile.reveal:nth-child(3) { transition-delay: 0.2s; }
+    .stat-value {
+      font-size: 40px;
+      font-weight: 650;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      color: #fff;
+    }
+    @media (min-width: 768px) { .stat-value { font-size: 48px; } }
+    .stat-tile.featured .stat-value { font-size: 48px; }
+    @media (min-width: 768px) { .stat-tile.featured .stat-value { font-size: 56px; } }
+    .stat-label {
+      margin-top: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--stone-200);
+    }
+    .stat-desc {
+      margin-top: 6px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--stone-400);
+    }
+    .stats-footnote {
+      margin-top: 24px;
+      text-align: center;
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--stone-500);
+      max-width: 640px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .stats-footnote a {
+      color: var(--stone-300);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .stats-footnote a:hover { color: var(--brand-gold-bright); }
+
+    /* ── Brand film ───────────────────────────── */
+    .promo-section { max-width: var(--max-w-narrow); }
+    .promo-section .section-eyebrow,
+    .promo-section .section-h { text-align: center; }
+    .promo-frame {
+      margin-top: 40px;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border-medium);
+      background: var(--surface-elevated);
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4);
+    }
+    .promo-frame video {
+      width: 100%;
+      display: block;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      background: var(--surface-canvas);
+    }
+
+    .hero-badge-link:hover {
+      border-color: rgba(216,164,93,0.45);
+      color: var(--brand-cream);
+    }
+
     /* ── Hero live classifier (real /api/playground/classify) ── */
     .klassify {
       display: grid;
@@ -1316,6 +1410,7 @@
         </div>
         <a href="https://app.klorn.ai/login" class="hero-secondary-link">이미 승인받으셨나요? 로그인 →</a>
         <div class="hero-badges">
+          <a href="#measured" class="hero-badge hero-badge-link"><span class="dot-gold"></span>실메일 실측 94.3%</a>
           <span class="hero-badge"><span class="dot-gold"></span>오픈소스 — AGPLv3</span>
           <span class="hero-badge"><span class="dot-gold"></span>셀프호스팅 가능</span>
           <span class="hero-badge"><span class="dot-gold"></span>모든 행동은 승인 후에만 실행됩니다</span>
@@ -1397,12 +1492,13 @@
   <section class="section demo-section snap-section" aria-label="Klorn 사용 흐름">
     <div class="reveal">
       <p class="mono section-eyebrow">직접 확인하세요</p>
-      <h2 class="section-h">1분이면 충분합니다. 인박스에서 결정 큐까지.</h2>
+      <h2 class="section-h">31초. 인박스에서 결정 큐까지.</h2>
       <p class="section-lead">모든 신호는 4단계 중 하나로 분류되고, 그중 중요한 것만 클릭 한 번으로 승인하는 결정 카드가 됩니다. 승인 없이는 어떤 것도 손을 떠나지 않으며, 모든 행동은 하루 단위 영수증에 기록됩니다.</p>
     </div>
     <div class="demo-frame reveal">
-      <video controls autoplay muted loop playsinline preload="metadata" poster="/demo-poster.jpg">
-        <source src="/demo.webm" type="video/webm">
+      <video controls autoplay muted loop playsinline preload="metadata" poster="/media/klorn-demo-poster.jpg">
+        <source src="/media/klorn-demo.webm" type="video/webm">
+        <source src="/media/klorn-demo.mp4" type="video/mp4">
       </video>
     </div>
     <div class="demo-legend">
@@ -1423,6 +1519,33 @@
         <p class="tier-desc">반복적인 항목은 미리 분류해 둡니다 — 준비만 해 둘 뿐, 스스로 발송하지 않습니다.</p>
       </div>
     </div>
+  </section>
+
+  <!-- ── Measured accuracy ───────────────────── -->
+  <section class="section section-narrow stats-section snap-section" id="measured" aria-label="실측 정확도">
+    <div class="reveal">
+      <p class="mono section-eyebrow">약속이 아니라 실측</p>
+      <h2 class="section-h">실제 인박스에서 나온 숫자.</h2>
+      <p class="section-lead">모든 릴리스는 출시 전에 손으로 라벨링한 실제 메일 세트로 채점됩니다. 아래는 최신 실측 수치이고, 방법론은 공개 리포에 그대로 있습니다.</p>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-tile featured reveal">
+        <p class="stat-value"><span class="grad">94.3%</span></p>
+        <p class="stat-label">실메일 정확도</p>
+        <p class="stat-desc">손으로 라벨링한 실제 메일 53건 중 50건을 정확한 티어로 분류했습니다.</p>
+      </div>
+      <div class="stat-tile reveal">
+        <p class="stat-value">95.5%</p>
+        <p class="stat-label">Silent 정밀도</p>
+        <p class="stat-desc">Klorn이 노이즈로 분류한 메일이 진짜 신호를 묻어버리는 일은 거의 없습니다.</p>
+      </div>
+      <div class="stat-tile reveal">
+        <p class="stat-value">0</p>
+        <p class="stat-label">승인 없는 실행</p>
+        <p class="stat-desc">모든 발송·삭제·전달은 승인을 기다리고, 서명된 영수증을 남깁니다.</p>
+      </div>
+    </div>
+    <p class="stats-footnote reveal">2026년 7월, 실제 인박스에서 손으로 라벨링한 53건 세트로 측정 — 학습 컨텍스트가 쌓인 warm-start 기준(cold-start는 81.1%). <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" target="_blank" rel="noreferrer noopener">방법론과 eval 세트 →</a></p>
   </section>
 
   <!-- ── Decision card section ───────────────── -->
@@ -1560,6 +1683,20 @@
     </div>
   </section>
 
+  <!-- ── Brand film ──────────────────────────── -->
+  <section class="section promo-section snap-section" aria-label="14초로 보는 Klorn">
+    <div class="reveal">
+      <p class="mono section-eyebrow">14초</p>
+      <h2 class="section-h">노이즈는 걸러지고, 신호만 남습니다.</h2>
+    </div>
+    <div class="promo-frame reveal">
+      <video controls muted loop playsinline preload="metadata" poster="/media/klorn-promo-poster.jpg" data-inview-play aria-label="Klorn 브랜드 필름 — 시끄러운 인박스가 4개의 명확한 티어로 걸러집니다">
+        <source src="/media/klorn-promo.webm" type="video/webm">
+        <source src="/media/klorn-promo.mp4" type="video/mp4">
+      </video>
+    </div>
+  </section>
+
   <!-- ── Pricing ─────────────────────────────── -->
   <section class="section section-narrow snap-section" id="pricing" aria-label="가격">
     <div class="reveal">
@@ -1694,6 +1831,28 @@
       }, { threshold: 0.15, rootMargin: '0px 0px -10% 0px' });
 
       document.querySelectorAll('.reveal').forEach((el) => revealObserver.observe(el));
+    }
+
+    // Video hygiene: no video auto-plays for reduced-motion users (controls
+    // stay available for manual play), and the brand film only runs while
+    // it is actually on screen.
+    if (reduceMotion) {
+      document.querySelectorAll('video[autoplay]').forEach((video) => {
+        video.removeAttribute('autoplay');
+        video.pause();
+      });
+    } else {
+      const filmObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          const video = entry.target;
+          if (entry.isIntersecting) {
+            video.play().catch(() => {});
+          } else {
+            video.pause();
+          }
+        });
+      }, { threshold: 0.35 });
+      document.querySelectorAll('video[data-inview-play]').forEach((video) => filmObserver.observe(video));
     }
 
     // ── Section-level fade in/out, scrubbed exactly to scroll position ──

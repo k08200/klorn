@@ -1056,6 +1056,100 @@
     .demo-tier.silent .tier-name { color: var(--stone-300); }
     .demo-tier.auto .tier-name { color: var(--emerald-200); }
 
+    /* ── Measured stats ───────────────────────── */
+    .stats-section .section-eyebrow,
+    .stats-section .section-h { text-align: center; }
+    .stats-section .section-lead {
+      max-width: 640px;
+      margin-left: auto;
+      margin-right: auto;
+      text-align: center;
+    }
+    .stats-grid {
+      margin-top: 40px;
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 768px) {
+      .stats-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    }
+    .stat-tile {
+      border: 1px solid var(--border-soft);
+      background: var(--surface-panel);
+      border-radius: 12px;
+      padding: 28px 24px;
+    }
+    .stat-tile.featured {
+      border-color: rgba(216,164,93,0.3);
+      background: var(--surface-translucent);
+    }
+    .stats-grid .stat-tile.reveal:nth-child(2) { transition-delay: 0.1s; }
+    .stats-grid .stat-tile.reveal:nth-child(3) { transition-delay: 0.2s; }
+    .stat-value {
+      font-size: 40px;
+      font-weight: 650;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      color: #fff;
+    }
+    @media (min-width: 768px) { .stat-value { font-size: 48px; } }
+    .stat-tile.featured .stat-value { font-size: 48px; }
+    @media (min-width: 768px) { .stat-tile.featured .stat-value { font-size: 56px; } }
+    .stat-label {
+      margin-top: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--stone-200);
+    }
+    .stat-desc {
+      margin-top: 6px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--stone-400);
+    }
+    .stats-footnote {
+      margin-top: 24px;
+      text-align: center;
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--stone-500);
+      max-width: 640px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .stats-footnote a {
+      color: var(--stone-300);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .stats-footnote a:hover { color: var(--brand-gold-bright); }
+
+    /* ── Brand film ───────────────────────────── */
+    .promo-section { max-width: var(--max-w-narrow); }
+    .promo-section .section-eyebrow,
+    .promo-section .section-h { text-align: center; }
+    .promo-frame {
+      margin-top: 40px;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border-medium);
+      background: var(--surface-elevated);
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4);
+    }
+    .promo-frame video {
+      width: 100%;
+      display: block;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      background: var(--surface-canvas);
+    }
+
+    .hero-badge-link:hover {
+      border-color: rgba(216,164,93,0.45);
+      color: var(--brand-cream);
+    }
+
     /* ── Hero live classifier (real /api/playground/classify) ── */
     .klassify {
       display: grid;
@@ -1317,6 +1411,7 @@
         </div>
         <a href="https://app.klorn.ai/login" class="hero-secondary-link">Already approved? Log in →</a>
         <div class="hero-badges">
+          <a href="#measured" class="hero-badge hero-badge-link"><span class="dot-gold"></span>94.3% measured on real mail</a>
           <span class="hero-badge"><span class="dot-gold"></span>Open source — AGPLv3</span>
           <span class="hero-badge"><span class="dot-gold"></span>Self-hostable</span>
           <span class="hero-badge"><span class="dot-gold"></span>Every action needs your approval</span>
@@ -1398,12 +1493,13 @@
   <section class="section demo-section snap-section" aria-label="Klorn walkthrough">
     <div class="reveal">
       <p class="mono section-eyebrow">See it in action</p>
-      <h2 class="section-h">One minute. Inbox to decision queue.</h2>
+      <h2 class="section-h">Thirty-one seconds. Inbox to decision queue.</h2>
       <p class="section-lead">Every signal sorts into one of four tiers, then the ones that matter become decision cards you approve with one click. Nothing leaves your hands without that approval, and a daily receipt logs every action.</p>
     </div>
     <div class="demo-frame reveal">
-      <video controls autoplay muted loop playsinline preload="metadata" poster="/demo-poster.jpg">
-        <source src="/demo.webm" type="video/webm">
+      <video controls autoplay muted loop playsinline preload="metadata" poster="/media/klorn-demo-poster.jpg">
+        <source src="/media/klorn-demo.webm" type="video/webm">
+        <source src="/media/klorn-demo.mp4" type="video/mp4">
       </video>
     </div>
     <div class="demo-legend">
@@ -1424,6 +1520,33 @@
         <p class="tier-desc">Routine items pre-sorted for you — still staged, never sent on their own.</p>
       </div>
     </div>
+  </section>
+
+  <!-- ── Measured accuracy ───────────────────── -->
+  <section class="section section-narrow stats-section snap-section" id="measured" aria-label="Measured accuracy">
+    <div class="reveal">
+      <p class="mono section-eyebrow">Measured, not promised</p>
+      <h2 class="section-h">Numbers from a real inbox.</h2>
+      <p class="section-lead">Every release is scored against a hand-labeled set of real emails before it ships. These are the latest numbers — and the methodology is in the open repo.</p>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-tile featured reveal">
+        <p class="stat-value"><span class="grad">94.3%</span></p>
+        <p class="stat-label">Real-mail accuracy</p>
+        <p class="stat-desc">50 of 53 hand-labeled real emails sorted into the right tier.</p>
+      </div>
+      <div class="stat-tile reveal">
+        <p class="stat-value">95.5%</p>
+        <p class="stat-label">Silent precision</p>
+        <p class="stat-desc">When Klorn files mail as noise, it almost never buries a real signal.</p>
+      </div>
+      <div class="stat-tile reveal">
+        <p class="stat-value">0</p>
+        <p class="stat-label">Unapproved actions</p>
+        <p class="stat-desc">Every send, delete, and forward waits for your approval and logs a signed receipt.</p>
+      </div>
+    </div>
+    <p class="stats-footnote reveal">Measured July 2026 on a 53-email hand-labeled set from a live inbox, warm-start with learned context (cold-start: 81.1%). <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" target="_blank" rel="noreferrer noopener">Methodology and eval set →</a></p>
   </section>
 
   <!-- ── Decision card section ───────────────── -->
@@ -1561,6 +1684,20 @@
     </div>
   </section>
 
+  <!-- ── Brand film ──────────────────────────── -->
+  <section class="section promo-section snap-section" aria-label="Klorn in fourteen seconds">
+    <div class="reveal">
+      <p class="mono section-eyebrow">Fourteen seconds</p>
+      <h2 class="section-h">Noise in. Signal out.</h2>
+    </div>
+    <div class="promo-frame reveal">
+      <video controls muted loop playsinline preload="metadata" poster="/media/klorn-promo-poster.jpg" data-inview-play aria-label="Klorn brand film — a noisy inbox filtered into four clear tiers">
+        <source src="/media/klorn-promo.webm" type="video/webm">
+        <source src="/media/klorn-promo.mp4" type="video/mp4">
+      </video>
+    </div>
+  </section>
+
   <!-- ── Pricing ─────────────────────────────── -->
   <section class="section section-narrow snap-section" id="pricing" aria-label="Pricing">
     <div class="reveal">
@@ -1695,6 +1832,28 @@
       }, { threshold: 0.15, rootMargin: '0px 0px -10% 0px' });
 
       document.querySelectorAll('.reveal').forEach((el) => revealObserver.observe(el));
+    }
+
+    // Video hygiene: no video auto-plays for reduced-motion users (controls
+    // stay available for manual play), and the brand film only runs while
+    // it is actually on screen.
+    if (reduceMotion) {
+      document.querySelectorAll('video[autoplay]').forEach((video) => {
+        video.removeAttribute('autoplay');
+        video.pause();
+      });
+    } else {
+      const filmObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          const video = entry.target;
+          if (entry.isIntersecting) {
+            video.play().catch(() => {});
+          } else {
+            video.pause();
+          }
+        });
+      }, { threshold: 0.35 });
+      document.querySelectorAll('video[data-inview-play]').forEach((video) => filmObserver.observe(video));
     }
 
     // ── Section-level fade in/out, scrubbed exactly to scroll position ──
