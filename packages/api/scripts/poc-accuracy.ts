@@ -484,7 +484,9 @@ async function runContextComparison(loaded: LoadedSet, args: CliArgs): Promise<v
   console.log(
     `\nContext empty-vs-fixture comparison over ${labelled.length} labelled item(s) from ${inPath}`,
   );
-  console.log(`concurrency=${args.concurrency}, delay=${args.delayMs}ms per run, body=off (pinned)`);
+  console.log(
+    `concurrency=${args.concurrency}, delay=${args.delayMs}ms per run, body=off (pinned)`,
+  );
 
   const fixtureFor = await resolveContextFor(labelled, { ...args, contextMode: "fixture" });
 
