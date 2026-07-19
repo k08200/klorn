@@ -420,6 +420,23 @@ func runSelfChecks() async -> Bool {
     let long = String(repeating: "a", count: 5000)
     check("over-long body is capped", (cardBodyText(long)?.count ?? 0) <= 4000)
 
+    print("Mailbox search:")
+    check("2+ chars activates search", isSearchActive("re"))
+    check("1 char does not", !isSearchActive("r"))
+    check("whitespace-padded 1 char does not", !isSearchActive("  r  "))
+    check("blank does not", !isSearchActive("   "))
+    let searchJSON = """
+    {"emails":[{"id":"e9","from":"Boss <b@co.com>","subject":"Deal","snippet":"can you…",
+    "date":"2026-07-19","isRead":false,"extraField":123}],"total":1,"source":"gmail",
+    "unread":1,"page":1}
+    """
+    if let sr = try? JSONDecoder().decode(EmailSearchResponse.self, from: Data(searchJSON.utf8)) {
+        check("search response decodes subset", sr.total == 1 && sr.emails.first?.subject == "Deal")
+        check("search row tolerates unknown fields", sr.emails.first?.isRead == false)
+    } else {
+        check("search response decodes", false)
+    }
+
     print("Auto update check:")
     // Quiet background cadence: first run always checks; then every 6h.
     let t0 = Date(timeIntervalSince1970: 1_000_000)

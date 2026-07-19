@@ -655,20 +655,59 @@ private struct FullList: View {
     @Environment(AppModel.self) private var model
     let tier: Tier
     let actions: TopBarActions
+    @State private var query = ""
 
     private var items: [FirewallItem] { model.queue?.items(for: tier) ?? [] }
+    private var searching: Bool { isSearchActive(query) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Circle().fill(Theme.tint(tier)).frame(width: 9, height: 9)
-                Text(tier.label).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
-                Text("\(items.count)").font(.title3.monospacedDigit()).foregroundStyle(Theme.textDim)
+                if searching {
+                    Image(systemName: "magnifyingglass").font(.body).foregroundStyle(Theme.accent)
+                        .accessibilityHidden(true)
+                    Text("Search").font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+                    Text("\(model.searchTotal)")
+                        .font(.title3.monospacedDigit()).foregroundStyle(Theme.textDim)
+                } else {
+                    Circle().fill(Theme.tint(tier)).frame(width: 9, height: 9)
+                    Text(tier.label).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+                    Text("\(items.count)").font(.title3.monospacedDigit()).foregroundStyle(Theme.textDim)
+                }
             }
             .padding(.horizontal, 24).padding(.vertical, 18)
+
+            // Whole-mailbox search (same endpoint as the web inbox). Debounced;
+            // clearing the field returns to the tier list instantly.
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.caption).foregroundStyle(Theme.textDim)
+                    .accessibilityHidden(true)
+                TextField("Search all mail…", text: $query)
+                    .textFieldStyle(.plain).font(.callout).foregroundStyle(Theme.text)
+                    .accessibilityLabel("Search all mail")
+                if !query.isEmpty {
+                    Button {
+                        query = ""
+                    } label: { Image(systemName: "xmark.circle.fill").font(.caption) }
+                        .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+                        .accessibilityLabel("Clear search")
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+            .padding(.horizontal, 24).padding(.bottom, 12)
+            .task(id: query) {
+                // 300ms debounce: only the last keystroke's task survives.
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                await model.search(query)
+            }
+
             Divider().overlay(Theme.line)
 
-            if items.isEmpty {
+            if searching {
+                searchResultsList
+            } else if items.isEmpty {
                 Spacer()
                 Text("Nothing in \(tier.label).").font(.title3).foregroundStyle(Theme.textDim)
                     .frame(maxWidth: .infinity)
@@ -684,6 +723,71 @@ private struct FullList: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var searchResultsList: some View {
+        if model.isSearching && model.searchResults == nil {
+            Spacer()
+            ProgressView().controlSize(.small).frame(maxWidth: .infinity)
+            Spacer()
+        } else if let results = model.searchResults, !results.isEmpty {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(results) { hit in
+                        SearchHitRow(hit: hit)
+                        Divider().overlay(Theme.line).padding(.leading, 24)
+                    }
+                }
+            }
+        } else {
+            Spacer()
+            Text("No mail matches “\(query.trimmingCharacters(in: .whitespaces))”.")
+                .font(.callout).foregroundStyle(Theme.textDim).frame(maxWidth: .infinity)
+            Spacer()
+        }
+    }
+}
+
+/// One whole-mailbox search hit: sender, subject, snippet. Click loads the
+/// reading pane (read-only surface — firewall actions live on tier rows).
+private struct SearchHitRow: View {
+    @Environment(AppModel.self) private var model
+    let hit: EmailSearchItem
+
+    private var selected: Bool { model.selectedItemId == hit.id }
+    private var sender: String { hit.from ?? "(unknown sender)" }
+
+    var body: some View {
+        Button {
+            Task { await model.selectSearchResult(hit) }
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Text(sender).font(.callout.weight(hit.isRead == false ? .semibold : .regular))
+                        .foregroundStyle(Theme.text).lineLimit(1)
+                    Spacer(minLength: 0)
+                    if let date = hit.date {
+                        Text(String(date.prefix(10)))
+                            .font(.caption2.monospacedDigit()).foregroundStyle(Theme.textDim)
+                    }
+                }
+                Text(hit.subject ?? "(no subject)")
+                    .font(.callout).foregroundStyle(Theme.text.opacity(0.9)).lineLimit(1)
+                if let snippet = hit.snippet, !snippet.isEmpty {
+                    Text(snippet).font(.caption).foregroundStyle(Theme.textDim).lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 24).padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .background(alignment: .leading) {
+            if selected { Rectangle().fill(Theme.accent).frame(width: 3) }
+        }
+        .background(selected ? Color.white.opacity(0.14) : .clear)
+        .accessibilityLabel("Search result from \(sender): \(hit.subject ?? "no subject")")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

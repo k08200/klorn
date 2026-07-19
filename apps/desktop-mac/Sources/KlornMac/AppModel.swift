@@ -227,6 +227,56 @@ final class AppModel {
         }
     }
 
+    // MARK: Mailbox search
+
+    /// Search results (nil = search inactive, the tier list shows). Best-effort.
+    private(set) var searchResults: [EmailSearchItem]?
+    private(set) var searchTotal = 0
+    private(set) var isSearching = false
+
+    /// Search the whole mailbox (server-side, same endpoint the web inbox
+    /// uses). An inactive query clears results; failures keep the previous
+    /// results and log — search must never break the triage surface.
+    func search(_ query: String) async {
+        guard isSearchActive(query) else {
+            searchResults = nil
+            searchTotal = 0
+            return
+        }
+        isSearching = true
+        defer { isSearching = false }
+        let encoded = query.trimmingCharacters(in: .whitespaces)
+            .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+        do {
+            let resp: EmailSearchResponse = try await api.get(
+                "/api/email?search=\(encoded)", as: EmailSearchResponse.self)
+            searchResults = resp.emails
+            searchTotal = resp.total
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            Log.app.debug("search failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    /// Open a search hit in the reading pane. Reuses the email-detail fetch;
+    /// the row is not a FirewallItem, so firewall actions simply don't show.
+    func selectSearchResult(_ hit: EmailSearchItem) async {
+        selectedItemId = hit.id
+        emailError = nil
+        openedEmail = nil
+        isLoadingEmail = true
+        defer { isLoadingEmail = false }
+        do {
+            openedEmail = try await api.get(
+                "/api/email/\(hit.id)?markRead=true", as: EmailDetail.self)
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            emailError = Self.describe(error)
+        }
+    }
+
     /// Tier correction — teach the firewall. Optimistically moves the item in
     /// the visible queue, then persists via the override endpoint (which stamps
     /// the decision ledger; ≥2 identical overrides for a sender become a judge
