@@ -1410,12 +1410,28 @@ private struct ReadingPane: View {
                             .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
                         Button("Open in web") { actions.onOpenWeb(item) }
                             .buttonStyle(.bordered).controlSize(.small)
-                        SnoozeMenu(item: item, onSnooze: actions.onSnooze) { Text("Snooze") }
-                            .menuStyle(.button).buttonStyle(.bordered).controlSize(.small).fixedSize()
-                        TierMenu(item: item, onSetTier: actions.onSetTier) {
-                            Text("Move to \(item.tier.label) ▾")
+                        // menuIndicator(.hidden) kills the system-blue pull-down
+                        // segment (the one off-palette element on this row —
+                        // design audit 2026-07-20); a dim chevron in the label
+                        // keeps the "this opens a menu" affordance.
+                        SnoozeMenu(item: item, onSnooze: actions.onSnooze) {
+                            HStack(spacing: 4) {
+                                Text("Snooze")
+                                Image(systemName: "chevron.down")
+                                    .font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
+                            }
                         }
-                        .menuStyle(.button).buttonStyle(.bordered).controlSize(.small).fixedSize()
+                        .menuStyle(.button).buttonStyle(.bordered).controlSize(.small)
+                        .menuIndicator(.hidden).fixedSize()
+                        TierMenu(item: item, onSetTier: actions.onSetTier) {
+                            HStack(spacing: 4) {
+                                Text("Move to \(item.tier.label)")
+                                Image(systemName: "chevron.down")
+                                    .font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
+                            }
+                        }
+                        .menuStyle(.button).buttonStyle(.bordered).controlSize(.small)
+                        .menuIndicator(.hidden).fixedSize()
                         Button("Dismiss") { actions.onDismiss(item) }
                             .buttonStyle(.bordered).controlSize(.small)
                     }
