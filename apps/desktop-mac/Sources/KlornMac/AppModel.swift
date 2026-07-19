@@ -227,6 +227,35 @@ final class AppModel {
         }
     }
 
+    // MARK: Commitments
+
+    /// OPEN commitments (nil until first load). Best-effort like today/usage.
+    private(set) var commitments: [CommitmentItem]?
+
+    private func refreshCommitments() async {
+        do {
+            commitments = try await api.get(
+                "/api/commitments?status=OPEN&limit=50", as: [CommitmentItem].self)
+        } catch {
+            Log.app.debug("commitments fetch failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    /// Resolve a commitment (DONE) or dismiss it. Optimistic removal from the
+    /// list; rollback on failure (next refresh reconciles regardless).
+    func resolveCommitment(_ item: CommitmentItem, as status: String) async {
+        let before = commitments
+        commitments = commitments?.filter { $0.id != item.id }
+        do {
+            try await api.patch("/api/commitments/\(item.id)", json: ["status": status])
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            commitments = before
+            Log.app.warning("commitment update failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
     // MARK: Mailbox search
 
     /// Search results (nil = search inactive, the tier list shows). Best-effort.
@@ -448,6 +477,7 @@ final class AppModel {
         Task { await refreshToday() }
         Task { await refreshUsage() }
         Task { await refreshBriefing() }
+        Task { await refreshCommitments() }
         Task { await checkForUpdateIfDue() }
         do {
             let fetched = try await api.get("/api/inbox/firewall", as: FirewallResponse.self)
