@@ -157,6 +157,21 @@ extension View {
     }
 }
 
+extension NSPanel {
+    /// Round the WINDOW itself, not just the SwiftUI content: clip the content
+    /// view's layer and re-derive the window shadow. Without this the shadow
+    /// rim follows the square window frame and pokes out past the glass corner
+    /// (the corner-hairline artifact, dogfood zoom 2026-07-20). Call after
+    /// every contentView swap or frame change.
+    func applyGlassShape(cornerRadius: CGFloat) {
+        guard let view = contentView else { return }
+        view.wantsLayer = true
+        view.layer?.cornerRadius = cornerRadius
+        view.layer?.masksToBounds = true
+        invalidateShadow()
+    }
+}
+
 /// Dim at rest, full text on hover — the standard treatment for every
 /// secondary icon/text control (header buttons, row utilities). One modifier
 /// so "quiet until you reach for it" is a property of the system, not a
