@@ -420,6 +420,28 @@ func runSelfChecks() async -> Bool {
     let long = String(repeating: "a", count: 5000)
     check("over-long body is capped", (cardBodyText(long)?.count ?? 0) <= 4000)
 
+    print("Agent activity:")
+    func totals(_ e: Int, _ p: Int, _ r: Int) -> TodayActions.Totals {
+        TodayActions.Totals(executed: e, rejected: r, pending: p, urgent: 0)
+    }
+    check("all-zero day hides the block", agentActivityLine(totals(0, 0, 0)) == nil)
+    check("executed only", agentActivityLine(totals(2, 0, 0)) == "2 done")
+    check("pending only", agentActivityLine(totals(0, 1, 0)) == "1 awaiting approval")
+    check("combined keeps done · pending · declined order",
+          agentActivityLine(totals(2, 1, 3)) == "2 done · 1 awaiting approval · 3 declined")
+    let taJSON = """
+    {"executed":[],"rejected":[],"urgent":[],"sinceUtc":"2026-07-19T00:00:00Z",
+    "pending":[{"id":"p1","toolName":"send_email","summary":"[확인 필요] send_email",
+    "conversationId":"c1","at":"2026-07-03T18:35:54Z"}],
+    "totals":{"executed":0,"rejected":0,"pending":1,"urgent":0}}
+    """
+    if let ta = try? JSONDecoder().decode(TodayActions.self, from: Data(taJSON.utf8)) {
+        check("today-actions decodes subset",
+              ta.totals.pending == 1 && ta.pending.first?.toolName == "send_email")
+    } else {
+        check("today-actions decodes", false)
+    }
+
     print("Assistant:")
     check("send allowed for normal text", canSendChat("what matters today?", busy: false))
     check("send blocked while a turn is in flight", !canSendChat("hi", busy: true))

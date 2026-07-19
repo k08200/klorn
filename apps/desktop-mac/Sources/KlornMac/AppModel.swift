@@ -227,6 +227,20 @@ final class AppModel {
         }
     }
 
+    // MARK: Agent activity
+
+    /// Today's autonomous-agent receipt (nil until first load). Best-effort.
+    private(set) var agentToday: TodayActions?
+
+    private func refreshAgentToday() async {
+        do {
+            agentToday = try await api.get(
+                "/api/automations/today-actions", as: TodayActions.self)
+        } catch {
+            Log.app.debug("agent today fetch failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
     // MARK: Assistant (chat)
 
     /// In-memory thread for this app session (one conversation, lazily created
@@ -516,6 +530,7 @@ final class AppModel {
         Task { await refreshUsage() }
         Task { await refreshBriefing() }
         Task { await refreshCommitments() }
+        Task { await refreshAgentToday() }
         Task { await checkForUpdateIfDue() }
         do {
             let fetched = try await api.get("/api/inbox/firewall", as: FirewallResponse.self)
