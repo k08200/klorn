@@ -30,7 +30,11 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { findScrubbedSenders, fixtureToJudgeContext } from "../src/eval-context.js";
+import {
+  assessInstrumentIntegrity,
+  findScrubbedSenders,
+  fixtureToJudgeContext,
+} from "../src/eval-context.js";
 import {
   computePerTierMetrics,
   diffTierMetrics,
@@ -519,6 +523,19 @@ async function runSingle(
 
   const disagreements: Disagreement[] = rows.filter((r) => r.truth !== r.predicted);
   printDisagreements(disagreements);
+
+  // Instrument integrity: a provider failure degrades judgements to the
+  // keyword fallback, and the numbers above then measure the FALLBACK, not
+  // the judge. Refuse to present a poisoned run as a measurement — exit 3
+  // (distinct from 2 = a real floor failure) so CI and operators retry
+  // instead of reading artifact numbers.
+  const integrity = assessInstrumentIntegrity(rows.map((r) => r.source ?? ""));
+  if (integrity.degraded) {
+    console.error(
+      `\nINSTRUMENT DEGRADED — ${integrity.fallbackCount}/${integrity.total} item(s) were judged by the keyword fallback (provider unreachable). These numbers are NOT a measurement of the LLM judge. Retry when the provider recovers.`,
+    );
+    process.exit(3);
+  }
 
   if (args.out) {
     const outPath = resolve(args.out);
