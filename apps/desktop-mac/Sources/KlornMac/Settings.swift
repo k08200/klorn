@@ -33,7 +33,13 @@ final class AppSettings {
     /// nothing is drawn until ⌥⌘K summons the panel or a PUSH card appears —
     /// the card and the background engine are unaffected.
     var pillVisible: Bool {
-        didSet { defaults.set(pillVisible, forKey: Self.pillVisibleKey) }
+        didSet {
+            defaults.set(pillVisible, forKey: Self.pillVisibleKey)
+            // Breadcrumb: the pill has flipped hidden repeatedly in dogfood
+            // with no obvious actor (2026-07-20). Log every change with a
+            // stack-adjacent hint so the next occurrence names its caller.
+            Log.app.notice("pillVisible → \(self.pillVisible, privacy: .public) (\(Thread.callStackSymbols.dropFirst().prefix(3).joined(separator: " | "), privacy: .public))")
+        }
     }
 
     /// The user's global toggle shortcut (default ⌥⌘K). Persisted as a small
