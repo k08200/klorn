@@ -20,8 +20,8 @@ describe("collectFeatureFlags", () => {
     expect(report.dynamic.JUDGE_INCLUDE_BODY).toBe(true);
     expect(report.dynamic.AUTO_TIER_EXECUTION).toBe(true);
     expect(report.dynamic.CI_NOISE_SILENT_FLOOR).toBe(true);
-    expect(report.dynamic.LOG_RETENTION).toBe(true);
-    expect(report.dynamic.PHONE_ESCALATION).toBe(false);
+    expect(report.dynamic.LOG_RETENTION_ENABLED).toBe(true);
+    expect(report.dynamic.PHONE_ESCALATION_ENABLED).toBe(false);
   });
 
   it("reports configured entries as presence booleans, never values", () => {
@@ -29,10 +29,24 @@ describe("collectFeatureFlags", () => {
       GMAIL_PUBSUB_TOPIC: "projects/x/topics/y",
       EMBEDDING_MODEL: "nomic-embed-text",
     } as NodeJS.ProcessEnv);
-    expect(report.configured.GMAIL_PUSH_TOPIC).toBe(true);
-    expect(report.configured.EMBEDDINGS).toBe(true);
-    expect(report.configured.TWILIO).toBe(false);
+    expect(report.configured.GMAIL_PUBSUB_TOPIC).toBe(true);
+    expect(report.configured.EMBEDDING_MODEL).toBe(true);
+    expect(report.configured.TWILIO_ACCOUNT_SID).toBe(false);
     expect(JSON.stringify(report)).not.toContain("projects/x"); // no secret leakage
+
+    // Every reported key must be the exact env var name — copy-paste-able.
+    const keys = [
+      ...Object.keys(report.importTime),
+      ...Object.keys(report.dynamic),
+      ...Object.keys(report.configured),
+    ];
+    for (const k of keys) {
+      expect(k).toMatch(/^[A-Z0-9_]+$/);
+    }
+    expect(keys).toContain("DB_HEARTBEAT_ENABLED");
+    expect(keys).toContain("SENTRY_DSN");
+    expect(keys).not.toContain("DB_HEARTBEAT");
+    expect(keys).not.toContain("SENTRY");
   });
 
   it("empty env → everything dynamic/configured is off", () => {
