@@ -97,6 +97,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotKey = key
         // Re-register live when the user records a new shortcut.
         model.settings.onShortcutChanged = { [weak key] shortcut in key?.register(shortcut) }
+        // Suspend the hotkey while the recorder captures, so re-recording the
+        // currently-bound chord reaches the recorder instead of toggling the bar.
+        model.settings.onShortcutRecordingChanged = { [weak key, weak self] recording in
+            guard let key else { return }
+            if recording {
+                key.unregister()
+            } else if let self {
+                key.register(self.model.settings.shortcut)
+            }
+        }
 
         model.start()
     }
