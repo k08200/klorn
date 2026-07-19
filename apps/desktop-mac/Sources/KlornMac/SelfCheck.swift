@@ -420,6 +420,27 @@ func runSelfChecks() async -> Bool {
     let long = String(repeating: "a", count: 5000)
     check("over-long body is capped", (cardBodyText(long)?.count ?? 0) <= 4000)
 
+    print("Commitments:")
+    let cJSON = """
+    [{"id":"c1","title":"I'll send the SOW","owner":"USER","counterpartyName":"Sarah",
+    "counterpartyEmail":"s@co.com","dueText":"by Friday","status":"OPEN","confidence":0.9},
+    {"id":"c2","title":"They'll confirm budget","owner":"COUNTERPARTY","counterpartyName":null,
+    "counterpartyEmail":"cfo@co.com","dueText":null,"status":"OPEN"},
+    {"id":"c3","title":"orphan promise","owner":null,"counterpartyName":null,
+    "counterpartyEmail":null,"dueText":null,"status":"OPEN"}]
+    """
+    if let cs = try? JSONDecoder().decode([CommitmentItem].self, from: Data(cJSON.utf8)) {
+        check("commitments decode subset", cs.count == 3 && cs[0].title == "I'll send the SOW")
+        let groups = commitmentGroups(cs)
+        check("counterparty promises → waiting-on", groups.waitingOn.map(\.id) == ["c2"])
+        check("user + unknown owner → I-owe", groups.iOwe.map(\.id) == ["c1", "c3"])
+        check("counterparty label prefers name", cs[0].counterpartyLabel == "Sarah")
+        check("counterparty label falls back to email", cs[1].counterpartyLabel == "cfo@co.com")
+        check("counterparty label nil when absent", cs[2].counterpartyLabel == nil)
+    } else {
+        check("commitments decode", false)
+    }
+
     print("Mailbox search:")
     check("2+ chars activates search", isSearchActive("re"))
     check("1 char does not", !isSearchActive("r"))

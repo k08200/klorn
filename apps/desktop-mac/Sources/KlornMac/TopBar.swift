@@ -486,10 +486,16 @@ private struct AccountColumn: View {
 
 /// The largest state: a tier sidebar + a big scrollable list of the selected
 /// tier — a real desktop-app view of the whole firewall.
+/// What the full view's list column shows: a firewall tier, or commitments.
+enum ListMode: Equatable {
+    case tier(Tier)
+    case commitments
+}
+
 struct FullView: View {
     @Environment(AppModel.self) private var model
     let actions: TopBarActions
-    @State private var tier: Tier = .push
+    @State private var mode: ListMode = .tier(.push)
 
     var body: some View {
         ZStack {
@@ -497,9 +503,9 @@ struct FullView: View {
                 header
                 Divider().overlay(Theme.line)
                 HStack(spacing: 0) {
-                    FullSidebar(selected: $tier, actions: actions).frame(width: 220)
+                    FullSidebar(selected: $mode, actions: actions).frame(width: 220)
                     Rectangle().fill(Theme.line).frame(width: 1)
-                    FullList(tier: tier, actions: actions).frame(width: 420)
+                    FullList(mode: mode, actions: actions).frame(width: 420)
                     Rectangle().fill(Theme.line).frame(width: 1)
                     ReadingPane(actions: actions).frame(maxWidth: .infinity)
                 }
@@ -553,7 +559,7 @@ struct FullView: View {
 
 private struct FullSidebar: View {
     @Environment(AppModel.self) private var model
-    @Binding var selected: Tier
+    @Binding var selected: ListMode
     let actions: TopBarActions
 
     /// Compact event row for the 220pt sidebar: NOW badge or start time,
@@ -590,21 +596,43 @@ private struct FullSidebar: View {
         VStack(alignment: .leading, spacing: 4) {
             ColumnHeader(title: "INBOX").padding(.horizontal, 20).padding(.bottom, 6)
             ForEach(Tier.displayOrder) { tier in
-                Button { selected = tier } label: {
+                Button { selected = .tier(tier) } label: {
                     HStack(spacing: 10) {
                         Circle().fill(Theme.tint(tier)).frame(width: 8, height: 8)
-                        Text(tier.label).font(.body.weight(selected == tier ? .semibold : .regular))
+                        Text(tier.label)
+                            .font(.body.weight(selected == .tier(tier) ? .semibold : .regular))
                             .foregroundStyle(Theme.text)
                         Spacer()
                         Text("\(model.queue?.summary.count(for: tier) ?? 0)")
                             .font(.body.monospacedDigit()).foregroundStyle(Theme.textDim)
                     }
                     .padding(.horizontal, 12).padding(.vertical, 9)
-                    .background(selected == tier ? Color.white.opacity(0.07) : .clear,
+                    .background(selected == .tier(tier) ? Color.white.opacity(0.07) : .clear,
                                 in: RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
             }
+
+            // Commitments: promises made / replies awaited — the follow-through
+            // half of the firewall (what mail asked of you, and of them).
+            Button { selected = .commitments } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "checklist").font(.caption)
+                        .foregroundStyle(Theme.accent).frame(width: 8)
+                        .accessibilityHidden(true)
+                    Text("Commitments")
+                        .font(.body.weight(selected == .commitments ? .semibold : .regular))
+                        .foregroundStyle(Theme.text)
+                    Spacer()
+                    Text("\(model.commitments?.count ?? 0)")
+                        .font(.body.monospacedDigit()).foregroundStyle(Theme.textDim)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 9)
+                .background(selected == .commitments ? Color.white.opacity(0.07) : .clear,
+                            in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Commitments, \(model.commitments?.count ?? 0) open")
 
             // TODAY lives in the full view too — the biggest surface must not
             // know less about the day than the compact panel (dogfood 2026-07-16).
@@ -653,14 +681,26 @@ private struct FullSidebar: View {
 
 private struct FullList: View {
     @Environment(AppModel.self) private var model
-    let tier: Tier
+    let mode: ListMode
     let actions: TopBarActions
     @State private var query = ""
 
+    private var tier: Tier {
+        if case .tier(let t) = mode { return t }
+        return .push
+    }
     private var items: [FirewallItem] { model.queue?.items(for: tier) ?? [] }
     private var searching: Bool { isSearchActive(query) }
 
     var body: some View {
+        if mode == .commitments {
+            CommitmentsList()
+        } else {
+            tierList
+        }
+    }
+
+    private var tierList: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 if searching {
@@ -746,6 +786,87 @@ private struct FullList: View {
                 .font(.callout).foregroundStyle(Theme.textDim).frame(maxWidth: .infinity)
             Spacer()
         }
+    }
+}
+
+/// The commitments column: WAITING ON (their promises to you) above I OWE
+/// (your promises to them). ✓ marks done, ✕ dismisses — both optimistic.
+private struct CommitmentsList: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let groups = commitmentGroups(model.commitments ?? [])
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "checklist").font(.body).foregroundStyle(Theme.accent)
+                    .accessibilityHidden(true)
+                Text("Commitments").font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+                Text("\(model.commitments?.count ?? 0)")
+                    .font(.title3.monospacedDigit()).foregroundStyle(Theme.textDim)
+            }
+            .padding(.horizontal, 24).padding(.vertical, 18)
+            Divider().overlay(Theme.line)
+
+            if model.commitments == nil {
+                Spacer()
+                ProgressView().controlSize(.small).frame(maxWidth: .infinity)
+                Spacer()
+            } else if groups.waitingOn.isEmpty && groups.iOwe.isEmpty {
+                Spacer()
+                Text("No open commitments.").font(.title3).foregroundStyle(Theme.textDim)
+                    .frame(maxWidth: .infinity)
+                Spacer()
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        if !groups.waitingOn.isEmpty {
+                            ColumnHeader(title: "WAITING ON")
+                                .padding(.horizontal, 24).padding(.top, 14).padding(.bottom, 4)
+                            ForEach(groups.waitingOn) { CommitmentRow(item: $0) }
+                        }
+                        if !groups.iOwe.isEmpty {
+                            ColumnHeader(title: "I OWE")
+                                .padding(.horizontal, 24).padding(.top, 14).padding(.bottom, 4)
+                            ForEach(groups.iOwe) { CommitmentRow(item: $0) }
+                        }
+                    }
+                    .padding(.bottom, 14)
+                }
+            }
+        }
+    }
+}
+
+private struct CommitmentRow: View {
+    @Environment(AppModel.self) private var model
+    let item: CommitmentItem
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title).font(.callout).foregroundStyle(Theme.text).lineLimit(2)
+                HStack(spacing: 6) {
+                    if let who = item.counterpartyLabel {
+                        Text(who).font(.caption).foregroundStyle(Theme.textDim).lineLimit(1)
+                    }
+                    if let due = item.dueText, !due.isEmpty {
+                        Text(due).font(.caption).foregroundStyle(Theme.accent)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            Button {
+                Task { await model.resolveCommitment(item, as: "DONE") }
+            } label: { Image(systemName: "checkmark").iconTarget() }
+                .buttonStyle(.plain).foregroundStyle(Theme.textDim).help("Mark done")
+                .accessibilityLabel("Mark done: \(item.title)")
+            Button {
+                Task { await model.resolveCommitment(item, as: "DISMISSED") }
+            } label: { Image(systemName: "xmark").iconTarget() }
+                .buttonStyle(.plain).foregroundStyle(Theme.textDim).help("Dismiss")
+                .accessibilityLabel("Dismiss: \(item.title)")
+        }
+        .padding(.horizontal, 24).padding(.vertical, 8)
     }
 }
 

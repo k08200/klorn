@@ -213,6 +213,45 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     }
 }
 
+// MARK: - Commitments (promises made / replies awaited)
+
+/// GET /api/commitments — one tracked promise. `owner == "USER"` is something
+/// the user promised ("I owe"); `owner == "COUNTERPARTY"` is something the
+/// other side promised ("waiting on"). Subset decode.
+struct CommitmentItem: Codable, Sendable, Identifiable, Hashable {
+    let id: String
+    let title: String
+    let owner: String?
+    let counterpartyName: String?
+    let counterpartyEmail: String?
+    let dueText: String?
+    let status: String?
+
+    /// "Sarah" / "sarah@co.com" / nil — whoever is on the other side.
+    var counterpartyLabel: String? {
+        if let name = counterpartyName, !name.isEmpty { return name }
+        if let email = counterpartyEmail, !email.isEmpty { return email }
+        return nil
+    }
+}
+
+/// Split OPEN commitments into the two lists the user thinks in: what THEY
+/// are waiting on from others, and what they owe. Unknown/missing owner goes
+/// to "I owe" — a promise with no clear counterparty is still the user's to
+/// resolve. Pure for testing.
+func commitmentGroups(_ items: [CommitmentItem]) -> (waitingOn: [CommitmentItem], iOwe: [CommitmentItem]) {
+    var waiting: [CommitmentItem] = []
+    var owe: [CommitmentItem] = []
+    for item in items {
+        if item.owner == "COUNTERPARTY" {
+            waiting.append(item)
+        } else {
+            owe.append(item)
+        }
+    }
+    return (waiting, owe)
+}
+
 // MARK: - Mailbox search
 
 /// GET /api/email?search= — one row of the searchable mailbox (decodes the
