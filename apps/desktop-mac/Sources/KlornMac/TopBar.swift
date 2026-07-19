@@ -231,7 +231,13 @@ struct CollapsedBar: View {
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(Theme.tint(.push).opacity(0.12), in: Capsule())
                 } else if model.loadError != nil {
-                    Text("offline").font(.caption).foregroundStyle(Theme.textDim)
+                    HStack(spacing: 5) {
+                        Circle().fill(Theme.tint(.push).opacity(0.7)).frame(width: 6, height: 6)
+                        Text("offline").font(.caption)
+                    }
+                    .foregroundStyle(Theme.textDim)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Theme.surfaceRaised, in: Capsule())
                 } else {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark").font(.caption2.weight(.semibold))
@@ -609,7 +615,10 @@ private struct AccountColumn: View {
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             Capsule().fill(Theme.surfaceHover)
-                            Capsule().fill(Theme.accent)
+                            Capsule()
+                                .fill(LinearGradient(
+                                    colors: [Theme.accent, Color(red: 1.0, green: 0.42, blue: 0.29)],
+                                    startPoint: .leading, endPoint: .trailing))
                                 .frame(width: geo.size.width
                                        * usageFillFraction(used: usage.dailyUsed, cap: usage.dailyCap))
                         }
@@ -954,8 +963,9 @@ private struct FullList: View {
             }
         } else {
             Spacer()
-            Text("No mail matches “\(query.trimmingCharacters(in: .whitespaces))”.")
-                .font(.callout).foregroundStyle(Theme.textDim).frame(maxWidth: .infinity)
+            EmptyState(
+                icon: "magnifyingglass",
+                title: "No mail matches “\(query.trimmingCharacters(in: .whitespaces))”.")
             Spacer()
         }
     }
