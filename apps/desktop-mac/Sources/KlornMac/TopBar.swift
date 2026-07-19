@@ -56,7 +56,6 @@ enum TopBarMetrics {
 struct TopBarRoot: View {
     let state: BarState
     let actions: TopBarActions
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         Group {
@@ -66,26 +65,7 @@ struct TopBarRoot: View {
             case .full: FullView(actions: actions)
             }
         }
-        .background {
-            // Warm glass: real system blur, warm-graphite tint over it, a
-            // top-edge highlight (light catching the glass), hairline border.
-            let radius = TopBarMetrics.corner(for: state)
-            ZStack {
-                GlassMaterial()
-                Theme.panelGradient(
-                    opacity: Theme.glassTintOpacity(reduceTransparency: reduceTransparency))
-                LinearGradient(
-                    colors: [Color.white.opacity(0.10), .clear],
-                    startPoint: .top, endPoint: .center)
-                    .frame(height: 1.5, alignment: .top)
-                    .frame(maxHeight: .infinity, alignment: .top)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: radius))
-            .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.line))
-        }
-        .clipShape(RoundedRectangle(cornerRadius: TopBarMetrics.corner(for: state)))
-        // The floating surface needs to sit ABOVE the desktop, not on it.
-        .shadow(color: .black.opacity(0.45), radius: 24, y: 8)
+        .glassPanel(cornerRadius: TopBarMetrics.corner(for: state))
     }
 }
 

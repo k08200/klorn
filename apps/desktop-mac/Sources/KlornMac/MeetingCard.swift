@@ -21,7 +21,6 @@ struct MeetingCardActions {
 struct MeetingCard: View {
     let state: MeetingCardState
     let actions: MeetingCardActions
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     private var readinessColor: Color {
         switch state.pack?.readiness {
@@ -43,12 +42,7 @@ struct MeetingCard: View {
         .padding(14)
         .frame(width: PushCardMetrics.compact.width, height: PushCardMetrics.compact.height,
                alignment: .top)
-        .background(
-            RoundedRectangle(cornerRadius: PushCardMetrics.corner)
-                .fill(Color.black.opacity(Theme.panelOpacity(reduceTransparency: reduceTransparency)))
-                .overlay(RoundedRectangle(cornerRadius: PushCardMetrics.corner).strokeBorder(Theme.line))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: PushCardMetrics.corner))
+        .glassPanel(cornerRadius: PushCardMetrics.corner)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Upcoming meeting card")
     }
