@@ -93,6 +93,34 @@ struct FirewallResponse: Codable, Sendable {
         tiers.values.flatMap { $0 }.first { $0.id == id }
     }
 
+    /// A copy with one item moved to a different tier (optimistic tier
+    /// correction — teach-the-firewall). The item is restamped with the new
+    /// tier and prepended to its list; summary shifts one count over, total
+    /// unchanged. Unknown id or same tier returns self.
+    func movingItem(id: String, to tier: Tier) -> FirewallResponse {
+        guard let item = item(id: id), item.tier != tier else { return self }
+        let moved = FirewallItem(
+            id: item.id, source: item.source, sourceId: item.sourceId, type: item.type,
+            title: item.title, tier: tier, tierReason: item.tierReason,
+            priority: item.priority, surfacedAt: item.surfacedAt, email: item.email,
+            href: item.href, hashStale: item.hashStale)
+        var newTiers = tiers
+        newTiers[item.tier.rawValue] = (tiers[item.tier.rawValue] ?? []).filter { $0.id != id }
+        newTiers[tier.rawValue] = [moved] + (tiers[tier.rawValue] ?? [])
+        func shifted(_ t: Tier, _ count: Int) -> Int {
+            if t == item.tier { return max(0, count - 1) }
+            if t == tier { return count + 1 }
+            return count
+        }
+        let summary = FirewallSummary(
+            silent: shifted(.silent, self.summary.silent),
+            queue: shifted(.queue, self.summary.queue),
+            push: shifted(.push, self.summary.push),
+            auto: shifted(.auto, self.summary.auto),
+            total: self.summary.total)
+        return FirewallResponse(tiers: newTiers, summary: summary)
+    }
+
     /// A copy with the given item ids removed from every tier and the summary
     /// decremented by however many were actually present (never below zero).
     /// Decrement (not recompute) so a server-side list cap can't corrupt counts.

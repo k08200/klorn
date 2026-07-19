@@ -227,6 +227,25 @@ final class AppModel {
         }
     }
 
+    /// Tier correction — teach the firewall. Optimistically moves the item in
+    /// the visible queue, then persists via the override endpoint (which stamps
+    /// the decision ledger; ≥2 identical overrides for a sender become a judge
+    /// prior, so corrections here are how the user trains future triage).
+    func setTier(_ item: FirewallItem, to tier: Tier) async {
+        guard item.tier != tier else { return }
+        let before = queue
+        queue = queue?.movingItem(id: item.id, to: tier)
+        do {
+            try await api.post("/api/inbox/firewall/\(item.id)", json: ["tier": tier.rawValue])
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            // Roll back the optimistic move; next poll reconciles regardless.
+            queue = before
+            Log.app.warning("tier override failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
     /// Snooze a PUSH item until `until`; it resurfaces server-side when the time
     /// passes. Works for any source (uses the AttentionItem id, not the email id).
     func snooze(_ item: FirewallItem, until: Date = AppModel.tomorrow9am()) async {

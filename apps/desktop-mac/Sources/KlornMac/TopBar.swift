@@ -20,6 +20,8 @@ struct TopBarActions {
     let onDismiss: (FirewallItem) -> Void
     /// Snooze an item to resurface at the chosen time.
     let onSnooze: (FirewallItem, SnoozeOption) -> Void
+    /// Tier correction — move an item to a different tier (teaches the judge).
+    let onSetTier: (FirewallItem, Tier) -> Void
     /// Select a row in the full view — loads its email into the reading pane.
     let onSelect: (FirewallItem) -> Void
     /// Open the Preferences overlay (switches to the full view first).
@@ -104,6 +106,32 @@ private struct SnoozeMenu<Label: View>: View {
         Menu {
             ForEach(SnoozeOption.allCases) { option in
                 Button(option.label) { onSnooze(item, option) }
+            }
+        } label: { label() }
+    }
+}
+
+/// Tier-correction control: pick the tier this item SHOULD be. Shared by the
+/// list row (dot) and the reading pane (text button). The current tier shows a
+/// checkmark; picking another calls onSetTier — the correction persists via the
+/// override endpoint and (≥2 identical for a sender) trains future triage.
+private struct TierMenu<Label: View>: View {
+    let item: FirewallItem
+    let onSetTier: (FirewallItem, Tier) -> Void
+    @ViewBuilder let label: () -> Label
+
+    var body: some View {
+        Menu {
+            ForEach(Tier.displayOrder) { tier in
+                Button {
+                    onSetTier(item, tier)
+                } label: {
+                    HStack {
+                        Text(tier.label)
+                        if tier == item.tier { Image(systemName: "checkmark") }
+                    }
+                }
+                .disabled(tier == item.tier)
             }
         } label: { label() }
     }
@@ -681,6 +709,15 @@ private struct FullRow: View {
             .focused($focused)
             .accessibilityAddTraits(selected ? .isSelected : [])
 
+            TierMenu(item: item, onSetTier: actions.onSetTier) {
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 8))
+                    .foregroundStyle(Theme.tint(item.tier))
+                    .iconTarget()
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("Move to tier… (teaches Klorn)")
+            .accessibilityLabel("Change tier for message from \(sender), currently \(item.tier.label)")
             SnoozeMenu(item: item, onSnooze: actions.onSnooze) {
                 Image(systemName: "moon.zzz").iconTarget()
             }
@@ -759,6 +796,10 @@ private struct ReadingPane: View {
                             .buttonStyle(.bordered).controlSize(.small)
                         SnoozeMenu(item: item, onSnooze: actions.onSnooze) { Text("Snooze") }
                             .menuStyle(.button).buttonStyle(.bordered).controlSize(.small).fixedSize()
+                        TierMenu(item: item, onSetTier: actions.onSetTier) {
+                            Text("Move to \(item.tier.label) ▾")
+                        }
+                        .menuStyle(.button).buttonStyle(.bordered).controlSize(.small).fixedSize()
                         Button("Dismiss") { actions.onDismiss(item) }
                             .buttonStyle(.bordered).controlSize(.small)
                     }
