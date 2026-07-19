@@ -429,6 +429,16 @@ private struct AccountColumn: View {
         VStack(alignment: .leading, spacing: 14) {
             ColumnHeader(title: "ACCOUNT")
             if model.phase == .signedIn {
+                if let version = model.updateAvailable {
+                    // Quiet update signal (auto-checked every 6h) — a normal
+                    // row, never a popup. Opens the notarized release page.
+                    Button { UpdateCheck.openReleasePage() } label: {
+                        Label("Update to v\(version)", systemImage: "arrow.down.circle")
+                            .font(.body).foregroundStyle(Theme.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Update available: version \(version). Opens the download page.")
+                }
                 Button { actions.onOpenWeb(nil) } label: {
                     Text("Open web inbox").font(.body).foregroundStyle(Theme.text)
                 }.buttonStyle(.plain)
