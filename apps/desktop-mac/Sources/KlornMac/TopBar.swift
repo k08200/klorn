@@ -95,6 +95,28 @@ struct ColumnHeader: View {
     }
 }
 
+/// A quiet text action: dim at rest, full text color on hover. The standard
+/// for secondary actions (headers, ACCOUNT rows) so emphasis stays reserved
+/// for primary content and the accent.
+struct SubtleTextButton: View {
+    let title: String
+    var dim = true
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title).font(.body)
+                .foregroundStyle(hovering || !dim ? Theme.text : Theme.textDim)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+}
+
 /// Sidebar nav row chrome: the same selection language as list rows — accent
 /// leading bar + the surface ladder's selected rung; hover uses the hover rung.
 /// One modifier so every nav row (tiers, Commitments, Assistant) stays in sync.
@@ -301,7 +323,7 @@ private struct TodayColumn: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(8)
-                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Today's briefing: \(briefing)")
@@ -344,7 +366,7 @@ private struct TodayColumn: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(8)
-                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 6)
@@ -428,30 +450,13 @@ private struct RecentPushColumn: View {
         VStack(alignment: .leading, spacing: 12) {
             ColumnHeader(title: "RECENT PUSH")
             if items.isEmpty {
-                Text("Nothing needs you right now.")
-                    .font(.callout).foregroundStyle(Theme.textDim)
+                EmptyState(icon: "checkmark.shield", title: "Nothing needs you right now.")
+                    .padding(.top, Theme.s6)
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: Theme.s1) {
                         ForEach(items) { item in
-                            let sender = item.email?.from ?? item.title
-                            HStack(spacing: 10) {
-                                Button { actions.onOpenInApp(item) } label: { pushRow(item) }
-                                    .buttonStyle(.plain)
-                                SnoozeMenu(item: item, onSnooze: actions.onSnooze) {
-                                    Image(systemName: "moon.zzz").font(.caption2).iconTarget()
-                                }
-                                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                                .foregroundStyle(Theme.textDim)
-                                .help("Snooze…")
-                                .accessibilityLabel("Snooze message from \(sender)")
-                                Button { actions.onDismiss(item) } label: {
-                                    Image(systemName: "xmark").font(.caption2).iconTarget()
-                                }
-                                .buttonStyle(.plain).foregroundStyle(Theme.textDim)
-                                .help("Dismiss")
-                                .accessibilityLabel("Dismiss message from \(sender)")
-                            }
+                            RecentPushRow(item: item, actions: actions)
                         }
                     }
                 }
@@ -460,15 +465,53 @@ private struct RecentPushColumn: View {
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)
     }
+}
 
-    private func pushRow(_ item: FirewallItem) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(item.email?.from ?? item.title).font(.callout.weight(.semibold))
-                .foregroundStyle(Theme.text).lineLimit(1)
-            Text(item.email?.subject ?? item.title).font(.caption)
-                .foregroundStyle(Theme.textDim).lineLimit(1)
+/// One PUSH ticker row — the same quiet-at-rest / hover-reveal language as
+/// the full-view list, at ticker density.
+private struct RecentPushRow: View {
+    let item: FirewallItem
+    let actions: TopBarActions
+    @State private var hovering = false
+
+    private var sender: String { decodeHTMLEntities(item.email?.from ?? item.title) }
+
+    var body: some View {
+        HStack(spacing: Theme.s2) {
+            Button { actions.onOpenInApp(item) } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(sender).font(.callout.weight(.semibold))
+                        .foregroundStyle(Theme.text).lineLimit(1)
+                    Text(decodeHTMLEntities(item.email?.subject ?? item.title)).font(.caption)
+                        .foregroundStyle(Theme.text.opacity(0.75)).lineLimit(1)
+                    if let reason = item.tierReason, !reason.isEmpty {
+                        Text(reason).font(.caption2).foregroundStyle(Theme.textDim).lineLimit(1)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            SnoozeMenu(item: item, onSnooze: actions.onSnooze) {
+                Image(systemName: "moon.zzz").font(.caption2).iconTarget()
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .foregroundStyle(Theme.textDim)
+            .help("Snooze…")
+            .accessibilityLabel("Snooze message from \(sender)")
+            .opacity(hovering ? 1 : 0)
+            Button { actions.onDismiss(item) } label: {
+                Image(systemName: "xmark").font(.caption2).iconTarget()
+            }
+            .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+            .help("Dismiss")
+            .accessibilityLabel("Dismiss message from \(sender)")
+            .opacity(hovering ? 1 : 0)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Theme.s2).padding(.vertical, 6)
+        .background(hovering ? Theme.surfaceHover : .clear, in: RoundedRectangle(cornerRadius: 8))
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
     }
 }
 
@@ -505,16 +548,10 @@ private struct AccountColumn: View {
                         ? "Updating to version \(version)"
                         : "Update available: version \(version). Installs and relaunches.")
                 }
-                Button { actions.onOpenWeb(nil) } label: {
-                    Text("Open web inbox").font(.body).foregroundStyle(Theme.text)
-                }.buttonStyle(.plain)
-                Button(action: actions.onSignOut) {
-                    Text("Sign out").font(.body).foregroundStyle(Theme.text)
-                }.buttonStyle(.plain)
+                SubtleTextButton(title: "Open web inbox", dim: false) { actions.onOpenWeb(nil) }
+                SubtleTextButton(title: "Sign out") { actions.onSignOut() }
             } else {
-                Button(action: actions.onSignIn) {
-                    Text("Sign in with Google").font(.body).foregroundStyle(Theme.text)
-                }.buttonStyle(.plain)
+                SubtleTextButton(title: "Sign in with Google", dim: false) { actions.onSignIn() }
             }
             if model.phase == .signedIn, let usage = model.usage {
                 VStack(alignment: .leading, spacing: 5) {
@@ -536,12 +573,8 @@ private struct AccountColumn: View {
                 .padding(.top, 4)
             }
 
-            Button(action: actions.onOpenPreferences) {
-                Text("Preferences").font(.body).foregroundStyle(Theme.textDim)
-            }.buttonStyle(.plain)
-            Button(action: actions.onQuit) {
-                Text("Quit Klorn").font(.body).foregroundStyle(Theme.textDim)
-            }.buttonStyle(.plain)
+            SubtleTextButton(title: "Preferences") { actions.onOpenPreferences() }
+            SubtleTextButton(title: "Quit Klorn") { actions.onQuit() }
             Spacer()
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)
@@ -988,7 +1021,7 @@ private struct ChatBubble: View {
                     .textSelection(.enabled)
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(
-                        message.role == .user ? Color.white.opacity(0.10) : Color.white.opacity(0.04),
+                        message.role == .user ? Theme.surfaceSelected : Theme.surfaceRaised,
                         in: RoundedRectangle(cornerRadius: 10))
                 if message.role != .user { Spacer(minLength: 40) }
             }
@@ -1294,11 +1327,13 @@ private struct ReadingPane: View {
 
     private func content(_ email: EmailDetail) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(email.subject ?? "(no subject)").font(.title3.weight(.semibold))
+            VStack(alignment: .leading, spacing: Theme.s2) {
+                Text(decodeHTMLEntities(email.subject ?? "(no subject)"))
+                    .font(.title2.weight(.semibold))
                     .foregroundStyle(Theme.text).lineLimit(2)
                 HStack {
-                    Text(email.from ?? "").font(.callout).foregroundStyle(Theme.textDim).lineLimit(1)
+                    Text(decodeHTMLEntities(email.from ?? ""))
+                        .font(.callout).foregroundStyle(Theme.textDim).lineLimit(1)
                     Spacer()
                     Text(Self.formatDate(email.date)).font(.caption).foregroundStyle(Theme.textDim)
                 }
@@ -1324,12 +1359,17 @@ private struct ReadingPane: View {
             Divider().overlay(Theme.line)
             klornBand(email)
             ScrollView {
+                // Reading typography: measured line length (~640pt) and open
+                // line spacing — a mail body should read like a document, not
+                // a log dump stretched across the pane.
                 Text(email.text.isEmpty ? "(no content)" : email.text)
                     .font(.callout)
+                    .lineSpacing(4)
                     .foregroundStyle(Theme.text.opacity(0.92))
                     .textSelection(.enabled)
+                    .frame(maxWidth: 640, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(24)
+                    .padding(Theme.s6)
             }
             if replying, let item {
                 Divider().overlay(Theme.line)
@@ -1425,7 +1465,7 @@ private struct ReadingPane: View {
             }
             .padding(.horizontal, 24).padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.04))
+            .background(Theme.surfaceRaised)
             Divider().overlay(Theme.line)
         }
     }
