@@ -442,6 +442,15 @@ func runSelfChecks() async -> Bool {
     check("team id parsed from codesign output",
           SelfUpdate.parseTeamID("Format=app bundle\nTeamIdentifier=P89M32649C\n") == "P89M32649C")
     check("unset team id rejected", SelfUpdate.parseTeamID("TeamIdentifier=not set\n") == nil)
+    // Relaunch must WAIT for the old pid — launching early loses to the
+    // single-instance guard (observed live 2026-07-20: nobody left running).
+    let relaunch = SelfUpdate.relaunchScript(pid: 123, appPath: "/Users/u/Applications/Klorn.app")
+    check("relaunch waits on the old pid", relaunch.contains("kill -0 123"))
+    check("relaunch opens the app after the wait",
+          relaunch.hasSuffix("/usr/bin/open \"/Users/u/Applications/Klorn.app\""))
+    check("relaunch quotes embedded double-quotes",
+          SelfUpdate.relaunchScript(pid: 1, appPath: "/x/\"odd\"/K.app")
+              .contains("open \"/x/\\\"odd\\\"/K.app\""))
 
     print("Calendar write:")
     var utcCal = Calendar(identifier: .gregorian)
