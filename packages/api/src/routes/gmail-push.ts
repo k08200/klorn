@@ -207,7 +207,11 @@ export async function gmailPushRoutes(app: FastifyInstance) {
       }
     }
 
-    // Unknown address — ack to drain the subscription.
+    // Unknown address — ack to drain the subscription, but LOG: if a lookup
+    // bug (normalization, unmigrated column) ever lands here for a real
+    // account, every realtime push for that user is discarded forever and only
+    // the polling fallback remains. This line is the only signal.
+    console.warn(`[GMAIL-PUSH] no user/linked inbox for address, draining: ${email}`);
     return reply.code(204).send();
   });
 

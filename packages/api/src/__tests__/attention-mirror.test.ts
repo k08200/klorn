@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const upsertSpy = vi.fn(async () => ({}));
 const updateManySpy = vi.fn(async () => ({ count: 0 }));
 const deleteManySpy = vi.fn(async () => ({ count: 0 }));
+const captureErrorSpy = vi.fn();
+
+vi.mock("../sentry.js", () => ({ captureError: captureErrorSpy }));
 
 vi.mock("../db.js", () => {
   const prisma = {
@@ -31,6 +34,8 @@ beforeEach(() => {
   upsertSpy.mockClear();
   updateManySpy.mockClear();
   deleteManySpy.mockClear();
+  captureErrorSpy.mockClear();
+  upsertSpy.mockResolvedValue({});
 });
 
 describe("multi-tenant isolation (userId-scoped upsert key)", () => {
@@ -603,6 +608,21 @@ describe("upsertAttentionForEmailJudgement — status preservation", () => {
     expect(call.update.status).toBeUndefined();
     // still refreshes the classification fields
     expect(call.update.tier).toBe("QUEUE");
+  });
+
+  it("propagates an upsert failure (captured) instead of swallowing it — the judge's decision must never silently fail to persist", async () => {
+    // If this write fails silently, the judge can decide PUSH, the push
+    // notification fires, and the item is nowhere in the firewall UI. The
+    // callers' "never silently dropped from triage" catch depends on this
+    // function actually throwing.
+    upsertSpy.mockRejectedValueOnce(new Error("db pool exhausted"));
+    await expect(upsertAttentionForEmailJudgement(email, judgement)).rejects.toThrow(
+      "db pool exhausted",
+    );
+    expect(captureErrorSpy).toHaveBeenCalledTimes(1);
+    expect((captureErrorSpy.mock.calls[0]?.[1] as { tags: { scope: string } }).tags.scope).toBe(
+      "attention-mirror.email-upsert",
+    );
   });
 
   it("never sets isManualOverride from judge output, even if the LLM reason string impersonates the override prefix (GHSA-cxc5-fmqv-pxv6)", async () => {

@@ -173,7 +173,11 @@ export function initWebSocket(server: Server): WebSocketServer {
       });
     });
 
-    ws.on("error", () => {
+    ws.on("error", (err) => {
+      // A send() to a broken socket surfaces here — without a log, a realtime
+      // notification can vanish with zero trace (the web-push channel is
+      // independent, so the user isn't fully unnotified, but ops must see it).
+      console.warn(`[WS] socket error for ${clientId}:`, err.message);
       clients.delete(clientId);
     });
   });
