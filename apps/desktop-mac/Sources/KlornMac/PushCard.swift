@@ -72,7 +72,6 @@ enum PushCardMetrics {
 struct PushCard: View {
     let state: PushCardState
     let actions: PushCardActions
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         let size = PushCardMetrics.size(for: state.layout)
@@ -89,14 +88,12 @@ struct PushCard: View {
         }
         .padding(14)
         .frame(width: size.width, height: size.height, alignment: .top)
-        .background(
+        .glassPanel(cornerRadius: PushCardMetrics.corner)
+        // Armed keyboard: the accent ring overrides the hairline so "keys are
+        // live" is unmistakable — drawn OVER the glass border.
+        .overlay(
             RoundedRectangle(cornerRadius: PushCardMetrics.corner)
-                .fill(Color.black.opacity(Theme.panelOpacity(reduceTransparency: reduceTransparency)))
-                .overlay(
-                    RoundedRectangle(cornerRadius: PushCardMetrics.corner)
-                        .strokeBorder(state.keysArmed ? Theme.accent.opacity(0.6) : Theme.line))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: PushCardMetrics.corner))
+                .strokeBorder(state.keysArmed ? Theme.accent.opacity(0.6) : .clear))
         .contentShape(RoundedRectangle(cornerRadius: PushCardMetrics.corner))
         .onTapGesture { actions.onToggleExpand() }
         .accessibilityElement(children: .contain)

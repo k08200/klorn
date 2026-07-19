@@ -85,16 +85,76 @@ enum Theme {
 /// rectangle" and "glass floating over your desk". `.hudWindow` is the
 /// system's heads-up material; `.behindWindow` samples whatever is under the
 /// panel. The warm tint gradient layers on top of this.
+///
+/// The blur region does NOT follow SwiftUI clipShape (the effect view's
+/// backdrop is masked by AppKit, not the layer tree) — without `maskImage`
+/// the glass bleeds square past the rounded corner (the corner artifact,
+/// screenshot 2026-07-20). A stretchable rounded-rect mask fixes it.
 struct GlassMaterial: NSViewRepresentable {
+    var cornerRadius: CGFloat
+
     func makeNSView(context _: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = .hudWindow
         view.blendingMode = .behindWindow
         view.state = .active
+        view.maskImage = .roundedCornerMask(radius: cornerRadius)
         return view
     }
 
-    func updateNSView(_: NSVisualEffectView, context _: Context) {}
+    func updateNSView(_ view: NSVisualEffectView, context _: Context) {
+        view.maskImage = .roundedCornerMask(radius: cornerRadius)
+    }
+}
+
+extension NSImage {
+    /// A stretchable rounded-rect mask for NSVisualEffectView.maskImage.
+    static func roundedCornerMask(radius: CGFloat) -> NSImage {
+        let edge = radius * 2 + 1
+        let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
+        image.resizingMode = .stretch
+        return image
+    }
+}
+
+/// The Warm Glass surface, as ONE reusable treatment: masked system blur,
+/// warm-graphite tint, top-edge light, hairline border, drop shadow. The top
+/// bar, the PushCard, and the MeetingCard all wear exactly this — one glass,
+/// everywhere.
+struct GlassPanel: ViewModifier {
+    var cornerRadius: CGFloat
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                ZStack {
+                    GlassMaterial(cornerRadius: cornerRadius)
+                    Theme.panelGradient(
+                        opacity: Theme.glassTintOpacity(reduceTransparency: reduceTransparency))
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.10), .clear],
+                        startPoint: .top, endPoint: .center)
+                        .frame(height: 1.5, alignment: .top)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                .overlay(RoundedRectangle(cornerRadius: cornerRadius).strokeBorder(Theme.line))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .shadow(color: .black.opacity(0.45), radius: 24, y: 8)
+    }
+}
+
+extension View {
+    func glassPanel(cornerRadius: CGFloat) -> some View {
+        modifier(GlassPanel(cornerRadius: cornerRadius))
+    }
 }
 
 /// Dim at rest, full text on hover — the standard treatment for every
