@@ -94,6 +94,7 @@ interface CliArgs {
   delayMs: number;
   /** Run the set twice (JUDGE_INCLUDE_BODY off then on) and print the delta. */
   compareBody: boolean;
+  compareContext: boolean;
   /** Where each item's JudgeContext comes from (#650). */
   contextMode: ContextMode;
   /** Account email for --context=db (resolved to a userId against the DB). */
@@ -141,6 +142,7 @@ function parseArgs(argv: string[]): CliArgs {
     concurrency,
     delayMs,
     compareBody: flags.has("compare-body"),
+    compareContext: flags.has("compare-context"),
     contextMode,
     user,
     gateFloors: map.has("gate-floor") ? parseGateFloorOverrides(map.get("gate-floor") ?? "") : {},
@@ -245,8 +247,11 @@ function printSuppressionTrust(metrics: TierMetric[]): void {
   }
 }
 
-function printBodyDelta(deltas: ReturnType<typeof diffTierMetrics>): void {
-  console.log("\n=== BODY DELTA (body-on minus body-off; '—' = a side had no support) ===");
+function printBodyDelta(
+  deltas: ReturnType<typeof diffTierMetrics>,
+  title = "BODY DELTA (body-on minus body-off; '—' = a side had no support)",
+): void {
+  console.log(`\n=== ${title} ===`);
   console.log(`  ${pad("tier", 8)}${pad("Δ precision", 13)}${pad("Δ recall", 12)}`);
   for (const d of deltas) {
     console.log(
@@ -461,6 +466,62 @@ async function runBodyComparison(
   }
 }
 
+/**
+ * Context empty-vs-fixture A/B: the measured value of the judge's context
+ * channel (sender traits, engagement, priors, corrections) on items whose
+ * base signals point at the WRONG tier. The body flag is pinned OFF for both
+ * runs so the context contribution is isolated, not confounded.
+ */
+async function runContextComparison(loaded: LoadedSet, args: CliArgs): Promise<void> {
+  if (!hasProviderKey()) {
+    console.log(
+      "\nno provider key — comparison skipped. Set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_COMPAT_BASE_URL to run the context off-vs-on eval.",
+    );
+    return;
+  }
+
+  const { labelled, inPath } = loaded;
+  console.log(
+    `\nContext empty-vs-fixture comparison over ${labelled.length} labelled item(s) from ${inPath}`,
+  );
+  console.log(
+    `concurrency=${args.concurrency}, delay=${args.delayMs}ms per run, body=off (pinned)`,
+  );
+
+  const fixtureFor = await resolveContextFor(labelled, { ...args, contextMode: "fixture" });
+
+  const priorBodyFlag = process.env.JUDGE_INCLUDE_BODY;
+  try {
+    process.env.JUDGE_INCLUDE_BODY = "false";
+
+    console.log("\n--- RUN 1/2: empty context (judge sees the email alone) ---");
+    const offRows = await runJudge(labelled, args, undefined);
+    const offMetrics = computePerTierMetrics(tierPairs(offRows));
+    const offAccuracy = offRows.filter((r) => r.truth === r.predicted).length / offRows.length;
+    printPerTierMetrics(offMetrics);
+    console.log(`  overall accuracy (no context): ${(offAccuracy * 100).toFixed(1)}%`);
+
+    console.log("\n--- RUN 2/2: fixture context (traits/engagement/priors fed to judge) ---");
+    const onRows = await runJudge(labelled, args, fixtureFor);
+    const onMetrics = computePerTierMetrics(tierPairs(onRows));
+    const onAccuracy = onRows.filter((r) => r.truth === r.predicted).length / onRows.length;
+    printPerTierMetrics(onMetrics);
+    console.log(`  overall accuracy (with context): ${(onAccuracy * 100).toFixed(1)}%`);
+
+    printBodyDelta(
+      diffTierMetrics(offMetrics, onMetrics),
+      "CONTEXT DELTA (with-context minus no-context; '—' = a side had no support)",
+    );
+    console.log(
+      `\n  overall accuracy delta: ${fmtDelta(onAccuracy - offAccuracy)} (context on − off) — the measured value of the context channel.`,
+    );
+    printSuppressionTrust(onMetrics);
+  } finally {
+    if (priorBodyFlag === undefined) delete process.env.JUDGE_INCLUDE_BODY;
+    else process.env.JUDGE_INCLUDE_BODY = priorBodyFlag;
+  }
+}
+
 async function runSingle(
   loaded: LoadedSet,
   args: CliArgs,
@@ -575,6 +636,10 @@ async function main() {
   try {
     if (args.compareBody) {
       await runBodyComparison(loaded, args, contextFor);
+      return;
+    }
+    if (args.compareContext) {
+      await runContextComparison(loaded, args);
       return;
     }
     await runSingle(loaded, args, contextFor);

@@ -49,6 +49,26 @@ set exists to isolate the body's contribution). Both remaining ON-side misses
 stays ON in prod (flipped 2026-07-20); on snippet-misleading mail it is the
 difference between missing every PUSH and catching them all.
 
+## Context-channel measurement (2026-07-20)
+
+`pnpm eval:judge:context` (new 8-item context-dependent set — base signals point
+at the WRONG tier; truth is recoverable only from the per-item fixture: sender
+traits, engagement, tier history — the channels prod gates behind
+SENDER_TRAITS_IN_JUDGE / CONTACT_ENGAGEMENT_IN_JUDGE). Body pinned OFF in both
+runs so the context contribution is isolated. claude-sonnet-5 via OpenRouter:
+
+| | no context | with context | Δ |
+|---|---|---|---|
+| overall accuracy | 37.5% | **50.0%** | +12.5pt |
+| PUSH precision | 50% | **100%** | +50pt (urgency-bait stopped interrupting) |
+| QUEUE recall | 66.7% | **100%** | +33.3pt (promo-shaped real work rescued) |
+| predicted SILENT | — | **0** | never hides non-marketing mail |
+
+The three truth-SILENT items (payment-scare bait, recruiter cold outreach, CI
+noise) landed QUEUE even with damning context — the locked "SILENT is narrow:
+clear marketing only" rule holds, so the channel's wins come with zero
+over-suppression risk. Recommendation recorded here: flip both context flags ON.
+
 ## Adding cases
 
 Add cases when you find a real misclassification worth locking in:
