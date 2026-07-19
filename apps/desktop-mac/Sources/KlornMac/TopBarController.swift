@@ -105,6 +105,9 @@ final class TopBarController {
     /// nothing (the menu-bar icon is the anchor in hidden-pill mode).
     private func dismiss() {
         summoned = false
+        // Leaving via ⌥⌘K / "Close" must also drop the Preferences overlay —
+        // otherwise the stale flag re-opens it on the NEXT full-view entry.
+        model.showPreferences = false
         if model.settings.pillVisible {
             setState(.collapsed)
         } else {

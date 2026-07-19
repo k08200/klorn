@@ -17,6 +17,12 @@ final class AppSettings {
     /// re-register the Carbon hotkey. Not persisted (wired at launch).
     var onShortcutChanged: ((Shortcut) -> Void)?
 
+    /// Fired when the Preferences recorder starts/stops capturing, so the app
+    /// can suspend the Carbon hotkey for the duration — otherwise pressing the
+    /// currently-bound chord is consumed by the hotkey (toggling the bar)
+    /// before the recorder's local monitor ever sees it. Not persisted.
+    var onShortcutRecordingChanged: ((Bool) -> Void)?
+
     /// A new PUSH posts a macOS banner unless the user turns it off. The top-bar
     /// count always updates regardless — this only gates the system banner.
     var notificationsEnabled: Bool {

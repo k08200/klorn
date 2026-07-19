@@ -104,11 +104,18 @@ struct PreferencesView: View {
                     ShortcutRecorder(
                         shortcut: model.settings.shortcut,
                         recording: recordingShortcut,
-                        onStartRecording: { recordingShortcut = true },
+                        onStartRecording: {
+                            recordingShortcut = true
+                            model.settings.onShortcutRecordingChanged?(true)
+                        },
                         onCapture: { model.settings.shortcut = $0 },
-                        onFinished: { recordingShortcut = false },
+                        onFinished: {
+                            recordingShortcut = false
+                            model.settings.onShortcutRecordingChanged?(false)
+                        },
                         onReset: {
                             recordingShortcut = false
+                            model.settings.onShortcutRecordingChanged?(false)
                             model.settings.shortcut = .defaultToggle
                         })
                 }

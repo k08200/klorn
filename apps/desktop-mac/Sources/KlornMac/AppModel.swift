@@ -275,6 +275,12 @@ final class AppModel {
         KeychainStore.clear()
         queue = nil
         loadError = nil
+        // Cross-account hygiene: every per-account surface must reset, or the
+        // next sign-in briefly shows the previous account's data.
+        today = nil
+        usage = nil
+        briefing = nil
+        shownMeetingIds = []
         phase = .signedOut
     }
 
