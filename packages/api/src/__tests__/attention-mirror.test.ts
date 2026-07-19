@@ -620,9 +620,9 @@ describe("upsertAttentionForEmailJudgement — status preservation", () => {
       "db pool exhausted",
     );
     expect(captureErrorSpy).toHaveBeenCalledTimes(1);
-    expect(
-      (captureErrorSpy.mock.calls[0]?.[1] as { tags: { scope: string } }).tags.scope,
-    ).toBe("attention-mirror.email-upsert");
+    expect((captureErrorSpy.mock.calls[0]?.[1] as { tags: { scope: string } }).tags.scope).toBe(
+      "attention-mirror.email-upsert",
+    );
   });
 
   it("never sets isManualOverride from judge output, even if the LLM reason string impersonates the override prefix (GHSA-cxc5-fmqv-pxv6)", async () => {
