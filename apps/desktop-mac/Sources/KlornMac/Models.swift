@@ -253,18 +253,48 @@ struct ChatConversation: Codable, Sendable {
     let id: String
 }
 
+/// A calendar event the agent drafted from the conversation — the user
+/// confirms before anything is written (deterministic-floor thinking: the
+/// desktop never creates an event the user didn't click).
+struct EventDraft: Codable, Sendable, Hashable {
+    let title: String
+    let startTime: String
+    let endTime: String
+    let location: String?
+}
+
 /// POST /api/chat/conversations/:id/messages → one synchronous agent turn.
 struct ChatTurnResponse: Codable, Sendable {
     let reply: String
     let error: String?
+    let eventDraft: EventDraft?
 }
 
-/// One bubble in the desktop's in-memory thread.
+/// One bubble in the desktop's in-memory thread. An assistant bubble may carry
+/// an event draft, rendered as a confirm card until created or ignored.
 struct ChatMessage: Identifiable, Hashable, Sendable {
     enum Role: Sendable { case user, assistant, failure }
     let id = UUID()
     let role: Role
     let text: String
+    var eventDraft: EventDraft?
+
+    init(role: Role, text: String, eventDraft: EventDraft? = nil) {
+        self.role = role
+        self.text = text
+        self.eventDraft = eventDraft
+    }
+}
+
+/// "Title · 15:00–16:00 · Location" — one-line confirm-card label. Time falls
+/// away on malformed ISO (never a crash); location only when present. Pure.
+func eventDraftLabel(_ draft: EventDraft, calendar: Calendar = .current) -> String {
+    var parts = [draft.title]
+    let time = eventTimeLabel(
+        startISO: draft.startTime, endISO: draft.endTime, allDay: false, calendar: calendar)
+    if !time.isEmpty { parts.append(time) }
+    if let location = draft.location, !location.isEmpty { parts.append(location) }
+    return parts.joined(separator: " · ")
 }
 
 /// Whether the composer may send: non-blank text, no turn in flight, and

@@ -915,26 +915,54 @@ private struct AssistantColumn: View {
 }
 
 private struct ChatBubble: View {
+    @Environment(AppModel.self) private var model
     let message: ChatMessage
 
     var body: some View {
-        HStack {
-            if message.role == .user { Spacer(minLength: 40) }
-            Text(message.text)
-                .font(.callout)
-                .foregroundStyle(message.role == .failure ? Theme.accent : Theme.text)
-                .textSelection(.enabled)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(
-                    message.role == .user ? Color.white.opacity(0.10) : Color.white.opacity(0.04),
-                    in: RoundedRectangle(cornerRadius: 10))
-            if message.role != .user { Spacer(minLength: 40) }
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                if message.role == .user { Spacer(minLength: 40) }
+                Text(message.text)
+                    .font(.callout)
+                    .foregroundStyle(message.role == .failure ? Theme.accent : Theme.text)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(
+                        message.role == .user ? Color.white.opacity(0.10) : Color.white.opacity(0.04),
+                        in: RoundedRectangle(cornerRadius: 10))
+                if message.role != .user { Spacer(minLength: 40) }
+            }
+            .accessibilityLabel(
+                message.role == .user ? "You said: \(message.text)"
+                    : message.role == .failure ? "Error: \(message.text)"
+                    : "Klorn replied: \(message.text)")
+
+            // Agent-drafted event: nothing is written until the user clicks.
+            if let draft = message.eventDraft {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "calendar.badge.plus").font(.caption)
+                            .foregroundStyle(Theme.accent).accessibilityHidden(true)
+                        Text(eventDraftLabel(draft))
+                            .font(.caption).foregroundStyle(Theme.text).lineLimit(2)
+                    }
+                    HStack(spacing: 8) {
+                        Button("Add to calendar") {
+                            Task { await model.createEvent(from: draft, messageId: message.id) }
+                        }
+                        .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
+                        Button("Ignore") { model.clearEventDraft(message.id) }
+                            .buttonStyle(.bordered).controlSize(.small)
+                    }
+                }
+                .padding(10)
+                .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.line))
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Proposed event: \(eventDraftLabel(draft))")
+            }
         }
         .padding(.horizontal, 16)
-        .accessibilityLabel(
-            message.role == .user ? "You said: \(message.text)"
-                : message.role == .failure ? "Error: \(message.text)"
-                : "Klorn replied: \(message.text)")
     }
 }
 

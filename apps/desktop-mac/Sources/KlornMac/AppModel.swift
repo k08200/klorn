@@ -227,6 +227,36 @@ final class AppModel {
         }
     }
 
+    /// Confirm an agent-drafted event: POST to the calendar (syncs to Google
+    /// server-side), clear the card, and confirm in-thread. Failure keeps the
+    /// card so the user can retry, plus a visible failure bubble.
+    func createEvent(from draft: EventDraft, messageId: UUID) async {
+        var body = ["title": draft.title, "startTime": draft.startTime, "endTime": draft.endTime]
+        if let location = draft.location { body["location"] = location }
+        do {
+            try await api.post("/api/calendar", json: body)
+            clearEventDraft(messageId)
+            chatMessages.append(ChatMessage(
+                role: .assistant, text: "✓ Added to calendar: \(eventDraftLabel(draft))"))
+            Task { await refreshToday() }  // the TODAY column should show it now
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            chatMessages.append(ChatMessage(
+                role: .failure, text: "Couldn't create the event — \(Self.describe(error))"))
+        }
+    }
+
+    /// Ignore a drafted event — removes the card, writes nothing.
+    func clearEventDraft(_ messageId: UUID) {
+        chatMessages = chatMessages.map { message in
+            guard message.id == messageId else { return message }
+            var cleared = message
+            cleared.eventDraft = nil
+            return cleared
+        }
+    }
+
     // MARK: Agent activity
 
     /// Today's autonomous-agent receipt (nil until first load). Best-effort.
@@ -267,7 +297,8 @@ final class AppModel {
             let turn: ChatTurnResponse = try await api.post(
                 "/api/chat/conversations/\(convId)/messages",
                 json: ["text": trimmed], as: ChatTurnResponse.self)
-            chatMessages.append(ChatMessage(role: .assistant, text: turn.reply))
+            chatMessages.append(
+                ChatMessage(role: .assistant, text: turn.reply, eventDraft: turn.eventDraft))
             if let error = turn.error {
                 chatMessages.append(ChatMessage(role: .failure, text: error))
             }
