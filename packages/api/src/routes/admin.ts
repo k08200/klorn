@@ -25,6 +25,7 @@ import { getTraitMetrics } from "../learning/sender-trait-metrics.js";
 import { clearFallbackState, getProviderCooldownInfo } from "../llm/model-fallback.js";
 import { MODEL } from "../llm/openai.js";
 import { sendBetaInviteEmail } from "../mail/email.js";
+import { collectFeatureFlags } from "../ops/feature-flags.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { getProviderChain } from "../providers/index.js";
 
@@ -66,6 +67,12 @@ function summarizeTrustFeedback(rows: FeedbackGroup[]) {
 export async function adminRoutes(app: FastifyInstance) {
   // All admin routes require ADMIN role
   app.addHook("preHandler", requireAdmin);
+
+  // GET /api/admin/flags — one truthful "what is actually on?" snapshot
+  // (import-time consts vs dynamic env reads, labeled; presence-only for
+  // operational config — never values). Ends the probe-behavior-to-find-out
+  // loop every flag flip used to require.
+  app.get("/flags", async () => collectFeatureFlags());
 
   // GET /api/admin/users — List all users
   app.get("/users", async () => {
