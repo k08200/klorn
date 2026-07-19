@@ -31,6 +31,12 @@ Gotchas:
   of them; a green local run means a green CI.
 - Touching `apps/desktop-mac/**`? CI runs `swift run KlornMac --self-check` on a
   macOS runner. Run it locally before pushing (the Swift `--self-check` harness).
+- Touching `website/`? The EN (`website/index.html`) and KO (`website/ko/index.html`)
+  landings are parallel copies — edit both in lockstep. CI enforces structural
+  parity (`.github/scripts/check-website-lockstep.sh`; run it locally to check).
+- Docs/website/media-only changes: the heavy CI jobs (TypeScript/Test/Build) and
+  Migrations self-skip via the `Scope` probe — skipped required checks still pass
+  branch protection, so these PRs merge in seconds.
 
 ## Branch & PR rules
 

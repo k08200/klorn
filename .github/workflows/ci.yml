@@ -10,11 +10,53 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# All jobs run in PARALLEL (no `needs`) with a warm pnpm cache, so PR wall-clock
-# is the slowest single job (build), not the sum of a serial chain. The founder
-# runs the full gate locally before pushing (CLAUDE.md ship workflow); CI is the
+# Heavy jobs run in PARALLEL behind a ~10s Scope probe, so PR wall-clock is the
+# slowest single job (build), not the sum of a serial chain. The founder runs
+# the full gate locally before pushing (CLAUDE.md ship workflow); CI is the
 # backstop, so fail-fast ordering buys little and costs minutes.
+#
+# Scope exists because required checks + path filters don't mix on GitHub: a
+# path-filtered workflow leaves its required checks "Expected" forever and the
+# PR can never merge. Instead the heavy jobs self-skip via job-level `if` — a
+# skipped required check counts as passing, while Scope itself is required so
+# a probe failure fails closed (its dependents skip, but Scope's own red X
+# blocks the merge).
 jobs:
+  scope:
+    name: Scope
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+      prisma: ${{ steps.diff.outputs.prisma }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          FILES=$(git diff --name-only "$BASE"...HEAD)
+          echo "$FILES"
+          # code=false only when every changed file is a surface with its own
+          # gate (desktop → desktop.yml, website → lockstep check in Lint) or
+          # pure docs/media. Anything unrecognized counts as code — new paths
+          # fail toward running the full gate, never toward skipping it.
+          CODE=false; PRISMA=false
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              website/*|docs/*|media/*|.tours/*|*.md|LICENSE|apps/desktop-mac/*) ;;
+              *) CODE=true ;;
+            esac
+            case "$f" in
+              packages/api/prisma/*|.github/workflows/ci.yml) PRISMA=true ;;
+            esac
+          done <<< "$FILES"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "prisma=$PRISMA" >> "$GITHUB_OUTPUT"
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -25,10 +67,16 @@ jobs:
           version: "2.4.12"
       - name: Run Biome lint (errors only)
         run: biome check --diagnostic-level=error packages/
+      # website/ ships two full parallel landings (EN + KO) with no shared
+      # template — structural edits must land in both. Fails on skeleton drift.
+      - name: Website EN/KO lockstep
+        run: bash .github/scripts/check-website-lockstep.sh
 
   typecheck:
     name: TypeScript
     runs-on: ubuntu-latest
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -52,6 +100,8 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -69,6 +119,8 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -91,6 +143,8 @@ jobs:
   migrations:
     name: Migrations
     runs-on: ubuntu-latest
+    needs: scope
+    if: needs.scope.outputs.prisma == 'true'
     services:
       postgres:
         image: postgres:16

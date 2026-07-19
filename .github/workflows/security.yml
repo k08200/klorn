@@ -1,47 +1,21 @@
 name: Security
 
+# PR-facing security gate — one fast job (~15s). The slow, non-gating scans
+# (CodeQL, dependency audit) live in security-deep.yml on push-to-main + a
+# weekly cron so they never occupy a row in the PR checks list.
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-  schedule:
-    # Run weekly on Monday at 09:00 UTC
-    - cron: "0 9 * * 1"
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
-  audit:
-    name: Dependency Audit
-    runs-on: ubuntu-latest
-    # Skip on PRs — the audit is non-blocking (`|| true`) so it gates nothing per
-    # PR; keep it on push-to-main + the weekly schedule to trim PR CI time.
-    if: github.event_name != 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - uses: pnpm/action-setup@v4
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Check for known vulnerabilities
-        run: pnpm audit --prod || true
-
-      - name: Check for outdated critical packages
-        run: |
-          echo "## Checking critical packages for updates..."
-          pnpm outdated --filter "@hireeve/*" || true
-
-  secrets-scan:
-    name: Secret Detection
+  security:
+    name: Security
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,39 +26,6 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           extra_args: --only-verified
-
-  codeql:
-    name: CodeQL Analysis
-    runs-on: ubuntu-latest
-    # Skip on PRs — CodeQL is the slowest job and only uploads to the Security
-    # tab (no PR comments/gate). Scanning every push to main + the weekly cron
-    # keeps main continuously analyzed while cutting PR CI time.
-    if: github.event_name != 'pull_request'
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: javascript-typescript
-          queries: security-extended
-          config-file: .github/codeql/codeql-config.yml
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-        with:
-          # Upload results to Security tab only, no PR comments
-          upload: always
-          add-snippets: false
-
-  security-lint:
-    name: Security Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
       - name: Check for .env files in commits
         run: |
