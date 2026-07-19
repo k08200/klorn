@@ -28,6 +28,7 @@ import { sendBetaInviteEmail } from "../mail/email.js";
 import { collectFeatureFlags } from "../ops/feature-flags.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { getProviderChain } from "../providers/index.js";
+import { captureError } from "../sentry.js";
 
 type FeedbackGroup = { signal: string; _count: { signal: number } };
 
@@ -73,6 +74,19 @@ export async function adminRoutes(app: FastifyInstance) {
   // operational config — never values). Ends the probe-behavior-to-find-out
   // loop every flag flip used to require.
   app.get("/flags", async () => collectFeatureFlags());
+
+  // POST /api/admin/sentry-test — fire a marker event through the REAL
+  // captureError path so "is error tracking actually wired?" is verifiable
+  // end-to-end (DSN set, SDK initialized, event ingested) instead of assumed.
+  app.post("/sentry-test", async (request) => {
+    const userId = getUserId(request);
+    const marker = `sentry-verification-${Date.now()}`;
+    captureError(new Error(`Sentry verification test (${marker})`), {
+      tags: { scope: "admin.sentry-test" },
+      extra: { firedBy: userId, marker },
+    });
+    return { fired: true, marker, sentryConfigured: Boolean(process.env.SENTRY_DSN) };
+  });
 
   // GET /api/admin/users — List all users
   app.get("/users", async () => {
