@@ -50,7 +50,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       # The probe runner never reads real data; the Prisma client just needs a
       # syntactically valid URL (usage-ledger writes are fire-and-forget).
       DATABASE_URL: "postgresql://eval:eval@localhost:5432/eval"
@@ -60,7 +59,7 @@ jobs:
       - name: Check for provider key
         id: key
         run: |
-          if [ -n "$OPENROUTER_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; then
+          if [ -n "$OPENROUTER_API_KEY" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
