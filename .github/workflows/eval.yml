@@ -33,7 +33,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       # poc-accuracy never queries the DB, but the Prisma client is
       # constructed at import time and needs a syntactically valid URL.
       DATABASE_URL: "postgresql://eval:eval@localhost:5432/eval"
@@ -45,7 +44,7 @@ jobs:
       - name: Check for provider key
         id: key
         run: |
-          if [ -n "$OPENROUTER_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; then
+          if [ -n "$OPENROUTER_API_KEY" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
@@ -76,7 +75,24 @@ jobs:
         # The judge defaults to a paid model (JUDGE_MODEL, openai.ts), so the
         # run no longer competes with prod for :free daily quota and modest
         # parallelism is safe. ~1 min for 50 emails.
-        run: cd packages/api && npx tsx scripts/poc-accuracy.ts --in=eval/judge-eval-set.json --concurrency=2 --delay=500
+        #
+        # Exit 3 = INSTRUMENT DEGRADED (#879): a transient provider failure
+        # dropped items to the keyword fallback, so the numbers measure the
+        # fallback, not the judge. Retry once after a pause — this exact shape
+        # caused three consecutive false-fails on 2026-07-16. A real floor
+        # failure (exit 2) is never retried.
+        run: |
+          cd packages/api
+          set +e
+          npx tsx scripts/poc-accuracy.ts --in=eval/judge-eval-set.json --concurrency=2 --delay=500
+          code=$?
+          if [ "$code" = "3" ]; then
+            echo "::warning::Instrument degraded (provider unreachable) — retrying once in 60s"
+            sleep 60
+            npx tsx scripts/poc-accuracy.ts --in=eval/judge-eval-set.json --concurrency=2 --delay=500
+            code=$?
+          fi
+          exit $code
 
       # Report-only readout on the REAL founder-labeled set (#648). The
       # original GO/NO-GO bar (≥80% overall on real mail) is measured on every

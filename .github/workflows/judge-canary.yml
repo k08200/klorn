@@ -45,7 +45,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       # poc-accuracy never queries the DB in fixture mode, but the Prisma
       # client is constructed at import time and needs a syntactically valid URL.
       DATABASE_URL: "postgresql://eval:eval@localhost:5432/eval"
@@ -55,7 +54,7 @@ jobs:
       - name: Check for provider key
         id: key
         run: |
-          if [ -n "$OPENROUTER_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; then
+          if [ -n "$OPENROUTER_API_KEY" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
@@ -98,11 +97,27 @@ jobs:
         id: eval
         # The gate can exit 2 (floor breach) and still write --out; keep going
         # so the flip comparison and the final verdict step see the full picture.
+        # Exit 3 = INSTRUMENT DEGRADED (#879): fallback-poisoned verdicts are
+        # never written (no --out), so they can't become a baseline or fake a
+        # flip alarm — retry once after a pause, then let the missing-output
+        # check below surface the outage.
         continue-on-error: true
         run: |
-          cd packages/api && npx tsx scripts/poc-accuracy.ts \
+          cd packages/api
+          set +e
+          npx tsx scripts/poc-accuracy.ts \
             --in=eval/real-eval-set.json --concurrency=2 --delay=500 \
             --out=../../canary-current.json
+          code=$?
+          if [ "$code" = "3" ]; then
+            echo "::warning::Instrument degraded (provider unreachable) — retrying once in 60s"
+            sleep 60
+            npx tsx scripts/poc-accuracy.ts \
+              --in=eval/real-eval-set.json --concurrency=2 --delay=500 \
+              --out=../../canary-current.json
+            code=$?
+          fi
+          exit $code
 
       - name: Compare against baseline
         if: steps.key.outputs.present == 'true'
