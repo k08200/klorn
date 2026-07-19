@@ -41,6 +41,18 @@ enum SelfUpdate {
         return candidates.first(where: exists)
     }
 
+    /// Shell command for the detached relauncher: wait until THIS (old)
+    /// process is gone, then open the new copy. Launching before the old
+    /// process exits loses the race against the single-instance guard — the
+    /// new copy sees the old one, defers to it, and exits; then the old one
+    /// terminates and nobody is left (observed on the first live self-update,
+    /// 2026-07-20). Pure for testing.
+    nonisolated static func relaunchScript(pid: Int32, appPath: String) -> String {
+        let quoted = appPath.replacingOccurrences(of: "\"", with: "\\\"")
+        return "while /bin/kill -0 \(pid) 2>/dev/null; do /bin/sleep 0.2; done; "
+            + "/usr/bin/open \"\(quoted)\""
+    }
+
     /// Extract the TeamIdentifier from `codesign -dv` output. Pure.
     nonisolated static func parseTeamID(_ codesignOutput: String) -> String? {
         for line in codesignOutput.split(separator: "\n") {
@@ -116,10 +128,18 @@ enum SelfUpdate {
             }
             try? FileManager.default.removeItem(at: backup)
 
-            // 5. Relaunch the new copy and exit this (old) process.
-            let config = NSWorkspace.OpenConfiguration()
-            config.createsNewApplicationInstance = true
-            try? await NSWorkspace.shared.openApplication(at: targetURL, configuration: config)
+            // 5. Relaunch AFTER this (old) process exits: a detached /bin/sh
+            // waits on our PID so the new copy's single-instance guard can't
+            // find us and defer. The helper is orphaned on our exit and keeps
+            // running — that's the point.
+            let helper = Process()
+            helper.executableURL = URL(fileURLWithPath: "/bin/sh")
+            helper.arguments = [
+                "-c",
+                Self.relaunchScript(
+                    pid: ProcessInfo.processInfo.processIdentifier, appPath: targetURL.path),
+            ]
+            try helper.run()
             NSApp.terminate(nil)
             return .relaunching
         } catch {
