@@ -33,9 +33,16 @@ The LLM does **not** pick the tier. On every email it scores four features betwe
 Two consequences fall out of that split:
 
 - **A cheap model wins.** When the model only has to read four signals consistently, you don't need a frontier model's reasoning depth. On the committed 50-email gate set ([`eval/judge-eval-set.json`](packages/api/eval/judge-eval-set.json)), `gemini-2.5-flash` scores **88%** with 100% recall on urgent mail — beating `gpt-4o` and `gemini-2.5-pro` (both 82%) at a fraction of the cost. Run it yourself: `pnpm eval:judge`.
-- **It fails open, safely.** If the LLM is down or rate-limited, a keyword fallback produces the same four features with zero model calls, so urgent mail still gets through. The model is the perception layer, never the load-bearing one.
+- **Measured on real mail, not just synthetic.** A second committed set ([`eval/real-eval-set.json`](packages/api/eval/real-eval-set.json)) holds 53 real, hand-labeled, PII-scrubbed emails with per-sender context snapshots from the production learning loop. Current score: **50/53 (94.3%) overall, 95.5% precision on silenced mail** — when Klorn hides something, it is almost never something you wanted. (Honest caveats: one inbox's ground truth so far, and the urgent tier has only 4 labeled samples, so its floor stays report-only until support grows. Full measurement history: [`eval/README.md`](packages/api/eval/README.md).)
+- **It fails open, safely — and heals.** If the LLM is down or rate-limited, a keyword fallback produces the same four features with zero model calls, so urgent mail still gets through. When the provider recovers, a bounded background sweep re-judges the degraded verdicts through the real pipeline — decisions you already touched are never rewritten.
 
 Every classification is **content-hash-bound**: the exact bytes the scorer read (`from`, `subject`, `snippet`, `labels`) are sha256'd at decision time and stored with the row. The read path re-hashes and throws `AttentionHashMismatchError` on mismatch, so a later enrichment can't silently invalidate a tier ([PR #468](https://github.com/k08200/klorn/pull/468)).
+
+### It learns from what you do — not what you say
+
+- **Two identical corrections make a rule.** Move the same sender to the same tier twice and that sender becomes deterministic — the LLM is skipped. Deliberately asymmetric: a learned pattern may promote mail to `PUSH`/`QUEUE`, but nothing learned can ever auto-`SILENT` a sender — a stale pattern must never mute someone where you can't see it to correct it.
+- **Reading is a signal.** Klorn measures your per-sender read rate straight from Gmail read state — no in-app clicks required. A sender you open every time stops getting buried as "marketing"; one you open 4% of the time stops cluttering your queue. On the real-mail set, this single signal recovered every wrongly-silenced sender the labeler actually reads.
+- **Every correction is ground truth.** Tier moves land in an append-only decision ledger (shown tier, feature vector, your correction) that regenerates the eval set — so the accuracy above is re-measured against real behavior, not a frozen benchmark.
 
 ## The deterministic floor
 
@@ -115,9 +122,20 @@ docs/           doctrine, screenshots, operational notes
 ## Native macOS app
 
 A real native SwiftUI client that lives as a **custom always-on bar pinned to the
-top of your screen** — a slim pill that expands (`☰` / `⌥⌘K`) into the firewall
-and never steals focus from what you're working in. Real-time over the existing
-WebSocket hub; row actions Open / Snooze / Dismiss.
+top of your screen** — a slim pill that expands into the firewall and never
+steals focus from what you're working in. Real-time over the existing WebSocket
+hub. What it does today:
+
+- **Ambient by default** — the pill hides behind a menu-bar icon with one click
+  and comes back on a global shortcut you record yourself (default `⌥⌘K`); a
+  `PUSH` card is the only thing allowed to surface on its own.
+- **Act without the browser** — read the full email inline, Open / Snooze /
+  Dismiss, and **one-click tier corrections** that teach the firewall from
+  exactly where you live.
+- **A day at a glance** — TODAY calendar column beside the queue, Klorn's
+  summary on every push card, and a daily AI-usage gauge in ACCOUNT.
+- Launch-at-login, in-app update check, and a Gatekeeper-verified release
+  pipeline.
 
 ```bash
 cd apps/desktop-mac
