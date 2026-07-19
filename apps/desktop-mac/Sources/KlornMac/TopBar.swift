@@ -298,6 +298,35 @@ private struct TodayColumn: View {
                 Text(model.today == nil ? "Loading…" : "No events today")
                     .font(.caption).foregroundStyle(Theme.textDim)
             }
+
+            // The agent's daily receipt — trust needs visibility. Hidden on
+            // no-activity days (an empty receipt is noise). Click → web inbox,
+            // where pending proposals are approved/declined.
+            if let agent = model.agentToday, let line = agentActivityLine(agent.totals) {
+                Button { if let url = URL(string: Config.webBaseURL) { NSWorkspace.shared.open(url) } } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "gearshape")
+                                .font(.caption2).foregroundStyle(Theme.accent)
+                                .accessibilityHidden(true)
+                            Text("KLORN TODAY").font(.caption2.weight(.semibold))
+                                .foregroundStyle(Theme.textDim)
+                        }
+                        Text(line).font(.caption).foregroundStyle(Theme.text)
+                        if let first = (agent.pending.first ?? agent.executed.first),
+                           let summary = first.summary {
+                            Text(summary).font(.caption2).foregroundStyle(Theme.textDim)
+                                .lineLimit(2).multilineTextAlignment(.leading)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 6)
+                .accessibilityLabel("Klorn today: \(line). Opens the web inbox to review.")
+            }
             Spacer()
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)

@@ -213,6 +213,39 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     }
 }
 
+// MARK: - Agent activity ("what Klorn did today")
+
+/// GET /api/automations/today-actions — the day's autonomous-agent receipt.
+struct TodayActions: Codable, Sendable {
+    struct Entry: Codable, Sendable, Identifiable, Hashable {
+        let id: String
+        let toolName: String
+        let summary: String?
+    }
+
+    struct Totals: Codable, Sendable, Hashable {
+        let executed: Int
+        let rejected: Int
+        let pending: Int
+        let urgent: Int
+    }
+
+    let executed: [Entry]
+    let pending: [Entry]
+    let totals: Totals
+}
+
+/// One glanceable line for the TODAY column — "2 done · 1 awaiting approval".
+/// nil when the agent did nothing today (the block hides entirely; an empty
+/// receipt is noise, not signal). Pure.
+func agentActivityLine(_ totals: TodayActions.Totals) -> String? {
+    var parts: [String] = []
+    if totals.executed > 0 { parts.append("\(totals.executed) done") }
+    if totals.pending > 0 { parts.append("\(totals.pending) awaiting approval") }
+    if totals.rejected > 0 { parts.append("\(totals.rejected) declined") }
+    return parts.isEmpty ? nil : parts.joined(separator: " · ")
+}
+
 // MARK: - Assistant (chat)
 
 /// POST /api/chat/conversations → the conversation the desktop lazily creates.
