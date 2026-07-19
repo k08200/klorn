@@ -1,0 +1,219 @@
+{
+  "metadata": {
+    "userEmail": "synthetic@klorn.ai",
+    "extractedAt": "2026-07-20T00:00:00.000Z",
+    "count": 8,
+    "note": "Synthetic, PII-free CONTEXT-DEPENDENT eval set. Every item is built so that from+subject+snippet point at the WRONG tier and the true tier is recoverable only from the per-item context fixture (sender traits, engagement, tier history) — the channels gated in prod by SENDER_TRAITS_IN_JUDGE / CONTACT_ENGAGEMENT_IN_JUDGE. Purpose: measure the judge's context channel in isolation. Run: pnpm eval:judge:context (body pinned OFF in both runs; RUN 1 empty context, RUN 2 fixture context). Compare 'overall accuracy' + per-tier recall."
+  },
+  "items": [
+    {
+      "id": "eval-ctx-001",
+      "gmailId": "synthetic",
+      "from": "Billing <billing@crmvendor.example.com>",
+      "subject": "Your invoice is ready — plus 20% off renewal",
+      "snippet": "Your April invoice is attached. Renew before the 30th and save 20% on the annual plan.",
+      "body": "Your April invoice is attached. Renew before the 30th and save 20% on the annual plan.",
+      "labels": ["UNREAD"],
+      "receivedAt": "2026-07-20T01:00:00.000Z",
+      "label": "QUEUE",
+      "note": "Promo-shaped subject reads SILENT; the context says this is the CRM the user's team runs on and the user engages with billing — a real invoice to handle.",
+      "context": {
+        "senderTraits": [
+          {
+            "factKind": "recurring_intent",
+            "factValue": "renewal and invoice notices for the CRM the user's team depends on",
+            "confidence": 0.85,
+            "evidenceText": "user replied about seat counts twice"
+          }
+        ],
+        "senderFacts": {
+          "tierHistory": { "QUEUE": 5 },
+          "engagement": { "importance": 0.7, "outboundCount": 3 }
+        }
+      }
+    },
+    {
+      "id": "eval-ctx-002",
+      "gmailId": "synthetic",
+      "from": "Account Security <alerts@paywall-verify.example.com>",
+      "subject": "URGENT: your account will be suspended in 24 hours",
+      "snippet": "We detected an issue with your billing details. Verify now to avoid suspension of service.",
+      "body": "We detected an issue with your billing details. Verify now to avoid suspension of service.",
+      "labels": ["UNREAD"],
+      "receivedAt": "2026-07-20T01:10:00.000Z",
+      "label": "SILENT",
+      "note": "Urgency-bait screams PUSH; the context shows a recurring solicitation pattern the user has always ignored.",
+      "context": {
+        "senderTraits": [
+          {
+            "factKind": "recurring_intent",
+            "factValue": "recurring urgency-bait solicitation; user has never engaged",
+            "confidence": 0.9,
+            "evidenceText": "same 24-hour-suspension framing monthly"
+          }
+        ],
+        "senderFacts": {
+          "tierHistory": { "SILENT": 7 },
+          "engagement": { "importance": 0, "outboundCount": 0 }
+        }
+      }
+    },
+    {
+      "id": "eval-ctx-003",
+      "gmailId": "synthetic",
+      "from": "Taylor Brooks <taylor@talent-reach.example.com>",
+      "subject": "Quick call today? Exciting opportunity",
+      "snippet": "I came across your profile and have a senior role I'd love to discuss — do you have 15 minutes today?",
+      "body": "I came across your profile and have a senior role I'd love to discuss — do you have 15 minutes today?",
+      "labels": ["UNREAD"],
+      "receivedAt": "2026-07-20T01:20:00.000Z",
+      "label": "SILENT",
+      "note": "Same-day ask reads urgent; the context marks recruiter cold outreach with zero engagement history.",
+      "context": {
+        "senderTraits": [
+          {
+            "factKind": "relationship",
+            "factValue": "external recruiter cold outreach",
+            "confidence": 0.85,
+            "evidenceText": "template phrasing across 5 prior mails"
+          }
+        ],
+        "senderFacts": {
+          "tierHistory": { "SILENT": 5 },
+          "engagement": { "importance": 0, "outboundCount": 0 }
+        }
+      }
+    },
+    {
+      "id": "eval-ctx-004",
+      "gmailId": "synthetic",
+      "from": "A. Rivera <ar@rivera-capital.example.com>",
+      "subject": "call me when you see this",
+      "snippet": "call me when you see this",
+      "body": "call me when you see this",
+      "labels": ["UNREAD"],
+      "receivedAt": "2026-07-20T01:30:00.000Z",
+      "label": "PUSH",
+      "note": "A terse note from an unknown-looking sender defaults to QUEUE; the context says lead investor with heavy real engagement — this interrupts.",
+      "context": {
+        "senderTraits": [
+          {
+            "factKind": "relationship",
+            "factValue": "lead investor in the user's current funding round",
+            "confidence": 0.9,
+            "evidenceText": "term-sheet thread and 3 calls this month"
+          }
+        ],
+        "senderFacts": {
+          "tierHistory": { "PUSH": 3, "QUEUE": 2 },
+          "engagement": { "importance": 1, "outboundCount": 22 },
+          "interaction": { "emailCount": 120, "lastEmailDaysAgo": 1, "upcomingMeetings": 1 }
+        }
+      }
+    },
+    {
+      "id": "eval-ctx-005",
+      "gmailId": "synthetic",
+      "from": "Morgan Yu <morgan@studiopartner.example.com>",
+      "subject": "Weekly digest #142",
+      "snippet": "This week: shipped the importer, two blockers for review, and the roadmap notes below.",
+      "body": "This week: shipped the importer, two blockers for review, and the roadmap notes below.",
+      "labels": ["UNREAD"],
+      "receivedAt": "2026-07-20T01:40:00.000Z",
+      "label": "QUEUE",
+      "note": "Digest-shaped subject reads SILENT newsletter; the context shows a close collaborator whose digest carries the user's action items.",
+      "context": {
+        "senderTraits": [
+          {
+            "factKind": "relationship",
+            "factValue": "close collaborator; weekly digest contains the user's action items",
+            "confidence": 0.8,
+            "evidenceText": "user replied to 6 of the last 10 digests"
+          }
+        ],
+        "senderFacts": {
+          "tierHistory": { "QUEUE": 6 },
+          "engagement": { "importance": 0.9, "outboundCount": 6 }
+        }
+      }
+    },
+    {
+      "id": "eval-ctx-006",
+      "gmailId": "synthetic",
+      "from": "CI Bot <ci@pipeline-bot.example.com>",
+      "subject": "Build FAILED: pipeline #9912",
+      "snippet": "Job web-e2e failed on step 7. See the attached log for details.",
+      "body": "Job web-e2e failed on step 7. See the attached log for details.",
+      "labels": ["UNREAD"],
+      "receivedAt": "2026-07-20T01:50:00.000Z",
+      "label": "SILENT",
+      "note": "FAILED reads alarming; the context says flaky CI noise that auto-retries and resolves, consistently ignored.",
+      "context": {
+        "senderTraits": [
+          {
+            "factKind": "recurring_intent",
+            "factValue": "CI failure noise; retries auto-resolve and the user never acts on these",
+            "confidence": 0.85,
+            "evidenceText": "9 identical failure/recovery pairs this month"
+          }
+        ],
+        "senderFacts": {
+          "tierHistory": { "SILENT": 9 },
+          "engagement": { "importance": 0, "outboundCount": 0 }
+        }
+      }
+    },
+    {
+      "id": "eval-ctx-007",
+      "gmailId": "synthetic",
+      "from": "Vendor Ops <po@parts-supplier.example.com>",
+      "subject": "Please confirm receipt of PO #4471",
+      "snippet": "Attached is purchase order #4471. Please confirm receipt at your convenience.",
+      "body": "Attached is purchase order #4471. Please confirm receipt at your convenience.",
+      "labels": ["UNREAD"],
+      "receivedAt": "2026-07-20T02:00:00.000Z",
+      "label": "AUTO",
+      "note": "A confirm-receipt ask defaults to QUEUE; the context shows a monthly pattern where a one-line acknowledgment always suffices — reversible and confident.",
+      "context": {
+        "senderTraits": [
+          {
+            "factKind": "recurring_intent",
+            "factValue": "monthly PO receipt confirmations; a one-line acknowledgment always suffices",
+            "confidence": 0.9,
+            "evidenceText": "6 identical confirmations sent"
+          }
+        ],
+        "senderFacts": {
+          "tierHistory": { "AUTO": 6 },
+          "engagement": { "importance": 0.4, "outboundCount": 6 }
+        }
+      }
+    },
+    {
+      "id": "eval-ctx-008",
+      "gmailId": "synthetic",
+      "from": "Sam Ortega <sam@clientco.example.com>",
+      "subject": "Following up on my last 3 emails!!",
+      "snippet": "Bumping this again — would love to get your eyes on the integration question below.",
+      "body": "Bumping this again — would love to get your eyes on the integration question below.",
+      "labels": ["UNREAD"],
+      "receivedAt": "2026-07-20T02:10:00.000Z",
+      "label": "QUEUE",
+      "note": "Triple-bump phrasing reads sales-spam SILENT; the context marks a paying customer's CTO the user actually corresponds with.",
+      "context": {
+        "senderTraits": [
+          {
+            "factKind": "relationship",
+            "factValue": "CTO of a paying customer; integration questions are real work",
+            "confidence": 0.85,
+            "evidenceText": "contract thread and 5 replies from the user"
+          }
+        ],
+        "senderFacts": {
+          "tierHistory": { "QUEUE": 4 },
+          "engagement": { "importance": 0.8, "outboundCount": 5 }
+        }
+      }
+    }
+  ]
+}

@@ -18,7 +18,8 @@
     "decision-metrics": "tsx scripts/decision-metrics.ts",
     "prune:push-logs": "tsx scripts/prune-push-logs.ts",
     "eval:judge": "tsx scripts/poc-accuracy.ts --in=eval/judge-eval-set.json --concurrency=1 --delay=4500",
-    "eval:judge:body": "tsx scripts/poc-accuracy.ts --in=eval/judge-body-eval-set.json --compare-body --concurrency=1 --delay=4500"
+    "eval:judge:body": "tsx scripts/poc-accuracy.ts --in=eval/judge-body-eval-set.json --compare-body --concurrency=1 --delay=4500",
+    "eval:judge:context": "tsx scripts/poc-accuracy.ts --in=eval/judge-context-eval-set.json --compare-context --concurrency=1 --delay=4500"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
