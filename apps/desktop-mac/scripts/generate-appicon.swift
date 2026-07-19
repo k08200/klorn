@@ -1,18 +1,26 @@
-// Generates Resources/AppIcon.png (1024×1024) — the Klorn identity as a
-// macOS Big-Sur-style icon: warm-graphite rounded square (the panel surface),
-// the amber ring (the wordmark), a top-light catching the glass, and a soft
-// ring glow. Deterministic: same input → same pixels, so the PNG is committed
-// and CI never needs to draw.
+// Generates Resources/AppIcon.png (1024×1024) — the Klorn "K" monogram:
+// a heavy rounded K in an amber→coral gradient, glowing softly on the
+// warm-graphite squircle. A letterform reads as *Klorn* at every size in a
+// way an abstract ring never did (dogfood 2026-07-20).
 //
 //   swift scripts/generate-appicon.swift Resources/AppIcon.png
 
 import AppKit
+import CoreText
 
 let size: CGFloat = 1024
 // Big Sur template: 824pt icon body centered on a 1024 canvas.
 let inset: CGFloat = 100
 let body = NSRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2)
 let cornerRadius: CGFloat = 185
+
+func roundedHeavyFont(pointSize: CGFloat) -> NSFont {
+    let base = NSFont.systemFont(ofSize: pointSize, weight: .heavy)
+    guard let descriptor = base.fontDescriptor.withDesign(.rounded),
+          let rounded = NSFont(descriptor: descriptor, size: pointSize)
+    else { return base }
+    return rounded
+}
 
 let image = NSImage(size: NSSize(width: size, height: size), flipped: false) { _ in
     guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
@@ -51,20 +59,39 @@ let image = NSImage(size: NSSize(width: size, height: size), flipped: false) { _
     border.lineWidth = 3
     border.stroke()
 
-    // The amber ring — Klorn's wordmark — with a soft glow.
-    let amber = NSColor(red: 1.0, green: 0.56, blue: 0.18, alpha: 1)
-    let ringRadius: CGFloat = 196
-    let ringWidth: CGFloat = 74
-    let ringRect = NSRect(
-        x: size / 2 - ringRadius, y: size / 2 - ringRadius,
-        width: ringRadius * 2, height: ringRadius * 2)
+    // ── The K ────────────────────────────────────────────────────────────
+    let font = roundedHeavyFont(pointSize: 600)
+    let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.black]
+    let line = CTLineCreateWithAttributedString(
+        NSAttributedString(string: "K", attributes: attributes))
+    let bounds = CTLineGetImageBounds(line, ctx)
+    let origin = CGPoint(x: size / 2 - bounds.midX, y: size / 2 - bounds.midY)
 
+    let amber = NSColor(red: 1.0, green: 0.63, blue: 0.20, alpha: 1)
+    let coral = NSColor(red: 1.0, green: 0.42, blue: 0.29, alpha: 1)
+
+    // Soft glow pass: the K in amber with a wide shadow, under the real fill.
     ctx.saveGState()
-    ctx.setShadow(offset: .zero, blur: 58, color: amber.withAlphaComponent(0.55).cgColor)
-    amber.setStroke()
-    let ring = NSBezierPath(ovalIn: ringRect)
-    ring.lineWidth = ringWidth
-    ring.stroke()
+    ctx.setShadow(offset: .zero, blur: 64, color: amber.withAlphaComponent(0.55).cgColor)
+    ctx.textPosition = origin
+    ctx.setFillColor(amber.cgColor)
+    CTLineDraw(line, ctx)
+    ctx.restoreGState()
+
+    // Gradient fill pass: clip to the glyph, pour amber→coral top→bottom.
+    ctx.saveGState()
+    ctx.textPosition = origin
+    ctx.setTextDrawingMode(.clip)
+    CTLineDraw(line, ctx)
+    let gradient = CGGradient(
+        colorsSpace: CGColorSpaceCreateDeviceRGB(),
+        colors: [amber.cgColor, coral.cgColor] as CFArray,
+        locations: [0.0, 1.0])!
+    ctx.drawLinearGradient(
+        gradient,
+        start: CGPoint(x: size / 2, y: origin.y + bounds.maxY),
+        end: CGPoint(x: size / 2, y: origin.y + bounds.minY),
+        options: [])
     ctx.restoreGState()
 
     return true

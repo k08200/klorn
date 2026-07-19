@@ -73,16 +73,16 @@ struct TopBarRoot: View {
 private struct LogoRing: View {
     var size: CGFloat = 16
     var body: some View {
-        // Brand ring v2: an amber→coral sweep instead of a flat stroke — the
-        // one place the identity gets to be slightly alive.
-        Circle()
-            .strokeBorder(
-                AngularGradient(
-                    colors: [Theme.accent, Color(red: 1.0, green: 0.42, blue: 0.29), Theme.accent],
-                    center: .center),
-                lineWidth: 2.2)
+        // The K mark — the app icon in miniature, so pill, panel, menu bar,
+        // and Dock all say the same thing: Klorn.
+        Text("K")
+            .font(.system(size: size * 0.82, weight: .heavy, design: .rounded))
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [Theme.accent, Color(red: 1.0, green: 0.42, blue: 0.29)],
+                    startPoint: .top, endPoint: .bottom))
             .frame(width: size, height: size)
-            .accessibilityHidden(true)  // decorative wordmark ring
+            .accessibilityHidden(true)  // decorative wordmark mark
     }
 }
 

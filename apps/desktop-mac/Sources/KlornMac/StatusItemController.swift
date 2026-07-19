@@ -98,23 +98,24 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     // MARK: - Pure (self-check)
 
     /// Top readout of the menu: running proof + the number that matters.
-    /// The menu-bar glyph: Klorn's ring at a deliberate 2.2pt weight, with a
-    /// filled center dot while PUSH mail waits. Drawn (not an SF symbol) so
-    /// the weight matches the brand ring instead of a hairline.
+    /// The menu-bar glyph: the Klorn "K" (rounded heavy — same letterform as
+    /// the app icon), with a corner dot while PUSH mail waits. Template so it
+    /// renders correctly in light/dark menu bars.
     static func ringIcon(pushWaiting: Bool) -> NSImage {
         let side: CGFloat = 18
         let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { _ in
-            let ringWidth: CGFloat = 2.2
-            let inset = ringWidth / 2 + 1.5
-            let ring = NSBezierPath(
-                ovalIn: NSRect(x: inset, y: inset, width: side - inset * 2, height: side - inset * 2))
-            ring.lineWidth = ringWidth
-            NSColor.black.setStroke()
-            ring.stroke()
+            let base = NSFont.systemFont(ofSize: 14, weight: .heavy)
+            let font: NSFont =
+                base.fontDescriptor.withDesign(.rounded).flatMap { NSFont(descriptor: $0, size: 14) }
+                ?? base
+            let k = NSAttributedString(
+                string: "K", attributes: [.font: font, .foregroundColor: NSColor.black])
+            let textSize = k.size()
+            k.draw(at: NSPoint(x: (side - textSize.width) / 2, y: (side - textSize.height) / 2 - 0.5))
             if pushWaiting {
-                let dot: CGFloat = 4.6
+                let dot: CGFloat = 5
                 NSBezierPath(
-                    ovalIn: NSRect(x: (side - dot) / 2, y: (side - dot) / 2, width: dot, height: dot))
+                    ovalIn: NSRect(x: side - dot - 0.5, y: side - dot - 0.5, width: dot, height: dot))
                     .fill()
             }
             return true
