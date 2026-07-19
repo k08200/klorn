@@ -271,6 +271,18 @@ func runSelfChecks() async -> Bool {
         check("removingIDs ignores unknown id",
               fw.removingIDs(["nope"]).summary.push == 2)
         check("allItemIDs collects across tiers", fw.allItemIDs == ["p1", "p2"])
+
+        // Tier correction (teach-the-firewall): optimistic move between tiers.
+        let moved = fw.movingItem(id: "p1", to: .silent)
+        check("movingItem removes from the old tier", moved.items(for: .push).map(\.id) == ["p2"])
+        check("movingItem prepends to the new tier", moved.items(for: .silent).map(\.id) == ["p1"])
+        check("movingItem restamps the item's tier", moved.item(id: "p1")?.tier == .silent)
+        check("movingItem shifts summary, total unchanged",
+              moved.summary.push == 1 && moved.summary.silent == 1 && moved.summary.total == 2)
+        check("movingItem to the same tier is a no-op",
+              fw.movingItem(id: "p1", to: .push).items(for: .push).map(\.id) == ["p1", "p2"])
+        check("movingItem unknown id is a no-op",
+              fw.movingItem(id: "nope", to: .silent).summary.push == 2)
     } else {
         check("dismiss fixture decodes", false)
     }

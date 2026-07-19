@@ -184,6 +184,10 @@ final class TopBarController {
                 guard let self else { return }
                 Task { await self.model.snooze(item, until: option.resurface()) }
             },
+            onSetTier: { [weak self] item, tier in
+                guard let self else { return }
+                Task { await self.model.setTier(item, to: tier) }
+            },
             onSelect: { [weak self] item in guard let self else { return }; Task { await self.model.select(item) } },
             onOpenPreferences: { [weak self] in
                 guard let self else { return }
