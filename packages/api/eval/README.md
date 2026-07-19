@@ -31,6 +31,24 @@ Safety invariants (enforced on every run, even on misses):
 The deterministic floor is a **ratchet**: raise it when the fallback improves;
 never lower it to make a PR pass.
 
+## JUDGE_INCLUDE_BODY measurement (2026-07-20)
+
+`pnpm eval:judge:body` (the 8-item body-dependent set, where from+subject+snippet
+deliberately point at the WRONG tier) against claude-sonnet-5 via OpenRouter:
+
+| | body OFF | body ON | Δ |
+|---|---|---|---|
+| overall accuracy | 0% | **62.5%** | +62.5pt |
+| PUSH recall | 0% | **100%** | +100pt |
+| PUSH precision | 0% | **100%** | +100pt |
+| QUEUE recall | 0% | 50% | +50pt |
+
+Zero provider errors in either run; the OFF-side zeros are by construction (the
+set exists to isolate the body's contribution). Both remaining ON-side misses
+(1 SILENT, 1 AUTO) degraded to QUEUE — the safe direction. Conclusion: the flag
+stays ON in prod (flipped 2026-07-20); on snippet-misleading mail it is the
+difference between missing every PUSH and catching them all.
+
 ## Adding cases
 
 Add cases when you find a real misclassification worth locking in:
