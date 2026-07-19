@@ -812,8 +812,10 @@ private struct FullList: View {
                 searchResultsList
             } else if items.isEmpty {
                 Spacer()
-                Text("Nothing in \(tier.label).").font(.title3).foregroundStyle(Theme.textDim)
-                    .frame(maxWidth: .infinity)
+                EmptyState(
+                    icon: tier == .push ? "checkmark.shield" : "tray",
+                    title: "Nothing in \(tier.label).",
+                    hint: tier == .push ? "Klorn is holding the line — nothing needs you." : nil)
                 Spacer()
             } else {
                 ScrollView {
@@ -875,10 +877,34 @@ private struct AssistantColumn: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
                         if model.chatMessages.isEmpty {
-                            Text("Ask about your mail, calendar, or day —\n“오늘 제일 중요한 메일 뭐야?”")
-                                .font(.callout).foregroundStyle(Theme.textDim)
-                                .padding(.top, 24).frame(maxWidth: .infinity)
-                                .multilineTextAlignment(.center)
+                            VStack(spacing: Theme.s4) {
+                                EmptyState(
+                                    icon: "sparkles",
+                                    title: "Ask about your mail, calendar, or day.")
+                                // One-click starters: discoverability beats a
+                                // blank prompt. Each sends immediately.
+                                VStack(spacing: Theme.s2) {
+                                    ForEach([
+                                        "오늘 제일 중요한 메일 뭐야?",
+                                        "답장 안 한 것 중 급한 것만 알려줘",
+                                        "이번 주 미팅 준비할 것 정리해줘",
+                                    ], id: \.self) { suggestion in
+                                        Button {
+                                            Task { await model.sendChat(suggestion) }
+                                        } label: {
+                                            Text(suggestion)
+                                                .font(.caption).foregroundStyle(Theme.text)
+                                                .padding(.horizontal, Theme.s3)
+                                                .padding(.vertical, Theme.s2)
+                                                .background(Theme.surfaceRaised, in: Capsule())
+                                                .overlay(Capsule().strokeBorder(Theme.line))
+                                        }
+                                        .buttonStyle(.plain)
+                                        .disabled(model.isChatting)
+                                    }
+                                }
+                            }
+                            .padding(.top, Theme.s6)
                         }
                         ForEach(model.chatMessages) { message in
                             ChatBubble(message: message)
@@ -899,8 +925,7 @@ private struct AssistantColumn: View {
                 }
             }
 
-            Divider().overlay(Theme.line)
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.s2) {
                 TextField("Message Klorn…", text: $draft, axis: .vertical)
                     .textFieldStyle(.plain).font(.callout).foregroundStyle(Theme.text)
                     .lineLimit(1...4)
@@ -908,14 +933,18 @@ private struct AssistantColumn: View {
                     .onSubmit { send() }
                     .accessibilityLabel("Message Klorn")
                 Button { send() } label: {
-                    Image(systemName: "arrow.up.circle.fill").font(.title3)
+                    Image(systemName: "arrow.up.circle.fill").font(.title2)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(canSendChat(draft, busy: model.isChatting) ? Theme.accent : Theme.textDim)
                 .disabled(!canSendChat(draft, busy: model.isChatting))
                 .accessibilityLabel("Send message")
             }
-            .padding(.horizontal, 16).padding(.vertical, 12)
+            .padding(.horizontal, Theme.s3).padding(.vertical, 10)
+            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(composerFocused ? Theme.accent.opacity(0.5) : Theme.field))
+            .padding(.horizontal, Theme.s4).padding(.vertical, Theme.s3)
         }
         .onAppear { composerFocused = true }
     }
@@ -1041,7 +1070,8 @@ private struct CommitmentRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.title).font(.callout).foregroundStyle(Theme.text).lineLimit(2)
+                Text(decodeHTMLEntities(item.title))
+                    .font(.callout).foregroundStyle(Theme.text).lineLimit(2)
                 HStack(spacing: 6) {
                     if let who = item.counterpartyLabel {
                         Text(who).font(.caption).foregroundStyle(Theme.textDim).lineLimit(1)
@@ -1116,7 +1146,8 @@ private struct FullRow: View {
     @FocusState private var focused: Bool
 
     private var selected: Bool { model.selectedItemId == item.id }
-    private var sender: String { item.email?.from ?? item.title }
+    private var sender: String { decodeHTMLEntities(item.email?.from ?? item.title) }
+    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1127,7 +1158,7 @@ private struct FullRow: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(sender).font(.body.weight(.semibold))
                             .foregroundStyle(Theme.text).lineLimit(1)
-                        Text(item.email?.subject ?? item.title).font(.callout)
+                        Text(decodeHTMLEntities(item.email?.subject ?? item.title)).font(.callout)
                             .foregroundStyle(Theme.text.opacity(0.85)).lineLimit(1)
                         if let reason = item.tierReason, !reason.isEmpty {
                             Text(reason).font(.caption).foregroundStyle(Theme.textDim).lineLimit(1)
@@ -1141,24 +1172,31 @@ private struct FullRow: View {
             .focused($focused)
             .accessibilityAddTraits(selected ? .isSelected : [])
 
-            TierMenu(item: item, onSetTier: actions.onSetTier) {
-                Image(systemName: "circle.fill")
-                    .font(.system(size: 8))
-                    .foregroundStyle(Theme.tint(item.tier))
-                    .iconTarget()
+            // Row actions surface on hover/selection/focus — at rest the list
+            // stays quiet (the tier dot alone carries state). Opacity keeps
+            // them clickable-by-position and fully present to VoiceOver.
+            HStack(spacing: 12) {
+                TierMenu(item: item, onSetTier: actions.onSetTier) {
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 8))
+                        .foregroundStyle(Theme.tint(item.tier))
+                        .iconTarget()
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                .help("Move to tier… (teaches Klorn)")
+                .accessibilityLabel("Change tier for message from \(sender), currently \(item.tier.label)")
+                SnoozeMenu(item: item, onSnooze: actions.onSnooze) {
+                    Image(systemName: "moon.zzz").iconTarget()
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                .foregroundStyle(Theme.textDim).help("Snooze…")
+                .accessibilityLabel("Snooze message from \(sender)")
+                .opacity(hovering || selected || focused ? 1 : 0)
+                Button { actions.onDismiss(item) } label: { Image(systemName: "xmark").iconTarget() }
+                    .buttonStyle(.plain).foregroundStyle(Theme.textDim).help("Dismiss")
+                    .accessibilityLabel("Dismiss message from \(sender)")
+                    .opacity(hovering || selected || focused ? 1 : 0)
             }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-            .help("Move to tier… (teaches Klorn)")
-            .accessibilityLabel("Change tier for message from \(sender), currently \(item.tier.label)")
-            SnoozeMenu(item: item, onSnooze: actions.onSnooze) {
-                Image(systemName: "moon.zzz").iconTarget()
-            }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-            .foregroundStyle(Theme.textDim).help("Snooze…")
-            .accessibilityLabel("Snooze message from \(sender)")
-            Button { actions.onDismiss(item) } label: { Image(systemName: "xmark").iconTarget() }
-                .buttonStyle(.plain).foregroundStyle(Theme.textDim).help("Dismiss")
-                .accessibilityLabel("Dismiss message from \(sender)")
         }
         .padding(.horizontal, 20).padding(.vertical, 12)
         // Selection is not color-only: an accent leading bar + a stronger fill (both
@@ -1166,7 +1204,8 @@ private struct FullRow: View {
         .background(alignment: .leading) {
             if selected { Rectangle().fill(Theme.accent).frame(width: 3) }
         }
-        .background(selected ? Color.white.opacity(0.14) : .clear)
+        .background(selected ? Theme.surfaceSelected : hovering ? Theme.surfaceHover : .clear)
+        .onHover { hovering = $0 }
         // Visible keyboard-focus indicator (2.4.7 / 2.4.13): .plain suppresses the
         // system ring, so draw our own — accent on the dark panel is ≈9.5:1 (≥3:1).
         .overlay {
@@ -1201,9 +1240,22 @@ private struct ReadingPane: View {
             } else if let email = model.openedEmail {
                 content(email)
             } else if model.selectedItemId != nil {
-                centered { Text("No preview for this item.").font(.callout).foregroundStyle(Theme.textDim) }
+                centered {
+                    EmptyState(icon: "doc.text", title: "No preview for this item.")
+                }
             } else {
-                centered { Text("Select a message to read it here.").font(.title3).foregroundStyle(Theme.textDim) }
+                centered {
+                    VStack(spacing: Theme.s4) {
+                        Circle().strokeBorder(Theme.accent.opacity(0.35), lineWidth: 3)
+                            .frame(width: 44, height: 44)
+                            .accessibilityHidden(true)
+                        Text("Nothing open").font(.title3).foregroundStyle(Theme.textDim)
+                        Text("Pick a message on the left — read, reply,\nsnooze, and re-tier without leaving Klorn.")
+                            .font(.caption).foregroundStyle(Theme.textDim.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

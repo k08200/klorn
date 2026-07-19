@@ -37,6 +37,47 @@ enum Theme {
         case .auto: .blue
         }
     }
+
+    // MARK: Surface ladder (design pass 2026-07-20)
+    // One opacity scale for every interactive rest→hover→selected state, so
+    // "how raised is this?" reads consistently across the app. Never invent
+    // ad-hoc `Color.white.opacity(…)` fills in views — pick a rung.
+    static let surfaceRaised = Color.white.opacity(0.05)   // cards, chips at rest
+    static let surfaceHover = Color.white.opacity(0.09)    // pointer feedback
+    static let surfaceSelected = Color.white.opacity(0.14) // the active row
+
+    // MARK: Spacing (4pt grid)
+    // s2/s3 within a control, s4 between controls, s6 between sections.
+    static let s1: CGFloat = 4
+    static let s2: CGFloat = 8
+    static let s3: CGFloat = 12
+    static let s4: CGFloat = 16
+    static let s6: CGFloat = 24
+}
+
+/// The standard quiet empty/guidance state: dim icon, one calm line, and an
+/// optional hint. Every "nothing here" moment uses this instead of a bare
+/// dim string, so emptiness reads as designed rather than unfinished.
+struct EmptyState: View {
+    let icon: String
+    let title: String
+    var hint: String? = nil
+
+    var body: some View {
+        VStack(spacing: Theme.s3) {
+            Image(systemName: icon)
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(Theme.textDim.opacity(0.7))
+                .accessibilityHidden(true)
+            Text(title).font(.callout).foregroundStyle(Theme.textDim)
+            if let hint {
+                Text(hint).font(.caption).foregroundStyle(Theme.textDim.opacity(0.7))
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+    }
 }
 
 /// Compact per-tier count chip for the queue header.
