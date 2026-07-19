@@ -24,8 +24,11 @@ struct PreferencesView: View {
             HStack {
                 Text("Preferences").font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
                 Spacer()
+                // Amber, not system blue — the sheet's one primary action
+                // speaks in the brand accent like every other primary.
                 Button("Done") { model.showPreferences = false }
                     .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
             }
             .padding(.bottom, 12)
 
