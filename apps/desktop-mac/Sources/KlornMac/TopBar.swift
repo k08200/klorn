@@ -1000,7 +1000,13 @@ private struct CommitmentsList: View {
 
             if model.commitments == nil {
                 Spacer()
-                ProgressView().controlSize(.small).frame(maxWidth: .infinity)
+                if model.commitmentsFailed {
+                    Text("Couldn't load commitments — retrying on the next refresh.")
+                        .font(.callout).foregroundStyle(Theme.textDim)
+                        .frame(maxWidth: .infinity).multilineTextAlignment(.center)
+                } else {
+                    ProgressView().controlSize(.small).frame(maxWidth: .infinity)
+                }
                 Spacer()
             } else if groups.waitingOn.isEmpty && groups.iOwe.isEmpty {
                 Spacer()

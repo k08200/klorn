@@ -507,15 +507,19 @@ func runSelfChecks() async -> Bool {
     check("turn response carries the error", errTurn?.error == "provider timeout")
 
     print("Commitments:")
+    // The API returns a WRAPPER — {"commitments":[...]} — not a bare array
+    // (decoding the bare array silently failed in prod: infinite spinner,
+    // 2026-07-20). This fixture mirrors the real wire shape.
     let cJSON = """
-    [{"id":"c1","title":"I'll send the SOW","owner":"USER","counterpartyName":"Sarah",
+    {"commitments":[{"id":"c1","title":"I'll send the SOW","owner":"USER","counterpartyName":"Sarah",
     "counterpartyEmail":"s@co.com","dueText":"by Friday","status":"OPEN","confidence":0.9},
     {"id":"c2","title":"They'll confirm budget","owner":"COUNTERPARTY","counterpartyName":null,
     "counterpartyEmail":"cfo@co.com","dueText":null,"status":"OPEN"},
     {"id":"c3","title":"orphan promise","owner":null,"counterpartyName":null,
-    "counterpartyEmail":null,"dueText":null,"status":"OPEN"}]
+    "counterpartyEmail":null,"dueText":null,"status":"OPEN"}]}
     """
-    if let cs = try? JSONDecoder().decode([CommitmentItem].self, from: Data(cJSON.utf8)) {
+    if let cs = (try? JSONDecoder().decode(CommitmentsResponse.self, from: Data(cJSON.utf8)))?
+        .commitments {
         check("commitments decode subset", cs.count == 3 && cs[0].title == "I'll send the SOW")
         let groups = commitmentGroups(cs)
         check("counterparty promises → waiting-on", groups.waitingOn.map(\.id) == ["c2"])
