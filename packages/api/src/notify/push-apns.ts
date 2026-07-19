@@ -113,8 +113,12 @@ function sendOne(
       console.error("[PUSH-APNS] request error:", err);
       done({ ok: false, prune: false });
     });
-    // Safety net: stream closed without end/error (e.g. RST) must still resolve.
-    req.on("close", () => done({ ok: false, prune: false }));
+    // Safety net: stream closed without end/error (e.g. RST) must still resolve
+    // — and log, so a per-device failure has a cause beyond the aggregate count.
+    req.on("close", () => {
+      console.error("[PUSH-APNS] stream closed without end/error (RST?)");
+      done({ ok: false, prune: false });
+    });
     req.on("end", () => {
       if (status === 200) return done({ ok: true, prune: false });
       let reason = "";

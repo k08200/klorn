@@ -21,6 +21,7 @@ import { getToolRisk } from "../agentcore/agent-logic.js";
 import { AUTOPILOT_LEVEL, type AutopilotLevel } from "../agentcore/agent-mode.js";
 import { prisma } from "../db.js";
 import { getSuppressionSet, isSuppressed } from "../learning/feedback-adaptor.js";
+import { captureError } from "../sentry.js";
 import type { EngagementKind } from "../learning/sender-policy.js";
 import { computeAttentionInputHash } from "./attention-input-hash.js";
 import { recordDecision, recordEmailDecision } from "./decision-label.js";
@@ -933,7 +934,17 @@ export async function upsertAttentionForEmailJudgement(
       },
     });
   } catch (err) {
+    // NOT best-effort: this write is what makes the judge's decision visible
+    // in the firewall UI. Swallowing it lets "judge decided PUSH" and "user
+    // can see it" silently diverge (the push may fire with no item behind it),
+    // and defeats the callers' "never silently dropped from triage" catch,
+    // which can only observe a throw. Capture and rethrow.
     console.warn("[attention-mirror] upsert failed for Email", email.id, err);
+    captureError(err, {
+      tags: { scope: "attention-mirror.email-upsert" },
+      extra: { emailId: email.id, tier: judgement.tier },
+    });
+    throw err;
   }
 
   // Append the immutable decision label (best-effort, never throws). Records
