@@ -142,8 +142,8 @@ struct PreferencesView: View {
         .onAppear { launchAtLogin = LoginItem.isEnabled }
         .padding(22)
         .frame(width: 440)
-        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.line))
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
         .shadow(radius: 24, y: 8)
     }
 
