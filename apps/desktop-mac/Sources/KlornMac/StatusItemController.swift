@@ -29,6 +29,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     func startSyncing() {
         withObservationTracking {
             setInstalled(Self.shouldShow(pillVisible: model.settings.pillVisible))
+            // Reading the push count here re-arms tracking on queue changes,
+            // so the center dot follows PUSH>0 live.
+            refreshIcon()
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in self?.startSyncing() }
         }
@@ -46,11 +49,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private func install() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = item.button {
-            // Template ring echoing the pill's LogoRing; template = correct
-            // rendering in light/dark menu bars and with tinted accents.
-            let image = NSImage(systemSymbolName: "circle", accessibilityDescription: "Klorn")
-            image?.isTemplate = true
-            button.image = image
+            // Hand-drawn bold ring (the SF "circle" hairline read as anemic —
+            // dogfood screenshot 2026-07-20). Template = correct in light/dark
+            // menu bars; a center dot appears while PUSH mail is waiting.
+            button.image = Self.ringIcon(pushWaiting: (model.queue?.summary.push ?? 0) > 0)
         }
         let menu = NSMenu()
         // Rebuilt on every open (menuNeedsUpdate); manual enabling so the
@@ -96,6 +98,37 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     // MARK: - Pure (self-check)
 
     /// Top readout of the menu: running proof + the number that matters.
+    /// The menu-bar glyph: Klorn's ring at a deliberate 2.2pt weight, with a
+    /// filled center dot while PUSH mail waits. Drawn (not an SF symbol) so
+    /// the weight matches the brand ring instead of a hairline.
+    static func ringIcon(pushWaiting: Bool) -> NSImage {
+        let side: CGFloat = 18
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { _ in
+            let ringWidth: CGFloat = 2.2
+            let inset = ringWidth / 2 + 1.5
+            let ring = NSBezierPath(
+                ovalIn: NSRect(x: inset, y: inset, width: side - inset * 2, height: side - inset * 2))
+            ring.lineWidth = ringWidth
+            NSColor.black.setStroke()
+            ring.stroke()
+            if pushWaiting {
+                let dot: CGFloat = 4.6
+                NSBezierPath(
+                    ovalIn: NSRect(x: (side - dot) / 2, y: (side - dot) / 2, width: dot, height: dot))
+                    .fill()
+            }
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = pushWaiting ? "Klorn — urgent mail waiting" : "Klorn"
+        return image
+    }
+
+    /// Refresh the glyph when the PUSH count crosses zero (called by the sync).
+    func refreshIcon() {
+        statusItem?.button?.image = Self.ringIcon(pushWaiting: (model.queue?.summary.push ?? 0) > 0)
+    }
+
     nonisolated static func statusLine(signedIn: Bool, pushCount: Int) -> String {
         guard signedIn else { return "Klorn — not signed in" }
         return pushCount == 0 ? "Klorn — no urgent mail" : "Klorn — \(pushCount) PUSH waiting"
