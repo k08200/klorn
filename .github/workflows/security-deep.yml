@@ -1,0 +1,65 @@
+name: Security Deep
+
+# The slow, non-gating scans. Neither job gates a PR (CodeQL only uploads to
+# the Security tab; the audit is informational), so neither has a pull_request
+# trigger — keeping them here means zero "skipped" rows in every PR's checks
+# list. Main stays continuously analyzed via push + the weekly cron.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Run weekly on Monday at 09:00 UTC
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for known vulnerabilities
+        run: pnpm audit --prod || true
+
+      - name: Check for outdated critical packages
+        run: |
+          echo "## Checking critical packages for updates..."
+          pnpm outdated --filter "@klorn/*" || true
+
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+          config-file: .github/codeql/codeql-config.yml
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          # Upload results to Security tab only, no PR comments
+          upload: always
+          add-snippets: false
