@@ -312,15 +312,20 @@ export const BRIEFING_SYSTEM_PROMPT =
   "return JSON, never explain yourself. Follow the format the user message specifies.";
 
 /**
- * Last briefing LLM outcome, surfaced by POST /generate so "AI summary
- * unavailable" is diagnosable in prod (which branch fired, and why) instead of
- * being invisible in the server logs. Single-user dogfood scope — not a
- * per-user store.
+ * Outcome of the briefing's LLM path, surfaced by POST /generate so "AI
+ * summary unavailable" is diagnosable in prod (which branch fired, and why).
+ * Threaded through return values — request-scoped, never shared module state
+ * (a singleton here leaks one user's diagnostic metadata to another).
  */
-export const lastBriefingLlm: { source: "ai" | "fallback"; reason: string | null; model: string } =
-  { source: "fallback", reason: "not generated yet", model: "" };
+export interface BriefingLlmOutcome {
+  source: "ai" | "fallback" | "cache";
+  reason: string | null;
+  model: string;
+}
 
-export default async function generateBriefing(userId: string): Promise<string> {
+export default async function generateBriefing(
+  userId: string,
+): Promise<{ content: string; llm: BriefingLlmOutcome }> {
   const data = await gatherBriefingData(userId);
 
   const today = new Date().toLocaleDateString("en-US", {
@@ -399,19 +404,16 @@ Recent Notes: ${JSON.stringify(data.notes)}`;
 
     const content = response.choices[0]?.message?.content?.trim();
     if (content) {
-      lastBriefingLlm.source = "ai";
-      lastBriefingLlm.reason = null;
-      lastBriefingLlm.model = MODEL;
-      return content;
+      return { content, llm: { source: "ai", reason: null, model: MODEL } };
     }
     const finish = response.choices[0]?.finish_reason ?? "none";
-    lastBriefingLlm.source = "fallback";
-    lastBriefingLlm.reason = `empty content (finish_reason=${finish})`;
-    lastBriefingLlm.model = MODEL;
     console.warn(
       `[BRIEFING] LLM returned empty content for ${userId} — falling back to rule-based view`,
     );
-    return buildSignalOnlyBriefing(data.signals);
+    return {
+      content: buildSignalOnlyBriefing(data.signals),
+      llm: { source: "fallback", reason: `empty content (finish_reason=${finish})`, model: MODEL },
+    };
   } catch (err) {
     // LLM provider exhausted, rate-limited, or otherwise unreachable.
     // Fall back to the deterministic signal summary so the user still
@@ -419,14 +421,18 @@ Recent Notes: ${JSON.stringify(data.notes)}`;
     // Log the reason — without it, "AI summary unavailable" is invisible
     // in prod and the user has no idea whether the issue is credentials,
     // the cost cap, or a transient provider outage.
-    lastBriefingLlm.source = "fallback";
-    lastBriefingLlm.reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-    lastBriefingLlm.model = MODEL;
     console.warn(
       `[BRIEFING] LLM call failed for ${userId} — falling back to rule-based view:`,
       err instanceof Error ? err.message : err,
     );
-    return buildSignalOnlyBriefing(data.signals);
+    return {
+      content: buildSignalOnlyBriefing(data.signals),
+      llm: {
+        source: "fallback",
+        reason: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+        model: MODEL,
+      },
+    };
   }
 }
 
@@ -511,8 +517,15 @@ export async function createDailyBriefingDelivery(userId: string): Promise<{
   note: { id: string; createdAt: Date };
   notification: { id: string; createdAt: Date } | null;
   reused: boolean;
+  /** LLM outcome for THIS caller's generation; "cache" when a note was reused. */
+  llm: BriefingLlmOutcome;
 }> {
   const dayKey = await briefingDayKeyForUser(userId);
+  const cacheLlm: BriefingLlmOutcome = {
+    source: "cache",
+    reason: "reused today's existing note",
+    model: "",
+  };
 
   const existing = await prisma.note.findUnique({
     where: { userId_dayKey: { userId, dayKey } },
@@ -525,10 +538,11 @@ export async function createDailyBriefingDelivery(userId: string): Promise<{
       note: { id: existing.id, createdAt: existing.createdAt },
       notification,
       reused: true,
+      llm: cacheLlm,
     };
   }
 
-  const briefing = await generateBriefing(userId);
+  const { content: briefing, llm } = await generateBriefing(userId);
 
   let note: { id: string; createdAt: Date };
   try {
@@ -557,12 +571,13 @@ export async function createDailyBriefingDelivery(userId: string): Promise<{
       note: { id: winner.id, createdAt: winner.createdAt },
       notification,
       reused: true,
+      llm: cacheLlm,
     };
   }
 
   const notification = await ensureDailyBriefingNotification(userId, briefing, dayKey);
 
-  return { briefing, note, notification, reused: false };
+  return { briefing, note, notification, reused: false, llm };
 }
 
 /**
@@ -662,21 +677,39 @@ export function briefingRoutes(app: FastifyInstance) {
   });
 
   // POST /api/briefing/generate — Generate daily briefing
-  app.post("/generate", async (request) => {
-    const userId = getUserId(request);
-    // `force` regenerates from scratch: today's briefing is deduped to one note
-    // per local day, so without this a user who wants a fresh briefing (e.g.
-    // after new mail, or when the first run fell back) always gets the cached
-    // one. Deleting the day's note lets createDailyBriefingDelivery re-run.
-    const { force } = (request.body as { force?: boolean } | null) ?? {};
-    if (force) {
-      const dayKey = await briefingDayKeyForUser(userId);
-      await prisma.note.deleteMany({ where: { userId, dayKey } });
-    }
-    const { briefing, note, notification, reused } = await createDailyBriefingDelivery(userId);
-    // Surface the LLM outcome so a rule-based fallback is diagnosable in prod.
-    return { briefing, note, notification, reused, llm: { ...lastBriefingLlm } };
-  });
+  app.post(
+    "/generate",
+    {
+      schema: {
+        body: {
+          type: ["object", "null"],
+          properties: { force: { type: "boolean" } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request) => {
+      const userId = getUserId(request);
+      // `force` regenerates from scratch: today's briefing is deduped to one
+      // note per local day, so without this a user who wants a fresh briefing
+      // (after new mail, or when the first run fell back) always gets the
+      // cached one. Deleting the day's note lets createDailyBriefingDelivery
+      // re-run. Deliberately does NOT reset the day's Notification dedupe: the
+      // caller is interacting live and receives the fresh content in this
+      // response — a second OS push for the same day would double-notify.
+      const { force } = (request.body as { force?: boolean } | null) ?? {};
+      if (force) {
+        const dayKey = await briefingDayKeyForUser(userId);
+        await prisma.note.deleteMany({ where: { userId, dayKey } });
+      }
+      const { briefing, note, notification, reused, llm } =
+        await createDailyBriefingDelivery(userId);
+      // llm is THIS request's outcome (request-scoped, threaded through return
+      // values) so a rule-based fallback is diagnosable in prod. On a reuse
+      // race after force-delete it reads "cache" — honest about what happened.
+      return { briefing, note, notification, reused, llm };
+    },
+  );
 
   // GET /api/briefing/data — Get raw briefing data
   app.get("/data", async (request) => {
