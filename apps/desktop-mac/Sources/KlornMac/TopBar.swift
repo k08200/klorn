@@ -1376,9 +1376,9 @@ private struct ReadingPane: View {
             } else {
                 centered {
                     VStack(spacing: Theme.s4) {
-                        Circle().strokeBorder(Theme.accent.opacity(0.35), lineWidth: 3)
-                            .frame(width: 44, height: 44)
-                            .accessibilityHidden(true)
+                        // The K mark, quiet — the ring identity is retired
+                        // (K monogram everywhere since 0.4.80005).
+                        LogoRing(size: 44).opacity(0.45)
                         Text("Nothing open").font(.title3).foregroundStyle(Theme.textDim)
                         Text("Pick a message on the left — read, reply,\nsnooze, and re-tier without leaving Klorn.")
                             .font(.caption).foregroundStyle(Theme.textDim.opacity(0.7))
