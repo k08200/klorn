@@ -420,6 +420,15 @@ func runSelfChecks() async -> Bool {
     let long = String(repeating: "a", count: 5000)
     check("over-long body is capped", (cardBodyText(long)?.count ?? 0) <= 4000)
 
+    print("Auto update check:")
+    // Quiet background cadence: first run always checks; then every 6h.
+    let t0 = Date(timeIntervalSince1970: 1_000_000)
+    check("never checked → due", AppModel.updateCheckDue(now: t0, last: nil))
+    check("5h later → not due",
+          !AppModel.updateCheckDue(now: t0.addingTimeInterval(5 * 3600), last: t0))
+    check("6h later → due",
+          AppModel.updateCheckDue(now: t0.addingTimeInterval(6 * 3600), last: t0))
+
     print("Shortcut:")
     check("default toggle displays as ⌥⌘K", ShortcutFormat.display(.defaultToggle) == "⌥⌘K")
     check("NS flags → carbon modifiers",

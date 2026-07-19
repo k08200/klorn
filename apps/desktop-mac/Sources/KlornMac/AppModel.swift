@@ -318,6 +318,29 @@ final class AppModel {
     /// Today's daily-briefing preview (TODAY column). Best-effort like the rest.
     private(set) var briefing: String?
 
+    /// Newer release version ("0.3.5") when GitHub has one; nil otherwise.
+    /// Surfaced as a quiet ACCOUNT-column button — never a popup
+    /// (never-steal-focus). Refreshed on the queue cadence, at most every 6h.
+    private(set) var updateAvailable: String?
+    private var lastUpdateCheck: Date?
+    nonisolated static let updateCheckIntervalHours: Double = 6
+
+    /// Whether a background update check should run now. Pure for testing.
+    nonisolated static func updateCheckDue(now: Date, last: Date?) -> Bool {
+        guard let last else { return true }
+        return now.timeIntervalSince(last) >= updateCheckIntervalHours * 3600
+    }
+
+    private func checkForUpdateIfDue() async {
+        guard Self.updateCheckDue(now: Date(), last: lastUpdateCheck) else { return }
+        lastUpdateCheck = Date()
+        if case .updateAvailable(let version) = await UpdateCheck.run() {
+            updateAvailable = version
+        } else {
+            updateAvailable = nil  // up to date, dev build, or network hiccup
+        }
+    }
+
     private func refreshBriefing() async {
         do {
             let today = try await api.get("/api/briefing/today", as: TodayBriefing.self)
@@ -375,6 +398,7 @@ final class AppModel {
         Task { await refreshToday() }
         Task { await refreshUsage() }
         Task { await refreshBriefing() }
+        Task { await checkForUpdateIfDue() }
         do {
             let fetched = try await api.get("/api/inbox/firewall", as: FirewallResponse.self)
             // Drop dismissed ids the server has since resolved; hide the rest.
