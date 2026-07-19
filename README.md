@@ -13,9 +13,9 @@ Klorn does the opposite. Each inbound email gets exactly **one** classification 
 
 **[Read the doctrine](docs/doctrine/deterministic-floor.md) before the code — that's the actual product.**
 
-![Klorn decision queue](packages/web/public/klorn-demo-poster.jpg)
+[![Klorn — 31-second demo](website/media/klorn-demo-poster.jpg)](website/media/klorn-demo.mp4)
 
-▶️ **[60-second walkthrough](packages/web/public/klorn-walkthrough.mp4)** ([한국어](packages/web/public/klorn-walkthrough-ko.mp4)) · 🌐 **[Live demo on klorn.ai](https://klorn.ai)** · 📖 **[Editions](docs/EDITIONS.md)** · 📋 **[CHANGELOG](CHANGELOG.md)**
+▶️ **[31-second demo](website/media/klorn-demo.mp4)** · 🎬 **[14-second promo](website/media/klorn-promo.mp4)** · 🌐 **[Live demo on klorn.ai](https://klorn.ai)** · 📖 **[Editions](docs/EDITIONS.md)** · 📋 **[CHANGELOG](CHANGELOG.md)**
 
 ## The four tiers
 
