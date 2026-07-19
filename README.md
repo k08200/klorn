@@ -121,6 +121,10 @@ docs/           doctrine, screenshots, operational notes
 
 ## Native macOS app
 
+[![Klorn desktop bar — pill expands into the four-tier firewall](packages/web/public/klorn-desktop-poster.jpg)](packages/web/public/klorn-desktop-demo.mp4)
+
+▶️ **[Watch the desktop bar (10s)](packages/web/public/klorn-desktop-demo.mp4)** — the pill expands into the full four-tier firewall, in place, without stealing focus.
+
 A real native SwiftUI client that lives as a **custom always-on bar pinned to the
 top of your screen** — a slim pill that expands into the firewall and never
 steals focus from what you're working in. Real-time over the existing WebSocket
