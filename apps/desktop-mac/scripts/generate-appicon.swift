@@ -54,13 +54,13 @@ let image = NSImage(size: NSSize(width: size, height: size), flipped: false) { _
     // The amber ring — Klorn's wordmark — with a soft glow.
     let amber = NSColor(red: 1.0, green: 0.56, blue: 0.18, alpha: 1)
     let ringRadius: CGFloat = 196
-    let ringWidth: CGFloat = 58
+    let ringWidth: CGFloat = 74
     let ringRect = NSRect(
         x: size / 2 - ringRadius, y: size / 2 - ringRadius,
         width: ringRadius * 2, height: ringRadius * 2)
 
     ctx.saveGState()
-    ctx.setShadow(offset: .zero, blur: 70, color: amber.withAlphaComponent(0.55).cgColor)
+    ctx.setShadow(offset: .zero, blur: 58, color: amber.withAlphaComponent(0.55).cgColor)
     amber.setStroke()
     let ring = NSBezierPath(ovalIn: ringRect)
     ring.lineWidth = ringWidth

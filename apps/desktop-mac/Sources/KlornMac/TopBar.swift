@@ -73,7 +73,15 @@ struct TopBarRoot: View {
 private struct LogoRing: View {
     var size: CGFloat = 16
     var body: some View {
-        Circle().strokeBorder(Theme.accent, lineWidth: 2).frame(width: size, height: size)
+        // Brand ring v2: an amber→coral sweep instead of a flat stroke — the
+        // one place the identity gets to be slightly alive.
+        Circle()
+            .strokeBorder(
+                AngularGradient(
+                    colors: [Theme.accent, Color(red: 1.0, green: 0.42, blue: 0.29), Theme.accent],
+                    center: .center),
+                lineWidth: 2.2)
+            .frame(width: size, height: size)
             .accessibilityHidden(true)  // decorative wordmark ring
     }
 }
@@ -195,9 +203,10 @@ struct CollapsedBar: View {
     var body: some View {
         HStack(spacing: 12) {
             Button(action: actions.onExpand) {
-                Image(systemName: "line.3.horizontal").font(.body.weight(.medium)).iconTarget(32)
+                Image(systemName: "line.3.horizontal").font(.body.weight(.medium)).iconTarget(30)
             }
             .buttonStyle(.plain).foregroundStyle(Theme.text)
+            .focusEffectDisabled()  // the default ring reads as an artifact on the capsule
             .help("Expand")
             .accessibilityLabel("Expand Klorn")
 
@@ -239,13 +248,14 @@ struct CollapsedBar: View {
             }
 
             Button(action: actions.onHideBar) {
-                Image(systemName: "xmark").font(.caption.weight(.semibold)).iconTarget(28)
+                Image(systemName: "xmark").font(.caption.weight(.semibold)).iconTarget(30)
             }
             .buttonStyle(.plain).hoverDim()
+            .focusEffectDisabled()
             .help("Hide the bar (it keeps running in the menu bar)")
             .accessibilityLabel("Hide top bar")
         }
-        .padding(.horizontal, 16)
+        .padding(.leading, 18).padding(.trailing, 16)
         .frame(width: TopBarMetrics.collapsed.width, height: TopBarMetrics.collapsed.height)
     }
 }
@@ -260,7 +270,7 @@ struct ExpandedPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().overlay(Theme.line)
+            Divider().overlay(Theme.line).padding(.horizontal, 18)
             HStack(alignment: .top, spacing: 0) {
                 InboxColumn(actions: actions)
                 columnDivider
@@ -642,7 +652,7 @@ struct FullView: View {
         ZStack {
             VStack(spacing: 0) {
                 header
-                Divider().overlay(Theme.line)
+                Divider().overlay(Theme.line).padding(.horizontal, 22)
                 HStack(spacing: 0) {
                     FullSidebar(selected: $mode, actions: actions).frame(width: 220)
                     Rectangle().fill(Theme.line).frame(width: 1)

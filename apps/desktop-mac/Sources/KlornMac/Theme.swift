@@ -4,7 +4,7 @@ enum Theme {
     static let bg = Color(red: 0.043, green: 0.043, blue: 0.059)
     /// Klorn amber — a designed warm signal, not system orange. Everything
     /// "Klorn is speaking" (logo ring, CTAs, focus, selection bar) uses this.
-    static let accent = Color(red: 1.0, green: 0.56, blue: 0.18)
+    static let accent = Color(red: 1.0, green: 0.63, blue: 0.20)
     static let line = Color.white.opacity(0.08)
 
     /// The top bar is always a dark floating surface regardless of system
@@ -35,10 +35,10 @@ enum Theme {
     /// signal red, Klorn-adjacent amber, cool slate, calm signal blue.
     static func tint(_ tier: Tier) -> Color {
         switch tier {
-        case .push: Color(red: 1.0, green: 0.32, blue: 0.32)
-        case .queue: Color(red: 1.0, green: 0.64, blue: 0.28)
-        case .silent: Color(red: 0.56, green: 0.60, blue: 0.66)
-        case .auto: Color(red: 0.36, green: 0.66, blue: 1.0)
+        case .push: Color(red: 1.0, green: 0.30, blue: 0.34)
+        case .queue: Color(red: 1.0, green: 0.69, blue: 0.26)
+        case .silent: Color(red: 0.49, green: 0.53, blue: 0.59)
+        case .auto: Color(red: 0.30, green: 0.62, blue: 1.0)
         }
     }
 
