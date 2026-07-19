@@ -348,6 +348,25 @@ func commitmentGroups(_ items: [CommitmentItem]) -> (waitingOn: [CommitmentItem]
     return (waiting, owe)
 }
 
+// MARK: - Text hygiene
+
+/// Decode the handful of HTML entities that leak through backend extraction
+/// into user-visible strings ("it&#39;s" seen live in a commitment title,
+/// 2026-07-20). Deliberately tiny — full HTML parsing does not belong in a
+/// display path. Pure for testing.
+func decodeHTMLEntities(_ text: String) -> String {
+    guard text.contains("&") else { return text }
+    var out = text
+    for (entity, replacement) in [
+        ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
+        ("&quot;", "\""), ("&#34;", "\""), ("&#39;", "'"), ("&apos;", "'"),
+        ("&nbsp;", " "),
+    ] {
+        out = out.replacingOccurrences(of: entity, with: replacement)
+    }
+    return out
+}
+
 // MARK: - Mailbox search
 
 /// GET /api/email?search= — one row of the searchable mailbox (decodes the

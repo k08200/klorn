@@ -420,6 +420,15 @@ func runSelfChecks() async -> Bool {
     let long = String(repeating: "a", count: 5000)
     check("over-long body is capped", (cardBodyText(long)?.count ?? 0) <= 4000)
 
+    print("Text hygiene:")
+    check("decodes the live-observed apostrophe entity",
+          decodeHTMLEntities("We will alert you when it&#39;s up again")
+              == "We will alert you when it's up again")
+    check("decodes amp/lt/gt/quot",
+          decodeHTMLEntities("a &amp; b &lt;c&gt; &quot;d&quot;") == "a & b <c> \"d\"")
+    check("plain text passes through untouched", decodeHTMLEntities("plain") == "plain")
+    check("ampersand-free fast path", decodeHTMLEntities("no entities here") == "no entities here")
+
     print("Self update:")
     check("release zip URL is tag-scoped",
           SelfUpdate.releaseZipURL(version: "0.4.1")?.absoluteString
