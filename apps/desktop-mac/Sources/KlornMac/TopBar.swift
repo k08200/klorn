@@ -217,7 +217,12 @@ struct CollapsedBar: View {
                 } else if model.loadError != nil {
                     Text("offline").font(.caption).foregroundStyle(Theme.textDim)
                 } else {
-                    Text("All clear").font(.caption).foregroundStyle(Theme.textDim)
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark").font(.caption2.weight(.semibold))
+                            .accessibilityHidden(true)
+                        Text("All clear").font(.caption)
+                    }
+                    .foregroundStyle(Theme.textDim)
                 }
             case .signingIn:
                 Text("Signing in…").font(.caption).foregroundStyle(Theme.textDim)
@@ -229,7 +234,7 @@ struct CollapsedBar: View {
             Button(action: actions.onHideBar) {
                 Image(systemName: "xmark").font(.caption.weight(.semibold)).iconTarget(28)
             }
-            .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+            .buttonStyle(.plain).hoverDim()
             .help("Hide the bar (it keeps running in the menu bar)")
             .accessibilityLabel("Hide top bar")
         }
@@ -270,7 +275,7 @@ struct ExpandedPanel: View {
                     Text("Close").font(.callout)
                 }
             }
-            .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+            .buttonStyle(.plain).hoverDim()
 
             Spacer()
             HStack(spacing: 8) { LogoRing(); Text("Klorn").font(.callout.weight(.semibold)).foregroundStyle(Theme.text) }
@@ -280,13 +285,13 @@ struct ExpandedPanel: View {
                 Button(action: actions.onExpandFull) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right").font(.callout).iconTarget()
                 }
-                .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+                .buttonStyle(.plain).hoverDim()
                 .help("Full view")
                 .accessibilityLabel("Open full view")
 
                 if model.phase == .signedIn {
                     Button("Sign Out", action: actions.onSignOut)
-                        .buttonStyle(.bordered).controlSize(.small)
+                        .buttonStyle(.plain).font(.callout).hoverDim()
                 } else if model.phase == .signedOut {
                     Button("Log In", action: actions.onSignIn)
                         .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
@@ -421,21 +426,41 @@ private struct InboxColumn: View {
         VStack(alignment: .leading, spacing: 14) {
             ColumnHeader(title: "INBOX")
             ForEach(Tier.displayOrder) { tier in
-                Button { actions.onOpenWeb(nil) } label: {
-                    HStack(spacing: 8) {
-                        Circle().fill(Theme.tint(tier)).frame(width: 7, height: 7)
-                        Text(tier.label).font(.body).foregroundStyle(Theme.text)
-                        Spacer()
-                        Text("\(model.queue?.summary.count(for: tier) ?? 0)")
-                            .font(.body.monospacedDigit().weight(.medium))
-                            .foregroundStyle(Theme.textDim)
-                    }
+                InboxTierRow(tier: tier, count: model.queue?.summary.count(for: tier) ?? 0) {
+                    actions.onOpenWeb(nil)
                 }
-                .buttonStyle(.plain)
             }
             Spacer()
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// One glanceable tier count in the expanded panel — hover invites the click
+/// through to the web inbox without shouting at rest.
+private struct InboxTierRow: View {
+    let tier: Tier
+    let count: Int
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Circle().fill(Theme.tint(tier)).frame(width: 7, height: 7)
+                Text(tier.label).font(.body).foregroundStyle(Theme.text)
+                Spacer()
+                Text("\(count)")
+                    .font(.body.monospacedDigit().weight(.medium))
+                    .foregroundStyle(Theme.textDim)
+            }
+            .padding(.horizontal, Theme.s2).padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(hovering ? Theme.surfaceHover : .clear, in: RoundedRectangle(cornerRadius: 8))
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
     }
 }
 
@@ -558,7 +583,7 @@ private struct AccountColumn: View {
                     Text("AI TODAY").font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
-                            Capsule().fill(Color.white.opacity(0.08))
+                            Capsule().fill(Theme.surfaceHover)
                             Capsule().fill(Theme.accent)
                                 .frame(width: geo.size.width
                                        * usageFillFraction(used: usage.dailyUsed, cap: usage.dailyCap))
@@ -630,13 +655,13 @@ struct FullView: View {
                     Text("Smaller").font(.callout)
                 }
             }
-            .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+            .buttonStyle(.plain).hoverDim()
             .help("Back to the compact panel")
 
             Button(action: actions.onCollapse) {
                 Image(systemName: "minus").font(.callout.weight(.bold)).iconTarget()
             }
-            .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+            .buttonStyle(.plain).hoverDim()
             .help("Collapse to the pill")
             .accessibilityLabel("Collapse to pill")
 
@@ -648,7 +673,10 @@ struct FullView: View {
             Spacer()
 
             if model.phase == .signedIn {
-                Button("Sign Out", action: actions.onSignOut).buttonStyle(.bordered).controlSize(.small)
+                // Secondary by design: signing out is rare — it must never
+                // compete with content. (Log In stays the accent CTA.)
+                Button("Sign Out", action: actions.onSignOut)
+                    .buttonStyle(.plain).font(.callout).hoverDim()
             } else if model.phase == .signedOut {
                 Button("Log In", action: actions.onSignIn)
                     .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
@@ -797,6 +825,7 @@ private struct FullList: View {
     let mode: ListMode
     let actions: TopBarActions
     @State private var query = ""
+    @FocusState private var searchFocused: Bool
 
     private var tier: Tier {
         if case .tier(let t) = mode { return t }
@@ -837,6 +866,7 @@ private struct FullList: View {
                     .accessibilityHidden(true)
                 TextField("Search all mail…", text: $query)
                     .textFieldStyle(.plain).font(.callout).foregroundStyle(Theme.text)
+                    .focused($searchFocused)
                     .accessibilityLabel("Search all mail")
                 if !query.isEmpty {
                     Button {
@@ -847,7 +877,9 @@ private struct FullList: View {
                 }
             }
             .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(searchFocused ? Theme.accent.opacity(0.5) : .clear))
             .padding(.horizontal, 24).padding(.bottom, 12)
             .task(id: query) {
                 // 300ms debounce: only the last keystroke's task survives.
@@ -1049,7 +1081,7 @@ private struct ChatBubble: View {
                     }
                 }
                 .padding(10)
-                .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 10))
                 .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.line))
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Proposed event: \(eventDraftLabel(draft))")
@@ -1401,9 +1433,9 @@ private struct ReadingPane: View {
                 .font(.callout).foregroundStyle(Theme.text)
                 .scrollContentBackground(.hidden)
                 .frame(height: 110)
-                .padding(8)
-                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.field))
+                .padding(Theme.s2)
+                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.field))
             if let err = model.replyError {
                 Text(err).font(.caption).foregroundStyle(.orange)
             }

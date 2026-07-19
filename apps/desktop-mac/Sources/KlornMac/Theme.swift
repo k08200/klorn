@@ -55,6 +55,24 @@ enum Theme {
     static let s6: CGFloat = 24
 }
 
+/// Dim at rest, full text on hover — the standard treatment for every
+/// secondary icon/text control (header buttons, row utilities). One modifier
+/// so "quiet until you reach for it" is a property of the system, not a
+/// per-view accident.
+struct HoverDim: ViewModifier {
+    @State private var hovering = false
+    func body(content: Content) -> some View {
+        content
+            .foregroundStyle(hovering ? Theme.text : Theme.textDim)
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+extension View {
+    func hoverDim() -> some View { modifier(HoverDim()) }
+}
+
 /// The standard quiet empty/guidance state: dim icon, one calm line, and an
 /// optional hint. Every "nothing here" moment uses this instead of a bare
 /// dim string, so emptiness reads as designed rather than unfinished.

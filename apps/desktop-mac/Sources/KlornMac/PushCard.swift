@@ -120,7 +120,7 @@ struct PushCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(10)
-            .background(Color.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
+            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 10))
             Divider().overlay(Theme.line)
         }
     }
@@ -297,7 +297,7 @@ private struct OptionRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(hovering && !disabled ? Color.white.opacity(0.08) : Color.white.opacity(0.03)))
+                    .fill(hovering && !disabled ? Theme.surfaceHover : Theme.surfaceRaised))
         }
         .buttonStyle(.plain)
         .disabled(disabled)
