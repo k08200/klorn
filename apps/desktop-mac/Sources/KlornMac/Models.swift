@@ -213,6 +213,31 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     }
 }
 
+// MARK: - Mailbox search
+
+/// GET /api/email?search= — one row of the searchable mailbox (decodes the
+/// subset the desktop list needs; JSONDecoder ignores the rest).
+struct EmailSearchItem: Codable, Sendable, Identifiable, Hashable {
+    let id: String
+    let from: String?
+    let subject: String?
+    let snippet: String?
+    let date: String?
+    let isRead: Bool?
+}
+
+/// GET /api/email response envelope (subset).
+struct EmailSearchResponse: Codable, Sendable {
+    let emails: [EmailSearchItem]
+    let total: Int
+}
+
+/// Search activates at ≥2 non-whitespace characters — a 1-char query would
+/// match half the mailbox and thrash the API on every keystroke. Pure.
+func isSearchActive(_ query: String) -> Bool {
+    query.trimmingCharacters(in: .whitespaces).count >= 2
+}
+
 // MARK: - Daily briefing
 
 /// GET /api/briefing/today → { briefing: { content } | null }.
