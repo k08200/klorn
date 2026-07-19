@@ -54,6 +54,10 @@ const emailRow = {
 const captureErrorMock = vi.fn();
 vi.mock("../sentry.js", () => ({ captureError: captureErrorMock }));
 
+// The self-heal path re-judges the stale row (lazy-imported by the route).
+const judgeAndMirrorMock = vi.fn(async () => "QUEUE");
+vi.mock("../judge/email-firewall.js", () => ({ judgeAndMirrorEmail: judgeAndMirrorMock }));
+
 vi.mock("../db.js", () => ({
   prisma: {
     attentionItem: {
@@ -62,6 +66,8 @@ vi.mock("../db.js", () => ({
     pendingAction: { findMany: vi.fn(async () => []) },
     emailMessage: {
       findMany: vi.fn(async () => [emailRow]),
+      // The heal re-fetches the FULL row (body included) before re-judging.
+      findFirst: vi.fn(async () => ({ ...emailRow, body: null, receivedAt: new Date() })),
     },
   },
 }));
@@ -117,9 +123,12 @@ function findItem(body: FirewallResponseWire, id: string): FirewallItemWire | un
 }
 
 describe("GET /api/inbox/firewall — hash verify integration", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     captureErrorMock.mockClear();
+    judgeAndMirrorMock.mockClear();
     attentionRow.inputHash = correctHash;
+    const { _resetHashMismatchDedupeForTests } = await import("../routes/firewall.js");
+    _resetHashMismatchDedupeForTests();
   });
 
   it("does NOT mark hashStale when stored hash matches current bytes", async () => {
@@ -155,6 +164,30 @@ describe("GET /api/inbox/firewall — hash verify integration", () => {
     expect(ctx?.tags?.scope).toBe("firewall.hashVerify");
     expect(ctx?.extra?.attentionItemId).toBe("att-1");
     expect(ctx?.extra?.emailDbId).toBe("email-1");
+    // The heal fired: the stale row gets RE-JUDGED (which rewrites inputHash).
+    await vi.waitFor(() => expect(judgeAndMirrorMock).toHaveBeenCalledTimes(1));
+    await app.close();
+  });
+
+  it("alerts and heals only ONCE per (row, storedHash) — repeat reads stay silent", async () => {
+    // Before this dedupe, the desktop's 60s poll re-paged the same benign
+    // mutation forever: 333 Sentry events in the first 12 minutes of the DSN
+    // going live (2026-07-20).
+    attentionRow.inputHash = staleStoredHash;
+    const app = await buildApp();
+
+    const first = await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
+    expect(first.statusCode).toBe(200);
+    await vi.waitFor(() => expect(judgeAndMirrorMock).toHaveBeenCalledTimes(1));
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+
+    const second = await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
+    expect(second.statusCode).toBe(200);
+    // Still flagged stale on the wire — clients keep seeing the truth…
+    expect(findItem(second.json() as FirewallResponseWire, "att-1")?.hashStale).toBe(true);
+    // …but no new page and no duplicate heal.
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+    expect(judgeAndMirrorMock).toHaveBeenCalledTimes(1);
     await app.close();
   });
 

@@ -22,6 +22,7 @@ import {
   checkAttentionInputHash,
   computeAttentionInputHash,
   HASH_SCHEMA_VERSION,
+  registerHashMismatch,
   verifyAttentionInputHash,
 } from "../judge/attention-input-hash.js";
 
@@ -164,5 +165,35 @@ describe("checkAttentionInputHash (soft variant)", () => {
   it("treats null storedHash as legacy (ok:true)", () => {
     const result = checkAttentionInputHash(null, baseInput);
     expect(result.ok).toBe(true);
+  });
+});
+
+describe("registerHashMismatch (per-process alert dedupe)", () => {
+  it("is true exactly once per (item, storedHash) pair", () => {
+    const seen = new Set<string>();
+    expect(registerHashMismatch(seen, "item-1", "hash-a")).toBe(true);
+    expect(registerHashMismatch(seen, "item-1", "hash-a")).toBe(false);
+    expect(registerHashMismatch(seen, "item-1", "hash-a")).toBe(false);
+  });
+
+  it("a NEW storedHash for the same item alerts again (fresh decision went stale)", () => {
+    const seen = new Set<string>();
+    expect(registerHashMismatch(seen, "item-1", "hash-a")).toBe(true);
+    expect(registerHashMismatch(seen, "item-1", "hash-b")).toBe(true);
+  });
+
+  it("different items are independent", () => {
+    const seen = new Set<string>();
+    expect(registerHashMismatch(seen, "item-1", "hash-a")).toBe(true);
+    expect(registerHashMismatch(seen, "item-2", "hash-a")).toBe(true);
+  });
+
+  it("clears (and keeps working) past the memory cap instead of growing forever", () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 10_000; i++) registerHashMismatch(seen, `item-${i}`, "h");
+    expect(seen.size).toBe(10_000);
+    // The 10_001st insert clears the set and registers fresh.
+    expect(registerHashMismatch(seen, "overflow", "h")).toBe(true);
+    expect(seen.size).toBe(1);
   });
 });
