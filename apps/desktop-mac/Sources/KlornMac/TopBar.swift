@@ -63,10 +63,13 @@ struct TopBarRoot: View {
         }
         .background(
             RoundedRectangle(cornerRadius: TopBarMetrics.corner)
-                .fill(Color.black.opacity(Theme.panelOpacity(reduceTransparency: reduceTransparency)))
+                .fill(Theme.panelGradient(
+                    opacity: Theme.panelOpacity(reduceTransparency: reduceTransparency)))
                 .overlay(RoundedRectangle(cornerRadius: TopBarMetrics.corner).strokeBorder(Theme.line))
         )
         .clipShape(RoundedRectangle(cornerRadius: TopBarMetrics.corner))
+        // The floating surface needs to sit ABOVE the desktop, not on it.
+        .shadow(color: .black.opacity(0.45), radius: 24, y: 8)
     }
 }
 
@@ -90,8 +93,10 @@ private extension View {
 struct ColumnHeader: View {
     let title: String
     var body: some View {
-        Text(title).font(.caption2.weight(.semibold))
-            .foregroundStyle(Theme.textDim).tracking(0.6)
+        // Editorial micro-label: wide tracking + smaller size reads as a
+        // deliberate system, not a shrunken heading.
+        Text(title).font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(Theme.textDim).tracking(1.4)
     }
 }
 
@@ -208,12 +213,18 @@ struct CollapsedBar: View {
             switch model.phase {
             case .signedIn:
                 if pushCount > 0 {
+                    // The one loud element Klorn allows itself: a glowing
+                    // signal dot + tinted chip. Everything else stays quiet
+                    // so this is unmissable at a glance.
                     HStack(spacing: 5) {
                         Circle().fill(Theme.tint(.push)).frame(width: 7, height: 7)
+                            .shadow(color: Theme.tint(.push).opacity(0.8), radius: 3)
                         Text("\(pushCount) PUSH")
                             .font(.caption.weight(.semibold).monospacedDigit())
                             .foregroundStyle(Theme.text)
                     }
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Theme.tint(.push).opacity(0.12), in: Capsule())
                 } else if model.loadError != nil {
                     Text("offline").font(.caption).foregroundStyle(Theme.textDim)
                 } else {
@@ -327,8 +338,12 @@ private struct TodayColumn: View {
                             .lineLimit(3).multilineTextAlignment(.leading)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
+                    .padding(8).padding(.leading, 6)
                     .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 1).fill(Theme.accent.opacity(0.7))
+                            .frame(width: 2).padding(.vertical, 6)
+                    }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Today's briefing: \(briefing)")
@@ -370,8 +385,12 @@ private struct TodayColumn: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
+                    .padding(8).padding(.leading, 6)
                     .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 1).fill(Theme.accent.opacity(0.7))
+                            .frame(width: 2).padding(.vertical, 6)
+                    }
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 6)

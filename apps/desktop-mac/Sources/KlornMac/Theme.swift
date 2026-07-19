@@ -2,7 +2,9 @@ import SwiftUI
 
 enum Theme {
     static let bg = Color(red: 0.043, green: 0.043, blue: 0.059)
-    static let accent = Color.orange
+    /// Klorn amber — a designed warm signal, not system orange. Everything
+    /// "Klorn is speaking" (logo ring, CTAs, focus, selection bar) uses this.
+    static let accent = Color(red: 1.0, green: 0.56, blue: 0.18)
     static let line = Color.white.opacity(0.08)
 
     /// The top bar is always a dark floating surface regardless of system
@@ -28,14 +30,28 @@ enum Theme {
     /// the reading pane's learned-engagement chip so desktop matches the web signal.
     static let engage = Color(red: 0.96, green: 0.45, blue: 0.71)
 
-    /// Per-tier accent: loud (red) for PUSH down to quiet (gray) for SILENT.
+    /// Per-tier signal palette — designed hues with matched brightness on the
+    /// dark panel (system .red/.orange/.gray/.blue read as defaults): warm
+    /// signal red, Klorn-adjacent amber, cool slate, calm signal blue.
     static func tint(_ tier: Tier) -> Color {
         switch tier {
-        case .push: .red
-        case .queue: .orange
-        case .silent: .gray
-        case .auto: .blue
+        case .push: Color(red: 1.0, green: 0.32, blue: 0.32)
+        case .queue: Color(red: 1.0, green: 0.64, blue: 0.28)
+        case .silent: Color(red: 0.56, green: 0.60, blue: 0.66)
+        case .auto: Color(red: 0.36, green: 0.66, blue: 1.0)
         }
+    }
+
+    /// The panel's machined-surface fill: a faint top-light vertical gradient
+    /// instead of flat black — depth you feel more than see. Opacity applied
+    /// by the caller (reduce-transparency aware).
+    static func panelGradient(opacity: Double) -> LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(white: 0.10).opacity(opacity),
+                Color(white: 0.045).opacity(opacity),
+            ],
+            startPoint: .top, endPoint: .bottom)
     }
 
     // MARK: Surface ladder (design pass 2026-07-20)
