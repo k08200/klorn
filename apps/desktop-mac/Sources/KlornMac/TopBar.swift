@@ -35,7 +35,12 @@ enum TopBarMetrics {
     static let collapsed = NSSize(width: 400, height: 52)
     static let expanded = NSSize(width: 1140, height: 380)
     static let full = NSSize(width: 1400, height: 860)
-    static let corner: CGFloat = 16
+    static let corner: CGFloat = 20
+
+    /// The pill is a TRUE capsule (corner = height/2); panels soften to 20.
+    static func corner(for state: BarState) -> CGFloat {
+        state == .collapsed ? collapsed.height / 2 : corner
+    }
 
     static func size(for state: BarState) -> NSSize {
         switch state {
@@ -61,13 +66,24 @@ struct TopBarRoot: View {
             case .full: FullView(actions: actions)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: TopBarMetrics.corner)
-                .fill(Theme.panelGradient(
-                    opacity: Theme.panelOpacity(reduceTransparency: reduceTransparency)))
-                .overlay(RoundedRectangle(cornerRadius: TopBarMetrics.corner).strokeBorder(Theme.line))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: TopBarMetrics.corner))
+        .background {
+            // Warm glass: real system blur, warm-graphite tint over it, a
+            // top-edge highlight (light catching the glass), hairline border.
+            let radius = TopBarMetrics.corner(for: state)
+            ZStack {
+                GlassMaterial()
+                Theme.panelGradient(
+                    opacity: Theme.glassTintOpacity(reduceTransparency: reduceTransparency))
+                LinearGradient(
+                    colors: [Color.white.opacity(0.10), .clear],
+                    startPoint: .top, endPoint: .center)
+                    .frame(height: 1.5, alignment: .top)
+                    .frame(maxHeight: .infinity, alignment: .top)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: radius))
+            .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.line))
+        }
+        .clipShape(RoundedRectangle(cornerRadius: TopBarMetrics.corner(for: state)))
         // The floating surface needs to sit ABOVE the desktop, not on it.
         .shadow(color: .black.opacity(0.45), radius: 24, y: 8)
     }
@@ -206,7 +222,7 @@ struct CollapsedBar: View {
             .accessibilityLabel("Expand Klorn")
 
             LogoRing()
-            Text("Klorn").font(.callout.weight(.semibold)).foregroundStyle(Theme.text)
+            Text("Klorn").font(.system(.callout, design: .rounded).weight(.bold)).foregroundStyle(Theme.text)
 
             Spacer()
 
@@ -289,7 +305,7 @@ struct ExpandedPanel: View {
             .buttonStyle(.plain).hoverDim()
 
             Spacer()
-            HStack(spacing: 8) { LogoRing(); Text("Klorn").font(.callout.weight(.semibold)).foregroundStyle(Theme.text) }
+            HStack(spacing: 8) { LogoRing(); Text("Klorn").font(.system(.callout, design: .rounded).weight(.bold)).foregroundStyle(Theme.text) }
             Spacer()
 
             HStack(spacing: 14) {
@@ -687,7 +703,7 @@ struct FullView: View {
             Spacer()
             HStack(spacing: 8) {
                 LogoRing(size: 20)
-                Text("Klorn").font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+                Text("Klorn").font(.system(.title3, design: .rounded).weight(.bold)).foregroundStyle(Theme.text)
             }
             Spacer()
 

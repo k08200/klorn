@@ -42,16 +42,23 @@ enum Theme {
         }
     }
 
-    /// The panel's machined-surface fill: a faint top-light vertical gradient
-    /// instead of flat black — depth you feel more than see. Opacity applied
-    /// by the caller (reduce-transparency aware).
+    /// Warm-graphite glass tint, layered OVER the real blur material: amber
+    /// bleeds faintly into the top of the surface so even the background is
+    /// unmistakably Klorn. Opacity applied by the caller (reduce-transparency
+    /// mode raises it to near-solid, where the blur behind barely shows).
     static func panelGradient(opacity: Double) -> LinearGradient {
         LinearGradient(
             colors: [
-                Color(white: 0.10).opacity(opacity),
-                Color(white: 0.045).opacity(opacity),
+                Color(red: 0.115, green: 0.095, blue: 0.075).opacity(opacity),
+                Color(red: 0.050, green: 0.046, blue: 0.050).opacity(opacity),
             ],
             startPoint: .top, endPoint: .bottom)
+    }
+
+    /// Glass tint opacity: lighter than the old solid panel so the real blur
+    /// shows through; near-solid when the user asked to reduce transparency.
+    static func glassTintOpacity(reduceTransparency: Bool) -> Double {
+        reduceTransparency ? 0.98 : 0.72
     }
 
     // MARK: Surface ladder (design pass 2026-07-20)
@@ -60,7 +67,10 @@ enum Theme {
     // ad-hoc `Color.white.opacity(…)` fills in views — pick a rung.
     static let surfaceRaised = Color.white.opacity(0.05)   // cards, chips at rest
     static let surfaceHover = Color.white.opacity(0.09)    // pointer feedback
-    static let surfaceSelected = Color.white.opacity(0.14) // the active row
+    /// Selection is WARM: when Klorn marks something as chosen, the brand
+    /// speaks — amber-tinted fill (the accent bar still carries the hard edge,
+    /// so selection is never color-alone).
+    static let surfaceSelected = accent.opacity(0.16)
 
     // MARK: Spacing (4pt grid)
     // s2/s3 within a control, s4 between controls, s6 between sections.
@@ -69,6 +79,22 @@ enum Theme {
     static let s3: CGFloat = 12
     static let s4: CGFloat = 16
     static let s6: CGFloat = 24
+}
+
+/// Real macOS blur behind the panel — the difference between "a dark
+/// rectangle" and "glass floating over your desk". `.hudWindow` is the
+/// system's heads-up material; `.behindWindow` samples whatever is under the
+/// panel. The warm tint gradient layers on top of this.
+struct GlassMaterial: NSViewRepresentable {
+    func makeNSView(context _: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .hudWindow
+        view.blendingMode = .behindWindow
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_: NSVisualEffectView, context _: Context) {}
 }
 
 /// Dim at rest, full text on hover — the standard treatment for every
