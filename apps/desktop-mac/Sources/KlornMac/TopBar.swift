@@ -95,6 +95,29 @@ struct ColumnHeader: View {
     }
 }
 
+/// Sidebar nav row chrome: the same selection language as list rows — accent
+/// leading bar + the surface ladder's selected rung; hover uses the hover rung.
+/// One modifier so every nav row (tiers, Commitments, Assistant) stays in sync.
+struct SidebarRowChrome: ViewModifier {
+    let selected: Bool
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .background(alignment: .leading) {
+                if selected {
+                    RoundedRectangle(cornerRadius: 1.5).fill(Theme.accent)
+                        .frame(width: 3).padding(.vertical, 5)
+                }
+            }
+            .background(
+                selected ? Theme.surfaceSelected : hovering ? Theme.surfaceHover : .clear,
+                in: RoundedRectangle(cornerRadius: 8))
+            .onHover { hovering = $0 }
+    }
+}
+
 /// A snooze control that pops the option list. Shared by every snooze site so the
 /// choices stay identical; the caller supplies the label (icon vs. text button).
 private struct SnoozeMenu<Label: View>: View {
@@ -651,9 +674,7 @@ private struct FullSidebar: View {
                         Text("\(model.queue?.summary.count(for: tier) ?? 0)")
                             .font(.body.monospacedDigit()).foregroundStyle(Theme.textDim)
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 9)
-                    .background(selected == .tier(tier) ? Color.white.opacity(0.07) : .clear,
-                                in: RoundedRectangle(cornerRadius: 8))
+                    .modifier(SidebarRowChrome(selected: selected == .tier(tier)))
                 }
                 .buttonStyle(.plain)
             }
@@ -672,9 +693,7 @@ private struct FullSidebar: View {
                     Text("\(model.commitments?.count ?? 0)")
                         .font(.body.monospacedDigit()).foregroundStyle(Theme.textDim)
                 }
-                .padding(.horizontal, 12).padding(.vertical, 9)
-                .background(selected == .commitments ? Color.white.opacity(0.07) : .clear,
-                            in: RoundedRectangle(cornerRadius: 8))
+                .modifier(SidebarRowChrome(selected: selected == .commitments))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Commitments, \(model.commitments?.count ?? 0) open")
@@ -690,9 +709,7 @@ private struct FullSidebar: View {
                         .foregroundStyle(Theme.text)
                     Spacer()
                 }
-                .padding(.horizontal, 12).padding(.vertical, 9)
-                .background(selected == .assistant ? Color.white.opacity(0.07) : .clear,
-                            in: RoundedRectangle(cornerRadius: 8))
+                .modifier(SidebarRowChrome(selected: selected == .assistant))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Assistant")
@@ -1066,6 +1083,7 @@ private struct CommitmentsList: View {
 private struct CommitmentRow: View {
     @Environment(AppModel.self) private var model
     let item: CommitmentItem
+    @State private var hovering = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -1082,18 +1100,23 @@ private struct CommitmentRow: View {
                 }
             }
             Spacer(minLength: 0)
+            // Same hover-reveal language as the mail rows: quiet at rest.
             Button {
                 Task { await model.resolveCommitment(item, as: "DONE") }
             } label: { Image(systemName: "checkmark").iconTarget() }
                 .buttonStyle(.plain).foregroundStyle(Theme.textDim).help("Mark done")
                 .accessibilityLabel("Mark done: \(item.title)")
+                .opacity(hovering ? 1 : 0)
             Button {
                 Task { await model.resolveCommitment(item, as: "DISMISSED") }
             } label: { Image(systemName: "xmark").iconTarget() }
                 .buttonStyle(.plain).foregroundStyle(Theme.textDim).help("Dismiss")
                 .accessibilityLabel("Dismiss: \(item.title)")
+                .opacity(hovering ? 1 : 0)
         }
         .padding(.horizontal, 24).padding(.vertical, 8)
+        .background(hovering ? Theme.surfaceHover : .clear)
+        .onHover { hovering = $0 }
     }
 }
 
@@ -1104,7 +1127,8 @@ private struct SearchHitRow: View {
     let hit: EmailSearchItem
 
     private var selected: Bool { model.selectedItemId == hit.id }
-    private var sender: String { hit.from ?? "(unknown sender)" }
+    private var sender: String { decodeHTMLEntities(hit.from ?? "(unknown sender)") }
+    @State private var hovering = false
 
     var body: some View {
         Button {
@@ -1133,7 +1157,8 @@ private struct SearchHitRow: View {
         .background(alignment: .leading) {
             if selected { Rectangle().fill(Theme.accent).frame(width: 3) }
         }
-        .background(selected ? Color.white.opacity(0.14) : .clear)
+        .background(selected ? Theme.surfaceSelected : hovering ? Theme.surfaceHover : .clear)
+        .onHover { hovering = $0 }
         .accessibilityLabel("Search result from \(sender): \(hit.subject ?? "no subject")")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
@@ -1177,9 +1202,12 @@ private struct FullRow: View {
             // them clickable-by-position and fully present to VoiceOver.
             HStack(spacing: 12) {
                 TierMenu(item: item, onSetTier: actions.onSetTier) {
-                    Image(systemName: "circle.fill")
-                        .font(.system(size: 8))
-                        .foregroundStyle(Theme.tint(item.tier))
+                    // A Shape, not an SF Symbol: the borderless menu style
+                    // template-renders Images and strips their color (the dot
+                    // showed WHITE in prod, v0.4.4 screenshots) — a filled
+                    // Circle keeps the tier tint, the row's core signal.
+                    Circle().fill(Theme.tint(item.tier))
+                        .frame(width: 8, height: 8)
                         .iconTarget()
                 }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
