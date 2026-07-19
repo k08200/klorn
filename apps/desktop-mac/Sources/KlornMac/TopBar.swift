@@ -486,10 +486,12 @@ private struct AccountColumn: View {
 
 /// The largest state: a tier sidebar + a big scrollable list of the selected
 /// tier — a real desktop-app view of the whole firewall.
-/// What the full view's list column shows: a firewall tier, or commitments.
+/// What the full view's list column shows: a firewall tier, commitments, or
+/// the assistant chat.
 enum ListMode: Equatable {
     case tier(Tier)
     case commitments
+    case assistant
 }
 
 struct FullView: View {
@@ -634,6 +636,24 @@ private struct FullSidebar: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Commitments, \(model.commitments?.count ?? 0) open")
 
+            // Assistant: ask/act across mail, calendar, and the briefing.
+            Button { selected = .assistant } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "sparkles").font(.caption)
+                        .foregroundStyle(Theme.accent).frame(width: 8)
+                        .accessibilityHidden(true)
+                    Text("Assistant")
+                        .font(.body.weight(selected == .assistant ? .semibold : .regular))
+                        .foregroundStyle(Theme.text)
+                    Spacer()
+                }
+                .padding(.horizontal, 12).padding(.vertical, 9)
+                .background(selected == .assistant ? Color.white.opacity(0.07) : .clear,
+                            in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Assistant")
+
             // TODAY lives in the full view too — the biggest surface must not
             // know less about the day than the compact panel (dogfood 2026-07-16).
             ColumnHeader(title: "TODAY").padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 6)
@@ -693,10 +713,10 @@ private struct FullList: View {
     private var searching: Bool { isSearchActive(query) }
 
     var body: some View {
-        if mode == .commitments {
-            CommitmentsList()
-        } else {
-            tierList
+        switch mode {
+        case .commitments: CommitmentsList()
+        case .assistant: AssistantColumn()
+        case .tier: tierList
         }
     }
 
@@ -786,6 +806,106 @@ private struct FullList: View {
                 .font(.callout).foregroundStyle(Theme.textDim).frame(maxWidth: .infinity)
             Spacer()
         }
+    }
+}
+
+/// The assistant column: an in-session thread with the mail/calendar agent.
+/// Synchronous turns (the API returns the full reply); the composer disables
+/// while a turn is in flight. Never steals focus — lives in the key-able full
+/// view like the reply composer.
+private struct AssistantColumn: View {
+    @Environment(AppModel.self) private var model
+    @State private var draft = ""
+    @FocusState private var composerFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles").font(.body).foregroundStyle(Theme.accent)
+                    .accessibilityHidden(true)
+                Text("Assistant").font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+            }
+            .padding(.horizontal, 24).padding(.vertical, 18)
+            Divider().overlay(Theme.line)
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        if model.chatMessages.isEmpty {
+                            Text("Ask about your mail, calendar, or day —\n“오늘 제일 중요한 메일 뭐야?”")
+                                .font(.callout).foregroundStyle(Theme.textDim)
+                                .padding(.top, 24).frame(maxWidth: .infinity)
+                                .multilineTextAlignment(.center)
+                        }
+                        ForEach(model.chatMessages) { message in
+                            ChatBubble(message: message)
+                        }
+                        if model.isChatting {
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text("Thinking…").font(.caption).foregroundStyle(Theme.textDim)
+                            }
+                            .padding(.horizontal, 16)
+                        }
+                        Color.clear.frame(height: 1).id("chat-bottom")
+                    }
+                    .padding(.vertical, 12)
+                }
+                .onChange(of: model.chatMessages) { _, _ in
+                    withAnimation { proxy.scrollTo("chat-bottom", anchor: .bottom) }
+                }
+            }
+
+            Divider().overlay(Theme.line)
+            HStack(spacing: 8) {
+                TextField("Message Klorn…", text: $draft, axis: .vertical)
+                    .textFieldStyle(.plain).font(.callout).foregroundStyle(Theme.text)
+                    .lineLimit(1...4)
+                    .focused($composerFocused)
+                    .onSubmit { send() }
+                    .accessibilityLabel("Message Klorn")
+                Button { send() } label: {
+                    Image(systemName: "arrow.up.circle.fill").font(.title3)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(canSendChat(draft, busy: model.isChatting) ? Theme.accent : Theme.textDim)
+                .disabled(!canSendChat(draft, busy: model.isChatting))
+                .accessibilityLabel("Send message")
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+        }
+        .onAppear { composerFocused = true }
+    }
+
+    private func send() {
+        let text = draft
+        guard canSendChat(text, busy: model.isChatting) else { return }
+        draft = ""
+        Task { await model.sendChat(text) }
+    }
+}
+
+private struct ChatBubble: View {
+    let message: ChatMessage
+
+    var body: some View {
+        HStack {
+            if message.role == .user { Spacer(minLength: 40) }
+            Text(message.text)
+                .font(.callout)
+                .foregroundStyle(message.role == .failure ? Theme.accent : Theme.text)
+                .textSelection(.enabled)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(
+                    message.role == .user ? Color.white.opacity(0.10) : Color.white.opacity(0.04),
+                    in: RoundedRectangle(cornerRadius: 10))
+            if message.role != .user { Spacer(minLength: 40) }
+        }
+        .padding(.horizontal, 16)
+        .accessibilityLabel(
+            message.role == .user ? "You said: \(message.text)"
+                : message.role == .failure ? "Error: \(message.text)"
+                : "Klorn replied: \(message.text)")
     }
 }
 

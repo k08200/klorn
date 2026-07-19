@@ -420,6 +420,21 @@ func runSelfChecks() async -> Bool {
     let long = String(repeating: "a", count: 5000)
     check("over-long body is capped", (cardBodyText(long)?.count ?? 0) <= 4000)
 
+    print("Assistant:")
+    check("send allowed for normal text", canSendChat("what matters today?", busy: false))
+    check("send blocked while a turn is in flight", !canSendChat("hi", busy: true))
+    check("send blocked for blank text", !canSendChat("   \n ", busy: false))
+    check("send blocked beyond the server cap",
+          !canSendChat(String(repeating: "x", count: 4001), busy: false))
+    let turnJSON = #"{"reply":"Here's what matters.","eventDraft":null}"#
+    let turn = try? JSONDecoder().decode(ChatTurnResponse.self, from: Data(turnJSON.utf8))
+    check("turn response decodes without error field",
+          turn?.reply == "Here's what matters." && turn?.error == nil)
+    let errTurn = try? JSONDecoder().decode(
+        ChatTurnResponse.self,
+        from: Data(#"{"reply":"(partial)","error":"provider timeout"}"#.utf8))
+    check("turn response carries the error", errTurn?.error == "provider timeout")
+
     print("Commitments:")
     let cJSON = """
     [{"id":"c1","title":"I'll send the SOW","owner":"USER","counterpartyName":"Sarah",

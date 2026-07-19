@@ -213,6 +213,34 @@ struct EmailDetail: Codable, Sendable, Identifiable {
     }
 }
 
+// MARK: - Assistant (chat)
+
+/// POST /api/chat/conversations → the conversation the desktop lazily creates.
+struct ChatConversation: Codable, Sendable {
+    let id: String
+}
+
+/// POST /api/chat/conversations/:id/messages → one synchronous agent turn.
+struct ChatTurnResponse: Codable, Sendable {
+    let reply: String
+    let error: String?
+}
+
+/// One bubble in the desktop's in-memory thread.
+struct ChatMessage: Identifiable, Hashable, Sendable {
+    enum Role: Sendable { case user, assistant, failure }
+    let id = UUID()
+    let role: Role
+    let text: String
+}
+
+/// Whether the composer may send: non-blank text, no turn in flight, and
+/// within the server's length cap (server rejects >4000). Pure.
+func canSendChat(_ text: String, busy: Bool) -> Bool {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return !busy && !trimmed.isEmpty && trimmed.count <= 4000
+}
+
 // MARK: - Commitments (promises made / replies awaited)
 
 /// GET /api/commitments — one tracked promise. `owner == "USER"` is something

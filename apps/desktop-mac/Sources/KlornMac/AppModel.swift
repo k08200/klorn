@@ -227,6 +227,44 @@ final class AppModel {
         }
     }
 
+    // MARK: Assistant (chat)
+
+    /// In-memory thread for this app session (one conversation, lazily created
+    /// server-side on the first send so an unopened Assistant costs nothing).
+    private(set) var chatMessages: [ChatMessage] = []
+    private(set) var isChatting = false
+    private var chatConversationId: String?
+
+    /// One synchronous agent turn: optimistic user bubble → POST → assistant
+    /// bubble. A failed turn becomes a visible failure bubble — never silent.
+    func sendChat(_ text: String) async {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard canSendChat(trimmed, busy: isChatting) else { return }
+        chatMessages.append(ChatMessage(role: .user, text: trimmed))
+        isChatting = true
+        defer { isChatting = false }
+        do {
+            if chatConversationId == nil {
+                let conv: ChatConversation = try await api.post(
+                    "/api/chat/conversations", json: [:], as: ChatConversation.self)
+                chatConversationId = conv.id
+            }
+            guard let convId = chatConversationId else { return }
+            let turn: ChatTurnResponse = try await api.post(
+                "/api/chat/conversations/\(convId)/messages",
+                json: ["text": trimmed], as: ChatTurnResponse.self)
+            chatMessages.append(ChatMessage(role: .assistant, text: turn.reply))
+            if let error = turn.error {
+                chatMessages.append(ChatMessage(role: .failure, text: error))
+            }
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            chatMessages.append(ChatMessage(
+                role: .failure, text: "Couldn't reach Klorn — \(Self.describe(error))"))
+        }
+    }
+
     // MARK: Commitments
 
     /// OPEN commitments (nil until first load). Best-effort like today/usage.
