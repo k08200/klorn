@@ -22,7 +22,7 @@ import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
 import { dismissAttentionItem } from "../judge/attention-dismiss.js";
-import { checkAttentionInputHash } from "../judge/attention-input-hash.js";
+import { checkAttentionInputHash, registerHashMismatch } from "../judge/attention-input-hash.js";
 import { confirmAttentionTier, overrideAttentionTier } from "../judge/attention-override.js";
 import { snoozeAttentionItem } from "../judge/attention-snooze.js";
 import { getDecisionMetrics } from "../judge/decision-metrics.js";
@@ -76,6 +76,50 @@ function extractEmailId(
   if (!toolArgs || !EMAIL_ID_TOOLS.has(toolName)) return undefined;
   const raw = toolArgs.email_id ?? toolArgs.emailId ?? toolArgs.gmail_id;
   return typeof raw === "string" && raw.trim() ? raw.trim() : undefined;
+}
+
+/// Per-process (row, storedHash) pairs already alerted + healed — see
+/// registerHashMismatch. Survives across requests; resets on deploy, which is
+/// fine (a still-stale row re-alerts once per boot until the heal lands).
+const hashMismatchesSeen = new Set<string>();
+
+/** Test-only: drop the per-process dedupe (mirrors quota-limiter's idiom). */
+export function _resetHashMismatchDedupeForTests(): void {
+  hashMismatchesSeen.clear();
+}
+
+/**
+ * Self-heal a stale decision: re-fetch the full row and re-judge it, which
+ * rewrites inputHash over the CURRENT bytes (attention-mirror upsert). The
+ * doctrine answer to a failed read-side verification is a fresh decision,
+ * not a repeated alert (checkAttentionInputHash's own doc says to pair it
+ * with a background re-classify). Fire-and-forget; failures are captured.
+ */
+function healStaleAttentionItem(userId: string, emailDbId: string): void {
+  void (async () => {
+    try {
+      const row = await prisma.emailMessage.findFirst({
+        where: { id: emailDbId, userId },
+        select: {
+          id: true,
+          gmailId: true,
+          from: true,
+          subject: true,
+          snippet: true,
+          body: true,
+          labels: true,
+          receivedAt: true,
+        },
+      });
+      if (!row) return;
+      // Lazy import: the judge pulls a heavy transitive graph (providers,
+      // gmail) that the hot read path — and its tests — must not load.
+      const { judgeAndMirrorEmail } = await import("../judge/email-firewall.js");
+      await judgeAndMirrorEmail(userId, row);
+    } catch (err) {
+      captureError(err, { tags: { scope: "firewall.hashRejudge" }, extra: { emailDbId } });
+    }
+  })();
 }
 
 export async function firewallRoutes(app: FastifyInstance) {
@@ -460,19 +504,28 @@ export async function firewallRoutes(app: FastifyInstance) {
           });
           if (!hashCheck.ok) {
             item.hashStale = true;
-            captureError(
-              new Error(
-                `AttentionItem hash mismatch — stored=${hashCheck.storedHash.slice(0, 12)}… current=${hashCheck.currentHash.slice(0, 12)}…`,
-              ),
-              {
-                tags: { scope: "firewall.hashVerify" },
-                extra: {
-                  attentionItemId: row.id,
-                  emailDbId: email.id,
-                  storedTier: row.tier,
+            // Alert + heal exactly ONCE per (row, storedHash). Repeats stay
+            // silent: hashStale on the wire already tells clients, and the
+            // desktop's 60s poll would otherwise re-page the same benign
+            // mutation (e.g. reading a mail flips its UNREAD label — one of
+            // the four hashed fields) forever. Measured before this guard:
+            // 333 Sentry events in the first 12 minutes of DSN going live.
+            if (registerHashMismatch(hashMismatchesSeen, row.id, hashCheck.storedHash)) {
+              captureError(
+                new Error(
+                  `AttentionItem hash mismatch — stored=${hashCheck.storedHash.slice(0, 12)}… current=${hashCheck.currentHash.slice(0, 12)}…`,
+                ),
+                {
+                  tags: { scope: "firewall.hashVerify" },
+                  extra: {
+                    attentionItemId: row.id,
+                    emailDbId: email.id,
+                    storedTier: row.tier,
+                  },
                 },
-              },
-            );
+              );
+              healStaleAttentionItem(userId, email.id);
+            }
           }
 
           const addr = senderEmail(email.from);

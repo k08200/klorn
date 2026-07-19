@@ -152,3 +152,29 @@ export function checkAttentionInputHash(
   }
   return { ok: true, currentHash };
 }
+
+/** Cap on the mismatch-dedupe set — far above any real open-item count. */
+const MISMATCH_SEEN_MAX = 10_000;
+
+/**
+ * Per-process dedupe for mismatch handling: true exactly once per
+ * (item, storedHash) pair. A stale row otherwise re-alerts on EVERY firewall
+ * read (the desktop polls every 60s), which turned one benign mutation — e.g.
+ * reading a mail flips its UNREAD label, one of the four hashed fields — into
+ * hundreds of Sentry events per hour the moment SENTRY_DSN went live
+ * (measured: 333 events/12min, 2026-07-20). First observation alerts and
+ * triggers the heal; repeats stay silent (the row already carries
+ * hashStale=true on the wire). A NEW storedHash for the same item alerts
+ * again — that is a fresh decision going stale, not a repeat.
+ */
+export function registerHashMismatch(
+  seen: Set<string>,
+  attentionItemId: string,
+  storedHash: string,
+): boolean {
+  const key = `${attentionItemId}:${storedHash}`;
+  if (seen.has(key)) return false;
+  if (seen.size >= MISMATCH_SEEN_MAX) seen.clear(); // bounded memory; re-alerting after 10k is fine
+  seen.add(key);
+  return true;
+}
