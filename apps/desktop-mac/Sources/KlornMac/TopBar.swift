@@ -1414,21 +1414,21 @@ private struct ReadingPane: View {
                         // segment (the one off-palette element on this row —
                         // design audit 2026-07-20); a dim chevron in the label
                         // keeps the "this opens a menu" affordance.
+                        // Chevron lives INSIDE one Text (concatenation) — a
+                        // separate Image in the label gets reordered to the
+                        // leading edge by the menu button's label styling
+                        // (screen-verified 0.4.80007: "∨ Snooze").
                         SnoozeMenu(item: item, onSnooze: actions.onSnooze) {
-                            HStack(spacing: 4) {
-                                Text("Snooze")
-                                Image(systemName: "chevron.down")
-                                    .font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
-                            }
+                            Text("Snooze ")
+                                + Text(Image(systemName: "chevron.down"))
+                                .font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
                         }
                         .menuStyle(.button).buttonStyle(.bordered).controlSize(.small)
                         .menuIndicator(.hidden).fixedSize()
                         TierMenu(item: item, onSetTier: actions.onSetTier) {
-                            HStack(spacing: 4) {
-                                Text("Move to \(item.tier.label)")
-                                Image(systemName: "chevron.down")
-                                    .font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
-                            }
+                            Text("Move to \(item.tier.label) ")
+                                + Text(Image(systemName: "chevron.down"))
+                                .font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
                         }
                         .menuStyle(.button).buttonStyle(.bordered).controlSize(.small)
                         .menuIndicator(.hidden).fixedSize()
