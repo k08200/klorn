@@ -660,9 +660,19 @@ export function authRoutes(app: FastifyInstance) {
     // verifier stops anyone who merely observes the nonce (browser history,
     // Referer, or server logs) from stealing the freshly minted session JWT.
     const { challenge } = request.query as { challenge?: string };
+    // PKCE is now REQUIRED: every shipped client (desktop 0.4.80015+, mobile
+    // native-auth) sends a SHA-256 base64url challenge (43 chars). Refusing a
+    // challenge-less mint removes the legacy "no challenge -> skip verifier"
+    // path that left an observed nonce redeemable (security audit 2026-07-20,
+    // G4 closed). An out-of-date client that omits it is told to update.
+    if (typeof challenge !== "string" || challenge.length < 32) {
+      return reply
+        .code(400)
+        .send({ error: "Missing PKCE challenge. Please update your Klorn app." });
+    }
     const nonce = crypto.randomBytes(32).toString("hex");
     const expiresAt = Date.now() + 10 * 60 * 1000; // 10 min window for user to complete login
-    desktopLoginTokens.set(nonce, { expiresAt, ...(challenge ? { challenge } : {}) });
+    desktopLoginTokens.set(nonce, { expiresAt, challenge });
     setTimeout(() => desktopLoginTokens.delete(nonce), 10 * 60 * 1000);
     return reply.send({ nonce });
   });
@@ -715,11 +725,10 @@ export function authRoutes(app: FastifyInstance) {
         desktopLoginTokens.delete(nonce);
         return reply.code(410).send({ error: "Expired" });
       }
-      // PKCE gate: when a challenge was registered, the caller must present the
-      // matching verifier (via header, so it never lands in a URL/access log).
-      // The verifier never went through the browser, so an observer of the nonce
-      // cannot satisfy this. Legacy callers that registered no challenge keep the
-      // old behavior until they adopt PKCE.
+      // PKCE gate (always enforced — every nonce now carries a challenge, see
+      // /desktop-nonce): the caller must present the matching verifier via a
+      // header, so it never lands in a URL/access log. The verifier never went
+      // through the browser, so an observer of the nonce cannot satisfy this.
       if (entry.challenge) {
         const header = request.headers["x-desktop-verifier"];
         const verifier = Array.isArray(header) ? header[0] : header;

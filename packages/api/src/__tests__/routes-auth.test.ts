@@ -311,11 +311,10 @@ describe("desktop-token PKCE verifier gate", () => {
     expect(res.statusCode).toBe(202);
   });
 
-  it("stays backward-compatible: a nonce with no challenge needs no verifier (202)", async () => {
+  it("rejects a challenge-less nonce mint with 400 (PKCE now required)", async () => {
     const app = await buildApp();
-    const nonce = await getNonce(app, false);
-    const res = await app.inject({ method: "GET", url: `/api/auth/desktop-token/${nonce}` });
-    expect(res.statusCode).toBe(202);
+    const res = await app.inject({ method: "GET", url: "/api/auth/desktop-nonce" });
+    expect(res.statusCode).toBe(400);
   });
 });
 
@@ -340,7 +339,11 @@ describe("desktop /google/login — appScheme relay binding", () => {
   beforeEach(resetStores);
 
   async function issueNonce(app: ReturnType<typeof Fastify>): Promise<string> {
-    const res = await app.inject({ method: "GET", url: "/api/auth/desktop-nonce" });
+    const challenge = crypto.createHash("sha256").update("relay-test-verifier").digest("base64url");
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/auth/desktop-nonce?challenge=${encodeURIComponent(challenge)}`,
+    });
     return res.json().nonce as string;
   }
 

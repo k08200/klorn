@@ -50,9 +50,14 @@ async function startRelayLogin(scheme: string): Promise<void> {
   const { Browser } = await import("@capacitor/browser");
   const { App } = await import("@capacitor/app");
 
-  // A nonce is still required to enter the desktop flow, but the relay never
-  // polls it — the JWT arrives via the deep link, so no PKCE challenge is needed.
-  const nonce = await fetchNonce();
+  // A nonce is still required to enter the desktop flow. The relay never polls
+  // it (the JWT arrives via the deep link), so the verifier is unused here — but
+  // /desktop-nonce now requires a PKCE challenge on every mint (security audit
+  // 2026-07-20, G4), so we send one anyway. It costs nothing and keeps a single
+  // server contract for both relay and poll paths.
+  const relayVerifier = generateVerifier();
+  const relayChallenge = await sha256Base64Url(relayVerifier);
+  const nonce = await fetchNonce(relayChallenge);
 
   let resolveCode!: (code: string) => void;
   let rejectCode!: (err: Error) => void;
