@@ -12,17 +12,19 @@ const contentSecurityPolicy = [
   "default-src 'self'",
   // Next.js injects inline bootstrap scripts; without a nonce setup
   // 'unsafe-inline' is required for the app to boot at all.
-  "script-src 'self' 'unsafe-inline'",
+  // Paddle.js (hosted checkout overlay) is an allowed external script.
+  "script-src 'self' 'unsafe-inline' https://cdn.paddle.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  `connect-src 'self' ${apiUrl ?? ""} ${apiWsUrl ?? ""} https://*.sentry.io https://*.ingest.sentry.io https://*.ingest.us.sentry.io`,
+  `connect-src 'self' ${apiUrl ?? ""} ${apiWsUrl ?? ""} https://*.sentry.io https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.paddle.com`,
   "media-src 'self'",
   "worker-src 'self'",
   "manifest-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
+  "frame-src https://*.paddle.com https://*.paddle.io",
   "frame-ancestors 'none'",
   "upgrade-insecure-requests",
 ]
