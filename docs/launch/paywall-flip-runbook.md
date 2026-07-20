@@ -4,10 +4,14 @@ How to turn on monetization. Everything below is already built and merged;
 nothing here ships code. The flip is **configuration only**, and every step is
 independently reversible.
 
-Current state (verified at HEAD): `PAYWALL_ENABLED` defaults to **off**, so
-`isEntitled()` returns true for everyone, the entitlement guards are no-ops,
-and all Stripe/RevenueCat surfaces render but cannot complete a purchase.
-The only active billing mechanism today is the per-user daily LLM cost cap.
+Current state (verified live 2026-07-20): `PAYWALL_ENABLED` is **off**, so
+`isEntitled()` returns true for everyone and the entitlement guards are no-ops.
+Additionally `BETA_AUTO_PRO_ENABLED=true`, so the first `BETA_AUTO_PRO_LIMIT`
+(default 50) signups are silently granted PRO (`betaProGrantedAt` set) — this
+is why a brand-new account already shows plan `PRO` with no payment. The Paddle
+web pipeline is fully wired and sandbox-verified (see §2a); the only reason no
+one is paying yet is that everyone is auto-PRO. The other active billing
+mechanism is the per-user daily LLM cost cap.
 
 ---
 
@@ -76,6 +80,32 @@ The only active billing mechanism today is the per-user daily LLM cost cap.
 - [ ] Confirm the admin comp path works as the escape hatch:
       `PATCH /api/admin/users/:id { plan: "PRO" }`.
 
+## 2a. Sandbox status — DONE & VERIFIED 2026-07-20
+
+The Paddle **sandbox** pipeline is set up and end-to-end verified except the
+final real-card round-trip (covered by 11 unit tests in
+`routes-webhook-paddle.test.ts`):
+
+- Paddle sandbox product **Klorn Pro** + monthly price with a 7-day trial created.
+- Render (API) env set: `PADDLE_API_KEY`, `PADDLE_PRO_PRICE_ID` (`pri_…`),
+  `PADDLE_WEBHOOK_SECRET`, `PADDLE_ENV=sandbox`.
+- Vercel (web) env set: `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` (`test_…`),
+  `NEXT_PUBLIC_PADDLE_ENV=sandbox`, `NEXT_PUBLIC_NATIVE_OAUTH_SCHEME=ai.klorn.app`.
+- Verified: `/api/billing/checkout` returns a `?_ptxn=` URL; the billing page's
+  Paddle.js loader opens the hosted checkout overlay showing "7-day free trial";
+  webhook signature gate rejects unsigned posts (401).
+- Four web blockers found & fixed while dogfooding this: `safeRedirect` allowing
+  paddle.com (#923), null-limit billing-page crash (#924), the missing Paddle.js
+  loader + CSP (#925), and `/billing` being unreachable before Google connect (#926).
+
+**To go LIVE, redo the provider setup (§1) against the *live* Paddle account**
+(separate from sandbox): new live product/price, live API key, live webhook
+secret, live client token. Then swap env: on Render **remove** `PADDLE_ENV`
+(or set it non-sandbox) and replace the three `PADDLE_*` values with live ones;
+on Vercel set `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` to the `live_…` token and
+`NEXT_PUBLIC_PADDLE_ENV=production`, then redeploy the web project (public env
+is inlined at build time — an env change alone does nothing until a redeploy).
+
 ## 3. The flip
 
 On Render (API service), set — in one deploy:
@@ -84,7 +114,16 @@ On Render (API service), set — in one deploy:
 PAYWALL_ENABLED=true
 FREE_DAILY_COST_CAP_CENTS=10   # or D2 value
 TRIAL_DAYS=7                   # or D3 value
+# Decide the beta-auto-PRO fate at the same time:
+#   BETA_AUTO_PRO_ENABLED=false   → new signups must pay from day one, OR
+#   leave it on with BETA_AUTO_PRO_LIMIT=50 → first 50 stay free, #51+ pays.
 ```
+
+Note: the paywall (`isEntitled`) and beta-auto-PRO are independent switches.
+If you flip `PAYWALL_ENABLED=true` but leave `BETA_AUTO_PRO_ENABLED=true` with
+room under the limit, new users are still auto-granted PRO and won't see the
+paywall — so to actually collect money from new signups, set
+`BETA_AUTO_PRO_ENABLED=false` (or confirm the limit is already reached).
 
 What changes at that moment (all code paths already live):
 - `isEntitled()` starts returning false for FREE users → `requireEntitled`
