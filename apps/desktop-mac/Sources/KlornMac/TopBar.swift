@@ -293,13 +293,10 @@ struct ExpandedPanel: View {
 
     private var header: some View {
         HStack {
-            Button(action: actions.onCollapse) {
-                HStack(spacing: 6) {
-                    Image(systemName: "minus").font(.caption.weight(.bold)).accessibilityHidden(true)
-                    Text("Close").font(.callout)
-                }
-            }
-            .buttonStyle(.plain).hoverDim()
+            // The ✕ on the right is the one way out (dogfood 2026-07-20) —
+            // the old "— Close" here did the exact same thing, so it's gone.
+            // Balance the ✕'s width so the wordmark stays optically centered.
+            Color.clear.frame(width: 28, height: 28)
 
             Spacer()
             HStack(spacing: 8) { LogoRing(); Text("Klorn").font(.system(.callout, design: .rounded).weight(.bold)).foregroundStyle(Theme.text) }
@@ -701,13 +698,7 @@ struct FullView: View {
             }
             .buttonStyle(.plain).hoverDim()
             .help("Back to the compact panel")
-
-            Button(action: actions.onCollapse) {
-                Image(systemName: "minus").font(.callout.weight(.bold)).iconTarget()
-            }
-            .buttonStyle(.plain).hoverDim()
-            .help("Collapse to the pill")
-            .accessibilityLabel("Collapse to pill")
+            // The old "—" (collapse-to-rest) duplicated the header ✕ — gone.
 
             Spacer()
             HStack(spacing: 8) {

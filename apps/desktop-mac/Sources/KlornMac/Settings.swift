@@ -36,9 +36,31 @@ final class AppSettings {
         didSet {
             defaults.set(pillVisible, forKey: Self.pillVisibleKey)
             // Breadcrumb: the pill has flipped hidden repeatedly in dogfood
-            // with no obvious actor (2026-07-20). Log every change with a
-            // stack-adjacent hint so the next occurrence names its caller.
-            Log.app.notice("pillVisible → \(self.pillVisible, privacy: .public) (\(Thread.callStackSymbols.dropFirst().prefix(3).joined(separator: " | "), privacy: .public))")
+            // with no obvious actor (2026-07-20). os.log turned out not to be
+            // collectable on the dogfood Mac, so the trace ALSO goes to a file
+            // in Application Support — the next occurrence names its caller.
+            let stack = Thread.callStackSymbols.dropFirst().prefix(4).joined(separator: "\n    ")
+            Log.app.notice("pillVisible → \(self.pillVisible, privacy: .public)")
+            Self.appendPillTrace("pillVisible → \(pillVisible)\n    \(stack)")
+        }
+    }
+
+    /// Append one pill-flip event to ~/Library/Application Support/Klorn/
+    /// pill-trace.log. Best-effort; never throws into the UI path.
+    private static func appendPillTrace(_ line: String) {
+        let fm = FileManager.default
+        guard let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Klorn", isDirectory: true) else { return }
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let file = dir.appendingPathComponent("pill-trace.log")
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        let entry = "\(stamp) \(line)\n"
+        if let handle = try? FileHandle(forWritingTo: file) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: Data(entry.utf8))
+        } else {
+            try? Data(entry.utf8).write(to: file)
         }
     }
 
