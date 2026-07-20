@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
+import { PaddleLoader } from "../../components/paddle-loader";
 import { CardSkeleton } from "../../components/skeleton";
 import { useToast } from "../../components/toast";
 import { apiFetch } from "../../lib/api";
@@ -90,6 +91,10 @@ const PLANS = [
 export default function BillingPage() {
   return (
     <AuthGuard>
+      {/* Paddle.js must live on this page: it detects the _ptxn param on the
+          default-payment-link URL and opens the checkout overlay. Completed
+          checkout reloads so the webhook-granted plan is refetched. */}
+      <PaddleLoader onCheckoutCompleted={() => window.location.reload()} />
       <Suspense>
         <BillingContent />
       </Suspense>
