@@ -14,8 +14,10 @@ function CallbackHandler() {
     if (handled.current) return;
     handled.current = true;
 
+    // The server only ever emits ?code= (exchange-code flow); the old direct
+    // ?token= JWT-in-URL path is dead server-side and was residual attack
+    // surface (browser history/Referer) — removed, security audit 2026-07-20.
     const code = searchParams.get("code");
-    const token = searchParams.get("token"); // legacy: direct JWT (backward-compat)
 
     if (code) {
       fetch(`${API_BASE}/api/auth/exchange-code`, {
@@ -28,10 +30,6 @@ function CallbackHandler() {
         .catch(() => {
           window.location.href = "/login?error=google_failed";
         });
-    } else if (token) {
-      loginWithToken(token).catch(() => {
-        window.location.href = "/login?error=google_failed";
-      });
     } else {
       window.location.href = "/login?error=google_failed";
     }

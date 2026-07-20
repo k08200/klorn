@@ -175,7 +175,10 @@ export async function calendarRoutes(app: FastifyInstance) {
 
     // Only allow safe fields — prevent userId/id overwrite
     const data: Record<string, unknown> = {};
-    if (body.summary !== undefined) data.summary = body.summary;
+    // The model's title field is `title`; `summary` stays accepted as an
+    // alias (the old name silently never updated anything — audit 2026-07-20).
+    if (body.title !== undefined) data.title = body.title;
+    else if (body.summary !== undefined) data.title = body.summary;
     if (body.description !== undefined) data.description = body.description;
     if (body.location !== undefined) data.location = body.location;
     if (body.allDay !== undefined) data.allDay = body.allDay;
