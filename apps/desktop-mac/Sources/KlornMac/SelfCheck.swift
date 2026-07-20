@@ -609,14 +609,14 @@ func runSelfChecks() async -> Bool {
           !Entry.shouldDeferToExistingInstance(bundleID: nil, otherInstanceCount: 2))
 
     print("Summon cycle:")
-    // ⌥⌘K always shows the MINIMAL pill first, expands on the second press,
-    // and dismisses from expanded/full — never jumps straight to the big panel.
+    // ⌥⌘K steps UP one size per press — pill, expanded, full — and from full
+    // it dismisses back to rest. Never jumps straight to the big panel.
     check("nothing on screen → show the pill",
           TopBarController.summonAction(isVisible: false, state: .collapsed) == .showPill)
     check("pill → expand",
           TopBarController.summonAction(isVisible: true, state: .collapsed) == .expand)
-    check("expanded → dismiss",
-          TopBarController.summonAction(isVisible: true, state: .expanded) == .dismissToRest)
+    check("expanded → full",
+          TopBarController.summonAction(isVisible: true, state: .expanded) == .expandFull)
     check("full → dismiss",
           TopBarController.summonAction(isVisible: true, state: .full) == .dismissToRest)
     // A summon draws the pill even in hidden-pill mode (pillVisible=false):
