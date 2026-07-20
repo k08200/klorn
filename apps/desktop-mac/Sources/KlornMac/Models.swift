@@ -367,6 +367,29 @@ func decodeHTMLEntities(_ text: String) -> String {
     return out
 }
 
+/// Row-level reason line, or nil when the stored reason is the tier-policy
+/// boilerplate that only restates the tier ("Visible in queue for manual
+/// review" — tier-policy.ts's generic QUEUE fallback). On the QUEUE list it
+/// repeated verbatim on every row: zero information, one wasted line each
+/// (design audit 2026-07-20). Specific reasons pass through untouched.
+/// Pure for testing.
+func rowTierReason(_ reason: String?) -> String? {
+    guard let reason, !reason.isEmpty,
+          reason != "Visible in queue for manual review"
+    else { return nil }
+    return reason
+}
+
+/// Assistant replies arrive as markdown-ish text (**bold**, lists). Render
+/// the inline syntax when it parses; fall back to the raw string. Inline-only
+/// so newlines survive as written. Pure for testing.
+func chatMarkdown(_ text: String) -> AttributedString {
+    (try? AttributedString(
+        markdown: text,
+        options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+        ?? AttributedString(text)
+}
+
 // MARK: - Mailbox search
 
 /// GET /api/email?search= — one row of the searchable mailbox (decodes the

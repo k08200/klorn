@@ -745,6 +745,21 @@ func runSelfChecks() async -> Bool {
     check("menu-bar icon absent while the pill is visible",
           !StatusItemController.shouldShow(pillVisible: true))
 
+    print("Row reason + chat markdown:")
+    // The generic QUEUE fallback restates the tier — suppressed on rows so the
+    // list doesn't repeat one noise line 65 times. Specific reasons survive.
+    check("boilerplate queue reason suppressed",
+          rowTierReason("Visible in queue for manual review") == nil)
+    check("specific reason passes through",
+          rowTierReason("Manual override — user moved to PUSH")
+              == "Manual override — user moved to PUSH")
+    check("nil/empty reason → nil",
+          rowTierReason(nil) == nil && rowTierReason("") == nil)
+    check("markdown bold renders (asterisks consumed)",
+          String(chatMarkdown("**Sentry** alert").characters) == "Sentry alert")
+    check("plain text untouched", String(chatMarkdown("hello").characters) == "hello")
+    check("newlines preserved", String(chatMarkdown("a\nb").characters) == "a\nb")
+
     print("Glass mask:")
     // The stretchable blur mask must stay non-degenerate on EVERY surface:
     // capInsets summing to ≥ the masked dimension breaks NSImage stretching
