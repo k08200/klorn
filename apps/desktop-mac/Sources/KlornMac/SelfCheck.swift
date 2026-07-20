@@ -745,6 +745,36 @@ func runSelfChecks() async -> Bool {
     check("menu-bar icon absent while the pill is visible",
           !StatusItemController.shouldShow(pillVisible: true))
 
+    print("PKCE + relay + TLS (security audit 2026-07-20):")
+    // Challenge must match the server's createHash("sha256").digest("base64url").
+    check("PKCE challenge matches server digest",
+          PKCE.challenge(for: "test-verifier") == "JBbiqONGWPaAmwXk_8bT6UnlPfrn65D32eZlJS-zGG0")
+    let pkce = PKCE.generate()
+    check("PKCE verifier is 32 bytes base64url (43 chars, no padding)",
+          pkce.verifier.count == 43 && !pkce.verifier.contains("=")
+          && pkce.challenge == PKCE.challenge(for: pkce.verifier))
+    check("login URL carries nonce + relay scheme",
+          AuthFlow.loginURL(apiBase: base, nonce: "n1")
+          == "\(base)/api/auth/google/login?source=desktop&nonce=n1&appScheme=klorn")
+    check("relay URL → code",
+          AuthFlow.relayCode(from: URL(string: "klorn://oauth-callback?code=abc")!) == "abc")
+    check("wrong scheme → nil",
+          AuthFlow.relayCode(from: URL(string: "evil://oauth-callback?code=abc")!) == nil)
+    check("missing code → nil",
+          AuthFlow.relayCode(from: URL(string: "klorn://oauth-callback")!) == nil)
+    // Relay short-circuits the poll: token arrives via exchange-code, and a
+    // poll that would say "pending" forever never blocks the sign-in.
+    let relayDeps = AuthFlowDeps(
+        fetchNonce: { "N1" }, openLogin: { _ in }, pollToken: { _ in .pending },
+        sleep: {}, now: { 0 }, isCancelled: { false },
+        takeRelayCode: { "relay-code" }, exchangeCode: { $0 == "relay-code" ? "jwt-relay" : nil })
+    let relayResult = await AuthFlow.run(relayDeps, apiBase: base)
+    check("relay code → success without polling", relayResult == .success(token: "jwt-relay"))
+    // Plaintext http is dev-localhost only; a remote http env override is refused.
+    check("https remote allowed", Config.validated("https://klorn-api.onrender.com") != nil)
+    check("http localhost allowed", Config.validated("http://localhost:3001") != nil)
+    check("http remote refused", Config.validated("http://evil.example.com") == nil)
+
     print("Row reason + chat markdown:")
     // The generic QUEUE fallback restates the tier — suppressed on rows so the
     // list doesn't repeat one noise line 65 times. Specific reasons survive.

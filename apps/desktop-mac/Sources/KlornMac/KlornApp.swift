@@ -55,6 +55,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: StatusItemController?
     private var hotKey: HotKey?
 
+    /// OAuth deep-link relay: the browser bounces `klorn://oauth-callback?code=…`
+    /// back to us; the code goes to the RelayInbox where the sign-in loop
+    /// exchanges it for the JWT. Structural defense against active login-CSRF
+    /// (security audit 2026-07-20) — the JWT is never parked for polling.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            if let code = AuthFlow.relayCode(from: url) {
+                RelayInbox.deposit(code)
+            }
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Reassert accessory policy post-launch; do NOT activate or foreground.
         NSApp.setActivationPolicy(.accessory)
