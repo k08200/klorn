@@ -88,7 +88,44 @@ app.setErrorHandler(handleError);
 // a couple of static HTML responses, not an app origin that needs a content
 // policy — the Next.js web app sets its own CSP. Registered before cors so the
 // headers apply to every response.
-await app.register(helmet, { contentSecurityPolicy: false });
+await app.register(helmet, {
+  // The API returns JSON (plus a couple of static HTML pages), so lock the
+  // content policy to nothing-loadable and forbid framing outright — a JSON
+  // API is never a legitimate frame target. Explicit here because the Google
+  // restricted-scope CASA Tier 2 DAST flags a missing CSP / X-Frame-Options
+  // on every host it scans (security hardening 2026-07-20).
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'none'"],
+      formAction: ["'none'"],
+    },
+  },
+  frameguard: { action: "deny" },
+  hsts: { maxAge: 31536000, includeSubDomains: true },
+  referrerPolicy: { policy: "no-referrer" },
+});
+// Belt-and-suspenders: force the framing/CSP headers on every response even if
+// an upstream proxy (Cloudflare/Render) strips helmet's — the DAST scanner sees
+// the edge response, so the guarantee must survive the proxy.
+app.addHook("onSend", async (_req, reply, payload) => {
+  reply.header("X-Frame-Options", "DENY");
+  // JSON responses lock to nothing-loadable. The only HTML the API serves is
+  // the tiny OAuth "login successful" page, which uses an inline <style> (no
+  // scripts, no external loads) — allow inline styles there so it isn't broken,
+  // while keeping script-src at 'none' so there is still no XSS surface.
+  const contentType = reply.getHeader("content-type");
+  const isHtml = typeof contentType === "string" && contentType.includes("text/html");
+  reply.header(
+    "Content-Security-Policy",
+    isHtml
+      ? "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'"
+      : "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+  );
+  reply.removeHeader("X-Powered-By");
+  return payload;
+});
 
 // First-party surfaces that call the API from a browser. Always allowed —
 // independent of CORS_ORIGINS — so the public marketing site's login-free

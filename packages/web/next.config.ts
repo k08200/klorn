@@ -36,6 +36,15 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  // The app is same-origin (the API lives on its own host with its own CORS
+  // allowlist), so no resource here needs to be readable cross-origin. Pin
+  // Access-Control-Allow-Origin to our own origin to override Vercel's default
+  // wildcard on static assets — the wildcard is the #1 CASA Tier 2 DAST finding
+  // for Vercel apps (security hardening for Google restricted-scope review 2026-07-20).
+  { key: "Access-Control-Allow-Origin", value: "https://app.klorn.ai" },
+  { key: "Vary", value: "Origin" },
+  // Suppress framework/server fingerprinting (information disclosure finding).
+  { key: "X-Powered-By", value: "" },
   ...(process.env.NODE_ENV === "production"
     ? [
         { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
