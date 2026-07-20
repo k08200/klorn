@@ -540,7 +540,7 @@ private struct RecentPushRow: View {
                         .foregroundStyle(Theme.text).lineLimit(1)
                     Text(decodeHTMLEntities(item.email?.subject ?? item.title)).font(.caption)
                         .foregroundStyle(Theme.text.opacity(0.75)).lineLimit(1)
-                    if let reason = item.tierReason, !reason.isEmpty {
+                    if let reason = rowTierReason(item.tierReason) {
                         Text(reason).font(.caption2).foregroundStyle(Theme.textDim).lineLimit(1)
                     }
                 }
@@ -1082,7 +1082,10 @@ private struct ChatBubble: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 if message.role == .user { Spacer(minLength: 40) }
-                Text(message.text)
+                // Assistant replies carry markdown (**bold** rendered literally
+                // on screen, design audit 2026-07-20); user/failure text stays raw.
+                (message.role == .assistant
+                    ? Text(chatMarkdown(message.text)) : Text(message.text))
                     .font(.callout)
                     .foregroundStyle(message.role == .failure ? Theme.accent : Theme.text)
                     .textSelection(.enabled)
@@ -1285,7 +1288,7 @@ private struct FullRow: View {
                             .foregroundStyle(Theme.text).lineLimit(1)
                         Text(decodeHTMLEntities(item.email?.subject ?? item.title)).font(.callout)
                             .foregroundStyle(Theme.text.opacity(0.85)).lineLimit(1)
-                        if let reason = item.tierReason, !reason.isEmpty {
+                        if let reason = rowTierReason(item.tierReason) {
                             Text(reason).font(.caption).foregroundStyle(Theme.textDim).lineLimit(1)
                         }
                     }
