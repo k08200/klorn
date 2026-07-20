@@ -15,9 +15,11 @@ function isPaywallBypass(pathname: string): boolean {
 }
 
 // Pages that stay reachable while Google is unconnected. /onboarding is the
-// gate itself; /settings is where the user manages the connection; any path
-// under /auth or /login is the sign-in flow.
-const GOOGLE_OPTIONAL_PREFIXES = ["/onboarding", "/settings", "/login", "/auth"];
+// gate itself; /settings is where the user manages the connection; /billing
+// must be reachable so a user can upgrade BEFORE connecting Google (otherwise
+// a paying customer is bounced to onboarding and can never check out); any
+// path under /auth or /login is the sign-in flow.
+const GOOGLE_OPTIONAL_PREFIXES = ["/onboarding", "/settings", "/billing", "/login", "/auth"];
 
 function isGoogleOptional(pathname: string): boolean {
   return GOOGLE_OPTIONAL_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
