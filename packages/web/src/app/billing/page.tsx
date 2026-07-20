@@ -8,12 +8,18 @@ import { useToast } from "../../components/toast";
 import { apiFetch } from "../../lib/api";
 import { isNativePlatform } from "../../lib/native/capacitor";
 
+/** Server-side Infinity arrives as null through JSON — treat both as "unlimited". */
+function isFiniteLimit(value: number | null): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 interface BillingStatus {
   plan: string;
   planName: string;
-  messageLimit: number;
+  /** null = unlimited (Infinity does not survive JSON serialization). */
+  messageLimit: number | null;
   messageCount: number;
-  tokenLimit: number;
+  tokenLimit: number | null;
   tokenUsage: number;
   estimatedCost: number;
   stripeId: string | null;
@@ -220,10 +226,10 @@ function BillingContent() {
                 <span className="text-stone-400">Decisions</span>
                 <span className="text-stone-300">
                   {status.messageCount} /{" "}
-                  {status.messageLimit === Infinity ? "∞" : status.messageLimit.toLocaleString()}
+                  {isFiniteLimit(status.messageLimit) ? status.messageLimit.toLocaleString() : "∞"}
                 </span>
               </div>
-              {status.messageLimit !== Infinity && status.messageLimit > 0 && (
+              {isFiniteLimit(status.messageLimit) && status.messageLimit > 0 && (
                 <div className="h-2 w-full rounded-full bg-stone-800">
                   <div
                     className={`h-2 rounded-full transition-all duration-500 ${
@@ -247,10 +253,10 @@ function BillingContent() {
                 <span className="text-stone-400">Tokens</span>
                 <span className="text-stone-300">
                   {formatTokens(status.tokenUsage)} /{" "}
-                  {status.tokenLimit === Infinity ? "∞" : formatTokens(status.tokenLimit)}
+                  {isFiniteLimit(status.tokenLimit) ? formatTokens(status.tokenLimit) : "∞"}
                 </span>
               </div>
-              {status.tokenLimit !== Infinity && status.tokenLimit > 0 && (
+              {isFiniteLimit(status.tokenLimit) && status.tokenLimit > 0 && (
                 <div className="h-2 w-full rounded-full bg-stone-800">
                   <div
                     className={`h-2 rounded-full transition-all duration-500 ${
