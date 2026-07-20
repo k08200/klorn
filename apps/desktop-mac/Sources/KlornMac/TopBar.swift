@@ -10,6 +10,9 @@ struct TopBarActions {
     let onExpandFull: () -> Void    // expanded → full
     let onRestore: () -> Void       // full → expanded
     let onCollapse: () -> Void      // → collapsed
+    /// Close the open panel back to the resting state (pill, or nothing in
+    /// hidden-pill mode) — the ✕ in the expanded/full headers.
+    let onClose: () -> Void
     let onSignIn: () -> Void
     let onSignOut: () -> Void
     /// Open an item on the web inbox; nil opens the inbox root.
@@ -317,6 +320,15 @@ struct ExpandedPanel: View {
                     Button("Log In", action: actions.onSignIn)
                         .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
                 }
+
+                // One click OUT from anywhere (dogfood 2026-07-20: the ✕ only
+                // existed on the pill) — closes back to the resting state.
+                Button(action: actions.onClose) {
+                    Image(systemName: "xmark").font(.callout.weight(.semibold)).iconTarget()
+                }
+                .buttonStyle(.plain).hoverDim()
+                .help("Close")
+                .accessibilityLabel("Close panel")
             }
         }
         .padding(.horizontal, 18).frame(height: 56)
@@ -713,6 +725,15 @@ struct FullView: View {
                 Button("Log In", action: actions.onSignIn)
                     .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
             }
+
+            // One click OUT from anywhere (dogfood 2026-07-20).
+            Button(action: actions.onClose) {
+                Image(systemName: "xmark").font(.callout.weight(.semibold)).iconTarget()
+            }
+            .buttonStyle(.plain).hoverDim()
+            .padding(.leading, 6)
+            .help("Close")
+            .accessibilityLabel("Close panel")
         }
         .padding(.horizontal, 22).frame(height: 64)
     }

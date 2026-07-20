@@ -80,15 +80,20 @@ final class TopBarController {
 
     /// What ⌥⌘K does, given whether the bar is on screen and its state. Pure so
     /// the self-check pins the cycle: nothing → the MINIMAL pill (not the big
-    /// panel), pill → expanded, expanded/full → dismiss back to rest.
-    enum SummonAction: Equatable, Sendable { case showPill, expand, dismissToRest }
+    /// panel), pill → expanded → FULL (dogfood 2026-07-20: the shortcut must
+    /// reach the largest view), full → dismiss back to rest.
+    enum SummonAction: Equatable, Sendable { case showPill, expand, expandFull, dismissToRest }
     nonisolated static func summonAction(isVisible: Bool, state: BarState) -> SummonAction {
         guard isVisible else { return .showPill }
-        return state == .collapsed ? .expand : .dismissToRest
+        switch state {
+        case .collapsed: return .expand
+        case .expanded: return .expandFull
+        case .full: return .dismissToRest
+        }
     }
 
-    /// Global-hotkey entry point. Never steals focus; always shows the minimal
-    /// pill first (a second press expands) instead of jumping to the big panel.
+    /// Global-hotkey entry point. Never steals focus on the first press; each
+    /// further press steps up one size, and from full it closes back to rest.
     func toggle() {
         switch Self.summonAction(isVisible: panel?.isVisible ?? false, state: state) {
         case .showPill:
@@ -96,6 +101,8 @@ final class TopBarController {
             setState(.collapsed)
         case .expand:
             setState(.expanded)
+        case .expandFull:
+            setState(.full)
         case .dismissToRest:
             dismiss()
         }
@@ -172,6 +179,7 @@ final class TopBarController {
             onExpandFull: { [weak self] in self?.setState(.full) },
             onRestore: { [weak self] in self?.setState(.expanded) },
             onCollapse: { [weak self] in self?.dismiss() },  // "Close" → back to rest
+            onClose: { [weak self] in self?.dismiss() },     // header ✕ → back to rest
             onSignIn: { [weak self] in guard let self else { return }; Task { await self.model.signIn() } },
             onSignOut: { [weak self] in self?.model.signOut() },
             onOpenWeb: { [weak self] item in self?.open(item) },
