@@ -17,6 +17,8 @@ interface BillingStatus {
   tokenUsage: number;
   estimatedCost: number;
   stripeId: string | null;
+  /** True when the account has a Paddle customer record (manageable via portal). */
+  hasPaddleCustomer?: boolean;
   // Whether the web (Stripe) checkout can complete server-side. When false
   // the upgrade button shows a disabled state instead of firing a checkout
   // that 400s. Undefined (older API) = assume available.
@@ -105,11 +107,16 @@ function BillingContent() {
       .finally(() => setLoading(false));
   }, [toast]);
 
-  /** Only allow Stripe-hosted URLs to prevent open redirect */
+  /** Only allow our payment providers' hosted URLs to prevent open redirect */
   function safeRedirect(url: string) {
     try {
       const parsed = new URL(url);
-      if (parsed.hostname.endsWith(".stripe.com")) {
+      if (
+        parsed.protocol === "https:" &&
+        (parsed.hostname.endsWith(".stripe.com") ||
+          parsed.hostname.endsWith(".paddle.com") ||
+          parsed.hostname === "paddle.com")
+      ) {
         window.location.href = url;
       } else {
         toast("Unsafe billing redirect URL.", "error");
@@ -194,7 +201,7 @@ function BillingContent() {
               {/* No Stripe checkout/portal inside the iOS app (App Store
                   anti-steering 3.1.1). Billing is managed on the web; the app
                   offers IAP at launch. */}
-              {status.stripeId && !isNativePlatform() && (
+              {(status.stripeId || status.hasPaddleCustomer) && !isNativePlatform() && (
                 <button
                   type="button"
                   onClick={handleManage}

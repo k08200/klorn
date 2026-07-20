@@ -161,6 +161,9 @@ export async function billingRoutes(app: FastifyInstance) {
       tokenUsage: tokenAgg._sum.totalTokens || 0,
       estimatedCost: Math.round((tokenAgg._sum.estimatedCost || 0) * 10000) / 10000,
       stripeId: user.stripeId,
+      // Paddle subscribers have no stripeId — the web needs to know a portal
+      // exists for them too (billing-page Manage button, Paddle launch 2026-07-20).
+      hasPaddleCustomer: Boolean(user.paddleCustomerId),
       webCheckoutAvailable: isWebCheckoutAvailable(),
     };
   });
