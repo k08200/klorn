@@ -684,13 +684,19 @@ export function authRoutes(app: FastifyInstance) {
           .send({ error: "Invalid or expired nonce. Call /api/auth/desktop-nonce first." });
       }
     }
-    const loginState = signToken({
-      userId: isDesktop ? nonce : "__login__",
-      email: isDesktop ? "__google_login_desktop__" : "__google_login__",
-      // Carry an allowlisted native scheme so the callback can deep-link the
-      // token back to the user's own app instead of parking it for polling.
-      ...(isDesktop && isAllowedNativeScheme(appScheme) ? { appScheme } : {}),
-    });
+    const loginState = signToken(
+      {
+        userId: isDesktop ? nonce : "__login__",
+        email: isDesktop ? "__google_login_desktop__" : "__google_login__",
+        // Carry an allowlisted native scheme so the callback can deep-link the
+        // token back to the user's own app instead of parking it for polling.
+        ...(isDesktop && isAllowedNativeScheme(appScheme) ? { appScheme } : {}),
+      },
+      // Same short replay window as every other OAuth-initiating route — an
+      // intercepted state URL must not be honored for the default 7-day
+      // token lifetime (security audit 2026-07-20, consistency with link flows).
+      "10m",
+    );
     const url = getLoginAuthUrl(loginState);
     return reply.redirect(url);
   });

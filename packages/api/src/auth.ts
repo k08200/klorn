@@ -83,7 +83,10 @@ export function signToken(
 }
 
 export function verifyToken(token: string): JwtPayload {
-  return jwt.verify(token, EFFECTIVE_SECRET) as JwtPayload;
+  // Pin the algorithm family: with a string secret jsonwebtoken already
+  // refuses asymmetric/none, but an explicit allowlist keeps that guarantee
+  // if key handling ever changes (security audit 2026-07-20).
+  return jwt.verify(token, EFFECTIVE_SECRET, { algorithms: ["HS256"] }) as JwtPayload;
 }
 
 /**

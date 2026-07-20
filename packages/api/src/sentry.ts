@@ -32,6 +32,15 @@ export function initSentry(): void {
         delete event.request.headers.authorization;
         delete event.request.headers.cookie;
       }
+      // Scrub the URL query string — the OAuth callback's ?code=…&state=…
+      // (live Google authorization code + signed state JWT) would otherwise
+      // ship to Sentry when the callback throws (security audit 2026-07-20).
+      if (event.request?.url) {
+        event.request.url = event.request.url.split("?")[0];
+      }
+      if (event.request?.query_string) {
+        event.request.query_string = undefined;
+      }
       // Scrub request bodies — a captured error during a POST can otherwise
       // ship submitted credentials (playground apiKey, login password, OAuth
       // token) to Sentry. Redact known fields; drop a raw-string body whole.
