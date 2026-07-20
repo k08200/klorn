@@ -50,6 +50,13 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>KlornAPIURL</key><string>${API_URL}</string>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key><string>ai.klorn.desktop.oauth</string>
+      <key>CFBundleURLSchemes</key><array><string>klorn</string></array>
+    </dict>
+  </array>
 </dict>
 </plist>
 PLIST

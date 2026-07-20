@@ -75,12 +75,16 @@ struct APIClient: Sendable {
         method: String = "GET",
         body: Data? = nil,
         contentType: String? = nil,
-        authed: Bool = true
+        authed: Bool = true,
+        headers: [String: String]? = nil
     ) async throws -> Data {
         var req = URLRequest(url: try url(path))
         req.httpMethod = method
         if let body { req.httpBody = body }
         if let contentType { req.setValue(contentType, forHTTPHeaderField: "Content-Type") }
+        if let headers {
+            for (name, value) in headers { req.setValue(value, forHTTPHeaderField: name) }
+        }
         if authed, let t = token() {
             req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization")
         }

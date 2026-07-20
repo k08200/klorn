@@ -37,10 +37,18 @@ enum Config {
         return fallback
     }
 
-    private static func validated(_ raw: String) -> String? {
+    /// Plaintext http is allowed ONLY for local development hosts — a malicious
+    /// env override must not be able to redirect the Bearer token off-TLS to a
+    /// remote host (security audit 2026-07-20; matches RealtimeClient's rule).
+    /// Internal (not private) so the self-check pins it.
+    static func validated(_ raw: String) -> String? {
         guard let url = URL(string: raw),
               let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https" else { return nil }
+        if scheme == "http" {
+            let host = url.host?.lowercased() ?? ""
+            guard host == "localhost" || host == "127.0.0.1" || host == "::1" else { return nil }
+        }
         return raw.hasSuffix("/") ? String(raw.dropLast()) : raw
     }
 }
