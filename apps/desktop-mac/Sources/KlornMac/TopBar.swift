@@ -74,13 +74,11 @@ private struct LogoRing: View {
     var size: CGFloat = 16
     var body: some View {
         // The K mark — the app icon in miniature, so pill, panel, menu bar,
-        // and Dock all say the same thing: Klorn.
+        // and Dock all say the same thing: Klorn. White, matching the B&W
+        // brand icon (founder direction 2026-07-20: no orange).
         Text("K")
             .font(.system(size: size * 0.82, weight: .heavy, design: .rounded))
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [Theme.accent, Color(red: 1.0, green: 0.42, blue: 0.29)],
-                    startPoint: .top, endPoint: .bottom))
+            .foregroundStyle(Theme.text)
             .frame(width: size, height: size)
             .accessibilityHidden(true)  // decorative wordmark mark
     }
@@ -617,7 +615,7 @@ private struct AccountColumn: View {
                             Capsule().fill(Theme.surfaceHover)
                             Capsule()
                                 .fill(LinearGradient(
-                                    colors: [Theme.accent, Color(red: 1.0, green: 0.42, blue: 0.29)],
+                                    colors: [Theme.accent, Theme.accentDeep],
                                     startPoint: .leading, endPoint: .trailing))
                                 .frame(width: geo.size.width
                                        * usageFillFraction(used: usage.dailyUsed, cap: usage.dailyCap))

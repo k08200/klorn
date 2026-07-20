@@ -2,9 +2,11 @@ import SwiftUI
 
 enum Theme {
     static let bg = Color(red: 0.043, green: 0.043, blue: 0.059)
-    /// Klorn amber — a designed warm signal, not system orange. Everything
-    /// "Klorn is speaking" (logo ring, CTAs, focus, selection bar) uses this.
-    static let accent = Color(red: 1.0, green: 0.63, blue: 0.20)
+    /// The one interaction accent — CTAs, focus, selection, gauge. Everything
+    /// "choose me / chosen" speaks in this; the brand marks themselves are B&W.
+    static let accent = Color(red: 0.35, green: 0.72, blue: 1.0)
+    /// Deep end of the accent gradient (gauge fill etc.).
+    static let accentDeep = Color(red: 0.24, green: 0.49, blue: 1.0)
     static let line = Color.white.opacity(0.08)
 
     /// The top bar is always a dark floating surface regardless of system
@@ -42,10 +44,10 @@ enum Theme {
         }
     }
 
-    /// Warm-graphite glass tint, layered OVER the real blur material: amber
-    /// bleeds faintly into the top of the surface so even the background is
-    /// unmistakably Klorn. Opacity applied by the caller (reduce-transparency
-    /// mode raises it to near-solid, where the blur behind barely shows).
+    /// Warm-graphite glass tint, layered OVER the real blur material — a faint
+    /// warmth at the top keeps the surface from reading as flat black. Opacity
+    /// applied by the caller (reduce-transparency mode raises it to near-solid,
+    /// where the blur behind barely shows).
     static func panelGradient(opacity: Double) -> LinearGradient {
         LinearGradient(
             colors: [
@@ -67,9 +69,8 @@ enum Theme {
     // ad-hoc `Color.white.opacity(…)` fills in views — pick a rung.
     static let surfaceRaised = Color.white.opacity(0.05)   // cards, chips at rest
     static let surfaceHover = Color.white.opacity(0.09)    // pointer feedback
-    /// Selection is WARM: when Klorn marks something as chosen, the brand
-    /// speaks — amber-tinted fill (the accent bar still carries the hard edge,
-    /// so selection is never color-alone).
+    /// Selection speaks in the accent — tinted fill (the accent bar still
+    /// carries the hard edge, so selection is never color-alone).
     static let surfaceSelected = accent.opacity(0.16)
 
     // MARK: Spacing (4pt grid)
