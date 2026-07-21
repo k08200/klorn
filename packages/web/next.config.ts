@@ -57,7 +57,18 @@ const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DEV_DIST === "1" ? ".next-dev" : ".next",
   outputFileTracingRoot: path.join(import.meta.dirname, "../../"),
   async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }];
+    // Authenticated app pages must not be cached by proxies/shared browsers —
+    // even though the HTML itself carries no PII (data is fetched client-side),
+    // CASA/DAST flags any cacheable authenticated route. Static assets keep
+    // their own immutable caching (this only matches these page prefixes).
+    const noStore = [{ key: "Cache-Control", value: "private, no-store" }];
+    const authedPrefixes =
+      "inbox|briefing|calendar|chat|email|graph|settings|billing|admin|onboarding|playground";
+    return [
+      { source: "/(.*)", headers: securityHeaders },
+      { source: `/:path(${authedPrefixes})`, headers: noStore },
+      { source: `/:path(${authedPrefixes})/:rest*`, headers: noStore },
+    ];
   },
   async redirects() {
     return [

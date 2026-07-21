@@ -123,6 +123,10 @@ app.addHook("onSend", async (_req, reply, payload) => {
       ? "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'"
       : "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
   );
+  // No intermediary or shared-machine browser cache may retain API responses —
+  // they carry Gmail-derived content and PII. no-store on every API response
+  // (CASA/ASVS V8 data-protection; the API is not a cacheable surface anyway).
+  reply.header("Cache-Control", "no-store");
   reply.removeHeader("X-Powered-By");
   return payload;
 });
@@ -133,11 +137,14 @@ app.addHook("onSend", async (_req, reply, payload) => {
 // permitting them (even with credentials) carries no cross-origin trust risk.
 const FIRST_PARTY_ORIGINS = ["https://klorn.ai", "https://www.klorn.ai"];
 
+// The localhost/tauri fallback is a DEV convenience only. On a real deploy with
+// CORS_ORIGINS unset we must fail closed to the first-party origins rather than
+// silently trusting localhost/tauri with credentials (security audit 2026-07-21,
+// CASA hardening) — mirrors the isDevOrTestEnv gate on isAllowedDevOrigin below.
+const DEV_ORIGIN_FALLBACK =
+  "http://localhost:8001,http://127.0.0.1:8001,http://127.0.2.2:8001,http://127.0.2.3:8001,http://localhost:3000,http://127.0.0.1:3000,tauri://localhost,https://tauri.localhost,http://tauri.localhost";
 const ALLOWED_ORIGINS = [
-  ...(
-    process.env.CORS_ORIGINS ||
-    "http://localhost:8001,http://127.0.0.1:8001,http://127.0.2.2:8001,http://127.0.2.3:8001,http://localhost:3000,http://127.0.0.1:3000,tauri://localhost,https://tauri.localhost,http://tauri.localhost"
-  )
+  ...(process.env.CORS_ORIGINS ?? (isDevOrTestEnv() ? DEV_ORIGIN_FALLBACK : ""))
     .split(",")
     .map((o) => o.trim())
     .filter(Boolean),

@@ -256,6 +256,14 @@ export async function registerDevice(
 }
 
 /** Validate that a token's device session is still active */
+/**
+ * Idle-session window (ASVS V3.3): a token unused for this long is rejected even
+ * though its 7-day absolute TTL hasn't elapsed. Device.lastActiveAt is already
+ * bumped on every authed request, so this is a cheap check (security audit
+ * 2026-07-21, CASA hardening).
+ */
+const IDLE_SESSION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 export async function isDeviceSessionValid(token: string): Promise<boolean> {
   const tHash = hashToken(token);
   const device = await db.device.findUnique({ where: { tokenHash: tHash } });
@@ -268,6 +276,11 @@ export async function isDeviceSessionValid(token: string): Promise<boolean> {
     // — defeating server-side revocation on the common single-device logout.
     return false;
   }
+  // Idle timeout: reject a session dormant past the idle window. lastActiveAt is
+  // schema-default now() in production; guard the read so it degrades safely
+  // (skip the check) rather than throwing if a row somehow lacks the timestamp.
+  const lastActive = device.lastActiveAt?.getTime() ?? device.createdAt?.getTime();
+  if (lastActive !== undefined && Date.now() - lastActive > IDLE_SESSION_MS) return false;
   // Update lastActiveAt (non-blocking)
   db.device
     .update({ where: { id: device.id }, data: { lastActiveAt: new Date() } })
