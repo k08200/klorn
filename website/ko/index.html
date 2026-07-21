@@ -160,6 +160,37 @@
       background: linear-gradient(180deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.08) 24%, rgba(255,255,255,.34) 62%, #fff 100%); }
     @media (prefers-reduced-motion: reduce) { .hero-scene .drift { animation: none; } }
 
+    /* Floating product cards that fill the empty sky on both sides */
+    .hero-floaters { position:absolute; inset:0; z-index:2; pointer-events:none; }
+    .floater {
+      position:absolute; background:rgba(255,255,255,.82);
+      backdrop-filter:blur(14px) saturate(1.4); -webkit-backdrop-filter:blur(14px) saturate(1.4);
+      border:1px solid rgba(255,255,255,.7); border-radius:16px; padding:13px 15px;
+      box-shadow:0 18px 44px -18px rgba(12,60,110,.4), 0 1px 0 rgba(255,255,255,.7) inset;
+      animation: floaty 7s ease-in-out infinite;
+    }
+    @keyframes floaty { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-12px) } }
+    .fl-top { display:flex; align-items:center; gap:7px; font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--sky-700); margin-bottom:7px; }
+    .fl-pip { width:8px; height:8px; border-radius:50%; }
+    .fl-pip.push{background:var(--sky-500)} .fl-pip.queue{background:var(--slate-400)}
+    .fl-body { font-size:13px; font-weight:600; color:var(--ink); line-height:1.3; }
+    .fl-meta { font-size:11.5px; color:var(--ink-mute); margin-top:3px; }
+    .fl-row { display:flex; align-items:center; gap:11px; }
+    .fl-check { width:30px; height:30px; border-radius:9px; background:#dcfce7; color:#15803d; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; flex-shrink:0; }
+    .fl-cal { width:38px; height:40px; border-radius:10px; background:var(--sky-50); border:1px solid var(--sky-100); display:flex; flex-direction:column; align-items:center; justify-content:center; flex-shrink:0; }
+    .fl-cal b { font-size:14px; font-weight:800; color:var(--sky-700); line-height:1; }
+    .fl-cal span { font-size:9px; letter-spacing:.1em; color:var(--sky-600); text-transform:uppercase; }
+    .fl-tiers { display:flex; flex-direction:column; gap:5px; }
+    .fl-tier { display:flex; align-items:center; justify-content:space-between; gap:14px; font-size:11.5px; font-weight:700; padding:4px 9px; border-radius:8px; min-width:118px; }
+    .fl-tier.push{background:var(--sky-50);color:var(--sky-700)} .fl-tier.queue{color:var(--slate-500)} .fl-tier.silent{color:#94a3b8}
+    .fl-tier .n{font-variant-numeric:tabular-nums}
+    .floater.f1 { top:15%; left:3.5%; width:210px; animation-delay:.2s; }
+    .floater.f2 { top:23%; right:4%; animation-delay:1.4s; }
+    .floater.f3 { top:40%; left:4.5%; animation-delay:.8s; }
+    .floater.f4 { top:47%; right:4.5%; animation-delay:2s; }
+    @media (max-width:1240px){ .hero-floaters { display:none; } }
+    @media (prefers-reduced-motion: reduce){ .floater { animation:none; } }
+
     .hero-inner { position:relative; z-index:2; text-align:center; max-width:880px; margin:0 auto; }
     .hero-eyebrow {
       display:inline-flex; align-items:center; gap:8px; padding:6px 15px; border-radius:9999px;
@@ -561,6 +592,26 @@
       </g>
     </svg>
     <div class="hero-veil"></div>
+    <div class="hero-floaters" aria-hidden="true">
+      <div class="floater f1">
+        <div class="fl-top"><span class="fl-pip push"></span>Push · 지금 필요</div>
+        <div class="fl-body">투자자가 수정된 지표 요청</div>
+        <div class="fl-meta">오후 3시까지 답장</div>
+      </div>
+      <div class="floater f2">
+        <div class="fl-row"><span class="fl-check">✓</span><div><div class="fl-body">답장 초안 완료</div><div class="fl-meta">승인 대기 중</div></div></div>
+      </div>
+      <div class="floater f3">
+        <div class="fl-tiers">
+          <span class="fl-tier push">Push<span class="n">2</span></span>
+          <span class="fl-tier queue">Queue<span class="n">6</span></span>
+          <span class="fl-tier silent">Silent<span class="n">31</span></span>
+        </div>
+      </div>
+      <div class="floater f4">
+        <div class="fl-row"><span class="fl-cal"><b>3</b><span>화</span></span><div><div class="fl-body">투자자 콜</div><div class="fl-meta">오후 3:00 – 3:30</div></div></div>
+      </div>
+    </div>
 
     <div class="container hero-inner">
       <a class="hero-eyebrow" href="#measured"><span class="dot"></span>실제 메일에서 94.3% 측정</a>
