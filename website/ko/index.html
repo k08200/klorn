@@ -6,6 +6,7 @@
   <link rel="alternate" hreflang="en" href="https://klorn.ai/">
   <link rel="alternate" hreflang="ko" href="https://klorn.ai/ko/">
   <link rel="canonical" href="https://klorn.ai/ko/">
+  <!-- 한국어 페이지. 기본은 영어(klorn.ai)이며, 플로팅 독의 EN 토글로 영어로 돌아갑니다. -->
   <title>Klorn — 행동할 가치가 있는 명확한 신호</title>
   <meta name="description" content="Klorn은 메일, 캘린더, AI 신호를 하나의 명확한 결정 큐로 걸러냅니다 — 근거와 승인 없이는 어떤 것도 손을 떠나지 않습니다.">
   <meta property="og:title" content="Klorn — 행동할 가치가 있는 명확한 신호">
@@ -21,1582 +22,590 @@
   <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v=matte2">
   <noscript><style>.reveal { opacity: 1 !important; transform: none !important; }</style></noscript>
   <style>
-    /* ── Reset & Tokens ───────────────────────── */
+    /* ── Reset ─────────────────────────────────── */
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --surface-canvas: #0f1115;
-      --surface-elevated: #151922;
-      --surface-panel: #111318;
-      --surface-translucent: #12161b;
-      --surface-strip: #131722;
+      /* Light + sky design system */
+      --canvas:#ffffff;
+      --paper:#f6f9fc;
+      --ink:#0a0e14;
+      --ink-soft:#39424e;
+      --ink-mute:#6a7480;
+      --line:rgba(10,14,20,0.08);
+      --line-strong:rgba(10,14,20,0.14);
 
-      --brand-gold: #d8a45d;
-      --brand-gold-bright: #f0c982;
-      --brand-cream: #f8f4ec;
-      --brand-cream-soft: #f2eadc;
-      --brand-ink: #11100d;
-      --brand-ink-soft: #12100d;
+      --sky-50:#f0f9ff;
+      --sky-100:#e0f2fe;
+      --sky-200:#bae6fd;
+      --sky-300:#7dd3fc;
+      --sky-400:#38bdf8;
+      --sky-500:#0ea5e9;
+      --sky-600:#0284c7;
+      --sky-700:#0369a1;
 
-      --stone-100: #f5f5f4;
-      --stone-200: #e7e5e4;
-      --stone-300: #d6d3d1;
-      --stone-400: #a8a29e;
-      --stone-500: #78716c;
-      --stone-600: #57534e;
-      --stone-700: #44403c;
-      --stone-800: #292524;
+      --slate-400:#94a3b8;
+      --slate-500:#64748b;
 
-      --border-soft: rgba(255,255,255,0.08);
-      --border-medium: rgba(255,255,255,0.12);
-      --border-strong: rgba(255,255,255,0.18);
-
-      --amber-200: #fde68a;
-      --sky-200: #bae6fd;
-      --emerald-200: #a7f3d0;
-
-      --max-w: 1280px;
-      --max-w-narrow: 1120px;
+      --max-w:1200px;
+      --max-w-narrow:960px;
+      --ease:cubic-bezier(.2,.7,.2,1);
     }
 
-    /* scroll-snap-type below needs html to be the one unambiguous root
-       scroll container — overflow-x lives here, not on body, so nothing
-       makes body a competing scroller that swallows the snap. */
-    html { scroll-behavior: smooth; overflow-x: hidden; }
-
+    html { scroll-behavior: smooth; overflow-x: hidden; -webkit-text-size-adjust:100%; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
-      background: var(--surface-canvas);
-      color: var(--brand-cream);
+      font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;
+      background: var(--canvas);
+      color: var(--ink);
       line-height: 1.6;
       -webkit-font-smoothing: antialiased;
       word-break: keep-all;
       overflow-wrap: anywhere;
     }
-
     a { color: inherit; text-decoration: none; }
     button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
-    ::selection { background: rgba(216,164,93,0.5); color: var(--brand-ink); }
+    img, video { max-width: 100%; display: block; }
+    ::selection { background: var(--sky-200); color: var(--ink); }
 
+    .serif { font-family:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif; }
     .mono {
-      font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
-      font-size: 11px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
+      font-family: ui-monospace,'SF Mono','JetBrains Mono',Menlo,Consolas,monospace;
+      font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
     }
+    .container { max-width: var(--max-w); margin: 0 auto; padding: 0 24px; }
+    .container.narrow { max-width: var(--max-w-narrow); }
 
-    .container { max-width: var(--max-w); margin: 0 auto; padding: 0 20px; }
-    @media (min-width: 768px) { .container { padding: 0 32px; } }
+    /* ── Reveal on scroll ──────────────────────── */
+    .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
+    .reveal.in { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; transition: none; } }
 
-    /* ── Buttons ──────────────────────────────── */
+    /* ── Buttons (pill) ────────────────────────── */
     .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      height: 48px;
-      padding: 0 24px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 600;
-      transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-      white-space: nowrap;
+      display:inline-flex; align-items:center; justify-content:center; gap:9px;
+      height:52px; padding:0 28px; border-radius:9999px;
+      font-size:15px; font-weight:600; white-space:nowrap;
+      transition: background .2s var(--ease), color .2s var(--ease), border-color .2s var(--ease), transform .2s var(--ease), box-shadow .2s var(--ease);
     }
-    .btn-gold { background: var(--brand-gold); color: var(--brand-ink); }
-    .btn-gold:hover { background: var(--brand-gold-bright); }
-    .btn-cream { background: var(--brand-cream-soft); color: var(--brand-ink); }
-    .btn-cream:hover { background: #fff; }
-    .btn-ghost {
-      border: 1px solid var(--border-strong);
-      color: var(--stone-200);
-      font-weight: 500;
-    }
-    .btn-ghost:hover { border-color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.08); }
-    .btn-github svg { flex-shrink: 0; }
-    .btn-github .star-count {
-      padding: 2px 8px;
-      border-radius: 4px;
-      background: rgba(255,255,255,0.08);
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--brand-gold-bright);
-    }
-    .btn-github .star-count:empty { display: none; }
+    .btn-primary { background: var(--ink); color:#fff; }
+    .btn-primary:hover { background: var(--sky-600); transform: translateY(-1px); box-shadow:0 10px 26px -12px rgba(2,132,199,.6); }
+    .btn-ghost { background: rgba(255,255,255,.7); border:1px solid var(--line-strong); color: var(--ink); }
+    .btn-ghost:hover { border-color: var(--sky-300); background:#fff; color: var(--sky-700); }
+    .btn-sky { background: var(--sky-500); color:#fff; }
+    .btn-sky:hover { background: var(--sky-600); transform: translateY(-1px); }
+    .btn .star-count { padding:2px 9px; border-radius:9999px; background:rgba(10,14,20,.06); font-size:12px; font-weight:700; color: var(--sky-700); }
+    .btn .star-count:empty { display:none; }
+    .btn svg { flex-shrink:0; }
 
-    /* ── OSS badges ───────────────────────────── */
-    .hero-badges {
-      margin-top: 24px;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 8px;
+    /* ── Floating glass pill nav ───────────────── */
+    .nav { position:fixed; top:16px; left:0; right:0; z-index:60; display:flex; justify-content:center; padding:0 16px; pointer-events:none; }
+    .nav-pill {
+      pointer-events:auto; display:flex; align-items:center; gap:4px;
+      padding:8px 8px 8px 14px; border-radius:9999px;
+      background:rgba(255,255,255,.72); backdrop-filter:blur(18px) saturate(1.4); -webkit-backdrop-filter:blur(18px) saturate(1.4);
+      border:1px solid rgba(255,255,255,.6);
+      box-shadow:0 8px 30px -12px rgba(10,50,90,.28), 0 1px 0 rgba(255,255,255,.7) inset;
+      max-width:100%;
     }
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      border: 1px solid var(--border-soft);
-      border-radius: 9999px;
-      background: rgba(255,255,255,0.03);
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--stone-300);
-    }
-    .hero-badge .dot-gold {
-      width: 6px;
-      height: 6px;
-      border-radius: 9999px;
-      background: var(--brand-gold);
-    }
+    .nav-brand { display:flex; align-items:center; gap:9px; padding-right:6px; font-weight:700; letter-spacing:-.01em; font-size:16px; }
+    .nav-mark { width:26px; height:26px; border-radius:7px; box-shadow:0 1px 3px rgba(10,20,40,.18); }
+    .nav-links { display:flex; align-items:center; gap:2px; margin:0 4px; }
+    .nav-links a { padding:8px 14px; border-radius:9999px; font-size:14px; font-weight:500; color: var(--ink-soft); transition:.18s var(--ease); }
+    .nav-links a:hover { background:rgba(10,14,20,.05); color: var(--ink); }
+    .nav-cta { display:inline-flex; align-items:center; gap:7px; height:40px; padding:0 18px; border-radius:9999px; background: var(--ink); color:#fff; font-size:14px; font-weight:600; transition:.18s var(--ease); }
+    .nav-cta:hover { background: var(--sky-600); }
+    @media (max-width:900px){ .nav-links { display:none; } }
 
-    /* ── Hero ─────────────────────────────────── */
-    .hero {
-      position: relative;
-      overflow: hidden;
-      padding-bottom: 80px;
+    /* ── Hero ──────────────────────────────────── */
+    .hero { position:relative; overflow:hidden; padding-top:132px; padding-bottom:64px; }
+    .hero-sky {
+      position:absolute; inset:0; z-index:0; pointer-events:none;
+      background: radial-gradient(130% 90% at 50% -12%, var(--sky-100) 0%, var(--sky-50) 32%, #ffffff 66%);
     }
+    .cloud { position:absolute; border-radius:50%; filter:blur(44px); z-index:0; pointer-events:none; }
+    .cloud.a { width:520px; height:300px; background:radial-gradient(circle,#fff 0%,rgba(186,230,253,.5) 70%,transparent 72%); top:70px; left:-90px; opacity:.7; }
+    .cloud.b { width:660px; height:360px; background:radial-gradient(circle,#fff 0%,rgba(125,211,252,.34) 70%,transparent 72%); top:24px; right:-140px; opacity:.65; }
+    .cloud.c { width:440px; height:250px; background:radial-gradient(circle,#fff 0%,rgba(224,242,254,.7) 70%,transparent 72%); bottom:-30px; left:32%; opacity:.6; }
 
-    .hero-scene {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
+    .hero-inner { position:relative; z-index:2; text-align:center; max-width:880px; margin:0 auto; }
+    .hero-eyebrow {
+      display:inline-flex; align-items:center; gap:8px; padding:6px 15px; border-radius:9999px;
+      background:rgba(255,255,255,.72); border:1px solid var(--sky-200); color: var(--sky-700);
+      font-size:12.5px; font-weight:600; margin-bottom:26px; box-shadow:0 2px 12px -4px rgba(14,165,233,.28);
     }
-    .hero-scene-bg {
-      position: absolute;
-      inset: 0;
-      background:
-        radial-gradient(ellipse 1200px 800px at 50% 68%, rgba(216,164,93,0.14), transparent 60%),
-        var(--surface-canvas);
-    }
-    .hero-3d {
-      position: absolute;
-      inset: 0;
-      display: block;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
-      transition: opacity 1.4s ease;
-      z-index: 1;
-    }
-    .hero-3d.ready { opacity: 1; }
-    .hero-scrim {
-      position: absolute;
-      inset: 0;
-      z-index: 1;
-      pointer-events: none;
-      background: linear-gradient(to bottom, var(--surface-canvas) 0%, rgba(15,17,21,0.55) 22%, rgba(15,17,21,0.1) 42%, transparent 58%);
-    }
-    .hero-float-chips {
-      position: absolute;
-      inset: -40px -20px;
-      z-index: 3;
-      display: none;
-      pointer-events: none;
-    }
-    @media (min-width: 1024px) { .hero-float-chips { display: block; } }
-    .hero-float-chip {
-      position: absolute;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 14px;
-      border-radius: 9999px;
-      border: 1px solid rgba(216,164,93,0.35);
-      background: rgba(21,25,34,0.65);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--stone-100);
-      box-shadow: 0 8px 24px -8px rgba(0,0,0,0.5);
-      opacity: 0;
-      animation: hero-chip-in 1s ease forwards, hero-chip-float 6s ease-in-out infinite;
-    }
-    .hero-float-chip .dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--brand-gold-bright); flex-shrink: 0; }
-    .hero-float-chip.c1 { top: -3%; left: 6%; animation-delay: 0.2s, 0.2s; }
-    .hero-float-chip.c2 { top: -3%; right: 4%; animation-delay: 0.6s, 0.6s; }
-    .hero-float-chip.c3 { bottom: -2%; left: 12%; animation-delay: 1s, 1s; }
-    @keyframes hero-chip-in { to { opacity: 1; } }
-    @keyframes hero-chip-float {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-10px); }
-    }
-    .hero-frame-wrap {
-      position: relative;
-      z-index: 10;
-      margin: 56px auto 0;
-      max-width: 1120px;
-      padding: 0 20px;
-      display: none;
-    }
-    @media (min-width: 1024px) { .hero-frame-wrap { display: block; } }
-    .hero-product {
-      position: relative;
-      z-index: 2;
-      width: 100%;
-      height: 560px;
-      border: 1px solid rgba(216,164,93,0.3);
-      border-radius: 14px;
-      background: var(--surface-elevated);
-      box-shadow:
-        0 30px 70px -20px rgba(0,0,0,0.6),
-        0 0 120px -30px rgba(216,164,93,0.3);
-    }
+    .hero-eyebrow:hover { color: var(--sky-700); }
+    .hero-eyebrow .dot { width:7px; height:7px; border-radius:50%; background: var(--sky-500); box-shadow:0 0 0 3px rgba(14,165,233,.2); }
+    h1.hero-h { font-size:clamp(40px,6.4vw,76px); line-height:1.02; letter-spacing:-.03em; font-weight:680; margin-bottom:22px; }
+    h1.hero-h .accent { font-style:italic; font-weight:500; color: var(--sky-600); }
+    .hero-lead { font-size:clamp(17px,2vw,21px); color: var(--ink-mute); max-width:620px; margin:0 auto 20px; line-height:1.55; }
 
-    .hero-titlebar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      height: 48px;
-      padding: 0 16px;
-      border-bottom: 1px solid var(--stone-800);
-    }
-    .hero-titlebar .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 9999px;
-      background: var(--stone-700);
-    }
-    .hero-titlebar .crumb {
-      margin-left: 16px;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--stone-500);
-    }
-    .hero-live {
-      margin-left: auto;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--brand-gold-bright);
-    }
-    .hero-live-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 9999px;
-      background: var(--brand-gold-bright);
-      box-shadow: 0 0 0 0 rgba(247,213,156,0.6);
-      animation: hero-live-pulse 1.8s ease-out infinite;
-    }
-    @keyframes hero-live-pulse {
-      0% { box-shadow: 0 0 0 0 rgba(247,213,156,0.55); }
-      70% { box-shadow: 0 0 0 7px rgba(247,213,156,0); }
-      100% { box-shadow: 0 0 0 0 rgba(247,213,156,0); }
-    }
-
-    .hero-shell {
-      display: grid;
-      grid-template-columns: 210px 1fr;
-      height: 496px;
-    }
-    .hero-aside {
-      border-right: 1px solid var(--stone-800);
-      background: var(--surface-panel);
-      padding: 16px;
-    }
-    .hero-aside-brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 32px;
-    }
-    .hero-aside-brand img { width: 32px; height: 32px; }
-    .hero-aside-brand .name { font-size: 14px; font-weight: 600; color: var(--stone-100); }
-    .hero-aside-brand .tag { font-size: 10px; color: var(--stone-500); }
-    .hero-nav-item {
-      margin-bottom: 4px;
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-size: 14px;
-      color: var(--stone-500);
-      cursor: pointer;
-      border: none;
-      background: none;
-      width: 100%;
-      text-align: left;
-      font-family: inherit;
-      transition: background 0.15s ease, color 0.15s ease;
-    }
-    .hero-nav-item:hover { color: var(--stone-200); background: rgba(255,255,255,0.04); }
-    .hero-nav-item.active { background: var(--stone-800); color: var(--stone-100); }
-
-    .hero-main { padding: 24px; }
-    .hero-main-fade {
-      transition: opacity 0.18s ease;
-    }
-    .hero-main-fade.switching { opacity: 0; }
-    .hero-main-head {
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 24px;
-      margin-bottom: 24px;
-    }
-    .hero-main-head .label {
-      color: var(--stone-500);
-      letter-spacing: 0.16em;
-      font-weight: 600;
-    }
-    .hero-main-head h2 {
-      margin-top: 8px;
-      font-size: 30px;
-      font-weight: 600;
-      letter-spacing: -0.025em;
-      color: #fff;
-    }
-    .hero-counts {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      overflow: hidden;
-      border: 1px solid var(--stone-800);
-      border-radius: 8px;
-      background: var(--surface-panel);
-      text-align: center;
-    }
-    .hero-counts > div { padding: 12px 20px; border-right: 1px solid var(--stone-800); }
-    .hero-counts > div:last-child { border-right: none; }
-    .hero-counts .num { font-size: 18px; font-weight: 600; color: var(--stone-100); }
-    .hero-counts .sub { font-size: 10px; color: var(--stone-500); }
-
-    .hero-rows { display: flex; flex-direction: column; gap: 12px; }
-    .hero-row {
-      padding: 16px;
-      border: 1px solid var(--stone-800);
-      border-radius: 8px;
-      background: var(--surface-panel);
-      cursor: pointer;
-      transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
-    }
-    .hero-row:hover {
-      border-color: rgba(216,164,93,0.4);
-      background: var(--surface-elevated);
-    }
-    .hero-row.selected {
-      border-color: var(--brand-gold);
-      background: rgba(216,164,93,0.08);
-      box-shadow: 0 0 0 1px rgba(216,164,93,0.35), 0 8px 24px -12px rgba(216,164,93,0.4);
-    }
-    .hero-row.selected .hero-row-sender { color: var(--brand-gold-bright); }
-    .hero-row-meta {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 12px;
-    }
-    .hero-row-tag {
-      border: 1px solid var(--stone-700);
-      border-radius: 4px;
-      padding: 4px 8px;
-      font-size: 10px;
-      color: var(--stone-400);
-    }
-    .hero-row-time { font-size: 12px; color: var(--stone-600); }
-    .hero-row-sender { font-size: 14px; font-weight: 500; color: var(--stone-100); }
-    .hero-row-subject { margin-top: 4px; font-size: 14px; color: var(--stone-500); }
-
-    .hero-nav {
-      position: relative;
-      z-index: 10;
-      margin: 0 auto;
-      max-width: var(--max-w);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 20px;
-    }
-    /* Full-width divider under the nav — the bar itself is max-width/centered,
-       so a plain bottom-border would stop short; this pseudo-element spans the
-       whole viewport and fades at the edges so the header reads as its own
-       band instead of floating on a flat hero. */
-    .hero-nav::after {
-      content: "";
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 100vw;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.14) 18%, rgba(216,164,93,0.28) 50%, rgba(255,255,255,0.14) 82%, transparent);
-    }
-    @media (min-width: 768px) { .hero-nav { padding: 20px 32px; } }
-    .hero-nav .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .hero-nav .brand img { width: 36px; height: 36px; }
-    .hero-nav .brand .wordmark {
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: 0.18em;
-      color: var(--stone-100);
-    }
-    .hero-nav-actions { display: flex; align-items: center; gap: 8px; }
-    .nav-link {
-      display: inline-flex;
-      align-items: center;
-      min-height: 44px;
-      padding: 0 12px;
-      font-size: 14px;
-      color: var(--stone-300);
-      transition: color 0.2s ease;
-    }
-    .nav-link:hover { color: #fff; }
-    .nav-cta {
-      display: inline-flex;
-      align-items: center;
-      min-height: 44px;
-      padding: 0 16px;
-      border-radius: 6px;
-      background: var(--brand-cream-soft);
-      color: var(--brand-ink-soft);
-      font-size: 14px;
-      font-weight: 600;
-      transition: background 0.2s ease;
-    }
-    .nav-cta:hover { background: #fff; }
-
-    .hero-body {
-      position: relative;
-      z-index: 20;
-      margin: 0 auto;
-      max-width: var(--max-w);
-      padding: 96px 20px 0;
-    }
-    @media (min-width: 768px) { .hero-body { padding: 120px 32px 0; } }
-
-    .hero-content {
-      max-width: 760px;
-      margin: 0 auto;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-align: center;
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 7px 16px;
-      border-radius: 9999px;
-      border: 1px solid rgba(216,164,93,0.4);
-      background: rgba(216,164,93,0.08);
-      box-shadow: 0 0 24px -6px rgba(216,164,93,0.5);
-      color: var(--brand-gold-bright);
-      margin-bottom: 28px;
-    }
-
-    .hero-headline {
-      max-width: 820px;
-      font-size: 44px;
-      font-weight: 700;
-      line-height: 1.0;
-      letter-spacing: -0.03em;
-      color: #fff;
-      text-wrap: balance;
-      text-shadow: 0 2px 28px rgba(15,17,21,0.85);
-    }
-    .hero-headline .grad {
-      background: linear-gradient(90deg, var(--brand-gold-bright), #fff 55%, var(--brand-gold-bright));
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-    }
-    @media (min-width: 640px) { .hero-headline { font-size: 56px; } }
-    @media (min-width: 768px) { .hero-headline { font-size: 68px; line-height: 0.98; } }
-    @media (min-width: 1024px) { .hero-headline { font-size: 84px; } }
-
-    .hero-sub {
-      margin-top: 24px;
-      max-width: 576px;
-      font-size: 16px;
-      line-height: 1.75;
-      color: var(--stone-300);
-    }
-    @media (min-width: 768px) { .hero-sub { font-size: 18px; line-height: 2; } }
-
-    .hero-ctas {
-      margin-top: 36px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-    }
-    @media (min-width: 640px) { .hero-ctas { flex-direction: row; } }
-
-    .hero-cta-note {
-      margin-top: 16px;
-      max-width: 480px;
-      font-size: 13px;
-      line-height: 1.6;
-      color: var(--stone-400);
-    }
-    .hero-cta-note svg {
-      display: inline-block;
-      vertical-align: -2px;
-      margin-right: 6px;
-      color: var(--brand-gold);
-    }
-
-    /* ── Invite-only banner (above hero CTAs) ── */
+    /* invite-only banner */
     .invite-banner {
-      margin-top: 28px;
-      max-width: 560px;
-      width: 100%;
-      text-align: left;
-      padding: 16px 18px;
-      border-radius: 10px;
-      border: 1px solid rgba(216, 164, 93, 0.32);
-      background: rgba(216, 164, 93, 0.06);
-      font-size: 14px;
-      line-height: 1.55;
-      color: #f0e3c8;
+      max-width:640px; margin:0 auto 30px; text-align:left;
+      background:rgba(255,255,255,.7); border:1px solid var(--sky-200); border-radius:16px;
+      padding:18px 20px; box-shadow:0 8px 30px -18px rgba(2,132,199,.4);
     }
-    .invite-banner-head {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      font-weight: 600;
-      color: #fbeacb;
-    }
-    .invite-banner-head .lock {
-      flex-shrink: 0;
-      color: var(--brand-gold);
-    }
-    .invite-banner ol {
-      margin: 10px 0 0 0;
-      padding-left: 28px;
-      font-size: 13px;
-      color: rgba(240, 227, 200, 0.85);
-    }
-    .invite-banner ol li { margin-top: 4px; }
-    .invite-banner ol li:first-child { margin-top: 0; }
-
-    .hero-secondary-link {
-      display: inline-block;
-      margin-top: 10px;
-      font-size: 13px;
-      color: var(--stone-400);
-      text-decoration: underline;
-      text-decoration-color: rgba(216, 164, 93, 0.4);
-      text-underline-offset: 3px;
-      transition: color 0.15s;
-    }
-    .hero-secondary-link:hover { color: #fbeacb; }
-
-    /* ── Mobile product preview ──────────────── */
-    .mobile-preview {
-      margin-top: 40px;
-      max-width: 576px;
-      border: 1px solid var(--border-medium);
-      border-radius: 8px;
-      background: rgba(18,22,27,0.9);
-      padding: 16px;
-      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
-    }
-    @media (min-width: 1024px) { .mobile-preview { display: none; } }
-    .mobile-preview-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding-bottom: 16px;
-      margin-bottom: 16px;
-      border-bottom: 1px solid var(--border-soft);
-    }
-    .mobile-preview-head .label {
-      color: var(--stone-500);
-      letter-spacing: 0.14em;
-      font-weight: 600;
-    }
-    .mobile-preview-head .title {
-      margin-top: 4px;
-      font-size: 18px;
-      font-weight: 600;
-      color: #fff;
-    }
-    .live-pill {
-      border: 1px solid rgba(253,230,138,0.25);
-      background: rgba(253,230,138,0.1);
-      color: var(--amber-200);
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-    }
-    .mobile-rows { display: flex; flex-direction: column; gap: 12px; }
-    .mobile-row {
-      border: 1px solid var(--border-soft);
-      background: rgba(0,0,0,0.2);
-      border-radius: 6px;
-      padding: 12px;
-    }
-    .mobile-row .name { font-size: 14px; font-weight: 500; color: var(--stone-100); }
-    .mobile-row .meta { margin-top: 4px; font-size: 12px; color: var(--stone-500); }
-
-    /* ── Decision-card section ───────────────── */
-    .section { margin: 0 auto; max-width: var(--max-w); padding: 72px 20px; }
-    @media (min-width: 768px) { .section { padding: 88px 32px; } }
-
-    .section-narrow { max-width: var(--max-w-narrow); }
-
-    .decision-grid {
-      display: grid;
-      gap: 40px;
-    }
-    @media (min-width: 768px) {
-      .decision-grid { grid-template-columns: 0.82fr 1.18fr; align-items: center; }
+    .invite-head { display:flex; align-items:center; gap:9px; font-weight:650; font-size:14px; color: var(--sky-700); margin-bottom:10px; }
+    .invite-head svg { width:16px; height:16px; }
+    .invite-banner ol { list-style:none; counter-reset:iv; display:grid; gap:8px; }
+    .invite-banner li { counter-increment:iv; position:relative; padding-left:30px; font-size:13.5px; color: var(--ink-soft); line-height:1.5; }
+    .invite-banner li::before {
+      content:counter(iv); position:absolute; left:0; top:1px; width:20px; height:20px; border-radius:50%;
+      background: var(--sky-100); color: var(--sky-700); font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;
     }
 
-    .section-eyebrow {
-      color: var(--brand-gold);
-      margin-bottom: 16px;
-    }
+    .hero-actions { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+    .hero-secondary { margin-top:16px; font-size:14px; }
+    .hero-secondary a { color: var(--sky-700); font-weight:600; }
+    .hero-secondary a:hover { text-decoration:underline; }
 
-    .section-h {
-      font-size: 30px;
-      font-weight: 600;
-      letter-spacing: -0.025em;
-      color: #fff;
-      text-wrap: balance;
-    }
-    @media (min-width: 768px) { .section-h { font-size: 48px; } }
+    .hero-badges { margin-top:22px; display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
+    .hero-badge { display:inline-flex; align-items:center; gap:7px; padding:6px 13px; border:1px solid var(--line); border-radius:9999px; background:rgba(255,255,255,.6); font-size:12.5px; font-weight:500; color: var(--ink-soft); }
+    .hero-badge .dot { width:6px; height:6px; border-radius:50%; background: var(--sky-500); }
 
-    .section-lead {
-      margin-top: 20px;
-      max-width: 576px;
-      font-size: 14px;
-      line-height: 1.75;
-      color: var(--stone-400);
-    }
-    @media (min-width: 768px) { .section-lead { font-size: 16px; } }
+    /* ── Floating product window (the brief) ───── */
+    .product { position:relative; z-index:2; margin:52px auto 0; max-width:940px; }
+    .win { border-radius:18px; overflow:hidden; background:#fff; border:1px solid var(--line);
+      box-shadow:0 44px 90px -34px rgba(12,60,110,.36), 0 10px 28px -14px rgba(12,40,80,.2); }
+    .win-bar { display:flex; align-items:center; gap:8px; padding:12px 16px; border-bottom:1px solid var(--line); background:linear-gradient(#fff,#fbfdff); }
+    .win-dot { width:11px; height:11px; border-radius:50%; }
+    .win-dot.r{background:#ff5f57}.win-dot.y{background:#febc2e}.win-dot.g{background:#28c840}
+    .win-title { margin-left:8px; font-size:12px; color: var(--ink-mute); font-weight:500; }
+    .brief { display:grid; grid-template-columns:210px 1fr; }
+    .brief-side { border-right:1px solid var(--line); padding:16px 12px; background:#fbfdff; }
+    .brief-who { display:flex; align-items:center; gap:9px; padding:6px 8px; margin-bottom:14px; }
+    .avatar { width:32px; height:32px; border-radius:9px; background:linear-gradient(135deg,var(--sky-400),var(--sky-600)); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0; }
+    .brief-who .nm { font-size:13px; font-weight:650; }
+    .brief-who .em { font-size:11px; color: var(--ink-mute); }
+    .brief-item { display:flex; align-items:center; gap:10px; padding:8px 11px; border-radius:9px; font-size:13px; color: var(--ink-soft); font-weight:500; }
+    .brief-item .g { width:14px; text-align:center; opacity:.75; }
+    .brief-item.on { background: var(--sky-50); color: var(--sky-700); }
+    .brief-main { padding:22px 26px; }
+    .brief-greet { font-size:19px; font-weight:650; letter-spacing:-.01em; margin-bottom:3px; }
+    .brief-greet .serif { font-style:italic; font-weight:500; }
+    .brief-sub { font-size:12.5px; color: var(--ink-mute); margin-bottom:20px; }
+    .tier { margin-bottom:18px; }
+    .tier-label { display:flex; align-items:center; gap:8px; font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; margin-bottom:8px; }
+    .tier-label .pip { width:8px; height:8px; border-radius:50%; }
+    .tier.push .pip{background:var(--sky-500)} .tier.push .tier-label{color:var(--sky-700)}
+    .tier.queue .pip{background:var(--slate-400)} .tier.queue .tier-label{color:var(--slate-500)}
+    .brow { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:11px; border:1px solid transparent; transition:.15s var(--ease); }
+    .brow:hover { background: var(--sky-50); border-color: var(--sky-100); }
+    .brow .txt { flex:1; font-size:13.5px; color: var(--ink); }
+    .brow .txt .from { color: var(--ink-mute); font-size:12px; }
+    .brow .chip { font-size:11px; font-weight:600; color: var(--sky-700); background: var(--sky-50); border:1px solid var(--sky-100); padding:3px 10px; border-radius:9999px; white-space:nowrap; }
+    .brow .check { width:18px; height:18px; border-radius:50%; border:1.5px solid var(--line-strong); flex-shrink:0; }
+    @media (max-width:640px){ .brief { grid-template-columns:1fr; } .brief-side { display:none; } }
 
-    .decision-card-wrap {
-      border: 1px solid var(--border-medium);
-      background: var(--surface-translucent);
-      border-radius: 8px;
-      padding: 12px;
-      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.3);
-    }
-    .decision-card {
-      border: 1px solid var(--border-soft);
-      background: #0d1014;
-      border-radius: 6px;
-      padding: 16px;
-    }
-    .decision-card-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding-bottom: 16px;
-      margin-bottom: 16px;
-      border-bottom: 1px solid var(--border-soft);
-    }
-    .decision-card-head .eyebrow-mono {
-      color: var(--stone-500);
-      letter-spacing: 0.16em;
-      font-weight: 500;
-    }
-    .decision-card-head h3 {
-      margin-top: 4px;
-      font-size: 18px;
-      font-weight: 600;
-      color: #fff;
-    }
-    .approval-pill {
-      border: 1px solid rgba(253,230,138,0.2);
-      background: rgba(253,230,138,0.1);
-      color: var(--amber-200);
-      padding: 4px 10px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
-      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-    }
-    .approval-pill.is-approved {
-      border-color: rgba(167,243,208,0.3);
-      background: rgba(167,243,208,0.12);
-      color: var(--emerald-200);
-    }
-    .decision-rows { display: grid; gap: 12px; }
-    .decision-row {
-      border: 1px solid var(--border-soft);
-      background: rgba(255,255,255,0.025);
-      border-radius: 6px;
-      padding: 16px;
-    }
-    .decision-row .inner { display: flex; gap: 12px; align-items: flex-start; }
-    .tag {
-      margin-top: 2px;
-      padding: 4px 8px;
-      border-radius: 4px;
-      border: 1px solid;
-      letter-spacing: 0.12em;
-      font-weight: 500;
-    }
-    .tag.sky {
-      color: var(--sky-200);
-      border-color: rgba(125,211,252,0.25);
-      background: rgba(125,211,252,0.1);
-    }
-    .tag.amber {
-      color: var(--amber-200);
-      border-color: rgba(253,230,138,0.25);
-      background: rgba(253,230,138,0.1);
-    }
-    .tag.emerald {
-      color: var(--emerald-200);
-      border-color: rgba(167,243,208,0.25);
-      background: rgba(167,243,208,0.1);
-    }
-    .decision-row h4 { font-size: 14px; font-weight: 600; color: var(--stone-100); }
-    .decision-row p { margin-top: 4px; font-size: 14px; line-height: 1.65; color: var(--stone-400); }
+    /* ── Trust / stat strip ────────────────────── */
+    .trust { position:relative; z-index:2; margin-top:56px; text-align:center; }
+    .trust > p { font-size:11px; letter-spacing:.16em; text-transform:uppercase; color: var(--ink-mute); margin-bottom:20px; }
+    .trust-row { display:flex; gap:40px; justify-content:center; flex-wrap:wrap; }
+    .stat { display:inline-flex; flex-direction:column; align-items:center; }
+    .stat b { font-size:28px; letter-spacing:-.02em; line-height:1; }
+    .stat small { margin-top:6px; font-size:10.5px; color: var(--ink-mute); text-transform:uppercase; letter-spacing:.1em; }
 
-    .decision-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px solid var(--border-soft);
-    }
-    @media (min-width: 640px) { .decision-actions { flex-direction: row; } }
-    .act-btn {
-      height: 44px;
-      padding: 0 16px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 600;
-    }
-    .act-btn.primary { background: var(--brand-gold); color: var(--brand-ink); }
-    .act-btn.ghost {
-      border: 1px solid var(--border-medium);
-      color: var(--stone-300);
-      font-weight: 500;
-      background: transparent;
-    }
-    .act-btn.plain {
-      color: var(--stone-500);
-      font-weight: 500;
-    }
-    .act-btn { transition: opacity 0.2s ease, transform 0.2s ease; }
-    .act-btn.is-selected { transform: scale(0.97); opacity: 0.85; }
+    /* ── Generic section ───────────────────────── */
+    .section { padding:96px 0; position:relative; }
+    .section-eyebrow { color: var(--sky-600); margin-bottom:16px; }
+    .section-h { font-size:clamp(28px,3.6vw,44px); line-height:1.08; letter-spacing:-.025em; font-weight:660; }
+    .section-lead { font-size:17px; color: var(--ink-mute); max-width:620px; margin-top:16px; line-height:1.55; }
+    .section-head-center { text-align:center; }
+    .section-head-center .section-lead { margin-left:auto; margin-right:auto; }
+    .section-bg-tint { background: linear-gradient(180deg,#fff, var(--sky-50) 50%, #fff); }
 
-    /* ── Pillars strip ───────────────────────── */
-    .pillars-strip {
-      background: var(--surface-strip);
-      border-top: 1px solid var(--border-soft);
-      border-bottom: 1px solid var(--border-soft);
-      color: var(--stone-100);
-    }
-    .pillars-grid {
-      display: grid;
-      gap: 16px;
-      margin: 0 auto;
-      max-width: var(--max-w);
-      padding: 80px 20px;
-    }
-    @media (min-width: 768px) {
-      .pillars-grid { grid-template-columns: repeat(3,1fr); padding: 80px 32px; }
-    }
-    .pillar {
-      border-top: 1px solid #d7c9b6;
-      padding-top: 20px;
-    }
-    .pillar-icon {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 40px;
-      height: 40px;
-      border: 1px solid var(--border-medium);
-      background: rgba(0,0,0,0.2);
-      border-radius: 6px;
-      color: var(--brand-gold);
-      margin-bottom: 32px;
-    }
-    .pillar-label { color: var(--brand-gold); letter-spacing: 0.16em; font-weight: 500; }
-    .pillar h3 {
-      margin-top: 12px;
-      font-size: 24px;
-      font-weight: 600;
-      letter-spacing: -0.025em;
-    }
-    .pillar p {
-      margin-top: 16px;
-      font-size: 14px;
-      line-height: 1.75;
-      color: var(--stone-400);
-    }
+    /* video frames */
+    .media-frame { margin-top:44px; border-radius:18px; overflow:hidden; border:1px solid var(--line); background:#000; box-shadow:0 40px 80px -34px rgba(12,60,110,.34); }
+    .media-frame video { width:100%; display:block; }
 
-    /* ── Operating principle ─────────────────── */
-    .principle-grid {
-      display: grid;
-      gap: 32px;
-    }
-    @media (min-width: 768px) {
-      .principle-grid { grid-template-columns: 0.8fr 1.2fr; align-items: center; }
-    }
-    .principle-steps {
-      display: grid;
-      overflow: hidden;
-      border: 1px solid var(--border-medium);
-      border-radius: 8px;
-    }
-    @media (min-width: 768px) {
-      .principle-steps { grid-template-columns: repeat(4, 1fr); }
-    }
-    .principle-step {
-      padding: 16px;
-      background: rgba(255,255,255,0.025);
-      border-color: var(--border-medium);
-    }
-    @media (min-width: 768px) {
-      .principle-step { border-right: 1px solid var(--border-medium); }
-      .principle-step:last-child { border-right: none; }
-    }
-    .principle-step .index {
-      color: var(--brand-gold);
-      letter-spacing: 0.14em;
-      font-weight: 500;
-    }
-    .principle-step h3 {
-      margin-top: 12px;
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--stone-100);
-    }
-    .principle-step p {
-      margin-top: 12px;
-      font-size: 12px;
-      line-height: 1.65;
-      color: var(--stone-400);
-    }
+    /* 4-tier legend */
+    .tier-legend { margin-top:36px; display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+    @media (max-width:820px){ .tier-legend { grid-template-columns:repeat(2,1fr); } }
+    @media (max-width:460px){ .tier-legend { grid-template-columns:1fr; } }
+    .legend-card { padding:20px; border:1px solid var(--line); border-radius:14px; background:#fff; }
+    .legend-card .lg-label { display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; margin-bottom:9px; }
+    .legend-card .lg-label .pip { width:9px; height:9px; border-radius:50%; }
+    .legend-card p { font-size:13.5px; color: var(--ink-mute); line-height:1.5; }
+    .lg-push .pip{background:var(--sky-500)} .lg-push .lg-label{color:var(--sky-700)}
+    .lg-queue .pip{background:var(--slate-400)} .lg-queue .lg-label{color:var(--slate-500)}
+    .lg-silent .pip{background:#cbd5e1} .lg-silent .lg-label{color:#94a3b8}
+    .lg-auto .pip{background:var(--sky-300)} .lg-auto .lg-label{color:var(--sky-600)}
 
-    /* ── Final CTA ────────────────────────────── */
-    .final-cta {
-      max-width: var(--max-w);
-      margin: 0 auto;
-      padding: 24px 20px 96px;
-      text-align: center;
-      background: radial-gradient(ellipse 800px 420px at 50% 35%, rgba(216,164,93,0.08), transparent 70%);
+    /* ── Live classifier ──────────────────────── */
+    .klassify-wrap { margin-top:44px; border:1px solid var(--line); border-radius:20px; overflow:hidden; background:#fff; box-shadow:0 40px 80px -40px rgba(12,60,110,.3); }
+    .klassify-titlebar { display:flex; align-items:center; gap:8px; padding:12px 16px; border-bottom:1px solid var(--line); background:#fbfdff; }
+    .klassify-titlebar .dot { width:11px; height:11px; border-radius:50%; background:#dbe4ee; }
+    .klassify-titlebar .crumb { margin-left:8px; font-size:12px; color: var(--ink-mute); font-weight:500; }
+    .klassify-titlebar .hero-live { margin-left:auto; display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color: var(--sky-700); }
+    .klassify-titlebar .hero-live-dot { width:7px; height:7px; border-radius:50%; background: var(--sky-500); box-shadow:0 0 0 3px rgba(14,165,233,.2); }
+    .klassify { display:grid; grid-template-columns:1fr 1fr; }
+    @media (max-width:820px){ .klassify { grid-template-columns:1fr; } }
+    .klassify-input { padding:24px; border-right:1px solid var(--line); }
+    @media (max-width:820px){ .klassify-input { border-right:none; border-bottom:1px solid var(--line); } }
+    .klassify-eyebrow { color: var(--sky-600); margin-bottom:14px; }
+    .kf-field {
+      width:100%; height:44px; padding:0 14px; margin-bottom:10px;
+      border:1px solid var(--line-strong); border-radius:10px; background:#fff;
+      font-family:inherit; font-size:14px; color: var(--ink); transition:.15s var(--ease);
     }
-    @media (min-width: 768px) { .final-cta { padding: 32px 32px 112px; } }
-    .final-cta-h {
-      margin: 0 auto;
-      max-width: 880px;
-      font-size: 36px;
-      font-weight: 600;
-      letter-spacing: -0.025em;
-      color: #fff;
-      text-wrap: balance;
-    }
-    @media (min-width: 768px) { .final-cta-h { font-size: 60px; } }
-    .final-cta-actions {
-      margin-top: 36px;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 12px;
-    }
-    .final-cta-p {
-      margin: 24px auto 0;
-      max-width: 640px;
-      font-size: 14px;
-      line-height: 1.75;
-      color: var(--stone-400);
-    }
-    @media (min-width: 768px) { .final-cta-p { font-size: 16px; } }
-
-    /* ── Footer ───────────────────────────────── */
-    footer {
-      border-top: 1px solid var(--border-soft);
-      padding: 32px 20px;
-    }
-    @media (min-width: 768px) { footer { padding: 32px; } }
-    .footer-inner {
-      max-width: var(--max-w);
-      margin: 0 auto;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      font-size: 14px;
-      color: var(--stone-400);
-    }
-    @media (min-width: 768px) {
-      .footer-inner { flex-direction: row; align-items: center; justify-content: space-between; }
-    }
-    .footer-brand { display: flex; align-items: center; gap: 12px; }
-    .footer-brand img { width: 28px; height: 28px; }
-    .footer-links { display: flex; gap: 20px; }
-    .footer-links a {
-      display: inline-flex;
-      align-items: center;
-      min-height: 40px;
-      transition: color 0.2s ease;
-    }
-    .footer-links a:hover { color: var(--stone-300); }
-    .footer-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-    .footer-social { display: flex; align-items: center; gap: 2px; }
-    .footer-social a {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 40px; height: 40px; border-radius: 6px;
-      color: var(--stone-500); transition: color 0.2s ease, background 0.2s ease;
-    }
-    .footer-social a:hover { color: var(--stone-300); background: rgba(255,255,255,0.06); }
-    .footer-social svg { width: 18px; height: 18px; }
-    .footer-divider { width: 1px; height: 16px; background: rgba(255,255,255,0.1); }
-
-    /* ── Reveal animation ────────────────────── */
-    .reveal {
-      opacity: 0;
-      transform: translateY(44px);
-      transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    .reveal.in { opacity: 1; transform: translateY(0); }
-    .pillars-grid .pillar.reveal:nth-child(2) { transition-delay: 0.12s; }
-    .pillars-grid .pillar.reveal:nth-child(3) { transition-delay: 0.24s; }
-    .principle-step.reveal:nth-child(2) { transition-delay: 0.1s; }
-    .principle-step.reveal:nth-child(3) { transition-delay: 0.2s; }
-    .principle-step.reveal:nth-child(4) { transition-delay: 0.3s; }
-    .demo-legend .demo-tier.reveal:nth-child(2) { transition-delay: 0.1s; }
-    .demo-legend .demo-tier.reveal:nth-child(3) { transition-delay: 0.2s; }
-    .demo-legend .demo-tier.reveal:nth-child(4) { transition-delay: 0.3s; }
-
-    /* ── Section rhythm ──────────────────────────
-       Sections hug their own content (their padding sets the breathing room)
-       instead of being forced to 100vh. Forcing full-viewport height with
-       centered content left big empty bands above/below each block, and at a
-       boundary you'd stare straight into two of those empty bands stacked —
-       that was the "black gap." Content-height sections sit back-to-back, so
-       the JS crossfade below hands off content-to-content with nothing dark
-       in between. A gentle min-height keeps short sections feeling substantial
-       without reintroducing a large void. */
-    .snap-section {
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-    }
-    .hero.snap-section { display: block; min-height: 0; }
-
-    /* ── Walkthrough demo section ─────────────── */
-    .demo-section { max-width: var(--max-w-narrow); }
-    .demo-section .section-eyebrow,
-    .demo-section .section-h { text-align: center; }
-    .demo-section .section-lead {
-      max-width: 720px;
-      margin-left: auto;
-      margin-right: auto;
-      text-align: center;
-    }
-    .demo-section {
-      background: radial-gradient(ellipse 900px 520px at 50% 38%, rgba(216,164,93,0.07), transparent 65%);
-    }
-    .demo-frame {
-      margin-top: 40px;
-      border-radius: 16px;
-      overflow: hidden;
-      border: 1px solid rgba(216,164,93,0.22);
-      background: var(--surface-elevated);
-      box-shadow:
-        0 25px 50px -12px rgba(0,0,0,0.4),
-        0 0 110px -25px rgba(216,164,93,0.20);
-    }
-    .demo-frame video {
-      width: 100%;
-      display: block;
-      aspect-ratio: 16/9;
-      object-fit: cover;
-      background: var(--surface-canvas);
-    }
-
-    /* Tier legend — the video text is small, so the four tiers are
-       spelled out here as the readable source of truth. */
-    .demo-legend {
-      margin-top: 20px;
-      display: grid;
-      gap: 12px;
-      grid-template-columns: 1fr;
-    }
-    @media (min-width: 640px) {
-      .demo-legend { grid-template-columns: repeat(2, 1fr); }
-    }
-    @media (min-width: 900px) {
-      .demo-legend { grid-template-columns: repeat(4, 1fr); }
-    }
-    .demo-tier {
-      border: 1px solid var(--border-soft);
-      background: var(--surface-panel);
-      border-radius: 8px;
-      padding: 14px 16px;
-      text-align: left;
-    }
-    .demo-tier .tier-name {
-      font-size: 11px;
-      letter-spacing: 0.18em;
-      font-weight: 600;
-    }
-    .demo-tier .tier-desc {
-      margin-top: 6px;
-      font-size: 13px;
-      line-height: 1.5;
-      color: var(--stone-400);
-    }
-    .demo-tier.push .tier-name { color: var(--brand-gold-bright); }
-    .demo-tier.queue .tier-name { color: var(--sky-200); }
-    .demo-tier.silent .tier-name { color: var(--stone-300); }
-    .demo-tier.auto .tier-name { color: var(--emerald-200); }
-
-    /* ── Measured stats ───────────────────────── */
-    .stats-section .section-eyebrow,
-    .stats-section .section-h { text-align: center; }
-    .stats-section .section-lead {
-      max-width: 640px;
-      margin-left: auto;
-      margin-right: auto;
-      text-align: center;
-    }
-    .stats-grid {
-      margin-top: 40px;
-      display: grid;
-      gap: 12px;
-      grid-template-columns: 1fr;
-    }
-    @media (min-width: 768px) {
-      .stats-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; }
-    }
-    .stat-tile {
-      border: 1px solid var(--border-soft);
-      background: var(--surface-panel);
-      border-radius: 12px;
-      padding: 28px 24px;
-    }
-    .stat-tile.featured {
-      border-color: rgba(216,164,93,0.3);
-      background: var(--surface-translucent);
-    }
-    .stats-grid .stat-tile.reveal:nth-child(2) { transition-delay: 0.1s; }
-    .stats-grid .stat-tile.reveal:nth-child(3) { transition-delay: 0.2s; }
-    .stat-value {
-      font-size: 40px;
-      font-weight: 650;
-      letter-spacing: -0.03em;
-      line-height: 1.1;
-      color: #fff;
-    }
-    @media (min-width: 768px) { .stat-value { font-size: 48px; } }
-    .stat-tile.featured .stat-value { font-size: 48px; }
-    @media (min-width: 768px) { .stat-tile.featured .stat-value { font-size: 56px; } }
-    .stat-label {
-      margin-top: 10px;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--stone-200);
-    }
-    .stat-desc {
-      margin-top: 6px;
-      font-size: 13px;
-      line-height: 1.6;
-      color: var(--stone-400);
-    }
-    .stats-footnote {
-      margin-top: 24px;
-      text-align: center;
-      font-size: 12px;
-      line-height: 1.7;
-      color: var(--stone-500);
-      max-width: 640px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    .stats-footnote a {
-      color: var(--stone-300);
-      text-decoration: underline;
-      text-underline-offset: 3px;
-    }
-    .stats-footnote a:hover { color: var(--brand-gold-bright); }
-
-    /* ── Brand film ───────────────────────────── */
-    .promo-section { max-width: var(--max-w-narrow); }
-    .promo-section .section-eyebrow,
-    .promo-section .section-h { text-align: center; }
-    .promo-frame {
-      margin-top: 40px;
-      border-radius: 16px;
-      overflow: hidden;
-      border: 1px solid var(--border-medium);
-      background: var(--surface-elevated);
-      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4);
-    }
-    .promo-frame video {
-      width: 100%;
-      display: block;
-      aspect-ratio: 16/9;
-      object-fit: cover;
-      background: var(--surface-canvas);
-    }
-
-    .hero-badge-link:hover {
-      border-color: rgba(216,164,93,0.45);
-      color: var(--brand-cream);
-    }
-
-    /* ── Hero live classifier (real /api/playground/classify) ── */
-    .klassify {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      height: 512px;
-    }
-    .klassify-input {
-      padding: 22px 24px;
-      border-right: 1px solid var(--stone-800);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      overflow-y: auto;
-    }
-    .klassify-eyebrow {
-      color: var(--brand-gold);
-      font-size: 10px;
-      letter-spacing: 0.16em;
-      margin-bottom: 2px;
-    }
-    .kf-field, .klassify-keyrow select, .klassify-keyrow input {
-      width: 100%;
-      background: var(--surface-panel);
-      border: 1px solid var(--stone-800);
-      border-radius: 7px;
-      padding: 9px 11px;
-      font-size: 13px;
-      font-family: inherit;
-      color: var(--stone-100);
-      transition: border-color 0.15s ease;
-    }
-    .kf-field::placeholder { color: var(--stone-600); }
-    .kf-field:focus, .klassify-keyrow select:focus, .klassify-keyrow input:focus {
-      outline: none;
-      border-color: rgba(216,164,93,0.5);
-    }
-    textarea.kf-field { resize: none; min-height: 60px; line-height: 1.5; }
-    .klassify-keyrow { display: flex; gap: 8px; }
-    .klassify-keyrow select { width: 118px; flex-shrink: 0; cursor: pointer; }
-    .klassify-keyrow input { flex: 1; }
-    .klassify-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
-    .klassify-preset {
-      padding: 5px 10px;
-      border-radius: 9999px;
-      border: 1px solid var(--stone-700);
-      background: transparent;
-      color: var(--stone-400);
-      font-size: 11px;
-      font-family: inherit;
-      cursor: pointer;
-      transition: border-color 0.15s ease, color 0.15s ease;
-    }
-    .klassify-preset:hover { border-color: rgba(216,164,93,0.5); color: var(--stone-100); }
-    .klassify-run {
-      width: 100%;
-      height: 42px;
-      margin-top: 4px;
-      border-radius: 7px;
-    }
-    .klassify-run:disabled { opacity: 0.6; cursor: default; }
-    .klassify-note { font-size: 10px; color: var(--stone-600); line-height: 1.5; }
-    .klassify-note a { color: var(--brand-gold); text-decoration: underline; }
-
-    .klassify-result {
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    .klassify-tier {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
+    textarea.kf-field { height:76px; padding:12px 14px; resize:vertical; line-height:1.5; }
+    .kf-field:focus { outline:none; border-color: var(--sky-400); box-shadow:0 0 0 3px rgba(14,165,233,.15); }
+    .kf-field::placeholder { color:#9aa4b0; }
+    .klassify-keyrow { display:grid; grid-template-columns:130px 1fr; gap:10px; }
+    .klassify-keyrow .kf-field { margin-bottom:10px; }
+    .klassify-presets { display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 14px; }
+    .klassify-preset { padding:6px 12px; border:1px solid var(--line-strong); border-radius:9999px; background:#fff; font-size:12.5px; font-weight:500; color: var(--ink-soft); transition:.15s var(--ease); }
+    .klassify-preset:hover { border-color: var(--sky-300); color: var(--sky-700); background: var(--sky-50); }
+    .klassify-run { width:100%; height:48px; }
+    .klassify-run[disabled] { opacity:.6; cursor:default; }
+    .klassify-note { margin-top:12px; font-size:12px; color: var(--ink-mute); line-height:1.5; }
+    .klassify-note a { color: var(--sky-700); font-weight:600; }
+    .klassify-result { padding:24px; background:#fbfdff; }
+    .klassify-tier { display:flex; align-items:flex-start; gap:14px; }
     .klassify-tier-badge {
-      display: inline-flex;
-      align-items: center;
-      align-self: flex-start;
-      gap: 8px;
-      padding: 8px 16px;
-      border-radius: 8px;
-      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-      font-size: 15px;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      border: 1px solid var(--stone-700);
-      color: var(--stone-400);
-      background: var(--surface-panel);
+      flex-shrink:0; min-width:78px; text-align:center; padding:10px 14px; border-radius:12px;
+      font-size:13px; font-weight:700; letter-spacing:.08em; background:#eef3f8; color: var(--ink-soft);
     }
-    .klassify-tier-badge[data-tier="PUSH"]   { color: var(--brand-gold-bright); border-color: rgba(240,201,130,0.4); background: rgba(240,201,130,0.1); }
-    .klassify-tier-badge[data-tier="QUEUE"]  { color: var(--sky-200); border-color: rgba(186,230,253,0.35); background: rgba(186,230,253,0.08); }
-    .klassify-tier-badge[data-tier="SILENT"] { color: var(--stone-300); border-color: var(--stone-700); background: rgba(255,255,255,0.03); }
-    .klassify-tier-badge[data-tier="AUTO"]   { color: var(--emerald-200); border-color: rgba(167,243,208,0.35); background: rgba(167,243,208,0.08); }
-    .klassify-tier-desc { font-size: 13px; line-height: 1.6; color: var(--stone-400); }
-    .klassify-reason {
-      font-size: 13px;
-      line-height: 1.7;
-      color: var(--stone-200);
-      border-left: 2px solid rgba(216,164,93,0.4);
-      padding-left: 12px;
-    }
-    .klassify-reason:empty { display: none; }
-    .klassify-features { display: flex; flex-direction: column; gap: 10px; }
-    .klassify-feature { display: grid; grid-template-columns: 92px 1fr 34px; align-items: center; gap: 10px; }
-    .klassify-feature .kf-label { font-size: 11px; color: var(--stone-500); text-transform: capitalize; }
-    .klassify-feature .kf-bar { height: 5px; border-radius: 9999px; background: var(--stone-800); overflow: hidden; }
-    .klassify-feature .kf-bar span { display: block; height: 100%; border-radius: 9999px; background: linear-gradient(90deg, var(--brand-gold), var(--brand-gold-bright)); transition: width 0.5s ease; }
-    .klassify-feature .kf-val { font-size: 11px; color: var(--stone-400); text-align: right; font-family: ui-monospace, Menlo, monospace; }
-    .klassify-error { font-size: 12px; line-height: 1.6; color: #f5b8a8; }
-    @media (max-width: 1023px) { .klassify { grid-template-columns: 1fr; height: auto; } .klassify-input { border-right: none; border-bottom: 1px solid var(--stone-800); } }
+    .klassify-tier-badge[data-tier="PUSH"] { background: var(--sky-500); color:#fff; }
+    .klassify-tier-badge[data-tier="QUEUE"] { background: var(--sky-100); color: var(--sky-700); }
+    .klassify-tier-badge[data-tier="SILENT"] { background:#e2e8f0; color: var(--slate-500); }
+    .klassify-tier-badge[data-tier="AUTO"] { background: var(--sky-200); color: var(--sky-700); }
+    .klassify-tier-desc { font-size:13.5px; color: var(--ink-soft); line-height:1.5; padding-top:4px; }
+    .klassify-reason { margin-top:16px; font-size:13px; color: var(--ink-mute); line-height:1.55; font-style:italic; }
+    .klassify-error { color:#dc2626; font-weight:500; }
+    .klassify-features { margin-top:18px; display:grid; gap:10px; }
+    .klassify-feature { display:grid; grid-template-columns:88px 1fr 40px; align-items:center; gap:10px; }
+    .kf-label { font-size:11px; text-transform:capitalize; color: var(--ink-mute); letter-spacing:.02em; }
+    .kf-bar { height:6px; border-radius:9999px; background:#e6edf4; overflow:hidden; }
+    .kf-bar > span { display:block; height:100%; border-radius:9999px; background:linear-gradient(90deg,var(--sky-400),var(--sky-600)); }
+    .kf-val { font-size:12px; font-weight:600; color: var(--sky-700); text-align:right; font-variant-numeric:tabular-nums; }
 
-    /* ── Floating download + language dock (bottom-center) ─────── */
+    /* ── Stats / measured ──────────────────────── */
+    .stats-grid { margin-top:44px; display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+    @media (max-width:820px){ .stats-grid { grid-template-columns:1fr; } }
+    .stat-tile { padding:28px; border:1px solid var(--line); border-radius:18px; background:#fff; }
+    .stat-tile.featured { background:linear-gradient(160deg,var(--sky-500),var(--sky-700)); border-color:transparent; color:#fff; box-shadow:0 24px 50px -24px rgba(2,132,199,.5); }
+    .stat-tile .big { font-size:44px; font-weight:700; letter-spacing:-.03em; line-height:1; }
+    .stat-tile .lab { margin-top:10px; font-size:14px; font-weight:650; }
+    .stat-tile .desc { margin-top:8px; font-size:13px; color: var(--ink-mute); line-height:1.5; }
+    .stat-tile.featured .desc { color:rgba(255,255,255,.85); }
+    .stats-foot { margin-top:22px; font-size:12.5px; color: var(--ink-mute); text-align:center; line-height:1.55; }
+    .stats-foot a { color: var(--sky-700); font-weight:600; }
+
+    /* ── Decision card ─────────────────────────── */
+    .decision-grid { display:grid; grid-template-columns:1fr 1fr; gap:56px; align-items:center; }
+    @media (max-width:900px){ .decision-grid { grid-template-columns:1fr; gap:36px; } }
+    .decision-card { border:1px solid var(--line); border-radius:20px; background:#fff; padding:24px; box-shadow:0 30px 70px -34px rgba(12,60,110,.3); }
+    .dc-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+    .dc-eyebrow { color: var(--sky-600); }
+    .approval-pill { font-size:12px; font-weight:600; padding:5px 12px; border-radius:9999px; background: var(--sky-50); color: var(--sky-700); border:1px solid var(--sky-200); transition:.2s var(--ease); }
+    .approval-pill.is-approved { background:#dcfce7; color:#15803d; border-color:#bbf7d0; }
+    .dc-title { font-size:20px; font-weight:660; letter-spacing:-.01em; margin:8px 0 18px; }
+    .dc-row { display:grid; grid-template-columns:78px 1fr; gap:14px; padding:14px 0; border-top:1px solid var(--line); }
+    .dc-row .k { font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color: var(--sky-600); padding-top:2px; }
+    .dc-row .v { font-size:14px; color: var(--ink); }
+    .dc-row .v small { display:block; margin-top:3px; font-size:12.5px; color: var(--ink-mute); line-height:1.5; }
+    .decision-actions { display:flex; gap:10px; margin-top:20px; }
+    .act-btn { flex:1; height:44px; border-radius:11px; font-size:14px; font-weight:600; transition:.15s var(--ease); }
+    .act-btn.primary { background: var(--ink); color:#fff; }
+    .act-btn.primary:hover, .act-btn.primary.is-selected { background: var(--sky-600); }
+    .act-btn.ghost { border:1px solid var(--line-strong); color: var(--ink-soft); }
+    .act-btn.ghost:hover, .act-btn.ghost.is-selected { border-color: var(--sky-300); color: var(--sky-700); }
+    .act-btn.plain { color: var(--ink-mute); }
+    .act-btn.plain:hover, .act-btn.plain.is-selected { background: var(--paper); color: var(--ink); }
+
+    /* ── Pillars strip ─────────────────────────── */
+    .pillars { background: var(--sky-50); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+    .pillars-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:28px; }
+    @media (max-width:820px){ .pillars-grid { grid-template-columns:1fr; gap:22px; } }
+    .pillar .pn { font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color: var(--sky-600); margin-bottom:12px; }
+    .pillar h3 { font-size:19px; font-weight:640; letter-spacing:-.01em; margin-bottom:8px; }
+    .pillar p { font-size:14px; color: var(--ink-mute); line-height:1.55; }
+
+    /* ── Principle steps ───────────────────────── */
+    .steps-grid { margin-top:44px; display:grid; grid-template-columns:repeat(4,1fr); gap:20px; }
+    @media (max-width:900px){ .steps-grid { grid-template-columns:repeat(2,1fr); } }
+    @media (max-width:520px){ .steps-grid { grid-template-columns:1fr; } }
+    .step { padding-top:20px; border-top:2px solid var(--sky-200); }
+    .step .num { font-size:12px; font-weight:700; color: var(--sky-600); letter-spacing:.08em; }
+    .step h3 { font-size:17px; font-weight:640; margin:8px 0 6px; }
+    .step p { font-size:13.5px; color: var(--ink-mute); line-height:1.5; }
+
+    /* ── Pricing ───────────────────────────────── */
+    .pricing-grid { margin-top:44px; display:grid; grid-template-columns:1fr 1fr; gap:22px; max-width:840px; margin-left:auto; margin-right:auto; }
+    @media (max-width:760px){ .pricing-grid { grid-template-columns:1fr; } }
+    .price-card { border:1px solid var(--line); border-radius:20px; background:#fff; padding:30px; display:flex; flex-direction:column; }
+    .price-card.pro { border-color: var(--sky-300); box-shadow:0 30px 60px -30px rgba(2,132,199,.4); position:relative; }
+    .price-badge { align-self:flex-start; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:5px 11px; border-radius:9999px; background: var(--paper); color: var(--ink-soft); margin-bottom:14px; }
+    .price-card.pro .price-badge { background: var(--sky-500); color:#fff; }
+    .price-name { font-size:18px; font-weight:660; }
+    .price-amt { margin:12px 0 4px; font-size:40px; font-weight:720; letter-spacing:-.03em; }
+    .price-amt span { font-size:15px; font-weight:500; color: var(--ink-mute); letter-spacing:0; }
+    .price-note { font-size:12.5px; color: var(--ink-mute); margin-bottom:20px; line-height:1.5; }
+    .price-feats { list-style:none; display:grid; gap:11px; margin-bottom:24px; flex:1; }
+    .price-feats li { display:flex; gap:10px; font-size:13.5px; color: var(--ink-soft); line-height:1.45; }
+    .price-feats li svg { width:17px; height:17px; flex-shrink:0; color: var(--sky-500); margin-top:1px; }
+    .price-card .btn { width:100%; }
+    .pricing-foot { margin-top:22px; text-align:center; font-size:12.5px; color: var(--ink-mute); }
+
+    /* ── Final CTA ─────────────────────────────── */
+    .final-cta { padding:110px 0; text-align:center; position:relative; overflow:hidden; }
+    .final-cta .final-bg { position:absolute; inset:0; z-index:0; background:radial-gradient(120% 100% at 50% 120%, var(--sky-100), #fff 62%); }
+    .final-inner { position:relative; z-index:2; max-width:640px; margin:0 auto; }
+    .final-cta h2 { font-size:clamp(30px,4.4vw,50px); letter-spacing:-.03em; line-height:1.05; font-weight:680; }
+    .final-cta p { margin:18px auto 30px; font-size:17px; color: var(--ink-mute); max-width:480px; }
+    .final-actions { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+
+    /* ── Footer ────────────────────────────────── */
+    footer { border-top:1px solid var(--line); padding:48px 0; background:#fbfdff; }
+    .footer-grid { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:20px; }
+    .footer-brand { display:flex; align-items:center; gap:11px; }
+    .footer-brand img { width:30px; height:30px; border-radius:8px; }
+    .footer-brand .fb-t { font-size:14px; color: var(--ink-soft); }
+    .footer-brand .fb-t b { color: var(--ink); font-weight:650; }
+    .footer-links { display:flex; align-items:center; gap:20px; font-size:13.5px; color: var(--ink-mute); }
+    .footer-links a { transition:.15s; }
+    .footer-links a:hover { color: var(--sky-700); }
+    .footer-social { display:flex; gap:14px; }
+    .footer-social a { color: var(--ink-mute); }
+    .footer-social a:hover { color: var(--sky-700); }
+    .footer-social svg { width:19px; height:19px; }
+
+    /* ── Floating download + language dock ─────── */
     .dl-dock {
-      position: fixed;
-      left: 50%;
-      bottom: 22px;
-      transform: translate(-50%, 0);
-      z-index: 60;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 8px 6px 6px;
-      border-radius: 999px;
-      background: rgba(17, 19, 24, 0.82);
-      border: 1px solid rgba(255, 255, 255, 0.10);
-      box-shadow: 0 10px 34px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-      -webkit-backdrop-filter: blur(16px) saturate(1.3);
-      backdrop-filter: blur(16px) saturate(1.3);
-      opacity: 1;
-      visibility: visible;
-      pointer-events: auto;
-      animation: dlDockIn 0.45s ease both;
+      position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:55;
+      display:flex; align-items:center; gap:6px; padding:7px 8px 7px 10px; border-radius:9999px;
+      background:rgba(255,255,255,.82); backdrop-filter:blur(16px) saturate(1.4); -webkit-backdrop-filter:blur(16px) saturate(1.4);
+      border:1px solid rgba(255,255,255,.65); box-shadow:0 10px 34px -14px rgba(10,50,90,.34);
     }
-    @keyframes dlDockIn { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
-    .dl-dock-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 18px;
-      border-radius: 999px;
-      background: var(--brand-gold);
-      color: var(--brand-ink);
-      font-size: 14px;
-      font-weight: 650;
-      letter-spacing: -0.01em;
-      text-decoration: none;
-      white-space: nowrap;
-      transition: background 0.2s ease;
-    }
-    .dl-dock-btn:hover { background: var(--brand-gold-bright); }
-    .dl-dock-btn svg { width: 16px; height: 16px; }
-    .dl-dock-help {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 26px;
-      height: 26px;
-      border-radius: 999px;
-      border: 1px solid var(--stone-600);
-      color: var(--stone-300, #d6d3d1);
-      font-size: 13px;
-      font-weight: 700;
-      text-decoration: none;
-      transition: border-color 0.2s ease, color 0.2s ease;
-    }
-    .dl-dock-help:hover { border-color: var(--brand-gold); color: var(--brand-gold); }
-    .dl-dock-lang { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px 0 2px; }
-    .dl-dock-lang a,
-    .dl-dock-lang .dl-dock-cur {
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      padding: 6px 8px;
-      border-radius: 8px;
-      text-decoration: none;
-      color: var(--stone-400);
-      transition: color 0.15s ease, background 0.15s ease;
-    }
-    .dl-dock-lang a:hover { color: var(--stone-100); background: rgba(255, 255, 255, 0.06); }
-    .dl-dock-cur { color: #fff; background: rgba(255, 255, 255, 0.08); cursor: default; }
-    .dl-dock-sep { color: var(--stone-600); font-size: 11px; }
-    @media (max-width: 520px) {
-      .dl-dock { bottom: 14px; gap: 4px; padding: 5px 6px 5px 5px; }
-      .dl-dock-btn { padding: 9px 15px; font-size: 13px; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .dl-dock { animation: none; transform: translate(-50%, 0); }
-    }
+    .dl-dock-btn { display:inline-flex; align-items:center; gap:8px; height:38px; padding:0 16px; border-radius:9999px; background: var(--ink); color:#fff; font-size:13.5px; font-weight:600; transition:.18s var(--ease); }
+    .dl-dock-btn:hover { background: var(--sky-600); }
+    .dl-dock-btn svg { width:16px; height:16px; }
+    .dl-dock-help { width:30px; height:30px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color: var(--ink-mute); border:1px solid var(--line-strong); transition:.15s; }
+    .dl-dock-help:hover { color: var(--sky-700); border-color: var(--sky-300); }
+    .dl-dock-lang { display:flex; align-items:center; gap:6px; padding:0 8px 0 4px; font-size:13px; font-weight:600; }
+    .dl-dock-cur { color: var(--ink); }
+    .dl-dock-sep { color: var(--line-strong); }
+    .dl-dock-lang a { color: var(--ink-mute); }
+    .dl-dock-lang a:hover { color: var(--sky-700); }
+    @media (max-width:520px){ .dl-dock-btn span.lbl { display:none; } }
+
+    /* mobile hero preview (shown < product on small) */
+    .mobile-preview { display:none; }
   </style>
 </head>
 <body>
 
-  <!-- ── Hero ────────────────────────────────── -->
-  <section class="hero snap-section">
-    <div class="hero-scene" aria-hidden="true">
-      <div class="hero-scene-bg"></div>
-      <canvas id="hero-3d" class="hero-3d"></canvas>
-      <div class="hero-scrim"></div>
+  <!-- ══ NAV ══════════════════════════════════ -->
+  <nav class="nav">
+    <div class="nav-pill">
+      <a class="nav-brand" href="/ko/"><img class="nav-mark" src="/brand/mark.svg?v=matte2" alt="Klorn">Klorn</a>
+      <span class="nav-links">
+        <a href="#measured">제품</a>
+        <a href="#how">작동 방식</a>
+        <a href="#pricing">가격</a>
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">오픈소스</a>
+      </span>
+      <a class="nav-cta" href="https://app.klorn.ai/early-access">Klorn 열기 →</a>
+    </div>
+  </nav>
+
+  <!-- ══ HERO ═════════════════════════════════ -->
+  <header class="hero">
+    <div class="hero-sky"></div>
+    <div class="cloud a"></div><div class="cloud b"></div><div class="cloud c"></div>
+
+    <div class="container hero-inner">
+      <a class="hero-eyebrow" href="#measured"><span class="dot"></span>실제 메일에서 94.3% 측정</a>
+      <h1 class="hero-h">소음은 들어오고,<br><span class="accent serif">신호</span>만 나갑니다.</h1>
+      <p class="hero-lead">다른 AI는 대신 행동합니다. Klorn은 무엇에 <em>행동할 가치가 있는지</em> 당신이 결정하도록 돕습니다 — 메일·캘린더·AI 신호를 하나의 명확한 결정 큐로 걸러내고, 근거와 승인 없이는 어떤 것도 손을 떠나지 않습니다.</p>
+
+      <div class="invite-banner">
+        <div class="invite-head">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          Klorn은 초대 전용 베타입니다
+        </div>
+        <ol>
+          <li>아래에서 액세스를 요청하세요 — 30초면 됩니다.</li>
+          <li>제가 깨어 있을 때(KST)는 5분 내, 아니면 몇 시간 내 승인합니다 — Google CASA 심사 통과 전까지 테스터 100명 한정.</li>
+          <li><b>noreply@klorn.ai</b>에서 메일이 도착합니다. 그때부터 로그인이 됩니다.</li>
+        </ol>
+      </div>
+
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="https://app.klorn.ai/early-access">얼리 액세스 요청 →</a>
+        <a class="btn btn-ghost" href="#live-classifier">라이브 데모 체험</a>
+        <a class="btn btn-ghost" href="https://github.com/k08200/klorn" rel="noreferrer noopener">
+          <svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub에서 스타 <span class="star-count" data-gh-stars></span></a>
+      </div>
+      <p class="hero-secondary">이미 승인받으셨나요? <a href="https://app.klorn.ai/login">로그인 →</a></p>
+
+      <div class="hero-badges">
+        <a class="hero-badge" href="#measured"><span class="dot"></span>실제 메일에서 94.3% 측정</a>
+        <span class="hero-badge"><span class="dot"></span>오픈소스 — AGPLv3</span>
+        <span class="hero-badge"><span class="dot"></span>셀프 호스팅 가능</span>
+        <span class="hero-badge"><span class="dot"></span>모든 행동은 당신의 승인이 필요</span>
+      </div>
     </div>
 
-    <nav class="hero-nav">
-      <a href="/ko/" class="brand">
-        <img src="/brand/mark.svg?v=matte2" alt="">
-        <span class="wordmark">KLORN</span>
-      </a>
-      <div class="hero-nav-actions">
-        <a href="#pricing" class="nav-link">가격</a>
-        <a href="#live-classifier" class="nav-link">라이브 데모</a>
-        <a href="https://app.klorn.ai/login" class="nav-link">로그인</a>
-        <a href="https://app.klorn.ai/early-access" class="nav-cta">얼리 액세스</a>
-      </div>
-    </nav>
+    <!-- Floating product window: today's brief -->
+    <div class="container">
+      <div class="product reveal">
+        <div class="win">
+          <div class="win-bar">
+            <span class="win-dot r"></span><span class="win-dot y"></span><span class="win-dot g"></span>
+            <span class="win-title">Klorn — 오늘의 브리핑</span>
+          </div>
+          <div class="brief">
+            <aside class="brief-side">
+              <div class="brief-who"><span class="avatar">J</span><div><div class="nm">김지은</div><div class="em">jane@company.com</div></div></div>
+              <div class="brief-item on"><span class="g">●</span>브리핑</div>
+              <div class="brief-item"><span class="g">◇</span>큐</div>
+              <div class="brief-item"><span class="g">○</span>사일런트</div>
+              <div class="brief-item"><span class="g">▤</span>캘린더</div>
+              <div class="brief-item"><span class="g">⌘</span>채팅</div>
+            </aside>
+            <main class="brief-main">
+              <div class="brief-greet">좋은 저녁이에요 — <span class="serif">화요일 브리핑</span></div>
+              <div class="brief-sub">신호 6개 · 2개는 당신이 필요 · 나머지는 처리됨</div>
 
-    <div class="hero-body">
-      <div class="hero-content">
-        <p class="mono eyebrow">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="9"></circle>
-            <path d="m15.5 8.5-2.2 5-4.8 2 2.2-5 4.8-2Z"></path>
-          </svg>
-          결정 큐
-        </p>
-        <h1 class="hero-headline">행동할 가치가 있는<br><span class="grad">명확한 신호.</span></h1>
-        <p class="hero-sub">
-          다른 AI 에이전트는 실행부터 합니다. Klorn은 무엇이 행동할 가치가 있는지 먼저 판단하도록 돕습니다. 메일, 캘린더, AI 신호를 하나의 명확한 결정 큐로 걸러내고 — 근거와 승인 없이는 어떤 것도 손을 떠나지 않습니다.
-        </p>
-        <div class="invite-banner">
-          <p class="invite-banner-head">
-            <svg class="lock" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="4" y="11" width="16" height="10" rx="2"></rect>
-              <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
-            </svg>
-            Klorn은 초대제 베타입니다. 제가 회원님의 Google 이메일을 테스트 사용자로 등록하기 전까지는 로그인할 수 없습니다.
-          </p>
-          <ol>
-            <li>아래에서 액세스를 신청하세요 (30초면 충분합니다).</li>
-            <li>제가 깨어 있는 시간(KST)에는 5분 이내, 그 외에는 몇 시간 안에 승인해 드립니다 — Google CASA 심사가 끝날 때까지 테스터는 100명으로 제한됩니다.</li>
-            <li>noreply@klorn.ai에서 이메일이 도착하면, 그때부터 로그인할 수 있습니다.</li>
-          </ol>
-        </div>
-        <div class="hero-ctas">
-          <a href="https://app.klorn.ai/early-access" class="btn btn-gold" aria-label="얼리 액세스 신청 — 비공개 베타 기간 무료">
-            얼리 액세스 신청
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M5 12h14M13 6l6 6-6 6"></path>
-            </svg>
-          </a>
-          <a href="#live-classifier" class="btn btn-ghost" aria-label="아래 라이브 분류기 체험 — 내 LLM 키로 실행">
-            라이브 데모 체험
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M5 12h14M13 6l6 6-6 6"></path>
-            </svg>
-          </a>
-          <a href="https://github.com/k08200/klorn" target="_blank" rel="noreferrer noopener" class="btn btn-ghost btn-github" aria-label="GitHub에서 Klorn에 Star">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.16-.02-2.1-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.02 11.02 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.8-.01 3.18 0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"/></svg>
-            GitHub에서 Star
-            <span class="star-count" data-gh-stars></span>
-          </a>
-        </div>
-        <a href="https://app.klorn.ai/login" class="hero-secondary-link">이미 승인받으셨나요? 로그인 →</a>
-        <div class="hero-badges">
-          <a href="#measured" class="hero-badge hero-badge-link"><span class="dot-gold"></span>실메일 실측 94.3%</a>
-          <span class="hero-badge"><span class="dot-gold"></span>오픈소스 — AGPLv3</span>
-          <span class="hero-badge"><span class="dot-gold"></span>셀프호스팅 가능</span>
-          <span class="hero-badge"><span class="dot-gold"></span>모든 행동은 승인 후에만 실행됩니다</span>
-        </div>
-      </div>
-
-      <div class="mobile-preview">
-        <div class="mobile-preview-head">
-          <div>
-            <p class="mono label" style="color: var(--stone-500); letter-spacing: 0.14em; font-weight: 600;">결정 큐</p>
-            <p class="title">주의가 필요한 항목 3건</p>
-          </div>
-          <span class="live-pill">라이브</span>
-        </div>
-        <div class="mobile-rows">
-          <div class="mobile-row">
-            <p class="name">투자자에게 회신</p>
-            <p class="meta">근거 첨부됨 · 승인 대기</p>
-          </div>
-          <div class="mobile-row">
-            <p class="name">배포 리스크 검토</p>
-            <p class="meta">근거 첨부됨 · 승인 대기</p>
-          </div>
-          <div class="mobile-row">
-            <p class="name">파트너 콜 준비</p>
-            <p class="meta">근거 첨부됨 · 승인 대기</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="hero-frame-wrap" id="live-classifier" style="scroll-margin-top: 90px;">
-        <div class="hero-float-chips">
-          <span class="hero-float-chip c1"><span class="dot"></span>회신 · OpenRouter Team</span>
-          <span class="hero-float-chip c2"><span class="dot"></span>보안 · Vercel</span>
-          <span class="hero-float-chip c3"><span class="dot"></span>승인 준비 완료</span>
-        </div>
-        <div class="hero-product">
-          <div class="hero-titlebar">
-            <span class="dot"></span>
-            <span class="dot"></span>
-            <span class="dot"></span>
-            <span class="crumb">Klorn / 오늘</span>
-            <span class="hero-live"><span class="hero-live-dot"></span>라이브</span>
-          </div>
-          <div class="klassify">
-            <div class="klassify-input">
-              <p class="mono klassify-eyebrow">라이브 분류기 · 내 API 키로 실행</p>
-              <div class="klassify-keyrow">
-                <select id="kf-provider" class="kf-field" aria-label="LLM 제공자">
-                  <option value="openrouter">OpenRouter</option>
-                  <option value="gemini">Gemini</option>
-                  <option value="openai">OpenAI</option>
-                </select>
-                <input id="kf-key" class="kf-field" type="password" placeholder="내 API 키" autocomplete="off" spellcheck="false">
+              <div class="tier push">
+                <div class="tier-label"><span class="pip"></span>Push · 지금 당신이 필요</div>
+                <div class="brow"><div class="txt">Alex와 Q4 로드맵 일정 논의<div class="from">Alex Rivera · Re: 프로젝트 업데이트</div></div><span class="chip">답장 초안 완료</span></div>
+                <div class="brow"><div class="txt">금요일 전 벤더 갱신 서명<div class="from">DocuSign · 조치 필요</div></div><span class="chip">조치 1건</span></div>
               </div>
-              <input id="kf-model" class="kf-field" placeholder="모델 — 선택 사항 (예: google/gemini-2.0-flash-001)" spellcheck="false">
-              <input id="kf-from" class="kf-field" placeholder="보낸 사람 — sender@example.com" spellcheck="false">
-              <input id="kf-subject" class="kf-field" placeholder="제목" spellcheck="false">
-              <textarea id="kf-snippet" class="kf-field" placeholder="미리보기 / 첫 줄 (선택 사항)"></textarea>
-              <div class="klassify-presets" id="kf-presets"></div>
-              <button type="button" id="kf-run" class="btn btn-gold klassify-run">이 이메일 분류하기</button>
-              <p class="klassify-note">실제 4단계 모델이 그대로 실행됩니다. API 키는 이 호출 한 번에만 전송되며 Klorn 서버에 저장되지 않습니다. 키가 아직 없다면? <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer noopener">OpenRouter 키 발급받기</a>.</p>
-            </div>
-            <div class="klassify-result">
-              <div class="klassify-tier">
-                <span class="klassify-tier-badge" id="kf-badge" data-tier="">READY</span>
-                <span class="klassify-tier-desc" id="kf-desc">예시를 고르거나 이메일을 붙여넣고 키를 입력한 뒤 분류를 실행해 보세요. Klorn 모델이 배정하는 정확한 단계 — PUSH, QUEUE, SILENT, AUTO — 를 확인할 수 있습니다.</span>
+
+              <div class="tier queue">
+                <div class="tier-label"><span class="pip"></span>Queue · 여유 있을 때</div>
+                <div class="brow"><div class="txt">Jordan의 대시보드 사양 수정본<div class="from">Jordan Lee</div></div><span class="check"></span></div>
+                <div class="brow"><div class="txt">2월 인보이스 내역<div class="from">자동화</div></div><span class="check"></span></div>
+                <div class="brow"><div class="txt">Support의 온보딩 플로우 아이디어<div class="from">Casey Park</div></div><span class="check"></span></div>
               </div>
-              <p class="klassify-reason" id="kf-reason"></p>
-              <div class="klassify-features" id="kf-features"></div>
+            </main>
+          </div>
+        </div>
+      </div>
+
+      <!-- trust / measured strip -->
+      <div class="trust reveal">
+        <p>실제 받은편지함에서 측정 — 약속이 아닌 실측</p>
+        <div class="trust-row">
+          <span class="stat"><b>94.3%</b><small>실제 메일 정확도</small></span>
+          <span class="stat"><b>95.5%</b><small>사일런트 정밀도</small></span>
+          <span class="stat"><b>4</b><small>주의 등급</small></span>
+          <span class="stat"><b>31s</b><small>받은편지함 → 큐</small></span>
+          <span class="stat"><b>0</b><small>미승인 행동</small></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ══ DEMO ═════════════════════════════════ -->
+  <section class="section section-bg-tint" id="how" aria-label="Klorn walkthrough">
+    <div class="container">
+      <div class="section-head-center reveal">
+        <p class="mono section-eyebrow">실제 작동 보기</p>
+        <h2 class="section-h">31초. 받은편지함에서 결정 큐까지.</h2>
+        <p class="section-lead">모든 신호는 네 등급 중 하나로 분류되고, 중요한 것만 원클릭으로 승인하는 결정 카드가 됩니다. 그 승인 없이는 어떤 것도 손을 떠나지 않으며, 매일의 영수증이 모든 행동을 기록합니다.</p>
+      </div>
+      <div class="media-frame reveal">
+        <video controls autoplay muted loop playsinline preload="metadata" poster="/media/klorn-demo-poster.jpg">
+          <source src="/media/klorn-demo.webm" type="video/webm">
+          <source src="/media/klorn-demo.mp4" type="video/mp4">
+        </video>
+      </div>
+      <div class="tier-legend reveal">
+        <div class="legend-card lg-push"><div class="lg-label"><span class="pip"></span>Push</div><p>시간에 민감하고 중대함. 도착하는 즉시 표면화됩니다.</p></div>
+        <div class="legend-card lg-queue"><div class="lg-label"><span class="pip"></span>Queue</div><p>볼 가치는 있지만 급하지 않음. 결정 큐로 모읍니다.</p></div>
+        <div class="legend-card lg-silent"><div class="lg-label"><span class="pip"></span>Silent</div><p>소음과 참고용. 방해하지 않도록 조용히 정리됩니다.</p></div>
+        <div class="legend-card lg-auto"><div class="lg-label"><span class="pip"></span>Auto</div><p>일상적인 항목은 미리 분류 — 여전히 대기 상태이며 스스로 전송되지 않습니다.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ LIVE CLASSIFIER ══════════════════════ -->
+  <section class="section" id="live-classifier" aria-label="Live classifier" style="scroll-margin-top:90px">
+    <div class="container">
+      <div class="section-head-center reveal">
+        <p class="mono section-eyebrow">라이브 체험 · 본인 키로</p>
+        <h2 class="section-h">어떤 메일이든 실제 4등급 모델로 돌려보세요.</h2>
+        <p class="section-lead">메일을 붙여넣거나 예시를 고르고, 본인 API 키를 넣으면 Klorn이 매기는 정확한 등급(PUSH·QUEUE·SILENT·AUTO)을 근거와 신호와 함께 확인할 수 있습니다.</p>
+      </div>
+
+      <div class="klassify-wrap reveal">
+        <div class="klassify-titlebar">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="crumb">Klorn / 플레이그라운드</span>
+          <span class="hero-live"><span class="hero-live-dot"></span>라이브</span>
+        </div>
+        <div class="klassify">
+          <div class="klassify-input">
+            <p class="mono klassify-eyebrow">당신의 메일</p>
+            <div class="klassify-keyrow">
+              <select id="kf-provider" class="kf-field" aria-label="LLM provider">
+                <option value="openrouter">OpenRouter</option>
+                <option value="gemini">Gemini</option>
+                <option value="openai">OpenAI</option>
+              </select>
+              <input id="kf-key" class="kf-field" type="password" placeholder="본인 API 키" autocomplete="off" spellcheck="false">
             </div>
+            <input id="kf-model" class="kf-field" placeholder="모델 — 선택 (예: google/gemini-2.0-flash-001)" spellcheck="false">
+            <input id="kf-from" class="kf-field" placeholder="보낸사람 — sender@example.com" spellcheck="false">
+            <input id="kf-subject" class="kf-field" placeholder="제목" spellcheck="false">
+            <textarea id="kf-snippet" class="kf-field" placeholder="미리보기 / 첫 줄 (선택)"></textarea>
+            <div class="klassify-presets" id="kf-presets"></div>
+            <button type="button" id="kf-run" class="btn btn-sky klassify-run">이 메일 분류하기</button>
+            <p class="klassify-note">실제 4등급 모델을 실행합니다. 키는 이 호출에 한 번만 전송되며 Klorn 서버에 저장되지 않습니다. 키가 없으신가요? <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer noopener">OpenRouter 키 발급받기</a>.</p>
+          </div>
+          <div class="klassify-result">
+            <div class="klassify-tier">
+              <span class="klassify-tier-badge" id="kf-badge" data-tier="">준비됨</span>
+              <span class="klassify-tier-desc" id="kf-desc">예시를 고르거나 메일을 붙여넣고, 키를 넣은 뒤 분류를 누르면 Klorn 모델이 매기는 정확한 등급(PUSH·QUEUE·SILENT·AUTO)이 표시됩니다.</span>
+            </div>
+            <p class="klassify-reason" id="kf-reason"></p>
+            <div class="klassify-features" id="kf-features"></div>
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ── Walkthrough demo section ─────────────── -->
-  <section class="section demo-section snap-section" aria-label="Klorn 사용 흐름">
-    <div class="reveal">
-      <p class="mono section-eyebrow">직접 확인하세요</p>
-      <h2 class="section-h">31초. 인박스에서 결정 큐까지.</h2>
-      <p class="section-lead">모든 신호는 4단계 중 하나로 분류되고, 그중 중요한 것만 클릭 한 번으로 승인하는 결정 카드가 됩니다. 승인 없이는 어떤 것도 손을 떠나지 않으며, 모든 행동은 하루 단위 영수증에 기록됩니다.</p>
-    </div>
-    <div class="demo-frame reveal">
-      <video controls autoplay muted loop playsinline preload="metadata" poster="/media/klorn-demo-poster.jpg">
-        <source src="/media/klorn-demo.webm" type="video/webm">
-        <source src="/media/klorn-demo.mp4" type="video/mp4">
-      </video>
-    </div>
-    <div class="demo-legend">
-      <div class="demo-tier push reveal">
-        <p class="mono tier-name">Push</p>
-        <p class="tier-desc">시간에 민감하고 중요도가 높은 신호. 도착하는 즉시 표시됩니다.</p>
+  <!-- ══ MEASURED / STATS ═════════════════════ -->
+  <section class="section section-bg-tint" id="measured" aria-label="Measured accuracy">
+    <div class="container narrow">
+      <div class="section-head-center reveal">
+        <p class="mono section-eyebrow">약속이 아닌 실측</p>
+        <h2 class="section-h">실제 받은편지함에서 나온 숫자.</h2>
+        <p class="section-lead">모든 릴리스는 출시 전 손수 라벨링한 실제 메일 세트로 채점됩니다. 아래는 최신 수치이며, 방법론은 공개 저장소에 있습니다.</p>
       </div>
-      <div class="demo-tier queue reveal">
-        <p class="mono tier-name">Queue</p>
-        <p class="tier-desc">볼 가치는 있지만 급하지 않은 신호. 결정 큐에 모아 한 번에 처리합니다.</p>
+      <div class="stats-grid reveal">
+        <div class="stat-tile featured"><div class="big">94.3%</div><div class="lab">실제 메일 정확도</div><div class="desc">손수 라벨링한 실제 메일 53개 중 50개를 올바른 등급으로 분류.</div></div>
+        <div class="stat-tile"><div class="big">95.5%</div><div class="lab">사일런트 정밀도</div><div class="desc">Klorn이 메일을 소음으로 분류할 때, 진짜 신호를 묻는 일은 거의 없습니다.</div></div>
+        <div class="stat-tile"><div class="big">0</div><div class="lab">미승인 행동</div><div class="desc">모든 전송·삭제·전달은 당신의 승인을 기다리며 서명된 영수증을 남깁니다.</div></div>
       </div>
-      <div class="demo-tier silent reveal">
-        <p class="mono tier-name">Silent</p>
-        <p class="tier-desc">노이즈와 단순 공지. 방해하지 않도록 조용히 정리됩니다.</p>
-      </div>
-      <div class="demo-tier auto reveal">
-        <p class="mono tier-name">Auto</p>
-        <p class="tier-desc">반복적인 항목은 미리 분류해 둡니다 — 준비만 해 둘 뿐, 스스로 발송하지 않습니다.</p>
-      </div>
+      <p class="stats-foot reveal">2026년 7월, 실제 받은편지함의 53개 손수 라벨링 세트에서 측정, 학습된 컨텍스트로 웜스타트(콜드스타트: 81.1%). <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" rel="noreferrer noopener">방법론과 평가셋 →</a></p>
     </div>
   </section>
 
-  <!-- ── Measured accuracy ───────────────────── -->
-  <section class="section section-narrow stats-section snap-section" id="measured" aria-label="실측 정확도">
-    <div class="reveal">
-      <p class="mono section-eyebrow">약속이 아니라 실측</p>
-      <h2 class="section-h">실제 인박스에서 나온 숫자.</h2>
-      <p class="section-lead">모든 릴리스는 출시 전에 손으로 라벨링한 실제 메일 세트로 채점됩니다. 아래는 최신 실측 수치이고, 방법론은 공개 리포에 그대로 있습니다.</p>
-    </div>
-    <div class="stats-grid">
-      <div class="stat-tile featured reveal">
-        <p class="stat-value"><span class="grad">94.3%</span></p>
-        <p class="stat-label">실메일 정확도</p>
-        <p class="stat-desc">손으로 라벨링한 실제 메일 53건 중 50건을 정확한 티어로 분류했습니다.</p>
-      </div>
-      <div class="stat-tile reveal">
-        <p class="stat-value">95.5%</p>
-        <p class="stat-label">Silent 정밀도</p>
-        <p class="stat-desc">Klorn이 노이즈로 분류한 메일이 진짜 신호를 묻어버리는 일은 거의 없습니다.</p>
-      </div>
-      <div class="stat-tile reveal">
-        <p class="stat-value">0</p>
-        <p class="stat-label">승인 없는 실행</p>
-        <p class="stat-desc">모든 발송·삭제·전달은 승인을 기다리고, 서명된 영수증을 남깁니다.</p>
-      </div>
-    </div>
-    <p class="stats-footnote reveal">2026년 7월, 실제 인박스에서 손으로 라벨링한 53건 세트로 측정 — 학습 컨텍스트가 쌓인 warm-start 기준(cold-start는 81.1%). <a href="https://github.com/k08200/klorn/tree/main/packages/api/eval" target="_blank" rel="noreferrer noopener">방법론과 eval 세트 →</a></p>
-  </section>
-
-  <!-- ── Decision card section ───────────────── -->
-  <section class="section snap-section">
-    <div class="decision-grid">
-      <div class="reveal">
-        <p class="mono section-eyebrow">결정 큐</p>
-        <h2 class="section-h">중요한 일은 카드 한 장에 담깁니다.</h2>
-        <p class="section-lead">또 하나의 인박스가 아닙니다. 움직이기에 충분한 맥락을 갖춘 결정만 남습니다.</p>
-      </div>
-
-      <div class="decision-card-wrap reveal">
-        <div class="decision-card">
-          <div class="decision-card-head">
-            <div>
-              <p class="mono eyebrow-mono">결정 카드</p>
-              <h3>투자자 팔로업 준비 완료</h3>
-            </div>
+  <!-- ══ DECISION CARD ════════════════════════ -->
+  <section class="section" aria-label="Decision queue">
+    <div class="container">
+      <div class="decision-grid">
+        <div class="reveal">
+          <p class="mono section-eyebrow">결정 큐</p>
+          <h2 class="section-h">중요한 일은 카드 한 장에 담깁니다.</h2>
+          <p class="section-lead">또 하나의 받은편지함이 아닙니다. 움직일 만큼 충분한 맥락을 가진 결정만.</p>
+        </div>
+        <div class="decision-card reveal">
+          <div class="dc-top">
+            <p class="mono dc-eyebrow">결정 카드</p>
             <span class="approval-pill">승인 필요</span>
           </div>
-
-          <div class="decision-rows">
-            <article class="decision-row">
-              <div class="inner">
-                <span class="mono tag sky">신호</span>
-                <div>
-                  <h4>투자자가 수정된 지표를 요청했습니다</h4>
-                  <p>이메일, 내일 미팅, 진행 중인 덱 작업이 하나의 결정으로 묶였습니다.</p>
-                </div>
-              </div>
-            </article>
-            <article class="decision-row">
-              <div class="inner">
-                <span class="mono tag amber">맥락</span>
-                <div>
-                  <h4>피치 덱이 아직 미완성입니다</h4>
-                  <p>답장하지 않은 메일과 남아 있는 작업이 같은 미팅 리스크를 가리킵니다.</p>
-                </div>
-              </div>
-            </article>
-            <article class="decision-row">
-              <div class="inner">
-                <span class="mono tag emerald">행동</span>
-                <div>
-                  <h4>오후 3-4시를 비워 두고 답장 초안을 준비합니다</h4>
-                  <p>다음 행동은 워크스페이스를 떠나기 전, 승인을 기다리며 준비됩니다.</p>
-                </div>
-              </div>
-            </article>
-          </div>
-
+          <div class="dc-title">투자자 후속 대응 준비됨</div>
+          <div class="dc-row"><div class="k">신호</div><div class="v">투자자가 수정된 지표를 요청<small>메일, 내일 미팅, 미완성 덱 작업이 하나의 결정으로 묶입니다.</small></div></div>
+          <div class="dc-row"><div class="k">맥락</div><div class="v">피치 덱이 아직 미완성<small>답장하지 않은 메일과 열린 작업이 같은 미팅 리스크를 가리킵니다.</small></div></div>
+          <div class="dc-row"><div class="k">행동</div><div class="v">오후 3–4시 확보 후 답장 초안 준비<small>다음 행동은 무엇이든 워크스페이스를 떠나기 전 승인 대기 상태로 준비됩니다.</small></div></div>
           <div class="decision-actions">
             <button type="button" class="act-btn primary">승인</button>
             <button type="button" class="act-btn ghost">먼저 수정</button>
@@ -1607,207 +616,133 @@
     </div>
   </section>
 
-  <!-- ── Pillars ─────────────────────────────── -->
-  <section class="pillars-strip snap-section">
-    <div class="pillars-grid">
-      <article class="pillar reveal">
-        <div class="pillar-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 7c4 0 4 10 8 10s4-10 8-10"></path>
-            <path d="M4 17c4 0 4-10 8-10s4 10 8 10"></path>
-            <circle cx="4" cy="7" r="1.5" fill="currentColor" stroke="none"></circle>
-            <circle cx="20" cy="17" r="1.5" fill="currentColor" stroke="none"></circle>
-          </svg>
-        </div>
-        <p class="mono pillar-label">수집</p>
-        <h3>업무 신호를 읽습니다</h3>
-        <p>메일, 캘린더, 작업, 메모리를 오늘 하루의 한 화면으로 모읍니다.</p>
-      </article>
-      <article class="pillar reveal">
-        <div class="pillar-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="6" cy="7" r="2"></circle>
-            <circle cx="18" cy="7" r="2"></circle>
-            <circle cx="8" cy="18" r="2"></circle>
-            <circle cx="17" cy="17" r="2"></circle>
-            <path d="M8 7h8M7 9l1 7M10 17l5-1M17 9v6"></path>
-          </svg>
-        </div>
-        <p class="mono pillar-label">연결</p>
-        <h3>노이즈를 맥락으로 바꿉니다</h3>
-        <p>사람, 마감, 스레드, 약속을 비즈니스 임팩트 기준으로 연결합니다.</p>
-      </article>
-      <article class="pillar reveal">
-        <div class="pillar-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 3 5 6v5c0 4.4 2.7 8 7 10 4.3-2 7-5.6 7-10V6l-7-3Z"></path>
-            <path d="m8.8 12.2 2.1 2.1 4.5-5"></path>
-          </svg>
-        </div>
-        <p class="mono pillar-label">승인</p>
-        <h3>행동 전에 확인합니다</h3>
-        <p>중요한 실행에는 근거와 리스크, 명시적인 승인 절차가 따릅니다.</p>
-      </article>
+  <!-- ══ PILLARS ══════════════════════════════ -->
+  <section class="section pillars" aria-label="How Klorn works">
+    <div class="container">
+      <div class="pillars-grid">
+        <div class="pillar reveal"><div class="pn">수집</div><h3>업무 신호를 읽습니다</h3><p>메일·캘린더·작업·메모리를 오늘 하루의 한 화면으로 모읍니다.</p></div>
+        <div class="pillar reveal"><div class="pn">연결</div><h3>소음을 맥락으로</h3><p>사람·마감·스레드·약속을 업무 영향도로 연결합니다.</p></div>
+        <div class="pillar reveal"><div class="pn">승인</div><h3>행동 전 확인</h3><p>중요한 실행에는 근거·리스크·명시적 승인 경로가 따라옵니다.</p></div>
+      </div>
     </div>
   </section>
 
-  <!-- ── Operating principle ─────────────────── -->
-  <section class="section section-narrow snap-section">
-    <div class="principle-grid">
-      <div class="reveal">
+  <!-- ══ PRINCIPLE ════════════════════════════ -->
+  <section class="section" aria-label="Operating principle">
+    <div class="container narrow">
+      <div class="section-head-center reveal">
         <p class="mono section-eyebrow">운영 원칙</p>
-        <h2 class="section-h">조용히 준비하고, 명확하게 확인합니다.</h2>
+        <h2 class="section-h">조용히 준비하고, 명확히 확인합니다.</h2>
       </div>
-      <div class="principle-steps">
-        <div class="principle-step reveal">
-          <p class="mono index">01</p>
-          <h3>관찰</h3>
-          <p>워크스페이스를 바꾸지 않고 중요한 패턴을 감지합니다.</p>
-        </div>
-        <div class="principle-step reveal">
-          <p class="mono index">02</p>
-          <h3>압축</h3>
-          <p>유용한 신호를 짧은 결정 카드로 압축합니다.</p>
-        </div>
-        <div class="principle-step reveal">
-          <p class="mono index">03</p>
-          <h3>초안</h3>
-          <p>답장, 리마인더, 일정 변경은 초안에서 시작합니다.</p>
-        </div>
-        <div class="principle-step reveal">
-          <p class="mono index">04</p>
-          <h3>승인</h3>
-          <p>외부로 나가는 행동은 명확한 확인 단계를 기다립니다.</p>
-        </div>
+      <div class="steps-grid">
+        <div class="step reveal"><div class="num">01 · 관찰</div><h3>관찰</h3><p>워크스페이스를 바꾸지 않고 중요한 패턴을 감지합니다.</p></div>
+        <div class="step reveal"><div class="num">02 · 압축</div><h3>압축</h3><p>유용한 신호를 짧은 결정 카드로 압축합니다.</p></div>
+        <div class="step reveal"><div class="num">03 · 초안</div><h3>초안</h3><p>답장·리마인더·일정 변경은 초안으로 시작합니다.</p></div>
+        <div class="step reveal"><div class="num">04 · 승인</div><h3>승인</h3><p>외부로 나가는 행동은 명확한 확인 단계를 기다립니다.</p></div>
       </div>
     </div>
   </section>
 
-  <!-- ── Brand film ──────────────────────────── -->
-  <section class="section promo-section snap-section" aria-label="14초로 보는 Klorn">
-    <div class="reveal">
-      <p class="mono section-eyebrow">14초</p>
-      <h2 class="section-h">노이즈는 걸러지고, 신호만 남습니다.</h2>
-    </div>
-    <div class="promo-frame reveal">
-      <video controls muted loop playsinline preload="metadata" poster="/media/klorn-promo-poster.jpg" data-inview-play aria-label="Klorn 브랜드 필름 — 시끄러운 인박스가 4개의 명확한 티어로 걸러집니다">
-        <source src="/media/klorn-promo.webm" type="video/webm">
-        <source src="/media/klorn-promo.mp4" type="video/mp4">
-      </video>
+  <!-- ══ PROMO / BRAND FILM ═══════════════════ -->
+  <section class="section section-bg-tint" aria-label="Klorn in fourteen seconds">
+    <div class="container">
+      <div class="section-head-center reveal">
+        <p class="mono section-eyebrow">14초</p>
+        <h2 class="section-h">소음은 들어오고, 신호만 나갑니다.</h2>
+      </div>
+      <div class="media-frame reveal">
+        <video controls muted loop playsinline preload="metadata" poster="/media/klorn-promo-poster.jpg" data-inview-play aria-label="Klorn brand film — a noisy inbox filtered into four clear tiers">
+          <source src="/media/klorn-promo.webm" type="video/webm">
+          <source src="/media/klorn-promo.mp4" type="video/mp4">
+        </video>
+      </div>
     </div>
   </section>
 
-  <!-- ── Pricing ─────────────────────────────── -->
-  <section class="section section-narrow snap-section" id="pricing" aria-label="가격">
-    <div class="reveal">
-      <p class="mono section-eyebrow" style="text-align:center;color:var(--brand-gold)">가격</p>
-      <h2 class="section-h" style="text-align:center">무료로 시작하세요. Klorn이 대신 행동할 때 업그레이드하세요.</h2>
-      <p class="section-lead" style="text-align:center;max-width:36rem;margin-left:auto;margin-right:auto">메일을 읽고, 분류하고, 브리핑하는 방화벽은 무료입니다. Pro는 행동을 열어줍니다 — 답장, 캘린더 기록, 그리고 더 많은 인박스.</p>
-    </div>
-    <div class="reveal" style="max-width:56rem;margin:2.5rem auto 0;display:flex;flex-wrap:wrap;gap:20px;justify-content:center;align-items:stretch">
-      <div style="flex:1 1 20rem;max-width:26rem;border:1px solid rgba(255,255,255,0.12);border-radius:18px;overflow:hidden;background:rgba(255,255,255,0.02)">
-        <div style="height:4px;background:linear-gradient(90deg, var(--stone-500), transparent)"></div>
-        <div style="padding:28px">
-          <div style="display:flex;align-items:center;justify-content:space-between">
-            <span class="mono" style="background:rgba(255,255,255,0.08);color:var(--stone-300);font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;padding:5px 10px;border-radius:999px">Free</span>
-            <span class="mono" style="color:var(--stone-500);font-size:11px;letter-spacing:.14em;text-transform:uppercase">방화벽</span>
-          </div>
-          <div style="margin-top:20px;display:flex;align-items:baseline;gap:6px">
-            <span style="font-size:40px;font-weight:700;color:#fff;letter-spacing:-0.02em">$0</span>
-            <span style="color:var(--stone-400);font-size:14px">/월</span>
-          </div>
-          <p style="margin-top:4px;color:var(--stone-500);font-size:12px">카드 등록이 필요 없습니다. 일일 AI 예산으로 지속 가능하게 운영됩니다.</p>
-          <ul style="list-style:none;padding:0;margin:24px 0 0;display:flex;flex-direction:column;gap:12px">
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--stone-400)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>4단계 메일 방화벽 — 진짜 신호만 나를 방해합니다</span></li>
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--stone-400)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>모든 카드에 근거가 담긴 결정 큐</span></li>
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--stone-400)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>모닝 브리핑과 캘린더 뷰</span></li>
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--stone-400)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>내 메일에서 답을 찾아주는 어시스턴트</span></li>
+  <!-- ══ PRICING ══════════════════════════════ -->
+  <section class="section" id="pricing" aria-label="Pricing">
+    <div class="container">
+      <div class="section-head-center reveal">
+        <p class="mono section-eyebrow" style="color:var(--sky-600)">가격</p>
+        <h2 class="section-h">무료로 시작하세요. Klorn이 대신 행동할 때 업그레이드하세요.</h2>
+        <p class="section-lead">메일을 읽고·분류하고·브리핑하는 방화벽은 무료입니다. Pro는 행동을 엽니다: 답장, 캘린더 작성, 더 많은 받은편지함.</p>
+      </div>
+      <div class="pricing-grid reveal">
+        <div class="price-card">
+          <span class="price-badge">무료</span>
+          <div class="price-name">방화벽</div>
+          <div class="price-amt">$0<span> /월</span></div>
+          <p class="price-note">카드 불필요. 일일 AI 예산으로 지속 가능하게 유지합니다.</p>
+          <ul class="price-feats">
+            <li><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-9"/></svg>4등급 메일 방화벽 — 진짜 신호만 당신을 방해합니다</li>
+            <li><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-9"/></svg>카드마다 근거가 있는 결정 큐</li>
+            <li><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-9"/></svg>아침 브리핑과 캘린더 뷰</li>
+            <li><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-9"/></svg>당신의 메일에서 답하는 어시스턴트</li>
           </ul>
-          <a href="https://app.klorn.ai/early-access" class="btn btn-ghost" style="margin-top:28px;width:100%;justify-content:center" aria-label="무료로 시작">
-            무료로 시작
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
-          </a>
+          <a class="btn btn-ghost" href="https://app.klorn.ai/early-access">무료로 시작</a>
         </div>
-      </div>
-      <div style="flex:1 1 20rem;max-width:26rem;border:1px solid rgba(216,164,93,0.3);border-radius:18px;overflow:hidden;background:rgba(255,255,255,0.03)">
-        <div style="height:4px;background:linear-gradient(90deg, var(--brand-gold), transparent)"></div>
-        <div style="padding:28px">
-          <div style="display:flex;align-items:center;justify-content:space-between">
-            <span class="mono" style="background:rgba(216,164,93,0.15);color:var(--brand-gold);font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;padding:5px 10px;border-radius:999px">파운딩 가격</span>
-            <span class="mono" style="color:var(--stone-500);font-size:11px;letter-spacing:.14em;text-transform:uppercase">Klorn Pro</span>
-          </div>
-          <div style="margin-top:20px;display:flex;align-items:baseline;gap:6px">
-            <span style="font-size:40px;font-weight:700;color:#fff;letter-spacing:-0.02em">$7.99</span>
-            <span style="color:var(--stone-400);font-size:14px">/월</span>
-          </div>
-          <p style="margin-top:4px;color:var(--stone-500);font-size:12px">7일 Pro 무료 체험 후 웹 기준 월 $7.99. 언제든 해지할 수 있습니다.</p>
-          <ul style="list-style:none;padding:0;margin:24px 0 0;display:flex;flex-direction:column;gap:12px">
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand-gold)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Free의 모든 것, 더 큰 AI 예산과 함께</span></li>
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand-gold)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>승인 후 Klorn에서 바로 발송하는 답장 초안</span></li>
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand-gold)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>음성이나 챗으로 캘린더 일정 생성</span></li>
-            <li style="display:flex;gap:12px;align-items:flex-start;color:var(--stone-100);font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand-gold)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg><span>여러 Gmail 인박스, 노이즈는 자동 처리</span></li>
+        <div class="price-card pro">
+          <span class="price-badge">창립 가격</span>
+          <div class="price-name">Klorn Pro</div>
+          <div class="price-amt">$7.99<span> /월</span></div>
+          <p class="price-note">7일 Pro 체험 후 웹에서 월 $7.99. 언제든 해지 가능.</p>
+          <ul class="price-feats">
+            <li><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-9"/></svg>무료의 모든 기능 + 더 큰 AI 예산</li>
+            <li><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-9"/></svg>Klorn에서 승인하고 보내는 답장 초안</li>
+            <li><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-9"/></svg>음성이나 채팅으로 캘린더 일정 생성</li>
+            <li><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-9"/></svg>여러 Gmail 받은편지함, 소음 자동 처리</li>
           </ul>
-          <a href="https://app.klorn.ai/login" class="btn btn-cream" style="margin-top:28px;width:100%;justify-content:center" aria-label="7일 Pro 체험 시작">
-            7일 Pro 체험 시작
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
-          </a>
+          <a class="btn btn-sky" href="https://app.klorn.ai/login">7일 Pro 체험 시작</a>
         </div>
       </div>
-    </div>
-    <p class="reveal" style="margin-top:16px;text-align:center;color:var(--stone-500);font-size:11px">iPhone에서는 앱 안에서 구독합니다. 셀프호스팅은 전부 무료 — Klorn은 오픈소스(AGPLv3)입니다.</p>
-  </section>
-
-  <!-- ── Final CTA ───────────────────────────── -->
-  <section class="final-cta reveal snap-section">
-    <p class="mono section-eyebrow">결정을 위해 만들어졌습니다</p>
-    <h2 class="final-cta-h">다음 인박스는 결정 큐입니다.</h2>
-    <p class="final-cta-p">하루가 소란스러워지기 전에, 맥락과 근거와 행동을 하나의 깔끔한 줄로 정렬하세요.</p>
-    <div class="final-cta-actions">
-      <a href="https://app.klorn.ai/early-access" class="btn btn-cream" aria-label="얼리 액세스 신청 — 비공개 베타 기간 무료">
-        얼리 액세스 신청
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M5 12h14M13 6l6 6-6 6"></path>
-        </svg>
-      </a>
-      <a href="https://github.com/k08200/klorn" target="_blank" rel="noreferrer noopener" class="btn btn-ghost btn-github" aria-label="GitHub에서 Klorn 보기">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.16-.02-2.1-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.02 11.02 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.8-.01 3.18 0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"/></svg>
-        GitHub에서 셀프호스팅
-        <span class="star-count" data-gh-stars></span>
-      </a>
+      <p class="pricing-foot reveal">iPhone에서는 앱에서 구독합니다. 전부 무료로 셀프 호스팅 — Klorn은 오픈소스입니다(AGPLv3).</p>
     </div>
   </section>
 
-  <!-- ── Footer ──────────────────────────────── -->
+  <!-- ══ FINAL CTA ════════════════════════════ -->
+  <section class="final-cta reveal" aria-label="Get started">
+    <div class="final-bg"></div>
+    <div class="final-inner">
+      <p class="mono section-eyebrow">결정을 위해 만들었습니다</p>
+      <h2>다음 세대의 받은편지함은 결정 큐입니다.</h2>
+      <p>하루가 시끄러워지기 전에, 맥락·근거·행동을 하나의 깔끔한 줄로 정렬하세요.</p>
+      <div class="final-actions">
+        <a class="btn btn-primary" href="https://app.klorn.ai/early-access">얼리 액세스 요청 →</a>
+        <a class="btn btn-ghost" href="https://github.com/k08200/klorn" rel="noreferrer noopener">
+          <svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+          Self-host on GitHub <span class="star-count" data-gh-stars></span></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ FOOTER ═══════════════════════════════ -->
   <footer>
-    <div class="footer-inner">
+    <div class="container footer-grid">
       <div class="footer-brand">
-        <img src="/brand/mark.svg?v=matte2" alt="">
-        <span>Klorn — 행동할 가치가 있는 명확한 신호.</span>
+        <img src="/brand/mark.svg?v=matte2" alt="Klorn">
+        <span class="fb-t"><b>Klorn</b> — 행동할 가치가 있는 명확한 신호.</span>
       </div>
-      <div class="footer-right">
-        <div class="footer-social">
-          <a href="https://github.com/k08200/klorn" target="_blank" rel="noreferrer noopener" aria-label="GitHub의 Klorn"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.16-.02-2.1-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.02 11.02 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14 0 1.55-.01 2.8-.01 3.18 0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"/></svg></a>
-          <a href="https://x.com/klornai" target="_blank" rel="noreferrer noopener" aria-label="X의 Klorn"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.66l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"/></svg></a>
-          <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" target="_blank" rel="noreferrer noopener" aria-label="Klorn Slack 참여"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg></a>
-        </div>
-        <span class="footer-divider"></span>
-        <div class="footer-links">
-          <a href="https://app.klorn.ai/privacy">개인정보처리방침</a>
-          <a href="https://app.klorn.ai/terms">이용약관</a>
-          <a href="mailto:k0820086@gmail.com">문의</a>
-        </div>
+      <div class="footer-links">
+        <a href="https://app.klorn.ai/privacy">개인정보</a>
+        <a href="https://app.klorn.ai/terms">약관</a>
+        <a href="mailto:k0820086@gmail.com">문의</a>
+      </div>
+      <div class="footer-social">
+        <a href="https://github.com/k08200/klorn" rel="noreferrer noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="https://x.com/klornai" rel="noreferrer noopener" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a href="https://join.slack.com/t/klorn/shared_invite/zt-3zkj8lqxg-L4LK8dNPkzgupHEdmXgbIg" rel="noreferrer noopener" aria-label="Slack"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523z"/></svg></a>
       </div>
     </div>
   </footer>
 
-  <!-- Persistent download + language dock (bottom-center) -->
+  <!-- ══ FLOATING DOWNLOAD + LANGUAGE DOCK ════ -->
   <div class="dl-dock" id="dlDock">
-    <a href="https://github.com/k08200/klorn/releases/latest/download/Klorn-macos.zip" rel="noreferrer noopener" class="dl-dock-btn" aria-label="네이티브 macOS 앱 다운로드 (.zip)">
+    <a href="https://github.com/k08200/klorn/releases/latest/download/Klorn-macos.zip" rel="noreferrer noopener" class="dl-dock-btn" aria-label="macOS용 Klorn.app 다운로드 (네이티브 상단바 방화벽, .zip)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 11l5 5 5-5"></path><path d="M5 21h14"></path></svg>
-      Mac 앱 다운로드
+      <span class="lbl">Mac용 다운로드</span>
     </a>
-    <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener" class="dl-dock-help" aria-label="첫 실행 도움말 — macOS가 서명 없는 앱을 한 번 차단합니다. 릴리즈 노트에 1회용 해결법이 있어요" title="macOS가 첫 실행을 차단하면 — 해결법은 릴리즈 노트에">?</a>
-    <div class="dl-dock-lang" role="group" aria-label="언어">
+    <a href="https://github.com/k08200/klorn/releases/latest" rel="noreferrer noopener" class="dl-dock-help" aria-label="First-launch help — macOS blocks unsigned apps once; the release notes show the one-time fix" title="macOS blocks the first launch — one-time fix in the release notes">?</a>
+    <div class="dl-dock-lang" role="group" aria-label="Language">
       <a href="/" data-lang-switch="en" aria-label="View in English">EN</a>
       <span class="dl-dock-sep" aria-hidden="true">·</span>
       <span class="dl-dock-cur" aria-current="page">KO</span>
@@ -1855,73 +790,7 @@
       document.querySelectorAll('video[data-inview-play]').forEach((video) => filmObserver.observe(video));
     }
 
-    // ── Section-level fade in/out, scrubbed exactly to scroll position ──
-    // Whichever full-height section sits centered in the viewport is fully
-    // opaque; the ones above/below fade out as they move away from center,
-    // so scrolling reads as one section dissolving into the next.
-    if (!reduceMotion) {
-      const fadePanels = Array.from(document.querySelectorAll('.snap-section'));
-
-      // Opacity is driven by how close a section's CENTER is to the viewport
-      // center — not by whether it fills the screen. The old "must fill the
-      // viewport" test made BOTH sections drop to ~0 right at a boundary
-      // (each only covers half), which read as a full-black gap. With the
-      // center-distance model the two sections meet at 0.5/0.5 exactly at the
-      // handoff, so the screen never goes dark between them.
-      // FADE_PX = length of the ramp on each side; BOUNDARY_MIN = the opacity
-      // each of two adjacent sections holds exactly at their shared boundary.
-      // Keeping it high (0.7) means the handoff is a bright cross-dissolve —
-      // outgoing content fading near the top edge, incoming near the bottom —
-      // instead of both dropping toward black in the middle.
-      const FADE_PX = 320;
-      const BOUNDARY_MIN = 0.7;
-      const clamp01 = (v) => Math.max(0, Math.min(1, v));
-
-      const updateFades = () => {
-        const vh = window.innerHeight;
-        const viewCenter = vh / 2;
-        const doc = document.documentElement;
-        const atTop = window.scrollY <= 2;
-        const atBottom = window.scrollY + vh >= doc.scrollHeight - 2;
-        const last = fadePanels.length - 1;
-
-        fadePanels.forEach((panel, i) => {
-          const r = panel.getBoundingClientRect();
-          const center = r.top + r.height / 2;
-          const half = r.height / 2;
-          const dist = Math.abs(center - viewCenter);
-          // At dist == half (the section's edge sitting on viewport center,
-          // i.e. a boundary) opacity == BOUNDARY_MIN; it climbs to 1 as the
-          // section centers up and falls to 0 once it's well past.
-          let opacity = clamp01((half - dist) / FADE_PX + BOUNDARY_MIN);
-          // First/last section has nothing on the far side to hand off to,
-          // so pin it solid while the page is scrolled hard against that end.
-          if (atTop && i === 0) opacity = 1;
-          if (atBottom && i === last) opacity = 1;
-          panel.style.opacity = opacity;
-          panel.style.pointerEvents = opacity < 0.05 ? 'none' : '';
-        });
-      };
-
-      // Run directly on every scroll (7 rect reads — cheap, and guarantees the
-      // opacities always match the exact current scroll position rather than
-      // lagging a frame or getting skipped).
-      window.addEventListener('scroll', updateFades, { passive: true });
-      window.addEventListener('resize', updateFades);
-      updateFades();
-      // Layout (fonts, the 3D canvas, images) can still be settling right
-      // after load, which would bake a stale viewport/rect into the very
-      // first pass — recheck once things have definitely finished.
-      requestAnimationFrame(updateFades);
-      window.addEventListener('load', updateFades);
-      setTimeout(updateFades, 500);
-    }
-
     // ── Hero live classifier — calls the real /api/playground/classify ──
-    // This is the actual `judgeEmail` 4-tier model (bring your own LLM key).
-    //  - Deployed klorn.ai → the production API (allowed via first-party CORS).
-    //  - Local dev → a locally-running API on :3001 (allowed via the dev-origin
-    //    rule when NODE_ENV isn't production). Start the API to test locally.
     const IS_LOCAL = /^(localhost|127\.|0\.0\.0\.0)/.test(location.hostname) || location.hostname === '';
     const CLASSIFY_URL = IS_LOCAL
       ? 'http://localhost:3001/api/playground/classify'
@@ -1942,13 +811,12 @@
       const kfFeatures = kfEl('kf-features');
 
       const TIER_DESC = {
-        PUSH: '시간에 민감하고 중요도가 높은 신호 — Klorn이 도착하는 즉시 표시합니다.',
-        QUEUE: '볼 가치는 있지만 급하지 않은 신호 — 결정 큐에 모아 처리합니다.',
-        SILENT: '노이즈 또는 단순 공지 — 방해하지 않도록 조용히 정리됩니다.',
-        AUTO: '반복적이고 위험이 낮은 항목 — 미리 처리해 두되, 발송은 승인을 기다립니다.',
+        PUSH: '시간에 민감하고 중대함 — Klorn이 도착 즉시 표면화합니다.',
+        QUEUE: '볼 가치는 있지만 급하지 않음 — 결정 큐로 모읍니다.',
+        SILENT: '소음이나 참고용 — 방해하지 않도록 조용히 정리됩니다.',
+        AUTO: '일상적이고 저위험 — 미리 처리되지만 여전히 승인 대기 상태입니다.',
       };
 
-      // Example emails — one per tier, so a visitor sees the model separate them.
       const PRESETS = [
         { name: '투자자 요청', from: 'Mina Kim <mina@sequoia.com>', subject: 'Revised metrics before tomorrow 3pm?', snippet: "Can you send the updated ARR and burn before our partner call tomorrow at 3? Need it to finalize the memo." },
         { name: '뉴스레터', from: 'Morning Brew <crew@morningbrew.com>', subject: '☕ Nvidia earnings, and a $2 coffee war', snippet: 'Your daily roundup of business news. Unsubscribe anytime.' },
@@ -1956,7 +824,6 @@
         { name: '영수증', from: 'Stripe <receipts@stripe.com>', subject: 'Your invoice #4021 was paid', snippet: 'No action needed. View invoice in your dashboard.' },
       ];
 
-      // Presets
       const presetsWrap = kfEl('kf-presets');
       PRESETS.forEach((p) => {
         const b = document.createElement('button');
@@ -1970,14 +837,10 @@
         });
         presetsWrap.appendChild(b);
       });
-      // Prefill the first example so the panel looks alive on load.
       kfFrom.value = PRESETS[0].from;
       kfSubject.value = PRESETS[0].subject;
       kfSnippet.value = PRESETS[0].snippet;
 
-      // Restore provider/model only. The API key is NEVER persisted — a raw
-      // BYOK LLM key in localStorage is cleartext sensitive data; the visitor
-      // re-enters it each session for the one-shot demo call.
       try {
         const savedProvider = localStorage.getItem('klorn_pg_provider');
         const savedModel = localStorage.getItem('klorn_pg_model');
@@ -2022,12 +885,10 @@
         const snippet = kfSnippet.value.trim();
         const model = kfModel.value.trim();
 
-        if (!apiKey) { showError('API 키를 먼저 입력해 주세요 — 분류는 내 키로 1회 실행됩니다.'); kfKey.focus(); return; }
-        if (!from || !subject) { showError('최소한 보낸 사람 주소와 제목은 입력해 주세요.'); return; }
+        if (!apiKey) { showError('API 키를 먼저 넣어주세요 — 본인 키로 한 번 분류합니다.'); kfKey.focus(); return; }
+        if (!from || !subject) { showError('최소한 보낸사람 주소와 제목을 채워주세요.'); return; }
 
         try {
-          // Never persist the API key (cleartext sensitive data). Provider and
-          // model are non-sensitive convenience only.
           localStorage.setItem('klorn_pg_provider', provider);
           if (model) localStorage.setItem('klorn_pg_model', model);
         } catch (_) { /* ignore */ }
@@ -2035,7 +896,7 @@
         kfRun.disabled = true;
         kfRun.textContent = '분류 중…';
         setBadge('', '···');
-        kfDesc.textContent = '이메일에 모델을 실행하는 중…';
+        kfDesc.textContent = '메일에 모델을 실행하는 중…';
         kfReason.textContent = '';
         renderFeatures(null);
 
@@ -2051,8 +912,8 @@
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
-            let msg = data.error || `요청이 실패했습니다 (${res.status}).`;
-            if (res.status === 429) msg = '요청 한도(분당 8회)에 도달했습니다. 잠시 후 다시 시도해 주세요.';
+            let msg = data.error || `Request failed (${res.status}).`;
+            if (res.status === 429) msg = '요청 한도 초과(분당 8회). 잠시 후 다시 시도하세요.';
             if (data.detail) msg += ` — ${data.detail}`;
             showError(msg);
             return;
@@ -2063,10 +924,10 @@
           kfReason.textContent = data.reason || '';
           renderFeatures(data.features);
         } catch (err) {
-          showError('분류기에 연결할 수 없습니다. 사이트 소유자라면 이 origin을 API의 CORS_ORIGINS에 추가해 주세요. 아니라면 연결 상태를 확인한 뒤 다시 시도해 주세요.');
+          showError('분류기에 연결하지 못했습니다. 사이트 소유자라면 이 origin을 API의 CORS_ORIGINS에 추가하세요. 아니라면 연결을 확인하고 다시 시도하세요.');
         } finally {
           kfRun.disabled = false;
-          kfRun.textContent = '이 이메일 분류하기';
+          kfRun.textContent = '이 메일 분류하기';
         }
       };
 
@@ -2115,157 +976,5 @@
       })
       .catch(() => {});
   </script>
-
-  <script type="module">
-    const canvas = document.getElementById('hero-3d');
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const isDesktop = window.matchMedia('(min-width: 1024px)').matches;
-
-    if (canvas && isDesktop && window.WebGLRenderingContext) {
-      import('https://unpkg.com/three@0.160.0/build/three.module.js')
-        .then((THREE) => initHero3D(THREE))
-        .catch((e) => { console.error('hero3d init failed', e); });
-    }
-
-    function initHero3D(THREE) {
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
-      camera.position.set(0, 0, 11);
-
-      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-
-      const gold = new THREE.Color(0xd8a45d);
-      const goldBright = new THREE.Color(0xf7d59c);
-      const goldDim = new THREE.Color(0x8a6a3f);
-
-      // Soft radial-gradient sprite texture — cheap bloom substitute so nodes read as
-      // glowing points of light instead of flat, hard-edged polygons
-      const glowCanvas = document.createElement('canvas');
-      glowCanvas.width = glowCanvas.height = 128;
-      const gctx = glowCanvas.getContext('2d');
-      const grad = gctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-      grad.addColorStop(0, 'rgba(255,255,255,1)');
-      grad.addColorStop(0.35, 'rgba(247,213,156,0.9)');
-      grad.addColorStop(1, 'rgba(216,164,93,0)');
-      gctx.fillStyle = grad;
-      gctx.fillRect(0, 0, 128, 128);
-      const glowTexture = new THREE.CanvasTexture(glowCanvas);
-      const makeGlowSprite = (scale, opacity) => {
-        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-          map: glowTexture, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending,
-        }));
-        sprite.scale.set(scale, scale, 1);
-        return sprite;
-      };
-
-      // Ambient particle field — signals scattered across the whole hero before they're sorted
-      const particleCount = 260;
-      const particlePositions = new Float32Array(particleCount * 3);
-      for (let i = 0; i < particleCount; i++) {
-        particlePositions[i * 3] = (Math.random() - 0.5) * 20;
-        particlePositions[i * 3 + 1] = (Math.random() - 0.5) * 16;
-        particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 10 - 4;
-      }
-      const particleGeo = new THREE.BufferGeometry();
-      particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-      const particles = new THREE.Points(
-        particleGeo,
-        new THREE.PointsMaterial({ color: gold, size: 0.045, transparent: true, opacity: 0.45, sizeAttenuation: true })
-      );
-      scene.add(particles);
-
-      // Main cluster — centered behind the demo frame lower in the hero, large enough
-      // to read as the hero's core visual (like an interactive product canvas), not a corner sticker
-      const group = new THREE.Group();
-      group.position.set(0, -2.7, -1);
-      scene.add(group);
-
-      // Core — the single clear signal everything resolves to. Layered glow sprites (soft,
-      // camera-facing) plus a tiny bright wireframe icosahedron for a crisp hot center.
-      const core = new THREE.Mesh(
-        new THREE.IcosahedronGeometry(0.22, 1),
-        new THREE.MeshBasicMaterial({ color: goldBright, transparent: true, opacity: 0.9 })
-      );
-      const coreGlow = [makeGlowSprite(1.4, 1), makeGlowSprite(2.6, 0.5), makeGlowSprite(4.2, 0.22)];
-      group.add(core, ...coreGlow);
-
-      // Outer wireframe shell — the filter boundary raw signals pass through
-      const shell = new THREE.LineSegments(
-        new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(5.6, 1)),
-        new THREE.LineBasicMaterial({ color: goldBright, transparent: true, opacity: 0.16 })
-      );
-      group.add(shell);
-
-      // Orbiting signal nodes — mail / calendar / approvals converging on the core,
-      // each trailed by a line back to center so the "many signals, one decision" read is explicit
-      const orbits = [
-        { radius: 3.0, speed: 0.5, tilt: 0.6, phase: 0 },
-        { radius: 3.8, speed: -0.38, tilt: -0.9, phase: 2.1 },
-        { radius: 2.3, speed: 0.7, tilt: 1.2, phase: 4.2 },
-        { radius: 4.3, speed: 0.3, tilt: -0.45, phase: 1.4 },
-        { radius: 3.4, speed: -0.55, tilt: 1.0, phase: 3.3 },
-        { radius: 5.0, speed: 0.42, tilt: 0.3, phase: 0.7 },
-      ].map((cfg) => {
-        const node = new THREE.Group();
-        node.add(makeGlowSprite(0.4, 1), makeGlowSprite(0.9, 0.35));
-        const line = new THREE.Line(
-          new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)]),
-          new THREE.LineBasicMaterial({ color: goldDim, transparent: true, opacity: 0.3 })
-        );
-        group.add(node, line);
-        return { ...cfg, node, line };
-      });
-
-      const target = { x: 0, y: 0 };
-      window.addEventListener('pointermove', (e) => {
-        target.x = (e.clientX / window.innerWidth - 0.5) * 0.8;
-        target.y = (e.clientY / window.innerHeight - 0.5) * 0.5;
-      });
-
-      const resize = () => {
-        const parent = canvas.parentElement;
-        const width = parent.clientWidth;
-        const height = parent.clientHeight;
-        renderer.setSize(width, height, false);
-        camera.aspect = width / height;
-        camera.updateProjectionMatrix();
-      };
-      const resizeObserver = new ResizeObserver(resize);
-      resizeObserver.observe(canvas.parentElement);
-      resize();
-
-      let frame = 0;
-      const animate = () => {
-        frame += 1;
-        const t = frame * 0.01;
-        group.rotation.y += 0.0025;
-        group.rotation.x = 0.35 + Math.sin(frame * 0.005) * 0.08;
-        particles.rotation.y += 0.0004;
-
-        orbits.forEach(({ radius, speed, tilt, phase, node, line }) => {
-          const a = t * speed + phase;
-          const x = Math.cos(a) * radius;
-          const z = Math.sin(a) * radius;
-          const y = Math.sin(a * 0.7 + phase) * tilt;
-          node.position.set(x, y, z);
-          const positions = line.geometry.attributes.position;
-          positions.setXYZ(1, x, y, z);
-          positions.needsUpdate = true;
-        });
-
-        camera.position.x += (target.x - camera.position.x) * 0.04;
-        camera.position.y += (-target.y - camera.position.y) * 0.04;
-        camera.lookAt(0, 0, 0);
-        renderer.render(scene, camera);
-        if (!reduceMotion) requestAnimationFrame(animate);
-      };
-
-      renderer.render(scene, camera);
-      canvas.classList.add('ready');
-      if (!reduceMotion) requestAnimationFrame(animate);
-    }
-  </script>
-
 </body>
 </html>
