@@ -54,13 +54,32 @@
 
     html { scroll-behavior: smooth; overflow-x: hidden; -webkit-text-size-adjust:100%; }
     body {
+      position: relative;
       font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;
-      background: var(--canvas);
+      background: #fff;
       color: var(--ink);
       line-height: 1.6;
       -webkit-font-smoothing: antialiased;
       word-break: keep-all;
       overflow-wrap: anywhere;
+    }
+    /* Page-wide background presence: layered sky glows + faint dot grid, fixed
+       so transparent sections reveal depth as you scroll. */
+    body::before {
+      content:""; position:fixed; inset:0; z-index:-2; pointer-events:none;
+      background:
+        radial-gradient(55% 45% at 84% 4%, rgba(56,189,248,.20), transparent 60%),
+        radial-gradient(48% 42% at 8% 34%, rgba(125,211,252,.20), transparent 62%),
+        radial-gradient(60% 45% at 92% 62%, rgba(186,230,253,.28), transparent 60%),
+        radial-gradient(80% 55% at 48% 106%, rgba(56,189,248,.20), transparent 60%),
+        #ffffff;
+    }
+    body::after {
+      content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+      background-image: radial-gradient(circle, rgba(14,116,180,.09) 1px, transparent 1.5px);
+      background-size: 30px 30px;
+      -webkit-mask-image: radial-gradient(130% 100% at 50% 40%, #000 55%, transparent 88%);
+      mask-image: radial-gradient(130% 100% at 50% 40%, #000 55%, transparent 88%);
     }
     a { color: inherit; text-decoration: none; }
     button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
@@ -128,15 +147,18 @@
     @media (max-width:900px){ .nav-links { display:none; } }
 
     /* ── Hero ──────────────────────────────────── */
-    .hero { position:relative; overflow:hidden; padding-top:132px; padding-bottom:64px; }
-    .hero-sky {
-      position:absolute; inset:0; z-index:0; pointer-events:none;
-      background: radial-gradient(130% 90% at 50% -12%, var(--sky-100) 0%, var(--sky-50) 32%, #ffffff 66%);
-    }
-    .cloud { position:absolute; border-radius:50%; filter:blur(44px); z-index:0; pointer-events:none; }
-    .cloud.a { width:520px; height:300px; background:radial-gradient(circle,#fff 0%,rgba(186,230,253,.5) 70%,transparent 72%); top:70px; left:-90px; opacity:.7; }
-    .cloud.b { width:660px; height:360px; background:radial-gradient(circle,#fff 0%,rgba(125,211,252,.34) 70%,transparent 72%); top:24px; right:-140px; opacity:.65; }
-    .cloud.c { width:440px; height:250px; background:radial-gradient(circle,#fff 0%,rgba(224,242,254,.7) 70%,transparent 72%); bottom:-30px; left:32%; opacity:.6; }
+    .hero { position:relative; overflow:hidden; padding-top:150px; padding-bottom:80px; }
+    /* Full-bleed illustrated sky scene (self-contained SVG, animated drift) */
+    .hero-scene { position:absolute; inset:0; width:100%; height:100%; z-index:0; pointer-events:none; }
+    .hero-scene .drift { will-change: transform; }
+    .drift-far  { animation: drift 68s ease-in-out infinite alternate; }
+    .drift-mid  { animation: drift 46s ease-in-out infinite alternate; }
+    .drift-near { animation: drift 34s ease-in-out infinite alternate; }
+    @keyframes drift { from { transform: translateX(-26px); } to { transform: translateX(26px); } }
+    /* soft white veil so the headline stays legible over the sky */
+    .hero-veil { position:absolute; inset:0; z-index:1; pointer-events:none;
+      background: linear-gradient(180deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.08) 24%, rgba(255,255,255,.34) 62%, #fff 100%); }
+    @media (prefers-reduced-motion: reduce) { .hero-scene .drift { animation: none; } }
 
     .hero-inner { position:relative; z-index:2; text-align:center; max-width:880px; margin:0 auto; }
     .hero-eyebrow {
@@ -146,8 +168,13 @@
     }
     .hero-eyebrow:hover { color: var(--sky-700); }
     .hero-eyebrow .dot { width:7px; height:7px; border-radius:50%; background: var(--sky-500); box-shadow:0 0 0 3px rgba(14,165,233,.2); }
-    h1.hero-h { font-size:clamp(40px,6.4vw,76px); line-height:1.02; letter-spacing:-.03em; font-weight:680; margin-bottom:22px; }
-    h1.hero-h .accent { font-style:italic; font-weight:500; color: var(--sky-600); }
+    h1.hero-h { font-size:clamp(42px,6.8vw,80px); line-height:1.0; letter-spacing:-.035em; font-weight:700; margin-bottom:22px; }
+    h1.hero-h .accent { position:relative; font-style:italic; font-weight:500; color: var(--sky-600); }
+    h1.hero-h .accent::before {
+      content:""; position:absolute; left:-8%; right:-8%; top:4%; bottom:2%; z-index:-1;
+      background: radial-gradient(58% 68% at 50% 55%, rgba(56,189,248,.38), transparent 72%);
+      filter: blur(7px);
+    }
     .hero-lead { font-size:clamp(17px,2vw,21px); color: var(--ink-mute); max-width:620px; margin:0 auto 20px; line-height:1.55; }
 
     /* invite-only banner */
@@ -176,7 +203,12 @@
 
     /* ── Floating product window (the brief) ───── */
     .product { position:relative; z-index:2; margin:52px auto 0; max-width:940px; }
-    .win { border-radius:18px; overflow:hidden; background:#fff; border:1px solid var(--line);
+    .product::before {
+      content:""; position:absolute; left:4%; right:4%; top:8%; bottom:-6%; z-index:0; pointer-events:none;
+      background: radial-gradient(58% 62% at 50% 42%, rgba(56,189,248,.34), rgba(125,211,252,.12) 55%, transparent 72%);
+      filter: blur(44px);
+    }
+    .win { position:relative; z-index:1; border-radius:18px; overflow:hidden; background:#fff; border:1px solid var(--line);
       box-shadow:0 44px 90px -34px rgba(12,60,110,.36), 0 10px 28px -14px rgba(12,40,80,.2); }
     .win-bar { display:flex; align-items:center; gap:8px; padding:12px 16px; border-bottom:1px solid var(--line); background:linear-gradient(#fff,#fbfdff); }
     .win-dot { width:11px; height:11px; border-radius:50%; }
@@ -213,8 +245,9 @@
     .trust > p { font-size:11px; letter-spacing:.16em; text-transform:uppercase; color: var(--ink-mute); margin-bottom:20px; }
     .trust-row { display:flex; gap:40px; justify-content:center; flex-wrap:wrap; }
     .stat { display:inline-flex; flex-direction:column; align-items:center; }
-    .stat b { font-size:28px; letter-spacing:-.02em; line-height:1; }
-    .stat small { margin-top:6px; font-size:10.5px; color: var(--ink-mute); text-transform:uppercase; letter-spacing:.1em; }
+    .stat b { font-size:34px; letter-spacing:-.03em; line-height:1; font-weight:760;
+      background:linear-gradient(180deg,var(--sky-500),var(--sky-700)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+    .stat small { margin-top:8px; font-size:10.5px; color: var(--ink-mute); text-transform:uppercase; letter-spacing:.1em; }
 
     /* ── Generic section ───────────────────────── */
     .section { padding:96px 0; position:relative; }
@@ -475,8 +508,59 @@
 
   <!-- ══ HERO ═════════════════════════════════ -->
   <header class="hero">
-    <div class="hero-sky"></div>
-    <div class="cloud a"></div><div class="cloud b"></div><div class="cloud c"></div>
+    <svg class="hero-scene" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMax slice" aria-hidden="true" role="presentation">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#3f9be0"/>
+          <stop offset="0.34" stop-color="#79c0ee"/>
+          <stop offset="0.62" stop-color="#b9e0f8"/>
+          <stop offset="0.84" stop-color="#e6f4fd"/>
+          <stop offset="1" stop-color="#fbf7ec"/>
+        </linearGradient>
+        <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stop-color="#fff8e6" stop-opacity="0.95"/>
+          <stop offset="0.5" stop-color="#ffeec4" stop-opacity="0.45"/>
+          <stop offset="1" stop-color="#ffeec4" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="cloudG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#ffffff"/>
+          <stop offset="0.6" stop-color="#f4fbff"/>
+          <stop offset="1" stop-color="#cfe6f6"/>
+        </linearGradient>
+        <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3"/></filter>
+        <symbol id="cl" viewBox="0 0 320 160">
+          <g fill="url(#cloudG)">
+            <ellipse cx="160" cy="132" rx="150" ry="30"/>
+            <circle cx="72" cy="104" r="52"/>
+            <circle cx="140" cy="74" r="72"/>
+            <circle cx="216" cy="88" r="62"/>
+            <circle cx="262" cy="112" r="46"/>
+            <circle cx="110" cy="112" r="48"/>
+          </g>
+        </symbol>
+      </defs>
+      <rect width="1440" height="900" fill="url(#sky)"/>
+      <ellipse cx="900" cy="760" rx="620" ry="360" fill="url(#sun)"/>
+      <!-- far layer (small, high, slow drift) -->
+      <g class="drift drift-far" filter="url(#soft)" opacity="0.8">
+        <use href="#cl" x="90" y="150" width="150" height="75"/>
+        <use href="#cl" x="470" y="120" width="112" height="56"/>
+        <use href="#cl" x="1100" y="165" width="164" height="82"/>
+        <use href="#cl" x="1300" y="115" width="126" height="63"/>
+      </g>
+      <!-- mid layer (framing the sides, mid height) -->
+      <g class="drift drift-mid" opacity="0.94">
+        <use href="#cl" x="-120" y="430" width="380" height="190"/>
+        <use href="#cl" x="1230" y="470" width="420" height="210"/>
+      </g>
+      <!-- near layer (big cumulus band across the bottom horizon) -->
+      <g class="drift drift-near">
+        <use href="#cl" x="-220" y="700" width="720" height="360"/>
+        <use href="#cl" x="900" y="720" width="820" height="410"/>
+        <use href="#cl" x="380" y="770" width="640" height="320"/>
+      </g>
+    </svg>
+    <div class="hero-veil"></div>
 
     <div class="container hero-inner">
       <a class="hero-eyebrow" href="#measured"><span class="dot"></span>실제 메일에서 94.3% 측정</a>
