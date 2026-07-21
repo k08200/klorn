@@ -181,6 +181,17 @@ await app.register(cors, {
 await app.register(rateLimit, {
   max: 100,
   timeWindow: "1 minute",
+  // Rate-limit key must be an UNSPOOFABLE client identity. request.ip derives
+  // from X-Forwarded-For (trustProxy), which a client can forge to rotate past
+  // every per-IP limit (confirmed 2026-07-21). We sit behind Cloudflare, which
+  // sets CF-Connecting-IP to the verified client IP and overwrites any
+  // client-supplied value — use it, falling back to the raw socket address
+  // (also unspoofable), never X-Forwarded-For.
+  keyGenerator: (req) => {
+    const cf = req.headers["cf-connecting-ip"];
+    if (typeof cf === "string" && cf.length > 0) return cf;
+    return req.socket?.remoteAddress ?? "unknown";
+  },
   allowList: (req: { url?: string }) => {
     const url = req.url ?? "";
     // OAuth callback: Google redirects here after consent; rate-limiting it
