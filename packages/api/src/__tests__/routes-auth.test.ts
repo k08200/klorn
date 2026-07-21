@@ -4,12 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken, verifyToken } from "../auth.js";
 import { getLoginAuthUrl, getOAuth2Client } from "../mail/gmail.js";
 import { isAllowedNativeScheme } from "../routes/auth.js";
+import { deleteUserAndAllData } from "../user-deletion.js";
 
 // Stub email sender — auth register fires it non-blocking and swallows errors,
 // but we want to assert it was called with the right token.
 const sendVerificationEmailSpy = vi.fn(async () => true);
 const sendPasswordResetEmailSpy = vi.fn(async () => true);
 const sendBetaInviteEmailSpy = vi.fn(async () => true);
+vi.mock("../user-deletion.js", () => ({ deleteUserAndAllData: vi.fn(async () => {}) }));
 vi.mock("../mail/email.js", () => ({
   sendVerificationEmail: (...args: unknown[]) => sendVerificationEmailSpy(...args),
   sendPasswordResetEmail: (...args: unknown[]) => sendPasswordResetEmailSpy(...args),
@@ -1394,6 +1396,34 @@ describe("POST /api/auth/logout", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    await app.close();
+  });
+});
+
+describe("DELETE /api/auth/account — self-service deletion", () => {
+  beforeEach(() => {
+    resetStores();
+    vi.mocked(deleteUserAndAllData).mockClear();
+  });
+
+  it("requires authentication (401 without a token)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "DELETE", url: "/api/auth/account" });
+    expect(res.statusCode).toBe(401);
+    expect(deleteUserAndAllData).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("deletes the authenticated user's data and returns 204", async () => {
+    const app = await buildApp();
+    const token = await registerAndGetToken(app);
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/auth/account",
+      headers: authHeader(token),
+    });
+    expect(res.statusCode).toBe(204);
+    expect(deleteUserAndAllData).toHaveBeenCalledTimes(1);
     await app.close();
   });
 });

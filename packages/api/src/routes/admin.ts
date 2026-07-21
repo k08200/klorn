@@ -29,6 +29,7 @@ import { collectFeatureFlags } from "../ops/feature-flags.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { getProviderChain } from "../providers/index.js";
 import { captureError } from "../sentry.js";
+import { deleteUserAndAllData } from "../user-deletion.js";
 
 type FeedbackGroup = { signal: string; _count: { signal: number } };
 
@@ -168,21 +169,8 @@ export async function adminRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Cannot delete admin user" });
     }
 
-    await prisma.$transaction([
-      prisma.notification.deleteMany({ where: { userId: id } }),
-      prisma.automationConfig.deleteMany({ where: { userId: id } }),
-      prisma.calendarEvent.deleteMany({ where: { userId: id } }),
-      prisma.contact.deleteMany({ where: { userId: id } }),
-      prisma.reminder.deleteMany({ where: { userId: id } }),
-      prisma.note.deleteMany({ where: { userId: id } }),
-      prisma.task.deleteMany({ where: { userId: id } }),
-      prisma.commitment.deleteMany({ where: { userId: id } }),
-      prisma.feedbackEvent.deleteMany({ where: { userId: id } }),
-      prisma.message.deleteMany({ where: { conversation: { userId: id } } }),
-      prisma.conversation.deleteMany({ where: { userId: id } }),
-      prisma.userToken.deleteMany({ where: { userId: id } }),
-      prisma.user.delete({ where: { id } }),
-    ]);
+    // Shared with the self-service delete route so the two can never drift.
+    await deleteUserAndAllData(id);
 
     return reply.code(204).send();
   });
