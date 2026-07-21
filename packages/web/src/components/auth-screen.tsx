@@ -41,7 +41,7 @@ export default function AuthScreen({
   ];
   const resolvedNavCtaLabel = navCtaLabel ?? t("nav.earlyAccess");
   return (
-    <main id="main" className="min-h-screen overflow-x-hidden bg-surface-canvas text-slate-900">
+    <main id="main" className="min-h-screen overflow-x-hidden sky-bg text-slate-900">
       <nav className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-6">
         <Link href="/" className="flex items-center gap-3">
           <img src="/brand/mark.svg?v=matte2" alt="" className="h-8 w-8" />

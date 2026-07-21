@@ -274,7 +274,7 @@ export default function PlaygroundPage() {
   }
 
   return (
-    <main id="main" className="min-h-screen bg-white text-slate-900">
+    <main id="main" className="min-h-screen sky-bg text-slate-900">
       <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
         <Link href="/" className="text-sm font-semibold tracking-tight text-slate-900">
           Klorn

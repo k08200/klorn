@@ -45,6 +45,33 @@ body {
   overflow-wrap: break-word;
 }
 
+/* Rich sky background: layered sky-blue glows + a faint dot grid, all in one
+   fixed background stack so marketing / auth surfaces have atmospheric depth
+   instead of flat white. Content sits above it normally (no z-index needed). */
+.sky-bg {
+  background-color: #f4f8fc;
+  background-image:
+    radial-gradient(circle at center, rgba(14, 116, 180, 0.07) 1px, transparent 1.6px),
+    radial-gradient(58% 48% at 85% 1%, rgba(56, 189, 248, 0.24), transparent 60%),
+    radial-gradient(50% 42% at 6% 24%, rgba(125, 211, 252, 0.24), transparent 62%),
+    radial-gradient(60% 46% at 94% 68%, rgba(186, 230, 253, 0.34), transparent 60%),
+    radial-gradient(82% 55% at 44% 108%, rgba(56, 189, 248, 0.22), transparent 60%);
+  background-size:
+    30px 30px,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%;
+  background-position:
+    0 0,
+    center,
+    center,
+    center,
+    center;
+  background-attachment: fixed;
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+}
+
 /* iOS safe-area helpers (notch + home indicator).
    Uses env(safe-area-inset-*) which evaluates to 0 when not in a PWA. */
 .pt-safe {

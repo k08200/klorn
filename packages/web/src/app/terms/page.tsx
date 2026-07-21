@@ -64,7 +64,7 @@ function TableOfContents({ sections }: { sections: string[] }) {
 
 export default function TermsPage() {
   return (
-    <main id="main" className="min-h-screen bg-white text-slate-900">
+    <main id="main" className="min-h-screen sky-bg text-slate-900">
       <nav className="mx-auto flex max-w-4xl items-center justify-between px-6 py-5">
         <Link href="/" className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-[#f5f0e8]">
