@@ -73,7 +73,8 @@ export function mintTierOverrideToken(
  */
 export function verifyTierOverrideToken(token: string): TierOverrideGrant | null {
   try {
-    const decoded = jwt.verify(token, OVERRIDE_SECRET) as {
+    // Pin HS256 for consistency with verifyToken (defense-in-depth).
+    const decoded = jwt.verify(token, OVERRIDE_SECRET, { algorithms: ["HS256"] }) as {
       kind?: string;
       userId?: string;
       itemId?: string;
