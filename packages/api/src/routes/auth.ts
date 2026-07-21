@@ -429,7 +429,10 @@ export function authRoutes(app: FastifyInstance) {
       // isEntitled) read User.role — which stayed "USER", so an env-admin was
       // silently gated as a free user (e.g. multi-inbox sync skipped). Promote
       // once on session bootstrap so User.role is the single source of truth.
-      if (user.role !== "ADMIN" && isAdminEmail(user.email)) {
+      // Only promote a VERIFIED account: a self-serve unverified row on an
+      // ADMIN_EMAILS address (pre-registration) must not auto-escalate to ADMIN
+      // before the real owner proves ownership (security audit 2026-07-21).
+      if (user.role !== "ADMIN" && user.emailVerified && isAdminEmail(user.email)) {
         await prisma.user
           .update({ where: { id: user.id }, data: { role: "ADMIN" } })
           .catch((err) => {
@@ -1039,14 +1042,30 @@ export function authRoutes(app: FastifyInstance) {
             { label: "oauth.create_user" },
           );
         } else if (!user.emailVerified) {
+          // A Google login proves ownership of this address. If the existing row
+          // was created via self-serve password registration but never verified,
+          // it may be a pre-registration takeover — an attacker who set a
+          // password on the victim's address before they signed in with Google
+          // (security audit 2026-07-21). Invalidate that password AND all its
+          // sessions so only the Google-verified owner keeps control; the
+          // attacker can no longer log in with the password they set.
+          const wasUnverifiedPassword = Boolean(user!.passwordHash);
           await withDbRetry(
             () =>
               prisma.user.update({
                 where: { id: user!.id },
-                data: { emailVerified: true },
+                data: {
+                  emailVerified: true,
+                  ...(wasUnverifiedPassword
+                    ? { passwordHash: null, sessionsInvalidatedAt: new Date() }
+                    : {}),
+                },
               }),
             { label: "oauth.verify_user" },
           );
+          if (wasUnverifiedPassword) {
+            await prisma.device.deleteMany({ where: { userId: user!.id } }).catch(() => {});
+          }
         }
 
         // Auto-save Google tokens for Gmail/Calendar integration (one-click setup).
