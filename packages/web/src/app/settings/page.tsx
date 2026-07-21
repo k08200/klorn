@@ -770,6 +770,35 @@ export default function SettingsPage() {
     }
   };
 
+  const deleteAccount = async () => {
+    const ok = await confirm({
+      title: "Delete your account",
+      message:
+        "This permanently deletes your Klorn account and ALL of your data — emails, " +
+        "classifications, tasks, memories, calendar events, connected Google access, " +
+        "and settings. This cannot be undone.",
+      confirmLabel: "Delete my account",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/account`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: "Request failed." }));
+        toast(body.error || "Could not delete your account.", "error");
+        return;
+      }
+      // Wipe local session and leave the app entirely.
+      localStorage.clear();
+      window.location.href = "/login?deleted=1";
+    } catch {
+      toast("Could not delete your account.", "error");
+    }
+  };
+
   const exportData = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/user/me/export`, { headers: authHeaders() });
@@ -1665,6 +1694,21 @@ export default function SettingsPage() {
               className="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition border border-red-900/50"
             >
               Delete workspace
+            </button>
+          </div>
+          <div className="flex items-center justify-between bg-stone-950/35 border border-red-900/50 rounded-xl p-4 mt-3">
+            <div>
+              <h3 className="font-medium">Delete account</h3>
+              <p className="text-sm text-stone-400 mt-0.5">
+                Permanently delete your account, Google access, and all data. This cannot be undone.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={deleteAccount}
+              className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+            >
+              Delete account
             </button>
           </div>
         </section>

@@ -37,6 +37,7 @@ import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
 import { captureError } from "../sentry.js";
 import { localMinuteOfDay, normalizeTimeZone } from "../time-zone.js";
+import { deleteUserAndAllData } from "../user-deletion.js";
 
 // Allowlisted native app URL schemes for the OAuth deep-link relay. The token is
 // delivered by redirecting the browser to `<scheme>://oauth-callback?code=…`,
@@ -1257,6 +1258,16 @@ export function authRoutes(app: FastifyInstance) {
     await prisma.userToken.deleteMany({
       where: { userId, provider: "google" },
     });
+    return reply.code(204).send();
+  });
+
+  // DELETE /api/auth/account — Self-service account deletion. Removes the user
+  // and ALL their data (Google restricted-scope review requires a user-facing
+  // way to request full deletion). Shares deleteUserAndAllData with the admin
+  // route so the deletion is identical and complete. Irreversible.
+  app.delete("/account", { preHandler: requireAuth }, async (request, reply) => {
+    const userId = getUserId(request);
+    await deleteUserAndAllData(userId);
     return reply.code(204).send();
   });
 
