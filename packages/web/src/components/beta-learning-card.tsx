@@ -76,16 +76,16 @@ export default function BetaLearningCard() {
   if (dismissed) return null;
 
   return (
-    <section className="mb-6 rounded-xl border border-amber-300/20 bg-amber-950/15 p-4">
+    <section className="mb-6 rounded-xl border border-sky-300/20 bg-sky-50 p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-600">
             Initial learning
           </p>
-          <h2 className="mt-2 text-base font-semibold text-stone-100">
+          <h2 className="mt-2 text-base font-semibold text-slate-900">
             Klorn learns mail and calendar patterns during the first 2-3 days.
           </h2>
-          <p className="mt-2 text-sm leading-6 text-stone-400">
+          <p className="mt-2 text-sm leading-6 text-slate-500">
             Early briefings may be conservative. The top three actions get sharper as you use the
             workspace.
           </p>
@@ -95,7 +95,7 @@ export default function BetaLearningCard() {
           {!connected && (
             <Link
               href="/settings"
-              className="rounded-lg border border-amber-300/40 px-3 py-1.5 text-xs font-medium text-amber-100 transition hover:bg-amber-300/10"
+              className="rounded-lg border border-sky-300/40 px-3 py-1.5 text-xs font-medium text-sky-700 transition hover:bg-sky-300/10"
             >
               Connect
             </Link>
@@ -103,7 +103,7 @@ export default function BetaLearningCard() {
           <button
             type="button"
             onClick={dismiss}
-            className="rounded-lg border border-stone-700 px-2.5 py-1.5 text-xs text-stone-400 transition hover:bg-stone-800 hover:text-stone-200"
+            className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
             aria-label="Dismiss initial learning notice"
           >
             Close
@@ -111,9 +111,9 @@ export default function BetaLearningCard() {
         </div>
       </div>
 
-      <div className="mt-4 h-1.5 rounded-full bg-stone-800">
+      <div className="mt-4 h-1.5 rounded-full bg-slate-100">
         <div
-          className="h-full rounded-full bg-amber-300 transition-all"
+          className="h-full rounded-full bg-sky-500 transition-all"
           style={{ width: `${progress}%` }}
         />
       </div>
@@ -122,19 +122,19 @@ export default function BetaLearningCard() {
         {steps.map((step) => (
           <div
             key={step.label}
-            className="rounded-lg border border-stone-800/80 bg-black/20 px-3 py-2"
+            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
           >
             <div className="flex items-center gap-2">
               <span className={`h-2 w-2 rounded-full ${dotClass(step.state)}`} />
-              <p className="text-xs font-medium text-stone-200">{step.label}</p>
+              <p className="text-xs font-medium text-slate-900">{step.label}</p>
             </div>
-            <p className="mt-1 text-[11px] leading-5 text-stone-500">{step.detail}</p>
+            <p className="mt-1 text-[11px] leading-5 text-slate-400">{step.detail}</p>
           </div>
         ))}
       </div>
 
       {syncFailed && (
-        <p className="mt-3 text-xs text-amber-300">
+        <p className="mt-3 text-xs text-sky-600">
           Initial analysis hit a temporary issue. Refresh or reopen shortly and Klorn will retry.
         </p>
       )}
@@ -147,10 +147,10 @@ function dotClass(state: StepState): string {
     case "done":
       return "bg-emerald-400";
     case "active":
-      return "bg-amber-300";
+      return "bg-sky-500";
     case "failed":
-      return "bg-amber-300";
+      return "bg-sky-500";
     case "pending":
-      return "bg-stone-600";
+      return "bg-slate-300";
   }
 }

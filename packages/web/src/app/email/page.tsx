@@ -610,10 +610,10 @@ function EmailView() {
       <div className="px-4 pb-28 pt-3 md:hidden">
         <header className="mb-4 flex items-end justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-[28px] font-bold leading-none tracking-tight text-stone-50">
+            <h1 className="text-[28px] font-bold leading-none tracking-tight text-slate-900">
               {t("nav.mail")}
             </h1>
-            <p className="mt-1.5 text-sm text-stone-400">
+            <p className="mt-1.5 text-sm text-slate-500">
               {source === "demo"
                 ? "Demo data — connect Gmail"
                 : replyCount > 0
@@ -628,7 +628,7 @@ function EmailView() {
             onClick={() => setComposeOpen(true)}
             disabled={source === "demo"}
             aria-label="Compose"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-400 text-stone-950 transition active:bg-amber-300 disabled:opacity-40"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sky-500 text-white transition active:bg-sky-500 disabled:opacity-40"
           >
             <svg
               aria-hidden="true"
@@ -653,7 +653,7 @@ function EmailView() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t("mail.searchMail")}
             aria-label={t("mail.searchMail")}
-            className="h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-stone-900/60 px-4 text-sm text-stone-200 outline-none transition placeholder:text-stone-400 focus:border-accent/45"
+            className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-accent/45"
           />
           {appliedSearch && (
             <button
@@ -662,7 +662,7 @@ function EmailView() {
                 setSearch("");
                 setAppliedSearch("");
               }}
-              className="shrink-0 rounded-xl border border-white/10 px-3 text-xs text-stone-400 transition active:bg-white/5"
+              className="shrink-0 rounded-xl border border-slate-200 px-3 text-xs text-slate-500 transition active:bg-slate-100"
             >
               Clear
             </button>
@@ -674,9 +674,9 @@ function EmailView() {
 
         {loading && (
           <div className="mt-3 space-y-2">
-            <div className="h-16 animate-pulse rounded-2xl bg-stone-900/50" />
-            <div className="h-16 animate-pulse rounded-2xl bg-stone-900/40" />
-            <div className="h-16 animate-pulse rounded-2xl bg-stone-900/30" />
+            <div className="h-16 animate-pulse rounded-2xl bg-slate-200" />
+            <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+            <div className="h-16 animate-pulse rounded-2xl bg-slate-50" />
           </div>
         )}
 
@@ -687,18 +687,18 @@ function EmailView() {
         )}
 
         {!loading && !error && filter !== "threads" && emails.length === 0 && (
-          <div className="mt-6 rounded-2xl bg-stone-900/40 px-6 py-12 text-center">
-            <p className="text-base font-medium text-stone-200">
+          <div className="mt-6 rounded-2xl bg-slate-50 px-6 py-12 text-center">
+            <p className="text-base font-medium text-slate-900">
               {filter === "reply-needed" ? t("mail.emptyReplyTitle") : t("mail.emptyTitle")}
             </p>
-            <p className="mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed text-stone-500">
+            <p className="mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed text-slate-400">
               {source === "demo" ? t("mail.emptyDemoBody") : t("mail.emptyBody")}
             </p>
             <button
               type="button"
               onClick={syncNow}
               disabled={syncing}
-              className="mt-5 inline-flex min-h-11 items-center rounded-xl border border-stone-700 px-5 text-sm text-stone-300 transition active:bg-stone-800 disabled:opacity-50"
+              className="mt-5 inline-flex min-h-11 items-center rounded-xl border border-slate-200 px-5 text-sm text-slate-500 transition active:bg-slate-100 disabled:opacity-50"
             >
               {syncing ? t("common.syncing") : t("common.syncNow")}
             </button>
@@ -723,7 +723,7 @@ function EmailView() {
             type="button"
             onClick={() => listQuery.fetchNextPage()}
             disabled={listQuery.isFetchingNextPage}
-            className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-stone-800 text-sm text-stone-400 transition active:bg-stone-800/60 disabled:opacity-50"
+            className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-200 text-sm text-slate-500 transition active:bg-slate-100 disabled:opacity-50"
           >
             {listQuery.isFetchingNextPage ? "Loading..." : "Load more"}
           </button>
@@ -735,16 +735,16 @@ function EmailView() {
         {/* Mobile = content-first: a compact title + small action row, with the
             description, the 4-stat dashboard, and Reanalyze hidden until md so the
             mail list isn't pushed off-screen. Desktop (md:+) keeps the full hero. */}
-        <header className="mb-4 rounded-lg border border-white/10 bg-stone-900/40 p-4 shadow-xl shadow-black/10 md:mb-5 md:p-6">
+        <header className="mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-xl shadow-black/10 md:mb-5 md:p-6">
           <div className="flex flex-col gap-3 md:gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80 md:mb-2">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600 md:mb-2">
                 Klorn · Mail
               </p>
-              <h1 className="text-lg font-semibold tracking-tight text-stone-50 md:text-2xl">
+              <h1 className="text-lg font-semibold tracking-tight text-slate-900 md:text-2xl">
                 Mail that needs a reply
               </h1>
-              <p className="mt-2 hidden max-w-xl text-sm leading-6 text-stone-400 md:block">
+              <p className="mt-2 hidden max-w-xl text-sm leading-6 text-slate-500 md:block">
                 Sorted by urgency and reply-needed signal.
                 {source === "demo" && <span className="ml-2 text-accent">Demo data</span>}
               </p>
@@ -763,7 +763,7 @@ function EmailView() {
                 type="button"
                 onClick={syncNow}
                 disabled={syncing}
-                className="min-h-11 w-fit rounded-md border border-white/10 bg-stone-950/60 px-3 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:bg-white/5 hover:text-stone-100 disabled:opacity-50"
+                className="min-h-11 w-fit rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-500 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
               >
                 {syncing ? t("common.syncing") : t("common.syncNow")}
               </button>
@@ -771,13 +771,13 @@ function EmailView() {
                 type="button"
                 onClick={reanalyzeAttachments}
                 disabled={reanalyzing}
-                className="hidden min-h-11 w-fit rounded-md border border-[#a8a29e]/25 bg-[#a8a29e]/10 px-3 text-xs font-medium text-stone-200 transition hover:bg-[#a8a29e]/15 disabled:opacity-50 md:inline-flex md:items-center"
+                className="hidden min-h-11 w-fit rounded-md border border-[#a8a29e]/25 bg-[#a8a29e]/10 px-3 text-xs font-medium text-slate-900 transition hover:bg-[#a8a29e]/15 disabled:opacity-50 md:inline-flex md:items-center"
               >
                 {reanalyzing ? "Analyzing..." : "Reanalyze attachments"}
               </button>
             </div>
           </div>
-          <div className="mt-5 hidden grid-cols-4 overflow-hidden rounded-md border border-white/10 bg-stone-950/60 md:grid">
+          <div className="mt-5 hidden grid-cols-4 overflow-hidden rounded-md border border-slate-200 bg-slate-50 md:grid">
             <SignalStat label="Unread" value={unreadCount} />
             <SignalStat label="Urgent" value={urgentCount} />
             <SignalStat label="Replies" value={replyCount} />
@@ -811,7 +811,7 @@ function EmailView() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t("mail.searchPlaceholder")}
             aria-label={t("mail.searchPlaceholder")}
-            className="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-stone-950/60 px-3 text-sm text-stone-200 outline-none transition placeholder:text-stone-400 focus:border-accent/45"
+            className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-accent/45"
           />
           <button
             type="submit"
@@ -826,7 +826,7 @@ function EmailView() {
                 setSearch("");
                 setAppliedSearch("");
               }}
-              className="h-10 rounded-lg border border-white/10 bg-stone-900/40 px-3 text-xs text-stone-400 transition hover:bg-white/5"
+              className="h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-500 transition hover:bg-slate-100"
             >
               Clear
             </button>
@@ -848,16 +848,16 @@ function EmailView() {
               className={`shrink-0 rounded-lg border px-3 py-2 text-left transition md:shrink md:p-3 ${
                 filter === queue.key
                   ? "border-accent/45 bg-accent/10"
-                  : "border-white/10 bg-stone-900/40 hover:border-white/20 hover:bg-white/5"
+                  : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100"
               }`}
             >
-              <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-stone-100 md:justify-between md:gap-2">
+              <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-slate-900 md:justify-between md:gap-2">
                 {queue.title}
                 <span className="text-accent-light" aria-hidden="true">
                   →
                 </span>
               </span>
-              <span className="mt-1 hidden text-[11px] leading-4 text-stone-500 md:block">
+              <span className="mt-1 hidden text-[11px] leading-4 text-slate-400 md:block">
                 {queue.description}
               </span>
             </button>
@@ -867,14 +867,14 @@ function EmailView() {
         {candidateCount > 0 && (
           <Link
             href="/email/candidates"
-            className="mt-3 flex items-center justify-between rounded-lg border border-orange-500/20 bg-orange-500/5 px-4 py-3 text-sm text-accent-muted transition hover:bg-orange-500/10"
+            className="mt-3 flex items-center justify-between rounded-lg border border-sky-500/20 bg-sky-500/5 px-4 py-3 text-sm text-accent-muted transition hover:bg-sky-500/10"
           >
             <span>Review {candidateCount} candidate signals in the intake queue.</span>
             <span className="text-xs">Open</span>
           </Link>
         )}
 
-        {loading && <p className="px-1 py-3 text-sm text-stone-500">Loading...</p>}
+        {loading && <p className="px-1 py-3 text-sm text-slate-400">Loading...</p>}
 
         {error && (
           <div className="mt-3 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -883,15 +883,15 @@ function EmailView() {
         )}
 
         {!loading && !error && filter !== "threads" && emails.length === 0 && (
-          <div className="mt-4 rounded-lg border border-white/10 bg-stone-900/40 p-6 text-center">
-            <p className="text-sm text-stone-300">
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-6 text-center">
+            <p className="text-sm text-slate-500">
               {filter === "all"
                 ? t("mail.emptyAll")
                 : filter === "reply-needed"
                   ? t("mail.emptyReplyNow")
                   : t("mail.emptyFilter")}
             </p>
-            <p className="mt-1 text-xs text-stone-400">
+            <p className="mt-1 text-xs text-slate-500">
               {filter === "reply-needed" ? t("mail.emptyReplyHint") : t("mail.emptySyncHint")}
             </p>
             {filter === "reply-needed" && (
@@ -899,7 +899,7 @@ function EmailView() {
                 <button
                   type="button"
                   onClick={() => setFilter("all")}
-                  className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100"
+                  className="inline-flex min-h-11 items-center rounded-md border border-slate-200 px-4 text-xs font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
                 >
                   {t("mail.showAllSignals")}
                 </button>
@@ -907,7 +907,7 @@ function EmailView() {
                   type="button"
                   onClick={syncNow}
                   disabled={syncing}
-                  className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100 disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center rounded-md border border-slate-200 px-4 text-xs font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-50"
                 >
                   {syncing ? t("common.syncing") : t("common.syncNow")}
                 </button>
@@ -925,7 +925,7 @@ function EmailView() {
                   type="button"
                   onClick={syncNow}
                   disabled={syncing}
-                  className="inline-flex min-h-11 items-center rounded-md border border-white/10 px-4 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100 disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center rounded-md border border-slate-200 px-4 text-xs font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-50"
                 >
                   {syncing ? t("common.syncing") : t("common.syncNow")}
                 </button>
@@ -963,8 +963,8 @@ function EmailView() {
         )}
 
         {!loading && filter === "threads" && threads.length === 0 && !error && (
-          <div className="mt-4 rounded-lg border border-white/10 bg-stone-900/40 p-6 text-center">
-            <p className="text-sm text-stone-300">No threads match this filter.</p>
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-6 text-center">
+            <p className="text-sm text-slate-500">No threads match this filter.</p>
           </div>
         )}
 
@@ -1023,11 +1023,11 @@ function UndoActionBanner({
 }) {
   const actionLabel = notice.action === "archive" ? "archived" : "moved to trash";
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-amber-950/30 px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-sky-50 px-4 py-3 text-sm text-slate-900 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="font-medium">Email {actionLabel}.</p>
         {notice.subject && (
-          <p className="mt-0.5 truncate text-xs text-stone-400">{notice.subject}</p>
+          <p className="mt-0.5 truncate text-xs text-slate-500">{notice.subject}</p>
         )}
       </div>
       <div className="flex shrink-0 gap-2">
@@ -1043,7 +1043,7 @@ function UndoActionBanner({
           type="button"
           onClick={onDismiss}
           disabled={busy}
-          className="min-h-10 rounded-md border border-white/10 px-3 text-xs text-stone-300 transition hover:bg-white/5 disabled:opacity-50"
+          className="min-h-10 rounded-md border border-slate-200 px-3 text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
         >
           Dismiss {countdown > 0 && `(${countdown}s)`}
         </button>
@@ -1071,12 +1071,12 @@ function BulkUndoActionBanner({
     .map((email) => email.subject)
     .join(", ");
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-amber-950/30 px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-sky-50 px-4 py-3 text-sm text-slate-900 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="font-medium">
           {count} {count === 1 ? "email" : "emails"} archived.
         </p>
-        {preview && <p className="mt-0.5 truncate text-xs text-stone-400">{preview}</p>}
+        {preview && <p className="mt-0.5 truncate text-xs text-slate-500">{preview}</p>}
       </div>
       <div className="flex shrink-0 gap-2">
         <button
@@ -1091,7 +1091,7 @@ function BulkUndoActionBanner({
           type="button"
           onClick={onDismiss}
           disabled={busy}
-          className="min-h-10 rounded-md border border-white/10 px-3 text-xs text-stone-300 transition hover:bg-white/5 disabled:opacity-50"
+          className="min-h-10 rounded-md border border-slate-200 px-3 text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
         >
           Dismiss {countdown > 0 && `(${countdown}s)`}
         </button>
@@ -1118,16 +1118,16 @@ function BulkActionBar({
   onToggleAll: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-white/10 bg-stone-950/70 px-3 py-2 md:flex-row md:items-center md:justify-between">
+    <div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 md:flex-row md:items-center md:justify-between">
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={onToggleAll}
-          className="h-8 rounded-md border border-white/10 bg-stone-900/40 px-2.5 text-xs font-medium text-stone-300 transition hover:bg-white/5"
+          className="h-8 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100"
         >
           {allVisibleSelected ? "Clear page" : "Select page"}
         </button>
-        <span className="text-xs text-stone-500">
+        <span className="text-xs text-slate-400">
           {selectedCount > 0 ? `${selectedCount} selected` : `${totalVisible} on this page`}
         </span>
       </div>
@@ -1155,7 +1155,7 @@ function BulkActionBar({
             type="button"
             onClick={onClear}
             disabled={busy}
-            className="h-8 rounded-md px-2.5 text-xs text-stone-500 transition hover:bg-white/5 disabled:opacity-50"
+            className="h-8 rounded-md px-2.5 text-xs text-slate-400 transition hover:bg-slate-100 disabled:opacity-50"
           >
             Cancel
           </button>
@@ -1184,7 +1184,7 @@ function BulkButton({
       className={`h-8 rounded-md border px-2.5 text-xs font-medium transition disabled:opacity-50 ${
         danger
           ? "border-red-500/25 bg-red-500/10 text-red-200 hover:bg-red-500/15"
-          : "border-white/10 bg-stone-900/40 text-stone-300 hover:bg-white/5"
+          : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100"
       }`}
     >
       {children}
@@ -1194,11 +1194,11 @@ function BulkButton({
 
 function SignalStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="border-r border-stone-800 px-4 py-3 last:border-r-0">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">
+    <div className="border-r border-slate-200 px-4 py-3 last:border-r-0">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
         {label}
       </p>
-      <p className="mt-1 text-2xl font-semibold text-stone-100">{value}</p>
+      <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
     </div>
   );
 }
@@ -1241,7 +1241,7 @@ function InboxSelector({
             className={`inline-flex min-h-[32px] shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
               active
                 ? "bg-accent/90 text-stone-950"
-                : "border border-white/10 bg-stone-900/40 text-stone-400 hover:bg-white/6 hover:text-stone-200"
+                : "border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
             }`}
           >
             <span className="max-w-[168px] truncate">{o.label}</span>
@@ -1250,7 +1250,7 @@ function InboxSelector({
                 role="img"
                 aria-label="Reconnect needed"
                 title="Reconnect needed"
-                className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400"
+                className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500"
               />
             )}
           </button>
@@ -1283,7 +1283,7 @@ function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filt
             className={`${MOBILE_FILTERS.has(f.key) ? "inline-flex" : "hidden md:inline-flex"} min-h-[32px] shrink-0 items-center rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
               active
                 ? "bg-accent text-stone-950"
-                : "border border-white/10 bg-stone-900/40 text-stone-400 hover:bg-white/6 hover:text-stone-200"
+                : "border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
             }`}
           >
             {f.labelKey ? t(f.labelKey) : f.label}
@@ -1335,7 +1335,7 @@ function LoadMoreBar({
   return (
     <div
       ref={sentinelRef}
-      className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-stone-800 bg-stone-950/50 px-4 py-3 text-xs text-stone-500"
+      className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-400"
     >
       <span>
         Showing {loadedCount}
@@ -1346,12 +1346,12 @@ function LoadMoreBar({
           type="button"
           onClick={onLoadMore}
           disabled={isFetching}
-          className="rounded-md border border-stone-700 px-3 py-1.5 text-xs text-stone-300 transition hover:border-amber-300/40 hover:text-amber-200 disabled:opacity-50"
+          className="rounded-md border border-slate-200 px-3 py-1.5 text-xs text-slate-500 transition hover:border-sky-300/40 hover:text-sky-600 disabled:opacity-50"
         >
           {isFetching ? "Loading…" : "Load more"}
         </button>
       ) : (
-        <span className="text-stone-400">All loaded.</span>
+        <span className="text-slate-500">All loaded.</span>
       )}
     </div>
   );
@@ -1385,25 +1385,25 @@ function EmailRowItem({
         onClick={() => onToggleSelected(email.id)}
         className={`mt-4 h-5 w-5 rounded border transition ${
           selected
-            ? "border-accent bg-accent shadow-[inset_0_0_0_4px_#0C1116]"
-            : "border-white/15 bg-stone-900/40 hover:border-white/30"
+            ? "border-accent bg-accent shadow-[inset_0_0_0_4px_#ffffff]"
+            : "border-slate-200 bg-slate-50 hover:border-slate-300"
         }`}
       />
-      <div className="overflow-hidden rounded-lg border border-white/10 bg-stone-900/40 transition hover:border-white/20">
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white transition hover:border-slate-300">
         <Link
           href={`/email/${email.id}?${detailParams.toString()}`}
-          className="block transition hover:bg-white/5 active:bg-white/10"
+          className="block transition hover:bg-slate-100 active:bg-slate-100"
         >
           <div className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-start">
             <div className="min-w-0 flex-1">
               <EmailBadges email={email} unread={unread} />
               <div
-                className={`mt-2 flex items-center gap-1.5 text-sm ${unread ? "font-semibold text-stone-100" : "text-stone-300"}`}
+                className={`mt-2 flex items-center gap-1.5 text-sm ${unread ? "font-semibold text-slate-900" : "text-slate-500"}`}
               >
                 <TrustDot trust={email.trust} />
                 <span className="truncate">{senderName(email.from)}</span>
                 {inboxLabel && (
-                  <span className="inline-flex max-w-[45%] shrink-0 items-center gap-1 truncate rounded-full bg-stone-800/70 px-2 py-0.5 text-[10px] font-medium text-stone-400">
+                  <span className="inline-flex max-w-[45%] shrink-0 items-center gap-1 truncate rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
                     <span
                       aria-hidden="true"
                       className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/70"
@@ -1412,16 +1412,16 @@ function EmailRowItem({
                   </span>
                 )}
               </div>
-              <p className="mt-1 truncate text-[13px] text-stone-400">
+              <p className="mt-1 truncate text-[13px] text-slate-500">
                 {email.subject || "No subject"}
               </p>
               {email.summary ? (
-                <p className="mt-2 line-clamp-2 text-xs leading-5 text-stone-400">
-                  <span className="mr-1 text-stone-500">Summary:</span>
+                <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
+                  <span className="mr-1 text-slate-400">Summary:</span>
                   {email.summary}
                 </p>
               ) : email.snippet ? (
-                <p className="mt-2 line-clamp-2 text-xs leading-5 text-stone-400">
+                <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
                   {email.snippet}
                 </p>
               ) : null}
@@ -1429,7 +1429,7 @@ function EmailRowItem({
                 <CandidatePreview profile={email.candidateProfilePreview} />
               )}
             </div>
-            <time className="shrink-0 text-[11px] tabular-nums text-stone-500 md:pt-1">
+            <time className="shrink-0 text-[11px] tabular-nums text-slate-400 md:pt-1">
               {formatRelative(email.date)}
             </time>
           </div>
@@ -1454,7 +1454,7 @@ function EmailRowReminderActions({
   onCreateReminder: (email: EmailRow, option: EmailReminderOption) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 border-t border-white/10 px-4 py-2 text-[11px] text-stone-500">
+    <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-200 px-4 py-2 text-[11px] text-slate-400">
       <span className="mr-1">Remind</span>
       {EMAIL_REMINDER_OPTIONS.map((option) => {
         const key = `${email.id}:${option.key}`;
@@ -1464,7 +1464,7 @@ function EmailRowReminderActions({
             type="button"
             onClick={() => onCreateReminder(email, option)}
             disabled={busyKey !== null}
-            className="min-h-8 rounded-md border border-white/10 bg-black/15 px-2.5 text-[11px] text-stone-400 transition hover:border-[#a8a29e]/35 hover:text-stone-100 disabled:cursor-not-allowed disabled:opacity-45"
+            className="min-h-8 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-[11px] text-slate-500 transition hover:border-[#a8a29e]/35 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-45"
           >
             {busyKey === key ? "Setting..." : option.label}
           </button>
@@ -1500,7 +1500,7 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
     badges.push(
       <span
         key="pending"
-        className="shrink-0 rounded border border-stone-600 bg-stone-900/70 px-1.5 py-0.5 text-[10px] font-medium text-stone-400"
+        className="shrink-0 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
       >
         Pending {email.attachmentPendingCount}
       </span>,
@@ -1525,7 +1525,7 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
     <div className="flex flex-wrap items-center gap-1.5">
       {visible}
       {overflow > 0 && (
-        <span className="shrink-0 rounded border border-stone-700 bg-stone-900/60 px-1.5 py-0.5 text-[10px] font-medium text-stone-400">
+        <span className="shrink-0 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
           +{overflow}
         </span>
       )}
@@ -1539,7 +1539,7 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
     <li>
       <Link
         href={`/email/${thread.lastMessage.id}?markRead=false`}
-        className="block rounded-lg border border-white/10 bg-stone-900/40 transition hover:border-white/20 hover:bg-white/5 active:bg-white/10"
+        className="block rounded-lg border border-slate-200 bg-white transition hover:border-slate-300 hover:bg-slate-100 active:bg-slate-100"
       >
         <div className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-start">
           <div className="min-w-0">
@@ -1550,25 +1550,25 @@ function ThreadRowItem({ thread }: { thread: ThreadRow }) {
                   Unread
                 </span>
               )}
-              <span className="rounded border border-stone-700 bg-stone-900/60 px-1.5 py-0.5 text-[10px] text-stone-400">
+              <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500">
                 {thread.messageCount} messages
               </span>
             </div>
-            <p className="mt-2 truncate text-sm font-semibold text-stone-100">
+            <p className="mt-2 truncate text-sm font-semibold text-slate-900">
               {thread.subject || "No subject"}
             </p>
-            <p className="mt-1 truncate text-[12px] text-stone-500">
+            <p className="mt-1 truncate text-[12px] text-slate-400">
               {thread.participants.map(senderName).join(", ")}
             </p>
             {thread.summary ? (
-              <p className="mt-2 line-clamp-2 text-xs leading-5 text-stone-400">{thread.summary}</p>
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">{thread.summary}</p>
             ) : thread.lastMessage.snippet ? (
-              <p className="mt-2 line-clamp-2 text-xs leading-5 text-stone-400">
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
                 {thread.lastMessage.snippet}
               </p>
             ) : null}
           </div>
-          <time className="shrink-0 text-[11px] tabular-nums text-stone-500 md:pt-1">
+          <time className="shrink-0 text-[11px] tabular-nums text-slate-400 md:pt-1">
             {formatRelative(thread.lastMessage.receivedAt)}
           </time>
         </div>
@@ -1584,15 +1584,15 @@ function CandidatePreview({ profile }: { profile: CandidateProfilePreview }) {
       ? `Needs: ${profile.missingFields.map(candidateMissingLabel).join(", ")}`
       : null;
   return (
-    <div className="mt-2 rounded-lg border border-orange-500/15 bg-orange-500/5 px-2.5 py-2">
+    <div className="mt-2 rounded-lg border border-sky-500/15 bg-sky-500/5 px-2.5 py-2">
       <div className="flex items-center justify-between gap-2">
         <p className="truncate text-[11px] font-medium text-accent-muted">{title}</p>
         <span className="shrink-0 text-[10px] tabular-nums text-accent-light/80">
           {Math.round(profile.confidence * 100)}%
         </span>
       </div>
-      <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-stone-400">{profile.summary}</p>
-      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-stone-500">
+      <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-slate-500">{profile.summary}</p>
+      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-slate-400">
         {profile.contact && <span className="truncate">Contact {profile.contact}</span>}
         {profile.intakeStatus && <span>{candidateIntakeLabel(profile.intakeStatus)}</span>}
         <span>Files {profile.evidenceCount}</span>
@@ -1644,8 +1644,8 @@ function CandidateBadge() {
 function PriorityBadge({ priority }: { priority: EmailRow["priority"] }) {
   const styles = {
     URGENT: "bg-red-500/15 text-red-300 border-red-500/30",
-    NORMAL: "bg-stone-800 text-stone-400 border-stone-700",
-    LOW: "bg-stone-900 text-stone-500 border-stone-800",
+    NORMAL: "bg-slate-100 text-slate-500 border-slate-200",
+    LOW: "bg-slate-50 text-slate-400 border-slate-200",
   } as const;
   const labels = { URGENT: "Urgent", NORMAL: "Normal", LOW: "Low" } as const;
   if (priority === "NORMAL") return null;
@@ -1671,7 +1671,7 @@ function CategoryBadge({ category }: { category: string }) {
   };
   const label = labelMap[category] || category;
   return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded border border-stone-700 bg-stone-900/60 text-stone-400 shrink-0">
+    <span className="text-[10px] px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-500 shrink-0">
       {label}
     </span>
   );
@@ -1704,30 +1704,30 @@ function MobileEmailRow({
     <li>
       <Link
         href={`/email/${email.id}?${params.toString()}`}
-        className="flex gap-3 rounded-2xl bg-stone-900/50 px-4 py-3 transition active:bg-stone-800/60"
+        className="flex gap-3 rounded-2xl bg-white px-4 py-3 transition active:bg-slate-100"
       >
         <span
           aria-hidden="true"
-          className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${unread ? "bg-amber-400" : "bg-transparent"}`}
+          className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${unread ? "bg-sky-500" : "bg-transparent"}`}
         />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline justify-between gap-2">
             <span
-              className={`truncate text-[15px] ${unread ? "font-semibold text-stone-50" : "font-medium text-stone-300"}`}
+              className={`truncate text-[15px] ${unread ? "font-semibold text-slate-900" : "font-medium text-slate-500"}`}
             >
               {senderName(email.from)}
             </span>
-            <time className="shrink-0 text-[11px] tabular-nums text-stone-500">
+            <time className="shrink-0 text-[11px] tabular-nums text-slate-400">
               {formatRelative(email.date)}
             </time>
           </span>
           <span
-            className={`mt-0.5 block truncate text-[13px] ${unread ? "text-stone-200" : "text-stone-400"}`}
+            className={`mt-0.5 block truncate text-[13px] ${unread ? "text-slate-900" : "text-slate-500"}`}
           >
             {email.subject || "No subject"}
           </span>
           {preview && (
-            <span className="mt-1 line-clamp-2 block text-[12px] leading-5 text-stone-500">
+            <span className="mt-1 line-clamp-2 block text-[12px] leading-5 text-slate-400">
               {preview}
             </span>
           )}
@@ -1739,7 +1739,7 @@ function MobileEmailRow({
                 </span>
               )}
               {inboxLabel && (
-                <span className="inline-flex max-w-[60%] items-center gap-1 truncate rounded-full bg-stone-800/70 px-2 py-0.5 text-[10px] font-medium text-stone-400">
+                <span className="inline-flex max-w-[60%] items-center gap-1 truncate rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
                   <span
                     aria-hidden="true"
                     className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/70"

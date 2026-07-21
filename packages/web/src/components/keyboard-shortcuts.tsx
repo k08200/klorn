@@ -85,7 +85,7 @@ export default function KeyboardShortcuts() {
     >
       <div
         ref={dialogRef}
-        className="bg-stone-950 border border-stone-700 rounded-xl p-6 w-full max-w-sm"
+        className="bg-white border border-slate-200 rounded-xl p-6 w-full max-w-sm"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -97,12 +97,12 @@ export default function KeyboardShortcuts() {
         <div className="space-y-3">
           {SHORTCUTS.map((s) => (
             <div key={s.label} className="flex items-center justify-between">
-              <span className="text-sm text-stone-400">{s.label}</span>
+              <span className="text-sm text-slate-500">{s.label}</span>
               <div className="flex gap-1">
                 {s.keys.map((k) => (
                   <kbd
                     key={k}
-                    className="bg-stone-900 border border-stone-700 rounded px-2 py-0.5 text-xs text-stone-300 font-mono"
+                    className="bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-xs text-slate-700 font-mono"
                   >
                     {k}
                   </kbd>
@@ -111,13 +111,13 @@ export default function KeyboardShortcuts() {
             </div>
           ))}
         </div>
-        <p className="text-xs text-stone-400 mt-4 text-center">
+        <p className="text-xs text-slate-500 mt-4 text-center">
           Press Esc or click outside to close.
         </p>
         <button
           type="button"
           onClick={() => setShowHelp(false)}
-          className="mt-4 w-full min-h-11 rounded-lg border border-stone-700 text-sm text-stone-300 transition hover:border-amber-500/40 hover:text-amber-100"
+          className="mt-4 w-full min-h-11 rounded-lg border border-slate-200 text-sm text-slate-500 transition hover:border-sky-500/40 hover:text-sky-600"
         >
           Close
         </button>

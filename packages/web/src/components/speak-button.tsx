@@ -59,7 +59,7 @@ export default function SpeakButton({ text, className }: SpeakButtonProps) {
       type="button"
       onClick={toggle}
       className={`transition ${className || ""} ${
-        speaking ? "text-amber-300" : "text-stone-400 hover:text-stone-300"
+        speaking ? "text-sky-600" : "text-slate-400 hover:text-slate-500"
       }`}
       title={speaking ? "Stop reading" : "Read aloud"}
     >

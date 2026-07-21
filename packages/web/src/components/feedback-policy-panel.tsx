@@ -52,8 +52,8 @@ const KIND_COPY: Record<
   },
   REQUIRE_DRAFT_REVIEW: {
     label: "Keep review",
-    tone: "border-stone-500/30 bg-stone-500/10 text-stone-300",
-    dot: "bg-stone-400",
+    tone: "border-slate-200 bg-slate-100 text-slate-500",
+    dot: "bg-slate-400",
     summary: "Review drafts before running",
   },
   AVOID_SUGGESTION: {
@@ -64,8 +64,8 @@ const KIND_COPY: Record<
   },
   LOWER_PRIORITY: {
     label: "Lower priority",
-    tone: "border-stone-600 bg-stone-900 text-stone-300",
-    dot: "bg-stone-400",
+    tone: "border-slate-200 bg-slate-100 text-slate-500",
+    dot: "bg-slate-400",
     summary: "Watch quietly",
   },
 };
@@ -99,11 +99,11 @@ export function FeedbackPolicyPanel() {
   }, [load]);
 
   return (
-    <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-medium">Learned operating signals</h3>
-          <p className="mt-0.5 text-xs text-stone-500">
+          <p className="mt-0.5 text-xs text-slate-400">
             {since
               ? `Since ${new Date(since).toLocaleDateString("en-US")}`
               : "Recent feedback patterns"}
@@ -122,18 +122,18 @@ export function FeedbackPolicyPanel() {
 
       {loading ? (
         <div className="mt-4 space-y-2">
-          <div className="h-16 animate-pulse rounded-lg bg-stone-800/80" />
-          <div className="h-16 animate-pulse rounded-lg bg-stone-900/60" />
+          <div className="h-16 animate-pulse rounded-lg bg-slate-100" />
+          <div className="h-16 animate-pulse rounded-lg bg-slate-100" />
         </div>
       ) : error ? (
         <div
           role="alert"
-          className="mt-4 rounded-lg border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-200"
+          className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
         >
           Could not load operating signals.
         </div>
       ) : candidates.length === 0 ? (
-        <div className="mt-4 rounded-lg border border-stone-800 bg-stone-950/45 px-3 py-3 text-sm text-stone-500">
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-400">
           No stable operating signals yet.
         </div>
       ) : (
@@ -143,22 +143,22 @@ export function FeedbackPolicyPanel() {
             return (
               <div
                 key={candidate.id}
-                className="rounded-lg border border-stone-800 bg-stone-950/45 px-3 py-3"
+                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <span className={`h-2 w-2 rounded-full ${copy.dot}`} />
-                      <span className="break-words font-mono text-xs text-stone-200">
+                      <span className="break-words font-mono text-xs text-slate-900">
                         {candidate.scope.toolName}
                       </span>
                       {candidate.scope.recipient && (
-                        <span className="break-all text-xs text-stone-500">
+                        <span className="break-all text-xs text-slate-400">
                           {candidate.scope.recipient}
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-stone-500">{copy.summary}</p>
+                    <p className="mt-1 text-xs text-slate-400">{copy.summary}</p>
                   </div>
                   <span
                     className={`shrink-0 rounded-full border px-2 py-1 text-[10px] ${copy.tone}`}
@@ -166,7 +166,7 @@ export function FeedbackPolicyPanel() {
                     {copy.label}
                   </span>
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-[10px] text-stone-500 sm:grid-cols-6">
+                <div className="mt-3 grid grid-cols-3 gap-2 text-[10px] text-slate-400 sm:grid-cols-6">
                   <SignalCount label="Approved" value={candidate.support.approved} />
                   <SignalCount label="Rejected" value={candidate.support.rejected} />
                   <SignalCount label="Edited" value={candidate.support.edited} />
@@ -175,7 +175,7 @@ export function FeedbackPolicyPanel() {
                   <SignalCount label="Snoozed" value={candidate.support.snoozed} />
                   <SignalCount label="Closed" value={candidate.support.dismissed} />
                 </div>
-                <div className="mt-2 flex items-center justify-between text-[10px] text-stone-400">
+                <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500">
                   <span>Confidence {Math.round(candidate.confidence * 100)}%</span>
                   <span>{candidate.support.total} events</span>
                 </div>
@@ -198,10 +198,10 @@ function SignalCount({
   tone?: "default" | "critical";
 }) {
   return (
-    <div className="rounded-md bg-stone-950/70 px-2 py-1">
-      <div className={tone === "critical" ? "text-red-400/70" : "text-stone-400"}>{label}</div>
+    <div className="rounded-md bg-slate-100 px-2 py-1">
+      <div className={tone === "critical" ? "text-red-400/70" : "text-slate-500"}>{label}</div>
       <div
-        className={`text-xs font-medium ${tone === "critical" ? "text-red-300" : "text-stone-300"}`}
+        className={`text-xs font-medium ${tone === "critical" ? "text-red-300" : "text-slate-500"}`}
       >
         {value}
       </div>

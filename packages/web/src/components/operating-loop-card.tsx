@@ -120,43 +120,41 @@ export default function OperatingLoopCard() {
 
   return (
     <section
-      className="mb-6 overflow-hidden rounded-2xl border border-amber-300/15 bg-stone-950/70"
+      className="mb-6 overflow-hidden rounded-2xl border border-sky-400/15 bg-white"
       aria-label="Klorn operating loop"
     >
-      <div className="border-b border-stone-800 bg-gradient-to-br from-stone-950 via-stone-950 to-amber-950/25 p-4 md:p-5">
+      <div className="border-b border-slate-200 bg-gradient-to-br from-white via-white to-sky-50 p-4 md:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600">
               Operating loop
             </p>
-            <h2 className="mt-2 text-xl font-semibold tracking-tight text-stone-50">
+            <h2 className="mt-2 text-xl font-semibold tracking-tight text-slate-900">
               {modeLabel(plan.mode)}
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-400">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
               {displayText(plan.headline)}
             </p>
           </div>
-          <div className="grid grid-cols-4 overflow-hidden rounded-xl border border-white/10 bg-black/20 md:min-w-[320px]">
+          <div className="grid grid-cols-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 md:min-w-[320px]">
             {plan.metrics.map((metric) => (
               <LoopMetric key={metric.label} metric={metric} />
             ))}
           </div>
         </div>
-        <div className="mt-4 rounded-xl border border-stone-800 bg-black/20 px-3 py-2.5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone-500">
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">
             First move
           </p>
-          <p className="mt-1 text-sm font-medium text-amber-100">
-            {displayText(plan.primaryAction)}
-          </p>
+          <p className="mt-1 text-sm font-medium text-sky-700">{displayText(plan.primaryAction)}</p>
         </div>
       </div>
 
       <div className="grid gap-3 p-3 md:grid-cols-[1.4fr_1fr] md:p-4">
         <section>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-stone-100">Next moves</h3>
-            <span className="text-[11px] text-stone-400">{plan.nextMoves.length}</span>
+            <h3 className="text-sm font-semibold text-slate-900">Next moves</h3>
+            <span className="text-[11px] text-slate-500">{plan.nextMoves.length}</span>
           </div>
           <ul className="space-y-2">
             {plan.nextMoves.map((move) => (
@@ -170,12 +168,12 @@ export default function OperatingLoopCard() {
         <section className="space-y-3">
           {plan.decisionPulse.latest.length > 0 && <DecisionPulseCard pulse={plan.decisionPulse} />}
           {plan.playbookNudge && (
-            <div className="rounded-xl border border-stone-800 bg-stone-900/35 p-3">
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-amber-200">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-sky-600">
                 Playbook
               </p>
-              <p className="mt-2 text-sm font-medium text-stone-100">{plan.playbookNudge.name}</p>
-              <p className="mt-1 text-xs leading-5 text-stone-500">
+              <p className="mt-2 text-sm font-medium text-slate-900">{plan.playbookNudge.name}</p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">
                 {plan.playbookNudge.active ? "Active" : "Recommended"} · Confidence{" "}
                 {Math.round(plan.playbookNudge.confidence * 100)}%
                 {plan.playbookNudge.nextStep ? ` · ${plan.playbookNudge.nextStep}` : ""}
@@ -183,8 +181,8 @@ export default function OperatingLoopCard() {
             </div>
           )}
           {plan.watchlist.length > 0 && (
-            <div className="rounded-xl border border-stone-800 bg-stone-900/35 p-3">
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone-500">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">
                 Watchlist
               </p>
               <ul className="mt-2 space-y-2">
@@ -202,21 +200,21 @@ export default function OperatingLoopCard() {
 
 function DecisionPulseCard({ pulse }: { pulse: OperatingPlanDecisionPulse }) {
   return (
-    <div className="rounded-xl border border-stone-800 bg-stone-900/35 p-3">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-emerald-200">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-emerald-600">
             Recent decisions
           </p>
-          <p className="mt-1 text-xs text-stone-500">Last {pulse.windowHours}h results</p>
+          <p className="mt-1 text-xs text-slate-400">Last {pulse.windowHours}h results</p>
         </div>
-        <div className="shrink-0 text-right text-[11px] leading-5 text-stone-500">
+        <div className="shrink-0 text-right text-[11px] leading-5 text-slate-400">
           <p>
-            Done <span className="font-semibold text-emerald-200">{pulse.executed}</span>
+            Done <span className="font-semibold text-emerald-600">{pulse.executed}</span>
           </p>
           <p>
-            Rejected <span className="font-semibold text-stone-300">{pulse.rejected}</span> · Failed{" "}
-            <span className="font-semibold text-red-200">{pulse.failed}</span>
+            Rejected <span className="font-semibold text-slate-700">{pulse.rejected}</span> · Failed{" "}
+            <span className="font-semibold text-red-600">{pulse.failed}</span>
           </p>
         </div>
       </div>
@@ -234,17 +232,17 @@ function DecisionOutcomeRow({ outcome }: { outcome: OperatingPlanOutcome }) {
     <li>
       <Link
         href={outcome.href ?? "/inbox"}
-        className="block rounded-lg border border-stone-800/80 bg-black/20 px-2.5 py-2 transition hover:border-emerald-300/25 hover:bg-stone-900/60"
+        className="block rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 transition hover:border-emerald-300/25 hover:bg-slate-100"
       >
         <div className="flex items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-xs font-medium text-stone-300">
+          <p className="min-w-0 truncate text-xs font-medium text-slate-700">
             {displayText(outcome.title)}
           </p>
           <span className={`shrink-0 text-[10px] ${outcomeStatusClass(outcome.status)}`}>
             {outcomeStatusLabel(outcome.status)}
           </span>
         </div>
-        <p className="mt-1 truncate text-[11px] text-stone-400">
+        <p className="mt-1 truncate text-[11px] text-slate-500">
           {outcome.toolName && outcome.toolName !== "decision"
             ? outcome.toolName.replace(/_/g, " ")
             : "Decision"}
@@ -258,37 +256,37 @@ function DecisionOutcomeRow({ outcome }: { outcome: OperatingPlanOutcome }) {
 function MoveRow({ move }: { move: OperatingPlanMove }) {
   const chatHref = `/chat?prefill=${encodeURIComponent(displayText(move.prompt))}`;
   const body = (
-    <article className="rounded-xl border border-stone-800 bg-stone-900/35 p-3 transition hover:border-amber-300/25 hover:bg-stone-900/55">
+    <article className="rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-sky-400/25 hover:bg-slate-100">
       <div className="flex flex-wrap items-center gap-2">
         <ToneBadge tone={move.tone} label={displayText(move.label)} />
-        <span className="text-[11px] text-stone-400">{sourceLabel(move.source)}</span>
+        <span className="text-[11px] text-slate-500">{sourceLabel(move.source)}</span>
       </div>
       {move.href ? (
         <Link
           href={move.href}
-          className="mt-2 block break-words text-sm font-medium text-stone-100"
+          className="mt-2 block break-words text-sm font-medium text-slate-900"
         >
           {displayText(move.title)}
         </Link>
       ) : (
-        <p className="mt-2 break-words text-sm font-medium text-stone-100">
+        <p className="mt-2 break-words text-sm font-medium text-slate-900">
           {displayText(move.title)}
         </p>
       )}
-      <p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500">
+      <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">
         {displayText(move.reason)}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Link
           href={chatHref}
-          className="rounded-md border border-amber-300/25 bg-amber-300/10 px-2.5 py-1.5 text-xs font-medium text-amber-100 transition hover:bg-amber-300/15"
+          className="rounded-md border border-sky-400/25 bg-sky-400/10 px-2.5 py-1.5 text-xs font-medium text-sky-700 transition hover:bg-sky-400/15"
         >
           Prepare thread
         </Link>
         {move.href && (
           <Link
             href={move.href}
-            className="rounded-md border border-stone-700 px-2.5 py-1.5 text-xs text-stone-400 transition hover:bg-stone-800"
+            className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs text-slate-500 transition hover:bg-slate-100"
           >
             View source
           </Link>
@@ -301,14 +299,14 @@ function MoveRow({ move }: { move: OperatingPlanMove }) {
 
 function WatchRow({ context }: { context: OperatingPlanWatchContext }) {
   const body = (
-    <div className="rounded-lg border border-stone-800/80 bg-black/20 px-2.5 py-2">
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="min-w-0 truncate text-xs font-medium text-stone-300">
+        <p className="min-w-0 truncate text-xs font-medium text-slate-700">
           {displayText(context.title)}
         </p>
-        <span className="shrink-0 text-[10px] text-stone-400">{riskLabel(context.risk)}</span>
+        <span className="shrink-0 text-[10px] text-slate-500">{riskLabel(context.risk)}</span>
       </div>
-      <p className="mt-1 line-clamp-1 text-[11px] text-stone-400">{displayText(context.reason)}</p>
+      <p className="mt-1 line-clamp-1 text-[11px] text-slate-500">{displayText(context.reason)}</p>
     </div>
   );
   return context.href ? (
@@ -324,9 +322,9 @@ function WatchRow({ context }: { context: OperatingPlanWatchContext }) {
 
 function LoopMetric({ metric }: { metric: OperatingPlanMetric }) {
   return (
-    <div className="border-r border-white/10 px-2 py-2 last:border-r-0">
+    <div className="border-r border-slate-200 px-2 py-2 last:border-r-0">
       <p className={`text-lg font-semibold ${metricColor(metric.tone)}`}>{metric.value}</p>
-      <p className="mt-0.5 truncate text-[10px] text-stone-400">{displayText(metric.label)}</p>
+      <p className="mt-0.5 truncate text-[10px] text-slate-500">{displayText(metric.label)}</p>
     </div>
   );
 }
@@ -380,19 +378,19 @@ function outcomeStatusLabel(status: OperatingPlanOutcome["status"]): string {
 }
 
 function outcomeStatusClass(status: OperatingPlanOutcome["status"]): string {
-  if (status === "executed") return "text-emerald-300";
-  if (status === "rejected") return "text-stone-500";
-  return "text-red-300";
+  if (status === "executed") return "text-emerald-600";
+  if (status === "rejected") return "text-slate-400";
+  return "text-red-600";
 }
 
 function toneClass(tone: OperatingPlanTone): string {
-  if (tone === "critical") return "border-red-500/25 bg-red-500/10 text-red-200";
-  if (tone === "warn") return "border-amber-300/25 bg-amber-300/10 text-amber-200";
-  return "border-stone-700 bg-stone-900 text-stone-300";
+  if (tone === "critical") return "border-red-500/25 bg-red-500/10 text-red-700";
+  if (tone === "warn") return "border-amber-300/25 bg-amber-300/10 text-amber-700";
+  return "border-slate-200 bg-slate-100 text-slate-600";
 }
 
 function metricColor(tone: OperatingPlanTone): string {
-  if (tone === "critical") return "text-red-200";
-  if (tone === "warn") return "text-amber-200";
-  return "text-stone-100";
+  if (tone === "critical") return "text-red-700";
+  if (tone === "warn") return "text-amber-700";
+  return "text-slate-900";
 }

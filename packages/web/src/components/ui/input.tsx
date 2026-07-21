@@ -4,7 +4,7 @@ import type { InputHTMLAttributes, TextareaHTMLAttributes } from "react";
 import { forwardRef, useId } from "react";
 
 const baseStyles =
-  "w-full bg-stone-950 border border-stone-800 rounded-lg px-4 py-2.5 text-sm text-stone-100 placeholder-stone-500 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25 transition-colors";
+  "w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25 transition-colors";
 
 const errorStyles = "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500/30";
 
@@ -27,7 +27,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div>
         {label && (
-          <label htmlFor={inputId} className="block text-xs font-medium text-stone-400 mb-1.5">
+          <label htmlFor={inputId} className="block text-xs font-medium text-slate-500 mb-1.5">
             {label}
           </label>
         )}
@@ -40,7 +40,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           {...props}
         />
         {error && (
-          <p id={`${inputId}-error`} className="text-xs text-red-400 mt-1" role="alert">
+          <p id={`${inputId}-error`} className="text-xs text-red-600 mt-1" role="alert">
             {error}
           </p>
         )}
@@ -61,7 +61,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <div>
         {label && (
-          <label htmlFor={inputId} className="block text-xs font-medium text-stone-400 mb-1.5">
+          <label htmlFor={inputId} className="block text-xs font-medium text-slate-500 mb-1.5">
             {label}
           </label>
         )}
@@ -74,7 +74,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           {...props}
         />
         {error && (
-          <p id={`${inputId}-error`} className="text-xs text-red-400 mt-1" role="alert">
+          <p id={`${inputId}-error`} className="text-xs text-red-600 mt-1" role="alert">
             {error}
           </p>
         )}
@@ -95,7 +95,7 @@ export function Select({ label, error, children, className = "", id, ...props }:
   return (
     <div>
       {label && (
-        <label htmlFor={inputId} className="block text-xs font-medium text-stone-400 mb-1.5">
+        <label htmlFor={inputId} className="block text-xs font-medium text-slate-500 mb-1.5">
           {label}
         </label>
       )}
@@ -109,7 +109,7 @@ export function Select({ label, error, children, className = "", id, ...props }:
         {children}
       </select>
       {error && (
-        <p id={`${inputId}-error`} className="text-xs text-red-400 mt-1" role="alert">
+        <p id={`${inputId}-error`} className="text-xs text-red-600 mt-1" role="alert">
           {error}
         </p>
       )}

@@ -180,13 +180,13 @@ function LoginForm() {
       title={mode === "login" ? t("auth.titleLogin") : t("auth.titleRegister")}
       description={mode === "login" ? t("auth.descLogin") : t("auth.descRegister")}
       footer={
-        <Link href="/" className="transition hover:text-stone-300">
+        <Link href="/" className="transition hover:text-slate-700">
           {t("auth.backHome")}
         </Link>
       }
     >
       {nextPath !== "/inbox" && (
-        <div className="mb-4 rounded-md border border-amber-300/40 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100">
+        <div className="mb-4 rounded-md border border-sky-300/40 bg-sky-300/10 px-3 py-2 text-xs leading-5 text-sky-800">
           {t("auth.signInToContinue", { destination: returnDestinationLabel(nextPath, t) })}
         </div>
       )}
@@ -197,14 +197,14 @@ function LoginForm() {
           three-way callouts. When the beta gate is off, Google leads as before. */}
       {!signupOpen ? (
         <div className="space-y-4">
-          <div className="rounded-md border border-amber-300/40 bg-amber-300/10 px-3 py-2.5 text-xs leading-5 text-amber-100">
-            <span className="font-semibold text-amber-50">{t("auth.inviteOnlyTitle")}</span>{" "}
+          <div className="rounded-md border border-sky-300/40 bg-sky-300/10 px-3 py-2.5 text-xs leading-5 text-sky-800">
+            <span className="font-semibold text-sky-900">{t("auth.inviteOnlyTitle")}</span>{" "}
             {t("auth.inviteOnlyBody")}
           </div>
 
           <Link
             href="/early-access"
-            className="flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 shadow-sm shadow-amber-300/20 transition hover:bg-amber-200"
+            className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-stone-950 shadow-sm shadow-sky-300/20 transition hover:bg-sky-200"
           >
             {t("auth.requestEarlyAccess")}
           </Link>
@@ -212,7 +212,7 @@ function LoginForm() {
           <a
             href={`${API_BASE}/api/auth/google/login`}
             onClick={handleGoogleClick}
-            className="flex h-11 w-full items-center justify-center gap-3 rounded-md border border-stone-700 bg-transparent text-sm font-medium text-stone-300 transition hover:border-stone-500 hover:text-stone-100"
+            className="flex h-11 w-full items-center justify-center gap-3 rounded-md border border-slate-200 bg-transparent text-sm font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
           >
             <GoogleMark />
             {t("auth.googleApprovedSignIn")}
@@ -230,7 +230,7 @@ function LoginForm() {
           </a>
           {/* Marketing/doctrine copy is landing-page context — hide it on the app
               (mobile) for a clean login; keep it on desktop. */}
-          <div className="mt-3 hidden space-y-2 text-center text-[11px] leading-5 text-stone-400 md:block">
+          <div className="mt-3 hidden space-y-2 text-center text-[11px] leading-5 text-slate-500 md:block">
             <p>{t("auth.betaScope")}</p>
             <p>{t("auth.noSilentActions")}</p>
             <p>
@@ -238,29 +238,29 @@ function LoginForm() {
                 href="https://github.com/k08200/klorn/blob/main/docs/doctrine/deterministic-floor.md"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline decoration-stone-600 underline-offset-2 hover:text-amber-200 hover:decoration-amber-300"
+                className="underline decoration-slate-300 underline-offset-2 hover:text-sky-600 hover:decoration-sky-300"
               >
                 {t("auth.readDoctrine")}
               </a>
-              <span className="ml-2 text-stone-500">{t("auth.openSourceVersion")}</span>
+              <span className="ml-2 text-slate-400">{t("auth.openSourceVersion")}</span>
             </p>
           </div>
         </>
       )}
 
       <div className="my-5 flex items-center gap-3">
-        <div className="h-px flex-1 bg-stone-800/80" />
-        <span className="text-xs text-stone-400">
+        <div className="h-px flex-1 bg-slate-200" />
+        <span className="text-xs text-slate-500">
           {signupOpen ? t("auth.orContinueEmail") : t("auth.orSignInEmail")}
         </span>
-        <div className="h-px flex-1 bg-stone-800/80" />
+        <div className="h-px flex-1 bg-slate-200" />
       </div>
 
       {signupOpen && (
         <div
           role="group"
           aria-label={t("auth.formGroupLabel")}
-          className="mb-5 grid grid-cols-2 rounded-md border border-stone-700/70 bg-black/20 p-1"
+          className="mb-5 grid grid-cols-2 rounded-md border border-slate-200 bg-slate-50 p-1"
         >
           <button
             type="button"
@@ -269,7 +269,7 @@ function LoginForm() {
             className={`h-11 rounded px-3 text-sm font-medium transition ${
               mode === "login"
                 ? "bg-stone-100 text-stone-950"
-                : "text-stone-400 hover:text-stone-200"
+                : "text-slate-500 hover:text-slate-900"
             }`}
           >
             {t("nav.logIn")}
@@ -281,7 +281,7 @@ function LoginForm() {
             className={`h-11 rounded px-3 text-sm font-medium transition ${
               mode === "register"
                 ? "bg-stone-100 text-stone-950"
-                : "text-stone-400 hover:text-stone-200"
+                : "text-slate-500 hover:text-slate-900"
             }`}
           >
             {t("auth.signUpShort")}
@@ -319,13 +319,13 @@ function LoginForm() {
 
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-3">
-            <label htmlFor="password" className="block text-xs font-medium text-stone-400">
+            <label htmlFor="password" className="block text-xs font-medium text-slate-500">
               {t("auth.password")}
             </label>
             {mode === "login" && (
               <Link
                 href="/reset-password"
-                className="inline-flex min-h-10 items-center text-xs text-stone-400 transition hover:text-amber-300"
+                className="inline-flex min-h-10 items-center text-xs text-slate-500 transition hover:text-sky-600"
               >
                 {t("auth.resetPassword")}
               </Link>
@@ -349,7 +349,7 @@ function LoginForm() {
         <button
           type="submit"
           disabled={loading || !email || !password}
-          className="flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 shadow-sm shadow-amber-300/20 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-800 disabled:text-stone-500"
+          className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-stone-950 shadow-sm shadow-sky-300/20 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">
@@ -364,14 +364,14 @@ function LoginForm() {
         </button>
       </form>
 
-      <div className="mt-5 border-t border-stone-800/80 pt-4 text-center text-xs text-stone-500">
+      <div className="mt-5 border-t border-slate-200 pt-4 text-center text-xs text-slate-400">
         {signupOpen ? (
           <>
             {mode === "login" ? t("auth.needAccount") : t("auth.haveAccount")}{" "}
             <button
               type="button"
               onClick={() => changeMode(mode === "login" ? "register" : "login")}
-              className="inline-flex min-h-10 items-center font-medium text-amber-300 transition hover:text-amber-200"
+              className="inline-flex min-h-10 items-center font-medium text-sky-600 transition hover:text-sky-500"
             >
               {mode === "login" ? t("auth.switchToSignUp") : t("auth.switchToLogIn")}
             </button>
@@ -384,7 +384,7 @@ function LoginForm() {
             {t("auth.approvedCantSignIn")}{" "}
             <Link
               href="/reset-password"
-              className="inline-flex min-h-10 items-center font-medium text-amber-300 transition hover:text-amber-200"
+              className="inline-flex min-h-10 items-center font-medium text-sky-600 transition hover:text-sky-500"
             >
               {t("auth.resetYourPassword")}
             </Link>

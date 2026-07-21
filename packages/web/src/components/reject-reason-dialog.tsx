@@ -74,12 +74,12 @@ export function RejectReasonDialog({ open, onCancel, onReject }: RejectReasonDia
         role="dialog"
         aria-modal="true"
         aria-labelledby="reject-reason-title"
-        className="bg-stone-950 border border-stone-700 rounded-xl p-6 w-full max-w-sm animate-slide-up"
+        className="bg-white border border-slate-200 rounded-xl p-6 w-full max-w-sm animate-slide-up"
       >
         <h3 id="reject-reason-title" className="font-semibold mb-2">
           Reject this suggestion?
         </h3>
-        <label htmlFor="reject-reason" className="block text-sm text-stone-400 mb-2">
+        <label htmlFor="reject-reason" className="block text-sm text-slate-500 mb-2">
           Why? Helps Klorn avoid proposing this again — optional
         </label>
         <textarea
@@ -90,23 +90,23 @@ export function RejectReasonDialog({ open, onCancel, onReject }: RejectReasonDia
           maxLength={MAX_REJECT_REASON_LENGTH}
           rows={3}
           placeholder="e.g. Wrong recipient, bad timing, not my task"
-          className="w-full resize-none rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-200 placeholder-stone-600 transition focus:border-amber-300 focus:outline-none"
+          className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 transition focus:border-sky-300 focus:outline-none"
         />
-        <p className="mt-1 text-right text-[10px] text-stone-400">
+        <p className="mt-1 text-right text-[10px] text-slate-500">
           {reason.length}/{MAX_REJECT_REASON_LENGTH}
         </p>
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="min-h-11 px-3 py-2 rounded-lg text-sm text-stone-400 hover:text-white transition"
+            className="min-h-11 px-3 py-2 rounded-lg text-sm text-slate-500 hover:text-slate-900 transition"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={() => onReject(null)}
-            className="min-h-11 px-3 py-2 rounded-lg text-sm border border-stone-700 text-stone-300 hover:bg-stone-800 transition"
+            className="min-h-11 px-3 py-2 rounded-lg text-sm border border-slate-200 text-slate-500 hover:bg-slate-100 transition"
           >
             Skip &amp; Reject
           </button>

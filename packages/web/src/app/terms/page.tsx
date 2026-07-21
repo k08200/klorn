@@ -33,8 +33,8 @@ const SECTIONS = [
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section id={slug(title)} className="scroll-mt-24 space-y-3">
-      <h2 className="text-xl font-semibold text-white">{title}</h2>
-      <div className="space-y-3 text-base leading-7 text-stone-300">{children}</div>
+      <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+      <div className="space-y-3 text-base leading-7 text-slate-500">{children}</div>
     </section>
   );
 }
@@ -43,15 +43,15 @@ function TableOfContents({ sections }: { sections: string[] }) {
   return (
     <nav
       aria-label="On this page"
-      className="mt-10 rounded-xl border border-stone-800 bg-stone-950/40 p-5"
+      className="mt-10 rounded-xl border border-slate-200 bg-slate-50 p-5"
     >
-      <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-400">On this page</p>
+      <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">On this page</p>
       <ul className="mt-3 grid gap-2 sm:grid-cols-2">
         {sections.map((title) => (
           <li key={title}>
             <a
               href={`#${slug(title)}`}
-              className="inline-flex min-h-11 items-center text-sm text-stone-300 transition hover:text-amber-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-stone-950 rounded"
+              className="inline-flex min-h-11 items-center text-sm text-slate-500 transition hover:text-sky-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-white rounded"
             >
               {title}
             </a>
@@ -64,7 +64,7 @@ function TableOfContents({ sections }: { sections: string[] }) {
 
 export default function TermsPage() {
   return (
-    <main id="main" className="min-h-screen bg-[#0f1115] text-white">
+    <main id="main" className="min-h-screen bg-white text-slate-900">
       <nav className="mx-auto flex max-w-4xl items-center justify-between px-6 py-5">
         <Link href="/" className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-[#f5f0e8]">
@@ -72,24 +72,24 @@ export default function TermsPage() {
           </div>
           <span className="text-lg font-bold tracking-tight">Klorn</span>
         </Link>
-        <div className="flex items-center gap-5 text-sm text-stone-400">
-          <Link href="/privacy" className="transition hover:text-white">
+        <div className="flex items-center gap-5 text-sm text-slate-500">
+          <Link href="/privacy" className="transition hover:text-slate-900">
             Privacy
           </Link>
-          <Link href="/login" className="transition hover:text-white">
+          <Link href="/login" className="transition hover:text-slate-900">
             Log in
           </Link>
         </div>
       </nav>
 
       <article className="mx-auto max-w-4xl px-6 py-14">
-        <p className="text-sm font-medium uppercase tracking-[0.18em] text-amber-200">
+        <p className="text-sm font-medium uppercase tracking-[0.18em] text-sky-600">
           TERMS OF SERVICE
         </p>
-        <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
+        <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-slate-900 md:text-5xl">
           Klorn Beta Terms
         </h1>
-        <p className="mt-5 max-w-2xl text-sm leading-6 text-stone-400">
+        <p className="mt-5 max-w-2xl text-sm leading-6 text-slate-500">
           Last updated: {updatedAt}. These terms apply to the Klorn beta. By using Klorn, you agree
           to these terms and the Privacy Policy.
         </p>
@@ -172,7 +172,7 @@ export default function TermsPage() {
           <Section title="Account Deletion">
             <p>
               To request deletion of Klorn account data, contact{" "}
-              <a className="text-amber-200 hover:text-amber-100" href="mailto:k0820086@gmail.com">
+              <a className="text-sky-600 hover:text-sky-700" href="mailto:k0820086@gmail.com">
                 k0820086@gmail.com
               </a>
               . Deleting Klorn account data does not automatically delete data from Google or other
@@ -190,7 +190,7 @@ export default function TermsPage() {
           <Section title="Contact">
             <p>
               For questions about these terms, contact{" "}
-              <a className="text-amber-200 hover:text-amber-100" href="mailto:k0820086@gmail.com">
+              <a className="text-sky-600 hover:text-sky-700" href="mailto:k0820086@gmail.com">
                 k0820086@gmail.com
               </a>
               .

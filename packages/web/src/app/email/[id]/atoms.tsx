@@ -12,9 +12,9 @@
 /** Single fact row in the candidate-profile card. */
 export function ProfileFact({ label, value }: { label: string; value: string | null }) {
   return (
-    <div className="rounded-lg border border-stone-800/60 bg-black/15 px-3 py-2">
-      <p className="text-[10px] font-medium uppercase tracking-wider text-stone-400">{label}</p>
-      <p className="mt-1 truncate text-xs text-stone-300">{value || "-"}</p>
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">{label}</p>
+      <p className="mt-1 truncate text-xs text-slate-500">{value || "-"}</p>
     </div>
   );
 }
@@ -22,11 +22,11 @@ export function ProfileFact({ label, value }: { label: string; value: string | n
 /** Stat tile shown above the email body (e.g. word count, attachment size). */
 export function DetailStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-stone-700/45 bg-black/20 px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
         {label}
       </p>
-      <p className="mt-1 truncate text-sm font-semibold text-stone-100">{value}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-slate-900">{value}</p>
     </div>
   );
 }
@@ -53,7 +53,7 @@ export function EmailActionButton({
       className={`h-8 rounded-md border px-2.5 text-xs font-medium transition disabled:opacity-50 ${
         danger
           ? "border-red-500/25 bg-red-500/10 text-red-200 hover:bg-red-500/15"
-          : "border-stone-700/70 bg-stone-950/50 text-stone-300 hover:border-stone-600 hover:bg-white/5"
+          : "border-slate-200 bg-white text-slate-500 hover:border-slate-200 hover:bg-slate-100"
       }`}
     >
       {busy ? "Working" : children}

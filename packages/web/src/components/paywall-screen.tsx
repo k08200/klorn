@@ -99,22 +99,22 @@ export default function PaywallScreen() {
   };
 
   return (
-    <main className="flex min-h-dvh flex-col justify-center bg-[#0f1115] px-6 pb-safe pt-safe text-stone-100">
+    <main className="flex min-h-dvh flex-col justify-center bg-white px-6 pb-safe pt-safe text-slate-900">
       <div className="mx-auto w-full max-w-sm">
         <img src="/brand/mark.svg?v=matte2" alt="" className="mb-6 h-12 w-12" />
-        <span className="inline-flex items-center rounded-full bg-amber-400/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-300">
+        <span className="inline-flex items-center rounded-full bg-sky-400/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-600">
           Founding price
         </span>
-        <h1 className="mt-3 text-[28px] font-bold leading-tight tracking-tight text-stone-50">
+        <h1 className="mt-3 text-[28px] font-bold leading-tight tracking-tight text-slate-900">
           Start your 7-day free trial
         </h1>
-        <p className="mt-2 text-sm leading-6 text-stone-400">
+        <p className="mt-2 text-sm leading-6 text-slate-500">
           Klorn Pro is your AI email firewall — it decides what reaches you and handles the rest.
         </p>
 
         <ul className="mt-6 space-y-3">
           {VALUE_PROPS.map((prop) => (
-            <li key={prop} className="flex items-start gap-3 text-[15px] text-stone-200">
+            <li key={prop} className="flex items-start gap-3 text-[15px] text-slate-900">
               <svg
                 aria-hidden="true"
                 width="20"
@@ -125,7 +125,7 @@ export default function PaywallScreen() {
                 strokeWidth="2.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="mt-0.5 shrink-0 text-amber-400"
+                className="mt-0.5 shrink-0 text-sky-500"
               >
                 <polyline points="20 6 9 17 4 12" />
               </svg>
@@ -142,7 +142,7 @@ export default function PaywallScreen() {
             <button
               type="button"
               disabled
-              className="flex min-h-12 w-full items-center justify-center rounded-xl bg-amber-400/60 text-[15px] font-semibold text-stone-950"
+              className="flex min-h-12 w-full items-center justify-center rounded-xl bg-sky-400/60 text-[15px] font-semibold text-white"
             >
               Subscription coming soon
             </button>
@@ -151,7 +151,7 @@ export default function PaywallScreen() {
               type="button"
               onClick={native ? startAppPurchase : startWebTrial}
               disabled={loading}
-              className="flex min-h-12 w-full items-center justify-center rounded-xl bg-amber-400 text-[15px] font-semibold text-stone-950 transition active:bg-amber-300 disabled:opacity-50"
+              className="flex min-h-12 w-full items-center justify-center rounded-xl bg-sky-500 text-[15px] font-semibold text-white transition active:bg-sky-500 disabled:opacity-50"
             >
               {loading ? "Starting..." : "Start free trial"}
             </button>
@@ -161,22 +161,22 @@ export default function PaywallScreen() {
               type="button"
               onClick={restore}
               disabled={loading}
-              className="mt-2 flex min-h-9 w-full items-center justify-center text-xs text-stone-400 transition active:text-stone-200 disabled:opacity-50"
+              className="mt-2 flex min-h-9 w-full items-center justify-center text-xs text-slate-500 transition active:text-slate-900 disabled:opacity-50"
             >
               Restore purchase
             </button>
           )}
-          <p className="mt-3 text-center text-xs text-stone-500">
+          <p className="mt-3 text-center text-xs text-slate-400">
             7 days free, then {price}/month — locked in for early members. Cancel anytime.
           </p>
         </div>
 
-        <div className="mt-6 flex items-center justify-center gap-4 text-xs text-stone-500">
-          <Link href="/settings" className="transition hover:text-stone-300">
+        <div className="mt-6 flex items-center justify-center gap-4 text-xs text-slate-400">
+          <Link href="/settings" className="transition hover:text-slate-700">
             Settings
           </Link>
           <span aria-hidden="true">·</span>
-          <Link href="/terms" className="transition hover:text-stone-300">
+          <Link href="/terms" className="transition hover:text-slate-700">
             Terms
           </Link>
         </div>

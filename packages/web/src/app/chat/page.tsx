@@ -129,12 +129,12 @@ function ChatView() {
   return (
     <section className="mx-auto flex h-[calc(100dvh-4rem)] w-full max-w-3xl flex-col px-4 pb-24 pt-4 md:pb-6">
       <div className="mb-3 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-white">{t("nav.assistant")}</h1>
+        <h1 className="text-lg font-semibold text-slate-900">{t("nav.assistant")}</h1>
         <button
           type="button"
           onClick={() => setConversationId(null)}
           disabled={!activeId || sendMutation.isPending}
-          className="focus-ring min-h-[44px] rounded-md border border-stone-600 px-3 text-sm text-stone-300 transition hover:border-stone-400 hover:text-white disabled:opacity-40"
+          className="focus-ring min-h-[44px] rounded-md border border-slate-200 px-3 text-sm text-slate-500 transition hover:border-slate-200 hover:text-slate-900 disabled:opacity-40"
         >
           {t("chat.newChat")}
         </button>
@@ -142,17 +142,17 @@ function ChatView() {
 
       <div className="flex-1 space-y-3 overflow-y-auto pr-1" aria-live="polite">
         {activeId && messagesQuery.isLoading ? (
-          <p className="text-sm text-stone-400">{t("chat.loadingConversation")}</p>
+          <p className="text-sm text-slate-500">{t("chat.loadingConversation")}</p>
         ) : messages.length === 0 && !pendingText ? (
           <div className="mt-8 space-y-3">
-            <p className="text-sm text-stone-300">{t("chat.emptyState")}</p>
+            <p className="text-sm text-slate-500">{t("chat.emptyState")}</p>
             <ul className="space-y-2">
               {SUGGESTION_KEYS.map((key) => (
                 <li key={key}>
                   <button
                     type="button"
                     onClick={() => send(t(key))}
-                    className="focus-ring min-h-[44px] w-full rounded-lg border border-stone-700 px-3 py-2 text-left text-sm text-stone-300 transition hover:border-stone-500 hover:text-white"
+                    className="focus-ring min-h-[44px] w-full rounded-lg border border-slate-200 px-3 py-2 text-left text-sm text-slate-500 transition hover:border-slate-200 hover:text-slate-900"
                   >
                     {t(key)}
                   </button>
@@ -167,13 +167,13 @@ function ChatView() {
             ))}
             {pendingText && (
               <div className="flex justify-end">
-                <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-accent/15 px-4 py-2 text-sm text-white">
+                <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-accent/15 px-4 py-2 text-sm text-slate-900">
                   <p className="whitespace-pre-wrap">{pendingText}</p>
                 </div>
               </div>
             )}
             {sendMutation.isPending && (
-              <p role="status" className="text-sm text-stone-400">
+              <p role="status" className="text-sm text-slate-500">
                 {t("chat.thinking")}
               </p>
             )}
@@ -194,7 +194,7 @@ function ChatView() {
           send(input);
         }}
       >
-        <div className="flex min-h-[44px] flex-1 items-center gap-2 rounded-xl border border-stone-600 bg-stone-900/70 px-3 py-2 focus-within:border-stone-400">
+        <div className="flex min-h-[44px] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 focus-within:border-slate-200">
           <textarea
             ref={inputRef}
             value={input}
@@ -209,7 +209,7 @@ function ChatView() {
             maxLength={4000}
             placeholder={t("chat.inputPlaceholder")}
             aria-label="Message the assistant"
-            className="max-h-32 flex-1 resize-none bg-transparent text-sm text-white outline-none placeholder:text-stone-500"
+            className="max-h-32 flex-1 resize-none bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
           />
           <VoiceButton
             onTranscript={(text) =>
@@ -233,7 +233,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   if (message.role === "USER") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-accent/15 px-4 py-2 text-sm text-white">
+        <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-accent/15 px-4 py-2 text-sm text-slate-900">
           <p className="whitespace-pre-wrap">{message.content}</p>
         </div>
       </div>
@@ -243,7 +243,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   const draft = message.metadata?.eventDraft;
   return (
     <div className="flex justify-start">
-      <div className="max-w-[85%] rounded-2xl rounded-bl-sm border border-stone-700/70 bg-stone-900/60 px-4 py-2 text-sm text-stone-100">
+      <div className="max-w-[85%] rounded-2xl rounded-bl-sm border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-900">
         <p className="whitespace-pre-wrap">{message.content}</p>
         {draft && <EventDraftCard draft={draft} />}
       </div>

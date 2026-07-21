@@ -286,16 +286,16 @@ function CandidateIntakeView() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
-      <header className="mb-5 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-2xl shadow-black/10">
+      <header className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl shadow-black/10">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-light/80">
               Candidate Intake
             </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-stone-50">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
               Candidate intake queue
             </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
               Resumes, profiles, portfolios, and audition materials found in email attachments are
               grouped by review state.
             </p>
@@ -303,7 +303,7 @@ function CandidateIntakeView() {
           <div className="flex shrink-0 gap-2">
             <Link
               href="/email"
-              className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-orange-500/40 hover:bg-orange-500/10 hover:text-accent-dim"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500 transition hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-accent-dim"
             >
               Email list
             </Link>
@@ -319,7 +319,7 @@ function CandidateIntakeView() {
               type="button"
               onClick={exportCsv}
               disabled={exporting}
-              className="rounded-lg border border-[#a8a29e]/30 px-3 py-1.5 text-xs text-stone-300 transition hover:bg-[#a8a29e]/10 disabled:opacity-50"
+              className="rounded-lg border border-[#a8a29e]/30 px-3 py-1.5 text-xs text-slate-500 transition hover:bg-[#a8a29e]/10 disabled:opacity-50"
             >
               {exporting ? "Exporting..." : "Export CSV"}
             </button>
@@ -359,7 +359,7 @@ function CandidateIntakeView() {
                 <Link
                   key={issue.attachmentId}
                   href={`/email/${issue.emailId}`}
-                  className="truncate rounded border border-rose-400/10 bg-black/10 px-2 py-1.5 text-[11px] text-rose-100/75 transition hover:border-rose-300/30 hover:text-rose-100"
+                  className="truncate rounded border border-rose-400/10 bg-slate-50 px-2 py-1.5 text-[11px] text-rose-100/75 transition hover:border-rose-300/30 hover:text-rose-100"
                 >
                   {issue.filename} · {issue.reason}
                 </Link>
@@ -380,7 +380,7 @@ function CandidateIntakeView() {
               className={`min-h-[32px] shrink-0 rounded-full px-3 py-1.5 text-xs transition ${
                 active
                   ? "bg-accent-light text-stone-950"
-                  : "border border-stone-700/55 bg-stone-950/45 text-stone-400 hover:bg-stone-900/70 hover:text-stone-200"
+                  : "border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
               }`}
             >
               {filter.label}
@@ -400,7 +400,7 @@ function CandidateIntakeView() {
               className={`min-h-[32px] shrink-0 rounded-full px-3 py-1.5 text-xs transition ${
                 active
                   ? "bg-[#a8a29e] text-stone-950"
-                  : "border border-stone-700/55 bg-stone-950/45 text-stone-400 hover:bg-stone-900/70 hover:text-stone-200"
+                  : "border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
               }`}
             >
               {filter.label}
@@ -410,12 +410,12 @@ function CandidateIntakeView() {
       </div>
 
       {!loading && candidates.length > 0 && (
-        <div className="mt-3 flex flex-col gap-2 rounded-xl border border-stone-700/45 bg-stone-950/35 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={toggleAllVisible}
-              className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim"
             >
               {selectedCount > 0 ? `${selectedCount} selected` : "Select visible"}
             </button>
@@ -423,7 +423,7 @@ function CandidateIntakeView() {
               <button
                 type="button"
                 onClick={() => setSelectedIds(new Set())}
-                className="rounded-lg px-3 py-1.5 text-xs text-stone-500 transition hover:bg-stone-800/70 hover:text-stone-200"
+                className="rounded-lg px-3 py-1.5 text-xs text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
               >
                 Clear
               </button>
@@ -454,7 +454,7 @@ function CandidateIntakeView() {
         </div>
       )}
 
-      {loading && <p className="px-1 py-3 text-sm text-stone-500">Loading...</p>}
+      {loading && <p className="px-1 py-3 text-sm text-slate-400">Loading...</p>}
 
       {error && (
         <div className="mt-3 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -463,9 +463,9 @@ function CandidateIntakeView() {
       )}
 
       {!loading && !error && candidates.length === 0 && (
-        <div className="mt-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-center">
-          <p className="text-sm text-stone-300">No candidate materials yet.</p>
-          <p className="mt-1 text-xs text-stone-400">
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-6 text-center">
+          <p className="text-sm text-slate-500">No candidate materials yet.</p>
+          <p className="mt-1 text-xs text-slate-500">
             After Gmail sync and attachment analysis, candidate signals appear here automatically.
           </p>
         </div>
@@ -489,11 +489,11 @@ function CandidateIntakeView() {
 
 function QueueStat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-xl border border-stone-700/45 bg-black/15 px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
         {label}
       </p>
-      <p className="mt-1 text-lg font-semibold text-stone-100">{value}</p>
+      <p className="mt-1 text-lg font-semibold text-slate-900">{value}</p>
     </div>
   );
 }
@@ -512,7 +512,7 @@ function BulkStatusButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim disabled:cursor-not-allowed disabled:opacity-40"
+      className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim disabled:cursor-not-allowed disabled:opacity-40"
     >
       {label}
     </button>
@@ -534,7 +534,7 @@ function CandidateCard({
       className={`rounded-xl border p-4 transition ${
         selected
           ? "border-accent-light/60 bg-accent/10"
-          : "border-orange-500/20 bg-orange-500/5 hover:border-accent/35 hover:bg-accent/10"
+          : "border-sky-500/20 bg-sky-500/5 hover:border-accent/35 hover:bg-accent/10"
       }`}
     >
       <div className="flex items-start gap-3">
@@ -542,7 +542,7 @@ function CandidateCard({
           type="checkbox"
           checked={selected}
           onChange={onToggle}
-          className="mt-1 h-4 w-4 rounded border-stone-600 bg-stone-950 text-accent-light"
+          className="mt-1 h-4 w-4 rounded border-stone-600 bg-white text-accent-light"
           aria-label={`Select ${title}`}
         />
         <div className="min-w-0">
@@ -559,14 +559,14 @@ function CandidateCard({
               </span>
             )}
           </div>
-          <h2 className="mt-2 truncate text-sm font-semibold text-stone-100">{title}</h2>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-400">{candidate.summary}</p>
+          <h2 className="mt-2 truncate text-sm font-semibold text-slate-900">{title}</h2>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{candidate.summary}</p>
         </div>
-        <time className="shrink-0 text-[11px] tabular-nums text-stone-500">
+        <time className="shrink-0 text-[11px] tabular-nums text-slate-400">
           {formatRelative(candidate.email.receivedAt)}
         </time>
       </div>
-      <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-stone-500">
+      <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-400">
         {candidate.contact && <span className="truncate">Contact {candidate.contact}</span>}
         <span>{candidate.evidenceFiles.length} files</span>
         {candidate.evidenceFiles.some((file) => file.needsManualReview) && (
@@ -585,26 +585,26 @@ function CandidateCard({
           </span>
         )}
       </div>
-      <div className="mt-3 rounded-lg border border-stone-800/60 bg-black/15 px-3 py-2">
-        <p className="truncate text-xs text-stone-300">{candidate.email.subject || "Untitled"}</p>
-        <p className="mt-1 truncate text-[11px] text-stone-400">
+      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+        <p className="truncate text-xs text-slate-500">{candidate.email.subject || "Untitled"}</p>
+        <p className="mt-1 truncate text-[11px] text-slate-500">
           {senderName(candidate.email.from)}
         </p>
       </div>
       {candidate.notes && (
-        <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-stone-500">
+        <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-400">
           Notes: {candidate.notes}
         </p>
       )}
       <Link
         href={`/email/candidates/${candidate.emailId}`}
-        className="mt-3 inline-flex rounded-lg border border-stone-700/55 px-3 py-1.5 text-xs text-stone-300 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim"
+        className="mt-3 inline-flex rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim"
       >
         Candidate details
       </Link>
       <Link
         href={`/email/${candidate.emailId}`}
-        className="ml-2 mt-3 inline-flex rounded-lg border border-stone-700/55 px-3 py-1.5 text-xs text-stone-500 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim"
+        className="ml-2 mt-3 inline-flex rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-400 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim"
       >
         Email
       </Link>

@@ -41,7 +41,7 @@ export const TIER_VISUAL: Record<
     description: "Worth interrupting you for. Push notifications fire here.",
     plane:
       "tier-plane-push border-tier-push/35 bg-gradient-to-b from-tier-push/[0.07] to-transparent",
-    card: "border-tier-push/15 bg-stone-950/60 hover:border-tier-push/45",
+    card: "border-tier-push/15 bg-white hover:border-tier-push/45",
     accent: "text-tier-push",
     dot: "text-tier-push",
   },
@@ -50,15 +50,15 @@ export const TIER_VISUAL: Record<
     description: "Visible when you choose to look. No push.",
     plane:
       "tier-plane-queue border-tier-queue/25 bg-gradient-to-b from-tier-queue/[0.05] to-transparent",
-    card: "border-tier-queue/10 bg-stone-950/55 hover:border-tier-queue/35",
+    card: "border-tier-queue/10 bg-white hover:border-tier-queue/35",
     accent: "text-tier-queue",
     dot: "text-tier-queue",
   },
   SILENT: {
     label: "SILENT",
     description: "Recorded only. Klorn decided this wasn't worth surfacing.",
-    plane: "tier-plane-silent border-stone-800/70 bg-stone-950/30 opacity-90 hover:opacity-100",
-    card: "border-stone-800/60 bg-stone-950/40 hover:border-stone-700",
+    plane: "tier-plane-silent border-slate-200 bg-slate-50 opacity-90 hover:opacity-100",
+    card: "border-slate-200 bg-white hover:border-slate-300",
     accent: "text-tier-silent",
     dot: "text-tier-silent",
   },
@@ -67,7 +67,7 @@ export const TIER_VISUAL: Record<
     description: "Handled without asking. Eligible for auto-execution.",
     plane:
       "tier-plane-auto border-tier-auto/30 bg-gradient-to-b from-tier-auto/[0.05] to-transparent",
-    card: "border-tier-auto/15 bg-stone-950/55 hover:border-tier-auto/40",
+    card: "border-tier-auto/15 bg-white hover:border-tier-auto/40",
     accent: "text-tier-auto",
     dot: "text-tier-auto",
   },
@@ -77,7 +77,7 @@ export const TIER_VISUAL: Record<
 const TARGET_BUTTON: Record<Tier, string> = {
   PUSH: "hover:border-tier-push/50 hover:text-tier-push",
   QUEUE: "hover:border-tier-queue/50 hover:text-tier-queue",
-  SILENT: "hover:border-stone-600 hover:text-tier-silent",
+  SILENT: "hover:border-slate-300 hover:text-tier-silent",
   AUTO: "hover:border-tier-auto/50 hover:text-tier-auto",
 };
 
@@ -168,7 +168,7 @@ export function FirewallBoard() {
 
   if (loading) {
     return (
-      <div className="flex min-h-full items-center justify-center px-4 py-10 text-stone-500">
+      <div className="flex min-h-full items-center justify-center px-4 py-10 text-slate-400">
         Loading firewall…
       </div>
     );
@@ -176,7 +176,7 @@ export function FirewallBoard() {
 
   if (!data) {
     return (
-      <div className="flex min-h-full items-center justify-center px-4 py-10 text-stone-500">
+      <div className="flex min-h-full items-center justify-center px-4 py-10 text-slate-400">
         Nothing to show yet.
       </div>
     );
@@ -189,13 +189,13 @@ export function FirewallBoard() {
           {announcement}
         </p>
         <header className="mb-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-300/80">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-600/80">
             Firewall board
           </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-50 sm:text-[2rem]">
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-[2rem]">
             Today's attention firewall
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
             Klorn evaluated every signal that hit your inbox today and sorted it into a tier. Move
             anything we got wrong — that override teaches the classifier.
           </p>
@@ -348,7 +348,7 @@ function DailyReceiptStrip({
 }) {
   const counts: Tier[] = ["PUSH", "QUEUE", "SILENT", "AUTO"];
   return (
-    <section className="glass rounded-2xl border border-stone-800/80 bg-stone-950/40 p-5">
+    <section className="glass rounded-2xl border border-slate-200 bg-white p-5">
       <div className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-4">
         {counts.map((tier) => {
           const v = TIER_VISUAL[tier];
@@ -356,7 +356,7 @@ function DailyReceiptStrip({
             <div key={tier} className="flex items-center gap-3">
               <TierGlyph tier={tier} className={v.dot} />
               <div className="flex flex-col">
-                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-stone-500">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400">
                   {v.label}
                 </span>
                 <CountChip
@@ -369,7 +369,7 @@ function DailyReceiptStrip({
         })}
       </div>
       {receipt?.summary?.narrative && (
-        <p className="mt-4 border-t border-stone-800/80 pt-4 text-xs leading-5 text-stone-500">
+        <p className="mt-4 border-t border-slate-200 pt-4 text-xs leading-5 text-slate-400">
           {receipt.summary.narrative}
         </p>
       )}
@@ -393,15 +393,15 @@ function TierColumn({
     <section className={`glass rounded-2xl border p-4 transition-opacity ${v.plane}`}>
       <header className="mb-1 flex items-center gap-2">
         <TierGlyph tier={tier} className={v.dot} />
-        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-100">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-900">
           {v.label}
         </h2>
         <CountChip value={items.length} className={`ml-auto text-sm font-semibold ${v.accent}`} />
       </header>
-      <p className="mb-4 text-[11px] leading-5 text-stone-500">{v.description}</p>
+      <p className="mb-4 text-[11px] leading-5 text-slate-400">{v.description}</p>
 
       {items.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-stone-800/70 px-3 py-8 text-center text-xs text-stone-400">
+        <p className="rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center text-xs text-slate-500">
           Nothing here yet.
         </p>
       ) : (
@@ -457,16 +457,16 @@ function FirewallCard({
       // cards (and re-renders) appear immediately.
       style={index < 8 ? { animationDelay: `${index * 35}ms` } : undefined}
     >
-      <p className="line-clamp-2 break-words font-medium text-stone-100">{subject}</p>
+      <p className="line-clamp-2 break-words font-medium text-slate-900">{subject}</p>
       {sender && (
-        <p className="mt-1 flex items-center gap-1.5 truncate text-[11px] text-stone-500">
+        <p className="mt-1 flex items-center gap-1.5 truncate text-[11px] text-slate-400">
           {item.email?.trust && <TrustDot trust={item.email.trust} />}
           <span className="truncate">
             {item.email?.from ? "From" : "To"}: {sender}
           </span>
         </p>
       )}
-      <div className="mt-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-stone-400">
+      <div className="mt-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-500">
         <SourceBadge source={item.source} />
         {item.toolName && (
           <>
@@ -479,22 +479,22 @@ function FirewallCard({
       </div>
 
       {snippet && (
-        <details className="group mt-2.5 rounded-lg border border-stone-800/80 bg-black/30">
-          <summary className="flex cursor-pointer list-none items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] text-stone-400 transition hover:text-stone-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        <details className="group mt-2.5 rounded-lg border border-slate-200 bg-slate-50">
+          <summary className="flex cursor-pointer list-none items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-500 transition hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
             <span aria-hidden="true" className="inline-block transition group-open:rotate-90">
               ›
             </span>
             <span className="group-open:hidden">Show preview</span>
             <span className="hidden group-open:inline">Hide preview</span>
           </summary>
-          <p className="line-clamp-6 whitespace-pre-wrap border-t border-stone-800/80 px-2.5 py-2 text-[11px] leading-4 text-stone-300">
+          <p className="line-clamp-6 whitespace-pre-wrap border-t border-slate-200 px-2.5 py-2 text-[11px] leading-4 text-slate-500">
             {snippet}
           </p>
         </details>
       )}
 
       {item.tierReason && (
-        <p className="mt-2.5 line-clamp-2 border-l-2 border-stone-800 pl-2 text-[11px] leading-4 text-stone-500">
+        <p className="mt-2.5 line-clamp-2 border-l-2 border-slate-200 pl-2 text-[11px] leading-4 text-slate-400">
           {item.tierReason}
         </p>
       )}
@@ -506,7 +506,7 @@ function FirewallCard({
             type="button"
             disabled={anyOverriding}
             onClick={() => onOverride(item, target)}
-            className={`inline-flex min-h-7 items-center rounded-full border border-stone-700/80 px-2.5 text-[10px] font-medium uppercase tracking-wider text-stone-400 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 ${TARGET_BUTTON[target]}`}
+            className={`inline-flex min-h-7 items-center rounded-full border border-slate-200 px-2.5 text-[10px] font-medium uppercase tracking-wider text-slate-500 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 ${TARGET_BUTTON[target]}`}
           >
             Move → {target}
           </button>
@@ -514,7 +514,7 @@ function FirewallCard({
         {item.href && (
           <Link
             href={item.href}
-            className={`ml-auto text-[11px] transition ${v.accent} hover:text-stone-100`}
+            className={`ml-auto text-[11px] transition ${v.accent} hover:text-slate-900`}
           >
             Open email →
           </Link>
@@ -575,9 +575,9 @@ function AutoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
   const v = TIER_VISUAL.AUTO;
   if (count === 0) {
     return (
-      <section className="glass mt-4 flex items-center gap-2 rounded-2xl border border-stone-800/70 bg-stone-950/30 p-4 text-xs text-stone-500">
-        <TierGlyph tier="AUTO" className="text-stone-400" />
-        <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-stone-500">
+      <section className="glass mt-4 flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-400">
+        <TierGlyph tier="AUTO" className="text-slate-500" />
+        <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400">
           AUTO
         </span>
         <span>— nothing handled automatically yet.</span>
@@ -593,10 +593,10 @@ function AutoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
         </h2>
         <CountChip value={count} className={`ml-auto text-sm font-semibold ${v.accent}`} />
       </header>
-      <p className="mt-1.5 text-[11px] leading-5 text-stone-500">
+      <p className="mt-1.5 text-[11px] leading-5 text-slate-400">
         Low-risk, pre-approved. Klorn ran these without interrupting you.
       </p>
-      <ul className="mt-3 space-y-1.5 text-xs text-stone-400">
+      <ul className="mt-3 space-y-1.5 text-xs text-slate-500">
         {items.slice(0, 5).map((item) => (
           <li key={item.id} className="flex items-center gap-2 line-clamp-1">
             <span className="text-tier-auto/60">·</span>
@@ -609,7 +609,7 @@ function AutoStrip({ count, items }: { count: number; items: FirewallItem[] }) {
 }
 
 function SourceBadge({ source }: { source: string }) {
-  return <span className="font-mono text-[10px] text-stone-500">{source}</span>;
+  return <span className="font-mono text-[10px] text-slate-400">{source}</span>;
 }
 
 function relativeTime(iso: string): string {

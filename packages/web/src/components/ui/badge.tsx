@@ -25,7 +25,7 @@ const intentStyles: Record<BadgeIntent, string> = {
   success: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
   warning: "bg-amber-500/10 text-amber-400 border-amber-500/20",
   danger: "bg-rose-500/10 text-rose-400 border-rose-500/20",
-  neutral: "bg-stone-900 text-stone-300 border-stone-700",
+  neutral: "bg-slate-100 text-slate-500 border-slate-200",
 };
 
 const intentDot: Record<BadgeIntent, string> = {
@@ -33,7 +33,7 @@ const intentDot: Record<BadgeIntent, string> = {
   success: "bg-emerald-400",
   warning: "bg-amber-400",
   danger: "bg-rose-400",
-  neutral: "bg-stone-400",
+  neutral: "bg-slate-400",
 };
 
 // Legacy → intent map (non-breaking). `blue` always rendered amber → accent;

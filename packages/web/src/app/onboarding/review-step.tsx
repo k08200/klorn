@@ -111,30 +111,30 @@ export function ReviewStep({ onContinue }: { onContinue: () => void }) {
 
   return (
     <div>
-      <h1 className="text-3xl font-semibold leading-tight tracking-tight text-stone-50">
+      <h1 className="text-3xl font-semibold leading-tight tracking-tight text-slate-900">
         Does this look right?
       </h1>
-      <p className="mt-4 text-sm leading-6 text-stone-400">
+      <p className="mt-4 text-sm leading-6 text-slate-500">
         Klorn sorted your recent inbox into tiers. Confirm the calls it got right and fix the ones
         it didn&apos;t — a few is enough to teach it what matters to you.
       </p>
 
       {loading && items.length === 0 ? (
-        <div className="mt-8 flex items-center gap-3 rounded-xl border border-stone-800 bg-stone-900/30 px-4 py-3">
-          <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-stone-600 border-t-amber-300 motion-reduce:animate-none" />
-          <p className="text-sm text-stone-300">Reading your inbox…</p>
+        <div className="mt-8 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-slate-200 border-t-sky-500 motion-reduce:animate-none" />
+          <p className="text-sm text-slate-500">Reading your inbox…</p>
         </div>
       ) : null}
 
       {loadError && items.length === 0 ? (
-        <p className="mt-8 rounded-xl border border-stone-800 bg-stone-900/30 px-4 py-3 text-sm text-stone-400">
+        <p className="mt-8 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
           Couldn&apos;t load your classifications right now. You can review them anytime from your
           inbox.
         </p>
       ) : null}
 
       {!loading && !loadError && items.length === 0 ? (
-        <p className="mt-8 rounded-xl border border-stone-800 bg-stone-900/30 px-4 py-3 text-sm text-stone-400">
+        <p className="mt-8 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
           No mail to review yet — Klorn will sort new email as it arrives.
         </p>
       ) : null}
@@ -146,7 +146,7 @@ export function ReviewStep({ onContinue }: { onContinue: () => void }) {
               <span className={`text-xs font-semibold ${TIER_VISUAL[group.tier].accent}`}>
                 {TIER_VISUAL[group.tier].label}
               </span>
-              <span className="text-[11px] text-stone-500">
+              <span className="text-[11px] text-slate-400">
                 {TIER_VISUAL[group.tier].description}
               </span>
             </div>
@@ -169,12 +169,12 @@ export function ReviewStep({ onContinue }: { onContinue: () => void }) {
       <button
         type="button"
         onClick={onContinue}
-        className="mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-950"
+        className="mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-sky-500 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
       >
         {reviewedCount > 0 ? `Continue — ${reviewedCount} reviewed` : "Looks good — continue"}
         <span aria-hidden>→</span>
       </button>
-      <p className="mt-3 text-center text-[11px] leading-5 text-stone-500">
+      <p className="mt-3 text-center text-[11px] leading-5 text-slate-400">
         Every confirm or fix teaches Klorn. You can refine any tier later from your inbox.
       </p>
     </div>
@@ -199,10 +199,10 @@ function ReviewCard({
   const snippet = item.email?.snippet ?? null;
 
   return (
-    <div className="rounded-xl border border-stone-800 bg-stone-900/40 p-3">
-      <p className="truncate text-xs text-stone-400">{sender}</p>
-      <p className="mt-0.5 truncate text-sm font-medium text-stone-200">{subject}</p>
-      {snippet ? <p className="mt-1 line-clamp-2 text-xs text-stone-500">{snippet}</p> : null}
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <p className="truncate text-xs text-slate-500">{sender}</p>
+      <p className="mt-0.5 truncate text-sm font-medium text-slate-900">{subject}</p>
+      {snippet ? <p className="mt-1 line-clamp-2 text-xs text-slate-400">{snippet}</p> : null}
 
       {labelState ? (
         <p className={`mt-3 text-xs font-semibold ${TIER_VISUAL[labelState.tier].accent}`}>
@@ -220,14 +220,14 @@ function ReviewCard({
           >
             Looks right
           </button>
-          <span className="text-[11px] text-stone-600">or move to</span>
+          <span className="text-[11px] text-slate-400">or move to</span>
           {MOVE_TARGETS.filter((t) => t !== item.tier).map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => onCorrect(t)}
               disabled={busy}
-              className={`min-h-11 rounded-lg border border-stone-700 px-3 py-1.5 text-xs font-medium text-stone-400 transition hover:bg-stone-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-500 disabled:cursor-not-allowed disabled:opacity-50 ${TIER_VISUAL[t].accent}`}
+              className={`min-h-11 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50 ${TIER_VISUAL[t].accent}`}
             >
               {t}
             </button>

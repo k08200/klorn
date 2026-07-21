@@ -137,20 +137,20 @@ export default function CommandPalette() {
       />
       <div
         ref={dialogRef}
-        className="relative w-full max-w-md rounded-xl border border-stone-700 bg-stone-900 shadow-2xl"
+        className="relative w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
         onKeyDown={handleKeyDown}
       >
-        <div className="p-3 border-b border-stone-800">
+        <div className="p-3 border-b border-slate-200">
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search decisions, pages, settings..."
             aria-label="Search commands"
-            className="w-full bg-transparent text-sm focus:outline-none placeholder-stone-500"
+            className="w-full bg-transparent text-sm focus:outline-none placeholder-slate-400"
             role="combobox"
             aria-expanded="true"
             aria-controls={listboxId}
@@ -170,7 +170,7 @@ export default function CommandPalette() {
         </div>
         <div id={listboxId} className="max-h-64 overflow-y-auto py-1" role="listbox">
           {filtered.length === 0 ? (
-            <p className="text-sm text-stone-500 px-4 py-3">No matching commands.</p>
+            <p className="text-sm text-slate-400 px-4 py-3">No matching commands.</p>
           ) : (
             filtered.map((cmd, i) => (
               <button
@@ -186,17 +186,17 @@ export default function CommandPalette() {
                 onMouseEnter={() => setSelected(i)}
                 className={`w-full text-left px-4 py-2.5 flex items-center justify-between text-sm transition ${
                   i === selected
-                    ? "bg-stone-800 text-white"
-                    : "text-stone-400 hover:bg-stone-800/50"
+                    ? "bg-slate-100 text-slate-900"
+                    : "text-slate-500 hover:bg-slate-100"
                 }`}
               >
                 <span>{cmd.label}</span>
-                {cmd.sublabel && <span className="text-xs text-stone-400">{cmd.sublabel}</span>}
+                {cmd.sublabel && <span className="text-xs text-slate-500">{cmd.sublabel}</span>}
               </button>
             ))
           )}
         </div>
-        <div className="border-t border-stone-800 px-4 py-2 flex items-center justify-between text-[10px] text-stone-400">
+        <div className="border-t border-slate-200 px-4 py-2 flex items-center justify-between text-[10px] text-slate-500">
           <span>Use arrows to move, Enter to open</span>
           <span>Esc to close</span>
         </div>

@@ -212,14 +212,14 @@ function AdminDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-300 border-t-transparent" />
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-sky-300 border-t-transparent" />
       </div>
     );
   }
 
   if (user?.role !== "ADMIN") {
     return (
-      <div className="flex h-full items-center justify-center text-stone-500">
+      <div className="flex h-full items-center justify-center text-slate-400">
         Admin access required.
       </div>
     );
@@ -238,30 +238,30 @@ function AdminDashboard() {
             ))}
           </div>
         )}
-        <header className="flex flex-col gap-4 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-sm shadow-black/20 md:flex-row md:items-center md:justify-between">
+        <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-black/20 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-600">
               Ops command
             </p>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-stone-50">
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
               Operations console
             </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-400">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
               Monitor execution quality, approval flow, user state, and cost from one compact view.
             </p>
           </div>
-          <div className="flex w-full gap-1 rounded-lg border border-stone-700/45 bg-stone-950/70 p-1 md:w-auto">
+          <div className="flex w-full gap-1 rounded-lg border border-slate-200 bg-white p-1 md:w-auto">
             <button
               type="button"
               onClick={() => setTab("ops")}
-              className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition md:flex-none ${tab === "ops" ? "bg-amber-300 text-stone-950" : "text-stone-500 hover:text-stone-200"}`}
+              className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition md:flex-none ${tab === "ops" ? "bg-sky-500 text-white" : "text-slate-400 hover:text-slate-900"}`}
             >
               Ops
             </button>
             <button
               type="button"
               onClick={() => setTab("users")}
-              className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition md:flex-none ${tab === "users" ? "bg-amber-300 text-stone-950" : "text-stone-500 hover:text-stone-200"}`}
+              className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition md:flex-none ${tab === "users" ? "bg-sky-500 text-white" : "text-slate-400 hover:text-slate-900"}`}
             >
               Users
             </button>
@@ -269,11 +269,11 @@ function AdminDashboard() {
         </header>
 
         {/* Agent Eval Harness */}
-        <section className="rounded-2xl border border-stone-700/45 bg-stone-950/35 p-4">
+        <section className="rounded-2xl border border-slate-200 bg-white p-4">
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-sm font-medium text-stone-50">Decision agent eval</h2>
-              <p className="mt-0.5 text-xs text-stone-500">
+              <h2 className="text-sm font-medium text-slate-900">Decision agent eval</h2>
+              <p className="mt-0.5 text-xs text-slate-400">
                 Check tool risk, dedupe, and plan-gate regressions.
               </p>
             </div>
@@ -281,7 +281,7 @@ function AdminDashboard() {
               type="button"
               onClick={runEval}
               disabled={evalLoading}
-              className="rounded-lg bg-amber-300 px-3 py-1.5 text-xs font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-sky-500 px-3 py-1.5 text-xs font-semibold text-stone-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {evalLoading ? "Running..." : "Run eval"}
             </button>
@@ -289,7 +289,7 @@ function AdminDashboard() {
           {evalData && (
             <div className="space-y-2">
               <div className="flex items-center gap-4 text-xs">
-                <span className="text-stone-400">
+                <span className="text-slate-500">
                   {evalData.summary.passed}/{evalData.summary.total} passed
                 </span>
                 <span
@@ -297,7 +297,7 @@ function AdminDashboard() {
                 >
                   Pass rate {(evalData.summary.passRate * 100).toFixed(0)}%
                 </span>
-                <span className="text-stone-400">
+                <span className="text-slate-500">
                   {new Date(evalData.runAt).toLocaleString("en-US")}
                 </span>
               </div>
@@ -306,7 +306,7 @@ function AdminDashboard() {
                   <div
                     key={r.id}
                     className={`flex items-start gap-2 text-xs p-2 rounded ${
-                      r.passed ? "bg-stone-900/45" : "border border-red-900/50 bg-red-950/30"
+                      r.passed ? "bg-slate-50" : "border border-red-900/50 bg-red-950/30"
                     }`}
                   >
                     <span
@@ -321,9 +321,9 @@ function AdminDashboard() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-stone-500">{r.id}</span>
-                        <span className="text-stone-300">{r.name}</span>
-                        <span className="text-[10px] uppercase text-stone-400">[{r.severity}]</span>
+                        <span className="font-mono text-slate-400">{r.id}</span>
+                        <span className="text-slate-500">{r.name}</span>
+                        <span className="text-[10px] uppercase text-slate-500">[{r.severity}]</span>
                       </div>
                       {!r.passed && r.message && <p className="text-red-400 mt-0.5">{r.message}</p>}
                     </div>
@@ -352,7 +352,7 @@ function AdminDashboard() {
         {tab === "ops" && ops && (
           <div className="space-y-6">
             <section>
-              <h2 className="mb-3 text-sm font-medium text-stone-400">Tool execution (7d)</h2>
+              <h2 className="mb-3 text-sm font-medium text-slate-500">Tool execution (7d)</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard
                   label="Success rate"
@@ -365,7 +365,7 @@ function AdminDashboard() {
             </section>
 
             <section>
-              <h2 className="mb-3 text-sm font-medium text-stone-400">Approval flow (7d)</h2>
+              <h2 className="mb-3 text-sm font-medium text-slate-500">Approval flow (7d)</h2>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <StatCard
                   label="Approval rate"
@@ -379,7 +379,7 @@ function AdminDashboard() {
             </section>
 
             <section>
-              <h2 className="mb-3 text-sm font-medium text-stone-400">Daily trust loop (7d)</h2>
+              <h2 className="mb-3 text-sm font-medium text-slate-500">Daily trust loop (7d)</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard
                   label="Top-3 useful rate"
@@ -395,7 +395,7 @@ function AdminDashboard() {
             </section>
 
             <section>
-              <h2 className="mb-3 text-sm font-medium text-stone-400">
+              <h2 className="mb-3 text-sm font-medium text-slate-500">
                 Active users and notifications
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -410,7 +410,7 @@ function AdminDashboard() {
             </section>
 
             <section>
-              <h2 className="mb-3 text-sm font-medium text-stone-400">Model cost ledger (7d)</h2>
+              <h2 className="mb-3 text-sm font-medium text-slate-500">Model cost ledger (7d)</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard label="Est. cost" value={`$${ops.tokens.estimatedCostUsd.toFixed(2)}`} />
                 <StatCard label="Prompt tokens" value={ops.tokens.promptTokens.toLocaleString()} />
@@ -424,7 +424,7 @@ function AdminDashboard() {
 
             {perf && perf.routes.length > 0 && (
               <section>
-                <h2 className="mb-3 text-sm font-medium text-stone-400">
+                <h2 className="mb-3 text-sm font-medium text-slate-500">
                   Route latency (since last restart)
                 </h2>
                 {/* Mobile: stacked cards; the 7-column table is unreadable when it
@@ -433,9 +433,9 @@ function AdminDashboard() {
                   {perf.routes.slice(0, 20).map((r) => (
                     <div
                       key={r.route}
-                      className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-3 text-xs"
+                      className="rounded-xl border border-slate-200 bg-white p-3 text-xs"
                     >
-                      <p className="font-mono text-stone-300 break-all">{r.route}</p>
+                      <p className="font-mono text-slate-500 break-all">{r.route}</p>
                       <dl className="mt-2 grid grid-cols-3 gap-2">
                         <RouteStat label="Count" value={`${r.count}`} />
                         <RouteStat
@@ -463,10 +463,10 @@ function AdminDashboard() {
                     </div>
                   ))}
                 </div>
-                <div className="hidden overflow-x-auto rounded-2xl border border-stone-700/45 bg-stone-950/35 sm:block">
+                <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white sm:block">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-stone-800 text-left text-stone-400">
+                      <tr className="border-b border-slate-200 text-left text-slate-500">
                         <th className="p-3">Route</th>
                         <th className="p-3">Count</th>
                         <th className="p-3">Errors</th>
@@ -478,26 +478,26 @@ function AdminDashboard() {
                     </thead>
                     <tbody>
                       {perf.routes.slice(0, 20).map((r) => (
-                        <tr key={r.route} className="border-b border-stone-800/60">
-                          <td className="p-3 font-mono text-stone-300">{r.route}</td>
-                          <td className="p-3 text-stone-400">{r.count}</td>
+                        <tr key={r.route} className="border-b border-slate-200">
+                          <td className="p-3 font-mono text-slate-500">{r.route}</td>
+                          <td className="p-3 text-slate-500">{r.count}</td>
                           <td
-                            className={`p-3 ${r.errorCount > 0 ? "text-red-400" : "text-stone-400"}`}
+                            className={`p-3 ${r.errorCount > 0 ? "text-red-400" : "text-slate-500"}`}
                           >
                             {r.errorCount}
                           </td>
-                          <td className="p-3 text-stone-400">{r.p50}ms</td>
+                          <td className="p-3 text-slate-500">{r.p50}ms</td>
                           <td
-                            className={`p-3 ${r.p95 > 1000 ? "text-amber-300" : "text-stone-400"}`}
+                            className={`p-3 ${r.p95 > 1000 ? "text-amber-300" : "text-slate-500"}`}
                           >
                             {r.p95}ms
                           </td>
                           <td
-                            className={`p-3 ${r.p99 > 1000 ? "text-amber-300" : "text-stone-400"}`}
+                            className={`p-3 ${r.p99 > 1000 ? "text-amber-300" : "text-slate-500"}`}
                           >
                             {r.p99}ms
                           </td>
-                          <td className={`p-3 ${r.max > 2000 ? "text-red-400" : "text-stone-400"}`}>
+                          <td className={`p-3 ${r.max > 2000 ? "text-red-400" : "text-slate-500"}`}>
                             {r.max}ms
                           </td>
                         </tr>
@@ -510,20 +510,20 @@ function AdminDashboard() {
 
             {ops.recentErrors.length > 0 && (
               <section>
-                <h2 className="mb-3 text-sm font-medium text-stone-400">Recent errors</h2>
-                <div className="divide-y divide-stone-800 rounded-2xl border border-stone-700/45 bg-stone-950/35">
+                <h2 className="mb-3 text-sm font-medium text-slate-500">Recent errors</h2>
+                <div className="divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
                   {ops.recentErrors.map((e) => (
                     <div key={`${e.createdAt}-${e.userId}-${e.summary}`} className="p-3 text-xs">
                       <div className="flex justify-between mb-1">
                         <span className="text-red-400 font-mono">
                           {e.tool || (e.summary.startsWith("Agent error") ? "Agent loop" : "Agent")}
                         </span>
-                        <span className="text-stone-400">
+                        <span className="text-slate-500">
                           {new Date(e.createdAt).toLocaleString("en-US")}
                         </span>
                       </div>
-                      <p className="truncate text-stone-400">{e.summary}</p>
-                      <p className="mt-1 text-stone-400">User: {e.userId.slice(0, 8)}</p>
+                      <p className="truncate text-slate-500">{e.summary}</p>
+                      <p className="mt-1 text-slate-500">User: {e.userId.slice(0, 8)}</p>
                     </div>
                   ))}
                 </div>
@@ -543,10 +543,10 @@ function AdminDashboard() {
             </div>
 
             {/* Desktop: full table, still wrapped for horizontal scroll safety. */}
-            <div className="hidden overflow-x-auto rounded-2xl border border-stone-700/45 bg-stone-950/35 sm:block">
+            <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white sm:block">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-stone-800 text-left text-stone-400">
+                  <tr className="border-b border-slate-200 text-left text-slate-500">
                     <th className="p-3 pr-4">Email</th>
                     <th className="p-3 pr-4">Name</th>
                     <th className="p-3 pr-4">Role</th>
@@ -559,15 +559,15 @@ function AdminDashboard() {
                 </thead>
                 <tbody>
                   {users.map((u) => (
-                    <tr key={u.id} className="border-b border-stone-800/60">
-                      <td className="p-3 pr-4 text-stone-300">{u.email}</td>
-                      <td className="p-3 pr-4 text-stone-400">{u.name || "-"}</td>
+                    <tr key={u.id} className="border-b border-slate-200">
+                      <td className="p-3 pr-4 text-slate-500">{u.email}</td>
+                      <td className="p-3 pr-4 text-slate-500">{u.name || "-"}</td>
                       <td className="p-3 pr-4">
                         <select
                           aria-label={`Role for ${u.email}`}
                           value={u.role}
                           onChange={(e) => updateUser(u.id, { role: e.target.value })}
-                          className="min-h-11 rounded border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+                          className="min-h-11 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
                         >
                           <option value="USER">USER</option>
                           <option value="ADMIN">ADMIN</option>
@@ -578,16 +578,16 @@ function AdminDashboard() {
                           aria-label={`Plan for ${u.email}`}
                           value={u.plan}
                           onChange={(e) => updateUser(u.id, { plan: e.target.value })}
-                          className="min-h-11 rounded border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+                          className="min-h-11 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
                         >
                           <option value="FREE">FREE</option>
                           <option value="PRO">PRO</option>
                           <option value="ENTERPRISE">ENTERPRISE</option>
                         </select>
                       </td>
-                      <td className="p-3 pr-4 text-stone-400">{u.messageCount}</td>
-                      <td className="p-3 pr-4 text-stone-400">{u._count.conversations}</td>
-                      <td className="p-3 pr-4 text-xs text-stone-400">
+                      <td className="p-3 pr-4 text-slate-500">{u.messageCount}</td>
+                      <td className="p-3 pr-4 text-slate-500">{u._count.conversations}</td>
+                      <td className="p-3 pr-4 text-xs text-slate-500">
                         {new Date(u.createdAt).toLocaleDateString("en-US")}
                       </td>
                       <td className="p-3">
@@ -615,9 +615,9 @@ function AdminDashboard() {
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
-      <p className="text-xs text-stone-400">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-stone-50">{value}</p>
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-slate-900">{value}</p>
     </div>
   );
 }
@@ -632,10 +632,10 @@ function RouteStat({
   tone?: "muted" | "warn" | "error";
 }) {
   const valueTone =
-    tone === "error" ? "text-red-400" : tone === "warn" ? "text-amber-300" : "text-stone-300";
+    tone === "error" ? "text-red-400" : tone === "warn" ? "text-amber-300" : "text-slate-500";
   return (
     <div>
-      <dt className="text-[10px] uppercase tracking-wide text-stone-500">{label}</dt>
+      <dt className="text-[10px] uppercase tracking-wide text-slate-400">{label}</dt>
       <dd className={`mt-0.5 font-medium ${valueTone}`}>{value}</dd>
     </div>
   );
@@ -651,11 +651,11 @@ function UserCard({
   onDelete: (id: string, email: string) => void;
 }) {
   return (
-    <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4 text-sm">
+    <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-stone-200">{user.email}</p>
-          <p className="text-xs text-stone-400">{user.name || "-"}</p>
+          <p className="truncate text-slate-900">{user.email}</p>
+          <p className="text-xs text-slate-500">{user.name || "-"}</p>
         </div>
         {user.role !== "ADMIN" && (
           <button
@@ -668,25 +668,25 @@ function UserCard({
         )}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <label className="text-xs text-stone-400">
+        <label className="text-xs text-slate-500">
           Role
           <select
             aria-label={`Role for ${user.email}`}
             value={user.role}
             onChange={(e) => onUpdate(user.id, { role: e.target.value })}
-            className="mt-1 block min-h-11 w-full rounded border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+            className="mt-1 block min-h-11 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
           >
             <option value="USER">USER</option>
             <option value="ADMIN">ADMIN</option>
           </select>
         </label>
-        <label className="text-xs text-stone-400">
+        <label className="text-xs text-slate-500">
           Plan
           <select
             aria-label={`Plan for ${user.email}`}
             value={user.plan}
             onChange={(e) => onUpdate(user.id, { plan: e.target.value })}
-            className="mt-1 block min-h-11 w-full rounded border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+            className="mt-1 block min-h-11 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
           >
             <option value="FREE">FREE</option>
             <option value="PRO">PRO</option>
@@ -694,7 +694,7 @@ function UserCard({
           </select>
         </label>
       </div>
-      <div className="mt-3 flex gap-4 text-xs text-stone-400">
+      <div className="mt-3 flex gap-4 text-xs text-slate-500">
         <span>Turns: {user.messageCount}</span>
         <span>Threads: {user._count.conversations}</span>
         <span>Joined {new Date(user.createdAt).toLocaleDateString("en-US")}</span>

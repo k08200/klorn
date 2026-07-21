@@ -193,10 +193,10 @@ function BriefingView() {
       {/* MOBILE — native large-title header (desktop hero below, untouched) */}
       <header className="mb-5 flex items-end justify-between gap-3 md:hidden">
         <div className="min-w-0">
-          <h1 className="text-[28px] font-bold leading-none tracking-tight text-stone-50">
+          <h1 className="text-[28px] font-bold leading-none tracking-tight text-slate-900">
             {t("nav.briefing")}
           </h1>
-          <p className="mt-1.5 text-sm text-stone-400">
+          <p className="mt-1.5 text-sm text-slate-500">
             {content
               ? `Today${formattedTime ? ` · ${formattedTime}` : ""}`
               : t("briefing.notGenerated")}
@@ -207,7 +207,7 @@ function BriefingView() {
           onClick={regenerate}
           disabled={generating}
           aria-label={content ? "Regenerate briefing" : "Generate briefing"}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-900/70 text-stone-300 transition active:bg-stone-800 disabled:opacity-50"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-500 transition active:bg-slate-100 disabled:opacity-50"
         >
           <svg
             aria-hidden="true"
@@ -228,41 +228,41 @@ function BriefingView() {
       </header>
 
       {/* DESKTOP — unchanged */}
-      <header className="mb-6 hidden overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10 md:block">
-        <div className="h-1 bg-gradient-to-r from-amber-300 via-amber-200/40 to-transparent" />
+      <header className="mb-6 hidden overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-black/10 md:block">
+        <div className="h-1 bg-gradient-to-r from-sky-300 via-sky-200/40 to-transparent" />
         {/* Mobile = content-first: hide the decorative work-signal panel and the
             3-stat dashboard below their breakpoints so the brief itself is up
             top. A compact Regenerate replaces the panel's button on phones. */}
         <div className="grid gap-5 p-4 md:p-6 lg:grid-cols-[1fr_300px] lg:items-stretch">
           <div className="min-w-0">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80 md:mb-2">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600 md:mb-2">
               Klorn · {t("nav.briefing")}
             </p>
             <div className="flex items-start justify-between gap-3">
-              <h1 className="text-lg font-semibold tracking-tight text-stone-50 md:text-2xl">
+              <h1 className="text-lg font-semibold tracking-tight text-slate-900 md:text-2xl">
                 {t("briefing.heading")}
               </h1>
               <button
                 type="button"
                 onClick={regenerate}
                 disabled={generating}
-                className="min-h-9 shrink-0 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50 lg:hidden"
+                className="min-h-9 shrink-0 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-50 lg:hidden"
               >
                 {generating ? "..." : content ? t("briefing.regenerate") : t("briefing.generate")}
               </button>
             </div>
-            <p className="mt-2 hidden max-w-xl text-sm leading-6 text-stone-400 md:block">
+            <p className="mt-2 hidden max-w-xl text-sm leading-6 text-slate-500 md:block">
               Mail and calendar items that need a call, sorted into approve, hold, and next steps.
-              {formattedTime && <span className="ml-2 text-stone-400">Today {formattedTime}</span>}
+              {formattedTime && <span className="ml-2 text-slate-500">Today {formattedTime}</span>}
             </p>
           </div>
-          <div className="relative hidden min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20 lg:block">
+          <div className="relative hidden min-h-40 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 lg:block">
             <EveSignalField className="absolute inset-0 border-0" />
             <button
               type="button"
               onClick={regenerate}
               disabled={generating}
-              className="absolute right-3 top-3 inline-flex min-h-11 items-center rounded-md border border-stone-700 bg-stone-950/75 px-3 py-1.5 text-xs text-stone-300 backdrop-blur transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100 disabled:opacity-50"
+              className="absolute right-3 top-3 inline-flex min-h-11 items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 backdrop-blur transition hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-sky-100 disabled:opacity-50"
             >
               {generating
                 ? t("briefing.generating")
@@ -283,12 +283,12 @@ function BriefingView() {
 
       {status && <BriefingDeliveryStatus status={status} />}
       {statusError && (
-        <div className="mb-4 rounded-lg border border-amber-900/50 bg-amber-950/20 px-4 py-3 text-sm text-amber-200">
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
           {statusError}
         </div>
       )}
 
-      {loading && <p className="text-sm text-stone-500">Loading...</p>}
+      {loading && <p className="text-sm text-slate-400">Loading...</p>}
 
       {(error || briefingLoadError) && (
         <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -297,14 +297,14 @@ function BriefingView() {
       )}
 
       {!loading && !error && !briefingLoadError && !content && (
-        <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-6 text-center">
-          <p className="mb-3 text-sm text-stone-300">No briefing for today yet.</p>
-          <p className="mx-auto mb-4 max-w-md text-xs leading-5 text-amber-100/85">
+        <div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
+          <p className="mb-3 text-sm text-slate-500">No briefing for today yet.</p>
+          <p className="mx-auto mb-4 max-w-md text-xs leading-5 text-sky-100/85">
             {t("briefing.learningMode")}
           </p>
-          <p className="mb-4 text-xs text-stone-500">
+          <p className="mb-4 text-xs text-slate-400">
             Change the automatic briefing time in{" "}
-            <Link href="/settings" className="text-amber-300 hover:underline">
+            <Link href="/settings" className="text-sky-600 hover:underline">
               Settings
             </Link>
             .
@@ -313,7 +313,7 @@ function BriefingView() {
             type="button"
             onClick={regenerate}
             disabled={generating}
-            className="rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
+            className="rounded-lg bg-sky-500 px-4 py-2 text-sm text-stone-950 transition hover:bg-sky-200 disabled:opacity-50"
           >
             {generating ? "Generating..." : "Generate now"}
           </button>
@@ -322,16 +322,16 @@ function BriefingView() {
 
       {content && (
         <div className="space-y-4">
-          <article className="relative overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/35 p-5 pl-6 md:p-6 md:pl-7">
-            <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-amber-300 via-amber-200/40 to-transparent" />
+          <article className="relative overflow-hidden rounded-lg border border-slate-200 bg-white p-5 pl-6 md:p-6 md:pl-7">
+            <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-sky-300 via-sky-200/40 to-transparent" />
             <Markdown content={content} />
           </article>
 
           {noteId && topActions.length > 0 && (
-            <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
+            <section className="rounded-lg border border-slate-200 bg-white p-4">
               <div className="mb-3">
-                <h2 className="text-sm font-semibold text-stone-100">Top 3 feedback</h2>
-                <p className="mt-1 text-xs text-stone-500">
+                <h2 className="text-sm font-semibold text-slate-900">Top 3 feedback</h2>
+                <p className="mt-1 text-xs text-slate-400">
                   Mark whether today's surfaced items were actually useful.
                 </p>
               </div>
@@ -339,10 +339,10 @@ function BriefingView() {
                 {topActions.map((action) => (
                   <div
                     key={action.rank}
-                    className="rounded-lg border border-stone-700/45 bg-black/20 p-3"
+                    className="rounded-lg border border-slate-200 bg-slate-50 p-3"
                   >
-                    <p className="text-sm text-stone-300">
-                      <span className="text-stone-500">{action.rank}.</span> {action.label}
+                    <p className="text-sm text-slate-500">
+                      <span className="text-slate-400">{action.rank}.</span> {action.label}
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                       {FEEDBACK_OPTIONS.map((option) => {
@@ -356,8 +356,8 @@ function BriefingView() {
                             disabled={savingRank === action.rank}
                             className={`h-8 rounded-lg border px-2 text-xs transition disabled:opacity-50 ${
                               selected
-                                ? "border-amber-300 bg-amber-500/10 text-amber-100"
-                                : "border-stone-700 text-stone-400 hover:bg-stone-800"
+                                ? "border-sky-300 bg-sky-500/10 text-sky-100"
+                                : "border-slate-200 text-slate-500 hover:bg-slate-100"
                             }`}
                           >
                             {savingRank === action.rank && !selected ? "Saving" : option.label}
@@ -395,10 +395,10 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
   const guidance = deliveryGuidance(status);
 
   return (
-    <section className="mb-4 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+    <section className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-stone-100">Briefing delivery</h2>
-        <Link href="/settings" className="text-xs text-amber-300 hover:underline">
+        <h2 className="text-sm font-semibold text-slate-900">Briefing delivery</h2>
+        <Link href="/settings" className="text-xs text-sky-600 hover:underline">
           Settings
         </Link>
       </div>
@@ -515,7 +515,7 @@ function DeliveryFact({
   const toneClass = {
     ok: "border-emerald-500/20 bg-emerald-500/5 text-emerald-200",
     warn: "border-amber-500/20 bg-amber-500/5 text-amber-200",
-    muted: "border-stone-800 bg-black/15 text-stone-400",
+    muted: "border-slate-200 bg-slate-50 text-slate-500",
   }[tone];
   return (
     <div className={`rounded-lg border px-3 py-2 ${toneClass}`}>
@@ -563,11 +563,11 @@ function pushReasonLabel(reason: string): string {
 
 function BriefStat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-lg border border-stone-700/45 bg-black/15 px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
         {label}
       </p>
-      <p className="mt-1 truncate text-lg font-semibold text-stone-100">{value}</p>
+      <p className="mt-1 truncate text-lg font-semibold text-slate-900">{value}</p>
     </div>
   );
 }

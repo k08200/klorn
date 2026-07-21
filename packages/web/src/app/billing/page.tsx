@@ -163,14 +163,14 @@ function BillingContent() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
-      <header className="mb-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-sm shadow-black/20">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">
+      <header className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-black/20">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-600">
           Plan ledger
         </p>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight text-stone-50 md:text-3xl">
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
           Klorn limits and execution access
         </h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-400">
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
           Review decision limits, model usage, execution modes, and the plan that fits your team.
         </p>
       </header>
@@ -195,17 +195,17 @@ function BillingContent() {
       )}
 
       {!loading && status && (
-        <div className="mb-8 rounded-2xl border border-stone-700/45 bg-stone-950/40 p-5">
+        <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-5">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
                 Current plan
               </p>
-              <p className="mt-1 text-xl font-semibold text-stone-50">{status.planName}</p>
+              <p className="mt-1 text-xl font-semibold text-slate-900">{status.planName}</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               {status.estimatedCost > 0 && (
-                <span className="rounded-full border border-stone-700 bg-stone-900/70 px-3 py-1 text-xs text-stone-400">
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500">
                   About {formatUsd(status.estimatedCost)} this month
                 </span>
               )}
@@ -216,7 +216,7 @@ function BillingContent() {
                 <button
                   type="button"
                   onClick={handleManage}
-                  className="rounded-lg border border-amber-400/40 bg-amber-400/10 px-4 py-2 text-sm font-medium text-amber-100 transition hover:bg-amber-400/15"
+                  className="rounded-lg border border-sky-400/40 bg-sky-400/10 px-4 py-2 text-sm font-medium text-sky-100 transition hover:bg-sky-400/15"
                 >
                   Manage subscription
                 </button>
@@ -228,14 +228,14 @@ function BillingContent() {
             {/* Decision turns usage */}
             <div>
               <div className="mb-1 flex justify-between text-sm">
-                <span className="text-stone-400">Decisions</span>
-                <span className="text-stone-300">
+                <span className="text-slate-500">Decisions</span>
+                <span className="text-slate-500">
                   {status.messageCount} /{" "}
                   {isFiniteLimit(status.messageLimit) ? status.messageLimit.toLocaleString() : "∞"}
                 </span>
               </div>
               {isFiniteLimit(status.messageLimit) && status.messageLimit > 0 && (
-                <div className="h-2 w-full rounded-full bg-stone-800">
+                <div className="h-2 w-full rounded-full bg-slate-100">
                   <div
                     className={`h-2 rounded-full transition-all duration-500 ${
                       status.messageCount / status.messageLimit > 0.9
@@ -255,14 +255,14 @@ function BillingContent() {
             {/* Tokens usage */}
             <div>
               <div className="mb-1 flex justify-between text-sm">
-                <span className="text-stone-400">Tokens</span>
-                <span className="text-stone-300">
+                <span className="text-slate-500">Tokens</span>
+                <span className="text-slate-500">
                   {formatTokens(status.tokenUsage)} /{" "}
                   {isFiniteLimit(status.tokenLimit) ? formatTokens(status.tokenLimit) : "∞"}
                 </span>
               </div>
               {isFiniteLimit(status.tokenLimit) && status.tokenLimit > 0 && (
-                <div className="h-2 w-full rounded-full bg-stone-800">
+                <div className="h-2 w-full rounded-full bg-slate-100">
                   <div
                     className={`h-2 rounded-full transition-all duration-500 ${
                       status.tokenUsage / status.tokenLimit > 0.9
@@ -288,29 +288,29 @@ function BillingContent() {
           return (
             <div
               key={plan.key}
-              className={`flex flex-col rounded-2xl border bg-stone-950/35 p-6 ${
+              className={`flex flex-col rounded-2xl border bg-white p-6 ${
                 isCurrent
-                  ? "border-amber-300/70"
+                  ? "border-sky-300/70"
                   : plan.key === "PRO"
-                    ? "border-amber-400/45 ring-1 ring-amber-400/15"
-                    : "border-stone-700/45"
+                    ? "border-sky-400/45 ring-1 ring-sky-400/15"
+                    : "border-slate-200"
               }`}
             >
               {plan.key === "PRO" && (
-                <span className="mb-2 self-start rounded-full bg-amber-300 px-2 py-0.5 text-[10px] font-semibold uppercase text-stone-950">
+                <span className="mb-2 self-start rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-semibold uppercase text-stone-950">
                   Recommended
                 </span>
               )}
-              <p className="mb-1 text-lg font-semibold text-stone-50">{plan.name}</p>
-              <p className="mb-1 text-2xl font-semibold text-stone-50">
+              <p className="mb-1 text-lg font-semibold text-slate-900">{plan.name}</p>
+              <p className="mb-1 text-2xl font-semibold text-slate-900">
                 {plan.price}
-                <span className="text-sm font-normal text-stone-500">{plan.period}</span>
+                <span className="text-sm font-normal text-slate-400">{plan.period}</span>
               </p>
-              <p className="mb-4 text-sm text-stone-400">{plan.limit}</p>
+              <p className="mb-4 text-sm text-slate-500">{plan.limit}</p>
 
               <ul className="mb-6 flex-1 space-y-2">
                 {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-sm text-stone-300">
+                  <li key={f} className="flex items-start gap-2 text-sm text-slate-500">
                     <span aria-hidden="true" className="mt-0.5 text-emerald-300">
                       ✓
                     </span>
@@ -320,19 +320,19 @@ function BillingContent() {
               </ul>
 
               {isCurrent ? (
-                <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 py-2 text-center text-sm font-medium text-amber-100">
+                <div className="rounded-lg border border-sky-400/30 bg-sky-400/10 py-2 text-center text-sm font-medium text-sky-100">
                   Current plan
                 </div>
               ) : plan.key === "FREE" ? (
                 // Non-current FREE card: render a neutral pill (not an empty div)
                 // so every plan card keeps the same footer height and alignment.
-                <div className="rounded-lg border border-stone-700 bg-stone-900/40 py-2 text-center text-sm font-medium text-stone-400">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 py-2 text-center text-sm font-medium text-slate-500">
                   Included with every plan
                 </div>
               ) : plan.key === "ENTERPRISE" ? (
                 <a
                   href="mailto:sales@klorn.ai"
-                  className="block rounded-lg border border-stone-700 bg-stone-900/70 py-2.5 text-center text-sm font-medium text-stone-100 transition hover:border-stone-500"
+                  className="block rounded-lg border border-slate-200 bg-slate-50 py-2.5 text-center text-sm font-medium text-slate-900 transition hover:border-slate-200"
                 >
                   Contact sales
                 </a>
@@ -346,7 +346,7 @@ function BillingContent() {
                 <button
                   type="button"
                   disabled
-                  className="rounded-lg bg-amber-300/60 py-2.5 text-sm font-semibold text-stone-950"
+                  className="rounded-lg bg-sky-300/60 py-2.5 text-sm font-semibold text-stone-950"
                 >
                   Subscription coming soon
                 </button>
@@ -354,7 +354,7 @@ function BillingContent() {
                 <button
                   type="button"
                   onClick={() => handleUpgrade(plan.key as "PRO")}
-                  className="rounded-lg bg-amber-300 py-2.5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
+                  className="rounded-lg bg-sky-500 py-2.5 text-sm font-semibold text-stone-950 transition hover:bg-sky-200"
                 >
                   Upgrade to {plan.name}
                 </button>

@@ -15,12 +15,12 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<Variant, string> = {
   primary:
-    "bg-accent hover:bg-accent-light text-stone-950 disabled:bg-stone-700 disabled:text-stone-500 shadow-sm shadow-accent/20",
+    "bg-accent hover:bg-accent-light text-white disabled:bg-slate-200 disabled:text-slate-400 shadow-sm shadow-accent/20",
   secondary:
-    "bg-stone-900 hover:bg-stone-700 text-stone-200 border border-stone-700 hover:border-stone-500",
+    "bg-white hover:bg-slate-100 text-slate-900 border border-slate-200 hover:border-slate-300",
   danger:
-    "bg-red-600/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-800/40 hover:border-red-600",
-  ghost: "bg-transparent hover:bg-stone-900 text-stone-400 hover:text-stone-200",
+    "bg-red-600/10 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600",
+  ghost: "bg-transparent hover:bg-slate-100 text-slate-500 hover:text-slate-900",
 };
 
 const sizeStyles: Record<Size, string> = {
@@ -45,7 +45,7 @@ export default function Button({
     <button
       type="button"
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center font-medium rounded-lg transition-all duration-150 cursor-pointer disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-stone-950 ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
+      className={`inline-flex items-center justify-center font-medium rounded-lg transition-all duration-150 cursor-pointer disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-white ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
       {...props}
     >
       {loading ? (

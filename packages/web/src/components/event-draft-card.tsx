@@ -81,16 +81,16 @@ export default function EventDraftCard({ draft }: { draft: EventDraft }) {
   };
 
   return (
-    <div className="mt-2 rounded-lg border border-stone-600/60 bg-stone-900/60 p-3 text-sm">
-      <p className="text-[11px] uppercase tracking-wide text-stone-400">{t("draft.title")}</p>
-      <p className="mt-1 font-medium text-white">{draft.title}</p>
-      <p className="mt-0.5 text-stone-300">{formatRange(draft.startTime, draft.endTime)}</p>
-      {draft.location && <p className="mt-0.5 text-stone-400">{draft.location}</p>}
+    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+      <p className="text-[11px] uppercase tracking-wide text-slate-500">{t("draft.title")}</p>
+      <p className="mt-1 font-medium text-slate-900">{draft.title}</p>
+      <p className="mt-0.5 text-slate-500">{formatRange(draft.startTime, draft.endTime)}</p>
+      {draft.location && <p className="mt-0.5 text-slate-500">{draft.location}</p>}
 
       {state === "saved" ? (
         <p className="mt-2 text-emerald-400">{t("draft.saved")}</p>
       ) : state === "paywalled" ? (
-        <p className="mt-2 text-stone-300">
+        <p className="mt-2 text-slate-500">
           {t("draft.paywall")}{" "}
           <Link href="/billing" className="focus-ring text-accent underline">
             {t("draft.seePlans")}
@@ -106,7 +106,7 @@ export default function EventDraftCard({ draft }: { draft: EventDraft }) {
           >
             {state === "saving" ? t("draft.saving") : t("draft.save")}
           </button>
-          {state === "error" && errorMessage && <p className="text-red-400">{errorMessage}</p>}
+          {state === "error" && errorMessage && <p className="text-red-600">{errorMessage}</p>}
         </div>
       )}
     </div>

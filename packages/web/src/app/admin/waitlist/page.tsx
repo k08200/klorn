@@ -112,16 +112,16 @@ function WaitlistPageInner() {
   };
 
   return (
-    <div className="min-h-dvh bg-[#10100d] px-4 pb-28 pt-6 text-stone-50 sm:px-6 md:py-10">
+    <div className="min-h-dvh bg-white px-4 pb-28 pt-6 text-slate-900 sm:px-6 md:py-10">
       <div className="mx-auto max-w-5xl">
-        <header className="mb-6 rounded-2xl border border-stone-700/45 bg-stone-950/35 p-5 shadow-sm shadow-black/20">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">
+        <header className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-black/20">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-600">
             Access review
           </p>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-stone-50">
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
             Early access waitlist
           </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-400">
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
             Review new requests, move approved candidates into testing, and keep access status
             clear.
           </p>
@@ -164,8 +164,8 @@ function WaitlistPageInner() {
                 onClick={() => setFilter(f.key)}
                 className={`rounded-xl border px-4 py-3 text-left transition ${
                   isActive
-                    ? "border-amber-300/60 bg-amber-300/10 text-stone-50"
-                    : "border-stone-700/45 bg-stone-950/35 text-stone-400 hover:border-stone-500 hover:text-stone-100"
+                    ? "border-sky-300/60 bg-sky-300/10 text-slate-900"
+                    : "border-slate-200 bg-white text-slate-500 hover:border-slate-200 hover:text-slate-900"
                 }`}
               >
                 <div className="text-xs uppercase tracking-wide">{f.label}</div>
@@ -176,9 +176,9 @@ function WaitlistPageInner() {
         </section>
 
         {loading ? (
-          <p className="text-sm text-stone-500">Loading...</p>
+          <p className="text-sm text-slate-400">Loading...</p>
         ) : entries.length === 0 ? (
-          <p className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-sm text-stone-400">
+          <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
             No requests in this state.
           </p>
         ) : (
@@ -186,7 +186,7 @@ function WaitlistPageInner() {
             {entries.map((entry) => (
               <li
                 key={entry.id}
-                className="rounded-2xl border border-stone-700/45 bg-stone-950/35 p-4 md:p-5"
+                className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5"
               >
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                   <div className="min-w-0">
@@ -194,23 +194,23 @@ function WaitlistPageInner() {
                       <button
                         type="button"
                         onClick={() => copyEmail(entry)}
-                        className="break-all text-base font-semibold text-stone-50 transition hover:text-amber-200"
+                        className="break-all text-base font-semibold text-slate-900 transition hover:text-sky-600"
                         title="Copy email"
                       >
                         {entry.email}
                       </button>
                       <StatusBadge status={entry.status} />
                       {copiedId === entry.id && (
-                        <span className="text-xs text-amber-200">Copied</span>
+                        <span className="text-xs text-sky-600">Copied</span>
                       )}
                     </div>
-                    <div className="mt-1 text-xs text-stone-500">
+                    <div className="mt-1 text-xs text-slate-400">
                       {entry.name ? `${entry.name} · ` : ""}
                       {formatDate(entry.createdAt)}
                       {entry.approvedAt ? ` · approved ${formatDate(entry.approvedAt)}` : ""}
                     </div>
                     {entry.useCase && (
-                      <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-300">
+                      <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
                         {entry.useCase}
                       </p>
                     )}
@@ -222,7 +222,7 @@ function WaitlistPageInner() {
                         type="button"
                         onClick={() => updateStatus(entry.id, "APPROVED")}
                         disabled={updating === entry.id}
-                        className="rounded-lg bg-amber-300 px-3 py-1.5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:opacity-60"
+                        className="rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-semibold text-stone-950 transition hover:bg-sky-200 disabled:opacity-60"
                       >
                         Approve
                       </button>
@@ -232,7 +232,7 @@ function WaitlistPageInner() {
                         type="button"
                         onClick={() => updateStatus(entry.id, "REJECTED")}
                         disabled={updating === entry.id}
-                        className="rounded-lg border border-stone-700 px-3 py-1.5 text-sm text-stone-300 transition hover:border-red-400/50 hover:text-red-200 disabled:opacity-60"
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-500 transition hover:border-red-400/50 hover:text-red-200 disabled:opacity-60"
                       >
                         Reject
                       </button>
@@ -242,7 +242,7 @@ function WaitlistPageInner() {
                         type="button"
                         onClick={() => updateStatus(entry.id, "PENDING")}
                         disabled={updating === entry.id}
-                        className="rounded-lg border border-stone-700 px-3 py-1.5 text-sm text-stone-300 transition hover:border-stone-500 disabled:opacity-60"
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-500 transition hover:border-slate-200 disabled:opacity-60"
                       >
                         Move to pending
                       </button>
@@ -265,7 +265,7 @@ function StatusBadge({ status }: { status: WaitlistEntry["status"] }) {
       label: "Approved",
       cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
     },
-    REJECTED: { label: "Rejected", cls: "border-stone-600 bg-stone-700/30 text-stone-400" },
+    REJECTED: { label: "Rejected", cls: "border-slate-200 bg-slate-100 text-slate-500" },
   };
   const s = map[status];
   return (

@@ -16,11 +16,11 @@ export function Markdown({ content }: { content: string }) {
           return (
             <div key={i} className="relative group">
               {block.lang && (
-                <span className="text-[10px] text-stone-500 absolute top-2 right-2">
+                <span className="text-[10px] text-slate-400 absolute top-2 right-2">
                   {block.lang}
                 </span>
               )}
-              <pre className="bg-stone-900 border border-stone-700 rounded-lg px-4 py-3 overflow-x-auto text-xs font-mono">
+              <pre className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 overflow-x-auto text-xs font-mono">
                 <code>{block.text}</code>
               </pre>
             </div>
@@ -99,7 +99,7 @@ function renderInline(text: string): (string | React.ReactNode)[] {
       parts.push(
         <code
           key={key++}
-          className="bg-stone-700 text-stone-200 px-1.5 py-0.5 rounded text-xs font-mono"
+          className="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded text-xs font-mono"
         >
           {match[4]}
         </code>,

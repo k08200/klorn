@@ -50,7 +50,7 @@ export default function BottomTabs() {
     <>
       <nav
         aria-label="Primary navigation"
-        className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-stone-700/50 bg-[#10100d]/92 pb-safe shadow-[0_-16px_44px_rgba(0,0,0,0.35)] backdrop-blur-xl"
+        className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-slate-200 bg-white/92 pb-safe shadow-[0_-16px_44px_rgba(0,0,0,0.35)] backdrop-blur-xl"
       >
         <ul className="grid grid-cols-6">
           {TABS.map((tab) => {
@@ -61,7 +61,7 @@ export default function BottomTabs() {
                   href={tab.href}
                   aria-current={active ? "page" : undefined}
                   className={`focus-ring flex min-h-[62px] flex-col items-center justify-center gap-1 py-2 text-[10px] transition ${
-                    active ? "text-accent" : "text-stone-400"
+                    active ? "text-accent" : "text-slate-500"
                   }`}
                 >
                   <NavIcon type={tab.icon} size={22} strokeWidth={active ? 2 : 1.6} />
@@ -77,12 +77,12 @@ export default function BottomTabs() {
               aria-haspopup="dialog"
               aria-expanded={accountOpen}
               className={`focus-ring flex w-full min-h-[62px] flex-col items-center justify-center gap-1 py-2 text-[10px] transition ${
-                accountActive || accountOpen ? "text-accent" : "text-stone-400"
+                accountActive || accountOpen ? "text-accent" : "text-slate-500"
               }`}
             >
               <span
                 aria-hidden="true"
-                className={`flex h-[22px] w-[22px] items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-stone-700 text-[9px] font-bold text-white ring-1 transition ${
+                className={`flex h-[22px] w-[22px] items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-sky-600 text-[9px] font-bold text-white ring-1 transition ${
                   accountActive || accountOpen ? "ring-accent" : "ring-transparent"
                 }`}
               >
@@ -160,28 +160,28 @@ function AccountSheet({ onClose, initials }: { onClose: () => void; initials: st
         aria-modal="true"
         aria-label="Account and settings"
         tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 animate-slide-up rounded-t-2xl border-t border-stone-700 bg-[#141414] pb-safe shadow-2xl shadow-black/60 focus:outline-none"
+        className="absolute inset-x-0 bottom-0 animate-slide-up rounded-t-2xl border-t border-slate-200 bg-white pb-safe shadow-2xl shadow-black/60 focus:outline-none"
       >
-        <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-stone-700" aria-hidden="true" />
+        <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
 
         {user && (
           <div className="flex items-center gap-3 px-5 py-4">
             <span
               aria-hidden="true"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-stone-700 text-xs font-bold text-white"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-sky-600 text-xs font-bold text-white"
             >
               {initials || "?"}
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-stone-100">
+              <p className="truncate text-sm font-semibold text-slate-900">
                 {user.name || user.email}
               </p>
-              {user.name && <p className="truncate text-xs text-stone-500">{user.email}</p>}
+              {user.name && <p className="truncate text-xs text-slate-400">{user.email}</p>}
             </div>
           </div>
         )}
 
-        <div className="border-t border-stone-800/70 px-2 py-2">
+        <div className="border-t border-slate-200 px-2 py-2">
           <SheetLink
             href="/settings"
             icon="settings"
@@ -238,9 +238,9 @@ function SheetLink({
     <Link
       href={href}
       onClick={onNavigate}
-      className="focus-ring flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-stone-200 transition hover:bg-stone-800/70"
+      className="focus-ring flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-900 transition hover:bg-slate-100"
     >
-      <span className="flex h-5 w-5 items-center justify-center text-stone-400" aria-hidden="true">
+      <span className="flex h-5 w-5 items-center justify-center text-slate-500" aria-hidden="true">
         <NavIcon type={icon} size={16} />
       </span>
       {label}

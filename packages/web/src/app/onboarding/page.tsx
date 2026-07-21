@@ -64,7 +64,7 @@ function OnboardingFlow() {
     <div className="flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
         {/* Brand mark */}
-        <p className="mb-10 text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-300">
+        <p className="mb-10 text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-600">
           Klorn
         </p>
 
@@ -80,10 +80,10 @@ function OnboardingFlow() {
               key={s}
               className={`h-1.5 rounded-full transition-all duration-300 ${
                 s === step
-                  ? "w-6 bg-amber-300"
+                  ? "w-6 bg-sky-500"
                   : s < step
-                    ? "w-1.5 bg-amber-300/40"
-                    : "w-1.5 bg-stone-700"
+                    ? "w-1.5 bg-sky-300/40"
+                    : "w-1.5 bg-slate-200"
               }`}
             />
           ))}
@@ -104,12 +104,12 @@ function WelcomeStep({
 }) {
   return (
     <div>
-      <h1 className="text-3xl font-semibold leading-tight tracking-tight text-stone-50">
+      <h1 className="text-3xl font-semibold leading-tight tracking-tight text-slate-900">
         Klorn surfaces only the
         <br />
         decisions worth acting on.
       </h1>
-      <p className="mt-4 text-sm leading-6 text-stone-400">
+      <p className="mt-4 text-sm leading-6 text-slate-500">
         Connect Gmail and Google Calendar. Klorn pulls the items that need a decision and quiets the
         rest.
       </p>
@@ -119,7 +119,7 @@ function WelcomeStep({
           type="button"
           onClick={onConnectClick}
           disabled={connecting}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {connecting ? "Redirecting to Google..." : "Connect Gmail & Calendar"}
           {!connecting && <span aria-hidden>→</span>}
@@ -134,18 +134,18 @@ function WelcomeStep({
         ].map((item) => (
           <div
             key={item.label}
-            className="rounded-xl border border-stone-800 bg-stone-900/40 p-3 text-center"
+            className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center"
           >
-            <p className="text-lg text-stone-300">{item.icon}</p>
-            <p className="mt-1 text-[11px] leading-4 text-stone-500">{item.label}</p>
+            <p className="text-lg text-slate-500">{item.icon}</p>
+            <p className="mt-1 text-[11px] leading-4 text-slate-400">{item.label}</p>
           </div>
         ))}
       </div>
 
       {/* Permissions disclosure — Klorn never sends without explicit approval. */}
-      <p className="mt-6 text-center text-[11px] leading-5 text-stone-500">
-        Klorn <span className="text-stone-300">only reads</span> Gmail and Calendar. Sending mail or
-        creating events always waits for <span className="text-stone-300">your approval</span>.
+      <p className="mt-6 text-center text-[11px] leading-5 text-slate-400">
+        Klorn <span className="text-slate-500">only reads</span> Gmail and Calendar. Sending mail or
+        creating events always waits for <span className="text-slate-500">your approval</span>.
       </p>
     </div>
   );
@@ -174,10 +174,10 @@ function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue
 
   return (
     <div>
-      <h1 className="text-3xl font-semibold leading-tight tracking-tight text-stone-50">
+      <h1 className="text-3xl font-semibold leading-tight tracking-tight text-slate-900">
         {isDone ? "Sync complete." : "Setting up your workspace..."}
       </h1>
-      <p className="mt-4 text-sm leading-6 text-stone-400">
+      <p className="mt-4 text-sm leading-6 text-slate-500">
         {isDone
           ? "Klorn has read your inbox and mapped your schedule."
           : "Reading your recent emails and calendar. This takes about 30 seconds."}
@@ -212,7 +212,7 @@ function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue
         <button
           type="button"
           onClick={onContinue}
-          className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
+          className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-sky-200"
         >
           {isDone ? "See what Klorn found" : "Continue to inbox"}
           <span aria-hidden>→</span>
@@ -234,12 +234,12 @@ function SyncRow({
   loading: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-stone-800 bg-stone-900/30 px-4 py-3">
-      <span className="shrink-0 text-base text-stone-400">{icon}</span>
-      <p className="flex-1 text-sm text-stone-300">{label}</p>
+    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+      <span className="shrink-0 text-base text-slate-500">{icon}</span>
+      <p className="flex-1 text-sm text-slate-500">{label}</p>
       {done && <span className="shrink-0 text-[11px] font-semibold text-emerald-400">✓</span>}
       {loading && (
-        <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-stone-600 border-t-amber-300" />
+        <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-slate-200 border-t-sky-300" />
       )}
     </div>
   );
@@ -250,10 +250,10 @@ function SyncRow({
 function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => void }) {
   return (
     <div>
-      <h1 className="text-3xl font-semibold leading-tight tracking-tight text-stone-50">
+      <h1 className="text-3xl font-semibold leading-tight tracking-tight text-slate-900">
         You&apos;re set up.
       </h1>
-      <p className="mt-4 text-sm leading-6 text-stone-400">
+      <p className="mt-4 text-sm leading-6 text-slate-500">
         Klorn is running. It&apos;ll surface decisions, track commitments, and prepare your morning
         briefing — all before you open your inbox.
       </p>
@@ -266,7 +266,7 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
 
       <div className="mt-4 rounded-xl border border-teal-500/20 bg-teal-400/5 p-4">
         <p className="text-xs font-semibold text-teal-300">What happens next</p>
-        <ul className="mt-2 space-y-1.5 text-xs text-stone-400">
+        <ul className="mt-2 space-y-1.5 text-xs text-slate-500">
           <li>Your morning briefing will be ready before you wake up.</li>
           <li>Decision cards appear when Klorn finds something that needs your approval.</li>
           <li>Commitments are tracked automatically from your emails.</li>
@@ -276,7 +276,7 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
       <button
         type="button"
         onClick={onDone}
-        className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
+        className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-sky-200"
       >
         Open decision queue
         <span aria-hidden>→</span>
@@ -287,9 +287,9 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
 
 function StatCard({ value, label }: { value: number; label: string }) {
   return (
-    <div className="rounded-xl border border-stone-800 bg-stone-900/40 p-3 text-center">
-      <p className="text-2xl font-semibold text-stone-50">{value > 0 ? value : "—"}</p>
-      <p className="mt-1 text-[11px] text-stone-500">{label}</p>
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
+      <p className="text-2xl font-semibold text-slate-900">{value > 0 ? value : "—"}</p>
+      <p className="mt-1 text-[11px] text-slate-400">{label}</p>
     </div>
   );
 }

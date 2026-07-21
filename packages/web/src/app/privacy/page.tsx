@@ -31,8 +31,8 @@ const SECTIONS = [
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section id={slug(title)} className="scroll-mt-24 space-y-3">
-      <h2 className="text-xl font-semibold text-white">{title}</h2>
-      <div className="space-y-3 text-base leading-7 text-stone-300">{children}</div>
+      <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+      <div className="space-y-3 text-base leading-7 text-slate-500">{children}</div>
     </section>
   );
 }
@@ -41,15 +41,15 @@ function TableOfContents({ sections }: { sections: string[] }) {
   return (
     <nav
       aria-label="On this page"
-      className="mt-10 rounded-xl border border-stone-800 bg-stone-950/40 p-5"
+      className="mt-10 rounded-xl border border-slate-200 bg-slate-50 p-5"
     >
-      <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-400">On this page</p>
+      <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">On this page</p>
       <ul className="mt-3 grid gap-2 sm:grid-cols-2">
         {sections.map((title) => (
           <li key={title}>
             <a
               href={`#${slug(title)}`}
-              className="inline-flex min-h-11 items-center text-sm text-stone-300 transition hover:text-amber-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-stone-950 rounded"
+              className="inline-flex min-h-11 items-center text-sm text-slate-500 transition hover:text-sky-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-white rounded"
             >
               {title}
             </a>
@@ -62,7 +62,7 @@ function TableOfContents({ sections }: { sections: string[] }) {
 
 export default function PrivacyPage() {
   return (
-    <main id="main" className="min-h-screen bg-[#0f1115] text-white">
+    <main id="main" className="min-h-screen bg-white text-slate-900">
       <nav className="mx-auto flex max-w-4xl items-center justify-between px-6 py-5">
         <Link href="/" className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-[#f5f0e8]">
@@ -70,24 +70,24 @@ export default function PrivacyPage() {
           </div>
           <span className="text-lg font-bold tracking-tight">Klorn</span>
         </Link>
-        <div className="flex items-center gap-5 text-sm text-stone-400">
-          <Link href="/terms" className="transition hover:text-white">
+        <div className="flex items-center gap-5 text-sm text-slate-500">
+          <Link href="/terms" className="transition hover:text-slate-900">
             Terms
           </Link>
-          <Link href="/login" className="transition hover:text-white">
+          <Link href="/login" className="transition hover:text-slate-900">
             Log in
           </Link>
         </div>
       </nav>
 
       <article className="mx-auto max-w-4xl px-6 py-14">
-        <p className="text-sm font-medium uppercase tracking-[0.18em] text-amber-200">
+        <p className="text-sm font-medium uppercase tracking-[0.18em] text-sky-600">
           PRIVACY POLICY
         </p>
-        <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
+        <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-slate-900 md:text-5xl">
           How Klorn handles work data
         </h1>
-        <p className="mt-5 max-w-2xl text-sm leading-6 text-stone-400">
+        <p className="mt-5 max-w-2xl text-sm leading-6 text-slate-500">
           Last updated: {updatedAt}. Klorn is currently a beta product. This policy explains what
           data Klorn can access, why it needs that access, and how you can request deletion.
         </p>
@@ -154,10 +154,10 @@ export default function PrivacyPage() {
               replies without your awareness. Email actions require your approval before sending.
             </p>
             <p>
-              <strong className="text-white">Limited Use disclosure.</strong> Klorn's use and
+              <strong className="text-slate-900">Limited Use disclosure.</strong> Klorn's use and
               transfer to any other app of information received from Google APIs will adhere to{" "}
               <a
-                className="text-amber-200 hover:text-amber-100"
+                className="text-sky-600 hover:text-sky-700"
                 href="https://developers.google.com/terms/api-services-user-data-policy"
                 target="_blank"
                 rel="noreferrer"
@@ -177,21 +177,21 @@ export default function PrivacyPage() {
               basis, and is not used to train the AI providers' models.
             </p>
             <p>
-              <strong className="text-white">Scopes Klorn requests and why.</strong>
+              <strong className="text-slate-900">Scopes Klorn requests and why.</strong>
             </p>
             <ul className="list-disc space-y-2 pl-5">
               <li>
-                <code className="text-stone-100">gmail.readonly</code> — read message metadata and
+                <code className="text-slate-900">gmail.readonly</code> — read message metadata and
                 bodies to classify priority, detect reply-needed signals, extract commitments and
                 deadlines, and prepare daily briefings.
               </li>
               <li>
-                <code className="text-stone-100">gmail.modify</code> — toggle read/star labels and
+                <code className="text-slate-900">gmail.modify</code> — toggle read/star labels and
                 archive on user-initiated commands; send replies only when the user explicitly
                 approves a draft.
               </li>
               <li>
-                <code className="text-stone-100">calendar.events</code> — read upcoming events to
+                <code className="text-slate-900">calendar.events</code> — read upcoming events to
                 surface meetings, link commitment due dates, and prepare meeting context. Edits
                 require user approval.
               </li>
@@ -203,13 +203,13 @@ export default function PrivacyPage() {
               Depending on where you live, you may have rights to access, correct, export, or delete
               the personal data Klorn holds about you, and to object to or restrict certain
               processing. To exercise any of these rights, contact{" "}
-              <a className="text-amber-200 hover:text-amber-100" href="mailto:k0820086@gmail.com">
+              <a className="text-sky-600 hover:text-sky-700" href="mailto:k0820086@gmail.com">
                 k0820086@gmail.com
               </a>
               . We respond within a reasonable time after verifying your identity. You may also
               revoke Klorn's Google access at any time from your{" "}
               <a
-                className="text-amber-200 hover:text-amber-100"
+                className="text-sky-600 hover:text-sky-700"
                 href="https://myaccount.google.com/permissions"
                 target="_blank"
                 rel="noreferrer"
@@ -239,7 +239,7 @@ export default function PrivacyPage() {
             </p>
             <p>
               To request account data deletion, contact{" "}
-              <a className="text-amber-200 hover:text-amber-100" href="mailto:k0820086@gmail.com">
+              <a className="text-sky-600 hover:text-sky-700" href="mailto:k0820086@gmail.com">
                 k0820086@gmail.com
               </a>
               . Authenticated users may also use in-product deletion controls where available.
@@ -259,7 +259,7 @@ export default function PrivacyPage() {
           <Section title="Contact">
             <p>
               For questions, deletion requests, or security concerns, contact{" "}
-              <a className="text-amber-200 hover:text-amber-100" href="mailto:k0820086@gmail.com">
+              <a className="text-sky-600 hover:text-sky-700" href="mailto:k0820086@gmail.com">
                 k0820086@gmail.com
               </a>
               .

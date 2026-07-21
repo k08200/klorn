@@ -65,10 +65,10 @@ export default function CommandCenterSummary() {
 
 function Top3Section({ items }: { items: AttentionItem[] }) {
   return (
-    <div className="rounded-xl border border-stone-800 bg-stone-900/40 p-4">
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-stone-100">Needs attention now</h2>
-        <span className="text-[11px] text-stone-500">Top {items.length}</span>
+        <h2 className="text-sm font-semibold text-slate-900">Needs attention now</h2>
+        <span className="text-[11px] text-slate-400">Top {items.length}</span>
       </div>
       <ol className="space-y-2">
         {items.map((item, idx) => (
@@ -86,8 +86,8 @@ function AttentionRow({ item, index }: { item: AttentionItem; index: number }) {
   const body = bodyFor(item);
   const href = hrefFor(item);
   const content = (
-    <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-stone-800/60 bg-stone-900/40 hover:bg-stone-800/40 transition">
-      <span className="text-[11px] font-semibold text-stone-500 mt-0.5 shrink-0 w-4 text-center">
+    <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition">
+      <span className="text-[11px] font-semibold text-slate-400 mt-0.5 shrink-0 w-4 text-center">
         {index}
       </span>
       <div className="min-w-0 flex-1">
@@ -97,10 +97,10 @@ function AttentionRow({ item, index }: { item: AttentionItem; index: number }) {
           >
             {badge.label}
           </span>
-          <span className="text-sm text-stone-100 truncate">{body.title}</span>
+          <span className="text-sm text-slate-900 truncate">{body.title}</span>
         </div>
         {body.subtitle && (
-          <p className="mt-1 text-[11px] text-stone-400 line-clamp-1">{body.subtitle}</p>
+          <p className="mt-1 text-[11px] text-slate-500 line-clamp-1">{body.subtitle}</p>
         )}
         <DecisionTrace item={item} />
       </div>
@@ -121,25 +121,25 @@ function DecisionTrace({ item }: { item: AttentionItem }) {
   if (!decision.costOfIgnoring && facts.length === 0) return null;
 
   return (
-    <div className="mt-2 grid gap-1.5 rounded-md border border-stone-800/70 bg-black/20 p-2">
+    <div className="mt-2 grid gap-1.5 rounded-md border border-slate-200 bg-slate-50 p-2">
       {decision.costOfIgnoring && (
-        <p className="line-clamp-2 text-[11px] leading-4 text-stone-400">
+        <p className="line-clamp-2 text-[11px] leading-4 text-slate-500">
           Cost: {displayText(decision.costOfIgnoring)}
         </p>
       )}
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="rounded border border-stone-800 px-1.5 py-0.5 text-[10px] text-stone-500">
+        <span className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-400">
           Confidence {Math.round(decision.confidence * 100)}%
         </span>
         {decision.suggestedAction && (
-          <span className="rounded border border-amber-300/20 bg-amber-300/10 px-1.5 py-0.5 text-[10px] text-amber-200">
+          <span className="rounded border border-sky-300/20 bg-sky-300/10 px-1.5 py-0.5 text-[10px] text-sky-700">
             {displayText(decision.suggestedAction)}
           </span>
         )}
         {facts.map((fact) => (
           <span
             key={`${fact.label}:${fact.value}`}
-            className="max-w-full truncate rounded border border-stone-800 px-1.5 py-0.5 text-[10px] text-stone-500"
+            className="max-w-full truncate rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-400"
           >
             {displayText(fact.label)}: {displayText(fact.value)}
           </span>
@@ -154,19 +154,19 @@ function badgeFor(item: AttentionItem): { label: string; className: string } {
     case "pending_action":
       return {
         label: "Needs approval",
-        className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
+        className: "text-sky-700 bg-sky-400/10 border-sky-400/20",
       };
     case "overdue_task":
       return { label: "Overdue", className: "text-red-300 bg-red-500/10 border-red-500/20" };
     case "today_event":
       return {
         label: "Starting soon",
-        className: "text-amber-200 bg-amber-300/10 border-amber-300/20",
+        className: "text-sky-700 bg-sky-300/10 border-sky-300/20",
       };
     case "agent_proposal":
       return {
         label: "Decision proposal",
-        className: "text-amber-200 bg-amber-300/10 border-amber-300/20",
+        className: "text-sky-700 bg-sky-300/10 border-sky-300/20",
       };
     case "commitment":
       if (item.attentionType === "COMMITMENT_OVERDUE") {
@@ -299,8 +299,8 @@ function formatEventSubtitle(
 
 function TodaySectionView({ section }: { section: TodaySection }) {
   return (
-    <div className="rounded-xl border border-stone-800 bg-stone-900/40 p-4">
-      <h2 className="text-sm font-semibold text-stone-100 mb-3">Today at a glance</h2>
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <h2 className="text-sm font-semibold text-slate-900 mb-3">Today at a glance</h2>
       <div className="space-y-3">
         {section.events.length > 0 && (
           <SubList
@@ -345,7 +345,7 @@ interface SubListItem {
 }
 
 function SubList({ label, items, tone }: { label: string; items: SubListItem[]; tone?: "warn" }) {
-  const labelClass = tone === "warn" ? "text-red-300" : "text-stone-400";
+  const labelClass = tone === "warn" ? "text-red-300" : "text-slate-500";
   return (
     <div>
       <p className={`text-[11px] font-medium mb-1.5 ${labelClass}`}>
@@ -355,16 +355,16 @@ function SubList({ label, items, tone }: { label: string; items: SubListItem[]; 
         {items.slice(0, 3).map((it) => (
           <li
             key={it.key}
-            className="flex items-center gap-2 text-sm text-stone-200 px-2 py-1 rounded border border-transparent hover:border-stone-800/80"
+            className="flex items-center gap-2 text-sm text-slate-900 px-2 py-1 rounded border border-transparent hover:border-slate-200"
           >
             <span className="truncate flex-1">{it.primary}</span>
             {it.secondary && (
-              <span className="text-[11px] text-stone-500 shrink-0">{it.secondary}</span>
+              <span className="text-[11px] text-slate-400 shrink-0">{it.secondary}</span>
             )}
           </li>
         ))}
         {items.length > 3 && (
-          <li className="text-[11px] text-stone-400 px-2">+{items.length - 3} more</li>
+          <li className="text-[11px] text-slate-500 px-2">+{items.length - 3} more</li>
         )}
       </ul>
     </div>

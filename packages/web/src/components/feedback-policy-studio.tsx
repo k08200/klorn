@@ -86,16 +86,16 @@ export default function FeedbackPolicyStudio() {
   const candidates = data?.candidates ?? [];
 
   return (
-    <section className="mb-6 rounded-2xl border border-stone-800 bg-stone-950/50 p-4 md:p-5">
+    <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent/80">
             Policy Studio
           </p>
-          <h2 className="mt-2 text-lg font-semibold text-stone-100">
+          <h2 className="mt-2 text-lg font-semibold text-slate-900">
             Rules learned from repeated feedback
           </h2>
-          <p className="mt-1 max-w-xl text-xs leading-5 text-stone-500">
+          <p className="mt-1 max-w-xl text-xs leading-5 text-slate-400">
             Apply or hide candidates from approve, reject, and edit patterns to tune Klorn's
             suggestions.
           </p>
@@ -104,7 +104,7 @@ export default function FeedbackPolicyStudio() {
           type="button"
           onClick={load}
           disabled={loading}
-          className="h-8 rounded-md border border-stone-700 px-3 text-xs text-stone-400 transition hover:border-accent/35 hover:text-stone-200 disabled:opacity-50"
+          className="h-8 rounded-md border border-slate-200 px-3 text-xs text-slate-500 transition hover:border-accent/35 hover:text-slate-900 disabled:opacity-50"
         >
           {loading ? "Checking" : "Refresh"}
         </button>
@@ -112,13 +112,13 @@ export default function FeedbackPolicyStudio() {
 
       {loading && (
         <div className="space-y-2">
-          <div className="h-20 animate-pulse rounded-lg border border-stone-800 bg-stone-900/45" />
-          <div className="h-20 animate-pulse rounded-lg border border-stone-800 bg-stone-900/25" />
+          <div className="h-20 animate-pulse rounded-lg border border-slate-200 bg-slate-100" />
+          <div className="h-20 animate-pulse rounded-lg border border-slate-200 bg-slate-100" />
         </div>
       )}
 
       {!loading && candidates.length === 0 && (
-        <p className="rounded-lg border border-stone-800 bg-black/20 p-3 text-xs text-stone-500">
+        <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-400">
           There are not enough repeated feedback patterns yet. Rule candidates will appear here once
           correction logs build up.
         </p>
@@ -129,7 +129,7 @@ export default function FeedbackPolicyStudio() {
           {candidates.slice(0, 5).map((candidate) => (
             <article
               key={candidate.id}
-              className="rounded-xl border border-stone-800 bg-stone-900/35 p-3 transition hover:border-accent/25 hover:bg-stone-900/55"
+              className="rounded-xl border border-slate-200 bg-white p-3 transition hover:border-accent/25 hover:bg-slate-50"
             >
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0">
@@ -141,22 +141,22 @@ export default function FeedbackPolicyStudio() {
                       </span>
                     )}
                     {candidate.ignored && (
-                      <span className="rounded border border-stone-700 px-1.5 py-0.5 text-[10px] text-stone-500">
+                      <span className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-400">
                         Hidden
                       </span>
                     )}
-                    <span className="text-[11px] text-stone-500">
+                    <span className="text-[11px] text-slate-400">
                       {Math.round(candidate.confidence * 100)}%
                     </span>
                   </div>
-                  <p className="mt-2 text-sm text-stone-200">
+                  <p className="mt-2 text-sm text-slate-900">
                     {candidate.scope.toolName}
                     {candidate.scope.recipient ? ` · ${candidate.scope.recipient}` : ""}
                   </p>
-                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500">
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">
                     {candidate.rationale}
                   </p>
-                  <p className="mt-2 text-[11px] text-stone-400">
+                  <p className="mt-2 text-[11px] text-slate-500">
                     Approved {candidate.support.approved} · Rejected {candidate.support.rejected} ·
                     Edited {candidate.support.edited} · Failed {candidate.support.failed} · Total{" "}
                     {candidate.support.total}
@@ -175,7 +175,7 @@ export default function FeedbackPolicyStudio() {
                     type="button"
                     onClick={() => setPreference(candidate, "IGNORED")}
                     disabled={updating === candidate.id}
-                    className="h-8 rounded-md border border-stone-700 px-3 text-xs text-stone-400 transition hover:bg-stone-800 disabled:opacity-50"
+                    className="h-8 rounded-md border border-slate-200 px-3 text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
                   >
                     Hide
                   </button>
@@ -197,7 +197,7 @@ function PolicyBadge({ kind }: { kind: PolicyKind }) {
       "border-[#a8a29e]/20 bg-[#a8a29e]/10 text-[#a8a29e]",
     ],
     AVOID_SUGGESTION: ["Suggest less", "border-red-400/20 bg-red-400/10 text-red-300"],
-    LOWER_PRIORITY: ["Lower priority", "border-stone-700 bg-stone-800/40 text-stone-400"],
+    LOWER_PRIORITY: ["Lower priority", "border-slate-200 bg-slate-100 text-slate-500"],
   }[kind];
   return <span className={`rounded border px-1.5 py-0.5 text-[10px] ${meta[1]}`}>{meta[0]}</span>;
 }
