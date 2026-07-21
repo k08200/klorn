@@ -75,10 +75,21 @@
     .container { max-width: var(--max-w); margin: 0 auto; padding: 0 24px; }
     .container.narrow { max-width: var(--max-w-narrow); }
 
-    /* ── Reveal on scroll ──────────────────────── */
-    .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
+    /* ── Reveal on scroll (scale-in / zoom feel) ── */
+    .reveal { opacity: 0; transform: translateY(30px) scale(.955); transition: opacity .85s var(--ease), transform .85s var(--ease); will-change: opacity, transform; }
     .reveal.in { opacity: 1; transform: none; }
-    @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; transition: none; } }
+    /* stronger pop for hero-anchor blocks (product window, flow, big cards) */
+    .reveal-pop { opacity: 0; transform: translateY(46px) scale(.9); transition: opacity 1s var(--ease), transform 1s var(--ease); will-change: opacity, transform; }
+    .reveal-pop.in { opacity: 1; transform: none; }
+    /* staggered children — each row/card eases in after its parent */
+    .stagger > * { opacity: 0; transform: translateY(24px) scale(.96); transition: opacity .7s var(--ease), transform .7s var(--ease); }
+    .stagger.in > * { opacity: 1; transform: none; }
+    .stagger.in > *:nth-child(2){ transition-delay:.08s } .stagger.in > *:nth-child(3){ transition-delay:.16s }
+    .stagger.in > *:nth-child(4){ transition-delay:.24s } .stagger.in > *:nth-child(5){ transition-delay:.32s }
+    @media (prefers-reduced-motion: reduce) {
+      .reveal, .reveal-pop, .stagger > * { opacity: 1 !important; transform: none !important; transition: none !important; }
+      .product .win { transform: none !important; }
+    }
 
     /* ── Buttons (pill) ────────────────────────── */
     .btn {
@@ -213,6 +224,22 @@
     .section-head-center { text-align:center; }
     .section-head-center .section-lead { margin-left:auto; margin-right:auto; }
     .section-bg-tint { background: linear-gradient(180deg,#fff, var(--sky-50) 50%, #fff); }
+
+    /* ── Full-bleed statement band (poster rhythm break) ── */
+    .statement { position:relative; overflow:hidden; padding:130px 0; text-align:center;
+      background: linear-gradient(155deg, var(--sky-500) 0%, var(--sky-700) 55%, #075985 100%); color:#fff; }
+    .statement::before { content:""; position:absolute; inset:0; pointer-events:none;
+      background: radial-gradient(120% 90% at 18% -10%, rgba(255,255,255,.28), transparent 55%),
+                  radial-gradient(90% 70% at 100% 120%, rgba(3,105,161,.6), transparent 60%); }
+    .statement .container { position:relative; z-index:1; }
+    .statement-eyebrow { color: var(--sky-200); margin-bottom:20px; }
+    .statement-h { font-size:clamp(30px,4.8vw,56px); line-height:1.08; letter-spacing:-.025em; font-weight:640; }
+    .statement-h .serif { font-style:italic; font-weight:500; color: var(--sky-200); }
+    .statement-sub { margin:22px auto 0; max-width:540px; color:rgba(255,255,255,.82); font-size:clamp(16px,1.7vw,19px); line-height:1.55; }
+    .statement-tags { margin-top:30px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+    .statement-tag { display:inline-flex; align-items:center; gap:7px; padding:7px 15px; border-radius:9999px;
+      background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.22); font-size:13px; font-weight:600; color:#fff; }
+    .statement-tag .pip { width:7px; height:7px; border-radius:50%; background:var(--sky-200); }
 
     /* video frames */
     .media-frame { margin-top:44px; border-radius:18px; overflow:hidden; border:1px solid var(--line); background:#000; box-shadow:0 40px 80px -34px rgba(12,60,110,.34); }
@@ -477,7 +504,7 @@
       </div>
       <p class="hero-secondary">이미 승인받으셨나요? <a href="https://app.klorn.ai/login">로그인 →</a></p>
 
-      <div class="hero-badges">
+      <div class="hero-badges stagger">
         <a class="hero-badge" href="#measured"><span class="dot"></span>실제 메일에서 94.3% 측정</a>
         <span class="hero-badge"><span class="dot"></span>오픈소스 — AGPLv3</span>
         <span class="hero-badge"><span class="dot"></span>셀프 호스팅 가능</span>
@@ -487,8 +514,8 @@
 
     <!-- Floating product window: today's brief -->
     <div class="container">
-      <div class="product reveal">
-        <div class="win">
+      <div class="product reveal-pop">
+        <div class="win" data-scroll-zoom>
           <div class="win-bar">
             <span class="win-dot r"></span><span class="win-dot y"></span><span class="win-dot g"></span>
             <span class="win-title">Klorn — 오늘의 브리핑</span>
@@ -526,7 +553,7 @@
       <!-- trust / measured strip -->
       <div class="trust reveal">
         <p>실제 받은편지함에서 측정 — 약속이 아닌 실측</p>
-        <div class="trust-row">
+        <div class="trust-row stagger">
           <span class="stat"><b>94.3%</b><small>실제 메일 정확도</small></span>
           <span class="stat"><b>95.5%</b><small>사일런트 정밀도</small></span>
           <span class="stat"><b>4</b><small>주의 등급</small></span>
@@ -545,7 +572,7 @@
         <h2 class="section-h">받은편지함에서 하나의 결정까지. 31초 만에.</h2>
         <p class="section-lead">모든 신호는 네 등급 중 하나로 분류되고, 중요한 것만 원클릭으로 승인하는 결정 카드가 됩니다. 그 승인 없이는 어떤 것도 손을 떠나지 않으며, 매일의 영수증이 모든 행동을 기록합니다.</p>
       </div>
-      <div class="flow reveal">
+      <div class="flow stagger">
         <div class="flow-card">
           <div class="fc-head"><span class="fc-step"><span class="n">1</span>받은편지함</span><span class="fc-tag">오늘 47</span></div>
           <div class="fc-body">
@@ -582,11 +609,25 @@
           </div>
         </div>
       </div>
-      <div class="tier-legend reveal">
+      <div class="tier-legend stagger">
         <div class="legend-card lg-push"><div class="lg-label"><span class="pip"></span>Push</div><p>시간에 민감하고 중대함. 도착하는 즉시 표면화됩니다.</p></div>
         <div class="legend-card lg-queue"><div class="lg-label"><span class="pip"></span>Queue</div><p>볼 가치는 있지만 급하지 않음. 결정 큐로 모읍니다.</p></div>
         <div class="legend-card lg-silent"><div class="lg-label"><span class="pip"></span>Silent</div><p>소음과 참고용. 방해하지 않도록 조용히 정리됩니다.</p></div>
         <div class="legend-card lg-auto"><div class="lg-label"><span class="pip"></span>Auto</div><p>일상적인 항목은 미리 분류 — 여전히 대기 상태이며 스스로 전송되지 않습니다.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ STATEMENT (poster rhythm break) ══════ -->
+  <section class="statement" aria-label="Why Klorn">
+    <div class="container narrow reveal">
+      <p class="mono statement-eyebrow">진짜 문제</p>
+      <h2 class="statement-h">받은편지함은 당신의 할 일 목록이 아닙니다.<br><span class="serif">남들의</span> 할 일 목록이죠.</h2>
+      <p class="statement-sub">모든 알림은 남이 당신의 주의를 결정하는 일입니다. Klorn은 그 결정권을 되찾아 줍니다 — 진짜 당신이 행동해야 할 몇 가지만 보입니다.</p>
+      <div class="statement-tags">
+        <span class="statement-tag"><span class="pip"></span>통제권은 당신에게</span>
+        <span class="statement-tag"><span class="pip"></span>카드마다 근거</span>
+        <span class="statement-tag"><span class="pip"></span>당신 없이는 전송 없음</span>
       </div>
     </div>
   </section>
@@ -646,7 +687,7 @@
         <h2 class="section-h">실제 받은편지함에서 나온 숫자.</h2>
         <p class="section-lead">모든 릴리스는 출시 전 손수 라벨링한 실제 메일 세트로 채점됩니다. 아래는 최신 수치이며, 방법론은 공개 저장소에 있습니다.</p>
       </div>
-      <div class="stats-grid reveal">
+      <div class="stats-grid stagger">
         <div class="stat-tile featured"><div class="big">94.3%</div><div class="lab">실제 메일 정확도</div><div class="desc">손수 라벨링한 실제 메일 53개 중 50개를 올바른 등급으로 분류.</div></div>
         <div class="stat-tile"><div class="big">95.5%</div><div class="lab">사일런트 정밀도</div><div class="desc">Klorn이 메일을 소음으로 분류할 때, 진짜 신호를 묻는 일은 거의 없습니다.</div></div>
         <div class="stat-tile"><div class="big">0</div><div class="lab">미승인 행동</div><div class="desc">모든 전송·삭제·전달은 당신의 승인을 기다리며 서명된 영수증을 남깁니다.</div></div>
@@ -686,7 +727,7 @@
   <!-- ══ PILLARS ══════════════════════════════ -->
   <section class="section pillars" aria-label="How Klorn works">
     <div class="container">
-      <div class="pillars-grid">
+      <div class="pillars-grid stagger">
         <div class="pillar reveal"><div class="pn">수집</div><h3>업무 신호를 읽습니다</h3><p>메일·캘린더·작업·메모리를 오늘 하루의 한 화면으로 모읍니다.</p></div>
         <div class="pillar reveal"><div class="pn">연결</div><h3>소음을 맥락으로</h3><p>사람·마감·스레드·약속을 업무 영향도로 연결합니다.</p></div>
         <div class="pillar reveal"><div class="pn">승인</div><h3>행동 전 확인</h3><p>중요한 실행에는 근거·리스크·명시적 승인 경로가 따라옵니다.</p></div>
@@ -702,7 +743,7 @@
         <h2 class="section-h">무료로 시작하세요. Klorn이 대신 행동할 때 업그레이드하세요.</h2>
         <p class="section-lead">메일을 읽고·분류하고·브리핑하는 방화벽은 무료입니다. Pro는 행동을 엽니다: 답장, 캘린더 작성, 더 많은 받은편지함.</p>
       </div>
-      <div class="pricing-grid reveal">
+      <div class="pricing-grid stagger">
         <div class="price-card">
           <span class="price-badge">무료</span>
           <div class="price-name">방화벽</div>
@@ -788,8 +829,9 @@
     // Fade-in + slide-up on scroll — plain IntersectionObserver.
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    const REVEAL_SEL = '.reveal, .reveal-pop, .stagger';
     if (reduceMotion) {
-      document.querySelectorAll('.reveal').forEach((el) => el.classList.add('in'));
+      document.querySelectorAll(REVEAL_SEL).forEach((el) => el.classList.add('in'));
     } else {
       const revealObserver = new IntersectionObserver((entries) => {
         entries.forEach((entry) => {
@@ -798,9 +840,31 @@
             revealObserver.unobserve(entry.target);
           }
         });
-      }, { threshold: 0.15, rootMargin: '0px 0px -10% 0px' });
+      }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
 
-      document.querySelectorAll('.reveal').forEach((el) => revealObserver.observe(el));
+      document.querySelectorAll(REVEAL_SEL).forEach((el) => revealObserver.observe(el));
+
+      // Scroll-linked "zoom into place": the hero product window scales up from
+      // 0.9 → 1 and settles as it rises through the lower viewport. Pure
+      // transform/opacity, rAF-throttled, disabled for reduced-motion above.
+      const zoomEls = document.querySelectorAll('[data-scroll-zoom]');
+      if (zoomEls.length) {
+        let ticking = false;
+        const applyZoom = () => {
+          const vh = window.innerHeight;
+          zoomEls.forEach((el) => {
+            const r = el.getBoundingClientRect();
+            const p = Math.max(0, Math.min(1, 1 - (r.top - vh * 0.15) / (vh * 0.85)));
+            const s = 0.9 + 0.1 * p;
+            el.style.transform = `scale(${s.toFixed(4)})`;
+          });
+          ticking = false;
+        };
+        const onScroll = () => { if (!ticking) { ticking = true; requestAnimationFrame(applyZoom); } };
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', onScroll);
+        applyZoom();
+      }
     }
 
     // Video hygiene: no video auto-plays for reduced-motion users (controls
