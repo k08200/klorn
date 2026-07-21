@@ -75,7 +75,7 @@ function ReceiptView() {
   if (loading) {
     return (
       <div className="mx-auto w-full max-w-4xl px-4 py-10">
-        <p className="text-sm text-stone-500 text-center">Loading today's receipt...</p>
+        <p className="text-sm text-slate-400 text-center">Loading today's receipt...</p>
       </div>
     );
   }
@@ -93,25 +93,25 @@ function ReceiptView() {
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-6 md:py-10">
       {/* Header */}
-      <header className="mb-6 overflow-hidden rounded-lg border border-stone-800/70 bg-stone-950/65 shadow-2xl shadow-black/20">
-        <div className="h-1 bg-gradient-to-r from-amber-300 via-amber-200/40 to-transparent" />
+      <header className="mb-6 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-black/20">
+        <div className="h-1 bg-gradient-to-r from-sky-300 via-sky-200/40 to-transparent" />
         <div className="p-5 md:p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600">
                 Attention receipt
               </p>
-              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-50">
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
                 What Klorn did today
               </h1>
-              <p className="mt-2 text-sm leading-6 text-stone-400">{receipt.summary.narrative}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">{receipt.summary.narrative}</p>
             </div>
             <div className="shrink-0 text-right">
-              <p className="text-xs text-stone-500">{formatReceiptDate(receipt.date)}</p>
+              <p className="text-xs text-slate-400">{formatReceiptDate(receipt.date)}</p>
               <button
                 type="button"
                 onClick={() => receiptQuery.refetch()}
-                className="mt-2 h-8 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800"
+                className="mt-2 h-8 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-500 transition hover:bg-slate-100"
               >
                 Refresh
               </button>
@@ -119,16 +119,16 @@ function ReceiptView() {
           </div>
 
           {/* Summary row */}
-          <div className="mt-5 grid grid-cols-4 overflow-hidden rounded-xl border border-white/10 bg-black/25">
+          <div className="mt-5 grid grid-cols-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
             <SummaryMetric
               label="Signals seen"
               value={receipt.summary.totalSeen}
-              color="text-stone-50"
+              color="text-slate-900"
             />
             <SummaryMetric
               label="Silenced"
               value={receipt.summary.savedFromInbox}
-              color="text-stone-300"
+              color="text-slate-500"
             />
             <SummaryMetric
               label="Pushed"
@@ -158,7 +158,7 @@ function ReceiptView() {
                 type="button"
                 onClick={() => handleUndo(item.id)}
                 disabled={!!undoLoading[item.id]}
-                className="text-[11px] text-stone-500 hover:text-stone-300 transition disabled:opacity-50"
+                className="text-[11px] text-slate-400 hover:text-slate-500 transition disabled:opacity-50"
               >
                 {undoLoading[item.id] ? "Creating undo..." : "Request undo"}
               </button>
@@ -187,8 +187,8 @@ function ReceiptView() {
           <ReceiptSection
             title="Queued in inbox"
             description="Items placed in your decision queue — no push sent"
-            accentClass="border-stone-700 bg-stone-900/30"
-            labelClass="text-stone-400"
+            accentClass="border-slate-200 bg-slate-50"
+            labelClass="text-slate-500"
             items={receipt.queued}
           />
         )}
@@ -198,16 +198,16 @@ function ReceiptView() {
           <ReceiptSection
             title="Silenced"
             description="Signals Klorn filtered out to protect your focus"
-            accentClass="border-stone-800 bg-black/20"
-            labelClass="text-stone-500"
+            accentClass="border-slate-100 bg-slate-50"
+            labelClass="text-slate-400"
             items={receipt.silenced}
           />
         )}
 
         {receipt.summary.totalSeen === 0 && (
-          <div className="rounded-lg border border-stone-800 bg-stone-900/40 p-8 text-center">
-            <p className="text-sm text-stone-400">No signals processed today yet.</p>
-            <p className="mt-1 text-xs text-stone-400">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-8 text-center">
+            <p className="text-sm text-slate-500">No signals processed today yet.</p>
+            <p className="mt-1 text-xs text-slate-500">
               Come back later — Klorn processes your mail and meetings continuously.
             </p>
           </div>
@@ -215,7 +215,7 @@ function ReceiptView() {
       </div>
 
       <div className="mt-8 flex justify-center">
-        <Link href="/inbox" className="text-sm text-stone-500 hover:text-stone-300 transition">
+        <Link href="/inbox" className="text-sm text-slate-400 hover:text-slate-500 transition">
           ← Back to Decision Queue
         </Link>
       </div>
@@ -245,9 +245,9 @@ function ReceiptSection({
       <div className="mb-2 flex items-center justify-between">
         <div>
           <h2 className={`text-sm font-semibold ${labelClass}`}>{title}</h2>
-          <p className="text-xs text-stone-400">{description}</p>
+          <p className="text-xs text-slate-500">{description}</p>
         </div>
-        <span className="text-[11px] text-stone-400">{items.length}</span>
+        <span className="text-[11px] text-slate-500">{items.length}</span>
       </div>
       <ul className="space-y-2">
         {items.map((item) => (
@@ -255,16 +255,16 @@ function ReceiptSection({
             <div className={`rounded-lg border p-3 ${accentClass}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-stone-200 truncate">{item.title}</p>
+                  <p className="text-sm font-medium text-slate-900 truncate">{item.title}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <SourceBadge source={item.source} type={item.type} />
                     {item.tierReason && (
-                      <span className="text-[11px] text-stone-400">{item.tierReason}</span>
+                      <span className="text-[11px] text-slate-500">{item.tierReason}</span>
                     )}
                   </div>
                 </div>
                 <div className="shrink-0 flex flex-col items-end gap-1">
-                  <span className="text-[11px] text-stone-400">{formatTime(item.surfacedAt)}</span>
+                  <span className="text-[11px] text-slate-500">{formatTime(item.surfacedAt)}</span>
                   {renderExtra?.(item)}
                   {renderActions?.(item)}
                 </div>
@@ -279,9 +279,9 @@ function ReceiptSection({
 
 function SummaryMetric({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="border-r border-white/10 px-4 py-3 last:border-r-0">
+    <div className="border-r border-slate-200 px-4 py-3 last:border-r-0">
       <p className={`text-2xl font-semibold ${color}`}>{value}</p>
-      <p className="mt-1 text-[11px] text-stone-500">{label}</p>
+      <p className="mt-1 text-[11px] text-slate-400">{label}</p>
     </div>
   );
 }
@@ -289,7 +289,7 @@ function SummaryMetric({ label, value, color }: { label: string; value: number; 
 function SourceBadge({ source, type }: { source: string; type: string }) {
   const label = sourceLabel(source, type);
   return (
-    <span className="text-[11px] text-stone-500 bg-stone-800/60 border border-stone-700/60 rounded px-1.5 py-0.5">
+    <span className="text-[11px] text-slate-400 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5">
       {label}
     </span>
   );

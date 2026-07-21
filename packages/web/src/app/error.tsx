@@ -13,18 +13,18 @@ function ErrorPage({
         Screen paused
       </p>
       <h1 className="text-xl font-semibold mb-2">Something went wrong on this screen.</h1>
-      <p className="text-stone-400 text-sm mb-2 text-center max-w-md">
+      <p className="text-slate-500 text-sm mb-2 text-center max-w-md">
         Reload the latest context and continue from there.
       </p>
       {error.message && (
-        <p className="text-xs text-stone-400 mb-6 font-mono bg-stone-950 border border-stone-800 rounded px-3 py-1.5 max-w-md truncate">
+        <p className="text-xs text-slate-500 mb-6 font-mono bg-slate-50 border border-slate-200 rounded px-3 py-1.5 max-w-md truncate">
           {error.message}
         </p>
       )}
       <button
         type="button"
         onClick={reset}
-        className="bg-amber-300 hover:bg-amber-200 text-stone-950 px-5 py-2.5 rounded-lg text-sm font-medium transition"
+        className="bg-sky-500 hover:bg-sky-200 text-stone-950 px-5 py-2.5 rounded-lg text-sm font-medium transition"
       >
         Try again
       </button>

@@ -107,18 +107,18 @@ export function TelegramSection() {
   };
 
   return (
-    <div className="mt-4 bg-stone-950/35 border border-stone-700/45 rounded-xl p-4">
+    <div className="mt-4 bg-slate-50 border border-slate-200 rounded-xl p-4">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h3 className="font-medium">Telegram</h3>
-          <p className="text-sm text-stone-400">
+          <p className="text-sm text-slate-500">
             {linked
               ? "Connected — PUSH-tier interrupts also arrive in your Telegram chat."
               : "Receive PUSH-tier interrupts in a Telegram chat."}
           </p>
         </div>
         {loading ? (
-          <span className="text-sm text-stone-400">Loading...</span>
+          <span className="text-sm text-slate-500">Loading...</span>
         ) : linked ? (
           <div className="flex shrink-0 items-center gap-3">
             <StatusChip status="connected" />
@@ -147,28 +147,28 @@ export function TelegramSection() {
       </div>
 
       {!linked && !loading && linkCode && (
-        <div className="mt-3 space-y-2 rounded-lg border border-stone-800 bg-stone-900/40 p-3">
+        <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-white p-3">
           {linkCode.deepLink ? (
-            <p className="text-sm text-stone-300">
+            <p className="text-sm text-slate-500">
               Open{" "}
               <a
                 href={linkCode.deepLink}
                 target="_blank"
                 rel="noreferrer"
-                className="break-all text-amber-300 underline hover:text-amber-200"
+                className="break-all text-sky-600 underline hover:text-sky-600"
               >
                 {linkCode.deepLink}
               </a>{" "}
-              and press <span className="font-medium text-stone-200">Start</span>.
+              and press <span className="font-medium text-slate-900">Start</span>.
             </p>
           ) : (
-            <p className="text-sm text-stone-300">
-              Send <span className="font-mono text-stone-200">/start {linkCode.code}</span> to your
+            <p className="text-sm text-slate-500">
+              Send <span className="font-mono text-slate-900">/start {linkCode.code}</span> to your
               Klorn bot in Telegram.
             </p>
           )}
-          <p className="text-xs text-stone-500">
-            Code: <span className="font-mono text-stone-300">{linkCode.code}</span> · expires at{" "}
+          <p className="text-xs text-slate-400">
+            Code: <span className="font-mono text-slate-500">{linkCode.code}</span> · expires at{" "}
             {new Date(linkCode.expiresAt).toLocaleTimeString("en-US")}.
           </p>
           <div className="flex items-center gap-2 pt-1">

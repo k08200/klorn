@@ -94,20 +94,20 @@ export function SubscriptionSection() {
 
   return (
     <section className="mb-8">
-      <h2 className="mb-3 text-sm font-semibold text-stone-300">Subscription</h2>
-      <div className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-5">
+      <h2 className="mb-3 text-sm font-semibold text-slate-500">Subscription</h2>
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
         {isPro ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-base font-semibold text-stone-100">Klorn Pro</p>
-              <p className="mt-0.5 text-xs text-stone-500">Active — thanks for supporting Klorn.</p>
+              <p className="text-base font-semibold text-slate-900">Klorn Pro</p>
+              <p className="mt-0.5 text-xs text-slate-400">Active — thanks for supporting Klorn.</p>
             </div>
             {native ? (
               <button
                 type="button"
                 onClick={restore}
                 disabled={loading}
-                className="min-h-10 rounded-lg border border-stone-700 px-4 text-sm text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
+                className="min-h-10 rounded-lg border border-slate-200 px-4 text-sm text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
               >
                 Restore purchase
               </button>
@@ -116,7 +116,7 @@ export function SubscriptionSection() {
                 type="button"
                 onClick={manageWeb}
                 disabled={loading}
-                className="min-h-10 rounded-lg border border-stone-700 px-4 text-sm text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
+                className="min-h-10 rounded-lg border border-slate-200 px-4 text-sm text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
               >
                 Manage subscription
               </button>
@@ -125,17 +125,17 @@ export function SubscriptionSection() {
         ) : (
           <div>
             <div className="flex items-baseline justify-between gap-3">
-              <p className="text-base font-semibold text-stone-100">Klorn Pro</p>
-              <p className="text-sm text-stone-400">
-                <span className="text-xl font-bold text-stone-50">{price}</span>/mo
+              <p className="text-base font-semibold text-slate-900">Klorn Pro</p>
+              <p className="text-sm text-slate-500">
+                <span className="text-xl font-bold text-slate-900">{price}</span>/mo
               </p>
             </div>
-            <p className="mt-1 text-xs text-stone-500">
+            <p className="mt-1 text-xs text-slate-400">
               7 days free, then {price}/month. Cancel anytime.
             </p>
             <ul className="mt-4 space-y-2">
               {VALUE_PROPS.map((prop) => (
-                <li key={prop} className="flex items-start gap-2.5 text-sm text-stone-300">
+                <li key={prop} className="flex items-start gap-2.5 text-sm text-slate-500">
                   <svg
                     aria-hidden="true"
                     width="16"
@@ -146,7 +146,7 @@ export function SubscriptionSection() {
                     strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="mt-0.5 shrink-0 text-amber-400"
+                    className="mt-0.5 shrink-0 text-sky-400"
                   >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
@@ -158,7 +158,7 @@ export function SubscriptionSection() {
               <button
                 type="button"
                 disabled
-                className="mt-5 flex min-h-11 w-full items-center justify-center rounded-lg bg-amber-400/60 text-sm font-semibold text-stone-950"
+                className="mt-5 flex min-h-11 w-full items-center justify-center rounded-lg bg-sky-400/60 text-sm font-semibold text-stone-950"
               >
                 Subscription coming soon
               </button>
@@ -167,7 +167,7 @@ export function SubscriptionSection() {
                 type="button"
                 onClick={native ? startAppPurchase : startWebTrial}
                 disabled={loading}
-                className="mt-5 flex min-h-11 w-full items-center justify-center rounded-lg bg-amber-400 text-sm font-semibold text-stone-950 transition hover:bg-amber-300 disabled:opacity-50"
+                className="mt-5 flex min-h-11 w-full items-center justify-center rounded-lg bg-sky-500 text-sm font-semibold text-stone-950 transition hover:bg-sky-500 disabled:opacity-50"
               >
                 {loading ? "Starting..." : "Start 7-day free trial"}
               </button>

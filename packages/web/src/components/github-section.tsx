@@ -109,18 +109,18 @@ export function GitHubSection() {
   };
 
   return (
-    <div className="mt-4 bg-stone-950/35 border border-stone-700/45 rounded-xl p-4">
+    <div className="mt-4 bg-white border border-slate-200 rounded-xl p-4">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h3 className="font-medium">GitHub</h3>
-          <p className="text-sm text-stone-400">
+          <p className="text-sm text-slate-500">
             {connected
               ? "Connected — PR reviews, mentions, and CI failures become firewall items."
               : "Turn GitHub notifications into firewall items."}
           </p>
         </div>
         {loading ? (
-          <span className="text-sm text-stone-400">Loading...</span>
+          <span className="text-sm text-slate-500">Loading...</span>
         ) : connected ? (
           <div className="flex shrink-0 items-center gap-3">
             <StatusChip status="connected" />
@@ -137,25 +137,25 @@ export function GitHubSection() {
       </div>
 
       {connected && connectedAt && (
-        <p className="mt-2 text-xs text-stone-500">
+        <p className="mt-2 text-xs text-slate-400">
           Connected since {new Date(connectedAt).toLocaleString("en-US")}.
         </p>
       )}
 
       {!connected && !loading && (
-        <div className="mt-3 space-y-2 rounded-lg border border-stone-800 bg-stone-900/40 p-3">
-          <p className="text-sm text-stone-300">
+        <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-sm text-slate-500">
             Connect a GitHub personal access token (classic) with the{" "}
-            <span className="font-mono text-stone-200">notifications</span> scope — add{" "}
-            <span className="font-mono text-stone-200">repo</span> for private repos. PR reviews,
+            <span className="font-mono text-slate-900">notifications</span> scope — add{" "}
+            <span className="font-mono text-slate-900">repo</span> for private repos. PR reviews,
             mentions, and CI failures become firewall items.
           </p>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-slate-400">
             <a
               href={NEW_TOKEN_URL}
               target="_blank"
               rel="noreferrer"
-              className="text-amber-300 underline hover:text-amber-200"
+              className="text-sky-600 underline hover:text-sky-500"
             >
               Create a pre-scoped token
             </a>{" "}
@@ -182,7 +182,7 @@ export function GitHubSection() {
       )}
 
       {error && (
-        <p role="alert" className="mt-2 text-xs text-red-300">
+        <p role="alert" className="mt-2 text-xs text-red-600">
           {error}
         </p>
       )}

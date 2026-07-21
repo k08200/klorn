@@ -23,7 +23,7 @@ function formatBytes(bytes: number): string {
 }
 
 const fieldClass =
-  "w-full rounded-md border border-white/10 bg-stone-950/60 px-3 py-2 text-sm text-stone-100 outline-none transition placeholder:text-stone-400 focus:border-accent/45 disabled:opacity-60";
+  "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-accent/45 disabled:opacity-60";
 
 export function ComposeModal({ open, onClose }: ComposeModalProps) {
   const { toast } = useToast();
@@ -209,10 +209,10 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-stone-700 bg-stone-950 shadow-2xl shadow-black/40"
+        className="flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl shadow-black/40"
       >
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-          <h2 id={titleId} className="text-base font-semibold text-stone-100">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <h2 id={titleId} className="text-base font-semibold text-slate-900">
             New message
           </h2>
           <button
@@ -220,7 +220,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
             onClick={close}
             disabled={sending}
             aria-label="Close"
-            className="min-h-9 rounded-md px-2 text-stone-500 transition hover:text-stone-200 disabled:opacity-50"
+            className="min-h-9 rounded-md px-2 text-slate-400 transition hover:text-slate-700 disabled:opacity-50"
           >
             ✕
           </button>
@@ -278,18 +278,18 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
               {files.map((file, index) => (
                 <li
                   key={`${file.name}-${file.size}`}
-                  className="flex items-center justify-between gap-2 rounded-md border border-white/10 bg-stone-900/50 px-3 py-2 text-xs"
+                  className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs"
                 >
-                  <span className="min-w-0 flex-1 truncate text-stone-200" title={file.name}>
+                  <span className="min-w-0 flex-1 truncate text-slate-900" title={file.name}>
                     📎 {file.name}
                   </span>
-                  <span className="shrink-0 text-stone-500">{formatBytes(file.size)}</span>
+                  <span className="shrink-0 text-slate-400">{formatBytes(file.size)}</span>
                   <button
                     type="button"
                     onClick={() => removeFile(index)}
                     disabled={sending}
                     aria-label={`Remove ${file.name}`}
-                    className="shrink-0 rounded px-1 text-stone-500 transition hover:text-red-300 disabled:opacity-50"
+                    className="shrink-0 rounded px-1 text-slate-400 transition hover:text-red-600 disabled:opacity-50"
                   >
                     ✕
                   </button>
@@ -299,28 +299,28 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
           )}
 
           {tooMany && (
-            <p className="text-xs text-red-300">You can attach at most {MAX_ATTACHMENTS} files.</p>
+            <p className="text-xs text-red-600">You can attach at most {MAX_ATTACHMENTS} files.</p>
           )}
           {overSize && (
-            <p className="text-xs text-red-300">
+            <p className="text-xs text-red-600">
               Attachments are {formatBytes(totalBytes)} — the limit is{" "}
               {formatBytes(MAX_TOTAL_BYTES)}.
             </p>
           )}
           {error && (
-            <p className="rounded-md border border-red-900/60 bg-red-950/30 px-3 py-2 text-xs text-red-300">
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
               {error}
             </p>
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-4">
+        <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-4">
           <input ref={fileInputRef} type="file" multiple hidden onChange={onFileInputChange} />
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={sending}
-            className="min-h-11 rounded-md border border-white/10 bg-stone-950/60 px-3 text-xs font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100 disabled:opacity-50"
+            className="min-h-11 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-50"
           >
             📎 Attach files
           </button>
@@ -329,7 +329,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
               type="button"
               onClick={close}
               disabled={sending}
-              className="min-h-11 rounded-md px-4 text-sm text-stone-400 transition hover:text-stone-100 disabled:opacity-50"
+              className="min-h-11 rounded-md px-4 text-sm text-slate-500 transition hover:text-slate-900 disabled:opacity-50"
             >
               Cancel
             </button>

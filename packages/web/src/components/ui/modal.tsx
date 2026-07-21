@@ -77,17 +77,17 @@ export default function Modal({ open, onClose, title, children, footer, size = "
     >
       <div
         ref={dialogRef}
-        className={`w-full ${sizes[size]} bg-stone-950 border border-stone-800 rounded-2xl shadow-2xl shadow-black/40`}
+        className={`w-full ${sizes[size]} bg-white border border-slate-200 rounded-2xl shadow-2xl shadow-slate-900/10`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-700/45">
-          <h2 id={titleId} className="text-base font-semibold text-stone-100">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+          <h2 id={titleId} className="text-base font-semibold text-slate-900">
             {title}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex min-h-11 min-w-11 items-center justify-center text-stone-500 hover:text-stone-300 transition rounded-lg hover:bg-stone-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center text-slate-400 hover:text-slate-900 transition rounded-lg hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
             aria-label="Close"
           >
             <svg
@@ -112,7 +112,7 @@ export default function Modal({ open, onClose, title, children, footer, size = "
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-stone-700/45">
+          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200">
             {footer}
           </div>
         )}

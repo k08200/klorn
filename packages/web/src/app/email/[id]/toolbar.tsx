@@ -32,11 +32,11 @@ export function UndoActionBanner({
 }) {
   const actionLabel = notice.action === "archive" ? "archived" : "moved to trash";
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-amber-950/30 px-4 py-3 text-sm text-stone-200 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-accent-light/30 bg-sky-50 px-4 py-3 text-sm text-slate-900 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="font-medium">Email {actionLabel}.</p>
         {notice.subject && (
-          <p className="mt-0.5 truncate text-xs text-stone-400">{notice.subject}</p>
+          <p className="mt-0.5 truncate text-xs text-slate-500">{notice.subject}</p>
         )}
       </div>
       <div className="flex shrink-0 gap-2">
@@ -52,7 +52,7 @@ export function UndoActionBanner({
           type="button"
           onClick={onDismiss}
           disabled={busy}
-          className="min-h-10 rounded-md border border-white/10 px-3 text-xs text-stone-300 transition hover:bg-white/5 disabled:opacity-50"
+          className="min-h-10 rounded-md border border-slate-200 px-3 text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
         >
           Dismiss
         </button>
@@ -84,11 +84,11 @@ export function EmailActionToolbar({
   const isDemo = email.id.startsWith("demo-");
   const actionDisabled = disabled || isDemo;
   return (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-stone-800/70 bg-black/20 px-3 py-2">
-      <div className="flex min-w-0 items-center gap-2 text-xs text-stone-500">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2 text-xs text-slate-400">
         <span
           className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-            email.isRead ? "bg-stone-600" : "bg-accent"
+            email.isRead ? "bg-slate-300" : "bg-accent"
           }`}
         />
         <span className="truncate">
@@ -147,8 +147,8 @@ export function EmailReminderQuickActions({
   onCreate: (option: EmailReminderOption) => void;
 }) {
   return (
-    <div className="mb-4 flex flex-col gap-2 rounded-lg border border-stone-800/70 bg-stone-950/30 px-3 py-2 text-xs text-stone-400 sm:flex-row sm:items-center sm:justify-between">
-      <span className="font-medium text-stone-300">Remind me</span>
+    <div className="mb-4 flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+      <span className="font-medium text-slate-500">Remind me</span>
       <div className="flex flex-wrap gap-1.5">
         {EMAIL_REMINDER_OPTIONS.map((option) => (
           <button
@@ -156,7 +156,7 @@ export function EmailReminderQuickActions({
             type="button"
             onClick={() => onCreate(option)}
             disabled={disabled || busyKey !== null}
-            className="min-h-9 rounded-md border border-white/10 bg-black/20 px-3 text-xs text-stone-300 transition hover:border-[#a8a29e]/35 hover:text-stone-100 disabled:cursor-not-allowed disabled:opacity-45"
+            className="min-h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs text-slate-500 transition hover:border-[#a8a29e]/35 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-45"
           >
             {busyKey === option.key ? "Setting..." : option.label}
           </button>

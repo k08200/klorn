@@ -108,9 +108,9 @@ export function LinkedInboxesSection() {
   });
 
   return (
-    <section className="rounded-xl border border-stone-800 bg-stone-950/40 p-5">
-      <h2 className="text-base font-semibold text-stone-100">Connected inboxes</h2>
-      <p className="mt-1 text-xs text-stone-400">
+    <section className="rounded-xl border border-slate-200 bg-white p-5">
+      <h2 className="text-base font-semibold text-slate-900">Connected inboxes</h2>
+      <p className="mt-1 text-xs text-slate-500">
         Add a second Google account (e.g. work) so Klorn runs the same 4-tier firewall across all
         your mail, not just your primary account.
       </p>
@@ -120,16 +120,16 @@ export function LinkedInboxesSection() {
           {accounts.map((account) => (
             <li
               key={account.id}
-              className="flex items-center justify-between gap-3 rounded-md border border-stone-800 bg-black/20 px-3 py-2 text-sm"
+              className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
             >
               <div className="min-w-0">
-                <span className="block truncate text-stone-200">{account.email}</span>
+                <span className="block truncate text-slate-900">{account.email}</span>
                 {account.needsReconnect ? (
-                  <span className="block truncate text-[11px] text-amber-400">
+                  <span className="block truncate text-[11px] text-amber-600">
                     Reconnect needed — access was revoked
                   </span>
                 ) : (
-                  <span className="block truncate text-[11px] text-stone-500">
+                  <span className="block truncate text-[11px] text-slate-400">
                     {formatLastSynced(account.lastSyncedAt)}
                   </span>
                 )}
@@ -140,7 +140,7 @@ export function LinkedInboxesSection() {
                     type="button"
                     onClick={() => connect.mutate()}
                     disabled={connect.isPending}
-                    className="rounded-md border border-amber-400/50 bg-amber-400/10 px-2 py-1 text-xs text-amber-200 transition hover:bg-amber-400/20 disabled:opacity-50"
+                    className="rounded-md border border-amber-400/50 bg-amber-400/10 px-2 py-1 text-xs text-amber-700 transition hover:bg-amber-400/20 disabled:opacity-50"
                   >
                     Reconnect
                   </button>
@@ -149,7 +149,7 @@ export function LinkedInboxesSection() {
                   type="button"
                   onClick={() => disconnect.mutate(account.id)}
                   disabled={disconnect.isPending}
-                  className="rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 transition hover:bg-stone-800 disabled:opacity-50"
+                  className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
                 >
                   Disconnect
                 </button>
@@ -164,16 +164,16 @@ export function LinkedInboxesSection() {
           type="button"
           onClick={() => connect.mutate()}
           disabled={connect.isPending}
-          className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
+          className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-sky-500 px-4 py-2 text-sm text-white transition hover:bg-sky-500 disabled:opacity-50"
         >
           Connect another inbox
         </button>
       ) : (
-        <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-4">
-          <p className="text-sm text-stone-200">
-            Multiple inboxes is a <span className="font-semibold text-amber-300">Pro</span> feature.
+        <div className="mt-3 rounded-md border border-sky-500/30 bg-sky-500/5 p-4">
+          <p className="text-sm text-slate-900">
+            Multiple inboxes is a <span className="font-semibold text-sky-600">Pro</span> feature.
           </p>
-          <p className="mt-1 text-xs text-stone-400">
+          <p className="mt-1 text-xs text-slate-500">
             Free covers your primary Google account. Upgrade in the Subscription section to run the
             firewall across a second inbox.
           </p>

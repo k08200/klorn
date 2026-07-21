@@ -62,17 +62,17 @@ function ForgotPasswordForm() {
         title="Check your email"
         description="If that email account exists, we sent a password reset link."
         footer={
-          <Link href="/login" className="transition hover:text-stone-300">
+          <Link href="/login" className="transition hover:text-slate-900">
             Back to login
           </Link>
         }
       >
-        <div className="border-y border-stone-800/80 py-5 text-sm leading-6 text-stone-300">
+        <div className="border-y border-slate-200 py-5 text-sm leading-6 text-slate-500">
           The link is only valid for a limited time. Check spam if it does not appear.
         </div>
         <Link
           href="/login"
-          className="mt-5 flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
+          className="mt-5 flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-stone-950 transition hover:bg-sky-200"
         >
           Open login
         </Link>
@@ -86,7 +86,7 @@ function ForgotPasswordForm() {
       title="Reset password"
       description="Enter your account email and we will send a secure reset link."
       footer={
-        <Link href="/login" className="transition hover:text-stone-300">
+        <Link href="/login" className="transition hover:text-slate-900">
           Back to login
         </Link>
       }
@@ -109,7 +109,7 @@ function ForgotPasswordForm() {
         <button
           type="submit"
           disabled={loading || !email}
-          className="flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-800 disabled:text-stone-500"
+          className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-stone-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
         >
           {loading ? "Sending..." : "Send reset link"}
         </button>
@@ -165,7 +165,7 @@ function NewPasswordForm({ token }: { token: string }) {
       >
         <Link
           href="/login"
-          className="flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
+          className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-stone-950 transition hover:bg-sky-200"
         >
           Log in
         </Link>
@@ -179,7 +179,7 @@ function NewPasswordForm({ token }: { token: string }) {
       title="Set a new password"
       description="Enter the password you will use for your next login."
       footer={
-        <Link href="/login" className="transition hover:text-stone-300">
+        <Link href="/login" className="transition hover:text-slate-900">
           Back to login
         </Link>
       }
@@ -218,7 +218,7 @@ function NewPasswordForm({ token }: { token: string }) {
         <button
           type="submit"
           disabled={loading || !password || !confirm}
-          className="flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-800 disabled:text-stone-500"
+          className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-stone-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
         >
           {loading ? "Resetting..." : "Reset password"}
         </button>

@@ -115,11 +115,11 @@ export function NaverImapSection() {
   };
 
   return (
-    <section className="rounded-xl border border-stone-800 bg-stone-950/40 p-5">
+    <section className="rounded-xl border border-slate-200 bg-white p-5">
       <header className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-stone-100">Naver Mail</h2>
-          <p className="mt-1 text-xs text-stone-400">
+          <h2 className="text-base font-semibold text-slate-900">Naver Mail</h2>
+          <p className="mt-1 text-xs text-slate-500">
             Connect a Naver mailbox via IMAP. Klorn classifies every incoming message into the same
             4-tier firewall as Gmail.
           </p>
@@ -128,14 +128,14 @@ export function NaverImapSection() {
       </header>
 
       {loading ? (
-        <div className="text-xs text-stone-500">Loading…</div>
+        <div className="text-xs text-slate-400">Loading…</div>
       ) : status?.connected ? (
         <div className="space-y-3">
-          <div className="rounded-md border border-stone-800 bg-stone-900/40 p-3 text-sm text-stone-200">
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-900">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="font-medium">{status.email}</p>
-                <p className="text-[11px] text-stone-500">
+                <p className="text-[11px] text-slate-400">
                   Host: {status.host} · since{" "}
                   {status.connectedAt ? new Date(status.connectedAt).toLocaleString("en-US") : "—"}
                 </p>
@@ -152,18 +152,18 @@ export function NaverImapSection() {
             </div>
           </div>
           {error && (
-            <p role="alert" className="text-xs text-red-300">
+            <p role="alert" className="text-xs text-red-600">
               {error}
             </p>
           )}
         </div>
       ) : !entitled ? (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-4">
-          <p className="text-sm text-stone-200">
-            Connecting a second inbox is a <span className="font-semibold text-amber-300">Pro</span>{" "}
+        <div className="rounded-md border border-sky-500/30 bg-sky-500/5 p-4">
+          <p className="text-sm text-slate-900">
+            Connecting a second inbox is a <span className="font-semibold text-sky-600">Pro</span>{" "}
             feature.
           </p>
-          <p className="mt-1 text-xs text-stone-400">
+          <p className="mt-1 text-xs text-slate-500">
             Free covers your primary Google account. Upgrade in the Subscription section to run the
             firewall across a Naver mailbox too.
           </p>
@@ -191,20 +191,20 @@ export function NaverImapSection() {
               required
               autoComplete="off"
             />
-            <p className="mt-1 text-[11px] text-stone-400">
+            <p className="mt-1 text-[11px] text-slate-500">
               This is NOT your Naver account password. Generate one at{" "}
               <a
                 href={PASSWORD_HELP_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="underline hover:text-stone-300"
+                className="underline hover:text-slate-700"
               >
                 Naver Help → 외부 메일 비밀번호
               </a>
               . We store it encrypted (AES-GCM), never the plaintext.
             </p>
           </div>
-          <details className="text-xs text-stone-400">
+          <details className="text-xs text-slate-500">
             <summary className="cursor-pointer">Advanced: IMAP host</summary>
             <div className="mt-2">
               <Input
@@ -219,7 +219,7 @@ export function NaverImapSection() {
           {error && (
             <div
               role="alert"
-              className="rounded-md border border-red-700/40 bg-red-950/30 p-3 text-xs text-red-200"
+              className="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-600"
             >
               {error}
             </div>

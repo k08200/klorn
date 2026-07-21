@@ -217,17 +217,17 @@ function CalendarView() {
       {/* MOBILE — native large-title header (desktop hero below, untouched) */}
       <header className="mb-5 flex items-end justify-between gap-3 md:hidden">
         <div className="min-w-0">
-          <h1 className="text-[28px] font-bold leading-none tracking-tight text-stone-50">
+          <h1 className="text-[28px] font-bold leading-none tracking-tight text-slate-900">
             {t("nav.calendar")}
           </h1>
-          <p className="mt-1.5 truncate text-sm text-stone-400">
+          <p className="mt-1.5 truncate text-sm text-slate-500">
             {nextEvent ? `Next: ${nextEvent.title || "Untitled"}` : "Your next 14 days"}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <VoiceButton
             onTranscript={(text) => void handleVoiceTranscript(text)}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-stone-700"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200"
           />
           <button
             type="button"
@@ -258,7 +258,7 @@ function CalendarView() {
             onClick={syncNow}
             disabled={syncing}
             aria-label="Sync calendar"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-stone-900/70 text-stone-300 transition active:bg-stone-800 disabled:opacity-50"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-50 text-slate-500 transition active:bg-slate-100 disabled:opacity-50"
           >
             <svg
               aria-hidden="true"
@@ -280,19 +280,19 @@ function CalendarView() {
       </header>
 
       {/* DESKTOP — unchanged */}
-      <header className="mb-6 hidden overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10 md:block">
-        <div className="h-1 bg-gradient-to-r from-amber-300 via-amber-200/40 to-transparent" />
+      <header className="mb-6 hidden overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-black/10 md:block">
+        <div className="h-1 bg-gradient-to-r from-sky-300 via-sky-200/40 to-transparent" />
         <div className="p-5 md:p-6">
           {/* Mobile = content-first: the decorative work-signal panel and the
               3-stat dashboard are hidden below their breakpoints so the month
               shows sooner. A compact Sync replaces the panel's Sync on phones. */}
           <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
             <div className="min-w-0">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/80 md:mb-2">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600 md:mb-2">
                 Klorn · Calendar
               </p>
               <div className="flex items-start justify-between gap-3">
-                <h1 className="text-lg font-semibold tracking-tight text-stone-50 md:text-2xl">
+                <h1 className="text-lg font-semibold tracking-tight text-slate-900 md:text-2xl">
                   {t("calendar.needPrep")}
                 </h1>
                 {/* One button pair for every breakpoint, anchored to the title
@@ -301,7 +301,7 @@ function CalendarView() {
                 <div className="flex shrink-0 items-center gap-2">
                   <VoiceButton
                     onTranscript={(text) => void handleVoiceTranscript(text)}
-                    className="flex min-h-9 w-9 items-center justify-center rounded-md border border-stone-700"
+                    className="flex min-h-9 w-9 items-center justify-center rounded-md border border-slate-200"
                   />
                   <button
                     type="button"
@@ -318,21 +318,21 @@ function CalendarView() {
                     type="button"
                     onClick={syncNow}
                     disabled={syncing}
-                    className="min-h-9 rounded-md border border-stone-700 bg-stone-950/70 px-3 text-xs text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
+                    className="min-h-9 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
                   >
                     {syncing ? t("common.syncing") : t("common.syncNow")}
                   </button>
                 </div>
               </div>
-              <p className="mt-2 hidden max-w-xl text-sm leading-6 text-stone-400 md:block">
+              <p className="mt-2 hidden max-w-xl text-sm leading-6 text-slate-500 md:block">
                 The next 14 days of events alongside the work signals that touch them.
               </p>
             </div>
-            <div className="relative hidden min-h-40 overflow-hidden rounded-lg border border-stone-800 bg-black/20 lg:block">
+            <div className="relative hidden min-h-40 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 lg:block">
               <EveSignalField className="absolute inset-0 border-0" />
             </div>
           </div>
-          <div className="mt-5 hidden grid-cols-3 overflow-hidden rounded-lg border border-stone-800 bg-black/20 md:grid">
+          <div className="mt-5 hidden grid-cols-3 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 md:grid">
             <CalendarStat label="Month" value={events.length} />
             <CalendarStat label="Today" value={eventsByDay.get(todayKey)?.length ?? 0} />
             <CalendarStat
@@ -341,11 +341,11 @@ function CalendarView() {
             />
           </div>
           {nextEvent && (
-            <div className="mt-4 rounded-lg border border-amber-300/15 bg-amber-300/5 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300/80">
+            <div className="mt-4 rounded-lg border border-sky-300/15 bg-sky-300/5 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-600">
                 Next prep target
               </p>
-              <p className="mt-1 truncate text-sm font-medium text-stone-100">
+              <p className="mt-1 truncate text-sm font-medium text-slate-900">
                 {nextEvent.title || "Untitled"}
               </p>
             </div>
@@ -360,7 +360,7 @@ function CalendarView() {
       </div>
 
       {loading && (
-        <div className="rounded-lg border border-stone-800 bg-stone-950/35 px-4 py-5 text-center text-sm text-stone-500">
+        <div className="rounded-lg border border-slate-200 bg-white px-4 py-5 text-center text-sm text-slate-400">
           Gathering calendar context...
         </div>
       )}
@@ -378,13 +378,13 @@ function CalendarView() {
       )}
 
       {!loading && !error && events.length === 0 && (
-        <div className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-6 text-center">
-          <p className="mb-1 text-sm text-stone-300">
+        <div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
+          <p className="mb-1 text-sm text-slate-500">
             {googleConnected === false
               ? "Google Calendar is not connected yet."
               : "No events in the next 14 days."}
           </p>
-          <p className="mb-4 text-xs text-stone-500">
+          <p className="mb-4 text-xs text-slate-400">
             {googleConnected === false
               ? "Connect and sync so Klorn can brief from your real calendar."
               : "Google is connected. An empty calendar stays empty in the briefing."}
@@ -395,7 +395,7 @@ function CalendarView() {
               onClick={() => {
                 void startGoogleConnect();
               }}
-              className="inline-flex min-h-11 items-center rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200"
+              className="inline-flex min-h-11 items-center rounded-lg bg-sky-500 px-4 py-2 text-sm text-stone-950 transition hover:bg-sky-200"
             >
               Connect Google
             </button>
@@ -404,7 +404,7 @@ function CalendarView() {
               type="button"
               onClick={syncNow}
               disabled={syncing}
-              className="min-h-11 rounded-lg bg-amber-300 px-4 py-2 text-sm text-stone-950 transition hover:bg-amber-200 disabled:opacity-50"
+              className="min-h-11 rounded-lg bg-sky-500 px-4 py-2 text-sm text-stone-950 transition hover:bg-sky-200 disabled:opacity-50"
             >
               {syncing ? "Syncing..." : "Sync again"}
             </button>
@@ -451,7 +451,7 @@ function CalendarView() {
         }}
       />
       {voiceParsing && (
-        <output className="fixed bottom-24 left-1/2 z-40 -translate-x-1/2 rounded-full border border-stone-700 bg-stone-900/95 px-4 py-2 text-xs text-stone-200 shadow-lg md:bottom-8">
+        <output className="fixed bottom-24 left-1/2 z-40 -translate-x-1/2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-900 shadow-lg md:bottom-8">
           {t("calendar.voiceParsing")}
         </output>
       )}
@@ -485,7 +485,7 @@ function AgendaList({
 
   if (days.length === 0) {
     return (
-      <div className="rounded-lg border border-stone-800 bg-stone-950/30 px-4 py-6 text-center text-sm text-stone-500">
+      <div className="rounded-lg border border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-400">
         Nothing coming up this month.
       </div>
     );
@@ -496,7 +496,7 @@ function AgendaList({
       {days.map(([key, list]) => (
         <div key={key}>
           <div className="mb-1.5 flex items-center gap-2 px-0.5">
-            <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">
+            <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
               {new Date(list[0].startTime).toLocaleDateString("en-US", {
                 weekday: "short",
                 month: "short",
@@ -505,7 +505,7 @@ function AgendaList({
               })}
             </h3>
             {key === todayKey && (
-              <span className="rounded-full bg-amber-300 px-2 py-0.5 text-[10px] font-semibold text-stone-950">
+              <span className="rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-semibold text-stone-950">
                 Today
               </span>
             )}
@@ -515,17 +515,17 @@ function AgendaList({
               <li key={ev.id}>
                 <Link
                   href={`/calendar/${ev.id}`}
-                  className="flex items-start gap-3 rounded-lg border border-stone-800/60 bg-stone-950/30 px-3 py-2.5 transition hover:bg-stone-800/40"
+                  className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 transition hover:bg-slate-100"
                 >
-                  <span className="w-14 shrink-0 pt-0.5 text-right text-xs tabular-nums text-stone-400">
+                  <span className="w-14 shrink-0 pt-0.5 text-right text-xs tabular-nums text-slate-500">
                     {ev.allDay ? "All day" : formatTime(new Date(ev.startTime), timeZone)}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-stone-100">
+                    <span className="block truncate text-sm font-medium text-slate-900">
                       {ev.title || "Untitled"}
                     </span>
                     {ev.location && (
-                      <span className="mt-0.5 block truncate text-[11px] text-stone-500">
+                      <span className="mt-0.5 block truncate text-[11px] text-slate-400">
                         {ev.location}
                       </span>
                     )}
@@ -566,14 +566,14 @@ function MonthGrid({
   const viewMonthIdx = monthIndexInZone(viewMonth, timeZone);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-stone-800 bg-stone-950/30">
-      <div className="flex items-center justify-between gap-3 border-b border-stone-800/70 px-4 py-2.5">
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onPrev}
             aria-label="Previous month"
-            className="flex h-8 w-8 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-800/60 hover:text-stone-100"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
           >
             ‹
           </button>
@@ -581,25 +581,25 @@ function MonthGrid({
             type="button"
             onClick={onNext}
             aria-label="Next month"
-            className="flex h-8 w-8 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-800/60 hover:text-stone-100"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
           >
             ›
           </button>
-          <h2 className="ml-1 text-base font-medium text-stone-100">{monthLabel}</h2>
+          <h2 className="ml-1 text-base font-medium text-slate-900">{monthLabel}</h2>
         </div>
         <button
           type="button"
           onClick={onToday}
-          className="rounded-md border border-stone-700 px-3 py-1 text-xs text-stone-300 transition hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-100"
+          className="rounded-md border border-slate-200 px-3 py-1 text-xs text-slate-500 transition hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-sky-100"
         >
           Today
         </button>
       </div>
-      <div className="grid grid-cols-7 border-b border-stone-800/70 bg-stone-950/40">
+      <div className="grid grid-cols-7 border-b border-slate-200 bg-white">
         {weekdayLabels.map((d) => (
           <div
             key={d}
-            className="px-2 py-1.5 text-center text-[11px] font-medium uppercase tracking-[0.12em] text-stone-500"
+            className="px-2 py-1.5 text-center text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400"
           >
             {d}
           </div>
@@ -662,13 +662,13 @@ function DayCell({
     if (events.length > 0) router.push(`/calendar/${events[0].id}`);
   };
   const dayNumberClass = `inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-[11px] font-medium tabular-nums transition ${
-    isToday ? "bg-amber-300 text-stone-950" : inMonth ? "text-stone-300" : "text-stone-400"
+    isToday ? "bg-sky-500 text-white" : inMonth ? "text-slate-500" : "text-slate-500"
   }`;
 
   return (
     <div
-      className={`min-h-[96px] border-b border-r border-stone-800/60 px-1.5 py-1 transition ${
-        inMonth ? "bg-stone-950/20" : "bg-stone-950/45 text-stone-400"
+      className={`min-h-[96px] border-b border-r border-slate-200 px-1.5 py-1 transition ${
+        inMonth ? "bg-white" : "bg-white text-slate-500"
       }`}
     >
       <div className="mb-1 flex items-center justify-between">
@@ -677,7 +677,7 @@ function DayCell({
             type="button"
             onClick={openDay}
             aria-label={`${dayLabel} — ${events.length} event${events.length === 1 ? "" : "s"}`}
-            className={`${dayNumberClass} hover:ring-1 hover:ring-amber-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
+            className={`${dayNumberClass} hover:ring-1 hover:ring-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
           >
             {cell.dayNumber}
           </button>
@@ -692,7 +692,7 @@ function DayCell({
         {hidden > 0 && (
           <Link
             href={`/calendar/${events[MAX_VISIBLE].id}`}
-            className="block truncate px-1 text-[10px] text-stone-500 hover:text-amber-200"
+            className="block truncate px-1 text-[10px] text-slate-400 hover:text-sky-600"
           >
             +{hidden} more
           </Link>
@@ -719,15 +719,15 @@ function EventChip({
       title={`${timeLabel ? `${timeLabel} · ` : ""}${event.title || "Untitled"}`}
       className={`flex items-center gap-1 truncate rounded px-1 py-0.5 text-[11px] transition ${
         dimmed
-          ? "text-stone-400 hover:bg-stone-800/40 hover:text-stone-400"
-          : "text-stone-200 hover:bg-amber-500/10 hover:text-amber-100"
+          ? "text-slate-500 hover:bg-slate-100 hover:text-slate-500"
+          : "text-slate-900 hover:bg-sky-500/10 hover:text-sky-100"
       }`}
     >
       <span
         aria-hidden="true"
-        className={`h-1.5 w-1.5 shrink-0 rounded-full ${dimmed ? "bg-stone-700" : "bg-amber-300"}`}
+        className={`h-1.5 w-1.5 shrink-0 rounded-full ${dimmed ? "bg-slate-100" : "bg-sky-500"}`}
       />
-      {timeLabel && <span className="shrink-0 tabular-nums text-stone-500">{timeLabel}</span>}
+      {timeLabel && <span className="shrink-0 tabular-nums text-slate-400">{timeLabel}</span>}
       <span className="truncate">{event.title || "Untitled"}</span>
     </Link>
   );
@@ -735,11 +735,11 @@ function EventChip({
 
 function CalendarStat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="border-r border-stone-800 px-4 py-3 last:border-r-0">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">
+    <div className="border-r border-slate-200 px-4 py-3 last:border-r-0">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
         {label}
       </p>
-      <p className="mt-1 truncate text-2xl font-semibold text-stone-100">{value}</p>
+      <p className="mt-1 truncate text-2xl font-semibold text-slate-900">{value}</p>
     </div>
   );
 }

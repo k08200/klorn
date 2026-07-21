@@ -591,7 +591,7 @@ function EmailDetailView() {
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:py-10">
       <Link
         href="/email"
-        className="mb-4 inline-flex items-center gap-1 rounded-full border border-stone-700/45 bg-stone-950/35 px-3 py-1.5 text-xs text-stone-400 transition hover:border-amber-300/40 hover:text-stone-100"
+        className="mb-4 inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-500 transition hover:border-sky-300/40 hover:text-slate-900"
       >
         <svg
           aria-hidden="true"
@@ -619,7 +619,7 @@ function EmailDetailView() {
         />
       )}
 
-      {loading && <p className="text-sm text-stone-500">Loading...</p>}
+      {loading && <p className="text-sm text-slate-400">Loading...</p>}
 
       {error && (
         <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
@@ -629,7 +629,7 @@ function EmailDetailView() {
 
       {email && (
         <article>
-          <header className="mb-5 overflow-hidden rounded-lg border border-stone-700/45 bg-stone-950/55 shadow-2xl shadow-black/10">
+          <header className="mb-5 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-black/10">
             <div className="h-1 bg-gradient-to-r from-[#a8a29e] via-accent to-stone-600" />
             <div className="p-5 md:p-6">
               <EmailActionToolbar
@@ -652,15 +652,15 @@ function EmailDetailView() {
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent/80">
                     Signal detail
                   </p>
-                  <h1 className="break-words text-xl font-semibold leading-snug tracking-tight text-stone-50 md:text-2xl">
+                  <h1 className="break-words text-xl font-semibold leading-snug tracking-tight text-slate-900 md:text-2xl">
                     {email.subject || "No subject"}
                   </h1>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                     <span className="max-w-full truncate">{email.from}</span>
                     {email.trust && <TrustBadgeChip trust={email.trust} />}
-                    <span className="text-stone-400">·</span>
+                    <span className="text-slate-500">·</span>
                     <time className="shrink-0 tabular-nums">{formatFull(email.date)}</time>
-                    <span className="text-stone-400">·</span>
+                    <span className="text-slate-500">·</span>
                     <span>{email.isRead ? "Read" : "Kept unread"}</span>
                   </div>
                 </div>
@@ -732,20 +732,20 @@ function EmailDetailView() {
             />
 
             {email.body ? (
-              <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
-                <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-stone-500">
+              <section className="rounded-lg border border-slate-200 bg-white p-4">
+                <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-slate-400">
                   Body
                 </h2>
-                <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-stone-200">
+                <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-slate-900">
                   {linkifyText(email.body)}
                 </pre>
               </section>
             ) : email.snippet ? (
-              <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
-                <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-stone-500">
+              <section className="rounded-lg border border-slate-200 bg-white p-4">
+                <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-slate-400">
                   Preview
                 </h2>
-                <p className="text-sm text-stone-300">{linkifyText(email.snippet)}</p>
+                <p className="text-sm text-slate-500">{linkifyText(email.snippet)}</p>
               </section>
             ) : null}
           </div>
@@ -768,23 +768,23 @@ function CandidateProfileCard({
 }) {
   const status = intake?.status ?? candidatePipelineToIntakeStatus(profile.pipelineStatus);
   return (
-    <section className="mt-5 rounded-xl border border-orange-500/20 bg-orange-500/5 p-4">
+    <section className="mt-5 rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-accent-light">
           Candidate card
         </h2>
-        <span className="text-[11px] text-stone-500">
+        <span className="text-[11px] text-slate-400">
           Confidence {Math.round(profile.confidence * 100)}%
         </span>
       </div>
-      <div className="mb-3 rounded-lg border border-orange-500/15 bg-black/15 px-3 py-2">
+      <div className="mb-3 rounded-lg border border-sky-500/15 bg-slate-50 px-3 py-2">
         <p className="text-[10px] font-medium uppercase tracking-wider text-accent-light/70">
           Pipeline
         </p>
         <p className="mt-1 text-xs font-medium text-accent-dim">
           {candidatePipelineLabel(profile.pipelineStatus)}
         </p>
-        <p className="mt-1 text-[11px] leading-5 text-stone-400">{profile.nextAction}</p>
+        <p className="mt-1 text-[11px] leading-5 text-slate-500">{profile.nextAction}</p>
       </div>
       <div className="mb-3 flex flex-wrap gap-1.5">
         {CANDIDATE_STATUS_OPTIONS.map((option) => (
@@ -796,14 +796,14 @@ function CandidateProfileCard({
             className={`rounded border px-2 py-1 text-[11px] transition disabled:cursor-default ${
               status === option.status
                 ? "border-accent-light/40 bg-accent-light/15 text-accent-dim"
-                : "border-stone-700/60 bg-black/15 text-stone-400 hover:border-accent/30 hover:text-accent-muted"
+                : "border-slate-200 bg-slate-50 text-slate-500 hover:border-accent/30 hover:text-accent-muted"
             }`}
           >
             {option.label}
           </button>
         ))}
       </div>
-      <p className="text-sm font-medium leading-relaxed text-stone-100">{profile.summary}</p>
+      <p className="text-sm font-medium leading-relaxed text-slate-900">{profile.summary}</p>
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-3">
         <ProfileFact label="Name" value={profile.name} />
         <ProfileFact label="Role" value={profile.role} />
@@ -817,7 +817,7 @@ function CandidateProfileCard({
           {profile.skills.map((skill) => (
             <span
               key={skill}
-              className="rounded border border-orange-500/25 bg-accent/10 px-2 py-1 text-[11px] text-accent-muted"
+              className="rounded border border-sky-500/25 bg-accent/10 px-2 py-1 text-[11px] text-accent-muted"
             >
               {skill}
             </span>
@@ -851,14 +851,14 @@ function CandidateProfileCard({
         </div>
       )}
       <label className="mt-3 block">
-        <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-stone-400">
+        <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">
           Review note
         </span>
         <textarea
           defaultValue={intake?.notes ?? ""}
           rows={2}
           onBlur={(e) => onUpdate({ notes: e.target.value || null })}
-          className="w-full rounded-lg border border-orange-500/15 bg-black/15 px-3 py-2 text-xs leading-5 text-stone-300 outline-none transition focus:border-accent/35"
+          className="w-full rounded-lg border border-sky-500/15 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500 outline-none transition focus:border-accent/35"
           placeholder="Review note"
         />
       </label>
@@ -893,11 +893,11 @@ function ThreadContextPanel({
   currentEmailId: string;
 }) {
   return (
-    <section className="mb-5 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+    <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-stone-100">Thread context</h2>
-          <p className="mt-1 text-xs text-stone-500">
+          <h2 className="text-sm font-semibold text-slate-900">Thread context</h2>
+          <p className="mt-1 text-xs text-slate-400">
             Review {thread.messageCount} earlier messages to understand the reply context.
           </p>
         </div>
@@ -909,18 +909,18 @@ function ThreadContextPanel({
             <li
               key={message.id}
               className={`rounded-lg border px-3 py-2 ${
-                current ? "border-accent/30 bg-accent/10" : "border-stone-800/70 bg-black/15"
+                current ? "border-accent/30 bg-accent/10" : "border-slate-200 bg-slate-50"
               }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="min-w-0 truncate text-xs font-medium text-stone-200">
+                <p className="min-w-0 truncate text-xs font-medium text-slate-900">
                   {senderName(message.from)}
                 </p>
-                <time className="shrink-0 text-[10px] tabular-nums text-stone-400">
+                <time className="shrink-0 text-[10px] tabular-nums text-slate-500">
                   {formatFull(message.date)}
                 </time>
               </div>
-              <p className="mt-1 truncate text-[11px] text-stone-500">
+              <p className="mt-1 truncate text-[11px] text-slate-400">
                 {message.summary || message.snippet || message.subject || "No summary"}
               </p>
               {message.actionItems.length > 0 && (
@@ -1152,13 +1152,13 @@ function ReplyDraftBox({
   const quickIntents = buildQuickReplyIntents(candidateProfile, mode);
 
   return (
-    <section className="mt-5 rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
+    <section className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-stone-300">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
             Reply draft
           </h2>
-          <p className="mt-1 text-xs text-stone-500">
+          <p className="mt-1 text-xs text-slate-400">
             Klorn drafts it. You approve before anything is sent.
           </p>
         </div>
@@ -1166,7 +1166,7 @@ function ReplyDraftBox({
           type="button"
           onClick={onGenerate}
           disabled={drafting}
-          className="rounded-lg border border-orange-500/30 px-3 py-1.5 text-xs text-accent-muted transition hover:bg-orange-500/10 disabled:opacity-50"
+          className="rounded-lg border border-sky-500/30 px-3 py-1.5 text-xs text-accent-muted transition hover:bg-sky-500/10 disabled:opacity-50"
         >
           {drafting ? "Drafting..." : draft ? "Regenerate" : "Draft reply"}
         </button>
@@ -1175,7 +1175,7 @@ function ReplyDraftBox({
         value={intent}
         onChange={(e) => onIntentChange(e.target.value)}
         placeholder="Example: confirm the profile was reviewed and ask for next audition availability"
-        className="mb-3 w-full rounded-lg border border-stone-700/60 bg-black/20 px-3 py-2 text-xs text-stone-300 placeholder-stone-600 outline-none transition focus:border-orange-500/40"
+        className="mb-3 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 placeholder-slate-400 outline-none transition focus:border-sky-500/40"
       />
       <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
         {WORK_MODE_OPTIONS.map((option) => (
@@ -1186,7 +1186,7 @@ function ReplyDraftBox({
             className={`h-8 shrink-0 rounded-full border px-3 text-[11px] transition ${
               mode === option.value
                 ? "border-accent/45 bg-accent/15 text-accent-muted"
-                : "border-stone-700/60 bg-black/15 text-stone-400 hover:border-stone-600"
+                : "border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300"
             }`}
           >
             {option.label}
@@ -1200,7 +1200,7 @@ function ReplyDraftBox({
               key={item.label}
               type="button"
               onClick={() => onIntentChange(item.intent)}
-              className="rounded-full border border-stone-700/60 bg-black/15 px-3 py-1.5 text-[11px] text-stone-300 transition hover:border-[#a8a29e]/35 hover:bg-[#a8a29e]/10 hover:text-stone-200"
+              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500 transition hover:border-[#a8a29e]/35 hover:bg-[#a8a29e]/10 hover:text-slate-900"
             >
               {item.label}
             </button>
@@ -1211,23 +1211,23 @@ function ReplyDraftBox({
         <div className="space-y-2">
           <div className="grid gap-2 text-xs sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-400">
+              <span className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">
                 To
               </span>
               <input
                 value={draft.to}
                 onChange={(e) => onDraftChange({ ...draft, to: e.target.value })}
-                className="w-full rounded border border-stone-700/60 bg-black/20 px-2 py-1.5 text-stone-300 outline-none focus:border-orange-500/40"
+                className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-slate-500 outline-none focus:border-sky-500/40"
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-400">
+              <span className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">
                 Subject
               </span>
               <input
                 value={draft.subject}
                 onChange={(e) => onDraftChange({ ...draft, subject: e.target.value })}
-                className="w-full rounded border border-stone-700/60 bg-black/20 px-2 py-1.5 text-stone-300 outline-none focus:border-orange-500/40"
+                className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-slate-500 outline-none focus:border-sky-500/40"
               />
             </label>
           </div>
@@ -1235,28 +1235,28 @@ function ReplyDraftBox({
             value={draft.body}
             onChange={(e) => onDraftChange({ ...draft, body: e.target.value })}
             rows={7}
-            className="w-full rounded-lg border border-stone-700/60 bg-black/20 px-3 py-2 text-sm leading-6 text-stone-200 outline-none focus:border-orange-500/40"
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-900 outline-none focus:border-sky-500/40"
           />
           {attachments.length > 0 && (
-            <div className="space-y-2 rounded-lg border border-stone-800/70 bg-black/15 px-3 py-2">
+            <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
               <label className="flex cursor-pointer items-start gap-2 rounded border border-accent/15 bg-accent/5 px-2 py-1.5">
                 <input
                   type="checkbox"
                   checked={includeBriefAttachment}
                   onChange={(e) => onIncludeBriefAttachmentChange(e.target.checked)}
-                  className="mt-0.5 h-3.5 w-3.5 rounded border-stone-600 bg-stone-900 text-accent-light focus:ring-accent-light focus:ring-offset-stone-950"
+                  className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 bg-white text-accent-light focus:ring-accent-light focus:ring-offset-white"
                 />
                 <span>
                   <span className="block text-[11px] font-medium text-accent-muted">
                     Attach the attachment analysis brief
                   </span>
-                  <span className="mt-0.5 block text-[10px] leading-4 text-stone-500">
+                  <span className="mt-0.5 block text-[10px] leading-4 text-slate-400">
                     Converts the candidate card, key points, and extracted fields into a txt brief.
                   </span>
                 </span>
               </label>
               <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-stone-400">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
                   Save original attachments too
                 </span>
                 <button
@@ -1268,7 +1268,7 @@ function ReplyDraftBox({
                         : attachments.map((attachment) => attachment.id),
                     )
                   }
-                  className="text-[11px] text-[#a8a29e] transition hover:text-stone-300"
+                  className="text-[11px] text-[#a8a29e] transition hover:text-slate-500"
                 >
                   {selectedCount === attachments.length ? "Clear all" : "Select all"}
                 </button>
@@ -1277,18 +1277,18 @@ function ReplyDraftBox({
                 {attachments.map((attachment) => (
                   <label
                     key={attachment.id}
-                    className="flex min-w-0 cursor-pointer items-center gap-2 rounded border border-stone-800/70 bg-stone-950/35 px-2 py-1.5 transition hover:border-[#a8a29e]/25"
+                    className="flex min-w-0 cursor-pointer items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1.5 transition hover:border-[#a8a29e]/25"
                   >
                     <input
                       type="checkbox"
                       checked={selectedAttachmentIds.includes(attachment.id)}
                       onChange={() => toggleAttachment(attachment.id)}
-                      className="h-3.5 w-3.5 rounded border-stone-600 bg-stone-900 text-[#a8a29e] focus:ring-[#a8a29e] focus:ring-offset-stone-950"
+                      className="h-3.5 w-3.5 rounded border-slate-300 bg-white text-[#a8a29e] focus:ring-[#a8a29e] focus:ring-offset-white"
                     />
-                    <span className="min-w-0 flex-1 truncate text-[11px] text-stone-400">
+                    <span className="min-w-0 flex-1 truncate text-[11px] text-slate-500">
                       {attachment.filename}
                     </span>
-                    <span className="shrink-0 text-[10px] text-stone-400">
+                    <span className="shrink-0 text-[10px] text-slate-500">
                       {formatBytes(attachment.size)}
                     </span>
                   </label>
@@ -1312,7 +1312,7 @@ function ReplyDraftBox({
                 type="button"
                 onClick={onSaveGmailDraft}
                 disabled={savingGmailDraft || !draft.to || !draft.subject || !draft.body}
-                className="rounded-lg border border-[#a8a29e]/30 px-3 py-1.5 text-xs font-medium text-stone-300 transition hover:bg-[#a8a29e]/10 disabled:opacity-50"
+                className="rounded-lg border border-[#a8a29e]/30 px-3 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-[#a8a29e]/10 disabled:opacity-50"
               >
                 {savingGmailDraft
                   ? "Saving..."
@@ -1348,8 +1348,8 @@ function KlornAnalysis({
 
   if (!hasAnything) {
     return (
-      <section className="rounded-lg border border-stone-700/45 bg-stone-950/35 p-4">
-        <p className="text-xs text-stone-500">
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <p className="text-xs text-slate-400">
           Klorn has not analyzed this email yet. Sync, then check again shortly.
         </p>
       </section>
@@ -1357,7 +1357,7 @@ function KlornAnalysis({
   }
 
   return (
-    <section className="relative overflow-hidden rounded-lg border border-amber-300/20 bg-amber-300/5 p-4">
+    <section className="relative overflow-hidden rounded-lg border border-sky-300/20 bg-sky-300/5 p-4">
       <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-transparent via-accent to-transparent" />
       <div className="pl-2">
         <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -1376,16 +1376,16 @@ function KlornAnalysis({
           />
         </div>
 
-        {email.summary && <p className="text-sm leading-relaxed text-stone-200">{email.summary}</p>}
+        {email.summary && <p className="text-sm leading-relaxed text-slate-900">{email.summary}</p>}
 
         {email.keyPoints.length > 0 && (
           <div className="mt-3">
-            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-stone-500">
+            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-slate-400">
               Key points
             </p>
             <ul className="space-y-1">
               {email.keyPoints.map((k, i) => (
-                <li key={i} className="flex gap-1.5 text-xs text-stone-300">
+                <li key={i} className="flex gap-1.5 text-xs text-slate-500">
                   <span className="text-accent/75">•</span>
                   <span>{k}</span>
                 </li>
@@ -1452,7 +1452,7 @@ function ActionItemsPanel({ emailId, actionItems }: { emailId: string; actionIte
   return (
     <div className="mt-3">
       <div className="flex items-center justify-between mb-1.5">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-stone-500">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
           Action items
         </p>
         {!allCreated && (
@@ -1473,7 +1473,7 @@ function ActionItemsPanel({ emailId, actionItems }: { emailId: string; actionIte
               {created.has(i) ? "✓" : "□"}
             </span>
             <span
-              className={`flex-1 ${created.has(i) ? "text-stone-500 line-through" : "text-stone-300"}`}
+              className={`flex-1 ${created.has(i) ? "text-slate-400 line-through" : "text-slate-500"}`}
             >
               {a}
             </span>
@@ -1482,7 +1482,7 @@ function ActionItemsPanel({ emailId, actionItems }: { emailId: string; actionIte
                 type="button"
                 onClick={() => createTask(i)}
                 disabled={creating !== null}
-                className="shrink-0 text-[10px] px-1.5 py-0.5 rounded border border-stone-700/50 text-stone-500 hover:text-stone-300 hover:border-stone-600 transition disabled:opacity-40"
+                className="shrink-0 text-[10px] px-1.5 py-0.5 rounded border border-slate-200 text-slate-400 hover:text-slate-500 hover:border-slate-300 transition disabled:opacity-40"
               >
                 {creating === i ? "…" : "+ task"}
               </button>
@@ -1569,7 +1569,7 @@ function LabelFeedbackControl({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-[11px] text-stone-500 underline-offset-2 hover:text-stone-300 hover:underline"
+        className="text-[11px] text-slate-400 underline-offset-2 hover:text-slate-500 hover:underline"
       >
         Wrong label
       </button>
@@ -1582,14 +1582,14 @@ function LabelFeedbackControl({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[11px] text-stone-500">Actual priority:</span>
+      <span className="text-[11px] text-slate-400">Actual priority:</span>
       {options.map((p) => (
         <button
           key={p}
           type="button"
           onClick={() => submit(p)}
           disabled={!!submitting}
-          className="rounded border border-stone-700 px-1.5 py-0.5 text-[11px] text-stone-200 transition hover:bg-stone-800 disabled:opacity-50"
+          className="rounded border border-slate-200 px-1.5 py-0.5 text-[11px] text-slate-900 transition hover:bg-slate-100 disabled:opacity-50"
         >
           {submitting === p ? "..." : PRIORITY_LABELS[p]}
         </button>
@@ -1601,7 +1601,7 @@ function LabelFeedbackControl({
           setError(null);
         }}
         disabled={!!submitting}
-        className="text-[11px] text-stone-500 hover:text-stone-300"
+        className="text-[11px] text-slate-400 hover:text-slate-500"
       >
         Cancel
       </button>
@@ -1668,9 +1668,9 @@ function ReplyNeededFeedbackControl({ emailId }: { emailId: string }) {
   ];
 
   return (
-    <div className="mt-4 border-t border-orange-500/10 pt-3">
+    <div className="mt-4 border-t border-sky-500/10 pt-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] text-stone-500">Reply-needed judgment:</span>
+        <span className="text-[11px] text-slate-400">Reply-needed judgment:</span>
         {options.map((option) => {
           const selected = feedback?.choice === option.choice;
           return (
@@ -1683,7 +1683,7 @@ function ReplyNeededFeedbackControl({ emailId }: { emailId: string }) {
               className={`h-7 rounded-lg border px-2 text-[11px] transition disabled:opacity-50 ${
                 selected
                   ? "border-accent bg-accent/10 text-accent-muted"
-                  : "border-stone-700 text-stone-400 hover:bg-stone-800"
+                  : "border-slate-200 text-slate-500 hover:bg-slate-100"
               }`}
             >
               {submitting === option.choice ? "..." : option.label}
@@ -1700,7 +1700,7 @@ function PriorityPill({ priority }: { priority: EmailDetail["priority"] }) {
   if (priority === "NORMAL") return null;
   const styles = {
     URGENT: "bg-red-500/15 text-red-300 border-red-500/30",
-    LOW: "bg-stone-900 text-stone-500 border-stone-800",
+    LOW: "bg-slate-100 text-slate-400 border-slate-200",
   };
   const labels = { URGENT: "Urgent", LOW: "Low" };
   return (
@@ -1715,7 +1715,7 @@ function PriorityPill({ priority }: { priority: EmailDetail["priority"] }) {
 function CategoryPill({ category }: { category: string }) {
   const label = categoryLabel(category);
   return (
-    <span className="rounded border border-stone-700 bg-stone-900/60 px-1.5 py-0.5 text-[10px] text-stone-400">
+    <span className="rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">
       {label}
     </span>
   );

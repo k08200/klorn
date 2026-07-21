@@ -28,21 +28,21 @@ export function OAuthErrorBanner() {
     <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/5 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-red-300">
+          <h3 className="text-sm font-semibold text-red-600">
             Gmail offline access wasn't granted
           </h3>
-          <p className="mt-1 text-[13px] leading-5 text-stone-300">
+          <p className="mt-1 text-[13px] leading-5 text-slate-500">
             Google returned a short-lived token without the refresh permission Klorn needs to keep
             syncing in the background. This is almost always one of two things:
           </p>
-          <ul className="mt-2 space-y-1 text-[13px] leading-5 text-stone-400">
+          <ul className="mt-2 space-y-1 text-[13px] leading-5 text-slate-500">
             <li>
-              <span className="text-stone-200">Workspace policy</span> — your IT admin restricts
+              <span className="text-slate-900">Workspace policy</span> — your IT admin restricts
               third-party apps from offline Gmail access. Ask them to allow Klorn's OAuth client ID,
               then reconnect below.
             </li>
             <li>
-              <span className="text-stone-200">Missing scope on consent</span> — the Google consent
+              <span className="text-slate-900">Missing scope on consent</span> — the Google consent
               screen didn't grant all Gmail permissions. Reconnect and make sure every checkbox is
               selected.
             </li>
@@ -51,14 +51,14 @@ export function OAuthErrorBanner() {
             <button
               type="button"
               onClick={() => void startGoogleConnect()}
-              className="rounded-lg bg-amber-300 px-3 py-1.5 text-[12px] font-medium text-stone-950 transition hover:bg-amber-200"
+              className="rounded-lg bg-sky-500 px-3 py-1.5 text-[12px] font-medium text-white transition hover:bg-sky-500"
             >
               Reconnect Google
             </button>
             <button
               type="button"
               onClick={() => setDismissed(true)}
-              className="rounded-lg border border-stone-700 px-3 py-1.5 text-[12px] text-stone-400 transition hover:text-stone-200"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] text-slate-500 transition hover:text-slate-900"
             >
               Dismiss
             </button>

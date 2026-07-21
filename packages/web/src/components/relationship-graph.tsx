@@ -48,7 +48,7 @@ export const TIER_COLORS: Record<string, string> = {
 };
 
 // Relationship-signal colours (not part of the 4-tier system).
-const SELF_COLOR = "#fbbf24"; // you (== --color-accent)
+const SELF_COLOR = "#0ea5e9"; // you (== --color-accent)
 const FEATURE_COLOR = "#a78bfa"; // a scored input feature (violet)
 const OVERDUE_COLOR = "#fb7185"; // waiting on a reply (reuses PUSH rose)
 const MEETING_COLOR = "#f59e0b"; // meeting coming up
@@ -193,7 +193,7 @@ export function RelationshipGraph({ nodes, edges }: { nodes: GraphNode[]; edges:
 
   if (nodes.length <= 1) {
     return (
-      <p className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6 text-sm text-stone-400">
+      <p className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
         No relationships yet — the graph fills in as mail and calendar activity accrues.
       </p>
     );
@@ -202,7 +202,7 @@ export function RelationshipGraph({ nodes, edges }: { nodes: GraphNode[]; edges:
   return (
     <svg
       viewBox={viewBox}
-      className="h-[70vh] w-full rounded-2xl border border-stone-700/45 bg-stone-950/40"
+      className="h-[70vh] w-full rounded-2xl border border-slate-200 bg-slate-50"
       role="img"
       aria-label="Relationship graph of your contacts"
     >
@@ -235,7 +235,7 @@ export function RelationshipGraph({ nodes, edges }: { nodes: GraphNode[]; edges:
               x={p.x}
               y={p.y - r - 3}
               textAnchor="middle"
-              className="fill-stone-300"
+              className="fill-slate-600"
               style={{ fontSize: n.kind === "self" || n.kind === "tier" ? 12 : 10 }}
             >
               {n.label.length > 42 ? `${n.label.slice(0, 41)}…` : n.label}

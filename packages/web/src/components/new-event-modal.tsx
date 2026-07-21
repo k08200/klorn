@@ -12,7 +12,7 @@ import { apiFetch } from "../lib/api";
  */
 
 const inputClass =
-  "w-full rounded-md border border-white/10 bg-stone-950/60 px-3 py-2 text-sm text-stone-100 outline-none transition placeholder:text-stone-400 focus:border-accent/45 disabled:opacity-60";
+  "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-accent/45 disabled:opacity-60";
 
 function getFocusableElements(root: HTMLElement | null): HTMLElement[] {
   if (!root) return [];
@@ -176,12 +176,12 @@ export function NewEventModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={headingId}
-        className="relative w-full max-w-md animate-slide-up rounded-t-2xl border border-stone-700 bg-[#141414] p-5 shadow-2xl shadow-black/60 md:rounded-2xl"
+        className="relative w-full max-w-md animate-slide-up rounded-t-2xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-900/10 md:rounded-2xl"
       >
-        <h2 id={headingId} className="text-base font-semibold text-stone-100">
+        <h2 id={headingId} className="text-base font-semibold text-slate-900">
           New event
         </h2>
-        <p className="mt-1 text-xs text-stone-500">
+        <p className="mt-1 text-xs text-slate-400">
           Created in your Google Calendar and synced back here.
         </p>
 
@@ -193,7 +193,7 @@ export function NewEventModal({
           }}
         >
           <div>
-            <label htmlFor={`${headingId}-title`} className="mb-1 block text-xs text-stone-400">
+            <label htmlFor={`${headingId}-title`} className="mb-1 block text-xs text-slate-500">
               Title
             </label>
             <input
@@ -211,7 +211,7 @@ export function NewEventModal({
 
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-1">
-              <label htmlFor={`${headingId}-date`} className="mb-1 block text-xs text-stone-400">
+              <label htmlFor={`${headingId}-date`} className="mb-1 block text-xs text-slate-500">
                 Date
               </label>
               <input
@@ -224,7 +224,7 @@ export function NewEventModal({
               />
             </div>
             <div>
-              <label htmlFor={`${headingId}-start`} className="mb-1 block text-xs text-stone-400">
+              <label htmlFor={`${headingId}-start`} className="mb-1 block text-xs text-slate-500">
                 Starts
               </label>
               <input
@@ -241,7 +241,7 @@ export function NewEventModal({
               />
             </div>
             <div>
-              <label htmlFor={`${headingId}-end`} className="mb-1 block text-xs text-stone-400">
+              <label htmlFor={`${headingId}-end`} className="mb-1 block text-xs text-slate-500">
                 Ends
               </label>
               <input
@@ -255,12 +255,12 @@ export function NewEventModal({
             </div>
           </div>
           {!startsBeforeEnds && (
-            <p className="text-xs text-red-400">End time must be after the start time.</p>
+            <p className="text-xs text-red-600">End time must be after the start time.</p>
           )}
 
           <div>
-            <label htmlFor={`${headingId}-location`} className="mb-1 block text-xs text-stone-400">
-              Location <span className="text-stone-600">(optional)</span>
+            <label htmlFor={`${headingId}-location`} className="mb-1 block text-xs text-slate-500">
+              Location <span className="text-slate-400">(optional)</span>
             </label>
             <input
               id={`${headingId}-location`}
@@ -275,7 +275,7 @@ export function NewEventModal({
           </div>
 
           {error && (
-            <p className="rounded-md border border-red-900/60 bg-red-950/30 px-3 py-2 text-xs text-red-300">
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
               {error}
             </p>
           )}
@@ -285,7 +285,7 @@ export function NewEventModal({
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="min-h-10 rounded-md border border-stone-700 px-4 text-sm text-stone-300 transition hover:bg-stone-800 disabled:opacity-50"
+              className="min-h-10 rounded-md border border-slate-200 px-4 text-sm text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
             >
               Cancel
             </button>

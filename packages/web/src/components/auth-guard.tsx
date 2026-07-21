@@ -55,7 +55,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         aria-live="polite"
       >
         <div
-          className="w-6 h-6 border-2 border-amber-300 border-t-transparent rounded-full animate-spin"
+          className="w-6 h-6 border-2 border-sky-300 border-t-transparent rounded-full animate-spin"
           aria-hidden="true"
         />
         <span className="sr-only">Checking session...</span>
@@ -153,23 +153,23 @@ function ApiOfflineScreen() {
       role="status"
       aria-live="polite"
     >
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-300">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-600">
         Connection issue
       </p>
-      <h1 className="mt-3 text-2xl font-semibold text-stone-50">
+      <h1 className="mt-3 text-2xl font-semibold text-slate-900">
         {exhausted ? "Couldn't reach the API." : "Waking the API up…"}
       </h1>
-      <p className="mt-3 text-sm leading-6 text-stone-400">
+      <p className="mt-3 text-sm leading-6 text-slate-500">
         {exhausted
           ? "Render free tier may be down. Your session is still saved — tap Retry to try again, or check Render."
           : `First request after idle wakes the server (≈${totalSec}s). Your session is still saved.`}
       </p>
 
       {!exhausted && (
-        <div className="mt-5 flex items-center gap-3 text-xs text-stone-500">
+        <div className="mt-5 flex items-center gap-3 text-xs text-slate-400">
           <span
             aria-hidden="true"
-            className="h-4 w-4 animate-spin rounded-full border-2 border-amber-300 border-t-transparent"
+            className="h-4 w-4 animate-spin rounded-full border-2 border-sky-300 border-t-transparent"
           />
           <span className="tabular-nums">
             Attempt {attempt + 1} / {ATTEMPT_DELAYS_MS.length} · {elapsedSec}s elapsed
@@ -181,7 +181,7 @@ function ApiOfflineScreen() {
         <button
           type="button"
           onClick={retryNow}
-          className="mt-6 inline-flex min-h-11 items-center rounded-md bg-amber-300 px-5 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
+          className="mt-6 inline-flex min-h-11 items-center rounded-md bg-sky-500 px-5 text-sm font-semibold text-stone-950 transition hover:bg-sky-200"
         >
           Retry
         </button>

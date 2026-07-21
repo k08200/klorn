@@ -61,7 +61,7 @@ function VerifyEmailContent() {
       <div className="flex h-screen flex-col items-center justify-center gap-4 bg-surface-app">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
         {status === "verifying" && (
-          <p className="text-sm text-stone-400" aria-live="polite">
+          <p className="text-sm text-slate-500" aria-live="polite">
             Verifying your email…
           </p>
         )}
@@ -87,17 +87,17 @@ function VerifyEmailContent() {
             : "The link is expired or invalid. Sign in again and request a new verification email."
       }
       footer={
-        <Link href="/login" className="transition hover:text-stone-300">
+        <Link href="/login" className="transition hover:text-slate-900">
           Back to login
         </Link>
       }
     >
       <div className="space-y-4">
-        <div className="rounded-md border border-stone-700/60 bg-black/20 p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-stone-500">
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
             Next step
           </p>
-          <p className="mt-2 text-sm leading-6 text-stone-300">
+          <p className="mt-2 text-sm leading-6 text-slate-500">
             {status === "sent"
               ? "Open the Klorn verification email and follow the link. You can return to the decision queue after verification."
               : status === "pending"
@@ -110,14 +110,14 @@ function VerifyEmailContent() {
           <button
             type="button"
             onClick={resend}
-            className="flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
+            className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-stone-950 transition hover:bg-sky-200"
           >
             {status === "sent" ? "Resend again" : "Resend verification email"}
           </button>
         ) : (
           <Link
             href="/login"
-            className="flex h-11 w-full items-center justify-center rounded-md border border-stone-700 bg-stone-900/70 text-sm font-semibold text-stone-100 transition hover:border-stone-500"
+            className="flex h-11 w-full items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-900 transition hover:border-slate-300"
           >
             Back to login
           </Link>

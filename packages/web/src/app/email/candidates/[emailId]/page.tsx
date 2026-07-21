@@ -145,14 +145,14 @@ function CandidateDetailView() {
       <div className="mb-4 flex flex-wrap gap-2">
         <Link
           href="/email/candidates"
-          className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 hover:border-accent/35 hover:text-accent-dim"
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500 hover:border-accent/35 hover:text-accent-dim"
         >
           Candidate queue
         </Link>
         {email && (
           <Link
             href={`/email/${email.id}`}
-            className="rounded-lg border border-stone-700/60 px-3 py-1.5 text-xs text-stone-300 hover:border-accent/35 hover:text-accent-dim"
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500 hover:border-accent/35 hover:text-accent-dim"
           >
             Source email
           </Link>
@@ -172,16 +172,16 @@ function CandidateDetailView() {
 
       {email && profile && (
         <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
-          <section className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-5">
+          <section className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-light/80">
                   Candidate CRM
                 </p>
-                <h1 className="mt-2 text-2xl font-semibold text-stone-50">
+                <h1 className="mt-2 text-2xl font-semibold text-slate-900">
                   {[profile.name || "Unknown name", profile.role].filter(Boolean).join(" · ")}
                 </h1>
-                <p className="mt-2 text-sm leading-6 text-stone-400">{profile.summary}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">{profile.summary}</p>
               </div>
               <span className="rounded border border-accent-light/25 bg-accent-light/10 px-2 py-1 text-xs text-accent-muted">
                 {Math.round(profile.confidence * 100)}%
@@ -212,17 +212,17 @@ function CandidateDetailView() {
             )}
 
             <div className="mt-5 space-y-2">
-              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                 Evidence files
               </h2>
               {profile.evidenceFiles.map((file) => (
                 <div
                   key={file.filename}
-                  className="rounded-lg border border-stone-800/70 bg-black/15 px-3 py-2"
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-medium text-stone-200">{file.filename}</span>
-                    <span className="text-[10px] text-stone-400">
+                    <span className="text-xs font-medium text-slate-900">{file.filename}</span>
+                    <span className="text-[10px] text-slate-500">
                       {file.category || "document"} · {file.analysisStatus}
                     </span>
                     {file.needsManualReview && (
@@ -230,15 +230,15 @@ function CandidateDetailView() {
                     )}
                   </div>
                   {file.summary && (
-                    <p className="mt-1 text-[11px] leading-5 text-stone-500">{file.summary}</p>
+                    <p className="mt-1 text-[11px] leading-5 text-slate-400">{file.summary}</p>
                   )}
                 </div>
               ))}
             </div>
           </section>
 
-          <aside className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-4">
-            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-stone-300">
+          <aside className="rounded-xl border border-slate-200 bg-white p-4">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
               Review status
             </h2>
             <div className="mt-3 grid gap-2">
@@ -251,7 +251,7 @@ function CandidateDetailView() {
                   className={`rounded-lg border px-3 py-2 text-left text-xs transition disabled:opacity-50 ${
                     email.candidateIntake?.status === status.value
                       ? "border-accent-light/45 bg-accent-light/10 text-accent-dim"
-                      : "border-stone-700/55 text-stone-400 hover:border-accent/30 hover:text-accent-dim"
+                      : "border-slate-200 text-slate-500 hover:border-accent/30 hover:text-accent-dim"
                   }`}
                 >
                   {status.label}
@@ -259,14 +259,14 @@ function CandidateDetailView() {
               ))}
             </div>
             <label className="mt-4 block">
-              <span className="mb-1 block text-[10px] uppercase tracking-wider text-stone-400">
+              <span className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">
                 Notes
               </span>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={6}
-                className="w-full rounded-lg border border-stone-700/60 bg-black/20 px-3 py-2 text-xs leading-5 text-stone-300 outline-none focus:border-accent/40"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-500 outline-none focus:border-accent/40"
               />
             </label>
             <button
@@ -277,20 +277,20 @@ function CandidateDetailView() {
             >
               {saving ? "Saving..." : "Save notes"}
             </button>
-            <div className="mt-4 rounded-lg border border-stone-800/70 bg-black/15 px-3 py-2">
-              <p className="text-xs text-stone-300">{email.subject || "Untitled"}</p>
-              <p className="mt-1 text-[11px] text-stone-400">{email.from}</p>
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-xs text-slate-500">{email.subject || "Untitled"}</p>
+              <p className="mt-1 text-[11px] text-slate-500">{email.from}</p>
             </div>
           </aside>
         </section>
       )}
       {email && !profile && !loading && (
-        <section className="rounded-xl border border-stone-700/45 bg-stone-950/35 p-6">
+        <section className="rounded-xl border border-slate-200 bg-white p-6">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-light/80">
             Candidate CRM
           </p>
-          <h1 className="mt-2 text-2xl font-semibold text-stone-50">No candidate profile yet</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
+          <h1 className="mt-2 text-2xl font-semibold text-slate-900">No candidate profile yet</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
             Klorn found this message, but the attachments have not produced a structured profile.
             Open the source email, reanalyze attachments, or add notes while the review state is
             still clear.
@@ -304,14 +304,14 @@ function CandidateDetailView() {
             </Link>
             <Link
               href="/email/candidates"
-              className="inline-flex min-h-11 items-center rounded-lg border border-stone-700/60 px-4 text-sm text-stone-300 hover:border-accent/35 hover:text-accent-dim"
+              className="inline-flex min-h-11 items-center rounded-lg border border-slate-200 px-4 text-sm text-slate-500 hover:border-accent/35 hover:text-accent-dim"
             >
               Back to queue
             </Link>
           </div>
-          <div className="mt-5 rounded-lg border border-stone-800/70 bg-black/15 px-3 py-2">
-            <p className="text-xs text-stone-300">{email.subject || "Untitled"}</p>
-            <p className="mt-1 text-[11px] text-stone-400">{email.from}</p>
+          <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <p className="text-xs text-slate-500">{email.subject || "Untitled"}</p>
+            <p className="mt-1 text-[11px] text-slate-500">{email.from}</p>
           </div>
         </section>
       )}
@@ -321,9 +321,9 @@ function CandidateDetailView() {
 
 function Fact({ label, value }: { label: string; value: string | null }) {
   return (
-    <div className="rounded-lg border border-stone-800/70 bg-black/15 px-3 py-2">
-      <p className="text-[10px] uppercase tracking-wider text-stone-400">{label}</p>
-      <p className="mt-1 truncate text-sm text-stone-200">{value || "-"}</p>
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+      <p className="text-[10px] uppercase tracking-wider text-slate-500">{label}</p>
+      <p className="mt-1 truncate text-sm text-slate-900">{value || "-"}</p>
     </div>
   );
 }
@@ -331,12 +331,12 @@ function Fact({ label, value }: { label: string; value: string | null }) {
 function ChipBlock({ title, values }: { title: string; values: string[] }) {
   return (
     <div className="mt-5">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">{title}</h2>
+      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{title}</h2>
       <div className="mt-2 flex flex-wrap gap-2">
         {values.map((value) => (
           <span
             key={value}
-            className="rounded-full border border-stone-700/60 bg-black/15 px-2 py-1 text-xs text-stone-300"
+            className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-500"
           >
             {value}
           </span>

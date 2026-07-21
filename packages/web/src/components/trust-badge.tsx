@@ -45,8 +45,8 @@ export const BADGE_META: Record<TrustBadge, BadgeStyle> = {
   },
   unknown: {
     label: "Unknown",
-    chip: "text-stone-500 bg-stone-800/40 border-stone-700",
-    dot: "bg-stone-600",
+    chip: "text-slate-400 bg-slate-100 border-slate-200",
+    dot: "bg-slate-400",
   },
 };
 

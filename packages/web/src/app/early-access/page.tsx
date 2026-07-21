@@ -102,14 +102,14 @@ export default function EarlyAccessPage() {
         <span>
           <Link
             href="/privacy"
-            className="inline-flex min-h-10 items-center px-1 transition hover:text-stone-300"
+            className="inline-flex min-h-10 items-center px-1 transition hover:text-slate-500"
           >
             Privacy
           </Link>
-          <span className="mx-2 text-stone-700">/</span>
+          <span className="mx-2 text-slate-300">/</span>
           <Link
             href="/terms"
-            className="inline-flex min-h-10 items-center px-1 transition hover:text-stone-300"
+            className="inline-flex min-h-10 items-center px-1 transition hover:text-slate-500"
           >
             Terms
           </Link>
@@ -118,20 +118,20 @@ export default function EarlyAccessPage() {
     >
       {isDone ? (
         <div>
-          <div className="rounded-md border border-amber-300/25 bg-amber-300/10 p-4">
-            <h2 className="text-base font-semibold text-white">
+          <div className="rounded-md border border-sky-300/25 bg-sky-300/10 p-4">
+            <h2 className="text-base font-semibold text-slate-900">
               {status === "already"
                 ? "You're already on the list"
                 : "Request received — here's what's next"}
             </h2>
-            <p className="mt-2 text-sm leading-6 text-stone-300">
+            <p className="mt-2 text-sm leading-6 text-slate-500">
               {status === "already" ? (
                 <>
                   Your previous request is still in the queue. If it's been more than a few hours
                   and you haven't heard back, email{" "}
                   <a
                     href="mailto:k0820086@gmail.com"
-                    className="underline decoration-stone-600 underline-offset-2 hover:text-stone-200"
+                    className="underline decoration-stone-600 underline-offset-2 hover:text-slate-900"
                   >
                     k0820086@gmail.com
                   </a>{" "}
@@ -140,13 +140,13 @@ export default function EarlyAccessPage() {
               ) : (
                 <>
                   I'll add you to Google Cloud Console as a test user{" "}
-                  <span className="font-medium text-stone-100">within 5 minutes</span> if I'm awake
+                  <span className="font-medium text-slate-900">within 5 minutes</span> if I'm awake
                   (KST), otherwise within a few hours. You'll get an email from{" "}
-                  <span className="font-mono text-stone-100">noreply@klorn.ai</span> the moment
+                  <span className="font-mono text-slate-900">noreply@klorn.ai</span> the moment
                   you're approved — then{" "}
                   <Link
                     href="/login"
-                    className="underline decoration-amber-400/60 underline-offset-2 hover:text-amber-100"
+                    className="underline decoration-sky-400/60 underline-offset-2 hover:text-sky-100"
                   >
                     Log in
                   </Link>{" "}
@@ -158,13 +158,13 @@ export default function EarlyAccessPage() {
           <div className="mt-5 grid grid-cols-2 gap-3">
             <Link
               href="/"
-              className="flex min-h-11 items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
+              className="flex min-h-11 items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-stone-950 transition hover:bg-sky-200"
             >
               Back home
             </Link>
             <Link
               href="/login"
-              className="flex min-h-11 items-center justify-center rounded-md border border-stone-700 text-sm text-stone-300 transition hover:border-stone-500"
+              className="flex min-h-11 items-center justify-center rounded-md border border-slate-200 text-sm text-slate-500 transition hover:border-slate-200"
             >
               Log in after approval
             </Link>
@@ -214,7 +214,7 @@ export default function EarlyAccessPage() {
               rows={3}
               placeholder="Example: 50+ emails/day, follow-ups, meeting prep."
             />
-            <p className="mt-2 text-xs leading-5 text-stone-500">
+            <p className="mt-2 text-xs leading-5 text-slate-400">
               This helps us understand which workflow to tune first.
             </p>
           </div>
@@ -231,23 +231,23 @@ export default function EarlyAccessPage() {
           <button
             type="submit"
             disabled={status === "submitting"}
-            className="flex h-11 w-full items-center justify-center rounded-md bg-amber-300 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-800 disabled:text-stone-500"
+            className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-white shadow-lg shadow-sky-500/30 transition-all hover:bg-sky-600 hover:shadow-xl hover:shadow-sky-500/40 hover:-translate-y-px active:translate-y-0 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
           >
             {status === "submitting" ? "Submitting..." : "Request early access"}
           </button>
 
-          <p className="text-xs leading-5 text-stone-500">
+          <p className="text-xs leading-5 text-slate-400">
             By applying, you agree to the{" "}
             <Link
               href="/privacy"
-              className="inline-flex min-h-10 items-center underline hover:text-stone-300"
+              className="inline-flex min-h-10 items-center underline hover:text-slate-500"
             >
               Privacy Policy
             </Link>{" "}
             and{" "}
             <Link
               href="/terms"
-              className="inline-flex min-h-10 items-center underline hover:text-stone-300"
+              className="inline-flex min-h-10 items-center underline hover:text-slate-500"
             >
               Terms
             </Link>
