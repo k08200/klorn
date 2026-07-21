@@ -8,6 +8,26 @@ in code).
 
 ---
 
+## 🔦 Pre-submission scan — verified 2026-07-21 (greenlight-style)
+
+Audited the code against the Apple review categories a pre-submission scanner
+checks (IAP policy, privacy manifest + data declarations, required login +
+account-deletion flow, permission strings, binary settings, real user flows).
+**All code-level items PASS.** Remaining blockers are founder-ops only.
+
+| Apple guideline | Status | Evidence |
+|---|---|---|
+| **3.1.1 IAP** (no external purchase in-app) | ✅ PASS | `subscription-section.tsx` / `billing/page.tsx` gate on `isNativePlatform()` — iOS uses RevenueCat IAP; Stripe/Paddle web checkout + portal are hidden on native. |
+| **5.1.1(v) account deletion** | ✅ PASS | `settings/page.tsx` "Delete account" → `DELETE /api/auth/account` (self-service, reachable in the shell). |
+| **4.8 Sign in with Apple** | ✅ EXEMPT | The app offers its own email/password account setup alongside Google, satisfying 4.8's "another login service." SIWA is **optional** de-risking, not required. |
+| **Privacy manifest / ITMS-91053** | ✅ PASS | `PrivacyInfo.xcprivacy` declares tracking=false, email + user-content data types (app functionality), UserDefaults required-reason (CA92.1). Must be added to target membership (see B.3) + match the App Privacy questionnaire. |
+| **Permission usage strings** | ✅ PASS | `Info.plist` has `NSMicrophoneUsageDescription` + `NSSpeechRecognitionUsageDescription` (voice) + push; calendar strings correctly removed (no feature = no prompt). |
+| **Binary settings** | ✅ PASS | `ITSAppUsesNonExemptEncryption=false`, versions aligned (1.0 / build 1), Background Modes present. |
+| **Redesign flows in** | ✅ AUTO | Shell loads `app.klorn.ai`; the new light+sky web redesign ships to mobile automatically — no mobile code change needed. |
+| **4.2 thin-wrapper** | ⚠️ founder | De-risked once native push delivers a visible notification at launch — needs the APNs key (B.4). Native sign-in + voice + push make the case. |
+
+**Only true code item left is optional:** Sign in with Apple (4.8 de-risk). Flag me if you want it wired.
+
 ## ✅ [CODE — done] (this repo)
 
 - **SHELL is the default build.** `capacitor.config.ts` now loads `app.klorn.ai`
