@@ -231,6 +231,42 @@
     .lg-silent .pip{background:#cbd5e1} .lg-silent .lg-label{color:#94a3b8}
     .lg-auto .pip{background:var(--sky-300)} .lg-auto .lg-label{color:var(--sky-600)}
 
+    /* ── How-it-works product flow (replaces demo video) ── */
+    .flow { margin-top:44px; display:grid; grid-template-columns:1fr auto 1fr auto 1fr; gap:14px; align-items:stretch; }
+    @media (max-width:860px){ .flow { grid-template-columns:1fr; gap:12px; } .flow-arrow { transform:rotate(90deg); justify-self:center; padding:2px 0; } }
+    .flow-card { border:1px solid var(--line); border-radius:16px; background:#fff; box-shadow:0 24px 54px -32px rgba(12,60,110,.3); overflow:hidden; display:flex; flex-direction:column; }
+    .fc-head { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--line); background:#fbfdff; font-size:12.5px; font-weight:650; color:var(--ink-soft); }
+    .fc-step { display:flex; align-items:center; gap:8px; }
+    .fc-step .n { width:20px; height:20px; border-radius:50%; background:var(--sky-100); color:var(--sky-700); font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+    .fc-tag { font-size:11px; font-weight:600; padding:3px 9px; border-radius:9999px; background:var(--paper); color:var(--ink-mute); }
+    .fc-tag.sky { background:var(--sky-50); color:var(--sky-700); }
+    .fc-body { padding:14px 16px; flex:1; }
+    .flow-arrow { align-self:center; color:var(--sky-400); }
+    .flow-arrow svg { width:22px; height:22px; }
+    /* card 1 — inbox */
+    .fi-row { display:flex; align-items:center; gap:9px; padding:7px 0; font-size:12.5px; color:var(--ink); border-bottom:1px dashed var(--line); }
+    .fi-row:last-of-type { border-bottom:none; }
+    .fi-row.muted { color:var(--ink-mute); }
+    .fi-dot { width:6px; height:6px; border-radius:50%; background:var(--slate-400); flex-shrink:0; }
+    .fi-more { margin-top:8px; font-size:11.5px; color:var(--ink-mute); font-style:italic; }
+    /* card 2 — tiers */
+    .ft-row { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:9px; font-size:13px; font-weight:600; margin-bottom:6px; }
+    .ft-row .pip { width:9px; height:9px; border-radius:50%; }
+    .ft-row .ft-n { margin-left:auto; font-variant-numeric:tabular-nums; font-weight:700; }
+    .ft-row.push { background:var(--sky-50); color:var(--sky-700); } .ft-row.push .pip{background:var(--sky-500)}
+    .ft-row.queue { color:var(--slate-500); } .ft-row.queue .pip{background:var(--slate-400)}
+    .ft-row.silent { color:#94a3b8; } .ft-row.silent .pip{background:#cbd5e1}
+    .ft-row.auto { color:var(--sky-600); } .ft-row.auto .pip{background:var(--sky-300)}
+    /* card 3 — decision */
+    .fd-title { font-size:15px; font-weight:660; letter-spacing:-.01em; }
+    .fd-sub { font-size:12.5px; color:var(--ink-mute); margin:5px 0 16px; }
+    .fd-evidence { display:grid; gap:7px; margin-bottom:16px; }
+    .fd-ev { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink-soft); }
+    .fd-ev svg { width:14px; height:14px; color:var(--sky-500); flex-shrink:0; }
+    .fd-actions { display:flex; gap:8px; }
+    .fd-approve { flex:1; text-align:center; padding:9px; border-radius:10px; background:var(--ink); color:#fff; font-size:13px; font-weight:600; }
+    .fd-edit { padding:9px 16px; border-radius:10px; border:1px solid var(--line-strong); color:var(--ink-soft); font-size:13px; font-weight:600; }
+
     /* ── Live classifier ──────────────────────── */
     .klassify-wrap { margin-top:44px; border:1px solid var(--line); border-radius:20px; overflow:hidden; background:#fff; box-shadow:0 40px 80px -40px rgba(12,60,110,.3); }
     .klassify-titlebar { display:flex; align-items:center; gap:8px; padding:12px 16px; border-bottom:1px solid var(--line); background:#fbfdff; }
@@ -505,15 +541,46 @@
   <section class="section section-bg-tint" id="how" aria-label="Klorn walkthrough">
     <div class="container">
       <div class="section-head-center reveal">
-        <p class="mono section-eyebrow">See it in action</p>
-        <h2 class="section-h">Thirty-one seconds. Inbox to decision queue.</h2>
+        <p class="mono section-eyebrow">How it works</p>
+        <h2 class="section-h">Inbox to one decision. In thirty-one seconds.</h2>
         <p class="section-lead">Every signal sorts into one of four tiers, then the ones that matter become decision cards you approve with one click. Nothing leaves your hands without that approval, and a daily receipt logs every action.</p>
       </div>
-      <div class="media-frame reveal">
-        <video controls autoplay muted loop playsinline preload="metadata" poster="/media/klorn-demo-poster.jpg">
-          <source src="/media/klorn-demo.webm" type="video/webm">
-          <source src="/media/klorn-demo.mp4" type="video/mp4">
-        </video>
+      <div class="flow reveal">
+        <div class="flow-card">
+          <div class="fc-head"><span class="fc-step"><span class="n">1</span>Inbox</span><span class="fc-tag">47 today</span></div>
+          <div class="fc-body">
+            <div class="fi-row"><span class="fi-dot"></span>Investor — revised metrics</div>
+            <div class="fi-row"><span class="fi-dot"></span>Vendor renewal · sign</div>
+            <div class="fi-row muted"><span class="fi-dot"></span>Newsletter · Morning Brew</div>
+            <div class="fi-row muted"><span class="fi-dot"></span>Receipt · Stripe invoice</div>
+            <div class="fi-row muted"><span class="fi-dot"></span>Dashboard specs · Jordan</div>
+            <p class="fi-more">+ 42 more…</p>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+        <div class="flow-card">
+          <div class="fc-head"><span class="fc-step"><span class="n">2</span>Sorted into 4 tiers</span></div>
+          <div class="fc-body">
+            <div class="ft-row push"><span class="pip"></span>Push<span class="ft-n">2</span></div>
+            <div class="ft-row queue"><span class="pip"></span>Queue<span class="ft-n">6</span></div>
+            <div class="ft-row silent"><span class="pip"></span>Silent<span class="ft-n">31</span></div>
+            <div class="ft-row auto"><span class="pip"></span>Auto<span class="ft-n">8</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+        <div class="flow-card">
+          <div class="fc-head"><span class="fc-step"><span class="n">3</span>Decision</span><span class="fc-tag sky">Approval needed</span></div>
+          <div class="fc-body">
+            <div class="fd-title">Investor follow-up</div>
+            <div class="fd-sub">Reply to Mina before tomorrow 3 PM</div>
+            <div class="fd-evidence">
+              <div class="fd-ev"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-9"/></svg>Draft reply ready</div>
+              <div class="fd-ev"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-9"/></svg>ARR + burn attached</div>
+              <div class="fd-ev"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-9"/></svg>3 PM hold suggested</div>
+            </div>
+            <div class="fd-actions"><span class="fd-approve">Approve</span><span class="fd-edit">Edit</span></div>
+          </div>
+        </div>
       </div>
       <div class="tier-legend reveal">
         <div class="legend-card lg-push"><div class="lg-label"><span class="pip"></span>Push</div><p>Time-sensitive and high-stakes. Surfaced the moment it lands.</p></div>
@@ -623,38 +690,6 @@
         <div class="pillar reveal"><div class="pn">Capture</div><h3>Read the work signals</h3><p>Mail, calendar, tasks, and memory are pulled into one view for today.</p></div>
         <div class="pillar reveal"><div class="pn">Connect</div><h3>Turn noise into context</h3><p>People, deadlines, threads, and promises are linked by business impact.</p></div>
         <div class="pillar reveal"><div class="pn">Approve</div><h3>Confirm before action</h3><p>Important execution carries evidence, risk, and an explicit approval path.</p></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ══ PRINCIPLE ════════════════════════════ -->
-  <section class="section" aria-label="Operating principle">
-    <div class="container narrow">
-      <div class="section-head-center reveal">
-        <p class="mono section-eyebrow">Operating principle</p>
-        <h2 class="section-h">Prepare quietly. Confirm clearly.</h2>
-      </div>
-      <div class="steps-grid">
-        <div class="step reveal"><div class="num">01 · Observe</div><h3>Observe</h3><p>Detect important patterns without changing the workspace.</p></div>
-        <div class="step reveal"><div class="num">02 · Condense</div><h3>Condense</h3><p>Compress useful signals into short decision cards.</p></div>
-        <div class="step reveal"><div class="num">03 · Draft</div><h3>Draft</h3><p>Replies, reminders, and schedule changes start as drafts.</p></div>
-        <div class="step reveal"><div class="num">04 · Approve</div><h3>Approve</h3><p>External actions wait for a clear confirmation step.</p></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ══ PROMO / BRAND FILM ═══════════════════ -->
-  <section class="section section-bg-tint" aria-label="Klorn in fourteen seconds">
-    <div class="container">
-      <div class="section-head-center reveal">
-        <p class="mono section-eyebrow">Fourteen seconds</p>
-        <h2 class="section-h">Noise in. Signal out.</h2>
-      </div>
-      <div class="media-frame reveal">
-        <video controls muted loop playsinline preload="metadata" poster="/media/klorn-promo-poster.jpg" data-inview-play aria-label="Klorn brand film — a noisy inbox filtered into four clear tiers">
-          <source src="/media/klorn-promo.webm" type="video/webm">
-          <source src="/media/klorn-promo.mp4" type="video/mp4">
-        </video>
       </div>
     </div>
   </section>
