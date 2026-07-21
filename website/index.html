@@ -160,37 +160,6 @@
       background: linear-gradient(180deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.08) 24%, rgba(255,255,255,.34) 62%, #fff 100%); }
     @media (prefers-reduced-motion: reduce) { .hero-scene .drift { animation: none; } }
 
-    /* Floating product cards that fill the empty sky on both sides */
-    .hero-floaters { position:absolute; inset:0; z-index:2; pointer-events:none; }
-    .floater {
-      position:absolute; background:rgba(255,255,255,.82);
-      backdrop-filter:blur(14px) saturate(1.4); -webkit-backdrop-filter:blur(14px) saturate(1.4);
-      border:1px solid rgba(255,255,255,.7); border-radius:16px; padding:13px 15px;
-      box-shadow:0 18px 44px -18px rgba(12,60,110,.4), 0 1px 0 rgba(255,255,255,.7) inset;
-      animation: floaty 7s ease-in-out infinite;
-    }
-    @keyframes floaty { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-12px) } }
-    .fl-top { display:flex; align-items:center; gap:7px; font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--sky-700); margin-bottom:7px; }
-    .fl-pip { width:8px; height:8px; border-radius:50%; }
-    .fl-pip.push{background:var(--sky-500)} .fl-pip.queue{background:var(--slate-400)}
-    .fl-body { font-size:13px; font-weight:600; color:var(--ink); line-height:1.3; }
-    .fl-meta { font-size:11.5px; color:var(--ink-mute); margin-top:3px; }
-    .fl-row { display:flex; align-items:center; gap:11px; }
-    .fl-check { width:30px; height:30px; border-radius:9px; background:#dcfce7; color:#15803d; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; flex-shrink:0; }
-    .fl-cal { width:38px; height:40px; border-radius:10px; background:var(--sky-50); border:1px solid var(--sky-100); display:flex; flex-direction:column; align-items:center; justify-content:center; flex-shrink:0; }
-    .fl-cal b { font-size:14px; font-weight:800; color:var(--sky-700); line-height:1; }
-    .fl-cal span { font-size:9px; letter-spacing:.1em; color:var(--sky-600); text-transform:uppercase; }
-    .fl-tiers { display:flex; flex-direction:column; gap:5px; }
-    .fl-tier { display:flex; align-items:center; justify-content:space-between; gap:14px; font-size:11.5px; font-weight:700; padding:4px 9px; border-radius:8px; min-width:118px; }
-    .fl-tier.push{background:var(--sky-50);color:var(--sky-700)} .fl-tier.queue{color:var(--slate-500)} .fl-tier.silent{color:#94a3b8}
-    .fl-tier .n{font-variant-numeric:tabular-nums}
-    .floater.f1 { top:15%; left:3.5%; width:210px; animation-delay:.2s; }
-    .floater.f2 { top:23%; right:4%; animation-delay:1.4s; }
-    .floater.f3 { top:40%; left:4.5%; animation-delay:.8s; }
-    .floater.f4 { top:47%; right:4.5%; animation-delay:2s; }
-    @media (max-width:1240px){ .hero-floaters { display:none; } }
-    @media (prefers-reduced-motion: reduce){ .floater { animation:none; } }
-
     .hero-inner { position:relative; z-index:2; text-align:center; max-width:880px; margin:0 auto; }
     .hero-eyebrow {
       display:inline-flex; align-items:center; gap:8px; padding:6px 15px; border-radius:9999px;
@@ -208,20 +177,19 @@
     }
     .hero-lead { font-size:clamp(17px,2vw,21px); color: var(--ink-mute); max-width:620px; margin:0 auto 20px; line-height:1.55; }
 
-    /* invite-only banner */
-    .invite-banner {
-      max-width:640px; margin:0 auto 30px; text-align:left;
-      background:rgba(255,255,255,.7); border:1px solid var(--sky-200); border-radius:16px;
-      padding:18px 20px; box-shadow:0 8px 30px -18px rgba(2,132,199,.4);
+    /* compact invite-only pill */
+    .hero-invite {
+      display:inline-flex; align-items:center; gap:10px; max-width:100%;
+      margin:0 auto 28px; padding:9px 16px; border-radius:9999px;
+      background:rgba(255,255,255,.7); border:1px solid var(--sky-200);
+      box-shadow:0 6px 22px -12px rgba(2,132,199,.4); color:var(--ink-soft);
+      font-size:13.5px; line-height:1.35; transition:.18s var(--ease); text-align:left;
     }
-    .invite-head { display:flex; align-items:center; gap:9px; font-weight:650; font-size:14px; color: var(--sky-700); margin-bottom:10px; }
-    .invite-head svg { width:16px; height:16px; }
-    .invite-banner ol { list-style:none; counter-reset:iv; display:grid; gap:8px; }
-    .invite-banner li { counter-increment:iv; position:relative; padding-left:30px; font-size:13.5px; color: var(--ink-soft); line-height:1.5; }
-    .invite-banner li::before {
-      content:counter(iv); position:absolute; left:0; top:1px; width:20px; height:20px; border-radius:50%;
-      background: var(--sky-100); color: var(--sky-700); font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;
-    }
+    .hero-invite:hover { border-color:var(--sky-300); background:#fff; }
+    .hero-invite svg { width:15px; height:15px; color:var(--sky-600); flex-shrink:0; }
+    .hero-invite b { color:var(--sky-700); font-weight:700; }
+    .hero-invite-arrow { color:var(--sky-700); font-weight:600; white-space:nowrap; flex-shrink:0; }
+    @media (max-width:640px){ .hero-invite { flex-wrap:wrap; border-radius:16px; justify-content:center; text-align:center; } }
 
     .hero-actions { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
     .hero-secondary { margin-top:16px; font-size:14px; }
@@ -592,43 +560,17 @@
       </g>
     </svg>
     <div class="hero-veil"></div>
-    <div class="hero-floaters" aria-hidden="true">
-      <div class="floater f1">
-        <div class="fl-top"><span class="fl-pip push"></span>Push · needs you</div>
-        <div class="fl-body">Investor asked for revised metrics</div>
-        <div class="fl-meta">Reply by 3:00 PM</div>
-      </div>
-      <div class="floater f2">
-        <div class="fl-row"><span class="fl-check">✓</span><div><div class="fl-body">Reply drafted</div><div class="fl-meta">Ready for your approval</div></div></div>
-      </div>
-      <div class="floater f3">
-        <div class="fl-tiers">
-          <span class="fl-tier push">Push<span class="n">2</span></span>
-          <span class="fl-tier queue">Queue<span class="n">6</span></span>
-          <span class="fl-tier silent">Silent<span class="n">31</span></span>
-        </div>
-      </div>
-      <div class="floater f4">
-        <div class="fl-row"><span class="fl-cal"><b>3</b><span>Tue</span></span><div><div class="fl-body">Investor call</div><div class="fl-meta">3:00 – 3:30 PM</div></div></div>
-      </div>
-    </div>
 
     <div class="container hero-inner">
       <a class="hero-eyebrow" href="#measured"><span class="dot"></span>94.3% measured on real mail</a>
       <h1 class="hero-h">Noise in.<br><span class="accent serif">Signal</span> out.</h1>
       <p class="hero-lead">Other AI agents act. Klorn helps you <em>decide</em> what's worth acting on — mail, calendar, and AI signals filtered into one clear decision queue, with evidence and approval before anything leaves your hands.</p>
 
-      <div class="invite-banner">
-        <div class="invite-head">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-          Klorn is invite-only beta
-        </div>
-        <ol>
-          <li>Request access below — it takes 30 seconds.</li>
-          <li>I approve within 5 minutes when I'm awake (KST), within a few hours otherwise — capped at 100 testers until Google's CASA review clears.</li>
-          <li>You get an email from <b>noreply@klorn.ai</b>. Then Log in works.</li>
-        </ol>
-      </div>
+      <a class="hero-invite" href="https://app.klorn.ai/early-access">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <span><b>Invite-only beta</b> — approved within minutes, 100 testers until Google's review clears</span>
+        <span class="hero-invite-arrow">How it works →</span>
+      </a>
 
       <div class="hero-actions">
         <a class="btn btn-primary" href="https://app.klorn.ai/early-access">Request early access →</a>
@@ -979,26 +921,32 @@
 
       document.querySelectorAll(REVEAL_SEL).forEach((el) => revealObserver.observe(el));
 
-      // Scroll-linked "zoom into place": the hero product window scales up from
-      // 0.9 → 1 and settles as it rises through the lower viewport. Pure
-      // transform/opacity, rAF-throttled, disabled for reduced-motion above.
-      const zoomEls = document.querySelectorAll('[data-scroll-zoom]');
+      // Scroll-linked "zoom into place": the hero product window scales 0.94 → 1
+      // as it rises through the viewport. A continuous rAF loop LERPs the current
+      // scale toward its scroll-derived target every frame, so motion stays
+      // buttery instead of stepping on each discrete scroll event. Pure
+      // transform, compositor-friendly; disabled for reduced-motion above.
+      const zoomEls = [...document.querySelectorAll('[data-scroll-zoom]')].map((el) => ({ el, cur: 0.94, target: 0.94 }));
       if (zoomEls.length) {
-        let ticking = false;
-        const applyZoom = () => {
+        const computeTargets = () => {
           const vh = window.innerHeight;
-          zoomEls.forEach((el) => {
-            const r = el.getBoundingClientRect();
-            const p = Math.max(0, Math.min(1, 1 - (r.top - vh * 0.15) / (vh * 0.85)));
-            const s = 0.9 + 0.1 * p;
-            el.style.transform = `scale(${s.toFixed(4)})`;
+          zoomEls.forEach((z) => {
+            const r = z.el.getBoundingClientRect();
+            const p = Math.max(0, Math.min(1, 1 - (r.top - vh * 0.12) / (vh * 0.8)));
+            z.target = 0.94 + 0.06 * p;
           });
-          ticking = false;
         };
-        const onScroll = () => { if (!ticking) { ticking = true; requestAnimationFrame(applyZoom); } };
-        window.addEventListener('scroll', onScroll, { passive: true });
-        window.addEventListener('resize', onScroll);
-        applyZoom();
+        const tick = () => {
+          zoomEls.forEach((z) => {
+            z.cur += (z.target - z.cur) * 0.09; // smoothing factor
+            z.el.style.transform = `scale(${z.cur.toFixed(4)})`;
+          });
+          requestAnimationFrame(tick);
+        };
+        window.addEventListener('scroll', computeTargets, { passive: true });
+        window.addEventListener('resize', computeTargets);
+        computeTargets();
+        tick();
       }
     }
 
