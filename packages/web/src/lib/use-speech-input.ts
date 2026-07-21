@@ -47,10 +47,16 @@ export function useSpeechInput(onTranscript: (text: string) => void): {
   useEffect(() => {
     if (isNativePlatform()) {
       isNative.current = true;
-      // Availability is confirmed lazily on first toggle (plugin import +
-      // permission prompt belong to a user gesture); assume present in the
-      // shell — the shell always ships the plugin.
-      setSupported(true);
+      // Probe the plugin for real instead of assuming it's present: on iOS the
+      // native SpeechRecognition plugin ships only as a CocoaPods podspec, so
+      // under the Capacitor 8 SPM build it is NOT linked and every call rejects
+      // with "not implemented on ios". `available()` throws there → we set
+      // supported=false and the voice button hides (graceful), while Android
+      // (where it links) reports available=true and keeps the button.
+      void import("@capacitor-community/speech-recognition")
+        .then(({ SpeechRecognition }) => SpeechRecognition.available())
+        .then((res) => setSupported(Boolean(res?.available)))
+        .catch(() => setSupported(false));
       // Unmounting mid-dictation must not leave the OS recognizer running
       // with listeners firing into a dead component.
       return () => {
