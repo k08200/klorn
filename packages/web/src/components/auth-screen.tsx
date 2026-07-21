@@ -76,7 +76,7 @@ export default function AuthScreen({
             </h2>
             <p className="mt-5 max-w-lg text-base leading-7 text-slate-500">{resolvedAsideBody}</p>
           </div>
-          <div className="mt-9 max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-surface-panel">
+          <div className="mt-9 max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-surface-panel shadow-[0_18px_44px_-26px_rgba(2,60,110,0.28)]">
             {resolvedAsideItems.map((item, index) => (
               <div
                 key={item.label}
@@ -120,7 +120,7 @@ export default function AuthScreen({
             </ul>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-surface-panel p-4 shadow-xl shadow-black/20 sm:p-5">
+          <div className="rounded-lg border border-slate-200 bg-surface-panel p-4 shadow-[0_28px_64px_-28px_rgba(2,60,110,0.32)] sm:p-5">
             {children}
           </div>
 

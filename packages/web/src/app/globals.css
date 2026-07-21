@@ -49,15 +49,21 @@ body {
    fixed background stack so marketing / auth surfaces have atmospheric depth
    instead of flat white. Content sits above it normally (no z-index needed). */
 .sky-bg {
-  background-color: #f4f8fc;
+  background-color: #eef4fb;
   background-image:
     radial-gradient(circle at center, rgba(14, 116, 180, 0.07) 1px, transparent 1.6px),
-    radial-gradient(58% 48% at 85% 1%, rgba(56, 189, 248, 0.24), transparent 60%),
-    radial-gradient(50% 42% at 6% 24%, rgba(125, 211, 252, 0.24), transparent 62%),
-    radial-gradient(60% 46% at 94% 68%, rgba(186, 230, 253, 0.34), transparent 60%),
-    radial-gradient(82% 55% at 44% 108%, rgba(56, 189, 248, 0.22), transparent 60%);
+    radial-gradient(56% 46% at 85% -2%, rgba(56, 189, 248, 0.32), transparent 58%),
+    radial-gradient(48% 40% at 4% 20%, rgba(125, 211, 252, 0.3), transparent 60%),
+    radial-gradient(56% 44% at 96% 70%, rgba(186, 230, 253, 0.42), transparent 60%),
+    radial-gradient(82% 55% at 44% 110%, rgba(56, 189, 248, 0.26), transparent 60%),
+    radial-gradient(38% 30% at 28% 52%, rgba(255, 255, 255, 0.85), transparent 66%),
+    radial-gradient(34% 26% at 72% 34%, rgba(255, 255, 255, 0.7), transparent 66%),
+    radial-gradient(120% 90% at 50% -20%, rgba(255, 255, 255, 0.55), transparent 52%);
   background-size:
     30px 30px,
+    100% 100%,
+    100% 100%,
+    100% 100%,
     100% 100%,
     100% 100%,
     100% 100%,
@@ -67,9 +73,13 @@ body {
     center,
     center,
     center,
+    center,
+    center,
+    center,
     center;
   background-attachment: fixed;
-  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+  background-repeat:
+    repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
 }
 
 /* iOS safe-area helpers (notch + home indicator).

@@ -231,7 +231,7 @@ export default function EarlyAccessPage() {
           <button
             type="submit"
             disabled={status === "submitting"}
-            className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-stone-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+            className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-white shadow-lg shadow-sky-500/30 transition-all hover:bg-sky-600 hover:shadow-xl hover:shadow-sky-500/40 hover:-translate-y-px active:translate-y-0 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
           >
             {status === "submitting" ? "Submitting..." : "Request early access"}
           </button>
