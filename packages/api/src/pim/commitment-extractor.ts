@@ -86,13 +86,14 @@ const EN_USER_RULES: Rule[] = [
 
 const EN_COUNTERPARTY_RULES: Rule[] = [
   {
-    // "You/Your" is excluded from the capitalized-subject alternation: a
-    // sentence telling the RECIPIENT what will happen ("You will not be
-    // allowed to join the queue…") is a notice about the user, never a
-    // counterparty promise (founder screen 2026-07-22).
+    // Excluded from the capitalized-subject alternation (founder screen +
+    // prod ledger audit 2026-07-22): "You/Your" — a sentence telling the
+    // RECIPIENT what will happen is a notice, not a counterparty promise —
+    // and audience-cohort nouns (Attendees/Students/Visitors/…) — an
+    // announcement about a group is never a promise owed to the user.
     name: "en-counterparty-future",
     pattern:
-      /\b(?:they|he|she|[Tt]he team|(?!Your?\b)[A-Z][a-z]+)\s+(?:will|is going to|'ll|will be|plans to|is supposed to)\s+[^.!?\n]{0,160}/g,
+      /\b(?:they|he|she|[Tt]he team|(?!Your?\b|Attendees?\b|Students?\b|Visitors?\b|Volunteers?\b|Applicants?\b|Participants?\b|Members?\b|Customers?\b|Users?\b|Guests?\b|Patients?\b|Winners?\b|Recipients?\b)[A-Z][a-z]+)\s+(?:will|is going to|'ll|will be|plans to|is supposed to)\s+[^.!?\n]{0,160}/g,
     owner: "COUNTERPARTY",
   },
   {
@@ -153,13 +154,22 @@ function isTransactionalNoise(text: string): boolean {
 
 // Policy-notice noise: automated notices phrase rules as negated permission
 // ("Applicants will not be permitted to enter…", "Visitors will not be able
-// to park…"). Nobody is promising an action — the sentence describes a
-// restriction — so it must never become a ledger commitment no matter which
-// subject-rule matched it.
-const POLICY_NOTICE_RE = /\bwill\s+not\s+be\s+(?:allowed|permitted|able|eligible|required)\b/i;
+// to park…") or as expiry countdowns ("It will expire in 5 minutes" — OTP
+// codes, offers). Nobody is promising an action — the sentence describes a
+// restriction or a deadline — so it must never become a ledger commitment no
+// matter which subject-rule matched it.
+const POLICY_NOTICE_RE =
+  /\bwill\s+not\s+be\s+(?:allowed|permitted|able|eligible|required)\b|\bwill\s+expire\b/i;
+
+// Korean formulaic closings: politeness boilerplate ending in -하겠습니다
+// ("노력하겠습니다", "최선을 다하겠습니다", "알려주시면 감사하겠습니다")
+// carries no concrete deliverable — it is how Korean mail signs off, not a
+// promise. Prod ledger audit 2026-07-22 found these mined as I-OWE rows.
+const KO_FORMULAIC_CLOSING_RE =
+  /(?:노력하겠습니다|최선을\s*다하겠습니다|감사하겠습니다|보답하겠습니다)/;
 
 function isPolicyNotice(text: string): boolean {
-  return POLICY_NOTICE_RE.test(text);
+  return POLICY_NOTICE_RE.test(text) || KO_FORMULAIC_CLOSING_RE.test(text);
 }
 
 /**
