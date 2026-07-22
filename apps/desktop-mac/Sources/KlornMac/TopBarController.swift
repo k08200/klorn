@@ -224,6 +224,9 @@ final class TopBarController {
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = !focusable
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        // Light v2: the panel is always a light surface — pin the effective
+        // appearance so semantic colors resolve light even in system dark mode.
+        panel.appearance = NSAppearance(named: .aqua)
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true

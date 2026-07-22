@@ -110,7 +110,7 @@ struct MeetingCard: View {
             Spacer()
             if state.event?.meetingLink != nil {
                 Button("Join", action: actions.onJoin)
-                    .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
+                    .buttonStyle(PrimaryButtonStyle())
             }
         }
     }

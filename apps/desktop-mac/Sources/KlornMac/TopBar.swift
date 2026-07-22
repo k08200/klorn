@@ -77,8 +77,8 @@ private struct LogoRing: View {
     var size: CGFloat = 16
     var body: some View {
         // The K mark — the app icon in miniature, so pill, panel, menu bar,
-        // and Dock all say the same thing: Klorn. White, matching the B&W
-        // brand icon (founder direction 2026-07-20: no orange).
+        // and Dock all say the same thing: Klorn. Ink on the light panel,
+        // matching the B&W brand icon (founder direction 2026-07-20: no orange).
         Text("K")
             .font(.system(size: size * 0.82, weight: .heavy, design: .rounded))
             .foregroundStyle(Theme.text)
@@ -251,7 +251,7 @@ struct CollapsedBar: View {
                 Text("Signing in…").font(.caption).foregroundStyle(Theme.textDim)
             case .signedOut:
                 Button("Log In", action: actions.onSignIn)
-                    .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
+                    .buttonStyle(PrimaryButtonStyle())
             }
 
             Button(action: actions.onHideBar) {
@@ -315,7 +315,7 @@ struct ExpandedPanel: View {
                         .buttonStyle(.plain).font(.callout).hoverDim()
                 } else if model.phase == .signedOut {
                     Button("Log In", action: actions.onSignIn)
-                        .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
+                        .buttonStyle(PrimaryButtonStyle())
                 }
 
                 // One click OUT from anywhere (dogfood 2026-07-20: the ✕ only
@@ -679,7 +679,8 @@ struct FullView: View {
             }
             if model.showPreferences {
                 // Scrim: click-off dismiss (a11y users use the Done button instead).
-                Color.black.opacity(0.55)
+                // Slate-navy tint, not pure black — matches the light theme.
+                Theme.text.opacity(0.45)
                     .onTapGesture { model.showPreferences = false }
                     .accessibilityHidden(true)
                 PreferencesView(actions: actions)
@@ -714,7 +715,7 @@ struct FullView: View {
                     .buttonStyle(.plain).font(.callout).hoverDim()
             } else if model.phase == .signedOut {
                 Button("Log In", action: actions.onSignIn)
-                    .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
+                    .buttonStyle(PrimaryButtonStyle())
             }
 
             // One click OUT from anywhere (dogfood 2026-07-20).
@@ -1123,7 +1124,7 @@ private struct ChatBubble: View {
                         Button("Add to calendar") {
                             Task { await model.createEvent(from: draft, messageId: message.id) }
                         }
-                        .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
+                        .buttonStyle(PrimaryButtonStyle())
                         Button("Ignore") { model.clearEventDraft(message.id) }
                             .buttonStyle(.bordered).controlSize(.small)
                     }
@@ -1420,7 +1421,7 @@ private struct ReadingPane: View {
                 if let item {
                     HStack(spacing: 10) {
                         Button("Reply with AI") { startReply(item) }
-                            .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
+                            .buttonStyle(PrimaryButtonStyle())
                         Button("Open in web") { actions.onOpenWeb(item) }
                             .buttonStyle(.bordered).controlSize(.small)
                         // menuIndicator(.hidden) kills the system-blue pull-down
@@ -1508,7 +1509,7 @@ private struct ReadingPane: View {
                 Button("Cancel") { replying = false; replyText = "" }
                     .buttonStyle(.bordered).controlSize(.small)
                 Button(sending ? "Sending…" : "Send") { send(item) }
-                    .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(sending || model.isDrafting || replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }

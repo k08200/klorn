@@ -28,7 +28,7 @@ struct PreferencesView: View {
                 // speaks in the brand accent like every other primary.
                 Button("Done") { model.showPreferences = false }
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
+                    .buttonStyle(PrimaryButtonStyle())
             }
             .padding(.bottom, 12)
 
@@ -70,7 +70,7 @@ struct PreferencesView: View {
                     switch updateOutcome {
                     case .updateAvailable(let version):
                         Button("Get v\(version)") { UpdateCheck.openReleasePage() }
-                            .buttonStyle(.borderedProminent).controlSize(.small).tint(Theme.accent)
+                            .buttonStyle(PrimaryButtonStyle())
                     case .upToDate:
                         Text("Up to date (v\(AppInfo.version))")
                             .font(.caption).foregroundStyle(Theme.textDim)
@@ -147,7 +147,7 @@ struct PreferencesView: View {
         .frame(width: 440)
         .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
-        .shadow(radius: 24, y: 8)
+        .shadow(color: Theme.panelShadow, radius: 24, y: 8)
     }
 
     @ViewBuilder
