@@ -345,6 +345,10 @@ private struct TodayColumn: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             ColumnHeader(title: "TODAY")
+            // Scrollable: TODAY + the 7-day UPCOMING agenda share the column,
+            // and a busy week must not push the receipt off a 380pt panel.
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 14) {
             if let briefing = model.briefing {
                 Button { if let url = URL(string: Config.webBaseURL) { NSWorkspace.shared.open(url) } } label: {
                     VStack(alignment: .leading, spacing: 3) {
@@ -415,9 +419,42 @@ private struct TodayColumn: View {
                 .padding(.top, 6)
                 .accessibilityLabel("Klorn today: \(line). Opens the web inbox to review.")
             }
-            Spacer()
+            upcomingSection
+                }
+            }
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// UPCOMING — tomorrow through the next 7 days, grouped by day (calendar
+    /// parity with the web: the desktop must not know less about the week
+    /// than it knows about the day). Rows open a detail popover.
+    @ViewBuilder
+    private var upcomingSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ColumnHeader(title: "UPCOMING")
+            if let week = model.weekAhead {
+                let days = upcomingAgenda(now: Date(), events: week)
+                if days.isEmpty {
+                    EmptyState(icon: "calendar", title: "No events this week")
+                        .padding(.vertical, Theme.s2)
+                } else {
+                    ForEach(days) { day in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(day.label)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(Theme.textDim)
+                            ForEach(day.events) { event in
+                                UpcomingEventRow(event: event)
+                            }
+                        }
+                    }
+                }
+            } else {
+                Text("Loading…").font(.caption).foregroundStyle(Theme.textDim)
+            }
+        }
+        .padding(.top, 6)
     }
 
     @ViewBuilder
@@ -456,13 +493,143 @@ private struct TodayColumn: View {
     }
 }
 
+/// One UPCOMING row: start time + title, quiet at rest. Click opens a
+/// lightweight detail popover (title / time / location, Join when there's a
+/// meeting link) with "Open in Klorn" → the web calendar.
+private struct UpcomingEventRow: View {
+    let event: CalendarEventWire
+    @State private var showDetail = false
+    @State private var hovering = false
+
+    private var timeLabel: String {
+        eventTimeLabel(startISO: event.startTime, endISO: event.endTime, allDay: event.allDay)
+    }
+
+    var body: some View {
+        Button { showDetail = true } label: {
+            HStack(alignment: .top, spacing: 8) {
+                Text(event.allDay ? "All day" : String(timeLabel.prefix(5)))
+                    .font(.caption.monospacedDigit()).foregroundStyle(Theme.textDim)
+                    .frame(width: 48, alignment: .leading)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(event.title).font(.callout).foregroundStyle(Theme.text).lineLimit(1)
+                    if let location = event.location, !location.isEmpty {
+                        Text(location).font(.caption2).foregroundStyle(Theme.textDim).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+                if event.meetingLink != nil {
+                    Image(systemName: "video").font(.caption).foregroundStyle(Theme.textDim)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(.horizontal, Theme.s2).padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(hovering ? Theme.surfaceHover : .clear, in: RoundedRectangle(cornerRadius: 8))
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
+        .accessibilityLabel(
+            "\(event.title), \(event.allDay ? "all day" : timeLabel). Shows details.")
+        .popover(isPresented: $showDetail, arrowEdge: .trailing) { detail }
+    }
+
+    private var detail: some View {
+        VStack(alignment: .leading, spacing: Theme.s2) {
+            Text(event.title).font(.headline).foregroundStyle(Theme.text).lineLimit(3)
+            if !timeLabel.isEmpty {
+                Text(timeLabel).font(.caption.monospacedDigit()).foregroundStyle(Theme.textDim)
+            }
+            if let location = event.location, !location.isEmpty {
+                HStack(spacing: 5) {
+                    Image(systemName: "mappin.and.ellipse").font(.caption2)
+                        .accessibilityHidden(true)
+                    Text(location).font(.caption).lineLimit(2)
+                }
+                .foregroundStyle(Theme.textDim)
+            }
+            HStack(spacing: 8) {
+                if let link = event.meetingLink, let url = URL(string: link) {
+                    Button("Join") { NSWorkspace.shared.open(url) }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .accessibilityLabel("Join \(event.title)")
+                }
+                Button("Open in Klorn") {
+                    if let url = URL(string: Config.webBaseURL + "/calendar") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .buttonStyle(.bordered).controlSize(.small)
+            }
+            .padding(.top, 4)
+        }
+        .padding(Theme.s4)
+        .frame(width: 250, alignment: .leading)
+    }
+}
+
+/// Per-inbox scope selector (web parity: email/page.tsx InboxSelector) —
+/// rendered only when the account actually has 2+ mailboxes. Values: "all",
+/// "primary", or a linked inbox id; addresses come straight from the API,
+/// never hardcoded. Selecting re-scopes the mail list end-to-end.
+struct InboxSelectorMenu: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if model.inboxes.count >= 2 {
+            let current = inboxSelectorLabel(selected: model.selectedInbox, inboxes: model.inboxes)
+            Menu {
+                row(value: "all", label: "All inboxes", needsReconnect: false)
+                ForEach(model.inboxes) { inbox in
+                    row(value: inbox.selectionValue,
+                        label: inboxDisplayLabel(email: inbox.email, kind: inbox.kind),
+                        needsReconnect: inbox.needsReconnect)
+                }
+            } label: {
+                // Chevron lives INSIDE the one Text (concatenation) — a
+                // separate Image in a menu label is reordered to the leading
+                // edge by the label styling (screen-verified 0.4.80007).
+                (Text(current + " ")
+                    + Text(Image(systemName: "chevron.down"))
+                    .font(.caption2.weight(.semibold)))
+                    .font(.caption)
+                    .foregroundStyle(Theme.textDim)
+                    .lineLimit(1)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("Filter by inbox")
+            .accessibilityLabel("Filter by inbox — currently \(current)")
+        }
+    }
+
+    private func row(value: String, label: String, needsReconnect: Bool) -> some View {
+        Button {
+            model.selectInbox(value)
+        } label: {
+            HStack {
+                // Text suffix, not the web's sky dot: the AppKit borderless
+                // menu drops SwiftUI shapes and renders symbols colorless
+                // (see the tier-dot note on FullRow) — words keep the
+                // reconnect signal perceivable, and color-independent.
+                Text(needsReconnect ? "\(label) — needs reconnect" : label)
+                if value == model.selectedInbox { Image(systemName: "checkmark") }
+            }
+        }
+    }
+}
+
 private struct InboxColumn: View {
     @Environment(AppModel.self) private var model
     let actions: TopBarActions
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            ColumnHeader(title: "INBOX")
+            HStack {
+                ColumnHeader(title: "INBOX")
+                Spacer()
+                InboxSelectorMenu()
+            }
             ForEach(Tier.displayOrder) { tier in
                 InboxTierRow(tier: tier, count: model.queue?.summary.count(for: tier) ?? 0) {
                     actions.onOpenWeb(nil)
@@ -768,7 +935,12 @@ private struct FullSidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            ColumnHeader(title: "INBOX").padding(.horizontal, 20).padding(.bottom, 6)
+            HStack {
+                ColumnHeader(title: "INBOX")
+                Spacer()
+                InboxSelectorMenu()
+            }
+            .padding(.horizontal, 20).padding(.bottom, 6)
             ForEach(Tier.displayOrder) { tier in
                 Button { selected = .tier(tier) } label: {
                     HStack(spacing: 10) {
@@ -926,7 +1098,9 @@ private struct FullList: View {
             .overlay(RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(searchFocused ? Theme.accent.opacity(0.5) : .clear))
             .padding(.horizontal, 24).padding(.bottom, 12)
-            .task(id: query) {
+            .task(id: "\(model.selectedInbox)|\(query)") {
+                // Keyed on scope + query: an inbox switch re-fetches an active
+                // search with the new scope, same debounce path.
                 // 300ms debounce: only the last keystroke's task survives.
                 try? await Task.sleep(for: .milliseconds(300))
                 guard !Task.isCancelled else { return }
@@ -1252,6 +1426,17 @@ private struct SearchHitRow: View {
                 HStack(spacing: 8) {
                     Text(sender).font(.callout.weight(hit.isRead == false ? .semibold : .regular))
                         .foregroundStyle(Theme.text).lineLimit(1)
+                    // Which mailbox this message lives on — only when the
+                    // account actually has several (single-inbox stays quiet).
+                    if let badge = inboxRowBadge(
+                        linkedId: hit.linkedInboxAccountId, inboxes: model.inboxes)
+                    {
+                        Text(badge).font(.caption2).foregroundStyle(Theme.textDim)
+                            .lineLimit(1)
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(Theme.surfaceRaised, in: Capsule())
+                            .accessibilityLabel("Inbox \(badge)")
+                    }
                     Spacer(minLength: 0)
                     if let date = hit.date {
                         Text(String(date.prefix(10)))

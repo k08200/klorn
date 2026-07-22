@@ -410,6 +410,48 @@ func runSelfChecks() async -> Bool {
     check("event time label — malformed ISO degrades",
           eventTimeLabel(startISO: "not-a-date", endISO: "also-no", allDay: false, calendar: utc) == "")
 
+    print("Upcoming agenda:")
+    // 7-day grouping for the UPCOMING section: today excluded (the TODAY rows
+    // own it), window ends 7 days after tomorrow's start, malformed ISO drops
+    // the event. Calendar + locale injected so labels are deterministic.
+    var agendaCal = Calendar(identifier: .gregorian)
+    agendaCal.timeZone = TimeZone(identifier: "UTC")!
+    agendaCal.locale = Locale(identifier: "en_US_POSIX")
+    // Wed 2026-07-22 09:00 UTC → tomorrow = Thu Jul 23, window ends Jul 30 00:00.
+    let agendaNow = ISO8601DateFormatter().date(from: "2026-07-22T09:00:00Z")!
+    func agendaEvent(_ id: String, _ startISO: String) -> CalendarEventWire {
+        CalendarEventWire(id: id, title: id, startTime: startISO, endTime: startISO,
+                          location: nil, meetingLink: nil, allDay: false)
+    }
+    let agenda = upcomingAgenda(now: agendaNow, events: [
+        agendaEvent("today", "2026-07-22T15:00:00.000Z"),        // today → excluded
+        agendaEvent("tmrw2", "2026-07-23T10:00:00.000Z"),
+        agendaEvent("tmrw1", "2026-07-23T08:00:00.000Z"),        // out of order on purpose
+        agendaEvent("sat", "2026-07-25T09:00:00Z"),              // no-millis ISO tolerated
+        agendaEvent("beyond", "2026-07-30T09:00:00.000Z"),       // day 8 → excluded
+        agendaEvent("bad", "not-a-date"),                        // malformed → dropped
+    ], calendar: agendaCal)
+    check("agenda keeps only tomorrow → +7 days",
+          agenda.flatMap(\.events).map(\.id) == ["tmrw1", "tmrw2", "sat"])
+    check("agenda groups by day, first labeled Tomorrow",
+          agenda.count == 2 && agenda[0].label == "Tomorrow" && agenda[0].events.count == 2)
+    check("agenda later day gets its weekday name", agenda[1].label == "Saturday")
+    check("agenda sorts within a day", agenda[0].events.map(\.id) == ["tmrw1", "tmrw2"])
+    check("agenda empty input → empty",
+          upcomingAgenda(now: agendaNow, events: [], calendar: agendaCal).isEmpty)
+    // GET /api/calendar list envelope ({events}) decodes the wire subset.
+    let calListJSON = """
+    {"events":[{"id":"u1","title":"Offsite","description":null,"startTime":"2026-07-23T01:00:00.000Z",
+    "endTime":"2026-07-23T02:00:00.000Z","location":"HQ","meetingLink":null,"color":null,
+    "allDay":false,"googleId":"g1"}]}
+    """
+    if let list = try? JSONDecoder().decode(CalendarListResponse.self, from: Data(calListJSON.utf8)) {
+        check("calendar list wire decodes", list.events.first?.title == "Offsite"
+              && list.events.first?.location == "HQ")
+    } else {
+        check("calendar list wire decodes", false)
+    }
+
     print("Card body:")
     // The expanded card shows the email body inline; whitespace-only bodies
     // collapse to nil (no empty scroll box), real text is trimmed and passed
@@ -557,15 +599,55 @@ func runSelfChecks() async -> Bool {
     check("blank does not", !isSearchActive("   "))
     let searchJSON = """
     {"emails":[{"id":"e9","from":"Boss <b@co.com>","subject":"Deal","snippet":"can you…",
-    "date":"2026-07-19","isRead":false,"extraField":123}],"total":1,"source":"gmail",
-    "unread":1,"page":1}
+    "date":"2026-07-19","isRead":false,"linkedInboxAccountId":"li-1","extraField":123}],
+    "total":1,"source":"gmail","unread":1,"page":1}
     """
     if let sr = try? JSONDecoder().decode(EmailSearchResponse.self, from: Data(searchJSON.utf8)) {
         check("search response decodes subset", sr.total == 1 && sr.emails.first?.subject == "Deal")
         check("search row tolerates unknown fields", sr.emails.first?.isRead == false)
+        check("search row carries its inbox id", sr.emails.first?.linkedInboxAccountId == "li-1")
     } else {
         check("search response decodes", false)
     }
+
+    print("Multi-inbox:")
+    // GET /api/email/inboxes wire (routes/email.ts): the primary row has a
+    // NULL id; linked rows carry the LinkedInboxAccount id.
+    let inboxJSON = """
+    {"inboxes":[{"id":null,"email":"me@co.com","kind":"primary","needsReconnect":false},
+    {"id":"li-1","email":"side.acct@gmail.com","kind":"linked","needsReconnect":true}]}
+    """
+    if let inboxResp = try? JSONDecoder().decode(InboxesResponse.self, from: Data(inboxJSON.utf8)) {
+        let two = inboxResp.inboxes
+        check("inboxes wire decodes", two.count == 2 && two[0].id == nil && two[1].needsReconnect)
+        check("primary selection value is \"primary\"", two[0].selectionValue == "primary")
+        check("selector label — all", inboxSelectorLabel(selected: "all", inboxes: two) == "All inboxes")
+        check("selector label — short name of the selection",
+              inboxSelectorLabel(selected: "primary", inboxes: two) == "me"
+              && inboxSelectorLabel(selected: "li-1", inboxes: two) == "side.acct")
+        check("selector label — stale id reads as all",
+              inboxSelectorLabel(selected: "gone", inboxes: two) == "All inboxes")
+        check("row badge maps null → primary", inboxRowBadge(linkedId: nil, inboxes: two) == "me")
+        check("row badge maps a linked id", inboxRowBadge(linkedId: "li-1", inboxes: two) == "side.acct")
+        check("row badge hidden with one inbox", inboxRowBadge(linkedId: nil, inboxes: [two[0]]) == nil)
+    } else {
+        check("inboxes wire decodes", false)
+    }
+    check("inbox param — all omits", inboxQueryParam(selected: "all") == nil)
+    check("inbox param — primary passes", inboxQueryParam(selected: "primary") == "primary")
+    check("inbox param — linked id passes", inboxQueryParam(selected: "li-1") == "li-1")
+    check("search path scopes to the inbox",
+          emailSearchPath(query: "deal", selectedInbox: "primary")
+              == "/api/email?search=deal&inbox=primary")
+    check("search path omits all-inboxes scope",
+          emailSearchPath(query: "deal", selectedInbox: "all") == "/api/email?search=deal")
+    check("inbox display label falls back by kind",
+          inboxDisplayLabel(email: nil, kind: "primary") == "Primary"
+          && inboxDisplayLabel(email: nil, kind: "linked") == "Linked inbox"
+          && inboxDisplayLabel(email: "a@b.c", kind: "linked") == "a@b.c")
+    check("inbox short name splits + caps",
+          inboxShortName("averylongalias.mail@x.io") == "averylongalias"
+          && inboxShortName(nil) == nil && inboxShortName("@x.io") == nil)
 
     print("Auto update check:")
     // Quiet background cadence: first run always checks; then every 6h.

@@ -390,6 +390,84 @@ func chatMarkdown(_ text: String) -> AttributedString {
         ?? AttributedString(text)
 }
 
+// MARK: - Multi-inbox
+
+/// GET /api/email/inboxes → one mailbox row (routes/email.ts): the primary
+/// Google account (id null) + every linked secondary inbox. Read-only wire —
+/// no tokens; addresses come straight from the user's own rows.
+struct InboxOption: Codable, Sendable, Identifiable, Hashable {
+    let id: String?  // nil = the primary account
+    let email: String?
+    let kind: String  // "primary" | "linked"
+    let needsReconnect: Bool
+
+    /// Selector value ("primary" for the nil-id primary row) — matches the
+    /// web InboxSelector's value scheme and the API's `inbox=` param.
+    var selectionValue: String { id ?? "primary" }
+}
+
+/// GET /api/email/inboxes response envelope.
+struct InboxesResponse: Codable, Sendable {
+    let inboxes: [InboxOption]
+}
+
+/// `inbox=` query value for a mail-list fetch: "all" (or blank) sends nothing —
+/// the server treats an absent param as every inbox. Pure.
+func inboxQueryParam(selected: String) -> String? {
+    (selected.isEmpty || selected == "all") ? nil : selected
+}
+
+/// Mailbox list path: search plus the optional per-inbox scope. Both values
+/// are percent-encoded to alphanumerics (server decodes; hyphenated linked
+/// ids survive the round trip). Pure for testing.
+func emailSearchPath(query: String, selectedInbox: String) -> String {
+    let encoded = query.trimmingCharacters(in: .whitespaces)
+        .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+    let base = "/api/email?search=\(encoded)"
+    guard let inbox = inboxQueryParam(selected: selectedInbox),
+          let enc = inbox.addingPercentEncoding(withAllowedCharacters: .alphanumerics)
+    else { return base }
+    return base + "&inbox=\(enc)"
+}
+
+/// Full menu-row label for one inbox: the address, falling back by kind
+/// (mirrors the web selector's fallback copy). Pure.
+func inboxDisplayLabel(email: String?, kind: String) -> String {
+    if let email, !email.isEmpty { return email }
+    return kind == "primary" ? "Primary" : "Linked inbox"
+}
+
+/// Compact mailbox marker — the address's local part ("yong" of "yong@x.io"),
+/// capped so a long alias can't stretch a row. nil when unknown/blank. Pure.
+func inboxShortName(_ email: String?) -> String? {
+    guard let email, !email.isEmpty,
+          // omittingEmptySubsequences: false — "@x.io" must yield an EMPTY
+          // local part (→ nil), not silently fall through to the domain.
+          let local = email.split(separator: "@", omittingEmptySubsequences: false).first,
+          !local.isEmpty
+    else { return nil }
+    return String(local.prefix(14))
+}
+
+/// Selector button label: "All inboxes" or the selected address's short name.
+/// An unknown selection (stale persisted id) reads as "All inboxes". Pure.
+func inboxSelectorLabel(selected: String, inboxes: [InboxOption]) -> String {
+    guard let value = inboxQueryParam(selected: selected),
+          let match = inboxes.first(where: { $0.selectionValue == value })
+    else { return "All inboxes" }
+    return inboxShortName(match.email) ?? inboxDisplayLabel(email: match.email, kind: match.kind)
+}
+
+/// Row badge naming the mailbox a message lives on — meaningful only with 2+
+/// inboxes (a single-inbox account never shows it). nil linkedId = the
+/// primary inbox (the wire's null). Pure.
+func inboxRowBadge(linkedId: String?, inboxes: [InboxOption]) -> String? {
+    guard inboxes.count >= 2,
+          let match = inboxes.first(where: { $0.id == linkedId })
+    else { return nil }
+    return inboxShortName(match.email)
+}
+
 // MARK: - Mailbox search
 
 /// GET /api/email?search= — one row of the searchable mailbox (decodes the
@@ -401,6 +479,9 @@ struct EmailSearchItem: Codable, Sendable, Identifiable, Hashable {
     let snippet: String?
     let date: String?
     let isRead: Bool?
+    /// null = the primary inbox; a string = the LinkedInboxAccount the message
+    /// belongs to (routes/email.ts list mapping) — drives the row's inbox badge.
+    let linkedInboxAccountId: String?
 }
 
 /// GET /api/email response envelope (subset).
@@ -447,6 +528,59 @@ struct CalendarEventWire: Codable, Sendable, Identifiable, Hashable {
     let location: String?
     let meetingLink: String?
     let allDay: Bool
+}
+
+/// GET /api/calendar?days=N → { events } (routes/calendar.ts list). Same wire
+/// rows as the today summary; CalendarEventWire ignores the extra fields.
+struct CalendarListResponse: Codable, Sendable {
+    let events: [CalendarEventWire]
+}
+
+/// One day of the UPCOMING agenda (tomorrow → +7 days): label + its events.
+struct AgendaDay: Sendable, Identifiable, Hashable {
+    let label: String  // "Tomorrow", then weekday names — unique in a 7-day window
+    let events: [CalendarEventWire]
+    var id: String { label }
+}
+
+/// Group events into the 7 days AFTER today — today is excluded (the TODAY
+/// rows above the section already show it). Days with no events are omitted;
+/// events keep start order; a malformed startTime drops that event, never a
+/// crash. Calendar injectable so the harness pins the boundaries in UTC.
+func upcomingAgenda(
+    now: Date,
+    events: [CalendarEventWire],
+    calendar: Calendar = .current
+) -> [AgendaDay] {
+    let withMillis = ISO8601DateFormatter()
+    withMillis.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let plain = ISO8601DateFormatter()  // tolerate writers that omit millis
+    guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)),
+          let windowEnd = calendar.date(byAdding: .day, value: 7, to: tomorrow)
+    else { return [] }
+    let dated: [(day: Date, start: Date, event: CalendarEventWire)] = events.compactMap { event in
+        guard let start = withMillis.date(from: event.startTime)
+            ?? plain.date(from: event.startTime),
+            start >= tomorrow, start < windowEnd
+        else { return nil }
+        return (calendar.startOfDay(for: start), start, event)
+    }
+    let groups = Dictionary(grouping: dated, by: \.day)
+    return groups.keys.sorted().map { day in
+        AgendaDay(
+            label: agendaDayLabel(day: day, tomorrow: tomorrow, calendar: calendar),
+            events: groups[day, default: []].sorted { $0.start < $1.start }.map(\.event))
+    }
+}
+
+/// "Tomorrow" for the first agenda day, else the weekday name — unique within
+/// the 7-day window. Pure.
+func agendaDayLabel(day: Date, tomorrow: Date, calendar: Calendar) -> String {
+    if calendar.isDate(day, inSameDayAs: tomorrow) { return "Tomorrow" }
+    let symbols = calendar.weekdaySymbols
+    let index = calendar.component(.weekday, from: day) - 1
+    guard symbols.indices.contains(index) else { return "" }
+    return symbols[index]
 }
 
 /// GET /api/calendar/today/summary.
