@@ -5,11 +5,14 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
+import BriefingCard from "../../components/briefing-card";
+import CommandCenterSummary from "../../components/command-center-summary";
 import type { CommitmentItem } from "../../components/commitment-card";
 import { FirewallBoard } from "../../components/firewall-board";
 import { RejectReasonDialog } from "../../components/reject-reason-dialog";
 import { useToast } from "../../components/toast";
 import { apiFetch } from "../../lib/api";
+import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
 import type { ReplyNeededEmail } from "../../lib/inbox-summary";
 import { queryKeys } from "../../lib/query-keys";
@@ -387,15 +390,19 @@ function DecisionsBody({
         />
       </div>
 
-      {/* DESKTOP — flagship header first, then the surface toolbar, then the grid. */}
+      {/* DESKTOP — command center: greeting header, then the surface toolbar,
+          then a grid dense with real content (decisions, today, commitments,
+          reply rail, briefing). */}
       <div className="mx-auto hidden w-full max-w-6xl px-4 py-6 md:block md:py-8">
         {/* Flat flagship header on the canvas — no boxed hero. */}
         <header className="mb-4 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
-              {t("nav.decisionQueue")}
+              <Greeting />
             </h1>
             <p className="mt-2 text-sm text-slate-500">
+              <span className="text-slate-400">{formatToday()}</span>
+              <span className="mx-1.5 text-slate-300">·</span>
               {pendingCount > 0 ? (
                 <>
                   <span className="font-medium text-slate-700">{pendingCount}</span>
@@ -468,8 +475,10 @@ function DecisionsBody({
               <HonestEmptyState commitmentCount={commitments.length} />
             )}
 
+            {/* Today's real substance below the queue: Top-3 attention + TODAY
+                calendar/tasks, then open commitments — the command-center core. */}
             {actions.length > 0 && (
-              <div className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+              <div className="panel-elevated mb-5 overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
                 <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
                   <div className="flex items-center gap-2">
                     <h2 className="text-sm font-semibold text-slate-900">Decisions</h2>
@@ -511,15 +520,98 @@ function DecisionsBody({
                 </ul>
               </div>
             )}
+
+            <CommandCenterSummary />
+            <CommitmentsPanel commitments={commitments} />
           </section>
 
           <div className="space-y-4">
             <ReplyNeededPanel />
+            <BriefingCard />
             <QuickLinksPanel />
           </div>
         </div>
       </div>
     </>
+  );
+}
+
+// ─── Greeting + date (command-center warmth, real clock + real name) ────────
+
+function Greeting() {
+  const { user } = useAuth();
+  const hour = new Date().getHours();
+  const timeOfDay =
+    hour < 5 ? "evening" : hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
+  const first = user?.name?.trim().split(/\s+/)[0];
+  return <>{first ? `Good ${timeOfDay}, ${first}` : `Good ${timeOfDay}`}</>;
+}
+
+function formatToday(): string {
+  return new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+// ─── Commitments panel (read surface — actions live on desktop/native) ─────
+
+const COMMITMENT_KIND_LABEL: Record<CommitmentItem["kind"], string> = {
+  DELIVERABLE: "Deliverable",
+  FOLLOW_UP: "Follow-up",
+  DECISION: "Decision",
+  MEETING: "Meeting",
+  REVIEW: "Review",
+};
+
+function CommitmentsPanel({ commitments }: { commitments: CommitmentItem[] }) {
+  if (commitments.length === 0) return null;
+  return (
+    <section
+      aria-label="Commitments"
+      className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white"
+    >
+      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+        <h2 className="text-sm font-semibold text-slate-900">Commitments</h2>
+        <span className="rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-sky-700">
+          {commitments.length}
+        </span>
+      </div>
+      <ul className="divide-y divide-slate-100">
+        {commitments.map((c) => {
+          const iOwe = c.owner === "USER";
+          return (
+            <li key={c.id} className="row-wash relative">
+              {iOwe && (
+                <span
+                  aria-hidden="true"
+                  className="absolute left-0 top-0 h-full w-[3px] bg-amber-400"
+                />
+              )}
+              <div className="flex items-start gap-2.5 px-4 py-2.5 pl-5">
+                <span
+                  className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${
+                    iOwe
+                      ? "bg-amber-500/10 text-amber-600 ring-amber-500/20"
+                      : "bg-sky-500/10 text-sky-700 ring-sky-500/20"
+                  }`}
+                >
+                  {iOwe ? "I owe" : "Waiting on"}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium text-slate-800">{c.title}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">
+                    {COMMITMENT_KIND_LABEL[c.kind]}
+                    {c.dueText ? ` · due ${c.dueText}` : ""}
+                  </p>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
