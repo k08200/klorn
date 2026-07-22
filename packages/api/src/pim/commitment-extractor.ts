@@ -86,9 +86,13 @@ const EN_USER_RULES: Rule[] = [
 
 const EN_COUNTERPARTY_RULES: Rule[] = [
   {
+    // "You/Your" is excluded from the capitalized-subject alternation: a
+    // sentence telling the RECIPIENT what will happen ("You will not be
+    // allowed to join the queue…") is a notice about the user, never a
+    // counterparty promise (founder screen 2026-07-22).
     name: "en-counterparty-future",
     pattern:
-      /\b(?:they|he|she|the team|[A-Z][a-z]+)\s+(?:will|is going to|'ll|will be|plans to|is supposed to)\s+[^.!?\n]{0,160}/g,
+      /\b(?:they|he|she|[Tt]he team|(?!Your?\b)[A-Z][a-z]+)\s+(?:will|is going to|'ll|will be|plans to|is supposed to)\s+[^.!?\n]{0,160}/g,
     owner: "COUNTERPARTY",
   },
   {
@@ -147,6 +151,17 @@ function isTransactionalNoise(text: string): boolean {
   return TRANSACTIONAL_NOISE_RE.test(text);
 }
 
+// Policy-notice noise: automated notices phrase rules as negated permission
+// ("Applicants will not be permitted to enter…", "Visitors will not be able
+// to park…"). Nobody is promising an action — the sentence describes a
+// restriction — so it must never become a ledger commitment no matter which
+// subject-rule matched it.
+const POLICY_NOTICE_RE = /\bwill\s+not\s+be\s+(?:allowed|permitted|able|eligible|required)\b/i;
+
+function isPolicyNotice(text: string): boolean {
+  return POLICY_NOTICE_RE.test(text);
+}
+
 /**
  * Scan a chunk of text for commitment-shaped sentences. Returns at most
  * `maxCandidates` results (default 10), in order of appearance.
@@ -164,7 +179,7 @@ export function extractCommitmentCandidates(
     let match: RegExpExecArray | null = rule.pattern.exec(text);
     while (match !== null) {
       const matched = match[0].trim();
-      if (matched.length > 0 && !isTransactionalNoise(matched)) {
+      if (matched.length > 0 && !isTransactionalNoise(matched) && !isPolicyNotice(matched)) {
         collected.push({
           text: matched,
           owner: rule.owner,

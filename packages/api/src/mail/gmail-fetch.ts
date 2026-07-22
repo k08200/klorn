@@ -39,6 +39,10 @@ export interface GmailRawEmail {
   isStarred: boolean;
   receivedAt: Date;
   attachments: RawEmailAttachment[];
+  // Bulk/automated-mail marker: present on newsletters, notification relays,
+  // and appointment systems. Read by the commitment-mining gate. Optional so
+  // non-Gmail producers and older fixtures don't have to set it.
+  hasListUnsubscribe?: boolean;
 }
 
 function decodeBase64Url(data: string): Buffer {
@@ -185,6 +189,7 @@ async function parseGmailMessageDetail(
     isStarred: labelIds.includes("STARRED"),
     receivedAt: parseReceivedAt(dateStr),
     attachments,
+    hasListUnsubscribe: getHeader("List-Unsubscribe") !== "",
   };
 }
 

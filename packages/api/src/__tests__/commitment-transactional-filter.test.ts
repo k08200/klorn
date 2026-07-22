@@ -117,7 +117,11 @@ describe("extractAndUpsertCommitmentsFromText — no-reply gate (F1)", () => {
     expect(result.commitmentsCreated).toBe(1);
   });
 
-  it("still mines commitments from project-tool notifications (notifications@ is not gated)", async () => {
+  it("no longer mines project-tool notifications (founder decision 2026-07-22 — automated senders are fully gated)", async () => {
+    // Reverses the earlier carve-out that spared notifications@ relays: after
+    // automated notices kept landing on the founder's ledger, commitment
+    // ingestion gates the broad isAutomatedSender signal, accepting the loss
+    // of relayed third-party promises ("Sarah will review the PR Friday").
     const result = await extractAndUpsertCommitmentsFromText({
       userId: "user-1",
       sourceType: "EMAIL",
@@ -125,7 +129,8 @@ describe("extractAndUpsertCommitmentsFromText — no-reply gate (F1)", () => {
       text: "Sarah will review the PR Friday.",
       senderEmail: "notifications@github.com",
     });
-    expect(result.commitmentsCreated).toBe(1);
+    expect(result.commitmentsCreated).toBe(0);
+    expect(upsertCalls).toHaveLength(0);
   });
 
   it("creates 0 commitments for a logistics role sender even when text evades F2 (F3 gate)", async () => {

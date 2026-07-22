@@ -10,7 +10,7 @@
 import { createHash } from "node:crypto";
 import type { CommitmentKind, CommitmentSource } from "@prisma/client";
 import { prisma } from "../db.js";
-import { isNoReplySender, isTransactionalSender } from "../judge/keyword-policy.js";
+import { isAutomatedSender } from "../judge/keyword-policy.js";
 import { type CommitmentCandidate, extractCommitmentCandidates } from "./commitment-extractor.js";
 import {
   type CommitmentRefinement,
@@ -32,6 +32,8 @@ export interface CommitmentIngestionInput {
   timeZone?: string;
   maxCandidates?: number;
   senderEmail?: string | null; // email source: set to From address; used for trust score
+  senderIsUser?: boolean; // email source: true when the user authored the message themselves
+  listUnsubscribe?: boolean; // email source: true when the mail carried a List-Unsubscribe header
 }
 
 export interface CommitmentIngestionResult {
@@ -73,13 +75,31 @@ function confidenceForCandidate(candidate: CommitmentCandidate): number {
   return candidate.dueHint ? 0.55 : 0.45;
 }
 
+/**
+ * EMAIL text is written by the SENDER: a first-person promise in a received
+ * email ("I'll push it back to them now") is the sender's commitment, not the
+ * user's — the rule extractor's USER owner is a perspective it cannot know.
+ * Only when the user authored the message themselves (senderIsUser) does
+ * first-person mean the user. Non-email sources (chat, notes) are the user's
+ * own voice, so the candidate owner stands.
+ */
+function ownerForCandidate(
+  input: CommitmentIngestionInput,
+  candidate: CommitmentCandidate,
+): CommitmentInput["owner"] {
+  if (input.sourceType === "EMAIL" && candidate.owner === "USER" && input.senderIsUser !== true) {
+    return "COUNTERPARTY";
+  }
+  return candidate.owner;
+}
+
 function buildCommitmentInput(
   input: CommitmentIngestionInput,
   candidate: CommitmentCandidate,
   refinement: CommitmentRefinement | null,
   dedupKey: string,
 ): CommitmentInput {
-  const owner = refinement?.owner ?? candidate.owner;
+  const owner = refinement?.owner ?? ownerForCandidate(input, candidate);
   return {
     title: compactText(refinement?.title ?? candidate.text),
     description: input.contextTitle ? compactText(input.contextTitle, 180) : null,
@@ -107,18 +127,18 @@ function buildCommitmentInput(
 export async function extractAndUpsertCommitmentsFromText(
   input: CommitmentIngestionInput,
 ): Promise<CommitmentIngestionResult> {
-  // Automated senders (order confirmations, shipping notices) don't make
-  // interpersonal commitments — their "X will deliver/arrive" text would
-  // otherwise be mined into a fake dated COUNTERPARTY commitment on the ledger.
-  // Two narrow gates: no-reply machine addresses, and logistics role addresses
-  // (ship-confirm@, order-update@, tracking@) whose notices can evade the
-  // text-level transactional denylist (e.g. a refund/return notice with no
-  // shipping noun). Both deliberately spare notifications@ (GitHub/Jira/Linear)
-  // and real people, which relay genuine human commitments worth capturing.
-  if (
-    input.senderEmail &&
-    (isNoReplySender(input.senderEmail) || isTransactionalSender(input.senderEmail))
-  ) {
+  // Automated mail doesn't make interpersonal commitments — its "X will
+  // deliver/arrive" / "You will not be allowed…" text would otherwise be mined
+  // into a fake ledger commitment. Gate on every automated signal we have:
+  // no-reply + logistics role + system-notification senders (isAutomatedSender)
+  // and the List-Unsubscribe bulk-mail header. Founder decision 2026-07-22:
+  // this deliberately REVERSES the earlier carve-out that spared notifications@
+  // (GitHub/Jira/Linear relays) — after the appointment-notice leak, keeping
+  // automated noise off the ledger outweighs relayed third-party promises.
+  if (input.listUnsubscribe === true) {
+    return { candidatesFound: 0, commitmentsCreated: 0, duplicatesSkipped: 0 };
+  }
+  if (input.senderEmail && isAutomatedSender(input.senderEmail)) {
     return { candidatesFound: 0, commitmentsCreated: 0, duplicatesSkipped: 0 };
   }
   const candidates = extractCommitmentCandidates(input.text, {
