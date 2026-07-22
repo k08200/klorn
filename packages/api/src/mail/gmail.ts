@@ -1545,7 +1545,18 @@ export async function renewExpiringGmailWatches(): Promise<{ renewed: number; fa
   const tokens = await prisma.userToken.findMany({
     where: {
       provider: "google",
-      gmailWatchExpiresAt: { not: null, lte: cutoff },
+      // Must have a usable refresh token — a revoked/partial token can only 401,
+      // so don't retry it every hour.
+      refreshToken: { not: null },
+      OR: [
+        // FIRST-TIME register: users connected before watch-on-connect existed
+        // (or before this sweep covered them) have a null expiry and were being
+        // silently skipped — Gmail never pushed, so their mail was poll-only.
+        // Registering here is what turns real-time on for the existing base.
+        { gmailWatchExpiresAt: null },
+        // Renew the ones about to lapse (Gmail watches expire ~7 days).
+        { gmailWatchExpiresAt: { lte: cutoff } },
+      ],
     },
     select: { userId: true },
   });
