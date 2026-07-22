@@ -738,21 +738,41 @@ function EmailView() {
             a quiet button, so the mail list stays the visual hero. */}
         <header className="mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-slate-900">
-              {t("nav.mail")}
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
+                {t("nav.mail")}
+              </h1>
+              {source === "gmail" && (
+                <span
+                  title="Real-time sync is on — new mail lands in seconds"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600"
+                >
+                  <span aria-hidden="true" className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  </span>
+                  Live
+                </span>
+              )}
+            </div>
+            <p className="mt-2 text-sm text-slate-500">
               {source === "demo" ? (
                 <span className="text-sky-600">Demo data — connect Gmail in Settings</span>
               ) : replyCount > 0 ? (
-                `${replyCount} ${replyCount === 1 ? "message needs" : "messages need"} a reply`
+                <>
+                  <span className="font-medium text-slate-700">{replyCount}</span>
+                  {replyCount === 1 ? " needs a reply" : " need a reply"}
+                </>
               ) : unreadCount > 0 ? (
                 `${unreadCount} unread`
               ) : (
                 "You're all caught up"
               )}
               {totalAvailable > 0 && (
-                <span className="text-slate-400"> · {totalAvailable} in view</span>
+                <span className="text-slate-400">
+                  {" "}
+                  <span className="mx-0.5 text-slate-300">·</span> {totalAvailable} in view
+                </span>
               )}
             </p>
           </div>
@@ -762,7 +782,7 @@ function EmailView() {
               onClick={() => setComposeOpen(true)}
               disabled={source === "demo"}
               title={source === "demo" ? "Connect Gmail to send email" : "Compose a new email"}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent px-3.5 text-sm font-medium text-white shadow-sm shadow-sky-500/25 transition duration-150 ease-out hover:bg-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+              className="glow-primary ease-strong inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3.5 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
             >
               <svg
                 aria-hidden="true"
@@ -786,7 +806,7 @@ function EmailView() {
               disabled={syncing}
               aria-label={syncing ? t("common.syncing") : t("common.syncNow")}
               title={t("common.syncNow")}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition duration-150 ease-out hover:bg-slate-50 hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
+              className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white/70 text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
             >
               <svg
                 aria-hidden="true"
@@ -809,7 +829,7 @@ function EmailView() {
               onClick={reanalyzeAttachments}
               disabled={reanalyzing}
               title="Re-run attachment analysis"
-              className="hidden h-9 items-center rounded-lg border border-slate-200 px-3 text-xs font-medium text-slate-500 transition duration-150 ease-out hover:bg-slate-50 hover:text-slate-900 active:scale-[0.97] disabled:opacity-50 lg:inline-flex"
+              className="ease-strong hidden h-9 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50 lg:inline-flex"
             >
               {reanalyzing ? "Analyzing…" : "Reanalyze"}
             </button>
@@ -839,7 +859,7 @@ function EmailView() {
         {/* One navigation model: core filters as a segmented row with inline
             search on the right. Flat on the canvas so the list stays the hero. */}
         <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <FilterTabs current={filter} onChange={setFilter} />
+          <FilterTabs current={filter} onChange={setFilter} activeCount={totalAvailable} />
           <form onSubmit={submitSearch} className="relative lg:w-72 lg:shrink-0">
             <svg
               aria-hidden="true"
@@ -861,8 +881,16 @@ function EmailView() {
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t("mail.searchPlaceholder")}
               aria-label={t("mail.searchPlaceholder")}
-              className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-sm text-slate-900 outline-none transition duration-150 ease-out placeholder:text-slate-400 focus:border-accent/50 focus:ring-2 focus:ring-accent/15"
+              className="h-9 w-full rounded-lg border border-slate-200 bg-white/80 pl-9 pr-12 text-sm text-slate-900 shadow-[0_1px_1px_rgba(15,23,42,0.03)] outline-none transition duration-150 ease-out placeholder:text-slate-400 focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15"
             />
+            {!appliedSearch && (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-slate-400"
+              >
+                ⌘K
+              </span>
+            )}
             {appliedSearch && (
               <button
                 type="button"
@@ -907,12 +935,15 @@ function EmailView() {
                 type="button"
                 onClick={() => setFilter(queue.key)}
                 title={queue.description}
-                className={`h-7 rounded-full px-3 text-xs font-medium transition duration-150 ease-out active:scale-[0.97] ${
+                className={`ease-strong inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition duration-150 active:scale-[0.97] ${
                   active
                     ? "bg-accent/10 text-sky-700 ring-1 ring-inset ring-accent/30"
-                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                    : "text-slate-500 hover:bg-white/80 hover:text-slate-900 hover:shadow-sm"
                 }`}
               >
+                {active && (
+                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                )}
                 {queue.title}
               </button>
             );
@@ -922,14 +953,51 @@ function EmailView() {
         {candidateCount > 0 && (
           <Link
             href="/email/candidates"
-            className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-sky-200/70 bg-sky-50/60 px-4 py-2.5 text-sm text-sky-700 transition duration-150 ease-out hover:bg-sky-50"
+            className="group mb-4 flex items-center justify-between gap-3 overflow-hidden rounded-xl border border-sky-200/70 bg-gradient-to-r from-sky-50 to-white px-4 py-2.5 text-sm text-sky-800 shadow-[0_1px_2px_rgba(2,60,110,0.05)] transition duration-150 ease-out hover:from-sky-100/70"
           >
-            <span className="inline-flex items-center gap-2">
-              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-sky-500" />
-              Review {candidateCount} candidate {candidateCount === 1 ? "signal" : "signals"} in the
-              intake queue.
+            <span className="inline-flex items-center gap-2.5">
+              <span
+                aria-hidden="true"
+                className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600"
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M9 11l3 3L22 4" />
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                </svg>
+              </span>
+              <span>
+                <span className="font-medium">
+                  {candidateCount} candidate {candidateCount === 1 ? "signal" : "signals"}
+                </span>{" "}
+                waiting in the intake queue.
+              </span>
             </span>
-            <span className="shrink-0 text-xs font-medium">Open →</span>
+            <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-sky-600">
+              Review
+              <svg
+                aria-hidden="true"
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="transition-transform duration-150 group-hover:translate-x-0.5"
+              >
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </span>
           </Link>
         )}
 
@@ -994,31 +1062,32 @@ function EmailView() {
         )}
 
         {!loading && filter !== "threads" && emails.length > 0 && (
-          <ul className="mt-3 space-y-2.5">
-            <li>
-              <BulkActionBar
-                allVisibleSelected={allVisibleSelected}
-                busy={bulkBusy}
-                selectedCount={selectedCount}
-                totalVisible={emails.length}
-                onApply={applyBulkAction}
-                onClear={() => setSelectedIds(new Set())}
-                onToggleAll={toggleAllVisible}
-              />
-            </li>
-            {emails.map((e) => (
-              <EmailRowItem
-                key={e.id}
-                email={e}
-                queue={filter}
-                reminderBusyKey={rowReminderBusy}
-                selected={selectedIds.has(e.id)}
-                inboxLabel={resolveInboxLabel(e)}
-                onCreateReminder={createRowReminder}
-                onToggleSelected={toggleSelected}
-              />
-            ))}
-          </ul>
+          <section className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+            <BulkActionBar
+              allVisibleSelected={allVisibleSelected}
+              busy={bulkBusy}
+              selectedCount={selectedCount}
+              totalVisible={emails.length}
+              totalAvailable={totalAvailable}
+              onApply={applyBulkAction}
+              onClear={() => setSelectedIds(new Set())}
+              onToggleAll={toggleAllVisible}
+            />
+            <ul className="divide-y divide-slate-100">
+              {emails.map((e) => (
+                <EmailRowItem
+                  key={e.id}
+                  email={e}
+                  queue={filter}
+                  reminderBusyKey={rowReminderBusy}
+                  selected={selectedIds.has(e.id)}
+                  inboxLabel={resolveInboxLabel(e)}
+                  onCreateReminder={createRowReminder}
+                  onToggleSelected={toggleSelected}
+                />
+              ))}
+            </ul>
+          </section>
         )}
 
         {!loading && filter === "threads" && threads.length === 0 && !error && (
@@ -1028,11 +1097,13 @@ function EmailView() {
         )}
 
         {!loading && filter === "threads" && threads.length > 0 && (
-          <ul className="mt-3 space-y-2.5">
-            {threads.map((thread) => (
-              <ThreadRowItem key={thread.threadId} thread={thread} />
-            ))}
-          </ul>
+          <section className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+            <ul className="divide-y divide-slate-100">
+              {threads.map((thread) => (
+                <ThreadRowItem key={thread.threadId} thread={thread} />
+              ))}
+            </ul>
+          </section>
         )}
 
         {!loading && !error && (emails.length > 0 || threads.length > 0) && (
@@ -1164,6 +1235,7 @@ function BulkActionBar({
   busy,
   selectedCount,
   totalVisible,
+  totalAvailable,
   onApply,
   onClear,
   onToggleAll,
@@ -1172,25 +1244,45 @@ function BulkActionBar({
   busy: boolean;
   selectedCount: number;
   totalVisible: number;
+  totalAvailable: number;
   onApply: (action: BulkAction, options?: { priority?: EmailRow["priority"] }) => void;
   onClear: () => void;
   onToggleAll: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 md:flex-row md:items-center md:justify-between">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onToggleAll}
-          className="h-8 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100"
+    <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-2.5 md:flex-row md:items-center md:justify-between">
+      <button
+        type="button"
+        onClick={onToggleAll}
+        aria-pressed={allVisibleSelected}
+        className="group inline-flex items-center gap-2 text-xs font-medium text-slate-500 transition hover:text-slate-900"
+      >
+        <span
+          aria-hidden="true"
+          className={`flex h-4 w-4 items-center justify-center rounded border transition ${
+            allVisibleSelected
+              ? "border-accent bg-accent text-white"
+              : "border-slate-300 bg-white group-hover:border-slate-400"
+          }`}
         >
-          {allVisibleSelected ? "Clear page" : "Select page"}
-        </button>
-        <span className="text-xs text-slate-400">
-          {selectedCount > 0 ? `${selectedCount} selected` : `${totalVisible} on this page`}
+          {allVisibleSelected && (
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          )}
         </span>
-      </div>
-      {selectedCount > 0 && (
+        {selectedCount > 0 ? `${selectedCount} selected` : "Select page"}
+      </button>
+      {selectedCount > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           <BulkButton disabled={busy} onClick={() => onApply("mark-read")}>
             Mark read
@@ -1214,11 +1306,16 @@ function BulkActionBar({
             type="button"
             onClick={onClear}
             disabled={busy}
-            className="h-8 rounded-md px-2.5 text-xs text-slate-400 transition hover:bg-slate-100 disabled:opacity-50"
+            className="h-7 rounded-md px-2 text-xs text-slate-400 transition hover:bg-slate-100 disabled:opacity-50"
           >
             Cancel
           </button>
         </div>
+      ) : (
+        <span className="text-[11px] text-slate-400">
+          {totalVisible}
+          {totalAvailable > totalVisible ? ` of ${totalAvailable}` : " on this page"}
+        </span>
       )}
     </div>
   );
@@ -1312,13 +1409,23 @@ function InboxSelector({
 // candidates, threads, automated) stay desktop-only to keep the chip row short.
 const MOBILE_FILTERS = new Set<Filter>(["all", "reply-needed", "urgent", "unread"]);
 
-function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filter) => void }) {
+function FilterTabs({
+  current,
+  onChange,
+  activeCount,
+}: {
+  current: Filter;
+  onChange: (f: Filter) => void;
+  /** Server-truth total for the ACTIVE filter (query total) — never a
+   *  loaded-rows count, which understates and shifts as pages load. */
+  activeCount?: number;
+}) {
   const { t } = useT();
   return (
     <div
       role="group"
       aria-label="Filter mail"
-      className="flex gap-0.5 overflow-x-auto rounded-lg bg-slate-100 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="flex gap-0.5 overflow-x-auto rounded-xl border border-slate-200/70 bg-white/60 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {FILTERS.filter((f) => !DOMAIN_FILTER_KEYS.includes(f.key)).map((f) => {
         const active = f.key === current;
@@ -1328,11 +1435,18 @@ function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filt
             type="button"
             aria-pressed={active}
             onClick={() => onChange(f.key)}
-            className={`${MOBILE_FILTERS.has(f.key) ? "inline-flex" : "hidden md:inline-flex"} min-h-[30px] shrink-0 items-center whitespace-nowrap rounded-md px-3 text-xs font-medium transition duration-150 ease-out active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-              active ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"
+            className={`${MOBILE_FILTERS.has(f.key) ? "inline-flex" : "hidden md:inline-flex"} ease-strong h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-xs transition duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+              active
+                ? "seg-active bg-white font-semibold text-slate-900"
+                : "font-medium text-slate-500 hover:bg-white/70 hover:text-slate-900"
             }`}
           >
             {f.labelKey ? t(f.labelKey) : f.label}
+            {active && typeof activeCount === "number" && activeCount > 0 && (
+              <span className="rounded bg-sky-100 px-1 text-[10px] font-bold text-sky-700">
+                {activeCount}
+              </span>
+            )}
           </button>
         );
       })}
@@ -1381,7 +1495,7 @@ function LoadMoreBar({
   return (
     <div
       ref={sentinelRef}
-      className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-400"
+      className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/60 px-4 py-2.5 text-[11px] text-slate-400 backdrop-blur"
     >
       <span>
         Showing {loadedCount}
@@ -1392,7 +1506,7 @@ function LoadMoreBar({
           type="button"
           onClick={onLoadMore}
           disabled={isFetching}
-          className="rounded-md border border-slate-200 px-3 py-1.5 text-xs text-slate-500 transition hover:border-sky-300/40 hover:text-sky-600 disabled:opacity-50"
+          className="ease-strong rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500 shadow-sm transition duration-150 hover:text-sky-600 active:scale-[0.97] disabled:opacity-50"
         >
           {isFetching ? "Loading…" : "Load more"}
         </button>
@@ -1421,71 +1535,118 @@ function EmailRowItem({
   onToggleSelected: (id: string) => void;
 }) {
   const unread = !email.isRead;
+  const urgent = email.priority === "URGENT";
+  const name = senderName(email.from);
   const detailParams = new URLSearchParams({ markRead: "false", queue });
   return (
-    <li className="grid grid-cols-[auto_1fr] gap-2">
-      <button
-        type="button"
-        aria-pressed={selected}
-        aria-label={`Select ${email.subject || "No subject"}`}
-        onClick={() => onToggleSelected(email.id)}
-        className={`mt-4 h-5 w-5 rounded border transition ${
-          selected
-            ? "border-accent bg-accent shadow-[inset_0_0_0_4px_#ffffff]"
-            : "border-slate-200 bg-slate-50 hover:border-slate-300"
-        }`}
-      />
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white transition hover:border-slate-300">
+    <li className="row-wash group relative">
+      {/* Tier accent bar: urgent outranks unread; read+normal rows stay bare. */}
+      {(urgent || unread) && (
+        <span
+          aria-hidden="true"
+          className={`absolute left-0 top-0 h-full w-[3px] ${
+            urgent ? "bg-gradient-to-b from-rose-400 to-rose-500" : "bg-sky-400"
+          }`}
+        />
+      )}
+      <div className="flex items-start gap-3 px-4 py-3.5 pl-5">
+        <button
+          type="button"
+          aria-pressed={selected}
+          aria-label={`Select ${email.subject || "No subject"}`}
+          onClick={() => onToggleSelected(email.id)}
+          className={`mt-2.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
+            selected
+              ? "border-accent bg-accent text-white"
+              : "border-slate-300 bg-white hover:border-slate-400"
+          }`}
+        >
+          {selected && (
+            <svg
+              aria-hidden="true"
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          )}
+        </button>
         <Link
           href={`/email/${email.id}?${detailParams.toString()}`}
-          className="block transition hover:bg-slate-100 active:bg-slate-100"
+          className="flex min-w-0 flex-1 items-start gap-3.5"
         >
-          <div className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-start">
-            <div className="min-w-0 flex-1">
-              <EmailBadges email={email} unread={unread} />
-              <div
-                className={`mt-2 flex items-center gap-1.5 text-sm ${unread ? "font-semibold text-slate-900" : "text-slate-500"}`}
+          <span
+            aria-hidden="true"
+            className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[13px] font-semibold text-white ${avatarGradient(name)}`}
+          >
+            {senderInitials(name)}
+          </span>
+          <span className="block min-w-0 flex-1">
+            <span className="flex items-center gap-2">
+              <TrustDot trust={email.trust} />
+              <span
+                className={`truncate text-sm ${
+                  unread ? "font-semibold text-slate-900" : "text-slate-600"
+                }`}
               >
-                <TrustDot trust={email.trust} />
-                <span className="truncate">{senderName(email.from)}</span>
-                {inboxLabel && (
-                  <span className="inline-flex max-w-[45%] shrink-0 items-center gap-1 truncate rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
-                    <span
-                      aria-hidden="true"
-                      className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/70"
-                    />
-                    <span className="truncate">{inboxLabel}</span>
-                  </span>
-                )}
-              </div>
-              <p className="mt-1 truncate text-[13px] text-slate-500">
-                {email.subject || "No subject"}
-              </p>
-              {email.summary ? (
-                <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
-                  <span className="mr-1 text-slate-400">Summary:</span>
-                  {email.summary}
-                </p>
-              ) : email.snippet ? (
-                <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
-                  {email.snippet}
-                </p>
-              ) : null}
-              {email.candidateProfilePreview && (
-                <CandidatePreview profile={email.candidateProfilePreview} />
+                {name}
+              </span>
+              {inboxLabel && (
+                <span className="inline-flex max-w-[30%] shrink-0 items-center gap-1 truncate rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                  <span
+                    aria-hidden="true"
+                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/70"
+                  />
+                  <span className="truncate">{inboxLabel}</span>
+                </span>
               )}
-            </div>
-            <time className="shrink-0 text-[11px] tabular-nums text-slate-400 md:pt-1">
-              {formatRelative(email.date)}
-            </time>
-          </div>
+              <EmailBadges email={email} unread={false} />
+              <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                {unread && (
+                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent" />
+                )}
+                <time className="text-[11px] tabular-nums text-slate-400">
+                  {formatRelative(email.date)}
+                </time>
+              </span>
+            </span>
+            <span
+              className={`mt-1 block truncate text-[13.5px] ${
+                unread ? "font-medium text-slate-800" : "text-slate-600"
+              }`}
+            >
+              {email.subject || "No subject"}
+            </span>
+            {email.summary ? (
+              <span
+                className={`mt-1 line-clamp-1 block text-xs leading-5 ${unread ? "text-slate-500" : "text-slate-400"}`}
+              >
+                {email.summary}
+              </span>
+            ) : email.snippet ? (
+              <span
+                className={`mt-1 line-clamp-1 block text-xs leading-5 ${unread ? "text-slate-500" : "text-slate-400"}`}
+              >
+                {email.snippet}
+              </span>
+            ) : null}
+            {email.candidateProfilePreview && (
+              <CandidatePreview profile={email.candidateProfilePreview} />
+            )}
+          </span>
         </Link>
-        <EmailRowReminderActions
-          email={email}
-          busyKey={reminderBusyKey}
-          onCreateReminder={onCreateReminder}
-        />
       </div>
+      <EmailRowReminderActions
+        email={email}
+        busyKey={reminderBusyKey}
+        onCreateReminder={onCreateReminder}
+      />
     </li>
   );
 }
@@ -1499,9 +1660,13 @@ function EmailRowReminderActions({
   email: EmailRow;
   onCreateReminder: (email: EmailRow, option: EmailReminderOption) => void;
 }) {
+  // Quiet inline strip, indented to the content column (checkbox 16 + gap 12 +
+  // avatar 36 + gap 14 = 78px). Text-only buttons keep the row calm while the
+  // one-click reminder affordance stays permanently visible (no hover-hiding —
+  // touch and keyboard users get the same surface).
   return (
-    <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-200 px-4 py-2 text-[11px] text-slate-400">
-      <span className="mr-1">Remind</span>
+    <div className="-mt-1.5 flex flex-wrap items-center gap-0.5 pb-2.5 pl-[78px] pr-4 text-[11px] text-slate-400">
+      <span className="mr-1.5">Remind</span>
       {EMAIL_REMINDER_OPTIONS.map((option) => {
         const key = `${email.id}:${option.key}`;
         return (
@@ -1510,9 +1675,9 @@ function EmailRowReminderActions({
             type="button"
             onClick={() => onCreateReminder(email, option)}
             disabled={busyKey !== null}
-            className="min-h-8 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-[11px] text-slate-500 transition hover:border-[#a8a29e]/35 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-45"
+            className="ease-strong rounded-md px-2 py-1 text-[11px] font-medium text-slate-400 transition duration-150 hover:bg-sky-50 hover:text-sky-700 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
           >
-            {busyKey === key ? "Setting..." : option.label}
+            {busyKey === key ? "Setting…" : option.label}
           </button>
         );
       })}
@@ -1536,9 +1701,22 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
     badges.push(
       <span
         key="files"
-        className="shrink-0 rounded border border-[#a8a29e]/30 bg-[#a8a29e]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#a8a29e]"
+        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-500"
       >
-        Files {email.attachmentCount}
+        <svg
+          aria-hidden="true"
+          width="9"
+          height="9"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+        </svg>
+        {email.attachmentCount}
       </span>,
     );
   }
@@ -1546,7 +1724,7 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
     badges.push(
       <span
         key="pending"
-        className="shrink-0 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
+        className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-400"
       >
         Pending {email.attachmentPendingCount}
       </span>,
@@ -1556,7 +1734,7 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
     badges.push(
       <span
         key="fallback"
-        className="shrink-0 rounded border border-accent/25 bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent"
+        className="shrink-0 rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-600 ring-1 ring-inset ring-sky-500/20"
       >
         Fallback {email.attachmentFallbackCount}
       </span>,
@@ -1581,43 +1759,52 @@ function EmailBadges({ email, unread }: { email: EmailRow; unread: boolean }) {
 }
 
 function ThreadRowItem({ thread }: { thread: ThreadRow }) {
+  const firstParticipant = thread.participants[0] ? senderName(thread.participants[0]) : "@";
   return (
-    <li>
+    <li className="row-wash group relative">
+      {thread.hasUnread && (
+        <span aria-hidden="true" className="absolute left-0 top-0 h-full w-[3px] bg-sky-400" />
+      )}
       <Link
         href={`/email/${thread.lastMessage.id}?markRead=false`}
-        className="block rounded-lg border border-slate-200 bg-white transition hover:border-slate-300 hover:bg-slate-100 active:bg-slate-100"
+        className="flex items-start gap-3.5 px-4 py-3.5 pl-5"
       >
-        <div className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-start">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <PriorityBadge priority={thread.latestPriority} />
-              {thread.hasUnread && (
-                <span className="rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
-                  Unread
-                </span>
-              )}
-              <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500">
-                {thread.messageCount} messages
-              </span>
-            </div>
-            <p className="mt-2 truncate text-sm font-semibold text-slate-900">
-              {thread.subject || "No subject"}
-            </p>
-            <p className="mt-1 truncate text-[12px] text-slate-400">
+        <span
+          aria-hidden="true"
+          className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[13px] font-semibold text-white ${avatarGradient(firstParticipant)}`}
+        >
+          {senderInitials(firstParticipant)}
+        </span>
+        <span className="block min-w-0 flex-1">
+          <span className="flex items-center gap-2">
+            <span
+              className={`truncate text-sm ${thread.hasUnread ? "font-semibold text-slate-900" : "text-slate-600"}`}
+            >
               {thread.participants.map(senderName).join(", ")}
-            </p>
-            {thread.summary ? (
-              <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">{thread.summary}</p>
-            ) : thread.lastMessage.snippet ? (
-              <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
-                {thread.lastMessage.snippet}
-              </p>
-            ) : null}
-          </div>
-          <time className="shrink-0 text-[11px] tabular-nums text-slate-400 md:pt-1">
-            {formatRelative(thread.lastMessage.receivedAt)}
-          </time>
-        </div>
+            </span>
+            <PriorityBadge priority={thread.latestPriority} />
+            <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-500">
+              {thread.messageCount} msgs
+            </span>
+            <time className="ml-auto shrink-0 text-[11px] tabular-nums text-slate-400">
+              {formatRelative(thread.lastMessage.receivedAt)}
+            </time>
+          </span>
+          <span
+            className={`mt-1 block truncate text-[13.5px] ${thread.hasUnread ? "font-medium text-slate-800" : "text-slate-600"}`}
+          >
+            {thread.subject || "No subject"}
+          </span>
+          {thread.summary ? (
+            <span className="mt-1 line-clamp-1 block text-xs leading-5 text-slate-400">
+              {thread.summary}
+            </span>
+          ) : thread.lastMessage.snippet ? (
+            <span className="mt-1 line-clamp-1 block text-xs leading-5 text-slate-400">
+              {thread.lastMessage.snippet}
+            </span>
+          ) : null}
+        </span>
       </Link>
     </li>
   );
@@ -1673,7 +1860,7 @@ function candidateMissingLabel(field: string): string {
 }
 function ReplyNeededBadge() {
   return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded border border-accent/30 bg-accent/10 text-accent font-medium shrink-0">
+    <span className="shrink-0 rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-700 ring-1 ring-inset ring-sky-500/20">
       Needs reply
     </span>
   );
@@ -1681,7 +1868,7 @@ function ReplyNeededBadge() {
 
 function CandidateBadge() {
   return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded border border-accent/30 bg-accent/10 text-accent-light font-medium shrink-0">
+    <span className="shrink-0 rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-600 ring-1 ring-inset ring-sky-500/20">
       Candidate
     </span>
   );
@@ -1689,15 +1876,15 @@ function CandidateBadge() {
 
 function PriorityBadge({ priority }: { priority: EmailRow["priority"] }) {
   const styles = {
-    URGENT: "bg-red-500/15 text-red-300 border-red-500/30",
-    NORMAL: "bg-slate-100 text-slate-500 border-slate-200",
-    LOW: "bg-slate-50 text-slate-400 border-slate-200",
+    URGENT: "bg-rose-500/10 text-rose-600 ring-rose-500/20",
+    NORMAL: "bg-slate-100 text-slate-500 ring-slate-200",
+    LOW: "bg-slate-100 text-slate-500 ring-transparent",
   } as const;
   const labels = { URGENT: "Urgent", NORMAL: "Normal", LOW: "Low" } as const;
   if (priority === "NORMAL") return null;
   return (
     <span
-      className={`text-[10px] px-1.5 py-0.5 rounded border ${styles[priority]} font-medium shrink-0`}
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority]}`}
     >
       {labels[priority]}
     </span>
@@ -1717,7 +1904,7 @@ function CategoryBadge({ category }: { category: string }) {
   };
   const label = labelMap[category] || category;
   return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-500 shrink-0">
+    <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-500">
       {label}
     </span>
   );
@@ -1727,6 +1914,42 @@ function senderName(raw: string): string {
   const match = raw.match(/^([^<]+?)\s*</);
   if (match?.[1]) return match[1].trim();
   return raw.replace(/[<>]/g, "").trim();
+}
+
+// Monogram avatar: up to two initials from the display name. Works for
+// latin ("Jamie Rivera" → JR), single-word senders ("Stripe" → S), and CJK
+// names (first grapheme). Falls back to "@" for empty/degenerate strings.
+function senderInitials(name: string): string {
+  const words = name
+    .replace(/["'()[\]]/g, "")
+    .split(/[\s·|,]+/)
+    .filter(Boolean);
+  if (words.length === 0) return "@";
+  const initials = words
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("");
+  return initials.toUpperCase();
+}
+
+// Deterministic gradient per sender so the same sender always gets the same
+// color (recognition over decoration). Simple 31-hash over the name.
+const AVATAR_GRADIENTS = [
+  "from-sky-400 to-blue-500",
+  "from-teal-400 to-emerald-500",
+  "from-indigo-500 to-violet-600",
+  "from-amber-400 to-orange-500",
+  "from-rose-400 to-pink-500",
+  "from-cyan-400 to-sky-600",
+  "from-slate-600 to-slate-800",
+];
+
+function avatarGradient(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  }
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
 }
 
 // ─── Mobile native mail row ─────────────────────────────────────────────────
