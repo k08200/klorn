@@ -597,10 +597,8 @@ function EmailView() {
   };
 
   const unreadCount = emails.filter((email) => !email.isRead).length;
-  const urgentCount = emails.filter((email) => email.priority === "URGENT").length;
   const replyCount = emails.filter((email) => email.needsReply).length;
   const candidateCount = emails.filter((email) => (email.attachmentCandidateCount ?? 0) > 0).length;
-  const attachmentCount = emails.filter((email) => (email.attachmentCount ?? 0) > 0).length;
 
   return (
     <>
@@ -735,53 +733,86 @@ function EmailView() {
         {/* Mobile = content-first: a compact title + small action row, with the
             description, the 4-stat dashboard, and Reanalyze hidden until md so the
             mail list isn't pushed off-screen. Desktop (md:+) keeps the full hero. */}
-        <header className="mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-xl shadow-black/10 md:mb-5 md:p-6">
-          <div className="flex flex-col gap-3 md:gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600 md:mb-2">
-                Klorn · Mail
-              </p>
-              <h1 className="text-lg font-semibold tracking-tight text-slate-900 md:text-2xl">
-                Mail that needs a reply
-              </h1>
-              <p className="mt-2 hidden max-w-xl text-sm leading-6 text-slate-500 md:block">
-                Sorted by urgency and reply-needed signal.
-                {source === "demo" && <span className="ml-2 text-accent">Demo data</span>}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setComposeOpen(true)}
-                disabled={source === "demo"}
-                title={source === "demo" ? "Connect Gmail to send email" : "Compose a new email"}
-                className="min-h-11 w-fit rounded-md bg-accent px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                ✎ {t("mail.compose")}
-              </button>
-              <button
-                type="button"
-                onClick={syncNow}
-                disabled={syncing}
-                className="min-h-11 w-fit rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-500 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-              >
-                {syncing ? t("common.syncing") : t("common.syncNow")}
-              </button>
-              <button
-                type="button"
-                onClick={reanalyzeAttachments}
-                disabled={reanalyzing}
-                className="hidden min-h-11 w-fit rounded-md border border-[#a8a29e]/25 bg-[#a8a29e]/10 px-3 text-xs font-medium text-slate-900 transition hover:bg-[#a8a29e]/15 disabled:opacity-50 md:inline-flex md:items-center"
-              >
-                {reanalyzing ? "Analyzing..." : "Reanalyze attachments"}
-              </button>
-            </div>
+        {/* Content-first header: plain text on the canvas, no boxed hero. Compose
+            is the only filled control; Sync collapses to an icon and Reanalyze to
+            a quiet button, so the mail list stays the visual hero. */}
+        <header className="mb-6 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-slate-900">
+              {t("nav.mail")}
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {source === "demo" ? (
+                <span className="text-sky-600">Demo data — connect Gmail in Settings</span>
+              ) : replyCount > 0 ? (
+                `${replyCount} ${replyCount === 1 ? "message needs" : "messages need"} a reply`
+              ) : unreadCount > 0 ? (
+                `${unreadCount} unread`
+              ) : (
+                "You're all caught up"
+              )}
+              {totalAvailable > 0 && (
+                <span className="text-slate-400"> · {totalAvailable} in view</span>
+              )}
+            </p>
           </div>
-          <div className="mt-5 hidden grid-cols-4 overflow-hidden rounded-md border border-slate-200 bg-slate-50 md:grid">
-            <SignalStat label="Unread" value={unreadCount} />
-            <SignalStat label="Urgent" value={urgentCount} />
-            <SignalStat label="Replies" value={replyCount} />
-            <SignalStat label="Files" value={attachmentCount} />
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setComposeOpen(true)}
+              disabled={source === "demo"}
+              title={source === "demo" ? "Connect Gmail to send email" : "Compose a new email"}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent px-3.5 text-sm font-medium text-white shadow-sm shadow-sky-500/25 transition duration-150 ease-out hover:bg-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <svg
+                aria-hidden="true"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+              {t("mail.compose")}
+            </button>
+            <button
+              type="button"
+              onClick={syncNow}
+              disabled={syncing}
+              aria-label={syncing ? t("common.syncing") : t("common.syncNow")}
+              title={t("common.syncNow")}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition duration-150 ease-out hover:bg-slate-50 hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
+            >
+              <svg
+                aria-hidden="true"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={syncing ? "animate-spin" : undefined}
+              >
+                <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                <path d="M21 3v6h-6" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={reanalyzeAttachments}
+              disabled={reanalyzing}
+              title="Re-run attachment analysis"
+              className="hidden h-9 items-center rounded-lg border border-slate-200 px-3 text-xs font-medium text-slate-500 transition duration-150 ease-out hover:bg-slate-50 hover:text-slate-900 active:scale-[0.97] disabled:opacity-50 lg:inline-flex"
+            >
+              {reanalyzing ? "Analyzing…" : "Reanalyze"}
+            </button>
           </div>
         </header>
 
@@ -805,72 +836,100 @@ function EmailView() {
           />
         )}
 
-        <form onSubmit={submitSearch} className="mb-3 flex gap-2">
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder={t("mail.searchPlaceholder")}
-            aria-label={t("mail.searchPlaceholder")}
-            className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-accent/45"
-          />
-          <button
-            type="submit"
-            className="h-10 rounded-lg bg-accent px-4 text-sm font-medium text-stone-950 transition hover:bg-accent-muted"
-          >
-            Search
-          </button>
-          {appliedSearch && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearch("");
-                setAppliedSearch("");
-              }}
-              className="h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-500 transition hover:bg-slate-100"
+        {/* One navigation model: core filters as a segmented row with inline
+            search on the right. Flat on the canvas so the list stays the hero. */}
+        <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <FilterTabs current={filter} onChange={setFilter} />
+          <form onSubmit={submitSearch} className="relative lg:w-72 lg:shrink-0">
+            <svg
+              aria-hidden="true"
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
             >
-              Clear
-            </button>
-          )}
-        </form>
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={t("mail.searchPlaceholder")}
+              aria-label={t("mail.searchPlaceholder")}
+              className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-sm text-slate-900 outline-none transition duration-150 ease-out placeholder:text-slate-400 focus:border-accent/50 focus:ring-2 focus:ring-accent/15"
+            />
+            {appliedSearch && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("");
+                  setAppliedSearch("");
+                }}
+                aria-label="Clear search"
+                className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+              >
+                <svg
+                  aria-hidden="true"
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </form>
+        </div>
 
         <InboxSelector inboxes={inboxes} current={inbox} onChange={setInbox} />
-        <FilterTabs current={filter} onChange={setFilter} />
 
-        {/* Work queues: on phones these stack into 4 tall cards that bury the mail
-          list, so render them as a compact horizontal-scroll chip row on mobile
-          (title only) and keep the full 4-up grid with descriptions on md+. */}
-        <div className="mt-3 hidden gap-2 md:grid md:grid-cols-4">
-          {WORK_QUEUES.map((queue) => (
-            <button
-              key={queue.key}
-              type="button"
-              onClick={() => setFilter(queue.key)}
-              className={`shrink-0 rounded-lg border px-3 py-2 text-left transition md:shrink md:p-3 ${
-                filter === queue.key
-                  ? "border-accent/45 bg-accent/10"
-                  : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100"
-              }`}
-            >
-              <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-slate-900 md:justify-between md:gap-2">
+        {/* Domain views — quiet chips instead of four competing cards, so they
+            aid triage without burying the list. */}
+        <div className="mb-4 mt-1 flex flex-wrap items-center gap-1.5">
+          <span className="mr-0.5 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+            Views
+          </span>
+          {WORK_QUEUES.map((queue) => {
+            const active = filter === queue.key;
+            return (
+              <button
+                key={queue.key}
+                type="button"
+                onClick={() => setFilter(queue.key)}
+                title={queue.description}
+                className={`h-7 rounded-full px-3 text-xs font-medium transition duration-150 ease-out active:scale-[0.97] ${
+                  active
+                    ? "bg-accent/10 text-sky-700 ring-1 ring-inset ring-accent/30"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                }`}
+              >
                 {queue.title}
-                <span className="text-accent-light" aria-hidden="true">
-                  →
-                </span>
-              </span>
-              <span className="mt-1 hidden text-[11px] leading-4 text-slate-400 md:block">
-                {queue.description}
-              </span>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
 
         {candidateCount > 0 && (
           <Link
             href="/email/candidates"
-            className="mt-3 flex items-center justify-between rounded-lg border border-sky-500/20 bg-sky-500/5 px-4 py-3 text-sm text-accent-muted transition hover:bg-sky-500/10"
+            className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-sky-200/70 bg-sky-50/60 px-4 py-2.5 text-sm text-sky-700 transition duration-150 ease-out hover:bg-sky-50"
           >
-            <span>Review {candidateCount} candidate signals in the intake queue.</span>
-            <span className="text-xs">Open</span>
+            <span className="inline-flex items-center gap-2">
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+              Review {candidateCount} candidate {candidateCount === 1 ? "signal" : "signals"} in the
+              intake queue.
+            </span>
+            <span className="shrink-0 text-xs font-medium">Open →</span>
           </Link>
         )}
 
@@ -1192,17 +1251,6 @@ function BulkButton({
   );
 }
 
-function SignalStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="border-r border-slate-200 px-4 py-3 last:border-r-0">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-        {label}
-      </p>
-      <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
-    </div>
-  );
-}
-
 // Per-inbox scope selector — only rendered when the user actually has more than
 // one mailbox. Values: "all", "primary" (the primary Google inbox), or a linked
 // inbox id. Addresses come straight from the API, never hardcoded.
@@ -1270,7 +1318,7 @@ function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filt
     <div
       role="group"
       aria-label="Filter mail"
-      className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="flex gap-0.5 overflow-x-auto rounded-lg bg-slate-100 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {FILTERS.filter((f) => !DOMAIN_FILTER_KEYS.includes(f.key)).map((f) => {
         const active = f.key === current;
@@ -1280,10 +1328,8 @@ function FilterTabs({ current, onChange }: { current: Filter; onChange: (f: Filt
             type="button"
             aria-pressed={active}
             onClick={() => onChange(f.key)}
-            className={`${MOBILE_FILTERS.has(f.key) ? "inline-flex" : "hidden md:inline-flex"} min-h-[32px] shrink-0 items-center rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-              active
-                ? "bg-accent text-stone-950"
-                : "border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+            className={`${MOBILE_FILTERS.has(f.key) ? "inline-flex" : "hidden md:inline-flex"} min-h-[30px] shrink-0 items-center whitespace-nowrap rounded-md px-3 text-xs font-medium transition duration-150 ease-out active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+              active ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"
             }`}
           >
             {f.labelKey ? t(f.labelKey) : f.label}
