@@ -32,6 +32,7 @@ import {
   getOAuth2Client,
   isGoogleAuthError,
   markGoogleTokenForReconnect,
+  registerGmailWatch,
 } from "../mail/gmail.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
@@ -1111,6 +1112,16 @@ export function authRoutes(app: FastifyInstance) {
                 },
               }),
             { label: "oauth.upsert_user_token" },
+          );
+
+          // Register the Gmail Pub/Sub watch so new mail pushes in near-real-time
+          // from the moment the account is connected. Without this a freshly
+          // connected user has NO watch until a scheduler renewal tick, so mail
+          // only surfaced on the client's poll — the "why isn't mail instant?"
+          // gap. No-ops cleanly when GMAIL_PUBSUB_TOPIC is unset; fire-and-forget
+          // so it never delays the OAuth redirect.
+          void registerGmailWatch(user.id).catch((err) =>
+            console.warn(`[GMAIL-WATCH] register on connect failed for ${user!.id}:`, err),
           );
         }
 
