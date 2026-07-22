@@ -457,7 +457,7 @@ function DecisionsBody({
         {/* Real-data stat tiles — command-center density between the toolbar
             and the grid. Counts come from the queries already on this page
             (plus the shared reply-needed/summary caches); never estimated. */}
-        <StatTilesRow
+        <SignalStrip
           pendingCount={pendingCount}
           commitmentCount={commitments.length}
           countsLoading={loading}
@@ -554,7 +554,13 @@ function Greeting() {
   const timeOfDay =
     hour < 5 ? "evening" : hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
   const first = user?.name?.trim().split(/\s+/)[0];
-  return <>{first ? `Good ${timeOfDay}, ${first}` : `Good ${timeOfDay}`}</>;
+  if (!first) return <>Good {timeOfDay}</>;
+  return (
+    <>
+      Good {timeOfDay},{" "}
+      <span className="font-serif italic tracking-tight text-slate-800">{first}</span>
+    </>
+  );
 }
 
 function formatToday(): string {
@@ -655,40 +661,46 @@ function CommitmentsPanel({ commitments }: { commitments: CommitmentItem[] }) {
 
 function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
   const { t } = useT();
+  // Compact "quiet instrument" moment, not a page-filling void: the K mark +
+  // one calm line says "watching, nothing for you" at a glance.
   return (
-    <div className="panel-elevated rounded-2xl border border-slate-200/70 bg-white px-8 py-12 text-center">
-      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/20">
-        <svg
-          aria-hidden="true"
-          width="22"
-          height="22"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="text-emerald-500"
-        >
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
+    <div className="panel-elevated flex items-center gap-4 rounded-2xl border border-slate-200/70 bg-white px-5 py-4">
+      <span className="relative shrink-0">
+        <img src="/brand/mark.svg?v=matte2" alt="" className="h-9 w-9" />
+        <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-white">
+          <svg
+            aria-hidden="true"
+            width="9"
+            height="9"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </span>
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-slate-900">{t("inbox.allClear")}</p>
+        <p className="mt-0.5 truncate text-xs text-slate-400">
+          {commitmentCount > 0
+            ? `Klorn is watching your mail and calendar — ${commitmentCount} commitment${commitmentCount === 1 ? "" : "s"} tracked in the background.`
+            : t("inbox.emptyBody")}
+        </p>
       </div>
-      <p className="text-base font-semibold text-slate-900">{t("inbox.allClear")}</p>
-      <p className="mx-auto mt-2 max-w-sm text-xs leading-relaxed text-slate-400">
-        {commitmentCount > 0
-          ? `Klorn is watching your mail and calendar. ${commitmentCount} tracked commitment${commitmentCount === 1 ? "" : "s"} in the background.`
-          : t("inbox.emptyBody")}
-      </p>
-      <div className="mt-6 flex justify-center gap-2">
+      <div className="flex shrink-0 gap-2">
         <Link
           href="/inbox/firewall"
-          className="ease-strong inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white/70 px-4 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+          className="ease-strong inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white/70 px-3.5 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
         >
           Firewall board
         </Link>
         <Link
           href="/email"
-          className="ease-strong inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white/70 px-4 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+          className="ease-strong inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white/70 px-3.5 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
         >
           {t("inbox.openMail")}
         </Link>
@@ -735,7 +747,7 @@ function OnboardingHint() {
   return (
     <>
       {/* DESKTOP — one-line compact strip; the tour never outweighs the queue. */}
-      <div className="mb-4 hidden items-center gap-3 rounded-lg border border-sky-200/60 bg-sky-50/60 px-3 py-2 md:flex">
+      <div className="mb-4 hidden items-center gap-3 rounded-lg border border-slate-200/60 bg-white/50 px-3 py-1.5 text-[12.5px] md:flex">
         <p className="min-w-0 flex-1 truncate text-xs text-slate-500">
           <span className="font-semibold text-sky-700">{t("inbox.tourTitle")}</span>
           <span className="mx-1.5 text-slate-300">·</span>
@@ -868,76 +880,20 @@ function useTodayEventCount() {
   });
 }
 
-const STAT_TONE_CLASS = {
-  amber: "bg-amber-500/10 text-amber-600",
-  sky: "bg-sky-500/10 text-sky-600",
-  violet: "bg-violet-500/10 text-violet-600",
-  emerald: "bg-emerald-500/10 text-emerald-600",
-} as const;
-
-type StatTone = keyof typeof STAT_TONE_CLASS;
-
-const STAT_TILE_CLASS =
-  "panel-elevated ease-strong flex w-full items-center gap-3 rounded-2xl border border-slate-200/70 bg-white px-4 py-3 text-left transition duration-150 hover:-translate-y-px";
-
-function StatTile({
-  href,
-  onClick,
-  tone,
-  icon,
-  value,
-  label,
-}: {
-  href?: string;
-  onClick?: () => void;
-  tone: StatTone;
-  icon: ReactNode;
+// One integrated signal strip instead of four templated stat cards — the
+// numbers speak Klorn's tier-dot language (no generic icon chips), divided by
+// hairlines inside a single sheet so the row reads as an instrument, not an
+// admin-dashboard template.
+interface SignalCell {
+  label: string;
   /** Real count, or null while the source is still loading (renders "—"). */
   value: number | null;
-  label: string;
-}) {
-  const inner = (
-    <>
-      <span
-        aria-hidden="true"
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${STAT_TONE_CLASS[tone]}`}
-      >
-        {icon}
-      </span>
-      <span className="min-w-0">
-        <span className="block text-2xl font-semibold leading-tight tabular-nums text-slate-900">
-          {value ?? "—"}
-        </span>
-        <span className="block truncate text-[11px] text-slate-500">{label}</span>
-      </span>
-    </>
-  );
-  if (href) {
-    return (
-      <Link href={href} className={STAT_TILE_CLASS}>
-        {inner}
-      </Link>
-    );
-  }
-  return (
-    <button type="button" onClick={onClick} className={STAT_TILE_CLASS}>
-      {inner}
-    </button>
-  );
+  dot: string;
+  href?: string;
+  onClick?: () => void;
 }
 
-const STAT_ICON_PROPS = {
-  width: 15,
-  height: 15,
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 2,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-} as const;
-
-function StatTilesRow({
+function SignalStrip({
   pendingCount,
   commitmentCount,
   countsLoading,
@@ -962,58 +918,65 @@ function StatTilesRow({
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const cells: SignalCell[] = [
+    {
+      label: "Pending decisions",
+      value: pendingValue,
+      dot: "bg-amber-500",
+      onClick: onPendingClick,
+    },
+    {
+      label: "Open commitments",
+      value: commitmentValue,
+      dot: "bg-sky-500",
+      onClick: scrollToCommitments,
+    },
+    {
+      label: "Needs reply",
+      value: replyQuery.data?.length ?? null,
+      dot: "bg-violet-500",
+      href: "/email",
+    },
+    {
+      label: "Today's events",
+      value: eventsQuery.data ?? null,
+      dot: "bg-emerald-500",
+      href: "/calendar",
+    },
+  ];
+
+  const cellClass =
+    "ease-strong group flex flex-col gap-1.5 px-5 py-4 text-left transition duration-150 hover:bg-slate-50/70 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent";
+
   return (
-    <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <StatTile
-        tone="amber"
-        value={pendingValue}
-        label="Pending decisions"
-        onClick={onPendingClick}
-        icon={
-          <svg {...STAT_ICON_PROPS} aria-hidden="true">
-            <path d="M9 11l3 3L22 4" />
-            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-          </svg>
+    <div className="panel-elevated mb-5 grid grid-cols-4 divide-x divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+      {cells.map((cell) => {
+        const inner = (
+          <>
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${cell.dot}`} />
+              <span className="truncate text-[10.5px] font-semibold uppercase tracking-wider text-slate-400 transition group-hover:text-slate-500">
+                {cell.label}
+              </span>
+            </span>
+            <span className="text-[26px] font-semibold leading-none tabular-nums text-slate-900">
+              {cell.value ?? "—"}
+            </span>
+          </>
+        );
+        if (cell.href) {
+          return (
+            <Link key={cell.label} href={cell.href} className={cellClass}>
+              {inner}
+            </Link>
+          );
         }
-      />
-      <StatTile
-        tone="sky"
-        value={commitmentValue}
-        label="Open commitments"
-        onClick={scrollToCommitments}
-        icon={
-          <svg {...STAT_ICON_PROPS} aria-hidden="true">
-            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-            <line x1="4" y1="22" x2="4" y2="15" />
-          </svg>
-        }
-      />
-      <StatTile
-        tone="violet"
-        value={replyQuery.data?.length ?? null}
-        label="Needs reply"
-        href="/email"
-        icon={
-          <svg {...STAT_ICON_PROPS} aria-hidden="true">
-            <polyline points="9 17 4 12 9 7" />
-            <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
-          </svg>
-        }
-      />
-      <StatTile
-        tone="emerald"
-        value={eventsQuery.data ?? null}
-        label="Today's events"
-        href="/calendar"
-        icon={
-          <svg {...STAT_ICON_PROPS} aria-hidden="true">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-            <line x1="16" y1="2" x2="16" y2="6" />
-            <line x1="8" y1="2" x2="8" y2="6" />
-            <line x1="3" y1="10" x2="21" y2="10" />
-          </svg>
-        }
-      />
+        return (
+          <button key={cell.label} type="button" onClick={cell.onClick} className={cellClass}>
+            {inner}
+          </button>
+        );
+      })}
     </div>
   );
 }
