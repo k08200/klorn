@@ -86,9 +86,14 @@ const EN_USER_RULES: Rule[] = [
 
 const EN_COUNTERPARTY_RULES: Rule[] = [
   {
+    // Excluded from the capitalized-subject alternation (founder screen +
+    // prod ledger audit 2026-07-22): "You/Your" — a sentence telling the
+    // RECIPIENT what will happen is a notice, not a counterparty promise —
+    // and audience-cohort nouns (Attendees/Students/Visitors/…) — an
+    // announcement about a group is never a promise owed to the user.
     name: "en-counterparty-future",
     pattern:
-      /\b(?:they|he|she|the team|[A-Z][a-z]+)\s+(?:will|is going to|'ll|will be|plans to|is supposed to)\s+[^.!?\n]{0,160}/g,
+      /\b(?:they|he|she|[Tt]he team|(?!Your?\b|Attendees?\b|Students?\b|Visitors?\b|Volunteers?\b|Applicants?\b|Participants?\b|Members?\b|Customers?\b|Users?\b|Guests?\b|Patients?\b|Winners?\b|Recipients?\b)[A-Z][a-z]+)\s+(?:will|is going to|'ll|will be|plans to|is supposed to)\s+[^.!?\n]{0,160}/g,
     owner: "COUNTERPARTY",
   },
   {
@@ -147,6 +152,26 @@ function isTransactionalNoise(text: string): boolean {
   return TRANSACTIONAL_NOISE_RE.test(text);
 }
 
+// Policy-notice noise: automated notices phrase rules as negated permission
+// ("Applicants will not be permitted to enter…", "Visitors will not be able
+// to park…") or as expiry countdowns ("It will expire in 5 minutes" — OTP
+// codes, offers). Nobody is promising an action — the sentence describes a
+// restriction or a deadline — so it must never become a ledger commitment no
+// matter which subject-rule matched it.
+const POLICY_NOTICE_RE =
+  /\bwill\s+not\s+be\s+(?:allowed|permitted|able|eligible|required)\b|\bwill\s+expire\b/i;
+
+// Korean formulaic closings: politeness boilerplate ending in -하겠습니다
+// ("노력하겠습니다", "최선을 다하겠습니다", "알려주시면 감사하겠습니다")
+// carries no concrete deliverable — it is how Korean mail signs off, not a
+// promise. Prod ledger audit 2026-07-22 found these mined as I-OWE rows.
+const KO_FORMULAIC_CLOSING_RE =
+  /(?:노력하겠습니다|최선을\s*다하겠습니다|감사하겠습니다|보답하겠습니다)/;
+
+function isPolicyNotice(text: string): boolean {
+  return POLICY_NOTICE_RE.test(text) || KO_FORMULAIC_CLOSING_RE.test(text);
+}
+
 /**
  * Scan a chunk of text for commitment-shaped sentences. Returns at most
  * `maxCandidates` results (default 10), in order of appearance.
@@ -164,7 +189,7 @@ export function extractCommitmentCandidates(
     let match: RegExpExecArray | null = rule.pattern.exec(text);
     while (match !== null) {
       const matched = match[0].trim();
-      if (matched.length > 0 && !isTransactionalNoise(matched)) {
+      if (matched.length > 0 && !isTransactionalNoise(matched) && !isPolicyNotice(matched)) {
         collected.push({
           text: matched,
           owner: rule.owner,

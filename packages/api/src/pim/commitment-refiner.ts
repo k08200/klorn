@@ -162,7 +162,10 @@ Rules:
 - title: short action phrase in the source language, max 80 characters.
 - dueText: preserve the original due phrase when present, e.g. "내일", "by EOD".
 - dueAt: ISO-8601 datetime only when the date/time can be resolved from the candidate plus reference datetime/timezone; otherwise null.
-- confidence: 0.0 to 1.0. Use 0.75+ only for explicit commitments.`,
+- Automated or bulk mail (appointment systems, order/shipping/queue notices, no-reply boilerplate) never makes a commitment: isCommitment=false.
+- Second-person policy text telling the RECIPIENT what will happen ("You will not be allowed…", "You will be required…") is a notice, not a commitment: isCommitment=false.
+- For EMAIL sources the text is written by the SENDER: a first-person promise ("I'll…", "보내드릴게요") is owed by the sender (owner=COUNTERPARTY), never USER, unless the source says the user authored it.
+- confidence: 0.0 to 1.0. Use 0.75+ only for explicit commitments where you can name who owes what; automated notices and boilerplate must stay below 0.5.`,
         },
         { role: "user", content: promptFor(input) },
       ],

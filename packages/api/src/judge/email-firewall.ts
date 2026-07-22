@@ -136,6 +136,11 @@ export async function persistGmailEmail(
       contextTitle: email.subject,
       referenceDate: email.receivedAt,
       senderEmail: email.from,
+      // First-person text in this email belongs to its author: only when the
+      // user sent it to themselves does "I'll…" mean the user owes it.
+      senderIsUser:
+        userEmail != null && normalizedFromAddress(email.from) === userEmail.toLowerCase(),
+      listUnsubscribe: email.hasListUnsubscribe === true,
     }).catch((err) => {
       captureError(err, {
         tags: { scope: "commitment.email_ingestion" },
