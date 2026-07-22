@@ -10,6 +10,7 @@
 import multipart from "@fastify/multipart";
 import type { EmailUndoActionResponse } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
+import { recordEvent } from "../analytics.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
@@ -319,6 +320,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       const result = await archiveEmail(uid, email.gmailId, email.linkedInboxAccountId);
       if (result && "error" in result) {
         await prisma.emailMessage.deleteMany({ where: { id: email.id } });
+        void recordEvent(uid, "queue_action", { action: "archive" });
         return { success: true, warning: "Gmail not connected, removed locally only" };
       }
     } catch (err) {
@@ -327,6 +329,8 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       return reply.code(502).send({ error: `Gmail archive failed: ${gErr.message || "unknown"}` });
     }
 
+    // Retention analytics: archiving is the core "I handled this card" signal.
+    void recordEvent(uid, "queue_action", { action: "archive" });
     return { success: true };
   });
 

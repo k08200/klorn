@@ -2,6 +2,7 @@ import type { WaitlistStatus } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { Resend } from "resend";
 import { runAllScenarios, summarizeEval } from "../agentcore/agent-eval.js";
+import { getRetentionMetrics } from "../analytics.js";
 import { getUserId, requireAdmin } from "../auth.js";
 import { getUsageSummary } from "../billing/llm-usage.js";
 import { db, prisma } from "../db.js";
@@ -75,6 +76,10 @@ export async function adminRoutes(app: FastifyInstance) {
   // operational config — never values). Ends the probe-behavior-to-find-out
   // loop every flag flip used to require.
   app.get("/flags", async () => collectFeatureFlags());
+
+  // GET /api/admin/analytics — Phase 1 retention dashboard (DAU/WAU, D1/D7/D14
+  // retention, queue-actions/day, PUSH open-rate, notification-mute rate).
+  app.get("/analytics", async () => getRetentionMetrics());
 
   // POST /api/admin/sentry-test — fire a marker event through the REAL
   // captureError path so "is error tracking actually wired?" is verifiable

@@ -12,6 +12,7 @@
 
 import crypto from "node:crypto";
 import webPush from "web-push";
+import { recordEvent } from "../analytics.js";
 import { mintTierOverrideToken } from "../billing/tier-override-token.js";
 import { prisma } from "../db.js";
 import { Semaphore } from "../semaphore.js";
@@ -299,6 +300,8 @@ export async function sendPushNotification(
   const failed = attempted - accepted;
 
   console.log(`[PUSH] Sent ${accepted}/${attempted} push notifications successfully`);
+  // Retention analytics: count a real delivery as the open-rate denominator.
+  if (accepted > 0) void recordEvent(userId, "push_sent", { category });
   return {
     status: "sent",
     subscriptions: subscriptions.length,

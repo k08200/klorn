@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import { useConfirm } from "../../components/confirm-dialog";
+import RetentionDashboard from "../../components/retention-dashboard";
 import { useToast } from "../../components/toast";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
@@ -267,6 +268,9 @@ function AdminDashboard() {
             </button>
           </div>
         </header>
+
+        {/* Phase 1 retention — the metric that gates public launch */}
+        <RetentionDashboard />
 
         {/* Agent Eval Harness */}
         <section className="rounded-2xl border border-slate-200 bg-white p-4">

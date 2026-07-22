@@ -110,6 +110,7 @@ model User {
   contactEngagementScores   ContactEngagementScore[]
   llmCostLedger             LlmCostLedger[]
   llmUsageLogs              LlmUsageLog[]
+  analyticsEvents           AnalyticsEvent[]
   senderTraits              SenderTrait[]
   learnedRules              LearnedRule[]
 }
@@ -1602,5 +1603,26 @@ model LlmUsageLog {
   // Admin-wide usage aggregation (getUsageSummary with no userId) filters on
   // createdAt alone; the composite index above can't serve a createdAt-only
   // range (userId is the leading column), so it falls back to a seq-scan.
+  @@index([createdAt])
+}
+
+// First-party product analytics (Phase 1 retention instrumentation). Kept in
+// our own Postgres — NOT a third-party tracker — so it never touches the
+// Privacy Manifest / Limited Use posture. Only coarse event names + optional
+// small meta; no message content. onDelete: Cascade wipes a user's events on
+// account deletion automatically (privacy). Event names are allowlisted at the
+// ingest route (analytics.ts ANALYTICS_EVENTS).
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event     String
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  // DAU/retention aggregation filters by event + time range, and by user for
+  // per-user first-seen (cohort) lookups.
+  @@index([event, createdAt])
+  @@index([userId, event, createdAt])
   @@index([createdAt])
 }
