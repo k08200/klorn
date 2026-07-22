@@ -504,6 +504,14 @@ model PushSubscription {
   // dead URL. Nullable for rows created before this column existed; clean
   // those up via scripts/cleanup-stale-push-subs.ts.
   origin    String?
+  // Stable per-browser id (client-generated UUID in localStorage). Lets
+  // /push/subscribe prune THIS browser's previous endpoint row when its push
+  // subscription rotates and re-registers via /subscribe instead of /rotate (SW
+  // replacement, permission re-grant, a second SW scope). Without it the old
+  // endpoint lingers as an orphan and a single notification fans out to it twice
+  // — the duplicate "Daily Briefing" bug. Mirrors DevicePushToken's
+  // prune-on-register. Nullable for rows created before this column existed.
+  deviceId  String?
   createdAt DateTime @default(now())
 
   // Budgeted-retry eviction: consecutive ambiguous (non-410/404) delivery
@@ -514,6 +522,7 @@ model PushSubscription {
   lastFailedAt DateTime?
 
   @@index([userId])
+  @@index([userId, deviceId])
 }
 
 // Native push registration for the Capacitor mobile shell (apps/mobile).

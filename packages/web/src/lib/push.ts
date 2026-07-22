@@ -40,6 +40,28 @@ export async function getOrCreatePushSubscription(
   });
 }
 
+/**
+ * A stable per-browser id so the backend can prune THIS browser's previous
+ * push-subscription row when its endpoint rotates — otherwise the old row
+ * lingers and a single notification is delivered twice. Persisted in
+ * localStorage (per-origin, shared across SW scopes), regenerated only if
+ * cleared. Returns undefined when storage is unavailable (private mode); the
+ * server then falls back to legacy, no-prune behavior.
+ */
+function getPushDeviceId(): string | undefined {
+  try {
+    const KEY = "klorn_push_device_id";
+    let id = localStorage.getItem(KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(KEY, id);
+    }
+    return id;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function registerSubscriptionWithServer(sub: PushSubscription): Promise<void> {
   const subJson = sub.toJSON();
   // window.location.origin tells the backend which SW owns this sub so it can
@@ -51,6 +73,7 @@ export async function registerSubscriptionWithServer(sub: PushSubscription): Pro
       endpoint: subJson.endpoint,
       keys: subJson.keys,
       origin: window.location.origin,
+      deviceId: getPushDeviceId(),
     }),
   });
   if (!res.ok) throw new Error(`Server registration failed: ${res.status}`);
