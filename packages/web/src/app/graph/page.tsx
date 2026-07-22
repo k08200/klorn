@@ -132,7 +132,7 @@ function GraphPageInner() {
               onClick={() => setMode(mKey)}
               className={`rounded-lg px-3 py-1.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                 mode === mKey
-                  ? "bg-accent font-semibold text-stone-950"
+                  ? "bg-accent font-semibold text-white"
                   : "text-slate-500 hover:text-slate-900"
               }`}
             >

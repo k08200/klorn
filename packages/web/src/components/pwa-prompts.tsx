@@ -149,7 +149,7 @@ export default function PwaPrompts() {
       {/* Offline indicator */}
       {offline && (
         <div
-          className="fixed top-0 left-0 right-0 z-[100] bg-amber-400 text-stone-950 text-center py-1.5 text-xs font-medium pt-[calc(env(safe-area-inset-top)+0.375rem)]"
+          className="fixed top-0 left-0 right-0 z-[100] bg-amber-400 text-amber-950 text-center py-1.5 text-xs font-medium pt-[calc(env(safe-area-inset-top)+0.375rem)]"
           role="status"
           aria-live="polite"
         >
@@ -160,7 +160,7 @@ export default function PwaPrompts() {
       {/* Update available banner */}
       {updateAvailable && (
         <div
-          className="fixed bottom-20 left-1/2 z-[100] flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-2xl shadow-black/60 animate-slide-up"
+          className="fixed bottom-20 left-1/2 z-[100] flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-2xl shadow-slate-900/15 animate-slide-up"
           role="region"
           aria-label="App update available"
         >
@@ -168,7 +168,7 @@ export default function PwaPrompts() {
           <button
             type="button"
             onClick={handleUpdate}
-            className="min-h-10 px-3 py-1 text-xs font-medium bg-sky-500 hover:bg-sky-200 text-stone-950 rounded-lg transition whitespace-nowrap"
+            className="min-h-10 px-3 py-1 text-xs font-medium bg-sky-500 hover:bg-sky-600 text-white rounded-lg transition whitespace-nowrap"
           >
             Refresh
           </button>
@@ -186,7 +186,7 @@ export default function PwaPrompts() {
       {/* Install prompt */}
       {showInstall && (
         <div
-          className="fixed bottom-20 left-1/2 z-[100] flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-xl border border-sky-300/20 bg-white px-4 py-3 shadow-2xl shadow-black/60 animate-slide-up sm:max-w-md"
+          className="fixed bottom-20 left-1/2 z-[100] flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-xl border border-sky-300/20 bg-white px-4 py-3 shadow-2xl shadow-slate-900/15 animate-slide-up sm:max-w-md"
           role="region"
           aria-label="Install Klorn"
         >
@@ -224,7 +224,7 @@ export default function PwaPrompts() {
       {/* iOS Safari install instructions — push notifications require PWA on iOS */}
       {showIosInstall && (
         <div
-          className="fixed bottom-20 left-1/2 z-[100] w-[min(94vw,420px)] -translate-x-1/2 rounded-2xl border border-sky-300/25 bg-white px-4 py-3.5 shadow-2xl shadow-black/60 animate-slide-up pb-safe"
+          className="fixed bottom-20 left-1/2 z-[100] w-[min(94vw,420px)] -translate-x-1/2 rounded-2xl border border-sky-300/25 bg-white px-4 py-3.5 shadow-2xl shadow-slate-900/15 animate-slide-up pb-safe"
           role="region"
           aria-label="Install Klorn on iPhone for push notifications"
         >

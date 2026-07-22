@@ -68,18 +68,21 @@ export function RejectReasonDialog({ open, onCancel, onReject }: RejectReasonDia
   const trimmed = reason.trim();
 
   return createPortal(
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[10000] px-4">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-[2px] transition-opacity duration-150 ease-strong starting:opacity-0 motion-reduce:transition-none">
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="reject-reason-title"
-        className="bg-white border border-slate-200 rounded-xl p-6 w-full max-w-sm animate-slide-up"
+        className="panel-elevated w-full max-w-sm origin-center rounded-2xl border border-slate-200/70 bg-white p-6 transition duration-150 ease-strong starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none"
       >
-        <h3 id="reject-reason-title" className="font-semibold mb-2">
+        <h3
+          id="reject-reason-title"
+          className="mb-2 text-base font-semibold tracking-[-0.01em] text-slate-900"
+        >
           Reject this suggestion?
         </h3>
-        <label htmlFor="reject-reason" className="block text-sm text-slate-500 mb-2">
+        <label htmlFor="reject-reason" className="mb-2 block text-sm text-slate-500">
           Why? Helps Klorn avoid proposing this again — optional
         </label>
         <textarea
@@ -90,30 +93,30 @@ export function RejectReasonDialog({ open, onCancel, onReject }: RejectReasonDia
           maxLength={MAX_REJECT_REASON_LENGTH}
           rows={3}
           placeholder="e.g. Wrong recipient, bad timing, not my task"
-          className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 transition focus:border-sky-300 focus:outline-none"
+          className="w-full resize-none rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-900 placeholder-slate-400 outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15"
         />
-        <p className="mt-1 text-right text-[10px] text-slate-500">
+        <p className="mt-1 text-right text-[10px] tabular-nums text-slate-400">
           {reason.length}/{MAX_REJECT_REASON_LENGTH}
         </p>
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="min-h-11 px-3 py-2 rounded-lg text-sm text-slate-500 hover:text-slate-900 transition"
+            className="ease-strong inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-slate-500 transition duration-150 hover:text-slate-900 active:scale-[0.97]"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={() => onReject(null)}
-            className="min-h-11 px-3 py-2 rounded-lg text-sm border border-slate-200 text-slate-500 hover:bg-slate-100 transition"
+            className="ease-strong inline-flex min-h-11 items-center rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-500 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
           >
             Skip &amp; Reject
           </button>
           <button
             type="button"
             onClick={() => onReject(trimmed || null)}
-            className="min-h-11 px-4 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-500 text-white transition"
+            className="ease-strong inline-flex min-h-11 items-center rounded-lg bg-gradient-to-b from-red-500 to-red-600 px-4 py-2 text-sm font-medium text-white shadow-[0_1px_2px_rgba(127,29,29,0.3),0_8px_18px_-8px_rgba(220,38,38,0.5)] transition duration-150 hover:from-red-500 hover:to-red-700 active:scale-[0.97]"
           >
             Reject
           </button>

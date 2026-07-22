@@ -309,7 +309,7 @@ function SegmentControl({
     <div
       role="group"
       aria-label="Inbox view"
-      className="mb-4 inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1"
+      className="mb-4 inline-flex items-center gap-1 rounded-xl border border-slate-200/70 bg-white/60 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur"
     >
       <FilterTab
         active={view === "decisions"}
@@ -385,40 +385,45 @@ function DecisionsBody({
       {/* DESKTOP — unchanged */}
       <div className="mx-auto hidden w-full max-w-6xl px-4 py-6 md:block md:py-8">
         <OnboardingHint />
-        {/* Minimal page header */}
-        <div className="mb-6 flex items-center justify-between gap-4">
+        {/* Flat header on the canvas — no boxed hero. */}
+        <header className="mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600">
-              Klorn · {t("nav.decisionQueue")}
-            </p>
-            <h1 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">
-              {pendingCount > 0
-                ? `${pendingCount} decision${pendingCount !== 1 ? "s" : ""} waiting`
-                : commitments.length > 0
-                  ? `${commitments.length} commitment${commitments.length !== 1 ? "s" : ""} tracked`
-                  : t("inbox.allClear")}
+            <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
+              {t("nav.decisionQueue")}
             </h1>
+            <p className="mt-2 text-sm text-slate-500">
+              {pendingCount > 0 ? (
+                <>
+                  <span className="font-medium text-slate-700">{pendingCount}</span>
+                  {pendingCount === 1 ? " decision waiting" : " decisions waiting"}
+                </>
+              ) : commitments.length > 0 ? (
+                `${commitments.length} commitment${commitments.length !== 1 ? "s" : ""} tracked`
+              ) : (
+                t("inbox.allClear")
+              )}
+            </p>
           </div>
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={onRefresh}
               disabled={loading}
-              className="h-8 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
+              className="ease-strong inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
             >
               {loading ? "..." : "Refresh"}
             </button>
             <Link
               href="/inbox/receipt"
-              className="hidden text-xs text-sky-600 hover:text-sky-600 transition sm:block"
+              className="hidden text-xs font-medium text-sky-600 transition duration-150 hover:text-sky-700 sm:block"
             >
               Today's receipt →
             </Link>
           </div>
-        </div>
+        </header>
 
         {error && (
-          <div className="mb-4 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
@@ -436,7 +441,7 @@ function DecisionsBody({
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     {pendingCount > 0 && (
-                      <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
+                      <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-amber-600 ring-1 ring-inset ring-amber-500/20">
                         {pendingCount} pending
                       </span>
                     )}
@@ -444,7 +449,7 @@ function DecisionsBody({
                   <div
                     role="group"
                     aria-label="Filter decisions"
-                    className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1"
+                    className="flex items-center gap-1 rounded-xl border border-slate-200/70 bg-white/60 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur"
                   >
                     <FilterTab
                       active={filter === "pending"}
@@ -472,19 +477,21 @@ function DecisionsBody({
               )}
 
               {actions.length > 0 && (
-                <ul className="space-y-3">
-                  {actions.map((action) => (
-                    <li key={action.id}>
-                      <ActionCard
-                        action={action}
-                        loading={actionLoading[action.id] ?? null}
-                        onApprove={() => onApprove(action.id)}
-                        onReject={() => onOpenReject(action.id)}
-                        onSnooze={() => onSnooze(action.id)}
-                      />
-                    </li>
-                  ))}
-                </ul>
+                <div className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+                  <ul className="divide-y divide-slate-100">
+                    {actions.map((action) => (
+                      <li key={action.id}>
+                        <ActionCard
+                          action={action}
+                          loading={actionLoading[action.id] ?? null}
+                          onApprove={() => onApprove(action.id)}
+                          onReject={() => onOpenReject(action.id)}
+                          onSnooze={() => onSnooze(action.id)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </section>
           </div>
@@ -512,7 +519,7 @@ function buildIntroLine(pendingCount: number): string | null {
 function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
   const { t } = useT();
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center">
+    <div className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-8 text-center">
       <p className="text-base text-slate-900">{t("inbox.nothingToDecideToday")}</p>
       <p className="mx-auto mt-2 max-w-sm text-xs text-slate-400">
         {commitmentCount > 0
@@ -522,13 +529,13 @@ function HonestEmptyState({ commitmentCount }: { commitmentCount: number }) {
       <div className="mt-5 flex justify-center gap-2">
         <Link
           href="/settings"
-          className="inline-flex min-h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-xs text-slate-500 transition hover:bg-slate-100"
+          className="ease-strong inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white/70 px-4 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
         >
           {t("settings.title")}
         </Link>
         <Link
           href="/email"
-          className="inline-flex min-h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-xs text-slate-500 transition hover:bg-slate-100"
+          className="ease-strong inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white/70 px-4 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
         >
           {t("inbox.openMail")}
         </Link>
@@ -588,21 +595,21 @@ function OnboardingHint() {
             </li>
             <li>
               2.{" "}
-              <Link href="/inbox/firewall" className="text-sky-600 hover:text-sky-100">
+              <Link href="/inbox/firewall" className="text-sky-600 hover:text-sky-700">
                 Firewall board
               </Link>{" "}
               — see every signal sorted into SILENT / QUEUE / PUSH. Move what we got wrong.
             </li>
             <li>
               3.{" "}
-              <Link href="/settings" className="text-sky-600 hover:text-sky-100">
+              <Link href="/settings" className="text-sky-600 hover:text-sky-700">
                 Settings → Connections
               </Link>{" "}
               — connect Google so Klorn can read mail and calendar.
             </li>
             <li>
               4.{" "}
-              <Link href="/inbox/receipt" className="text-sky-600 hover:text-sky-100">
+              <Link href="/inbox/receipt" className="text-sky-600 hover:text-sky-700">
                 Today's receipt
               </Link>{" "}
               — what Klorn silenced, surfaced, and auto-handled today.
@@ -659,25 +666,23 @@ function ReplyNeededPanel() {
 
   return (
     <section
-      className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+      className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white"
       aria-label="Reply needed"
     >
-      <div className="mb-3 flex items-center justify-between">
+      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
         <h2 className="text-sm font-semibold text-slate-900">Reply Needed</h2>
-        <span className="text-[11px] text-slate-400">{emails.length}</span>
+        <span className="text-[11px] tabular-nums text-slate-400">{emails.length}</span>
       </div>
-      <ul className="space-y-2">
+      <ul className="divide-y divide-slate-100">
         {emails.map((email) => (
-          <li key={email.id}>
-            <Link
-              href="/email"
-              className="block rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:bg-slate-100"
-            >
+          <li key={email.id} className="row-wash relative">
+            <span aria-hidden="true" className="absolute left-0 top-0 h-full w-[3px] bg-sky-400" />
+            <Link href="/email" className="block px-4 py-3 pl-5">
               <div className="flex items-start justify-between gap-2">
                 <p className="flex-1 truncate text-xs font-medium text-slate-900">
                   {email.subject || "(no subject)"}
                 </p>
-                <span className="shrink-0 rounded border border-amber-300/20 bg-amber-300/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
+                <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-amber-600 ring-1 ring-inset ring-amber-500/20">
                   {Math.round(email.needsReplyConfidence * 100)}%
                 </span>
               </div>
@@ -691,8 +696,11 @@ function ReplyNeededPanel() {
           </li>
         ))}
       </ul>
-      <div className="mt-3 flex justify-end">
-        <Link href="/email" className="text-xs text-slate-400 transition hover:text-slate-500">
+      <div className="flex justify-end border-t border-slate-100 px-4 py-2.5">
+        <Link
+          href="/email"
+          className="text-xs font-medium text-sky-600 transition duration-150 hover:text-sky-700"
+        >
           Open mail →
         </Link>
       </div>
@@ -739,7 +747,7 @@ function QuickLinksPanel() {
         <Link
           key={link.href}
           href={link.href}
-          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] text-slate-500 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900"
+          className="ease-strong inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white/70 px-2.5 py-1.5 text-[11px] font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
         >
           {link.label}
           <span className="text-slate-500">→</span>
@@ -765,8 +773,10 @@ function FilterTab({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`rounded-md px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-        active ? "bg-white text-slate-900" : "text-slate-500 hover:text-slate-900"
+      className={`ease-strong rounded-lg px-3 py-1.5 text-xs transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+        active
+          ? "seg-active bg-white font-semibold text-slate-900"
+          : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
       }`}
     >
       {label}
@@ -821,7 +831,16 @@ function ActionCard({
   const showThreadHint = action.conversationTitle && action.conversationTitle !== heroSubject;
 
   return (
-    <article className="overflow-hidden rounded-xl border border-sky-300/25 bg-white">
+    <article className="row-wash relative">
+      {/* Status accent bar: high risk = rose; any other pending decision = sky. */}
+      {(risk === "high" || isPending) && (
+        <span
+          aria-hidden="true"
+          className={`absolute left-0 top-0 h-full w-[3px] ${
+            risk === "high" ? "bg-gradient-to-b from-rose-400 to-rose-500" : "bg-sky-400"
+          }`}
+        />
+      )}
       {/* Top meta — just badges + relative time. No "Decision card" eyebrow,
           since the entire card already is one. */}
       <div className="flex items-center justify-between gap-2 px-5 pt-4">
@@ -829,7 +848,7 @@ function ActionCard({
           <RiskBadge risk={risk} />
           {!isPending && <StatusBadge status={action.status} />}
         </div>
-        <span className="font-mono text-[11px] text-slate-500">
+        <span className="text-[11px] tabular-nums text-slate-400">
           {formatRelative(action.createdAt)}
         </span>
       </div>
@@ -877,15 +896,15 @@ function ActionCard({
 
       {/* Action band */}
       {isPending && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-3">
           <button
             type="button"
             onClick={onApprove}
             disabled={!!loading}
-            className="inline-flex min-h-11 min-w-[120px] items-center justify-center gap-1.5 rounded-lg bg-sky-500 px-5 text-sm font-semibold text-stone-950 transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="glow-primary ease-strong inline-flex min-h-11 min-w-[120px] items-center justify-center gap-1.5 rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-5 text-sm font-semibold text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading === "approve" ? (
-              <span className="h-3 w-3 animate-spin rounded-full border-2 border-stone-950/30 border-t-stone-950" />
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
             ) : (
               "Act now"
             )}
@@ -894,7 +913,7 @@ function ActionCard({
             type="button"
             onClick={onReject}
             disabled={!!loading}
-            className="inline-flex min-h-11 min-w-[80px] items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-500 transition hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className="ease-strong inline-flex min-h-11 min-w-[80px] items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white/70 px-4 text-sm font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading === "reject" ? (
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400/30 border-t-slate-600" />
@@ -907,7 +926,7 @@ function ActionCard({
             onClick={onSnooze}
             disabled={!!loading}
             title="Remind me in 1 hour"
-            className="inline-flex min-h-11 items-center justify-center gap-1 px-3 text-xs text-slate-400 transition hover:text-slate-500 disabled:opacity-50"
+            className="ease-strong inline-flex min-h-11 items-center justify-center gap-1 rounded-lg px-3 text-xs text-slate-400 transition duration-150 hover:bg-sky-50 hover:text-sky-700 active:scale-[0.97] disabled:opacity-50"
           >
             {loading === "snooze" ? (
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400/30 border-t-slate-500" />
@@ -919,7 +938,7 @@ function ActionCard({
       )}
 
       {!isPending && action.result && (
-        <div className="border-t border-slate-200 bg-slate-50 px-5 py-3">
+        <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-3">
           <p className="truncate text-[11px] text-slate-400">{action.result}</p>
         </div>
       )}
@@ -931,20 +950,22 @@ function RiskBadge({ risk }: { risk: "low" | "medium" | "high" }) {
   const map = {
     low: {
       label: "Low risk",
-      className: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
+      className: "bg-emerald-500/10 text-emerald-600 ring-1 ring-inset ring-emerald-500/20",
     },
     medium: {
       label: "Needs approval",
-      className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
+      className: "bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20",
     },
     high: {
       label: "High risk",
-      className: "text-red-300 bg-red-500/10 border-red-500/20",
+      className: "bg-rose-500/10 text-rose-600 ring-1 ring-inset ring-rose-500/20",
     },
   }[risk];
 
   return (
-    <span className={`text-[11px] font-medium border rounded px-1.5 py-0.5 ${map.className}`}>
+    <span
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${map.className}`}
+    >
       {map.label}
     </span>
   );
@@ -990,20 +1011,28 @@ function splitReasoning(reasoning: string | null): {
 
 function StatusBadge({ status }: { status: PendingActionItem["status"] }) {
   const map: Record<PendingActionItem["status"], { label: string; className: string }> = {
-    PENDING: { label: "Pending", className: "text-amber-300 bg-amber-400/10 border-amber-400/20" },
+    PENDING: {
+      label: "Pending",
+      className: "bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20",
+    },
     EXECUTED: {
       label: "Done",
-      className: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
+      className: "bg-emerald-500/10 text-emerald-600 ring-1 ring-inset ring-emerald-500/20",
     },
     REJECTED: {
       label: "Rejected",
-      className: "text-stone-400 bg-stone-500/10 border-stone-500/20",
+      className: "bg-slate-100 text-slate-500",
     },
-    FAILED: { label: "Failed", className: "text-red-300 bg-red-500/10 border-red-500/20" },
+    FAILED: {
+      label: "Failed",
+      className: "bg-rose-500/10 text-rose-600 ring-1 ring-inset ring-rose-500/20",
+    },
   };
   const entry = map[status];
   return (
-    <span className={`text-[11px] font-medium border rounded px-1.5 py-0.5 ${entry.className}`}>
+    <span
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${entry.className}`}
+    >
       {entry.label}
     </span>
   );
@@ -1252,7 +1281,7 @@ function MobileEmpty({ commitmentCount }: { commitmentCount: number }) {
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="text-emerald-300"
+          className="text-emerald-500"
         >
           <polyline points="20 6 9 17 4 12" />
         </svg>
@@ -1335,10 +1364,10 @@ function MobileActionCard({
             type="button"
             onClick={onApprove}
             disabled={!!loading}
-            className="flex min-h-12 w-full items-center justify-center rounded-xl bg-sky-500 text-[15px] font-semibold text-stone-950 transition active:bg-sky-500 disabled:opacity-50"
+            className="glow-primary ease-strong flex min-h-12 w-full items-center justify-center rounded-xl bg-gradient-to-b from-sky-400 to-sky-500 text-[15px] font-semibold text-white transition duration-150 active:scale-[0.97] disabled:opacity-50"
           >
             {loading === "approve" ? (
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-stone-950/30 border-t-stone-950" />
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
             ) : (
               "Act now"
             )}

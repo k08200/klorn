@@ -144,7 +144,7 @@ export function CommitmentCard({
   };
 
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-4">
+    <article className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -166,15 +166,15 @@ export function CommitmentCard({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 mt-4">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={onDone}
           disabled={!!loading}
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[72px]"
+          className="glow-primary ease-strong inline-flex min-w-[72px] items-center justify-center gap-1.5 rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3 py-1.5 text-xs font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading === "done" ? (
-            <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
           ) : (
             "Done"
           )}
@@ -183,10 +183,10 @@ export function CommitmentCard({
           type="button"
           onClick={onDismiss}
           disabled={!!loading}
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition min-w-[72px]"
+          className="ease-strong inline-flex min-w-[72px] items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading === "dismiss" ? (
-            <span className="w-3 h-3 border-2 border-slate-300/40 border-t-slate-600 rounded-full animate-spin" />
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300/40 border-t-slate-600" />
           ) : (
             "Dismiss"
           )}
@@ -194,7 +194,7 @@ export function CommitmentCard({
         <button
           type="button"
           onClick={togglePath}
-          className="inline-flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-teal-700/50 text-teal-400 hover:bg-teal-400/10 transition"
+          className="ease-strong inline-flex items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
         >
           {pathExpanded ? "Hide plan" : "View plan"}
         </button>
@@ -203,10 +203,10 @@ export function CommitmentCard({
           onClick={onSnooze}
           disabled={!!loading}
           title="Hide for 24h — will resurface automatically"
-          className="inline-flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-slate-400 hover:text-slate-700 transition disabled:opacity-50"
+          className="ease-strong inline-flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs text-slate-400 transition duration-150 hover:bg-sky-50 hover:text-sky-700 active:scale-[0.97] disabled:opacity-50"
         >
           {loading === "snooze" ? (
-            <span className="w-3 h-3 border-2 border-slate-400/30 border-t-slate-500 rounded-full animate-spin" />
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400/30 border-t-slate-500" />
           ) : (
             "Snooze 24h"
           )}
@@ -231,7 +231,9 @@ export function CommitmentCard({
 function CommitmentOwnerBadge({ owner }: { owner: CommitmentItem["owner"] }) {
   const entry = commitmentOwnerEntry(owner);
   return (
-    <span className={`text-[11px] font-medium border rounded px-1.5 py-0.5 ${entry.className}`}>
+    <span
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${entry.className}`}
+    >
       {entry.label}
     </span>
   );
@@ -247,22 +249,22 @@ function TrustBadge({
   const map: Record<string, { shortLabel: string; className: string }> = {
     reliable: {
       shortLabel: "Reliable",
-      className: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
+      className: "bg-emerald-500/10 text-emerald-600 ring-1 ring-inset ring-emerald-500/20",
     },
     mostly_reliable: {
       shortLabel: "Usually reliable",
-      className: "text-amber-300 bg-amber-400/10 border-amber-400/20",
+      className: "bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20",
     },
     unreliable: {
       shortLabel: "Often late",
-      className: "text-red-300 bg-red-500/10 border-red-500/20",
+      className: "bg-rose-500/10 text-rose-600 ring-1 ring-inset ring-rose-500/20",
     },
   };
   const entry = map[badge];
   if (!entry) return null;
   return (
     <span
-      className={`text-[11px] font-medium border rounded px-1.5 py-0.5 ${entry.className}`}
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${entry.className}`}
       title={label ?? undefined}
     >
       {entry.shortLabel}
@@ -278,22 +280,22 @@ function commitmentOwnerEntry(owner: CommitmentItem["owner"]): {
     case "USER":
       return {
         label: "Mine",
-        className: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
+        className: "bg-emerald-500/10 text-emerald-600 ring-1 ring-inset ring-emerald-500/20",
       };
     case "COUNTERPARTY":
       return {
         label: "Counterparty",
-        className: "text-sky-700 bg-sky-300/10 border-sky-300/20",
+        className: "bg-sky-500/10 text-sky-600 ring-1 ring-inset ring-sky-500/20",
       };
     case "TEAM":
       return {
         label: "Team",
-        className: "text-sky-700 bg-sky-300/10 border-sky-300/20",
+        className: "bg-sky-500/10 text-sky-600 ring-1 ring-inset ring-sky-500/20",
       };
     case "UNKNOWN":
       return {
         label: "Needs owner",
-        className: "text-sky-700 bg-sky-400/10 border-sky-400/20",
+        className: "bg-slate-100 text-slate-500",
       };
   }
 }
@@ -362,15 +364,15 @@ function CommitmentPathPanel({
 
   return (
     <div className="mt-4 border-t border-slate-200 pt-4">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-semibold text-teal-300">Fulfillment plan</p>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-xs font-semibold text-sky-600">Fulfillment plan</p>
         <div className="flex items-center gap-3">
           {!allMaterialized && (
             <button
               type="button"
               onClick={onMaterializeAll}
               disabled={materializingStep !== null}
-              className="text-xs text-teal-400 hover:text-teal-300 transition disabled:opacity-50"
+              className="text-xs font-medium text-sky-600 transition duration-150 hover:text-sky-700 disabled:opacity-50"
             >
               {materializingStep === "all" ? "Creating..." : "Create all tasks"}
             </button>
@@ -379,7 +381,7 @@ function CommitmentPathPanel({
             type="button"
             onClick={onRebuild}
             disabled={loading}
-            className="text-xs text-slate-400 hover:text-slate-500 transition disabled:opacity-50"
+            className="text-xs text-slate-400 transition duration-150 hover:text-slate-600 disabled:opacity-50"
           >
             {loading ? "Rebuilding..." : "Rebuild"}
           </button>
@@ -396,8 +398,8 @@ function CommitmentPathPanel({
           return (
             <li
               key={`${step.dueIso}-${i}`}
-              className={`flex items-start gap-3 rounded-lg p-3 text-xs border ${
-                isMaterialized ? "border-teal-500/20 bg-teal-400/5" : "border-slate-200 bg-slate-50"
+              className={`flex items-start gap-3 rounded-lg border p-3 text-xs ${
+                isMaterialized ? "border-sky-500/20 bg-sky-500/5" : "border-slate-200 bg-slate-50"
               }`}
             >
               <span className="mt-0.5 w-4 shrink-0 text-center font-mono text-[10px] text-slate-400">
@@ -416,13 +418,13 @@ function CommitmentPathPanel({
                 </p>
               </div>
               {isMaterialized ? (
-                <span className="shrink-0 text-[11px] text-teal-400">task ✓</span>
+                <span className="shrink-0 text-[11px] font-medium text-sky-600">task ✓</span>
               ) : (
                 <button
                   type="button"
                   onClick={() => onMaterializeStep(i)}
                   disabled={materializingStep !== null}
-                  className="shrink-0 rounded border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 transition hover:border-slate-400 hover:text-slate-900 disabled:opacity-50"
+                  className="ease-strong shrink-0 rounded-md border border-slate-200 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
                 >
                   {materializingStep === i ? "..." : "+ task"}
                 </button>

@@ -181,7 +181,7 @@ function ApiOfflineScreen() {
         <button
           type="button"
           onClick={retryNow}
-          className="mt-6 inline-flex min-h-11 items-center rounded-md bg-sky-500 px-5 text-sm font-semibold text-stone-950 transition hover:bg-sky-200"
+          className="mt-6 inline-flex min-h-11 items-center rounded-md bg-sky-500 px-5 text-sm font-semibold text-white transition hover:bg-sky-600"
         >
           Retry
         </button>

@@ -4,14 +4,13 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
-import { EveSignalField } from "../../../components/brand-visuals";
 import { useConfirm } from "../../../components/confirm-dialog";
 import { useToast } from "../../../components/toast";
 import { TrustBadgeChip } from "../../../components/trust-badge";
 import { API_BASE, apiFetch, authHeaders } from "../../../lib/api";
 import { linkifyText } from "../../../lib/linkify";
 import { captureClientError } from "../../../lib/sentry";
-import { DetailStat, EmailActionButton, formatBytes, ProfileFact, senderName } from "./atoms";
+import { formatBytes, ProfileFact, senderName } from "./atoms";
 import { AttachmentAnalysis } from "./attachment-analysis";
 import { EmailActionToolbar, EmailReminderQuickActions, UndoActionBanner } from "./toolbar";
 
@@ -591,7 +590,7 @@ function EmailDetailView() {
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:py-10">
       <Link
         href="/email"
-        className="mb-4 inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-500 transition hover:border-sky-300/40 hover:text-slate-900"
+        className="ease-strong mb-5 inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
       >
         <svg
           aria-hidden="true"
@@ -622,16 +621,66 @@ function EmailDetailView() {
       {loading && <p className="text-sm text-slate-400">Loading...</p>}
 
       {error && (
-        <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
       {email && (
         <article>
-          <header className="mb-5 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-black/10">
-            <div className="h-1 bg-gradient-to-r from-[#a8a29e] via-accent to-stone-600" />
-            <div className="p-5 md:p-6">
+          {/* Flat content-first header: the subject is the h1 on the canvas,
+              sender meta stays quiet, and the classification signals collapse
+              into small badges instead of boxed stat tiles. */}
+          <header className="mb-6">
+            <div className="flex items-start gap-3.5">
+              <span
+                aria-hidden="true"
+                className={`avatar-ring mt-1 hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-sm font-semibold text-white sm:flex ${avatarGradient(senderName(email.from))}`}
+              >
+                {senderInitials(senderName(email.from))}
+              </span>
+              <div className="min-w-0 flex-1">
+                <h1 className="break-words text-[24px] font-semibold leading-tight tracking-[-0.02em] text-slate-900 md:text-[28px]">
+                  {email.subject || "No subject"}
+                </h1>
+                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500">
+                  <span className="max-w-full truncate font-medium text-slate-700">
+                    {senderName(email.from)}
+                  </span>
+                  {email.trust && <TrustBadgeChip trust={email.trust} />}
+                  <span aria-hidden="true" className="text-slate-300">
+                    ·
+                  </span>
+                  <time className="shrink-0 tabular-nums">{formatFull(email.date)}</time>
+                  <span aria-hidden="true" className="text-slate-300">
+                    ·
+                  </span>
+                  <span>{email.isRead ? "Read" : "Kept unread"}</span>
+                </div>
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                  <span
+                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${
+                      email.priority === "URGENT"
+                        ? "bg-rose-500/10 text-rose-600 ring-rose-500/20"
+                        : "bg-slate-100 text-slate-500 ring-transparent"
+                    }`}
+                  >
+                    {PRIORITY_LABELS[email.priority]}
+                  </span>
+                  {email.needsReply && (
+                    <span className="shrink-0 rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-700 ring-1 ring-inset ring-sky-500/20">
+                      Needs reply
+                    </span>
+                  )}
+                  {email.category && (
+                    <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-500">
+                      {categoryLabel(email.category)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="mt-4">
               <EmailActionToolbar
                 busyAction={actionBusy}
                 email={email}
@@ -647,33 +696,6 @@ function EmailDetailView() {
                 disabled={email.id.startsWith("demo-")}
                 onCreate={createEmailReminder}
               />
-              <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
-                <div>
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent/80">
-                    Signal detail
-                  </p>
-                  <h1 className="break-words text-xl font-semibold leading-snug tracking-tight text-slate-900 md:text-2xl">
-                    {email.subject || "No subject"}
-                  </h1>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                    <span className="max-w-full truncate">{email.from}</span>
-                    {email.trust && <TrustBadgeChip trust={email.trust} />}
-                    <span className="text-slate-500">·</span>
-                    <time className="shrink-0 tabular-nums">{formatFull(email.date)}</time>
-                    <span className="text-slate-500">·</span>
-                    <span>{email.isRead ? "Read" : "Kept unread"}</span>
-                  </div>
-                </div>
-                <EveSignalField className="min-h-40 rounded-lg" />
-              </div>
-              <div className="mt-5 grid grid-cols-3 gap-2">
-                <DetailStat label="Priority" value={PRIORITY_LABELS[email.priority]} />
-                <DetailStat label="Reply" value={email.needsReply ? "Needed" : "No signal"} />
-                <DetailStat
-                  label="Category"
-                  value={email.category ? categoryLabel(email.category) : "-"}
-                />
-              </div>
             </div>
           </header>
 
@@ -723,31 +745,34 @@ function EmailDetailView() {
             />
           )}
 
-          <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
+          {/* Reading first: the message body leads the grid in an elevated
+              panel with a comfortable reading measure; Klorn's judgment sits
+              beside it as supporting context. */}
+          <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
+            {email.body ? (
+              <section className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-5 md:p-6">
+                <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Message
+                </h2>
+                <pre className="whitespace-pre-wrap break-words font-sans text-[15px] leading-7 text-slate-800">
+                  {linkifyText(email.body)}
+                </pre>
+              </section>
+            ) : email.snippet ? (
+              <section className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-5 md:p-6">
+                <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Preview
+                </h2>
+                <p className="text-[15px] leading-7 text-slate-600">{linkifyText(email.snippet)}</p>
+              </section>
+            ) : null}
+
             <KlornAnalysis
               email={email}
               onPriorityChange={(priority) =>
                 setEmail((prev) => (prev ? { ...prev, priority } : prev))
               }
             />
-
-            {email.body ? (
-              <section className="rounded-lg border border-slate-200 bg-white p-4">
-                <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                  Body
-                </h2>
-                <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-slate-900">
-                  {linkifyText(email.body)}
-                </pre>
-              </section>
-            ) : email.snippet ? (
-              <section className="rounded-lg border border-slate-200 bg-white p-4">
-                <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                  Preview
-                </h2>
-                <p className="text-sm text-slate-500">{linkifyText(email.snippet)}</p>
-              </section>
-            ) : null}
           </div>
         </article>
       )}
@@ -768,20 +793,22 @@ function CandidateProfileCard({
 }) {
   const status = intake?.status ?? candidatePipelineToIntakeStatus(profile.pipelineStatus);
   return (
-    <section className="mt-5 rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
+    <section className="panel-elevated relative mt-5 overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-4 md:p-5">
+      <span
+        aria-hidden="true"
+        className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-sky-300 to-sky-500"
+      />
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-accent-light">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-sky-600">
           Candidate card
         </h2>
-        <span className="text-[11px] text-slate-400">
+        <span className="text-[11px] tabular-nums text-slate-400">
           Confidence {Math.round(profile.confidence * 100)}%
         </span>
       </div>
-      <div className="mb-3 rounded-lg border border-sky-500/15 bg-slate-50 px-3 py-2">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-accent-light/70">
-          Pipeline
-        </p>
-        <p className="mt-1 text-xs font-medium text-accent-dim">
+      <div className="mb-3 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Pipeline</p>
+        <p className="mt-1 text-xs font-semibold text-sky-700">
           {candidatePipelineLabel(profile.pipelineStatus)}
         </p>
         <p className="mt-1 text-[11px] leading-5 text-slate-500">{profile.nextAction}</p>
@@ -793,10 +820,10 @@ function CandidateProfileCard({
             type="button"
             onClick={() => onUpdate({ status: option.status })}
             disabled={updating || status === option.status}
-            className={`rounded border px-2 py-1 text-[11px] transition disabled:cursor-default ${
+            className={`ease-strong rounded-lg border px-2 py-1 text-[11px] font-medium transition duration-150 active:scale-[0.97] disabled:cursor-default ${
               status === option.status
-                ? "border-accent-light/40 bg-accent-light/15 text-accent-dim"
-                : "border-slate-200 bg-slate-50 text-slate-500 hover:border-accent/30 hover:text-accent-muted"
+                ? "border-sky-300 bg-accent/10 text-sky-700"
+                : "border-slate-200 bg-white/70 text-slate-500 hover:bg-white hover:text-slate-900"
             }`}
           >
             {option.label}
@@ -817,7 +844,7 @@ function CandidateProfileCard({
           {profile.skills.map((skill) => (
             <span
               key={skill}
-              className="rounded border border-sky-500/25 bg-accent/10 px-2 py-1 text-[11px] text-accent-muted"
+              className="rounded-full border border-slate-200 bg-white/70 px-2 py-1 text-[11px] text-slate-600"
             >
               {skill}
             </span>
@@ -827,23 +854,23 @@ function CandidateProfileCard({
       {profile.links.length > 0 && (
         <div className="mt-3 space-y-1">
           {profile.links.map((link) => (
-            <p key={link} className="break-all text-[11px] text-[#a8a29e]">
+            <p key={link} className="break-all text-[11px] text-sky-600">
               {link}
             </p>
           ))}
         </div>
       )}
       {profile.missingFields.length > 0 && (
-        <p className="mt-3 text-[11px] text-accent/80">
+        <p className="mt-3 text-[11px] text-sky-700">
           Needs follow-up: {profile.missingFields.map(candidateMissingLabel).join(", ")}
         </p>
       )}
       {profile.manualReviewFiles.length > 0 && (
-        <div className="mt-3 rounded-lg border border-rose-400/25 bg-rose-400/10 px-3 py-2">
-          <p className="text-[11px] font-medium text-rose-200">Source review needed</p>
+        <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+          <p className="text-[11px] font-semibold text-rose-700">Source review needed</p>
           <ul className="mt-1 space-y-1">
             {profile.manualReviewFiles.map((file) => (
-              <li key={`${file.filename}-${file.reason}`} className="text-[11px] text-rose-100/80">
+              <li key={`${file.filename}-${file.reason}`} className="text-[11px] text-rose-600/90">
                 {file.filename}: {file.reason}
               </li>
             ))}
@@ -858,7 +885,7 @@ function CandidateProfileCard({
           defaultValue={intake?.notes ?? ""}
           rows={2}
           onBlur={(e) => onUpdate({ notes: e.target.value || null })}
-          className="w-full rounded-lg border border-sky-500/15 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500 outline-none transition focus:border-accent/35"
+          className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-xs leading-5 text-slate-700 outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15"
           placeholder="Review note"
         />
       </label>
@@ -893,38 +920,40 @@ function ThreadContextPanel({
   currentEmailId: string;
 }) {
   return (
-    <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-900">Thread context</h2>
-          <p className="mt-1 text-xs text-slate-400">
-            Review {thread.messageCount} earlier messages to understand the reply context.
-          </p>
-        </div>
+    <section className="panel-elevated mb-5 overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+      <div className="border-b border-slate-100 px-4 py-3">
+        <h2 className="text-sm font-semibold text-slate-900">Thread context</h2>
+        <p className="mt-0.5 text-xs text-slate-400">
+          Review {thread.messageCount} earlier messages to understand the reply context.
+        </p>
       </div>
-      <ol className="space-y-2">
+      <ol className="divide-y divide-slate-100">
         {thread.messages.map((message) => {
           const current = message.id === currentEmailId;
           return (
             <li
               key={message.id}
-              className={`rounded-lg border px-3 py-2 ${
-                current ? "border-accent/30 bg-accent/10" : "border-slate-200 bg-slate-50"
-              }`}
+              className={`row-wash relative px-4 py-2.5 ${current ? "bg-accent/5" : ""}`}
             >
+              {current && (
+                <span
+                  aria-hidden="true"
+                  className="absolute left-0 top-0 h-full w-[3px] bg-sky-400"
+                />
+              )}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="min-w-0 truncate text-xs font-medium text-slate-900">
                   {senderName(message.from)}
                 </p>
-                <time className="shrink-0 text-[10px] tabular-nums text-slate-500">
+                <time className="shrink-0 text-[10px] tabular-nums text-slate-400">
                   {formatFull(message.date)}
                 </time>
               </div>
-              <p className="mt-1 truncate text-[11px] text-slate-400">
+              <p className="mt-1 truncate text-[11px] text-slate-500">
                 {message.summary || message.snippet || message.subject || "No summary"}
               </p>
               {message.actionItems.length > 0 && (
-                <p className="mt-1 text-[10px] text-accent-light">
+                <p className="mt-1 text-[10px] font-medium text-sky-600">
                   {message.actionItems.length} tasks
                 </p>
               )}
@@ -1152,7 +1181,7 @@ function ReplyDraftBox({
   const quickIntents = buildQuickReplyIntents(candidateProfile, mode);
 
   return (
-    <section className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
+    <section className="panel-elevated mt-5 overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-4 md:p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -1166,7 +1195,7 @@ function ReplyDraftBox({
           type="button"
           onClick={onGenerate}
           disabled={drafting}
-          className="rounded-lg border border-sky-500/30 px-3 py-1.5 text-xs text-accent-muted transition hover:bg-sky-500/10 disabled:opacity-50"
+          className="ease-strong inline-flex h-9 shrink-0 items-center rounded-lg border border-sky-200 bg-sky-50/70 px-3 text-xs font-medium text-sky-700 transition duration-150 hover:bg-sky-50 hover:text-sky-800 active:scale-[0.97] disabled:opacity-50"
         >
           {drafting ? "Drafting..." : draft ? "Regenerate" : "Draft reply"}
         </button>
@@ -1175,32 +1204,35 @@ function ReplyDraftBox({
         value={intent}
         onChange={(e) => onIntentChange(e.target.value)}
         placeholder="Example: confirm the profile was reviewed and ask for next audition availability"
-        className="mb-3 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 placeholder-slate-400 outline-none transition focus:border-sky-500/40"
+        className="mb-3 w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-700 placeholder-slate-400 outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15"
       />
-      <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+      <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
         {WORK_MODE_OPTIONS.map((option) => (
           <button
             key={option.value}
             type="button"
             onClick={() => setMode(option.value)}
-            className={`h-8 shrink-0 rounded-full border px-3 text-[11px] transition ${
+            className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium transition duration-150 active:scale-[0.97] ${
               mode === option.value
-                ? "border-accent/45 bg-accent/15 text-accent-muted"
-                : "border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300"
+                ? "bg-accent/10 text-sky-700 ring-1 ring-inset ring-accent/30"
+                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
             }`}
           >
+            {mode === option.value && (
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+            )}
             {option.label}
           </button>
         ))}
       </div>
       {quickIntents.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div className="mb-3 flex flex-wrap gap-1.5">
           {quickIntents.map((item) => (
             <button
               key={item.label}
               type="button"
               onClick={() => onIntentChange(item.intent)}
-              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500 transition hover:border-[#a8a29e]/35 hover:bg-[#a8a29e]/10 hover:text-slate-900"
+              className="ease-strong rounded-full border border-slate-200 bg-white/70 px-3 py-1.5 text-[11px] text-slate-500 transition duration-150 hover:bg-sky-50 hover:text-sky-700 active:scale-[0.97]"
             >
               {item.label}
             </button>
@@ -1217,7 +1249,7 @@ function ReplyDraftBox({
               <input
                 value={draft.to}
                 onChange={(e) => onDraftChange({ ...draft, to: e.target.value })}
-                className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-slate-500 outline-none focus:border-sky-500/40"
+                className="w-full rounded-lg border border-slate-200 bg-white/80 px-2 py-1.5 text-slate-700 outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15"
               />
             </label>
             <label className="block">
@@ -1227,7 +1259,7 @@ function ReplyDraftBox({
               <input
                 value={draft.subject}
                 onChange={(e) => onDraftChange({ ...draft, subject: e.target.value })}
-                className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-slate-500 outline-none focus:border-sky-500/40"
+                className="w-full rounded-lg border border-slate-200 bg-white/80 px-2 py-1.5 text-slate-700 outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15"
               />
             </label>
           </div>
@@ -1235,19 +1267,19 @@ function ReplyDraftBox({
             value={draft.body}
             onChange={(e) => onDraftChange({ ...draft, body: e.target.value })}
             rows={7}
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-900 outline-none focus:border-sky-500/40"
+            className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm leading-6 text-slate-900 outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15"
           />
           {attachments.length > 0 && (
-            <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-              <label className="flex cursor-pointer items-start gap-2 rounded border border-accent/15 bg-accent/5 px-2 py-1.5">
+            <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
+              <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-sky-200/70 bg-sky-50/60 px-2 py-1.5">
                 <input
                   type="checkbox"
                   checked={includeBriefAttachment}
                   onChange={(e) => onIncludeBriefAttachmentChange(e.target.checked)}
-                  className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 bg-white text-accent-light focus:ring-accent-light focus:ring-offset-white"
+                  className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 bg-white text-accent focus:ring-accent focus:ring-offset-white"
                 />
                 <span>
-                  <span className="block text-[11px] font-medium text-accent-muted">
+                  <span className="block text-[11px] font-medium text-sky-700">
                     Attach the attachment analysis brief
                   </span>
                   <span className="mt-0.5 block text-[10px] leading-4 text-slate-400">
@@ -1268,7 +1300,7 @@ function ReplyDraftBox({
                         : attachments.map((attachment) => attachment.id),
                     )
                   }
-                  className="text-[11px] text-[#a8a29e] transition hover:text-slate-500"
+                  className="text-[11px] font-medium text-slate-400 transition duration-150 hover:text-sky-700"
                 >
                   {selectedCount === attachments.length ? "Clear all" : "Select all"}
                 </button>
@@ -1277,18 +1309,18 @@ function ReplyDraftBox({
                 {attachments.map((attachment) => (
                   <label
                     key={attachment.id}
-                    className="flex min-w-0 cursor-pointer items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1.5 transition hover:border-[#a8a29e]/25"
+                    className="flex min-w-0 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 transition duration-150 ease-out hover:border-sky-200"
                   >
                     <input
                       type="checkbox"
                       checked={selectedAttachmentIds.includes(attachment.id)}
                       onChange={() => toggleAttachment(attachment.id)}
-                      className="h-3.5 w-3.5 rounded border-slate-300 bg-white text-[#a8a29e] focus:ring-[#a8a29e] focus:ring-offset-white"
+                      className="h-3.5 w-3.5 rounded border-slate-300 bg-white text-accent focus:ring-accent focus:ring-offset-white"
                     />
-                    <span className="min-w-0 flex-1 truncate text-[11px] text-slate-500">
+                    <span className="min-w-0 flex-1 truncate text-[11px] text-slate-600">
                       {attachment.filename}
                     </span>
-                    <span className="shrink-0 text-[10px] text-slate-500">
+                    <span className="shrink-0 text-[10px] text-slate-400">
                       {formatBytes(attachment.size)}
                     </span>
                   </label>
@@ -1303,7 +1335,7 @@ function ReplyDraftBox({
                   href={gmailDraftUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-lg border border-accent/30 px-3 py-1.5 text-xs font-medium text-accent-muted transition hover:bg-accent/10"
+                  className="ease-strong inline-flex h-9 items-center rounded-lg border border-sky-200 bg-sky-50/70 px-3 text-xs font-medium text-sky-700 transition duration-150 hover:bg-sky-50 hover:text-sky-800 active:scale-[0.97]"
                 >
                   Open Gmail draft
                 </a>
@@ -1312,7 +1344,7 @@ function ReplyDraftBox({
                 type="button"
                 onClick={onSaveGmailDraft}
                 disabled={savingGmailDraft || !draft.to || !draft.subject || !draft.body}
-                className="rounded-lg border border-[#a8a29e]/30 px-3 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-[#a8a29e]/10 disabled:opacity-50"
+                className="ease-strong inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
               >
                 {savingGmailDraft
                   ? "Saving..."
@@ -1324,7 +1356,7 @@ function ReplyDraftBox({
                 type="button"
                 onClick={onSend}
                 disabled={sending || !draft.to || !draft.subject || !draft.body}
-                className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-accent-muted disabled:opacity-50"
+                className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3.5 text-xs font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {sending ? "Sending..." : "Send this reply"}
               </button>
@@ -1348,7 +1380,7 @@ function KlornAnalysis({
 
   if (!hasAnything) {
     return (
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
+      <section className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-4">
         <p className="text-xs text-slate-400">
           Klorn has not analyzed this email yet. Sync, then check again shortly.
         </p>
@@ -1357,11 +1389,11 @@ function KlornAnalysis({
   }
 
   return (
-    <section className="relative overflow-hidden rounded-lg border border-sky-300/20 bg-sky-300/5 p-4">
-      <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-transparent via-accent to-transparent" />
+    <section className="panel-elevated relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-4 md:p-5">
+      <div className="absolute bottom-0 left-0 top-0 w-[3px] bg-gradient-to-b from-sky-300 to-sky-500" />
       <div className="pl-2">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-accent">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-sky-600">
             Klorn judgment
           </span>
           <div className="flex items-center gap-1.5">
@@ -1460,7 +1492,7 @@ function ActionItemsPanel({ emailId, actionItems }: { emailId: string; actionIte
             type="button"
             onClick={createAll}
             disabled={creating !== null}
-            className="text-[10px] px-2 py-0.5 rounded border border-teal-500/30 bg-teal-950/20 text-teal-400 hover:bg-teal-900/30 transition disabled:opacity-40"
+            className="ease-strong rounded-md border border-teal-200 bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700 transition duration-150 hover:bg-teal-100 active:scale-[0.97] disabled:opacity-40"
           >
             {creating === "all" ? "Creating…" : "Create all tasks"}
           </button>
@@ -1469,11 +1501,11 @@ function ActionItemsPanel({ emailId, actionItems }: { emailId: string; actionIte
       <ul className="space-y-1">
         {actionItems.map((a, i) => (
           <li key={i} className="flex items-center gap-2 text-xs">
-            <span className={created.has(i) ? "text-teal-400" : "text-accent/80"}>
+            <span className={created.has(i) ? "text-teal-600" : "text-sky-600"}>
               {created.has(i) ? "✓" : "□"}
             </span>
             <span
-              className={`flex-1 ${created.has(i) ? "text-slate-400 line-through" : "text-slate-500"}`}
+              className={`flex-1 ${created.has(i) ? "text-slate-400 line-through" : "text-slate-600"}`}
             >
               {a}
             </span>
@@ -1482,7 +1514,7 @@ function ActionItemsPanel({ emailId, actionItems }: { emailId: string; actionIte
                 type="button"
                 onClick={() => createTask(i)}
                 disabled={creating !== null}
-                className="shrink-0 text-[10px] px-1.5 py-0.5 rounded border border-slate-200 text-slate-400 hover:text-slate-500 hover:border-slate-300 transition disabled:opacity-40"
+                className="ease-strong shrink-0 rounded-md border border-slate-200 bg-white/70 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 transition duration-150 hover:bg-sky-50 hover:text-sky-700 active:scale-[0.97] disabled:opacity-40"
               >
                 {creating === i ? "…" : "+ task"}
               </button>
@@ -1496,7 +1528,7 @@ function ActionItemsPanel({ emailId, actionItems }: { emailId: string; actionIte
 
 function ReplyNeededPill() {
   return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded border border-accent/30 bg-accent/10 text-accent font-medium">
+    <span className="shrink-0 rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-700 ring-1 ring-inset ring-sky-500/20">
       Needs reply
     </span>
   );
@@ -1556,7 +1588,7 @@ function LabelFeedbackControl({
 
   if (feedback) {
     return (
-      <span className="text-[11px] text-accent-light/80 inline-flex items-center gap-1">
+      <span className="inline-flex items-center gap-1 text-[11px] text-sky-700">
         <span className="h-1.5 w-1.5 rounded-full bg-accent" />
         Reported: {PRIORITY_LABELS[feedback.originalPriority]} {"->"}{" "}
         {PRIORITY_LABELS[feedback.correctedPriority]}
@@ -1589,7 +1621,7 @@ function LabelFeedbackControl({
           type="button"
           onClick={() => submit(p)}
           disabled={!!submitting}
-          className="rounded border border-slate-200 px-1.5 py-0.5 text-[11px] text-slate-900 transition hover:bg-slate-100 disabled:opacity-50"
+          className="ease-strong rounded-md border border-slate-200 bg-white/70 px-1.5 py-0.5 text-[11px] font-medium text-slate-700 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
         >
           {submitting === p ? "..." : PRIORITY_LABELS[p]}
         </button>
@@ -1605,7 +1637,7 @@ function LabelFeedbackControl({
       >
         Cancel
       </button>
-      {error && <span className="text-[11px] text-red-300">{error}</span>}
+      {error && <span className="text-[11px] text-red-600">{error}</span>}
     </div>
   );
 }
@@ -1668,7 +1700,7 @@ function ReplyNeededFeedbackControl({ emailId }: { emailId: string }) {
   ];
 
   return (
-    <div className="mt-4 border-t border-sky-500/10 pt-3">
+    <div className="mt-4 border-t border-slate-100 pt-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[11px] text-slate-400">Reply-needed judgment:</span>
         {options.map((option) => {
@@ -1682,15 +1714,15 @@ function ReplyNeededFeedbackControl({ emailId }: { emailId: string }) {
               disabled={!!submitting}
               className={`h-7 rounded-lg border px-2 text-[11px] transition disabled:opacity-50 ${
                 selected
-                  ? "border-accent bg-accent/10 text-accent-muted"
-                  : "border-slate-200 text-slate-500 hover:bg-slate-100"
+                  ? "border-sky-300 bg-accent/10 text-sky-700"
+                  : "border-slate-200 bg-white/70 text-slate-500 hover:bg-white hover:text-slate-900"
               }`}
             >
               {submitting === option.choice ? "..." : option.label}
             </button>
           );
         })}
-        {error && <span className="text-[11px] text-red-300">{error}</span>}
+        {error && <span className="text-[11px] text-red-600">{error}</span>}
       </div>
     </div>
   );
@@ -1699,13 +1731,13 @@ function ReplyNeededFeedbackControl({ emailId }: { emailId: string }) {
 function PriorityPill({ priority }: { priority: EmailDetail["priority"] }) {
   if (priority === "NORMAL") return null;
   const styles = {
-    URGENT: "bg-red-500/15 text-red-300 border-red-500/30",
-    LOW: "bg-slate-100 text-slate-400 border-slate-200",
+    URGENT: "bg-rose-500/10 text-rose-600 ring-rose-500/20",
+    LOW: "bg-slate-100 text-slate-500 ring-transparent",
   };
   const labels = { URGENT: "Urgent", LOW: "Low" };
   return (
     <span
-      className={`text-[10px] px-1.5 py-0.5 rounded border ${styles[priority as "URGENT" | "LOW"]} font-medium`}
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${styles[priority as "URGENT" | "LOW"]}`}
     >
       {labels[priority as "URGENT" | "LOW"]}
     </span>
@@ -1715,7 +1747,7 @@ function PriorityPill({ priority }: { priority: EmailDetail["priority"] }) {
 function CategoryPill({ category }: { category: string }) {
   const label = categoryLabel(category);
   return (
-    <span className="rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">
+    <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-500">
       {label}
     </span>
   );
@@ -1752,6 +1784,39 @@ function candidatePipelineLabel(status: AttachmentCandidateProfile["pipelineStat
     needs_analysis: "Needs analysis",
   };
   return labels[status];
+}
+
+// Monogram avatar helpers — local copy of the email list pattern so the
+// detail header shows the same deterministic per-sender gradient.
+const AVATAR_GRADIENTS = [
+  "from-sky-400 to-blue-500",
+  "from-teal-400 to-emerald-500",
+  "from-indigo-500 to-violet-600",
+  "from-amber-400 to-orange-500",
+  "from-rose-400 to-pink-500",
+  "from-cyan-400 to-sky-600",
+  "from-slate-600 to-slate-800",
+];
+
+function avatarGradient(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  }
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
+}
+
+function senderInitials(name: string): string {
+  const words = name
+    .replace(/["'()[\]]/g, "")
+    .split(/[\s·|,]+/)
+    .filter(Boolean);
+  if (words.length === 0) return "@";
+  return words
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
 }
 
 function formatFull(iso: string): string {

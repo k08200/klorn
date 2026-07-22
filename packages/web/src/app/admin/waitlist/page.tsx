@@ -112,26 +112,23 @@ function WaitlistPageInner() {
   };
 
   return (
-    <div className="min-h-dvh bg-white px-4 pb-28 pt-6 text-slate-900 sm:px-6 md:py-10">
+    <div className="min-h-dvh px-4 pb-28 pt-6 text-slate-900 sm:px-6 md:py-10">
       <div className="mx-auto max-w-5xl">
-        <header className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-black/20">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-600">
-            Access review
-          </p>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
+        <header className="mb-6">
+          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
             Early access waitlist
           </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+          <p className="mt-2 max-w-3xl text-sm text-slate-500">
             Review new requests, move approved candidates into testing, and keep access status
             clear.
           </p>
         </header>
 
-        <div className="mb-6 rounded-xl border border-amber-300/35 bg-amber-300/[0.06] p-4 text-sm leading-6 text-amber-100/90">
-          <p className="font-semibold text-amber-100">
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+          <p className="font-semibold text-amber-800">
             ⚠️ Do this BEFORE clicking Approve — every time.
           </p>
-          <ol className="mt-2 list-decimal space-y-1 pl-6 text-[13px] text-amber-100/85">
+          <ol className="mt-2 list-decimal space-y-1 pl-6 text-[13px] text-amber-700">
             <li>Copy the email from the row below (click the address to copy).</li>
             <li>
               Open{" "}
@@ -139,7 +136,7 @@ function WaitlistPageInner() {
                 href="https://console.cloud.google.com/apis/credentials/consent"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline decoration-amber-400/60 underline-offset-2 hover:text-amber-50"
+                className="underline decoration-amber-500/60 underline-offset-2 hover:text-amber-900"
               >
                 Google Cloud Console → OAuth consent screen → Test users
               </a>{" "}
@@ -162,14 +159,14 @@ function WaitlistPageInner() {
                 key={f.key}
                 type="button"
                 onClick={() => setFilter(f.key)}
-                className={`rounded-xl border px-4 py-3 text-left transition ${
+                className={`ease-strong rounded-xl border px-4 py-3 text-left transition duration-150 active:scale-[0.97] ${
                   isActive
-                    ? "border-sky-300/60 bg-sky-300/10 text-slate-900"
-                    : "border-slate-200 bg-white text-slate-500 hover:border-slate-200 hover:text-slate-900"
+                    ? "panel-elevated border-sky-300 bg-sky-50 text-slate-900"
+                    : "border-slate-200 bg-white/70 text-slate-500 hover:bg-white hover:text-slate-900"
                 }`}
               >
                 <div className="text-xs uppercase tracking-wide">{f.label}</div>
-                <div className="mt-1 text-2xl font-semibold">{value}</div>
+                <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
               </button>
             );
           })}
@@ -178,80 +175,87 @@ function WaitlistPageInner() {
         {loading ? (
           <p className="text-sm text-slate-400">Loading...</p>
         ) : entries.length === 0 ? (
-          <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+          <p className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-6 text-sm text-slate-500">
             No requests in this state.
           </p>
         ) : (
-          <ul className="space-y-3">
-            {entries.map((entry) => (
-              <li
-                key={entry.id}
-                className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5"
-              >
-                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => copyEmail(entry)}
-                        className="break-all text-base font-semibold text-slate-900 transition hover:text-sky-600"
-                        title="Copy email"
+          <section className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+            <ul className="divide-y divide-slate-100">
+              {entries.map((entry) => (
+                <li key={entry.id} className="row-wash p-4 md:p-5">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span
+                        aria-hidden="true"
+                        className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[13px] font-semibold text-white ${avatarGradient(entry.name || entry.email)}`}
                       >
-                        {entry.email}
-                      </button>
-                      <StatusBadge status={entry.status} />
-                      {copiedId === entry.id && (
-                        <span className="text-xs text-sky-600">Copied</span>
+                        {senderInitials(entry.name || entry.email)}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => copyEmail(entry)}
+                            className="break-all text-base font-semibold text-slate-900 transition duration-150 hover:text-sky-600"
+                            title="Copy email"
+                          >
+                            {entry.email}
+                          </button>
+                          <StatusBadge status={entry.status} />
+                          {copiedId === entry.id && (
+                            <span className="text-xs text-sky-600">Copied</span>
+                          )}
+                        </div>
+                        <div className="mt-1 text-xs tabular-nums text-slate-400">
+                          {entry.name ? `${entry.name} · ` : ""}
+                          {formatDate(entry.createdAt)}
+                          {entry.approvedAt ? ` · approved ${formatDate(entry.approvedAt)}` : ""}
+                        </div>
+                        {entry.useCase && (
+                          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
+                            {entry.useCase}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      {entry.status !== "APPROVED" && (
+                        <button
+                          type="button"
+                          onClick={() => updateStatus(entry.id, "APPROVED")}
+                          disabled={updating === entry.id}
+                          className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3.5 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:opacity-60"
+                        >
+                          Approve
+                        </button>
+                      )}
+                      {entry.status !== "REJECTED" && (
+                        <button
+                          type="button"
+                          onClick={() => updateStatus(entry.id, "REJECTED")}
+                          disabled={updating === entry.id}
+                          className="ease-strong inline-flex h-9 items-center rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 transition duration-150 hover:bg-red-100 active:scale-[0.97] disabled:opacity-60"
+                        >
+                          Reject
+                        </button>
+                      )}
+                      {entry.status !== "PENDING" && (
+                        <button
+                          type="button"
+                          onClick={() => updateStatus(entry.id, "PENDING")}
+                          disabled={updating === entry.id}
+                          className="ease-strong inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-sm text-slate-500 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-60"
+                        >
+                          Move to pending
+                        </button>
                       )}
                     </div>
-                    <div className="mt-1 text-xs text-slate-400">
-                      {entry.name ? `${entry.name} · ` : ""}
-                      {formatDate(entry.createdAt)}
-                      {entry.approvedAt ? ` · approved ${formatDate(entry.approvedAt)}` : ""}
-                    </div>
-                    {entry.useCase && (
-                      <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
-                        {entry.useCase}
-                      </p>
-                    )}
                   </div>
-
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    {entry.status !== "APPROVED" && (
-                      <button
-                        type="button"
-                        onClick={() => updateStatus(entry.id, "APPROVED")}
-                        disabled={updating === entry.id}
-                        className="rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-semibold text-stone-950 transition hover:bg-sky-200 disabled:opacity-60"
-                      >
-                        Approve
-                      </button>
-                    )}
-                    {entry.status !== "REJECTED" && (
-                      <button
-                        type="button"
-                        onClick={() => updateStatus(entry.id, "REJECTED")}
-                        disabled={updating === entry.id}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-500 transition hover:border-red-400/50 hover:text-red-200 disabled:opacity-60"
-                      >
-                        Reject
-                      </button>
-                    )}
-                    {entry.status !== "PENDING" && (
-                      <button
-                        type="button"
-                        onClick={() => updateStatus(entry.id, "PENDING")}
-                        disabled={updating === entry.id}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-500 transition hover:border-slate-200 disabled:opacity-60"
-                      >
-                        Move to pending
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
       </div>
     </div>
@@ -260,17 +264,49 @@ function WaitlistPageInner() {
 
 function StatusBadge({ status }: { status: WaitlistEntry["status"] }) {
   const map: Record<WaitlistEntry["status"], { label: string; cls: string }> = {
-    PENDING: { label: "Pending", cls: "border-amber-500/40 bg-amber-500/10 text-amber-200" },
-    APPROVED: {
-      label: "Approved",
-      cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
-    },
-    REJECTED: { label: "Rejected", cls: "border-slate-200 bg-slate-100 text-slate-500" },
+    PENDING: { label: "Pending", cls: "bg-amber-500/10 text-amber-600 ring-amber-500/20" },
+    APPROVED: { label: "Approved", cls: "bg-emerald-500/10 text-emerald-600 ring-emerald-500/20" },
+    REJECTED: { label: "Rejected", cls: "bg-slate-100 text-slate-500 ring-slate-200" },
   };
   const s = map[status];
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${s.cls}`}>
+    <span
+      className={`rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${s.cls}`}
+    >
       {s.label}
     </span>
   );
+}
+
+// Monogram avatar helpers — local replica of the email/page.tsx pattern
+// (deliberately not imported; each surface keeps its own copy).
+function senderInitials(name: string): string {
+  const words = name
+    .replace(/["'()[\]]/g, "")
+    .split(/[\s·|,@]+/)
+    .filter(Boolean);
+  if (words.length === 0) return "@";
+  return words
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+}
+
+const AVATAR_GRADIENTS = [
+  "from-sky-400 to-blue-500",
+  "from-teal-400 to-emerald-500",
+  "from-indigo-500 to-violet-600",
+  "from-amber-400 to-orange-500",
+  "from-rose-400 to-pink-500",
+  "from-cyan-400 to-sky-600",
+  "from-slate-600 to-slate-800",
+];
+
+function avatarGradient(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  }
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
 }

@@ -82,6 +82,66 @@ body {
     repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
 }
 
+/* App-canvas wash: a soft sky→indigo two-tone gradient behind every in-app
+   surface so the workspace never reads as flat white. Sits on the body via a
+   fixed pseudo-element (z-index -1) so pages/panels stack above it without any
+   z-index bookkeeping. Auth/marketing pages layer .sky-bg on top of this. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(80% 60% at 12% -5%, rgba(14, 165, 233, 0.1), transparent 60%),
+    radial-gradient(70% 50% at 105% 0%, rgba(99, 102, 241, 0.08), transparent 55%),
+    linear-gradient(180deg, #eef4fc 0%, #f5f9fd 40%, #f6f8fc 100%);
+}
+
+/* Strong ease-out (Emil Kowalski's UI curve) — punchier than the built-in
+   ease-out; used for presses, segment changes, hover elevation. */
+.ease-strong {
+  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* One elevated surface for list panels: inset top highlight + tight contact
+   shadow + deep soft drop, so the panel reads as a physical sheet on the
+   canvas instead of a bordered rectangle. */
+.panel-elevated {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 18px 40px -20px rgba(2, 60, 110, 0.22);
+}
+
+/* Row hover: a directional sky wash (left→right fade) instead of a flat gray
+   fill — keeps the hover subtle while pointing at the accent color. */
+.row-wash:hover {
+  background: linear-gradient(90deg, rgba(14, 165, 233, 0.05), rgba(14, 165, 233, 0.015));
+}
+
+/* Primary-action glow (Compose): contact shadow + colored bloom so exactly one
+   control on the screen visibly emits light. */
+.glow-primary {
+  box-shadow:
+    0 1px 2px rgba(2, 60, 110, 0.25),
+    0 10px 22px -8px rgba(14, 165, 233, 0.55);
+}
+
+/* Active segment in a segmented control: lifted white pill. */
+.seg-active {
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.1),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+/* Monogram avatars: subtle contact shadow + inner light rim. */
+.avatar-ring {
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+}
+
 /* iOS safe-area helpers (notch + home indicator).
    Uses env(safe-area-inset-*) which evaluates to 0 when not in a PWA. */
 .pt-safe {

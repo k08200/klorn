@@ -65,14 +65,15 @@ export default function CommandCenterSummary() {
 
 function Top3Section({ items }: { items: AttentionItem[] }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
         <h2 className="text-sm font-semibold text-slate-900">Needs attention now</h2>
-        <span className="text-[11px] text-slate-400">Top {items.length}</span>
+        <span className="text-[11px] tabular-nums text-slate-400">Top {items.length}</span>
       </div>
-      <ol className="space-y-2">
+      <ol className="divide-y divide-slate-100">
         {items.map((item, idx) => (
-          <li key={`${item.kind}_${item.id}`}>
+          <li key={`${item.kind}_${item.id}`} className="row-wash relative">
+            <span aria-hidden="true" className="absolute left-0 top-0 h-full w-[3px] bg-sky-400" />
             <AttentionRow item={item} index={idx + 1} />
           </li>
         ))}
@@ -86,21 +87,21 @@ function AttentionRow({ item, index }: { item: AttentionItem; index: number }) {
   const body = bodyFor(item);
   const href = hrefFor(item);
   const content = (
-    <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition">
-      <span className="text-[11px] font-semibold text-slate-400 mt-0.5 shrink-0 w-4 text-center">
+    <div className="flex items-start gap-3 px-4 py-3 pl-5">
+      <span className="mt-0.5 w-4 shrink-0 text-center text-[11px] font-semibold tabular-nums text-slate-400">
         {index}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex flex-wrap items-center gap-2">
           <span
-            className={`text-[10px] font-medium border rounded px-1.5 py-0.5 ${badge.className}`}
+            className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${badge.className}`}
           >
             {badge.label}
           </span>
-          <span className="text-sm text-slate-900 truncate">{body.title}</span>
+          <span className="truncate text-sm text-slate-900">{body.title}</span>
         </div>
         {body.subtitle && (
-          <p className="mt-1 text-[11px] text-slate-500 line-clamp-1">{body.subtitle}</p>
+          <p className="mt-1 line-clamp-1 text-[11px] text-slate-500">{body.subtitle}</p>
         )}
         <DecisionTrace item={item} />
       </div>
@@ -121,25 +122,25 @@ function DecisionTrace({ item }: { item: AttentionItem }) {
   if (!decision.costOfIgnoring && facts.length === 0) return null;
 
   return (
-    <div className="mt-2 grid gap-1.5 rounded-md border border-slate-200 bg-slate-50 p-2">
+    <div className="mt-2 grid gap-1.5 rounded-lg border border-slate-100 bg-slate-50/60 p-2">
       {decision.costOfIgnoring && (
         <p className="line-clamp-2 text-[11px] leading-4 text-slate-500">
           Cost: {displayText(decision.costOfIgnoring)}
         </p>
       )}
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-400">
+        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
           Confidence {Math.round(decision.confidence * 100)}%
         </span>
         {decision.suggestedAction && (
-          <span className="rounded border border-sky-300/20 bg-sky-300/10 px-1.5 py-0.5 text-[10px] text-sky-700">
+          <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 ring-1 ring-inset ring-sky-500/20">
             {displayText(decision.suggestedAction)}
           </span>
         )}
         {facts.map((fact) => (
           <span
             key={`${fact.label}:${fact.value}`}
-            className="max-w-full truncate rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-400"
+            className="max-w-full truncate rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
           >
             {displayText(fact.label)}: {displayText(fact.value)}
           </span>
@@ -154,36 +155,39 @@ function badgeFor(item: AttentionItem): { label: string; className: string } {
     case "pending_action":
       return {
         label: "Needs approval",
-        className: "text-sky-700 bg-sky-400/10 border-sky-400/20",
+        className: "bg-sky-500/10 text-sky-600 ring-1 ring-inset ring-sky-500/20",
       };
     case "overdue_task":
-      return { label: "Overdue", className: "text-red-300 bg-red-500/10 border-red-500/20" };
+      return {
+        label: "Overdue",
+        className: "bg-rose-500/10 text-rose-600 ring-1 ring-inset ring-rose-500/20",
+      };
     case "today_event":
       return {
         label: "Starting soon",
-        className: "text-sky-700 bg-sky-300/10 border-sky-300/20",
+        className: "bg-sky-500/10 text-sky-600 ring-1 ring-inset ring-sky-500/20",
       };
     case "agent_proposal":
       return {
         label: "Decision proposal",
-        className: "text-sky-700 bg-sky-300/10 border-sky-300/20",
+        className: "bg-sky-500/10 text-sky-600 ring-1 ring-inset ring-sky-500/20",
       };
     case "commitment":
       if (item.attentionType === "COMMITMENT_OVERDUE") {
         return {
           label: "Overdue commitment",
-          className: "text-red-300 bg-red-500/10 border-red-500/20",
+          className: "bg-rose-500/10 text-rose-600 ring-1 ring-inset ring-rose-500/20",
         };
       }
       if (item.attentionType === "COMMITMENT_UNCONFIRMED") {
         return {
           label: "Needs confirmation",
-          className: "text-violet-300 bg-violet-400/10 border-violet-400/20",
+          className: "bg-violet-500/10 text-violet-600 ring-1 ring-inset ring-violet-500/20",
         };
       }
       return {
         label: "Commitment due",
-        className: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
+        className: "bg-emerald-500/10 text-emerald-600 ring-1 ring-inset ring-emerald-500/20",
       };
   }
 }
@@ -299,8 +303,8 @@ function formatEventSubtitle(
 
 function TodaySectionView({ section }: { section: TodaySection }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-slate-900 mb-3">Today at a glance</h2>
+    <div className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-4">
+      <h2 className="mb-3 text-sm font-semibold text-slate-900">Today at a glance</h2>
       <div className="space-y-3">
         {section.events.length > 0 && (
           <SubList
@@ -345,7 +349,7 @@ interface SubListItem {
 }
 
 function SubList({ label, items, tone }: { label: string; items: SubListItem[]; tone?: "warn" }) {
-  const labelClass = tone === "warn" ? "text-red-300" : "text-slate-500";
+  const labelClass = tone === "warn" ? "text-rose-600" : "text-slate-500";
   return (
     <div>
       <p className={`text-[11px] font-medium mb-1.5 ${labelClass}`}>

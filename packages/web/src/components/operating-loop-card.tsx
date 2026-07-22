@@ -120,10 +120,10 @@ export default function OperatingLoopCard() {
 
   return (
     <section
-      className="mb-6 overflow-hidden rounded-2xl border border-sky-400/15 bg-white"
+      className="panel-elevated mb-6 overflow-hidden rounded-2xl border border-slate-200/70 bg-white"
       aria-label="Klorn operating loop"
     >
-      <div className="border-b border-slate-200 bg-gradient-to-br from-white via-white to-sky-50 p-4 md:p-5">
+      <div className="border-b border-slate-100 bg-gradient-to-br from-white via-white to-sky-50 p-4 md:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600">
@@ -136,7 +136,7 @@ export default function OperatingLoopCard() {
               {displayText(plan.headline)}
             </p>
           </div>
-          <div className="grid grid-cols-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 md:min-w-[320px]">
+          <div className="grid grid-cols-4 overflow-hidden rounded-xl border border-slate-200/70 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] md:min-w-[320px]">
             {plan.metrics.map((metric) => (
               <LoopMetric key={metric.label} metric={metric} />
             ))}
@@ -214,7 +214,7 @@ function DecisionPulseCard({ pulse }: { pulse: OperatingPlanDecisionPulse }) {
           </p>
           <p>
             Rejected <span className="font-semibold text-slate-700">{pulse.rejected}</span> · Failed{" "}
-            <span className="font-semibold text-red-600">{pulse.failed}</span>
+            <span className="font-semibold text-rose-600">{pulse.failed}</span>
           </p>
         </div>
       </div>
@@ -279,14 +279,14 @@ function MoveRow({ move }: { move: OperatingPlanMove }) {
       <div className="mt-3 flex flex-wrap gap-2">
         <Link
           href={chatHref}
-          className="rounded-md border border-sky-400/25 bg-sky-400/10 px-2.5 py-1.5 text-xs font-medium text-sky-700 transition hover:bg-sky-400/15"
+          className="ease-strong rounded-lg bg-sky-500/10 px-2.5 py-1.5 text-xs font-medium text-sky-700 ring-1 ring-inset ring-sky-500/20 transition duration-150 hover:bg-sky-500/15 active:scale-[0.97]"
         >
           Prepare thread
         </Link>
         {move.href && (
           <Link
             href={move.href}
-            className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs text-slate-500 transition hover:bg-slate-100"
+            className="ease-strong rounded-lg border border-slate-200 bg-white/70 px-2.5 py-1.5 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
           >
             View source
           </Link>
@@ -322,8 +322,10 @@ function WatchRow({ context }: { context: OperatingPlanWatchContext }) {
 
 function LoopMetric({ metric }: { metric: OperatingPlanMetric }) {
   return (
-    <div className="border-r border-slate-200 px-2 py-2 last:border-r-0">
-      <p className={`text-lg font-semibold ${metricColor(metric.tone)}`}>{metric.value}</p>
+    <div className="border-r border-slate-100 px-2 py-2 last:border-r-0">
+      <p className={`text-lg font-semibold tabular-nums ${metricColor(metric.tone)}`}>
+        {metric.value}
+      </p>
       <p className="mt-0.5 truncate text-[10px] text-slate-500">{displayText(metric.label)}</p>
     </div>
   );
@@ -335,7 +337,9 @@ function displayText(value: string | null | undefined): string {
 
 function ToneBadge({ tone, label }: { tone: OperatingPlanTone; label: string }) {
   return (
-    <span className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${toneClass(tone)}`}>
+    <span
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${toneClass(tone)}`}
+    >
       {label}
     </span>
   );
@@ -380,17 +384,17 @@ function outcomeStatusLabel(status: OperatingPlanOutcome["status"]): string {
 function outcomeStatusClass(status: OperatingPlanOutcome["status"]): string {
   if (status === "executed") return "text-emerald-600";
   if (status === "rejected") return "text-slate-400";
-  return "text-red-600";
+  return "text-rose-600";
 }
 
 function toneClass(tone: OperatingPlanTone): string {
-  if (tone === "critical") return "border-red-500/25 bg-red-500/10 text-red-700";
-  if (tone === "warn") return "border-amber-300/25 bg-amber-300/10 text-amber-700";
-  return "border-slate-200 bg-slate-100 text-slate-600";
+  if (tone === "critical") return "bg-rose-500/10 text-rose-600 ring-1 ring-inset ring-rose-500/20";
+  if (tone === "warn") return "bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20";
+  return "bg-slate-100 text-slate-500";
 }
 
 function metricColor(tone: OperatingPlanTone): string {
-  if (tone === "critical") return "text-red-700";
-  if (tone === "warn") return "text-amber-700";
+  if (tone === "critical") return "text-rose-600";
+  if (tone === "warn") return "text-amber-600";
   return "text-slate-900";
 }

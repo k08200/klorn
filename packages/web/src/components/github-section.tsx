@@ -109,10 +109,10 @@ export function GitHubSection() {
   };
 
   return (
-    <div className="mt-4 bg-white border border-slate-200 rounded-xl p-4">
+    <div className="panel-elevated mt-3 rounded-2xl border border-slate-200/70 bg-white p-4">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h3 className="font-medium">GitHub</h3>
+          <h3 className="font-medium text-slate-900">GitHub</h3>
           <p className="text-sm text-slate-500">
             {connected
               ? "Connected — PR reviews, mentions, and CI failures become firewall items."
@@ -143,7 +143,7 @@ export function GitHubSection() {
       )}
 
       {!connected && !loading && (
-        <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <div className="mt-3 space-y-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
           <p className="text-sm text-slate-500">
             Connect a GitHub personal access token (classic) with the{" "}
             <span className="font-mono text-slate-900">notifications</span> scope — add{" "}

@@ -204,7 +204,7 @@ function LoginForm() {
 
           <Link
             href="/early-access"
-            className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-stone-950 shadow-sm shadow-sky-300/20 transition hover:bg-sky-200"
+            className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-white shadow-sm shadow-sky-300/20 transition hover:bg-sky-600"
           >
             {t("auth.requestEarlyAccess")}
           </Link>
@@ -268,7 +268,7 @@ function LoginForm() {
             onClick={() => changeMode("login")}
             className={`h-11 rounded px-3 text-sm font-medium transition ${
               mode === "login"
-                ? "bg-stone-100 text-stone-950"
+                ? "bg-white text-slate-900 shadow-sm"
                 : "text-slate-500 hover:text-slate-900"
             }`}
           >
@@ -280,7 +280,7 @@ function LoginForm() {
             onClick={() => changeMode("register")}
             className={`h-11 rounded px-3 text-sm font-medium transition ${
               mode === "register"
-                ? "bg-stone-100 text-stone-950"
+                ? "bg-white text-slate-900 shadow-sm"
                 : "text-slate-500 hover:text-slate-900"
             }`}
           >
@@ -349,7 +349,7 @@ function LoginForm() {
         <button
           type="submit"
           disabled={loading || !email || !password}
-          className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-stone-950 shadow-sm shadow-sky-300/20 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+          className="flex h-11 w-full items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-white shadow-sm shadow-sky-300/20 transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">

@@ -86,10 +86,10 @@ export default function FeedbackPolicyStudio() {
   const candidates = data?.candidates ?? [];
 
   return (
-    <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+    <section className="panel-elevated mb-6 rounded-2xl border border-slate-200/70 bg-white p-4 md:p-5">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent/80">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600">
             Policy Studio
           </p>
           <h2 className="mt-2 text-lg font-semibold text-slate-900">
@@ -104,7 +104,7 @@ export default function FeedbackPolicyStudio() {
           type="button"
           onClick={load}
           disabled={loading}
-          className="h-8 rounded-md border border-slate-200 px-3 text-xs text-slate-500 transition hover:border-accent/35 hover:text-slate-900 disabled:opacity-50"
+          className="ease-strong h-8 rounded-md border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
         >
           {loading ? "Checking" : "Refresh"}
         </button>
@@ -129,23 +129,23 @@ export default function FeedbackPolicyStudio() {
           {candidates.slice(0, 5).map((candidate) => (
             <article
               key={candidate.id}
-              className="rounded-xl border border-slate-200 bg-white p-3 transition hover:border-accent/25 hover:bg-slate-50"
+              className="row-wash ease-strong rounded-xl border border-slate-200 bg-white p-3 transition duration-150"
             >
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <PolicyBadge kind={candidate.kind} />
                     {candidate.active && (
-                      <span className="rounded border border-accent/20 bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent-light">
+                      <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-emerald-600 ring-1 ring-inset ring-emerald-500/20">
                         Active
                       </span>
                     )}
                     {candidate.ignored && (
-                      <span className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-400">
+                      <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-500 ring-1 ring-inset ring-slate-200">
                         Hidden
                       </span>
                     )}
-                    <span className="text-[11px] text-slate-400">
+                    <span className="text-[11px] tabular-nums text-slate-400">
                       {Math.round(candidate.confidence * 100)}%
                     </span>
                   </div>
@@ -156,7 +156,7 @@ export default function FeedbackPolicyStudio() {
                   <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">
                     {candidate.rationale}
                   </p>
-                  <p className="mt-2 text-[11px] text-slate-500">
+                  <p className="mt-2 text-[11px] tabular-nums text-slate-500">
                     Approved {candidate.support.approved} · Rejected {candidate.support.rejected} ·
                     Edited {candidate.support.edited} · Failed {candidate.support.failed} · Total{" "}
                     {candidate.support.total}
@@ -167,7 +167,7 @@ export default function FeedbackPolicyStudio() {
                     type="button"
                     onClick={() => setPreference(candidate, "ACTIVE")}
                     disabled={updating === candidate.id}
-                    className="h-8 rounded-md border border-accent/25 bg-accent/10 px-3 text-xs font-medium text-accent-muted transition hover:bg-accent/15 disabled:opacity-50"
+                    className="ease-strong h-8 rounded-md border border-sky-200 bg-sky-50 px-3 text-xs font-medium text-sky-700 transition duration-150 hover:bg-sky-100 active:scale-[0.97] disabled:opacity-50"
                   >
                     Apply
                   </button>
@@ -175,7 +175,7 @@ export default function FeedbackPolicyStudio() {
                     type="button"
                     onClick={() => setPreference(candidate, "IGNORED")}
                     disabled={updating === candidate.id}
-                    className="h-8 rounded-md border border-slate-200 px-3 text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
+                    className="ease-strong h-8 rounded-md border border-slate-200 bg-white/70 px-3 text-xs text-slate-500 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
                   >
                     Hide
                   </button>
@@ -191,13 +191,16 @@ export default function FeedbackPolicyStudio() {
 
 function PolicyBadge({ kind }: { kind: PolicyKind }) {
   const meta = {
-    ALLOW_AFTER_SUGGESTION: ["Allow more often", "border-accent/20 bg-accent/10 text-accent-light"],
-    REQUIRE_DRAFT_REVIEW: [
-      "Keep draft review",
-      "border-[#a8a29e]/20 bg-[#a8a29e]/10 text-[#a8a29e]",
-    ],
-    AVOID_SUGGESTION: ["Suggest less", "border-red-400/20 bg-red-400/10 text-red-300"],
-    LOWER_PRIORITY: ["Lower priority", "border-slate-200 bg-slate-100 text-slate-500"],
+    ALLOW_AFTER_SUGGESTION: ["Allow more often", "bg-sky-500/10 text-sky-600 ring-sky-500/20"],
+    REQUIRE_DRAFT_REVIEW: ["Keep draft review", "bg-slate-100 text-slate-500 ring-slate-200"],
+    AVOID_SUGGESTION: ["Suggest less", "bg-rose-500/10 text-rose-600 ring-rose-500/20"],
+    LOWER_PRIORITY: ["Lower priority", "bg-slate-100 text-slate-500 ring-slate-200"],
   }[kind];
-  return <span className={`rounded border px-1.5 py-0.5 text-[10px] ${meta[1]}`}>{meta[0]}</span>;
+  return (
+    <span
+      className={`rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${meta[1]}`}
+    >
+      {meta[0]}
+    </span>
+  );
 }

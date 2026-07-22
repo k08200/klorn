@@ -129,13 +129,10 @@ function OntologyPageInner() {
   }
 
   return (
-    <div className="min-h-dvh bg-white px-4 pb-28 pt-6 text-slate-900 sm:px-6 md:py-10">
+    <div className="min-h-dvh px-4 pb-28 pt-6 text-slate-900 sm:px-6 md:py-10">
       <div className="mx-auto max-w-5xl">
-        <header className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-black/20">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-600">
-            Shared ontology
-          </p>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
+        <header className="mb-6">
+          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
             The brain the firewall runs on
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
@@ -152,7 +149,7 @@ function OntologyPageInner() {
         {loading ? (
           <p className="text-sm text-slate-400">Loading...</p>
         ) : !data ? (
-          <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+          <p className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-6 text-sm text-slate-500">
             No ontology data.
           </p>
         ) : (
@@ -247,7 +244,7 @@ function Proposals({
   onDismiss: (id: string) => void;
 }) {
   return (
-    <section className="mb-4 rounded-2xl border border-sky-300/35 bg-sky-300/[0.06] p-4 md:p-5">
+    <section className="panel-elevated mb-4 rounded-2xl border border-sky-200/70 bg-white p-4 md:p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-sky-600">
           Proposals (advisory)
@@ -256,33 +253,33 @@ function Proposals({
           type="button"
           onClick={onRecompute}
           disabled={busy}
-          className="rounded-lg border border-sky-300/50 px-3 py-1.5 text-sm text-sky-100 transition hover:bg-sky-300/10 disabled:opacity-60"
+          className="ease-strong inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-sm text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-60"
         >
           Recompute
         </button>
       </div>
       {proposals.length === 0 ? (
-        <p className="text-sm text-sky-100/70">
+        <p className="text-sm text-slate-500">
           No open proposals — the override signal is within target.
         </p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="divide-y divide-slate-100">
           {proposals.map((p) => (
             <li
               key={p.id}
-              className="flex flex-col gap-2 rounded-xl border border-sky-300/25 bg-white p-3 md:flex-row md:items-center md:justify-between"
+              className="row-wash flex flex-col gap-2 py-3 md:flex-row md:items-center md:justify-between"
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="font-mono text-slate-900">{p.knob}</span>
-                  <span className="rounded bg-sky-300/15 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600">
+                  <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-600 ring-1 ring-inset ring-sky-500/20">
                     {p.direction}
                   </span>
-                  <span className="font-variant-numeric tabular-nums text-slate-900">
+                  <span className="tabular-nums text-slate-900">
                     {p.currentValue} → {p.proposedValue}
                   </span>
                 </div>
-                <div className="mt-1 text-xs text-slate-400">
+                <div className="mt-1 text-xs tabular-nums text-slate-400">
                   {p.evidence.metric} = {p.evidence.value} (target {p.evidence.target}, n=
                   {p.evidence.sampleSize}, {p.evidence.windowDays}d)
                 </div>
@@ -292,7 +289,7 @@ function Proposals({
                   type="button"
                   onClick={() => onApprove(p.id)}
                   disabled={busy}
-                  className="rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-semibold text-stone-950 transition hover:bg-sky-200 disabled:opacity-60"
+                  className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3.5 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:opacity-60"
                 >
                   Approve
                 </button>
@@ -300,7 +297,7 @@ function Proposals({
                   type="button"
                   onClick={() => onDismiss(p.id)}
                   disabled={busy}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-500 transition hover:border-slate-200 disabled:opacity-60"
+                  className="ease-strong inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-sm text-slate-500 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-60"
                 >
                   Dismiss
                 </button>
@@ -323,23 +320,23 @@ function Applied({
   onRevert: (id: string) => void;
 }) {
   return (
-    <section className="mb-4 rounded-2xl border border-emerald-500/35 bg-emerald-500/[0.06] p-4 md:p-5">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-emerald-200">
+    <section className="panel-elevated mb-4 rounded-2xl border border-emerald-200/70 bg-white p-4 md:p-5">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-emerald-600">
         Live overrides
       </h2>
-      <p className="mb-3 text-xs text-emerald-100/70">
+      <p className="mb-3 text-xs text-slate-500">
         Approved threshold changes the classifier is reading right now. Revert restores the git
         default.
       </p>
-      <ul className="space-y-2">
+      <ul className="divide-y divide-slate-100">
         {applied.map((p) => (
           <li
             key={p.id}
-            className="flex flex-col gap-2 rounded-xl border border-emerald-500/25 bg-white p-3 md:flex-row md:items-center md:justify-between"
+            className="row-wash flex flex-col gap-2 py-3 md:flex-row md:items-center md:justify-between"
           >
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-mono text-slate-900">{p.knob}</span>
-              <span className="font-variant-numeric tabular-nums text-slate-900">
+              <span className="tabular-nums text-slate-900">
                 {p.currentValue} → {p.proposedValue}
               </span>
             </div>
@@ -347,7 +344,7 @@ function Applied({
               type="button"
               onClick={() => onRevert(p.id)}
               disabled={busy}
-              className="shrink-0 self-start rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-500 transition hover:border-slate-200 disabled:opacity-60 md:self-auto"
+              className="ease-strong inline-flex h-9 shrink-0 items-center self-start rounded-lg border border-slate-200 bg-white/70 px-3 text-sm text-slate-500 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-60 md:self-auto"
             >
               Revert
             </button>
@@ -360,7 +357,7 @@ function Applied({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+    <section className="panel-elevated mb-4 rounded-2xl border border-slate-200/70 bg-white p-4 md:p-5">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-sky-600">{title}</h2>
       {children}
     </section>
@@ -370,16 +367,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 /** Render a flat or one-level-nested record as definition rows. */
 function KeyVals({ record }: { record: Record<string, unknown> }) {
   return (
-    <div className="divide-y divide-slate-200">
+    <div className="divide-y divide-slate-100">
       {Object.entries(record).map(([key, val]) => (
-        <div key={key} className="flex items-start justify-between gap-4 py-1.5 text-sm">
+        <div key={key} className="row-wash flex items-start justify-between gap-4 py-1.5 text-sm">
           <span className="text-slate-500">{key}</span>
           {isRecord(val) ? (
             <div className="min-w-0 flex-1 pl-4">
               <KeyVals record={val} />
             </div>
           ) : (
-            <span className="font-variant-numeric tabular-nums text-slate-900">
+            <span className="tabular-nums text-slate-900">
               {Array.isArray(val) ? val.join(", ") : String(val)}
             </span>
           )}

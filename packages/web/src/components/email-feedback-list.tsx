@@ -28,9 +28,9 @@ interface EmailFeedbackResponse {
 }
 
 const PRIORITY_STYLES: Record<EmailPriority, string> = {
-  URGENT: "text-red-300 bg-red-500/10 border-red-500/20",
-  NORMAL: "text-accent-muted bg-sky-500/10 border-sky-500/20",
-  LOW: "text-slate-500 bg-slate-100 border-slate-200",
+  URGENT: "bg-rose-500/10 text-rose-600 ring-rose-500/20",
+  NORMAL: "bg-sky-500/10 text-sky-600 ring-sky-500/20",
+  LOW: "bg-slate-100 text-slate-500 ring-slate-200",
 };
 
 function PriorityPill({ priority }: { priority: EmailPriority }) {
@@ -42,7 +42,7 @@ function PriorityPill({ priority }: { priority: EmailPriority }) {
 
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${PRIORITY_STYLES[priority]}`}
+      className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${PRIORITY_STYLES[priority]}`}
     >
       {label}
     </span>
@@ -98,7 +98,7 @@ export function EmailFeedbackList() {
           <a
             href={exportHref}
             download="klorn-email-feedback-fixtures.json"
-            className="inline-flex w-fit items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-900 transition hover:border-sky-500/35 hover:bg-sky-500/10"
+            className="ease-strong inline-flex h-9 w-fit items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-sm font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
           >
             Export JSON
           </a>
@@ -132,50 +132,49 @@ export function EmailFeedbackList() {
       )}
 
       {!loading && fixtures.length > 0 && (
-        <div className="space-y-3">
-          {fixtures.map((fixture) => (
-            <div
-              key={fixture.id}
-              className="rounded-xl border border-slate-200 bg-white p-4 transition hover:border-sky-500/30 hover:bg-sky-500/5"
-            >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-slate-900">{fixture.subject}</p>
-                  <p className="mt-1 truncate text-xs text-slate-400">{fixture.from}</p>
+        <div className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+          <div className="divide-y divide-slate-100">
+            {fixtures.map((fixture) => (
+              <div key={fixture.id} className="row-wash p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-slate-900">{fixture.subject}</p>
+                    <p className="mt-1 truncate text-xs text-slate-400">{fixture.from}</p>
+                  </div>
+                  <RelativeTime
+                    date={fixture.capturedAt}
+                    className="shrink-0 text-xs text-slate-500"
+                  />
                 </div>
-                <RelativeTime
-                  date={fixture.capturedAt}
-                  className="shrink-0 text-xs text-slate-500"
-                />
-              </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <PriorityPill priority={fixture.capturedHeuristic.priority} />
-                <span className="text-xs text-slate-500">-&gt;</span>
-                <PriorityPill priority={fixture.expectedSyncPriority} />
-                {fixture.capturedHeuristic.reason && (
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-400">
-                    {fixture.capturedHeuristic.reason}
-                  </span>
-                )}
-              </div>
-
-              {fixture.capturedHeuristic.signals.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {fixture.capturedHeuristic.signals.slice(0, 6).map((signal) => (
-                    <span
-                      key={signal}
-                      className="max-w-full truncate rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-400"
-                    >
-                      {signal}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <PriorityPill priority={fixture.capturedHeuristic.priority} />
+                  <span className="text-xs text-slate-500">-&gt;</span>
+                  <PriorityPill priority={fixture.expectedSyncPriority} />
+                  {fixture.capturedHeuristic.reason && (
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-400">
+                      {fixture.capturedHeuristic.reason}
                     </span>
-                  ))}
+                  )}
                 </div>
-              )}
 
-              {fixture.note && <p className="mt-3 text-xs text-slate-400">{fixture.note}</p>}
-            </div>
-          ))}
+                {fixture.capturedHeuristic.signals.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {fixture.capturedHeuristic.signals.slice(0, 6).map((signal) => (
+                      <span
+                        key={signal}
+                        className="max-w-full truncate rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-400"
+                      >
+                        {signal}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {fixture.note && <p className="mt-3 text-xs text-slate-400">{fixture.note}</p>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

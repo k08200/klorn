@@ -160,7 +160,7 @@ function AccountSheet({ onClose, initials }: { onClose: () => void; initials: st
         aria-modal="true"
         aria-label="Account and settings"
         tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 animate-slide-up rounded-t-2xl border-t border-slate-200 bg-white pb-safe shadow-2xl shadow-black/60 focus:outline-none"
+        className="absolute inset-x-0 bottom-0 animate-slide-up rounded-t-2xl border-t border-slate-200 bg-white pb-safe shadow-2xl shadow-slate-900/15 focus:outline-none"
       >
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
 

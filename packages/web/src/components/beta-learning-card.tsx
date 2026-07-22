@@ -76,7 +76,7 @@ export default function BetaLearningCard() {
   if (dismissed) return null;
 
   return (
-    <section className="mb-6 rounded-xl border border-sky-300/20 bg-sky-50 p-4">
+    <section className="panel-elevated mb-6 rounded-2xl border border-slate-200/70 bg-white p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-600">
@@ -95,7 +95,7 @@ export default function BetaLearningCard() {
           {!connected && (
             <Link
               href="/settings"
-              className="rounded-lg border border-sky-300/40 px-3 py-1.5 text-xs font-medium text-sky-700 transition hover:bg-sky-300/10"
+              className="glow-primary ease-strong rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3 py-1.5 text-xs font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97]"
             >
               Connect
             </Link>
@@ -103,7 +103,7 @@ export default function BetaLearningCard() {
           <button
             type="button"
             onClick={dismiss}
-            className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+            className="ease-strong rounded-lg border border-slate-200 bg-white/70 px-2.5 py-1.5 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
             aria-label="Dismiss initial learning notice"
           >
             Close
@@ -113,7 +113,7 @@ export default function BetaLearningCard() {
 
       <div className="mt-4 h-1.5 rounded-full bg-slate-100">
         <div
-          className="h-full rounded-full bg-sky-500 transition-all"
+          className="ease-strong h-full rounded-full bg-gradient-to-r from-sky-400 to-sky-500 transition-[width] duration-150"
           style={{ width: `${progress}%` }}
         />
       </div>
@@ -134,7 +134,7 @@ export default function BetaLearningCard() {
       </div>
 
       {syncFailed && (
-        <p className="mt-3 text-xs text-sky-600">
+        <p className="mt-3 text-xs text-rose-600">
           Initial analysis hit a temporary issue. Refresh or reopen shortly and Klorn will retry.
         </p>
       )}
@@ -145,11 +145,11 @@ export default function BetaLearningCard() {
 function dotClass(state: StepState): string {
   switch (state) {
     case "done":
-      return "bg-emerald-400";
+      return "bg-emerald-500";
     case "active":
       return "bg-sky-500";
     case "failed":
-      return "bg-sky-500";
+      return "bg-rose-500";
     case "pending":
       return "bg-slate-300";
   }

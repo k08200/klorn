@@ -107,10 +107,10 @@ export function TelegramSection() {
   };
 
   return (
-    <div className="mt-4 bg-slate-50 border border-slate-200 rounded-xl p-4">
+    <div className="panel-elevated mt-3 rounded-2xl border border-slate-200/70 bg-white p-4">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h3 className="font-medium">Telegram</h3>
+          <h3 className="font-medium text-slate-900">Telegram</h3>
           <p className="text-sm text-slate-500">
             {linked
               ? "Connected — PUSH-tier interrupts also arrive in your Telegram chat."
@@ -147,7 +147,7 @@ export function TelegramSection() {
       </div>
 
       {!linked && !loading && linkCode && (
-        <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+        <div className="mt-3 space-y-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
           {linkCode.deepLink ? (
             <p className="text-sm text-slate-500">
               Open{" "}
@@ -194,7 +194,7 @@ export function TelegramSection() {
       )}
 
       {error && (
-        <p role="alert" className="mt-2 text-xs text-red-300">
+        <p role="alert" className="mt-2 text-xs text-red-600">
           {error}
         </p>
       )}

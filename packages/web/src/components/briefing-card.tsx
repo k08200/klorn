@@ -81,7 +81,7 @@ export default function BriefingCard() {
 
   if (loading) {
     return (
-      <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
+      <section className="panel-elevated mb-6 rounded-2xl border border-slate-200/70 bg-white p-4">
         <div className="h-16 animate-pulse rounded-lg bg-slate-100" />
       </section>
     );
@@ -94,7 +94,7 @@ export default function BriefingCard() {
       : status.automation.briefingTime;
 
   return (
-    <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
+    <section className="panel-elevated mb-6 rounded-2xl border border-slate-200/70 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -108,13 +108,13 @@ export default function BriefingCard() {
             {status.note?.preview || emptyMessage(status)}
           </p>
           {time && <p className="mt-2 text-[11px] text-slate-500">{time}</p>}
-          {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+          {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
         </div>
 
         {status.generated ? (
           <Link
             href="/briefing"
-            className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500 transition hover:bg-slate-100"
+            className="ease-strong shrink-0 rounded-lg border border-slate-200 bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
           >
             Open
           </Link>
@@ -123,7 +123,7 @@ export default function BriefingCard() {
             type="button"
             onClick={generate}
             disabled={generating}
-            className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-slate-800 disabled:opacity-50"
+            className="glow-primary ease-strong shrink-0 rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3 py-1.5 text-xs font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {generating ? "Creating..." : "Create now"}
           </button>
@@ -148,16 +148,16 @@ function pushMeta(
 ): { label: string; className: string; dotClassName: string } {
   switch (state) {
     case "received":
-      return { label: "Received", className: "text-emerald-300", dotClassName: "bg-emerald-400" };
+      return { label: "Received", className: "text-emerald-600", dotClassName: "bg-emerald-500" };
     case "accepted":
       return { label: "Sent", className: "text-slate-500", dotClassName: "bg-slate-400" };
     case "failed":
-      return { label: "Failed", className: "text-red-300", dotClassName: "bg-red-400" };
+      return { label: "Failed", className: "text-red-700", dotClassName: "bg-red-500" };
     case "skipped":
       return {
         label: skipReasonLabel(reason),
-        className: "text-amber-300",
-        dotClassName: "bg-amber-300",
+        className: "text-amber-600",
+        dotClassName: "bg-amber-400",
       };
     case "pending":
       return { label: "Pending", className: "text-slate-500", dotClassName: "bg-slate-400" };

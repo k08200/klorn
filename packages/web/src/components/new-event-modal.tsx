@@ -12,7 +12,7 @@ import { apiFetch } from "../lib/api";
  */
 
 const inputClass =
-  "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-accent/45 disabled:opacity-60";
+  "w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-900 shadow-[0_1px_1px_rgba(15,23,42,0.03)] outline-none transition duration-150 ease-out placeholder:text-slate-400 focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15 disabled:opacity-60";
 
 function getFocusableElements(root: HTMLElement | null): HTMLElement[] {
   if (!root) return [];
@@ -176,7 +176,7 @@ export function NewEventModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={headingId}
-        className="relative w-full max-w-md animate-slide-up rounded-t-2xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-900/10 md:rounded-2xl"
+        className="panel-elevated relative w-full max-w-md animate-slide-up rounded-t-2xl border border-slate-200/70 bg-white p-5 shadow-2xl shadow-slate-900/10 md:rounded-2xl"
       >
         <h2 id={headingId} className="text-base font-semibold text-slate-900">
           New event
@@ -275,7 +275,7 @@ export function NewEventModal({
           </div>
 
           {error && (
-            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
               {error}
             </p>
           )}
@@ -285,14 +285,14 @@ export function NewEventModal({
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="min-h-10 rounded-md border border-slate-200 px-4 text-sm text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
+              className="ease-strong min-h-10 rounded-lg border border-slate-200 bg-white/70 px-4 text-sm text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!canSave}
-              className="min-h-10 rounded-md bg-accent px-4 text-sm font-semibold text-stone-950 transition hover:bg-accent/90 disabled:opacity-50"
+              className="glow-primary ease-strong min-h-10 rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-4 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {saving ? "Creating..." : "Create event"}
             </button>

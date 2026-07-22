@@ -117,7 +117,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 className={`min-h-11 px-4 py-2 rounded-lg text-sm font-medium transition ${
                   options.danger
                     ? "bg-red-600 hover:bg-red-500 text-white"
-                    : "bg-sky-500 hover:bg-sky-200 text-stone-950"
+                    : "bg-sky-500 hover:bg-sky-600 text-white"
                 }`}
               >
                 {options.confirmLabel || "Confirm"}

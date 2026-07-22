@@ -48,18 +48,18 @@ export default function Sidebar() {
 
   return (
     <aside className="hidden md:block w-[260px] h-dvh shrink-0 sticky top-0">
-      <div className="relative flex h-full flex-col overflow-hidden border-r border-slate-200 bg-white pt-safe pb-safe">
+      <div className="relative flex h-full flex-col overflow-hidden border-r border-slate-200/70 bg-white/55 backdrop-blur-xl pt-safe pb-safe">
         {/* Header */}
-        <div className="relative flex items-center justify-between px-3 py-3">
+        <div className="relative flex items-center justify-between px-3 py-4">
           <Link
             href="/inbox"
             aria-label="Open decision queue"
-            className="flex items-center gap-2 rounded-lg px-1 py-1 text-sm font-semibold text-slate-900 transition hover:text-slate-900"
+            className="flex items-center gap-2.5 rounded-lg px-1 py-1 text-sm font-semibold text-slate-900 transition hover:text-slate-900"
           >
-            <img src="/brand/mark.svg?v=matte2" alt="" className="h-7 w-7" />
+            <img src="/brand/mark.svg?v=matte2" alt="" className="h-8 w-8" />
             <span>
-              <span className="block leading-none">Klorn</span>
-              <span className="mt-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">
+              <span className="block text-[15px] leading-none tracking-tight">Klorn</span>
+              <span className="mt-1.5 block text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
                 {t("nav.decisionQueue")}
               </span>
             </span>
@@ -69,11 +69,9 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Spacer pushes nav + user to the bottom on desktop. */}
-        <div aria-hidden="true" className="flex-1" />
-
-        {/* Workspace nav */}
-        <div className="relative border-t border-slate-200 px-2 py-2">
+        {/* Workspace nav — top-anchored so the first glance lands on where you
+            can go, not on empty space. */}
+        <div className="relative px-2 pt-2">
           <div className="space-y-0.5">
             {NAV_ITEMS.map((item) => {
               const active = pathname.startsWith(item.href);
@@ -82,13 +80,19 @@ export default function Sidebar() {
                   key={item.href}
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={`focus-ring flex min-h-11 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition ${
+                  className={`focus-ring relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition ${
                     active
-                      ? "bg-accent/10 text-accent"
-                      : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                      ? "bg-sky-50 font-medium text-sky-700 shadow-[0_1px_2px_rgba(2,60,110,0.06)] ring-1 ring-inset ring-sky-100"
+                      : "text-slate-500 hover:bg-slate-100/70 hover:text-slate-900"
                   }`}
                 >
-                  <NavIcon type={item.icon} size={14} />
+                  {active && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r bg-sky-500"
+                    />
+                  )}
+                  <NavIcon type={item.icon} size={16} />
                   <span className="flex-1">{t(item.labelKey)}</span>
                 </Link>
               );
@@ -97,24 +101,33 @@ export default function Sidebar() {
               <Link
                 href="/admin"
                 aria-current={pathname.startsWith("/admin") ? "page" : undefined}
-                className={`focus-ring flex min-h-11 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition ${
+                className={`focus-ring relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition ${
                   pathname.startsWith("/admin")
-                    ? "bg-accent/10 text-accent"
-                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                    ? "bg-sky-50 font-medium text-sky-700 shadow-[0_1px_2px_rgba(2,60,110,0.06)] ring-1 ring-inset ring-sky-100"
+                    : "text-slate-500 hover:bg-slate-100/70 hover:text-slate-900"
                 }`}
               >
-                <NavIcon type="settings" size={14} />
+                {pathname.startsWith("/admin") && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r bg-sky-500"
+                  />
+                )}
+                <NavIcon type="settings" size={16} />
                 {t("nav.admin")}
               </Link>
             )}
           </div>
         </div>
 
+        {/* Spacer pushes the account card to the bottom. */}
+        <div aria-hidden="true" className="flex-1" />
+
         {/* User */}
-        <div className="border-t border-slate-200 p-2" ref={userMenuRef}>
+        <div className="border-t border-slate-200/70 p-2" ref={userMenuRef}>
           {authLoading ? (
             <div className="flex items-center gap-2.5 rounded-lg px-2 py-2">
-              <div className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-slate-100" />
+              <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-slate-100" />
               <div className="h-3 w-24 animate-pulse rounded bg-slate-100" />
             </div>
           ) : user ? (
@@ -122,13 +135,16 @@ export default function Sidebar() {
               <button
                 type="button"
                 onClick={() => setShowUserMenu((p) => !p)}
-                className="w-full flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-slate-100 transition text-left"
+                className="w-full flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-slate-100/70 transition text-left"
               >
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                <div className="avatar-ring flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-[11px] font-bold text-white">
                   {initials}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] text-slate-500 truncate">{user.name || user.email}</p>
+                  <p className="truncate text-[13px] font-medium text-slate-900">
+                    {user.name || user.email}
+                  </p>
+                  {user.name && <p className="truncate text-[11px] text-slate-400">{user.email}</p>}
                 </div>
                 <svg
                   aria-hidden="true"
@@ -145,7 +161,7 @@ export default function Sidebar() {
               </button>
 
               {showUserMenu && (
-                <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-xl shadow-2xl shadow-black/60 z-50 py-1 animate-slide-up">
+                <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-slate-200 rounded-xl shadow-xl shadow-slate-900/10 z-50 py-1 animate-slide-up">
                   <Link
                     href="/settings"
                     onClick={() => setShowUserMenu(false)}

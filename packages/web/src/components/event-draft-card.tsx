@@ -81,18 +81,20 @@ export default function EventDraftCard({ draft }: { draft: EventDraft }) {
   };
 
   return (
-    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-      <p className="text-[11px] uppercase tracking-wide text-slate-500">{t("draft.title")}</p>
-      <p className="mt-1 font-medium text-slate-900">{draft.title}</p>
+    <div className="mt-2 rounded-xl border border-slate-200/70 bg-white p-3 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <span className="inline-flex rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-600 ring-1 ring-inset ring-sky-500/20">
+        {t("draft.title")}
+      </span>
+      <p className="mt-1.5 font-medium text-slate-900">{draft.title}</p>
       <p className="mt-0.5 text-slate-500">{formatRange(draft.startTime, draft.endTime)}</p>
       {draft.location && <p className="mt-0.5 text-slate-500">{draft.location}</p>}
 
       {state === "saved" ? (
-        <p className="mt-2 text-emerald-400">{t("draft.saved")}</p>
+        <p className="mt-2 text-emerald-600">{t("draft.saved")}</p>
       ) : state === "paywalled" ? (
         <p className="mt-2 text-slate-500">
           {t("draft.paywall")}{" "}
-          <Link href="/billing" className="focus-ring text-accent underline">
+          <Link href="/billing" className="focus-ring text-sky-600 underline">
             {t("draft.seePlans")}
           </Link>
         </p>
@@ -102,11 +104,11 @@ export default function EventDraftCard({ draft }: { draft: EventDraft }) {
             type="button"
             onClick={() => void save()}
             disabled={state === "saving"}
-            className="focus-ring min-h-[44px] rounded-md bg-accent px-4 text-sm font-semibold text-stone-950 transition hover:bg-accent/90 disabled:opacity-50"
+            className="focus-ring glow-primary ease-strong min-h-[44px] rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-4 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {state === "saving" ? t("draft.saving") : t("draft.save")}
           </button>
-          {state === "error" && errorMessage && <p className="text-red-600">{errorMessage}</p>}
+          {state === "error" && errorMessage && <p className="text-red-700">{errorMessage}</p>}
         </div>
       )}
     </div>

@@ -59,8 +59,8 @@ export const TIER_VISUAL: Record<
     description: "Recorded only. Klorn decided this wasn't worth surfacing.",
     plane: "tier-plane-silent border-slate-200 bg-slate-50 opacity-90 hover:opacity-100",
     card: "border-slate-200 bg-white hover:border-slate-300",
-    accent: "text-tier-silent",
-    dot: "text-tier-silent",
+    accent: "text-slate-400",
+    dot: "text-slate-400",
   },
   AUTO: {
     label: "AUTO",
@@ -77,7 +77,7 @@ export const TIER_VISUAL: Record<
 const TARGET_BUTTON: Record<Tier, string> = {
   PUSH: "hover:border-tier-push/50 hover:text-tier-push",
   QUEUE: "hover:border-tier-queue/50 hover:text-tier-queue",
-  SILENT: "hover:border-slate-300 hover:text-tier-silent",
+  SILENT: "hover:border-slate-300 hover:text-slate-600",
   AUTO: "hover:border-tier-auto/50 hover:text-tier-auto",
 };
 
@@ -189,13 +189,10 @@ export function FirewallBoard() {
           {announcement}
         </p>
         <header className="mb-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-600/80">
-            Firewall board
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-[2rem]">
+          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
             Today's attention firewall
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+          <p className="mt-2 max-w-2xl text-sm text-slate-500">
             Klorn evaluated every signal that hit your inbox today and sorted it into a tier. Move
             anything we got wrong — that override teaches the classifier.
           </p>
@@ -348,7 +345,7 @@ function DailyReceiptStrip({
 }) {
   const counts: Tier[] = ["PUSH", "QUEUE", "SILENT", "AUTO"];
   return (
-    <section className="glass rounded-2xl border border-slate-200 bg-white p-5">
+    <section className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-5">
       <div className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-4">
         {counts.map((tier) => {
           const v = TIER_VISUAL[tier];
@@ -506,7 +503,7 @@ function FirewallCard({
             type="button"
             disabled={anyOverriding}
             onClick={() => onOverride(item, target)}
-            className={`inline-flex min-h-7 items-center rounded-full border border-slate-200 px-2.5 text-[10px] font-medium uppercase tracking-wider text-slate-500 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 ${TARGET_BUTTON[target]}`}
+            className={`ease-strong inline-flex min-h-7 items-center rounded-full border border-slate-200 bg-white/70 px-2.5 text-[10px] font-medium uppercase tracking-wider text-slate-500 transition duration-150 hover:bg-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 ${TARGET_BUTTON[target]}`}
           >
             Move → {target}
           </button>
