@@ -221,6 +221,58 @@ describe("notification routes", () => {
     await app.close();
   });
 
+  it("prunes this browser's prior + legacy rows when subscribing with a deviceId", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.pushSubscription.deleteMany).mockClear();
+    vi.mocked(prisma.pushSubscription.upsert).mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/subscribe",
+      headers: auth(),
+      payload: {
+        endpoint: "https://fcm.googleapis.com/fcm/send/rotated-new",
+        keys: { p256dh: "k1", auth: "k2" },
+        origin: "https://app.klorn.ai",
+        deviceId: "browser-xyz",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    // Deletes this device's other endpoints + legacy (null-device) rows on the
+    // same origin, never the row we're upserting, never another user's rows.
+    expect(prisma.pushSubscription.deleteMany).toHaveBeenCalledWith({
+      where: {
+        userId: "user-1",
+        endpoint: { not: "https://fcm.googleapis.com/fcm/send/rotated-new" },
+        OR: [{ deviceId: "browser-xyz" }, { deviceId: null, origin: "https://app.klorn.ai" }],
+      },
+    });
+    // And the surviving row carries the deviceId so future rotations can dedupe.
+    expect(prisma.pushSubscription.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ create: expect.objectContaining({ deviceId: "browser-xyz" }) }),
+    );
+    await app.close();
+  });
+
+  it("does NOT prune when subscribing without a deviceId (legacy client)", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.pushSubscription.deleteMany).mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/notifications/push/subscribe",
+      headers: auth(),
+      payload: {
+        endpoint: "https://fcm.googleapis.com/fcm/send/legacy",
+        keys: { p256dh: "k1", auth: "k2" },
+        origin: "https://app.klorn.ai",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(prisma.pushSubscription.deleteMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("rejects push subscribe from a non-allowlisted origin", async () => {
     const app = await buildApp();
     const res = await app.inject({

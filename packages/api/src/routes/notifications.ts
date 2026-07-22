@@ -140,10 +140,12 @@ export async function notificationRoutes(app: FastifyInstance) {
       endpoint,
       keys,
       origin: bodyOrigin,
+      deviceId: rawDeviceId,
     } = request.body as {
       endpoint: string;
       keys: { p256dh: string; auth: string };
       origin?: string;
+      deviceId?: string;
     };
 
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
@@ -167,10 +169,42 @@ export async function notificationRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Invalid or disallowed push endpoint" });
     }
 
+    // A client-generated stable browser id (localStorage UUID, ~36 chars).
+    // Bound the length so a malicious client can't stuff the column; anything
+    // unexpected is treated as a legacy client (no prune) rather than rejected,
+    // so a quirky browser still receives push — it just can't self-dedupe.
+    const DEVICE_ID_MAX_LEN = 128;
+    const deviceId =
+      typeof rawDeviceId === "string" &&
+      rawDeviceId.length > 0 &&
+      rawDeviceId.length <= DEVICE_ID_MAX_LEN
+        ? rawDeviceId
+        : undefined;
+
     const safeEndpointForLog = endpoint.replace(/[\r\n]/g, "").slice(0, 60);
     console.log(
       `[PUSH-SUB] Registering push subscription for user ${userId}: ${safeEndpointForLog}...`,
     );
+
+    // Collapse this browser to a single server-side subscription so one
+    // notification can't fan out to a stale duplicate (the "Daily Briefing
+    // arrives twice" bug). Delete this device's previous endpoint rows, plus any
+    // LEGACY rows on this origin that predate deviceId (deviceId IS NULL) —
+    // those are almost always this same browser's pre-migration orphans. A
+    // legacy row that actually belonged to a different browser self-heals: that
+    // browser re-registers with its own deviceId on its next app open. Once
+    // every client carries a deviceId, the NULL branch is inert. Scoped to the
+    // caller's userId so it can never touch another user's subscriptions.
+    if (deviceId) {
+      await prisma.pushSubscription.deleteMany({
+        where: {
+          userId,
+          endpoint: { not: endpoint },
+          OR: [{ deviceId }, { deviceId: null, origin: normalizedOrigin }],
+        },
+      });
+    }
+
     await prisma.pushSubscription.upsert({
       where: { endpoint },
       create: {
@@ -179,12 +213,14 @@ export async function notificationRoutes(app: FastifyInstance) {
         p256dh: keys.p256dh,
         auth: keys.auth,
         origin: normalizedOrigin,
+        deviceId,
       },
       update: {
         userId,
         p256dh: keys.p256dh,
         auth: keys.auth,
         origin: normalizedOrigin,
+        deviceId,
       },
     });
     console.log(`[PUSH-SUB] Successfully registered push subscription for user ${userId}`);
