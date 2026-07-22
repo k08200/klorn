@@ -18,7 +18,15 @@ import type {
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type FormEvent,
+  Fragment,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import AuthGuard from "../../components/auth-guard";
 import { ComposeModal } from "../../components/compose-modal";
 import { useToast } from "../../components/toast";
@@ -210,6 +218,7 @@ function EmailView() {
   const [undoBusy, setUndoBusy] = useState(false);
   const [bulkUndoNotice, setBulkUndoNotice] = useState<BulkUndoNotice | null>(null);
   const [rowReminderBusy, setRowReminderBusy] = useState<string | null>(null);
+  const [rowQuickBusy, setRowQuickBusy] = useState<string | null>(null);
   const [undoCountdown, setUndoCountdown] = useState(0);
   const [bulkUndoCountdown, setBulkUndoCountdown] = useState(0);
 
@@ -593,6 +602,76 @@ function EmailView() {
       setError("Could not create a reminder for that email.");
     } finally {
       setRowReminderBusy(null);
+    }
+  };
+
+  // Single-row cache patch for the hover quick actions. Same query key and
+  // page-map shape as applyBulkAction above (reused, not re-derived) so the
+  // optimistic behaviour stays identical between the bulk bar and row buttons.
+  const patchListPages = (ids: string[], action: BulkAction) => {
+    queryClient.setQueryData<typeof listQuery.data>(
+      queryKeys.email.list({ filter, search: appliedSearch, inbox }),
+      (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          pages: prev.pages.map((page) =>
+            page.kind === "list"
+              ? { ...page, emails: updateEmailsAfterBulk(page.emails, ids, action) }
+              : page,
+          ),
+        };
+      },
+    );
+    void queryClient.invalidateQueries({ queryKey: queryKeys.email.all });
+  };
+
+  const quickArchive = async (email: EmailRow) => {
+    if (rowQuickBusy) return;
+    setRowQuickBusy(email.id);
+    setError(null);
+    try {
+      const data = await apiFetch<BulkActionResponse>("/api/email/bulk", {
+        method: "POST",
+        body: JSON.stringify({ ids: [email.id], action: "archive" }),
+      });
+      if (data.failed && data.failed.length > 0) {
+        toast("Could not archive that email.", "error");
+        return;
+      }
+      patchListPages([email.id], "archive");
+      setBulkUndoNotice({
+        action: "archive",
+        emails: [{ id: email.id, gmailId: email.gmailId, subject: email.subject || "No subject" }],
+      });
+    } catch (err) {
+      captureClientError(err, { scope: "email.row.quickArchive", emailId: email.id });
+      toast("Could not archive that email.", "error");
+    } finally {
+      setRowQuickBusy(null);
+    }
+  };
+
+  const quickToggleRead = async (email: EmailRow) => {
+    if (rowQuickBusy) return;
+    const action: BulkAction = email.isRead ? "mark-unread" : "mark-read";
+    setRowQuickBusy(email.id);
+    setError(null);
+    try {
+      const data = await apiFetch<BulkActionResponse>("/api/email/bulk", {
+        method: "POST",
+        body: JSON.stringify({ ids: [email.id], action }),
+      });
+      if (data.failed && data.failed.length > 0) {
+        toast("Could not update read state.", "error");
+        return;
+      }
+      patchListPages([email.id], action);
+    } catch (err) {
+      captureClientError(err, { scope: "email.row.quickToggleRead", emailId: email.id, action });
+      toast("Could not update read state.", "error");
+    } finally {
+      setRowQuickBusy(null);
     }
   };
 
@@ -1074,17 +1153,27 @@ function EmailView() {
               onToggleAll={toggleAllVisible}
             />
             <ul className="divide-y divide-slate-100">
-              {emails.map((e) => (
-                <EmailRowItem
-                  key={e.id}
-                  email={e}
-                  queue={filter}
-                  reminderBusyKey={rowReminderBusy}
-                  selected={selectedIds.has(e.id)}
-                  inboxLabel={resolveInboxLabel(e)}
-                  onCreateReminder={createRowReminder}
-                  onToggleSelected={toggleSelected}
-                />
+              {groupEmailsByDate(emails).map((group) => (
+                <Fragment key={`${group.label}-${group.emails[0]?.id}`}>
+                  <li className="bg-slate-50/60 px-4 py-1.5 text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+                    {group.label} <span className="text-slate-300">· {group.emails.length}</span>
+                  </li>
+                  {group.emails.map((e) => (
+                    <EmailRowItem
+                      key={e.id}
+                      email={e}
+                      queue={filter}
+                      reminderBusyKey={rowReminderBusy}
+                      quickBusyId={rowQuickBusy}
+                      selected={selectedIds.has(e.id)}
+                      inboxLabel={resolveInboxLabel(e)}
+                      onCreateReminder={createRowReminder}
+                      onQuickArchive={quickArchive}
+                      onQuickToggleRead={quickToggleRead}
+                      onToggleSelected={toggleSelected}
+                    />
+                  ))}
+                </Fragment>
               ))}
             </ul>
           </section>
@@ -1118,6 +1207,38 @@ function EmailView() {
       </div>
     </>
   );
+}
+
+const DAY_MS = 86_400_000;
+
+// Buckets a message date into a Superhuman-style list section. Pure render-time
+// calculation — no state, no re-sorting (the server already ordered the list).
+function dateGroupLabel(dateIso: string): string {
+  const date = new Date(dateIso);
+  if (Number.isNaN(date.getTime())) return "Earlier";
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  if (date.getTime() >= todayStart.getTime()) return "Today";
+  if (date.getTime() >= todayStart.getTime() - DAY_MS) return "Yesterday";
+  if (date.getTime() >= todayStart.getTime() - 6 * DAY_MS) return "This week";
+  return "Earlier";
+}
+
+// Splits the loaded rows into consecutive label runs, preserving server order.
+// A label only opens a new group when it differs from the previous row's label,
+// so an interleaved order never collapses distant rows into one bucket.
+function groupEmailsByDate(emails: EmailRow[]): { label: string; emails: EmailRow[] }[] {
+  const groups: { label: string; emails: EmailRow[] }[] = [];
+  for (const email of emails) {
+    const label = dateGroupLabel(email.date);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) {
+      groups[groups.length - 1] = { label, emails: [...last.emails, email] };
+    } else {
+      groups.push({ label, emails: [email] });
+    }
+  }
+  return groups;
 }
 
 function updateEmailsAfterBulk(
@@ -1520,18 +1641,24 @@ function LoadMoreBar({
 function EmailRowItem({
   email,
   reminderBusyKey,
+  quickBusyId,
   queue,
   selected,
   inboxLabel,
   onCreateReminder,
+  onQuickArchive,
+  onQuickToggleRead,
   onToggleSelected,
 }: {
   email: EmailRow;
   reminderBusyKey: string | null;
+  quickBusyId: string | null;
   queue: Filter;
   selected: boolean;
   inboxLabel?: string | null;
   onCreateReminder: (email: EmailRow, option: EmailReminderOption) => void;
+  onQuickArchive: (email: EmailRow) => void;
+  onQuickToggleRead: (email: EmailRow) => void;
   onToggleSelected: (id: string) => void;
 }) {
   const unread = !email.isRead;
@@ -1641,6 +1768,83 @@ function EmailRowItem({
             )}
           </span>
         </Link>
+      </div>
+      {/* Hover quick actions: sit just below the timestamp, outside the row
+          Link (no nested interactive elements). focus-within keeps them
+          reachable by keyboard; the timestamp itself never moves. */}
+      <div
+        className={`absolute right-4 top-8 z-10 flex items-center gap-1 transition duration-150 ${
+          quickBusyId === email.id
+            ? "opacity-100"
+            : "opacity-0 focus-within:opacity-100 group-hover:opacity-100"
+        }`}
+      >
+        <button
+          type="button"
+          aria-label={
+            email.isRead
+              ? `Mark ${email.subject || "No subject"} as unread`
+              : `Mark ${email.subject || "No subject"} as read`
+          }
+          onClick={() => onQuickToggleRead(email)}
+          disabled={quickBusyId !== null}
+          className="ease-strong flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 shadow-sm transition duration-150 hover:text-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {email.isRead ? (
+            <svg
+              aria-hidden="true"
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+            </svg>
+          ) : (
+            <svg
+              aria-hidden="true"
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21.2 8.4c.5.38.8.97.8 1.6v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V10a2 2 0 0 1 .8-1.6l8-6a2 2 0 0 1 2.4 0l8 6Z" />
+              <path d="m22 10-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 10" />
+            </svg>
+          )}
+        </button>
+        <button
+          type="button"
+          aria-label={`Archive ${email.subject || "No subject"}`}
+          onClick={() => onQuickArchive(email)}
+          disabled={quickBusyId !== null}
+          className="ease-strong flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 shadow-sm transition duration-150 hover:text-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          <svg
+            aria-hidden="true"
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="2" y="3" width="20" height="5" rx="1" />
+            <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+            <path d="M10 12h4" />
+          </svg>
+        </button>
       </div>
       <EmailRowReminderActions
         email={email}

@@ -93,9 +93,18 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(80% 60% at 12% -5%, rgba(14, 165, 233, 0.1), transparent 60%),
-    radial-gradient(70% 50% at 105% 0%, rgba(99, 102, 241, 0.08), transparent 55%),
-    linear-gradient(180deg, #eef4fc 0%, #f5f9fd 40%, #f6f8fc 100%);
+    radial-gradient(circle at center, rgba(14, 116, 180, 0.045) 1px, transparent 1.5px),
+    radial-gradient(80% 60% at 12% -5%, rgba(14, 165, 233, 0.14), transparent 60%),
+    radial-gradient(70% 50% at 105% 0%, rgba(99, 102, 241, 0.11), transparent 55%),
+    radial-gradient(60% 45% at 50% 115%, rgba(56, 189, 248, 0.09), transparent 60%),
+    linear-gradient(180deg, #edf3fc 0%, #f4f8fd 40%, #f5f8fc 100%);
+  background-size:
+    26px 26px,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%;
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat;
 }
 
 /* Strong ease-out (Emil Kowalski's UI curve) — punchier than the built-in
