@@ -28,6 +28,7 @@ import {
   unregisterPushSubscription,
 } from "../../lib/push";
 import { captureClientError } from "../../lib/sentry";
+import { track } from "../../lib/track";
 import {
   type AgentMode,
   type AgentModeOption,
@@ -243,6 +244,9 @@ export default function SettingsPage() {
   const disablePush = async () => {
     await unregisterPushSubscription();
     setPushStatus("default");
+    // Retention analytics: turning push off entirely is the strongest churn
+    // signal — track it so the dashboard surfaces mute rate.
+    track("notif_muted", { scope: "all" });
     toast("Push notifications disabled.", "info");
   };
 
@@ -477,6 +481,8 @@ export default function SettingsPage() {
   const updateNotifPref = async (key: keyof typeof notifPrefs, value: boolean | string | null) => {
     const next = { ...notifPrefs, [key]: value };
     setNotifPrefs(next);
+    // Retention analytics: a category toggled OFF is a partial mute signal.
+    if (value === false) track("notif_muted", { scope: key });
     try {
       await apiFetch("/api/automations", {
         method: "PATCH",

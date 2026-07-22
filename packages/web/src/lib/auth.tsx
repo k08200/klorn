@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { apiFetch, clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from "./api";
+import { trackAppOpenOnce } from "./track";
 
 interface User {
   id: string;
@@ -126,6 +127,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .then((data) => {
           setUser(data.user);
           setGoogleConnected(data.user.googleConnected ?? false);
+          // Retention analytics: an authenticated session bootstrapped = the
+          // user opened the app. Fires once per browser session (DAU signal).
+          trackAppOpenOnce();
           // Auto-sync on app reload if Google is connected
           if (data.user.googleConnected) {
             runInitialSync(stored);
