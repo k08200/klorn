@@ -52,6 +52,7 @@ function CommandCenterView() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("pending");
+  const [syncing, setSyncing] = useState(false);
   const [actionLoading, setActionLoading] = useState<
     Record<string, "approve" | "reject" | "snooze" | null>
   >({});
@@ -88,7 +89,10 @@ function CommandCenterView() {
       {
         queryKey: [...queryKeys.inbox.pending(), filter] as const,
         // Poll as the real-time safety net (missed WS frames strand the queue).
-        refetchInterval: 30_000,
+        // 15s, not 30s: the WS mail-sync push is the fast path, but when it's
+        // flaky in the field this is the worst-case latency a user waits.
+        refetchInterval: 15_000,
+        refetchOnWindowFocus: true,
         queryFn: async () => {
           const qs = filter === "all" ? "?status=all" : "";
           const data = await apiFetch<{ actions: PendingActionItem[] }>(
@@ -115,10 +119,26 @@ function CommandCenterView() {
 
   const load = useCallback(
     async (_statusFilter: StatusFilter) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.inbox.pending() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.inbox.commitments() }),
-      ]);
+      // Refresh must actually PULL new mail from Gmail, not just re-read the DB
+      // the server already has. Trigger a server sync first, then refetch the
+      // decision queue so freshly-classified mail shows up on demand — this is
+      // the manual fast path when the real-time WS push didn't fire.
+      setSyncing(true);
+      try {
+        await apiFetch("/api/email/sync", {
+          method: "POST",
+          body: JSON.stringify({ maxResults: 30 }),
+        });
+      } catch (err) {
+        // Sync is best-effort; still refetch below so the queue reflects the DB.
+        captureClientError(err, { scope: "inbox.refresh.sync" });
+      } finally {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: queryKeys.inbox.pending() }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.inbox.commitments() }),
+        ]);
+        setSyncing(false);
+      }
     },
     [queryClient],
   );
@@ -249,7 +269,7 @@ function CommandCenterView() {
           pendingCount={pendingCount}
           filter={filter}
           setFilter={setFilter}
-          loading={loading}
+          loading={loading || syncing}
           error={error}
           introLine={introLine}
           actionLoading={actionLoading}
