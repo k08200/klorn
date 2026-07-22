@@ -39,6 +39,12 @@ struct APIClient: Sendable {
         }
     }
 
+    /// GET /api/email/inboxes — the caller's mailboxes (primary + linked) for
+    /// the per-inbox selector. Read-only; the server returns no tokens.
+    func fetchInboxes() async throws -> InboxesResponse {
+        try await get("/api/email/inboxes")
+    }
+
     /// Fire a POST (empty body); discard the response, mapping status to APIError.
     func post(_ path: String, authed: Bool = true) async throws {
         _ = try await data(path, method: "POST", authed: authed)

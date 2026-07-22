@@ -53,6 +53,45 @@ final class AppModel {
     init(api: APIClient = APIClient()) {
         self.api = api
         self.phase = KeychainStore.load() != nil ? .signedIn : .signedOut
+        self.selectedInbox =
+            UserDefaults.standard.string(forKey: Self.selectedInboxKey) ?? "all"
+    }
+
+    // MARK: Multi-inbox
+
+    /// The user's mailboxes (primary + linked). The selector renders at 2+;
+    /// every mail-list fetch is scoped by `selectedInbox` (doctrine: never
+    /// assume the primary account).
+    private(set) var inboxes: [InboxOption] = []
+
+    /// Selector value: "all" | "primary" | a linked inbox id. Persisted so the
+    /// scope survives relaunch (klorn.-prefixed defaults key — required).
+    private(set) var selectedInbox: String
+    static let selectedInboxKey = "klorn.selectedInbox"
+
+    /// Change the per-inbox scope and persist it. The list view's task keys on
+    /// this value, so an active search re-fetches with the new scope.
+    func selectInbox(_ value: String) {
+        guard value != selectedInbox else { return }
+        selectedInbox = value
+        UserDefaults.standard.set(value, forKey: Self.selectedInboxKey)
+    }
+
+    /// Refresh the mailbox list (poll + WS cadence, like the other surfaces).
+    /// A persisted selection whose linked inbox was since unlinked falls back
+    /// to "all" — a stale id would silently scope every list to zero rows.
+    private func refreshInboxes() async {
+        do {
+            let resp = try await api.fetchInboxes()
+            inboxes = resp.inboxes
+            if let value = inboxQueryParam(selected: selectedInbox), value != "primary",
+               !resp.inboxes.contains(where: { $0.id == value })
+            {
+                selectInbox("all")
+            }
+        } catch {
+            Log.app.debug("inboxes fetch failed: \(String(describing: error), privacy: .private)")
+        }
     }
 
     /// Kick off the headless lifecycle at app launch. With no window driving it,
@@ -363,11 +402,12 @@ final class AppModel {
         }
         isSearching = true
         defer { isSearching = false }
-        let encoded = query.trimmingCharacters(in: .whitespaces)
-            .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
         do {
+            // Scoped to the selected inbox ("all" adds nothing) — the desktop
+            // list must honor the same per-inbox scope as the web inbox.
             let resp: EmailSearchResponse = try await api.get(
-                "/api/email?search=\(encoded)", as: EmailSearchResponse.self)
+                emailSearchPath(query: query, selectedInbox: selectedInbox),
+                as: EmailSearchResponse.self)
             searchResults = resp.emails
             searchTotal = resp.total
         } catch APIError.unauthorized {
@@ -465,8 +505,12 @@ final class AppModel {
         // Cross-account hygiene: every per-account surface must reset, or the
         // next sign-in briefly shows the previous account's data.
         today = nil
+        weekAhead = nil
         usage = nil
         briefing = nil
+        inboxes = []
+        selectedInbox = "all"
+        UserDefaults.standard.removeObject(forKey: Self.selectedInboxKey)
         shownMeetingIds = []
         phase = .signedOut
     }
@@ -536,6 +580,23 @@ final class AppModel {
         }
     }
 
+    /// The raw 7-day-ahead event window (tomorrow onward) behind the UPCOMING
+    /// section. nil until first load; best-effort like the TODAY summary.
+    private(set) var weekAhead: [CalendarEventWire]?
+
+    /// GET /api/calendar?days=8 — the same list endpoint (and params) the web
+    /// calendar page uses. days=8 from today 00:00 covers tomorrow → +7 days;
+    /// today's rows are filtered out by the pure grouping.
+    private func refreshWeekAhead() async {
+        do {
+            let resp: CalendarListResponse = try await api.get(
+                "/api/calendar?days=8", as: CalendarListResponse.self)
+            weekAhead = resp.events
+        } catch {
+            Log.app.debug("week-ahead fetch failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
     /// Daily AI quota for the ACCOUNT gauge. Best-effort on the same tick.
     private(set) var usage: BillingStatusWire.Usage?
 
@@ -564,6 +625,8 @@ final class AppModel {
         // Piggyback on the same cadence as the queue (poll + WS wake) without
         // serializing the fetches.
         Task { await refreshToday() }
+        Task { await refreshWeekAhead() }
+        Task { await refreshInboxes() }
         Task { await refreshUsage() }
         Task { await refreshBriefing() }
         Task { await refreshCommitments() }
