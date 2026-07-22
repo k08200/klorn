@@ -78,7 +78,7 @@ function OnboardingFlow() {
           {([1, 2, 3, 4] as Step[]).map((s) => (
             <div
               key={s}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
+              className={`ease-strong h-1.5 rounded-full transition-[width,background-color] duration-150 ${
                 s === step
                   ? "w-6 bg-sky-500"
                   : s < step
@@ -104,7 +104,7 @@ function WelcomeStep({
 }) {
   return (
     <div>
-      <h1 className="text-3xl font-semibold leading-tight tracking-tight text-slate-900">
+      <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-slate-900">
         Klorn surfaces only the
         <br />
         decisions worth acting on.
@@ -119,7 +119,7 @@ function WelcomeStep({
           type="button"
           onClick={onConnectClick}
           disabled={connecting}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+          className="glow-primary ease-strong flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-sky-400 to-sky-500 px-5 py-3.5 text-sm font-semibold text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {connecting ? "Redirecting to Google..." : "Connect Gmail & Calendar"}
           {!connecting && <span aria-hidden>→</span>}
@@ -134,7 +134,7 @@ function WelcomeStep({
         ].map((item) => (
           <div
             key={item.label}
-            className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center"
+            className="panel-elevated rounded-xl border border-slate-200/70 bg-white p-3 text-center"
           >
             <p className="text-lg text-slate-500">{item.icon}</p>
             <p className="mt-1 text-[11px] leading-4 text-slate-400">{item.label}</p>
@@ -174,7 +174,7 @@ function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue
 
   return (
     <div>
-      <h1 className="text-3xl font-semibold leading-tight tracking-tight text-slate-900">
+      <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-slate-900">
         {isDone ? "Sync complete." : "Setting up your workspace..."}
       </h1>
       <p className="mt-4 text-sm leading-6 text-slate-500">
@@ -183,7 +183,7 @@ function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue
           : "Reading your recent emails and calendar. This takes about 30 seconds."}
       </p>
 
-      <div className="mt-8 space-y-3">
+      <div className="panel-elevated mt-8 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
         <SyncRow
           icon="✉"
           label={initSync.emails > 0 ? `${initSync.emails} emails processed` : "Reading emails..."}
@@ -212,7 +212,7 @@ function SyncingStep({ initSync, onContinue }: { initSync: SyncState; onContinue
         <button
           type="button"
           onClick={onContinue}
-          className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-sky-200"
+          className="ease-strong mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-sky-400 to-sky-500 px-5 py-3.5 text-sm font-semibold text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97]"
         >
           {isDone ? "See what Klorn found" : "Continue to inbox"}
           <span aria-hidden>→</span>
@@ -234,12 +234,12 @@ function SyncRow({
   loading: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+    <div className="flex items-center gap-3 px-4 py-3">
       <span className="shrink-0 text-base text-slate-500">{icon}</span>
       <p className="flex-1 text-sm text-slate-500">{label}</p>
-      {done && <span className="shrink-0 text-[11px] font-semibold text-emerald-400">✓</span>}
+      {done && <span className="shrink-0 text-[11px] font-semibold text-emerald-600">✓</span>}
       {loading && (
-        <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-slate-200 border-t-sky-300" />
+        <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-slate-200 border-t-sky-500" />
       )}
     </div>
   );
@@ -250,7 +250,7 @@ function SyncRow({
 function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => void }) {
   return (
     <div>
-      <h1 className="text-3xl font-semibold leading-tight tracking-tight text-slate-900">
+      <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-slate-900">
         You&apos;re set up.
       </h1>
       <p className="mt-4 text-sm leading-6 text-slate-500">
@@ -264,8 +264,8 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
         <StatCard value={initSync.contacts} label="Contacts" />
       </div>
 
-      <div className="mt-4 rounded-xl border border-teal-500/20 bg-teal-400/5 p-4">
-        <p className="text-xs font-semibold text-teal-300">What happens next</p>
+      <div className="panel-elevated mt-4 rounded-2xl border border-sky-200/70 bg-white p-4">
+        <p className="text-xs font-semibold text-sky-700">What happens next</p>
         <ul className="mt-2 space-y-1.5 text-xs text-slate-500">
           <li>Your morning briefing will be ready before you wake up.</li>
           <li>Decision cards appear when Klorn finds something that needs your approval.</li>
@@ -276,7 +276,7 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
       <button
         type="button"
         onClick={onDone}
-        className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 px-5 py-3.5 text-sm font-semibold text-stone-950 transition hover:bg-sky-200"
+        className="ease-strong mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-sky-400 to-sky-500 px-5 py-3.5 text-sm font-semibold text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97]"
       >
         Open decision queue
         <span aria-hidden>→</span>
@@ -287,8 +287,10 @@ function ReadyStep({ initSync, onDone }: { initSync: SyncState; onDone: () => vo
 
 function StatCard({ value, label }: { value: number; label: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
-      <p className="text-2xl font-semibold text-slate-900">{value > 0 ? value : "—"}</p>
+    <div className="panel-elevated rounded-xl border border-slate-200/70 bg-white p-3 text-center">
+      <p className="text-2xl font-semibold tabular-nums text-slate-900">
+        {value > 0 ? value : "—"}
+      </p>
       <p className="mt-1 text-[11px] text-slate-400">{label}</p>
     </div>
   );

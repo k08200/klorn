@@ -84,7 +84,7 @@ export function LinkedCalendars() {
   });
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 text-slate-600">
+    <section className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-4 text-slate-600">
       <h3 className="text-sm font-medium text-slate-900">Connected calendars</h3>
       <p className="mt-1 text-xs text-slate-500">
         Add a work Google account so conflict checks cover a calendar that lives on a different
@@ -92,11 +92,11 @@ export function LinkedCalendars() {
       </p>
 
       {accounts.length > 0 && (
-        <ul className="mt-3 space-y-2">
+        <ul className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-100 bg-slate-50/70">
           {accounts.map((account) => (
             <li
               key={account.id}
-              className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+              className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
             >
               <div className="min-w-0">
                 <span className="block truncate text-slate-900">{account.email}</span>
@@ -112,7 +112,7 @@ export function LinkedCalendars() {
                     type="button"
                     onClick={() => connect.mutate()}
                     disabled={connect.isPending}
-                    className="rounded-md border border-amber-400/50 bg-amber-400/10 px-2 py-1 text-xs text-amber-700 transition hover:bg-amber-400/20 disabled:opacity-50"
+                    className="ease-strong rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 transition duration-150 hover:bg-amber-100 active:scale-[0.97] disabled:opacity-50"
                   >
                     Reconnect
                   </button>
@@ -121,7 +121,7 @@ export function LinkedCalendars() {
                   type="button"
                   onClick={() => disconnect.mutate(account.id)}
                   disabled={disconnect.isPending}
-                  className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
+                  className="ease-strong rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 transition duration-150 hover:bg-red-100 active:scale-[0.97] disabled:opacity-50"
                 >
                   Disconnect
                 </button>
@@ -135,7 +135,7 @@ export function LinkedCalendars() {
         type="button"
         onClick={() => connect.mutate()}
         disabled={connect.isPending}
-        className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-sky-500 px-4 py-2 text-sm text-white transition hover:bg-sky-500 disabled:opacity-50"
+        className="glow-primary ease-strong mt-3 inline-flex min-h-10 items-center rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-4 py-2 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:opacity-50"
       >
         Connect work calendar
       </button>

@@ -115,7 +115,7 @@ export function NaverImapSection() {
   };
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5">
+    <section className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-5">
       <header className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-slate-900">Naver Mail</h2>
@@ -131,7 +131,7 @@ export function NaverImapSection() {
         <div className="text-xs text-slate-400">Loading…</div>
       ) : status?.connected ? (
         <div className="space-y-3">
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-900">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3 text-sm text-slate-900">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="font-medium">{status.email}</p>
@@ -158,7 +158,7 @@ export function NaverImapSection() {
           )}
         </div>
       ) : !entitled ? (
-        <div className="rounded-md border border-sky-500/30 bg-sky-500/5 p-4">
+        <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
           <p className="text-sm text-slate-900">
             Connecting a second inbox is a <span className="font-semibold text-sky-600">Pro</span>{" "}
             feature.

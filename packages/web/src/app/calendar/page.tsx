@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
-import { EveSignalField } from "../../components/brand-visuals";
 import { LinkedCalendars } from "../../components/linked-calendars";
 import { type NewEventInitial, NewEventModal } from "../../components/new-event-modal";
 import VoiceButton from "../../components/voice-button";
@@ -237,7 +236,7 @@ function CalendarView() {
               setNewEventOpen(true);
             }}
             aria-label="New event"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-stone-950 transition active:bg-accent/90"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-white transition active:bg-accent/90"
           >
             <svg
               aria-hidden="true"
@@ -279,77 +278,86 @@ function CalendarView() {
         </div>
       </header>
 
-      {/* DESKTOP — unchanged */}
-      <header className="mb-6 hidden overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-black/10 md:block">
-        <div className="h-1 bg-gradient-to-r from-sky-300 via-sky-200/40 to-transparent" />
-        <div className="p-5 md:p-6">
-          {/* Mobile = content-first: the decorative work-signal panel and the
-              3-stat dashboard are hidden below their breakpoints so the month
-              shows sooner. A compact Sync replaces the panel's Sync on phones. */}
-          <div className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-stretch">
-            <div className="min-w-0">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600 md:mb-2">
-                Klorn · Calendar
-              </p>
-              <div className="flex items-start justify-between gap-3">
-                <h1 className="text-lg font-semibold tracking-tight text-slate-900 md:text-2xl">
-                  {t("calendar.needPrep")}
-                </h1>
-                {/* One button pair for every breakpoint, anchored to the title
-                    row. (They used to be absolutely positioned over the signal
-                    panel on lg+, which covered the WORK SIGNALS header.) */}
-                <div className="flex shrink-0 items-center gap-2">
-                  <VoiceButton
-                    onTranscript={(text) => void handleVoiceTranscript(text)}
-                    className="flex min-h-9 w-9 items-center justify-center rounded-md border border-slate-200"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      invalidateVoiceRequests();
-                      setVoiceInitial(null);
-                      setNewEventOpen(true);
-                    }}
-                    className="min-h-9 rounded-md bg-accent px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent/90"
-                  >
-                    {t("calendar.newEvent")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={syncNow}
-                    disabled={syncing}
-                    className="min-h-9 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
-                  >
-                    {syncing ? t("common.syncing") : t("common.syncNow")}
-                  </button>
-                </div>
-              </div>
-              <p className="mt-2 hidden max-w-xl text-sm leading-6 text-slate-500 md:block">
-                The next 14 days of events alongside the work signals that touch them.
-              </p>
-            </div>
-            <div className="relative hidden min-h-40 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 lg:block">
-              <EveSignalField className="absolute inset-0 border-0" />
-            </div>
-          </div>
-          <div className="mt-5 hidden grid-cols-3 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 md:grid">
-            <CalendarStat label="Month" value={events.length} />
-            <CalendarStat label="Today" value={eventsByDay.get(todayKey)?.length ?? 0} />
-            <CalendarStat
-              label="Next"
-              value={nextEvent ? formatTime(new Date(nextEvent.startTime), userTimezone) : "-"}
-            />
-          </div>
-          {nextEvent && (
-            <div className="mt-4 rounded-lg border border-sky-300/15 bg-sky-300/5 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-600">
-                Next prep target
-              </p>
-              <p className="mt-1 truncate text-sm font-medium text-slate-900">
-                {nextEvent.title || "Untitled"}
-              </p>
-            </div>
-          )}
+      {/* DESKTOP — flat text header on the canvas, no boxed hero. New event is
+          the single filled primary action; Voice and Sync collapse to quiet
+          icon buttons and the subtitle carries the honest counts. */}
+      <header className="mb-6 hidden items-start justify-between gap-4 md:flex">
+        <div className="min-w-0">
+          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
+            {t("nav.calendar")}
+          </h1>
+          <p className="mt-2 truncate text-sm text-slate-500">
+            {nextEvent ? (
+              <>
+                Next:{" "}
+                <span className="font-medium text-slate-700">{nextEvent.title || "Untitled"}</span>{" "}
+                <span className="mx-0.5 text-slate-300">·</span>{" "}
+                {formatTime(new Date(nextEvent.startTime), userTimezone)}
+              </>
+            ) : (
+              "Nothing coming up"
+            )}
+            {events.length > 0 && (
+              <span className="text-slate-400">
+                {" "}
+                <span className="mx-0.5 text-slate-300">·</span> {events.length} this month
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              invalidateVoiceRequests();
+              setVoiceInitial(null);
+              setNewEventOpen(true);
+            }}
+            className="glow-primary ease-strong inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3.5 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97]"
+          >
+            <svg
+              aria-hidden="true"
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+            >
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            {t("calendar.newEvent")}
+          </button>
+          <VoiceButton
+            onTranscript={(text) => void handleVoiceTranscript(text)}
+            className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white/70 text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+          />
+          <button
+            type="button"
+            onClick={syncNow}
+            disabled={syncing}
+            aria-label={syncing ? t("common.syncing") : t("common.syncNow")}
+            title={t("common.syncNow")}
+            className="ease-strong inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white/70 text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
+          >
+            <svg
+              aria-hidden="true"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={syncing ? "animate-spin" : undefined}
+            >
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <path d="M21 3v6h-6" />
+            </svg>
+          </button>
         </div>
       </header>
 
@@ -366,19 +374,19 @@ function CalendarView() {
       )}
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
       {syncMessage && !error && (
-        <div className="mb-4 rounded-lg border border-emerald-900/50 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-200">
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           {syncMessage}
         </div>
       )}
 
       {!loading && !error && events.length === 0 && (
-        <div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
+        <div className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-6 text-center">
           <p className="mb-1 text-sm text-slate-500">
             {googleConnected === false
               ? "Google Calendar is not connected yet."
@@ -395,7 +403,7 @@ function CalendarView() {
               onClick={() => {
                 void startGoogleConnect();
               }}
-              className="inline-flex min-h-11 items-center rounded-lg bg-sky-500 px-4 py-2 text-sm text-stone-950 transition hover:bg-sky-200"
+              className="ease-strong inline-flex min-h-11 items-center rounded-lg border border-slate-200 bg-white/70 px-4 py-2 text-sm font-medium text-slate-600 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
             >
               Connect Google
             </button>
@@ -404,7 +412,7 @@ function CalendarView() {
               type="button"
               onClick={syncNow}
               disabled={syncing}
-              className="min-h-11 rounded-lg bg-sky-500 px-4 py-2 text-sm text-stone-950 transition hover:bg-sky-200 disabled:opacity-50"
+              className="ease-strong min-h-11 rounded-lg border border-slate-200 bg-white/70 px-4 py-2 text-sm font-medium text-slate-600 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
             >
               {syncing ? "Syncing..." : "Sync again"}
             </button>
@@ -485,7 +493,7 @@ function AgendaList({
 
   if (days.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-400">
+      <div className="panel-elevated rounded-2xl border border-slate-200/70 bg-white px-4 py-6 text-center text-sm text-slate-400">
         Nothing coming up this month.
       </div>
     );
@@ -505,35 +513,43 @@ function AgendaList({
               })}
             </h3>
             {key === todayKey && (
-              <span className="rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-semibold text-stone-950">
+              <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-600 ring-1 ring-inset ring-sky-500/20">
                 Today
               </span>
             )}
           </div>
-          <ul className="space-y-1.5">
-            {list.map((ev) => (
-              <li key={ev.id}>
-                <Link
-                  href={`/calendar/${ev.id}`}
-                  className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 transition hover:bg-slate-100"
-                >
-                  <span className="w-14 shrink-0 pt-0.5 text-right text-xs tabular-nums text-slate-500">
-                    {ev.allDay ? "All day" : formatTime(new Date(ev.startTime), timeZone)}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-slate-900">
-                      {ev.title || "Untitled"}
+          <div className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+            <ul className="divide-y divide-slate-100">
+              {list.map((ev) => (
+                <li key={ev.id} className="row-wash relative">
+                  {key === todayKey && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-0 top-0 h-full w-[3px] bg-sky-400"
+                    />
+                  )}
+                  <Link
+                    href={`/calendar/${ev.id}`}
+                    className="flex items-start gap-3 px-4 py-3 transition duration-150"
+                  >
+                    <span className="w-14 shrink-0 pt-0.5 text-right text-xs tabular-nums text-slate-500">
+                      {ev.allDay ? "All day" : formatTime(new Date(ev.startTime), timeZone)}
                     </span>
-                    {ev.location && (
-                      <span className="mt-0.5 block truncate text-[11px] text-slate-400">
-                        {ev.location}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-slate-900">
+                        {ev.title || "Untitled"}
                       </span>
-                    )}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                      {ev.location && (
+                        <span className="mt-0.5 block truncate text-[11px] text-slate-400">
+                          {ev.location}
+                        </span>
+                      )}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       ))}
     </div>
@@ -566,14 +582,14 @@ function MonthGrid({
   const viewMonthIdx = monthIndexInZone(viewMonth, timeZone);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5">
+    <div className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onPrev}
             aria-label="Previous month"
-            className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+            className="ease-strong flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition duration-150 hover:bg-slate-100 hover:text-slate-900 active:scale-[0.97]"
           >
             ‹
           </button>
@@ -581,21 +597,23 @@ function MonthGrid({
             type="button"
             onClick={onNext}
             aria-label="Next month"
-            className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+            className="ease-strong flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition duration-150 hover:bg-slate-100 hover:text-slate-900 active:scale-[0.97]"
           >
             ›
           </button>
-          <h2 className="ml-1 text-base font-medium text-slate-900">{monthLabel}</h2>
+          <h2 className="ml-1 text-base font-semibold tracking-[-0.01em] text-slate-900">
+            {monthLabel}
+          </h2>
         </div>
         <button
           type="button"
           onClick={onToday}
-          className="rounded-md border border-slate-200 px-3 py-1 text-xs text-slate-500 transition hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-sky-100"
+          className="ease-strong rounded-lg border border-slate-200 bg-white/70 px-3 py-1 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
         >
           Today
         </button>
       </div>
-      <div className="grid grid-cols-7 border-b border-slate-200 bg-white">
+      <div className="grid grid-cols-7 border-b border-slate-100 bg-white">
         {weekdayLabels.map((d) => (
           <div
             key={d}
@@ -662,13 +680,13 @@ function DayCell({
     if (events.length > 0) router.push(`/calendar/${events[0].id}`);
   };
   const dayNumberClass = `inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-[11px] font-medium tabular-nums transition ${
-    isToday ? "bg-sky-500 text-white" : inMonth ? "text-slate-500" : "text-slate-500"
+    isToday ? "bg-sky-500 text-white" : inMonth ? "text-slate-600" : "text-slate-400"
   }`;
 
   return (
     <div
-      className={`min-h-[96px] border-b border-r border-slate-200 px-1.5 py-1 transition ${
-        inMonth ? "bg-white" : "bg-white text-slate-500"
+      className={`min-h-[96px] border-b border-r border-slate-100 px-1.5 py-1 transition ${
+        inMonth ? "bg-white" : "bg-slate-50/40"
       }`}
     >
       <div className="mb-1 flex items-center justify-between">
@@ -717,30 +735,19 @@ function EventChip({
     <Link
       href={`/calendar/${event.id}`}
       title={`${timeLabel ? `${timeLabel} · ` : ""}${event.title || "Untitled"}`}
-      className={`flex items-center gap-1 truncate rounded px-1 py-0.5 text-[11px] transition ${
+      className={`flex items-center gap-1 truncate rounded-md px-1 py-0.5 text-[11px] transition duration-150 ${
         dimmed
-          ? "text-slate-500 hover:bg-slate-100 hover:text-slate-500"
-          : "text-slate-900 hover:bg-sky-500/10 hover:text-sky-100"
+          ? "text-slate-400 hover:bg-slate-100 hover:text-slate-500"
+          : "text-slate-900 hover:bg-sky-500/10 hover:text-sky-700"
       }`}
     >
       <span
         aria-hidden="true"
-        className={`h-1.5 w-1.5 shrink-0 rounded-full ${dimmed ? "bg-slate-100" : "bg-sky-500"}`}
+        className={`h-1.5 w-1.5 shrink-0 rounded-full ${dimmed ? "bg-slate-300" : "bg-sky-400"}`}
       />
       {timeLabel && <span className="shrink-0 tabular-nums text-slate-400">{timeLabel}</span>}
       <span className="truncate">{event.title || "Untitled"}</span>
     </Link>
-  );
-}
-
-function CalendarStat({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="border-r border-slate-200 px-4 py-3 last:border-r-0">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-        {label}
-      </p>
-      <p className="mt-1 truncate text-2xl font-semibold text-slate-900">{value}</p>
-    </div>
   );
 }
 

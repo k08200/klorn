@@ -679,7 +679,7 @@ function EmailView() {
         )}
 
         {error && (
-          <div className="mt-3 rounded-xl border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
@@ -1004,7 +1004,7 @@ function EmailView() {
         {loading && <p className="px-1 py-3 text-sm text-slate-400">Loading...</p>}
 
         {error && (
-          <div className="mt-3 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
@@ -1044,7 +1044,7 @@ function EmailView() {
               <div className="mt-4 flex flex-wrap justify-center gap-2">
                 <Link
                   href="/settings"
-                  className="inline-flex min-h-11 items-center rounded-md bg-accent-light px-4 text-xs font-medium text-stone-950 transition hover:bg-accent-muted"
+                  className="inline-flex min-h-11 items-center rounded-md bg-accent-light px-4 text-xs font-medium text-white transition hover:bg-accent-muted"
                 >
                   {t("mail.connectGoogle")}
                 </Link>
@@ -1165,7 +1165,7 @@ function UndoActionBanner({
           type="button"
           onClick={onUndo}
           disabled={busy}
-          className="min-h-10 rounded-md bg-accent-light px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent-muted disabled:opacity-50"
+          className="min-h-10 rounded-md bg-accent-light px-3 text-xs font-semibold text-white transition hover:bg-accent-muted disabled:opacity-50"
         >
           {busy ? "Restoring..." : "Undo"}
         </button>
@@ -1213,7 +1213,7 @@ function BulkUndoActionBanner({
           type="button"
           onClick={onUndo}
           disabled={busy}
-          className="min-h-10 rounded-md bg-accent-light px-3 text-xs font-semibold text-stone-950 transition hover:bg-accent-muted disabled:opacity-50"
+          className="min-h-10 rounded-md bg-accent-light px-3 text-xs font-semibold text-white transition hover:bg-accent-muted disabled:opacity-50"
         >
           {busy ? "Restoring..." : "Undo all"}
         </button>
@@ -1385,7 +1385,7 @@ function InboxSelector({
             onClick={() => onChange(o.value)}
             className={`inline-flex min-h-[32px] shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
               active
-                ? "bg-accent/90 text-stone-950"
+                ? "bg-accent/90 text-white"
                 : "border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
             }`}
           >
@@ -2003,7 +2003,7 @@ function MobileEmailRow({
           {(email.priority === "URGENT" || inboxLabel) && (
             <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {email.priority === "URGENT" && (
-                <span className="inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-300">
+                <span className="inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-700">
                   Urgent
                 </span>
               )}

@@ -46,25 +46,25 @@ const KIND_COPY: Record<
 > = {
   ALLOW_AFTER_SUGGESTION: {
     label: "Repeated approvals",
-    tone: "border-accent/30 bg-accent/10 text-accent",
-    dot: "bg-accent",
+    tone: "bg-sky-500/10 text-sky-600 ring-sky-500/20",
+    dot: "bg-sky-500",
     summary: "Suggest with more confidence",
   },
   REQUIRE_DRAFT_REVIEW: {
     label: "Keep review",
-    tone: "border-slate-200 bg-slate-100 text-slate-500",
+    tone: "bg-slate-100 text-slate-500 ring-slate-200",
     dot: "bg-slate-400",
     summary: "Review drafts before running",
   },
   AVOID_SUGGESTION: {
     label: "Repeated rejects",
-    tone: "border-rose-500/30 bg-rose-500/10 text-rose-200",
-    dot: "bg-rose-400",
+    tone: "bg-rose-500/10 text-rose-600 ring-rose-500/20",
+    dot: "bg-rose-500",
     summary: "Suggest less often",
   },
   LOWER_PRIORITY: {
     label: "Lower priority",
-    tone: "border-slate-200 bg-slate-100 text-slate-500",
+    tone: "bg-slate-100 text-slate-500 ring-slate-200",
     dot: "bg-slate-400",
     summary: "Watch quietly",
   },
@@ -99,7 +99,7 @@ export function FeedbackPolicyPanel() {
   }, [load]);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-medium">Learned operating signals</h3>
@@ -161,7 +161,7 @@ export function FeedbackPolicyPanel() {
                     <p className="mt-1 text-xs text-slate-400">{copy.summary}</p>
                   </div>
                   <span
-                    className={`shrink-0 rounded-full border px-2 py-1 text-[10px] ${copy.tone}`}
+                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${copy.tone}`}
                   >
                     {copy.label}
                   </span>
@@ -175,7 +175,7 @@ export function FeedbackPolicyPanel() {
                   <SignalCount label="Snoozed" value={candidate.support.snoozed} />
                   <SignalCount label="Closed" value={candidate.support.dismissed} />
                 </div>
-                <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500">
+                <div className="mt-2 flex items-center justify-between text-[10px] tabular-nums text-slate-500">
                   <span>Confidence {Math.round(candidate.confidence * 100)}%</span>
                   <span>{candidate.support.total} events</span>
                 </div>
@@ -199,9 +199,9 @@ function SignalCount({
 }) {
   return (
     <div className="rounded-md bg-slate-100 px-2 py-1">
-      <div className={tone === "critical" ? "text-red-400/70" : "text-slate-500"}>{label}</div>
+      <div className={tone === "critical" ? "text-red-600/80" : "text-slate-500"}>{label}</div>
       <div
-        className={`text-xs font-medium ${tone === "critical" ? "text-red-300" : "text-slate-500"}`}
+        className={`text-xs font-medium tabular-nums ${tone === "critical" ? "text-red-700" : "text-slate-500"}`}
       >
         {value}
       </div>

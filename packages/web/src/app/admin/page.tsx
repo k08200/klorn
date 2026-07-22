@@ -230,39 +230,36 @@ function AdminDashboard() {
     <div className="h-full overflow-y-auto px-4 pb-28 pt-6 sm:px-6 md:py-10">
       <div className="mx-auto max-w-6xl space-y-6">
         {errors.length > 0 && (
-          <div className="space-y-1 rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 text-xs">
-            <p className="font-medium text-amber-300">Some sections could not load</p>
+          <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs">
+            <p className="font-medium text-amber-700">Some sections could not load</p>
             {errors.map((e) => (
-              <p key={e.endpoint} className="font-mono text-amber-200/80">
+              <p key={e.endpoint} className="font-mono text-amber-600/80">
                 {e.endpoint} — {e.message}
               </p>
             ))}
           </div>
         )}
-        <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-black/20 md:flex-row md:items-center md:justify-between">
+        <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-600">
-              Ops command
-            </p>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
+            <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
               Operations console
             </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+            <p className="mt-2 max-w-2xl text-sm text-slate-500">
               Monitor execution quality, approval flow, user state, and cost from one compact view.
             </p>
           </div>
-          <div className="flex w-full gap-1 rounded-lg border border-slate-200 bg-white p-1 md:w-auto">
+          <div className="flex w-full shrink-0 gap-1 rounded-lg bg-slate-100 p-1 md:w-auto">
             <button
               type="button"
               onClick={() => setTab("ops")}
-              className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition md:flex-none ${tab === "ops" ? "bg-sky-500 text-white" : "text-slate-400 hover:text-slate-900"}`}
+              className={`ease-strong flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition duration-150 active:scale-[0.97] md:flex-none ${tab === "ops" ? "seg-active bg-white text-slate-900" : "text-slate-500 hover:text-slate-900"}`}
             >
               Ops
             </button>
             <button
               type="button"
               onClick={() => setTab("users")}
-              className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition md:flex-none ${tab === "users" ? "bg-sky-500 text-white" : "text-slate-400 hover:text-slate-900"}`}
+              className={`ease-strong flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition duration-150 active:scale-[0.97] md:flex-none ${tab === "users" ? "seg-active bg-white text-slate-900" : "text-slate-500 hover:text-slate-900"}`}
             >
               Users
             </button>
@@ -273,7 +270,7 @@ function AdminDashboard() {
         <RetentionDashboard />
 
         {/* Agent Eval Harness */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        <section className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-4">
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-sm font-medium text-slate-900">Decision agent eval</h2>
@@ -285,19 +282,19 @@ function AdminDashboard() {
               type="button"
               onClick={runEval}
               disabled={evalLoading}
-              className="rounded-lg bg-sky-500 px-3 py-1.5 text-xs font-semibold text-stone-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
+              className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3.5 text-xs font-semibold text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {evalLoading ? "Running..." : "Run eval"}
             </button>
           </div>
           {evalData && (
             <div className="space-y-2">
-              <div className="flex items-center gap-4 text-xs">
+              <div className="flex items-center gap-4 text-xs tabular-nums">
                 <span className="text-slate-500">
                   {evalData.summary.passed}/{evalData.summary.total} passed
                 </span>
                 <span
-                  className={`font-medium ${evalData.summary.failed === 0 ? "text-emerald-400" : "text-red-400"}`}
+                  className={`font-medium ${evalData.summary.failed === 0 ? "text-emerald-600" : "text-red-600"}`}
                 >
                   Pass rate {(evalData.summary.passRate * 100).toFixed(0)}%
                 </span>
@@ -309,15 +306,15 @@ function AdminDashboard() {
                 {evalData.results.map((r) => (
                   <div
                     key={r.id}
-                    className={`flex items-start gap-2 text-xs p-2 rounded ${
-                      r.passed ? "bg-slate-50" : "border border-red-900/50 bg-red-950/30"
+                    className={`flex items-start gap-2 text-xs p-2 rounded-md ${
+                      r.passed ? "bg-slate-50" : "border border-red-200 bg-red-50"
                     }`}
                   >
                     <span
                       className={`shrink-0 w-4 h-4 rounded-full flex items-center justify-center ${
                         r.passed
-                          ? "bg-emerald-500/20 text-emerald-400"
-                          : "bg-red-500/20 text-red-400"
+                          ? "bg-emerald-500/15 text-emerald-600"
+                          : "bg-red-500/15 text-red-600"
                       }`}
                     >
                       <span className="sr-only">{r.passed ? "Passed" : "Failed"}</span>
@@ -329,7 +326,7 @@ function AdminDashboard() {
                         <span className="text-slate-500">{r.name}</span>
                         <span className="text-[10px] uppercase text-slate-500">[{r.severity}]</span>
                       </div>
-                      {!r.passed && r.message && <p className="text-red-400 mt-0.5">{r.message}</p>}
+                      {!r.passed && r.message && <p className="text-red-700 mt-0.5">{r.message}</p>}
                     </div>
                   </div>
                 ))}
@@ -437,7 +434,7 @@ function AdminDashboard() {
                   {perf.routes.slice(0, 20).map((r) => (
                     <div
                       key={r.route}
-                      className="rounded-xl border border-slate-200 bg-white p-3 text-xs"
+                      className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-3 text-xs"
                     >
                       <p className="font-mono text-slate-500 break-all">{r.route}</p>
                       <dl className="mt-2 grid grid-cols-3 gap-2">
@@ -467,10 +464,10 @@ function AdminDashboard() {
                     </div>
                   ))}
                 </div>
-                <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white sm:block">
+                <div className="panel-elevated hidden overflow-x-auto rounded-2xl border border-slate-200/70 bg-white sm:block">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-slate-200 text-left text-slate-500">
+                      <tr className="border-b border-slate-100 text-left text-slate-500">
                         <th className="p-3">Route</th>
                         <th className="p-3">Count</th>
                         <th className="p-3">Errors</th>
@@ -480,28 +477,30 @@ function AdminDashboard() {
                         <th className="p-3">Max</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-slate-100">
                       {perf.routes.slice(0, 20).map((r) => (
-                        <tr key={r.route} className="border-b border-slate-200">
+                        <tr key={r.route} className="row-wash">
                           <td className="p-3 font-mono text-slate-500">{r.route}</td>
-                          <td className="p-3 text-slate-500">{r.count}</td>
+                          <td className="p-3 tabular-nums text-slate-500">{r.count}</td>
                           <td
-                            className={`p-3 ${r.errorCount > 0 ? "text-red-400" : "text-slate-500"}`}
+                            className={`p-3 tabular-nums ${r.errorCount > 0 ? "text-rose-600" : "text-slate-500"}`}
                           >
                             {r.errorCount}
                           </td>
-                          <td className="p-3 text-slate-500">{r.p50}ms</td>
+                          <td className="p-3 tabular-nums text-slate-500">{r.p50}ms</td>
                           <td
-                            className={`p-3 ${r.p95 > 1000 ? "text-amber-300" : "text-slate-500"}`}
+                            className={`p-3 tabular-nums ${r.p95 > 1000 ? "text-amber-600" : "text-slate-500"}`}
                           >
                             {r.p95}ms
                           </td>
                           <td
-                            className={`p-3 ${r.p99 > 1000 ? "text-amber-300" : "text-slate-500"}`}
+                            className={`p-3 tabular-nums ${r.p99 > 1000 ? "text-amber-600" : "text-slate-500"}`}
                           >
                             {r.p99}ms
                           </td>
-                          <td className={`p-3 ${r.max > 2000 ? "text-red-400" : "text-slate-500"}`}>
+                          <td
+                            className={`p-3 tabular-nums ${r.max > 2000 ? "text-rose-600" : "text-slate-500"}`}
+                          >
                             {r.max}ms
                           </td>
                         </tr>
@@ -515,11 +514,14 @@ function AdminDashboard() {
             {ops.recentErrors.length > 0 && (
               <section>
                 <h2 className="mb-3 text-sm font-medium text-slate-500">Recent errors</h2>
-                <div className="divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
+                <div className="panel-elevated divide-y divide-slate-100 rounded-2xl border border-slate-200/70 bg-white">
                   {ops.recentErrors.map((e) => (
-                    <div key={`${e.createdAt}-${e.userId}-${e.summary}`} className="p-3 text-xs">
+                    <div
+                      key={`${e.createdAt}-${e.userId}-${e.summary}`}
+                      className="row-wash p-3 text-xs"
+                    >
                       <div className="flex justify-between mb-1">
-                        <span className="text-red-400 font-mono">
+                        <span className="text-rose-600 font-mono">
                           {e.tool || (e.summary.startsWith("Agent error") ? "Agent loop" : "Agent")}
                         </span>
                         <span className="text-slate-500">
@@ -547,10 +549,10 @@ function AdminDashboard() {
             </div>
 
             {/* Desktop: full table, still wrapped for horizontal scroll safety. */}
-            <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white sm:block">
+            <div className="panel-elevated hidden overflow-x-auto rounded-2xl border border-slate-200/70 bg-white sm:block">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-slate-500">
+                  <tr className="border-b border-slate-100 text-left text-slate-500">
                     <th className="p-3 pr-4">Email</th>
                     <th className="p-3 pr-4">Name</th>
                     <th className="p-3 pr-4">Role</th>
@@ -561,10 +563,20 @@ function AdminDashboard() {
                     <th className="p-3">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   {users.map((u) => (
-                    <tr key={u.id} className="border-b border-slate-200">
-                      <td className="p-3 pr-4 text-slate-500">{u.email}</td>
+                    <tr key={u.id} className="row-wash">
+                      <td className="p-3 pr-4 text-slate-500">
+                        <span className="flex items-center gap-2.5">
+                          <span
+                            aria-hidden="true"
+                            className={`avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[11px] font-semibold text-white ${avatarGradient(u.name || u.email)}`}
+                          >
+                            {senderInitials(u.name || u.email)}
+                          </span>
+                          {u.email}
+                        </span>
+                      </td>
                       <td className="p-3 pr-4 text-slate-500">{u.name || "-"}</td>
                       <td className="p-3 pr-4">
                         <select
@@ -589,9 +601,11 @@ function AdminDashboard() {
                           <option value="ENTERPRISE">ENTERPRISE</option>
                         </select>
                       </td>
-                      <td className="p-3 pr-4 text-slate-500">{u.messageCount}</td>
-                      <td className="p-3 pr-4 text-slate-500">{u._count.conversations}</td>
-                      <td className="p-3 pr-4 text-xs text-slate-500">
+                      <td className="p-3 pr-4 tabular-nums text-slate-500">{u.messageCount}</td>
+                      <td className="p-3 pr-4 tabular-nums text-slate-500">
+                        {u._count.conversations}
+                      </td>
+                      <td className="p-3 pr-4 text-xs tabular-nums text-slate-500">
                         {new Date(u.createdAt).toLocaleDateString("en-US")}
                       </td>
                       <td className="p-3">
@@ -599,7 +613,7 @@ function AdminDashboard() {
                           <button
                             type="button"
                             onClick={() => deleteUser(u.id, u.email)}
-                            className="inline-flex min-h-11 items-center rounded-md px-2 text-xs text-red-400 transition hover:text-red-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                            className="ease-strong inline-flex min-h-11 items-center rounded-md border border-red-200 bg-red-50 px-2.5 text-xs font-medium text-red-700 transition duration-150 hover:bg-red-100 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                           >
                             Delete
                           </button>
@@ -619,9 +633,9 @@ function AdminDashboard() {
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-4">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-slate-900">{value}</p>
+      <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{value}</p>
     </div>
   );
 }
@@ -636,11 +650,11 @@ function RouteStat({
   tone?: "muted" | "warn" | "error";
 }) {
   const valueTone =
-    tone === "error" ? "text-red-400" : tone === "warn" ? "text-amber-300" : "text-slate-500";
+    tone === "error" ? "text-rose-600" : tone === "warn" ? "text-amber-600" : "text-slate-500";
   return (
     <div>
       <dt className="text-[10px] uppercase tracking-wide text-slate-400">{label}</dt>
-      <dd className={`mt-0.5 font-medium ${valueTone}`}>{value}</dd>
+      <dd className={`mt-0.5 font-medium tabular-nums ${valueTone}`}>{value}</dd>
     </div>
   );
 }
@@ -655,17 +669,25 @@ function UserCard({
   onDelete: (id: string, email: string) => void;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
+    <div className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-4 text-sm">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-slate-900">{user.email}</p>
-          <p className="text-xs text-slate-500">{user.name || "-"}</p>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
+            aria-hidden="true"
+            className={`avatar-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[13px] font-semibold text-white ${avatarGradient(user.name || user.email)}`}
+          >
+            {senderInitials(user.name || user.email)}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-slate-900">{user.email}</p>
+            <p className="text-xs text-slate-500">{user.name || "-"}</p>
+          </div>
         </div>
         {user.role !== "ADMIN" && (
           <button
             type="button"
             onClick={() => onDelete(user.id, user.email)}
-            className="inline-flex min-h-11 shrink-0 items-center rounded-md px-2 text-xs text-red-400 transition hover:text-red-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+            className="ease-strong inline-flex min-h-11 shrink-0 items-center rounded-md border border-red-200 bg-red-50 px-2.5 text-xs font-medium text-red-700 transition duration-150 hover:bg-red-100 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
           >
             Delete
           </button>
@@ -698,13 +720,46 @@ function UserCard({
           </select>
         </label>
       </div>
-      <div className="mt-3 flex gap-4 text-xs text-slate-500">
+      <div className="mt-3 flex gap-4 text-xs tabular-nums text-slate-500">
         <span>Turns: {user.messageCount}</span>
         <span>Threads: {user._count.conversations}</span>
         <span>Joined {new Date(user.createdAt).toLocaleDateString("en-US")}</span>
       </div>
     </div>
   );
+}
+
+// Monogram avatar helpers — local replica of the email/page.tsx pattern
+// (deliberately not imported; each surface keeps its own copy).
+function senderInitials(name: string): string {
+  const words = name
+    .replace(/["'()[\]]/g, "")
+    .split(/[\s·|,@]+/)
+    .filter(Boolean);
+  if (words.length === 0) return "@";
+  return words
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+}
+
+const AVATAR_GRADIENTS = [
+  "from-sky-400 to-blue-500",
+  "from-teal-400 to-emerald-500",
+  "from-indigo-500 to-violet-600",
+  "from-amber-400 to-orange-500",
+  "from-rose-400 to-pink-500",
+  "from-cyan-400 to-sky-600",
+  "from-slate-600 to-slate-800",
+];
+
+function avatarGradient(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  }
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
 }
 
 function errMsg(reason: unknown): string {

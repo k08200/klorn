@@ -83,7 +83,7 @@ function ReceiptView() {
   if (error || !receipt) {
     return (
       <div className="mx-auto w-full max-w-4xl px-4 py-10">
-        <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error ?? "No receipt available."}
         </div>
       </div>
@@ -92,55 +92,51 @@ function ReceiptView() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-6 md:py-10">
-      {/* Header */}
-      <header className="mb-6 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-black/20">
-        <div className="h-1 bg-gradient-to-r from-sky-300 via-sky-200/40 to-transparent" />
-        <div className="p-5 md:p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600">
-                Attention receipt
-              </p>
-              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
-                What Klorn did today
-              </h1>
-              <p className="mt-2 text-sm leading-6 text-slate-500">{receipt.summary.narrative}</p>
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="text-xs text-slate-400">{formatReceiptDate(receipt.date)}</p>
-              <button
-                type="button"
-                onClick={() => receiptQuery.refetch()}
-                className="mt-2 h-8 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-500 transition hover:bg-slate-100"
-              >
-                Refresh
-              </button>
-            </div>
+      {/* Flat header on the canvas — no boxed hero. */}
+      <header className="mb-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
+              What Klorn did today
+            </h1>
+            <p className="mt-2 text-sm text-slate-500">{receipt.summary.narrative}</p>
           </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <p className="hidden text-xs text-slate-400 sm:block">
+              {formatReceiptDate(receipt.date)}
+            </p>
+            <button
+              type="button"
+              onClick={() => receiptQuery.refetch()}
+              className="ease-strong inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
 
-          {/* Summary row */}
-          <div className="mt-5 grid grid-cols-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-            <SummaryMetric
-              label="Signals seen"
-              value={receipt.summary.totalSeen}
-              color="text-slate-900"
-            />
-            <SummaryMetric
-              label="Silenced"
-              value={receipt.summary.savedFromInbox}
-              color="text-slate-500"
-            />
-            <SummaryMetric
-              label="Pushed"
-              value={receipt.summary.totalInterrupted}
-              color="text-rose-300"
-            />
-            <SummaryMetric
-              label="Auto-handled"
-              value={receipt.summary.autoHandled}
-              color="text-emerald-300"
-            />
-          </div>
+        {/* Summary row — one elevated panel */}
+        <div className="panel-elevated mt-5 grid grid-cols-4 overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+          <SummaryMetric
+            label="Signals seen"
+            value={receipt.summary.totalSeen}
+            color="text-slate-900"
+          />
+          <SummaryMetric
+            label="Silenced"
+            value={receipt.summary.savedFromInbox}
+            color="text-slate-500"
+          />
+          <SummaryMetric
+            label="Pushed"
+            value={receipt.summary.totalInterrupted}
+            color="text-rose-600"
+          />
+          <SummaryMetric
+            label="Auto-handled"
+            value={receipt.summary.autoHandled}
+            color="text-emerald-600"
+          />
         </div>
       </header>
 
@@ -150,15 +146,15 @@ function ReceiptView() {
           <ReceiptSection
             title="Auto-handled"
             description="Low-risk actions Klorn executed without interrupting you"
-            accentClass="border-emerald-500/20 bg-emerald-500/5"
-            labelClass="text-emerald-300"
+            accentBar="bg-gradient-to-b from-emerald-400 to-emerald-500"
+            labelClass="text-emerald-600"
             items={receipt.auto}
             renderActions={(item) => (
               <button
                 type="button"
                 onClick={() => handleUndo(item.id)}
                 disabled={!!undoLoading[item.id]}
-                className="text-[11px] text-slate-400 hover:text-slate-500 transition disabled:opacity-50"
+                className="text-[11px] text-slate-400 transition duration-150 hover:text-sky-700 disabled:opacity-50"
               >
                 {undoLoading[item.id] ? "Creating undo..." : "Request undo"}
               </button>
@@ -171,8 +167,8 @@ function ReceiptView() {
           <ReceiptSection
             title="Pushed to you"
             description="Signals Klorn judged urgent enough to interrupt you"
-            accentClass="border-amber-400/20 bg-amber-400/5"
-            labelClass="text-amber-300"
+            accentBar="bg-gradient-to-b from-rose-400 to-rose-500"
+            labelClass="text-rose-600"
             items={receipt.pushed}
             renderExtra={(item) =>
               item.pushStatus ? (
@@ -187,8 +183,8 @@ function ReceiptView() {
           <ReceiptSection
             title="Queued in inbox"
             description="Items placed in your decision queue — no push sent"
-            accentClass="border-slate-200 bg-slate-50"
-            labelClass="text-slate-500"
+            accentBar="bg-sky-400"
+            labelClass="text-sky-600"
             items={receipt.queued}
           />
         )}
@@ -198,14 +194,14 @@ function ReceiptView() {
           <ReceiptSection
             title="Silenced"
             description="Signals Klorn filtered out to protect your focus"
-            accentClass="border-slate-100 bg-slate-50"
-            labelClass="text-slate-400"
+            accentBar={null}
+            labelClass="text-slate-500"
             items={receipt.silenced}
           />
         )}
 
         {receipt.summary.totalSeen === 0 && (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-8 text-center">
+          <div className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-8 text-center">
             <p className="text-sm text-slate-500">No signals processed today yet.</p>
             <p className="mt-1 text-xs text-slate-500">
               Come back later — Klorn processes your mail and meetings continuously.
@@ -215,7 +211,10 @@ function ReceiptView() {
       </div>
 
       <div className="mt-8 flex justify-center">
-        <Link href="/inbox" className="text-sm text-slate-400 hover:text-slate-500 transition">
+        <Link
+          href="/inbox"
+          className="text-sm text-slate-400 transition duration-150 hover:text-slate-600"
+        >
           ← Back to Decision Queue
         </Link>
       </div>
@@ -226,7 +225,7 @@ function ReceiptView() {
 function ReceiptSection({
   title,
   description,
-  accentClass,
+  accentBar,
   labelClass,
   items,
   renderActions,
@@ -234,7 +233,7 @@ function ReceiptSection({
 }: {
   title: string;
   description: string;
-  accentClass: string;
+  accentBar: string | null;
   labelClass: string;
   items: ReceiptItem[];
   renderActions?: (item: ReceiptItem) => React.ReactNode;
@@ -247,40 +246,50 @@ function ReceiptSection({
           <h2 className={`text-sm font-semibold ${labelClass}`}>{title}</h2>
           <p className="text-xs text-slate-500">{description}</p>
         </div>
-        <span className="text-[11px] text-slate-500">{items.length}</span>
+        <span className="text-[11px] tabular-nums text-slate-400">{items.length}</span>
       </div>
-      <ul className="space-y-2">
-        {items.map((item) => (
-          <li key={item.id}>
-            <div className={`rounded-lg border p-3 ${accentClass}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-slate-900 truncate">{item.title}</p>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <SourceBadge source={item.source} type={item.type} />
-                    {item.tierReason && (
-                      <span className="text-[11px] text-slate-500">{item.tierReason}</span>
-                    )}
+      <div className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+        <ul className="divide-y divide-slate-100">
+          {items.map((item) => (
+            <li key={item.id} className="row-wash relative">
+              {accentBar && (
+                <span
+                  aria-hidden="true"
+                  className={`absolute left-0 top-0 h-full w-[3px] ${accentBar}`}
+                />
+              )}
+              <div className="px-4 py-3 pl-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-900">{item.title}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <SourceBadge source={item.source} type={item.type} />
+                      {item.tierReason && (
+                        <span className="text-[11px] text-slate-500">{item.tierReason}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span className="text-[11px] tabular-nums text-slate-400">
+                      {formatTime(item.surfacedAt)}
+                    </span>
+                    {renderExtra?.(item)}
+                    {renderActions?.(item)}
                   </div>
                 </div>
-                <div className="shrink-0 flex flex-col items-end gap-1">
-                  <span className="text-[11px] text-slate-500">{formatTime(item.surfacedAt)}</span>
-                  {renderExtra?.(item)}
-                  {renderActions?.(item)}
-                </div>
               </div>
-            </div>
-          </li>
-        ))}
-      </ul>
+            </li>
+          ))}
+        </ul>
+      </div>
     </section>
   );
 }
 
 function SummaryMetric({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="border-r border-slate-200 px-4 py-3 last:border-r-0">
-      <p className={`text-2xl font-semibold ${color}`}>{value}</p>
+    <div className="border-r border-slate-100 px-4 py-3 last:border-r-0">
+      <p className={`text-2xl font-semibold tabular-nums ${color}`}>{value}</p>
       <p className="mt-1 text-[11px] text-slate-400">{label}</p>
     </div>
   );
@@ -289,7 +298,7 @@ function SummaryMetric({ label, value, color }: { label: string; value: number; 
 function SourceBadge({ source, type }: { source: string; type: string }) {
   const label = sourceLabel(source, type);
   return (
-    <span className="text-[11px] text-slate-400 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5">
+    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-500">
       {label}
     </span>
   );
@@ -298,14 +307,14 @@ function SourceBadge({ source, type }: { source: string; type: string }) {
 function PushStatusBadge({ status, clickedAt }: { status: string; clickedAt: string | null }) {
   if (clickedAt) {
     return (
-      <span className="text-[11px] text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 rounded px-1.5 py-0.5">
+      <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-emerald-600 ring-1 ring-inset ring-emerald-500/20">
         Opened
       </span>
     );
   }
   if (status === "SENT") {
     return (
-      <span className="text-[11px] text-amber-300 bg-amber-400/10 border border-amber-400/20 rounded px-1.5 py-0.5">
+      <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-amber-600 ring-1 ring-inset ring-amber-500/20">
         Sent
       </span>
     );

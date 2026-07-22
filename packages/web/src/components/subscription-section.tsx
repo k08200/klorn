@@ -94,8 +94,10 @@ export function SubscriptionSection() {
 
   return (
     <section className="mb-8">
-      <h2 className="mb-3 text-sm font-semibold text-slate-500">Subscription</h2>
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+      <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+        Subscription
+      </h2>
+      <div className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-5">
         {isPro ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -107,7 +109,7 @@ export function SubscriptionSection() {
                 type="button"
                 onClick={restore}
                 disabled={loading}
-                className="min-h-10 rounded-lg border border-slate-200 px-4 text-sm text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
+                className="ease-strong min-h-10 rounded-lg border border-slate-200 bg-white/70 px-4 text-sm text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
               >
                 Restore purchase
               </button>
@@ -116,7 +118,7 @@ export function SubscriptionSection() {
                 type="button"
                 onClick={manageWeb}
                 disabled={loading}
-                className="min-h-10 rounded-lg border border-slate-200 px-4 text-sm text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
+                className="ease-strong min-h-10 rounded-lg border border-slate-200 bg-white/70 px-4 text-sm text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
               >
                 Manage subscription
               </button>
@@ -158,7 +160,7 @@ export function SubscriptionSection() {
               <button
                 type="button"
                 disabled
-                className="mt-5 flex min-h-11 w-full items-center justify-center rounded-lg bg-sky-400/60 text-sm font-semibold text-stone-950"
+                className="mt-5 flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-400"
               >
                 Subscription coming soon
               </button>
@@ -167,7 +169,7 @@ export function SubscriptionSection() {
                 type="button"
                 onClick={native ? startAppPurchase : startWebTrial}
                 disabled={loading}
-                className="mt-5 flex min-h-11 w-full items-center justify-center rounded-lg bg-sky-500 text-sm font-semibold text-stone-950 transition hover:bg-sky-500 disabled:opacity-50"
+                className="glow-primary ease-strong mt-5 flex min-h-11 w-full items-center justify-center rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 text-sm font-semibold text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:opacity-50"
               >
                 {loading ? "Starting..." : "Start 7-day free trial"}
               </button>

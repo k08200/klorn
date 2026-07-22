@@ -24,7 +24,7 @@ function ErrorPage({
       <button
         type="button"
         onClick={reset}
-        className="bg-sky-500 hover:bg-sky-200 text-stone-950 px-5 py-2.5 rounded-lg text-sm font-medium transition"
+        className="bg-sky-500 hover:bg-sky-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition"
       >
         Try again
       </button>

@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
-import { EveSignalField } from "../../components/brand-visuals";
 import { Markdown } from "../../components/markdown";
 import { apiFetch } from "../../lib/api";
 import { useT } from "../../lib/i18n";
@@ -227,56 +226,57 @@ function BriefingView() {
         </button>
       </header>
 
-      {/* DESKTOP — unchanged */}
-      <header className="mb-6 hidden overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-black/10 md:block">
-        <div className="h-1 bg-gradient-to-r from-sky-300 via-sky-200/40 to-transparent" />
-        {/* Mobile = content-first: hide the decorative work-signal panel and the
-            3-stat dashboard below their breakpoints so the brief itself is up
-            top. A compact Regenerate replaces the panel's button on phones. */}
-        <div className="grid gap-5 p-4 md:p-6 lg:grid-cols-[1fr_300px] lg:items-stretch">
-          <div className="min-w-0">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600 md:mb-2">
-              Klorn · {t("nav.briefing")}
-            </p>
-            <div className="flex items-start justify-between gap-3">
-              <h1 className="text-lg font-semibold tracking-tight text-slate-900 md:text-2xl">
-                {t("briefing.heading")}
-              </h1>
-              <button
-                type="button"
-                onClick={regenerate}
-                disabled={generating}
-                className="min-h-9 shrink-0 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-500 transition hover:bg-slate-100 disabled:opacity-50 lg:hidden"
-              >
-                {generating ? "..." : content ? t("briefing.regenerate") : t("briefing.generate")}
-              </button>
-            </div>
-            <p className="mt-2 hidden max-w-xl text-sm leading-6 text-slate-500 md:block">
-              Mail and calendar items that need a call, sorted into approve, hold, and next steps.
-              {formattedTime && <span className="ml-2 text-slate-500">Today {formattedTime}</span>}
-            </p>
-          </div>
-          <div className="relative hidden min-h-40 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 lg:block">
-            <EveSignalField className="absolute inset-0 border-0" />
-            <button
-              type="button"
-              onClick={regenerate}
-              disabled={generating}
-              className="absolute right-3 top-3 inline-flex min-h-11 items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 backdrop-blur transition hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-sky-100 disabled:opacity-50"
-            >
-              {generating
-                ? t("briefing.generating")
-                : content
-                  ? t("briefing.regenerate")
-                  : t("briefing.generateNow")}
-            </button>
-          </div>
-          <div className="hidden grid-cols-3 gap-2 md:grid lg:col-span-2">
-            <BriefStat label="Actions" value={topActions.length} />
-            <BriefStat label="Feedback" value={Object.keys(feedback).length} />
-            <BriefStat label="Status" value={content ? "Ready" : "Empty"} />
-          </div>
+      {/* DESKTOP — flat text header on the canvas, no boxed hero. Regenerate is
+          the single filled primary action; the subtitle carries honest counts. */}
+      <header className="mb-6 hidden items-start justify-between gap-4 md:flex">
+        <div className="min-w-0">
+          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
+            {t("nav.briefing")}
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">
+            {content ? (
+              <>
+                Today{formattedTime ? ` · ${formattedTime}` : ""}
+                {topActions.length > 0 && (
+                  <span className="text-slate-400">
+                    {" "}
+                    <span className="mx-0.5 text-slate-300">·</span> {topActions.length}{" "}
+                    {topActions.length === 1 ? "action" : "actions"} surfaced
+                  </span>
+                )}
+              </>
+            ) : (
+              t("briefing.notGenerated")
+            )}
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={regenerate}
+          disabled={generating}
+          className="glow-primary ease-strong inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3.5 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <svg
+            aria-hidden="true"
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={generating ? "animate-spin" : undefined}
+          >
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <path d="M21 3v6h-6" />
+          </svg>
+          {generating
+            ? t("briefing.generating")
+            : content
+              ? t("briefing.regenerate")
+              : t("briefing.generateNow")}
+        </button>
       </header>
 
       <TodayActionsCard />
@@ -291,15 +291,15 @@ function BriefingView() {
       {loading && <p className="text-sm text-slate-400">Loading...</p>}
 
       {(error || briefingLoadError) && (
-        <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error ?? briefingLoadError}
         </div>
       )}
 
       {!loading && !error && !briefingLoadError && !content && (
-        <div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
+        <div className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-6 text-center">
           <p className="mb-3 text-sm text-slate-500">No briefing for today yet.</p>
-          <p className="mx-auto mb-4 max-w-md text-xs leading-5 text-sky-100/85">
+          <p className="mx-auto mb-4 max-w-md text-xs leading-5 text-slate-500">
             {t("briefing.learningMode")}
           </p>
           <p className="mb-4 text-xs text-slate-400">
@@ -313,7 +313,7 @@ function BriefingView() {
             type="button"
             onClick={regenerate}
             disabled={generating}
-            className="rounded-lg bg-sky-500 px-4 py-2 text-sm text-stone-950 transition hover:bg-sky-200 disabled:opacity-50"
+            className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3.5 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {generating ? "Generating..." : "Generate now"}
           </button>
@@ -322,29 +322,28 @@ function BriefingView() {
 
       {content && (
         <div className="space-y-4">
-          <article className="relative overflow-hidden rounded-lg border border-slate-200 bg-white p-5 pl-6 md:p-6 md:pl-7">
+          {/* Core: the brief itself, on the single elevated panel. */}
+          <article className="panel-elevated relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-5 pl-6 md:p-6 md:pl-7">
             <div className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-sky-300 via-sky-200/40 to-transparent" />
             <Markdown content={content} />
           </article>
 
+          {/* List: feedback rows inside one panel, not stacked cards. */}
           {noteId && topActions.length > 0 && (
-            <section className="rounded-lg border border-slate-200 bg-white p-4">
-              <div className="mb-3">
+            <section className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+              <div className="border-b border-slate-100 px-4 py-3">
                 <h2 className="text-sm font-semibold text-slate-900">Top 3 feedback</h2>
                 <p className="mt-1 text-xs text-slate-400">
                   Mark whether today's surfaced items were actually useful.
                 </p>
               </div>
-              <div className="space-y-3">
+              <ul className="divide-y divide-slate-100">
                 {topActions.map((action) => (
-                  <div
-                    key={action.rank}
-                    className="rounded-lg border border-slate-200 bg-slate-50 p-3"
-                  >
-                    <p className="text-sm text-slate-500">
+                  <li key={action.rank} className="row-wash px-4 py-3">
+                    <p className="text-sm text-slate-600">
                       <span className="text-slate-400">{action.rank}.</span> {action.label}
                     </p>
-                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
                       {FEEDBACK_OPTIONS.map((option) => {
                         const selected = feedback[action.rank] === option.choice;
                         return (
@@ -354,10 +353,10 @@ function BriefingView() {
                             onClick={() => submitFeedback(action, option.choice)}
                             aria-pressed={selected}
                             disabled={savingRank === action.rank}
-                            className={`h-8 rounded-lg border px-2 text-xs transition disabled:opacity-50 ${
+                            className={`ease-strong h-8 rounded-lg border px-2 text-xs transition duration-150 active:scale-[0.97] disabled:opacity-50 ${
                               selected
-                                ? "border-sky-300 bg-sky-500/10 text-sky-100"
-                                : "border-slate-200 text-slate-500 hover:bg-slate-100"
+                                ? "border-sky-300 bg-sky-500/10 font-medium text-sky-700"
+                                : "border-slate-200 bg-white/70 text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] hover:bg-white hover:text-slate-900"
                             }`}
                           >
                             {savingRank === action.rank && !selected ? "Saving" : option.label}
@@ -365,9 +364,9 @@ function BriefingView() {
                         );
                       })}
                     </div>
-                  </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </section>
           )}
         </div>
@@ -395,7 +394,7 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
   const guidance = deliveryGuidance(status);
 
   return (
-    <section className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+    <section className="panel-elevated mb-4 rounded-2xl border border-slate-200/70 bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-slate-900">Briefing delivery</h2>
         <Link href="/settings" className="text-xs text-sky-600 hover:underline">
@@ -421,12 +420,12 @@ function BriefingDeliveryStatus({ status }: { status: BriefingStatus }) {
         <DeliveryFact label="Push" value={push.label} tone={push.tone} />
       </div>
       {guidance && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] leading-5 text-amber-100/90">
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-700">
           <span>{guidance.message}</span>
           {guidance.action && (
             <Link
               href={guidance.action.href}
-              className="rounded-md border border-amber-300/40 px-2 py-0.5 text-amber-200 transition hover:bg-amber-300/10"
+              className="rounded-md border border-amber-300 px-2 py-0.5 font-medium text-amber-700 transition hover:bg-amber-100"
             >
               {guidance.action.label}
             </Link>
@@ -513,8 +512,8 @@ function DeliveryFact({
   tone: "ok" | "warn" | "muted";
 }) {
   const toneClass = {
-    ok: "border-emerald-500/20 bg-emerald-500/5 text-emerald-200",
-    warn: "border-amber-500/20 bg-amber-500/5 text-amber-200",
+    ok: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    warn: "border-amber-200 bg-amber-50 text-amber-700",
     muted: "border-slate-200 bg-slate-50 text-slate-500",
   }[tone];
   return (
@@ -559,17 +558,6 @@ function pushReasonLabel(reason: string): string {
     vapid_missing: "Push keys need configuration",
   };
   return labels[reason] || reason;
-}
-
-function BriefStat({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-        {label}
-      </p>
-      <p className="mt-1 truncate text-lg font-semibold text-slate-900">{value}</p>
-    </div>
-  );
 }
 
 function extractTopActions(content: string): TopAction[] {

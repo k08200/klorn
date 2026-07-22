@@ -163,25 +163,22 @@ function BillingContent() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 pb-28 pt-6 sm:px-6 md:py-10">
-      <header className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-black/20">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-600">
-          Plan ledger
-        </p>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-          Klorn limits and execution access
+      <header className="mb-8">
+        <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
+          Billing
         </h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+        <p className="mt-2 max-w-3xl text-sm text-slate-500">
           Review decision limits, model usage, execution modes, and the plan that fits your team.
         </p>
       </header>
 
       {success && (
-        <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+        <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
           Subscription is active.
         </div>
       )}
       {canceled && (
-        <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
           Checkout was canceled.
         </div>
       )}
@@ -195,7 +192,7 @@ function BillingContent() {
       )}
 
       {!loading && status && (
-        <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="panel-elevated mb-8 rounded-2xl border border-slate-200/70 bg-white p-5">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
@@ -216,7 +213,7 @@ function BillingContent() {
                 <button
                   type="button"
                   onClick={handleManage}
-                  className="rounded-lg border border-sky-400/40 bg-sky-400/10 px-4 py-2 text-sm font-medium text-sky-100 transition hover:bg-sky-400/15"
+                  className="ease-strong rounded-lg border border-slate-200 bg-white/70 px-4 py-2 text-sm font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
                 >
                   Manage subscription
                 </button>
@@ -237,7 +234,7 @@ function BillingContent() {
               {isFiniteLimit(status.messageLimit) && status.messageLimit > 0 && (
                 <div className="h-2 w-full rounded-full bg-slate-100">
                   <div
-                    className={`h-2 rounded-full transition-all duration-500 ${
+                    className={`h-2 rounded-full transition-[width] duration-500 ${
                       status.messageCount / status.messageLimit > 0.9
                         ? "bg-red-500"
                         : status.messageCount / status.messageLimit > 0.7
@@ -264,7 +261,7 @@ function BillingContent() {
               {isFiniteLimit(status.tokenLimit) && status.tokenLimit > 0 && (
                 <div className="h-2 w-full rounded-full bg-slate-100">
                   <div
-                    className={`h-2 rounded-full transition-all duration-500 ${
+                    className={`h-2 rounded-full transition-[width] duration-500 ${
                       status.tokenUsage / status.tokenLimit > 0.9
                         ? "bg-red-500"
                         : status.tokenUsage / status.tokenLimit > 0.7
@@ -288,16 +285,16 @@ function BillingContent() {
           return (
             <div
               key={plan.key}
-              className={`flex flex-col rounded-2xl border bg-white p-6 ${
+              className={`panel-elevated flex flex-col rounded-2xl border bg-white p-6 ${
                 isCurrent
                   ? "border-sky-300/70"
                   : plan.key === "PRO"
                     ? "border-sky-400/45 ring-1 ring-sky-400/15"
-                    : "border-slate-200"
+                    : "border-slate-200/70"
               }`}
             >
               {plan.key === "PRO" && (
-                <span className="mb-2 self-start rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-semibold uppercase text-stone-950">
+                <span className="mb-2 self-start rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
                   Recommended
                 </span>
               )}
@@ -311,7 +308,7 @@ function BillingContent() {
               <ul className="mb-6 flex-1 space-y-2">
                 {plan.features.map((f) => (
                   <li key={f} className="flex items-start gap-2 text-sm text-slate-500">
-                    <span aria-hidden="true" className="mt-0.5 text-emerald-300">
+                    <span aria-hidden="true" className="mt-0.5 text-emerald-500">
                       ✓
                     </span>
                     {f}
@@ -320,7 +317,7 @@ function BillingContent() {
               </ul>
 
               {isCurrent ? (
-                <div className="rounded-lg border border-sky-400/30 bg-sky-400/10 py-2 text-center text-sm font-medium text-sky-100">
+                <div className="rounded-lg border border-sky-200 bg-sky-50 py-2 text-center text-sm font-medium text-sky-700">
                   Current plan
                 </div>
               ) : plan.key === "FREE" ? (
@@ -332,7 +329,7 @@ function BillingContent() {
               ) : plan.key === "ENTERPRISE" ? (
                 <a
                   href="mailto:sales@klorn.ai"
-                  className="block rounded-lg border border-slate-200 bg-slate-50 py-2.5 text-center text-sm font-medium text-slate-900 transition hover:border-slate-200"
+                  className="ease-strong block rounded-lg border border-slate-200 bg-white/70 py-2.5 text-center text-sm font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
                 >
                   Contact sales
                 </a>
@@ -346,7 +343,7 @@ function BillingContent() {
                 <button
                   type="button"
                   disabled
-                  className="rounded-lg bg-sky-300/60 py-2.5 text-sm font-semibold text-stone-950"
+                  className="rounded-lg border border-slate-200 bg-slate-100 py-2.5 text-sm font-semibold text-slate-400"
                 >
                   Subscription coming soon
                 </button>
@@ -354,7 +351,7 @@ function BillingContent() {
                 <button
                   type="button"
                   onClick={() => handleUpgrade(plan.key as "PRO")}
-                  className="rounded-lg bg-sky-500 py-2.5 text-sm font-semibold text-stone-950 transition hover:bg-sky-200"
+                  className="glow-primary ease-strong rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 py-2.5 text-sm font-semibold text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97]"
                 >
                   Upgrade to {plan.name}
                 </button>

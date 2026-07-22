@@ -23,7 +23,7 @@ function formatBytes(bytes: number): string {
 }
 
 const fieldClass =
-  "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-accent/45 disabled:opacity-60";
+  "w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-900 outline-none transition duration-150 ease-out placeholder:text-slate-400 focus:border-accent/50 focus:bg-white focus:ring-2 focus:ring-accent/15 disabled:opacity-60";
 
 export function ComposeModal({ open, onClose }: ComposeModalProps) {
   const { toast } = useToast();
@@ -199,7 +199,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 px-4 py-6"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/40 px-4 py-6 backdrop-blur-[2px] transition-opacity duration-150 ease-strong starting:opacity-0 motion-reduce:transition-none"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !sending) close();
       }}
@@ -209,10 +209,10 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl shadow-black/40"
+        className="panel-elevated flex max-h-[88vh] w-full max-w-xl origin-center flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-white transition duration-150 ease-strong starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none"
       >
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <h2 id={titleId} className="text-base font-semibold text-slate-900">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <h2 id={titleId} className="text-base font-semibold tracking-[-0.01em] text-slate-900">
             New message
           </h2>
           <button
@@ -220,7 +220,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
             onClick={close}
             disabled={sending}
             aria-label="Close"
-            className="min-h-9 rounded-md px-2 text-slate-400 transition hover:text-slate-700 disabled:opacity-50"
+            className="ease-strong flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition duration-150 hover:bg-slate-100 hover:text-slate-700 active:scale-[0.97] disabled:opacity-50"
           >
             ✕
           </button>
@@ -278,7 +278,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
               {files.map((file, index) => (
                 <li
                   key={`${file.name}-${file.size}`}
-                  className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"
                 >
                   <span className="min-w-0 flex-1 truncate text-slate-900" title={file.name}>
                     📎 {file.name}
@@ -314,13 +314,13 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-4">
+        <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-4">
           <input ref={fileInputRef} type="file" multiple hidden onChange={onFileInputChange} />
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={sending}
-            className="min-h-11 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-50"
+            className="ease-strong inline-flex min-h-11 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
           >
             📎 Attach files
           </button>
@@ -329,7 +329,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
               type="button"
               onClick={close}
               disabled={sending}
-              className="min-h-11 rounded-md px-4 text-sm text-slate-500 transition hover:text-slate-900 disabled:opacity-50"
+              className="ease-strong inline-flex min-h-11 items-center rounded-lg px-4 text-sm text-slate-500 transition duration-150 hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
             >
               Cancel
             </button>
@@ -337,7 +337,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
               type="button"
               onClick={send}
               disabled={!canSend}
-              className="min-h-11 rounded-md bg-accent px-4 text-sm font-medium text-stone-950 transition hover:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="glow-primary ease-strong inline-flex min-h-11 items-center rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-4 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {sending ? "Sending…" : "Send"}
             </button>

@@ -33,7 +33,6 @@ import {
   type AgentMode,
   type AgentModeOption,
   type ApiAgentModeOption,
-  agentModeClasses,
   agentModeDescription,
   agentModeLabel,
   agentModeToast,
@@ -62,6 +61,26 @@ interface UserProfile {
   language: "en" | "ko" | "auto";
   timezone: string;
 }
+
+// v2 light-surface equivalents of agentModeClasses (the helper keeps the
+// legacy dark palette; presentation-only mapping, same mode semantics).
+function agentModeLightClasses(mode: AgentMode, active: boolean): string {
+  if (!active) return "border-slate-200 bg-white/70 text-slate-500 hover:border-slate-300";
+  if (mode === "SHADOW") return "border-slate-300 bg-slate-100 text-slate-700";
+  if (mode === "AUTO") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return "border-amber-200 bg-amber-50 text-amber-700";
+}
+
+// Shared v2 control recipes — one filled primary per screen, quiet secondary,
+// red-tinted destructive. Presentation only.
+const PRIMARY_BTN =
+  "glow-primary ease-strong inline-flex min-h-10 items-center justify-center rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-4 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40";
+const SECONDARY_BTN =
+  "ease-strong inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 bg-white/70 px-4 text-sm font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50";
+const DANGER_BTN =
+  "ease-strong inline-flex min-h-10 items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 text-sm font-medium text-red-700 transition duration-150 hover:bg-red-100 active:scale-[0.97] disabled:opacity-50";
+const SECTION_TITLE = "mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400";
+const PANEL = "panel-elevated rounded-2xl border border-slate-200/70 bg-white";
 
 export default function SettingsPage() {
   const [googleConnected, setGoogleConnected] = useState(false);
@@ -835,26 +854,13 @@ export default function SettingsPage() {
         <GoogleConnectRedirect />
       </Suspense>
       <div className="mx-auto max-w-4xl px-4 pb-28 pt-3 sm:px-6 md:py-10">
-        {/* MOBILE — native large-title header */}
-        <header className="mb-6 md:hidden">
-          <h1 className="text-[28px] font-bold leading-none tracking-tight text-slate-900">
+        {/* Flat v2 header — plain text on the canvas, no boxed hero. */}
+        <header className="mb-8">
+          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
             Settings
           </h1>
-          <p className="mt-1.5 text-sm text-slate-500">
-            Profile, notifications, execution, and data
-          </p>
-        </header>
-
-        {/* DESKTOP — unchanged */}
-        <header className="mb-6 hidden rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm shadow-black/20 md:block">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-600">
-            Control panel
-          </p>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-            Klorn execution boundaries and access
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-            Tune profile, notifications, execution mode, and data access in one compact place.
+          <p className="mt-2 text-sm text-slate-500">
+            Profile, notifications, execution boundaries, and data
           </p>
         </header>
 
@@ -862,8 +868,8 @@ export default function SettingsPage() {
 
         {/* Profile */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-slate-500 mb-3">Operator profile</h2>
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+          <h2 className={SECTION_TITLE}>Operator profile</h2>
+          <div className={`${PANEL} p-5 space-y-4`}>
             <div>
               <label htmlFor="profile-name" className="block text-sm text-slate-500 mb-1">
                 Display name
@@ -919,11 +925,11 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={saveProfile}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                className={
                   profileSaved
-                    ? "bg-emerald-500 text-stone-950"
-                    : "bg-sky-500 hover:bg-sky-200 text-stone-950"
-                }`}
+                    ? "ease-strong inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-500 px-4 text-sm font-medium text-white transition duration-150 active:scale-[0.97]"
+                    : PRIMARY_BTN
+                }
               >
                 {profileSaved ? "Saved" : "Save profile"}
               </button>
@@ -933,8 +939,8 @@ export default function SettingsPage() {
 
         {/* Security */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-slate-500 mb-3">Access security</h2>
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+          <h2 className={SECTION_TITLE}>Access security</h2>
+          <div className={`${PANEL} p-5 space-y-4`}>
             {hasPassword ? (
               <>
                 <div>
@@ -969,7 +975,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={changePassword}
                     disabled={passwordLoading || !currentPassword || !newPassword}
-                    className="bg-sky-500 hover:bg-sky-200 disabled:bg-slate-100 disabled:text-slate-400 text-stone-950 px-4 py-2 rounded-lg text-sm font-medium transition"
+                    className={PRIMARY_BTN}
                   >
                     {passwordLoading ? "Changing..." : "Change password"}
                   </button>
@@ -1003,7 +1009,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={setPasswordForOAuth}
                     disabled={passwordLoading || !newPassword}
-                    className="bg-sky-500 hover:bg-sky-200 disabled:bg-slate-100 disabled:text-slate-400 text-stone-950 px-4 py-2 rounded-lg text-sm font-medium transition"
+                    className={PRIMARY_BTN}
                   >
                     {passwordLoading ? "Saving..." : "Set password"}
                   </button>
@@ -1015,180 +1021,174 @@ export default function SettingsPage() {
 
         {/* Notifications */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-slate-500 mb-3">Signal rhythm</h2>
-          <div className="mb-4 bg-white border border-slate-200 rounded-xl p-4 space-y-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="font-medium">Morning briefing</h3>
-                <p className="text-sm text-slate-500">
-                  Sends one daily decision briefing in your time zone, even when you are away.
-                </p>
-                <p className="mt-1 text-xs text-slate-400">
-                  Time zone: {profile.timezone}. Change it in the profile section above.
-                </p>
-              </div>
-              <Switch
-                checked={dailyBriefingEnabled}
-                onChange={(next) => updateDailyBriefing(next)}
-                label="Morning briefing"
-                hideLabel
-                className="shrink-0"
-              />
-            </div>
-            <div className="flex items-center gap-3 border-t border-slate-200 pt-3">
-              <label htmlFor="briefing-time" className="text-sm font-medium text-slate-900">
-                Delivery time
-              </label>
-              <input
-                id="briefing-time"
-                type="time"
-                value={briefingTime}
-                disabled={!dailyBriefingEnabled}
-                onChange={(e) => updateBriefingTime(e.target.value)}
-                className="min-h-11 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 disabled:opacity-50"
-              />
-              <span className="text-xs text-slate-400">Default is 06:00.</span>
-            </div>
-          </div>
-          <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between">
-            <div>
-              <h3 className="font-medium">Push notifications</h3>
-              <p className="text-sm text-slate-500">
-                {pushStatus === "unsupported"
-                  ? "This browser does not support push notifications."
-                  : pushStatus === "granted"
-                    ? "On - receive reminders, briefings, and important mail alerts."
-                    : pushStatus === "denied"
-                      ? "Blocked by the browser. Allow notifications in browser settings."
-                      : "Receive reminders, briefings, and important mail alerts."}
-              </p>
-            </div>
-            {pushStatus === "unsupported" || pushStatus === "denied" ? (
-              <span className="text-sm text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-                {pushStatus === "denied" ? "Blocked" : "Unsupported"}
-              </span>
-            ) : pushStatus === "granted" ? (
-              <button
-                type="button"
-                onClick={disablePush}
-                className="min-h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-red-400"
-              >
-                Turn off
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={enablePush}
-                className="min-h-11 rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-sky-200"
-              >
-                Turn on
-              </button>
-            )}
-          </div>
-
-          {/* Granular Notification Preferences */}
-          <div className="mt-4 bg-white border border-slate-200 rounded-xl p-4 space-y-3">
-            <fieldset className="space-y-2">
-              <legend className="w-full">
-                <span className="block font-medium text-slate-900">
-                  Which signals are worth interrupting you?
-                </span>
-                <span className="mt-0.5 block text-xs text-slate-500">
-                  Disabled categories stay quiet across push and in-app notifications.
-                </span>
-              </legend>
-              {[
-                {
-                  key: "notifyEmailUrgent" as const,
-                  label: "Urgent mail",
-                  desc: "New mail Klorn considers time-sensitive",
-                },
-                {
-                  key: "notifyMeeting" as const,
-                  label: "Meeting reminders",
-                  desc: "Upcoming meetings and standup reminders",
-                },
-                {
-                  key: "notifyTaskDue" as const,
-                  label: "Due and overdue",
-                  desc: "Task due-date reminders",
-                },
-                {
-                  key: "notifyAgentProposal" as const,
-                  label: "Agent proposals",
-                  desc: "When Klorn needs approval before acting",
-                },
-                {
-                  key: "notifyDailyBriefing" as const,
-                  label: "Daily briefing",
-                  desc: "Your daily decision briefing",
-                },
-              ].map((row) => (
-                <label
-                  key={row.key}
-                  className="flex items-start gap-3 py-2 cursor-pointer hover:bg-slate-100 rounded-lg px-2 transition"
-                >
-                  <input
-                    type="checkbox"
-                    checked={notifPrefs[row.key]}
-                    onChange={(e) => updateNotifPref(row.key, e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-slate-300 bg-slate-50 text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-white"
-                  />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-900">{row.label}</p>
-                    <p className="text-xs text-slate-500">{row.desc}</p>
-                  </div>
-                </label>
-              ))}
-            </fieldset>
-            <div className="pt-3 border-t border-slate-200">
-              <p className="text-sm font-medium text-slate-900 mb-1">Quiet hours</p>
-              <p className="text-xs text-slate-500 mb-3">
-                Pause push notifications during this window. Leave blank for no limit.
-              </p>
-              <div className="flex items-center gap-3">
-                <label htmlFor="quiet-hours-start" className="sr-only">
-                  Quiet hours start time
-                </label>
-                <input
-                  id="quiet-hours-start"
-                  type="time"
-                  aria-label="Quiet hours start"
-                  value={notifPrefs.quietHoursStart || ""}
-                  onChange={(e) => updateNotifPref("quietHoursStart", e.target.value || null)}
-                  className="min-h-11 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-sm text-slate-900 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
-                />
-                <span className="text-slate-500 text-sm">to</span>
-                <label htmlFor="quiet-hours-end" className="sr-only">
-                  Quiet hours end time
-                </label>
-                <input
-                  id="quiet-hours-end"
-                  type="time"
-                  aria-label="Quiet hours end"
-                  value={notifPrefs.quietHoursEnd || ""}
-                  onChange={(e) => updateNotifPref("quietHoursEnd", e.target.value || null)}
-                  className="min-h-11 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-sm text-slate-900 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
-                />
-              </div>
-            </div>
-            <div className="pt-3 border-t border-slate-200">
+          <h2 className={SECTION_TITLE}>Signal rhythm</h2>
+          <div className={`${PANEL} divide-y divide-slate-100`}>
+            <div className="p-5 space-y-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-slate-900">Phone escalation</p>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Calls you once when an urgent notification goes unacknowledged for 5 minutes.
-                    Max 3 calls/day. Quiet hours always win. Requires a verified phone number and
-                    server-side Twilio setup.
+                  <h3 className="font-medium">Morning briefing</h3>
+                  <p className="text-sm text-slate-500">
+                    Sends one daily decision briefing in your time zone, even when you are away.
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Time zone: {profile.timezone}. Change it in the profile section above.
                   </p>
                 </div>
                 <Switch
-                  checked={phoneEscalationEnabled}
-                  onChange={(next) => updatePhoneEscalation(next)}
-                  label="Phone escalation"
+                  checked={dailyBriefingEnabled}
+                  onChange={(next) => updateDailyBriefing(next)}
+                  label="Morning briefing"
                   hideLabel
                   className="shrink-0"
                 />
+              </div>
+              <div className="flex items-center gap-3 border-t border-slate-100 pt-3">
+                <label htmlFor="briefing-time" className="text-sm font-medium text-slate-900">
+                  Delivery time
+                </label>
+                <input
+                  id="briefing-time"
+                  type="time"
+                  value={briefingTime}
+                  disabled={!dailyBriefingEnabled}
+                  onChange={(e) => updateBriefingTime(e.target.value)}
+                  className="min-h-11 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 disabled:opacity-50"
+                />
+                <span className="text-xs text-slate-400">Default is 06:00.</span>
+              </div>
+            </div>
+            <div className="p-5 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="font-medium">Push notifications</h3>
+                <p className="text-sm text-slate-500">
+                  {pushStatus === "unsupported"
+                    ? "This browser does not support push notifications."
+                    : pushStatus === "granted"
+                      ? "On - receive reminders, briefings, and important mail alerts."
+                      : pushStatus === "denied"
+                        ? "Blocked by the browser. Allow notifications in browser settings."
+                        : "Receive reminders, briefings, and important mail alerts."}
+                </p>
+              </div>
+              {pushStatus === "unsupported" || pushStatus === "denied" ? (
+                <span className="text-sm text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                  {pushStatus === "denied" ? "Blocked" : "Unsupported"}
+                </span>
+              ) : pushStatus === "granted" ? (
+                <button type="button" onClick={disablePush} className={SECONDARY_BTN}>
+                  Turn off
+                </button>
+              ) : (
+                <button type="button" onClick={enablePush} className={PRIMARY_BTN}>
+                  Turn on
+                </button>
+              )}
+            </div>
+
+            {/* Granular Notification Preferences */}
+            <div className="p-5 space-y-3">
+              <fieldset className="space-y-2">
+                <legend className="w-full">
+                  <span className="block font-medium text-slate-900">
+                    Which signals are worth interrupting you?
+                  </span>
+                  <span className="mt-0.5 block text-xs text-slate-500">
+                    Disabled categories stay quiet across push and in-app notifications.
+                  </span>
+                </legend>
+                {[
+                  {
+                    key: "notifyEmailUrgent" as const,
+                    label: "Urgent mail",
+                    desc: "New mail Klorn considers time-sensitive",
+                  },
+                  {
+                    key: "notifyMeeting" as const,
+                    label: "Meeting reminders",
+                    desc: "Upcoming meetings and standup reminders",
+                  },
+                  {
+                    key: "notifyTaskDue" as const,
+                    label: "Due and overdue",
+                    desc: "Task due-date reminders",
+                  },
+                  {
+                    key: "notifyAgentProposal" as const,
+                    label: "Agent proposals",
+                    desc: "When Klorn needs approval before acting",
+                  },
+                  {
+                    key: "notifyDailyBriefing" as const,
+                    label: "Daily briefing",
+                    desc: "Your daily decision briefing",
+                  },
+                ].map((row) => (
+                  <label
+                    key={row.key}
+                    className="flex items-start gap-3 py-2 cursor-pointer hover:bg-slate-100 rounded-lg px-2 transition"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={notifPrefs[row.key]}
+                      onChange={(e) => updateNotifPref(row.key, e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded border-slate-300 bg-slate-50 text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-white"
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-slate-900">{row.label}</p>
+                      <p className="text-xs text-slate-500">{row.desc}</p>
+                    </div>
+                  </label>
+                ))}
+              </fieldset>
+              <div className="pt-3 border-t border-slate-100">
+                <p className="text-sm font-medium text-slate-900 mb-1">Quiet hours</p>
+                <p className="text-xs text-slate-500 mb-3">
+                  Pause push notifications during this window. Leave blank for no limit.
+                </p>
+                <div className="flex items-center gap-3">
+                  <label htmlFor="quiet-hours-start" className="sr-only">
+                    Quiet hours start time
+                  </label>
+                  <input
+                    id="quiet-hours-start"
+                    type="time"
+                    aria-label="Quiet hours start"
+                    value={notifPrefs.quietHoursStart || ""}
+                    onChange={(e) => updateNotifPref("quietHoursStart", e.target.value || null)}
+                    className="min-h-11 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-sm text-slate-900 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+                  />
+                  <span className="text-slate-500 text-sm">to</span>
+                  <label htmlFor="quiet-hours-end" className="sr-only">
+                    Quiet hours end time
+                  </label>
+                  <input
+                    id="quiet-hours-end"
+                    type="time"
+                    aria-label="Quiet hours end"
+                    value={notifPrefs.quietHoursEnd || ""}
+                    onChange={(e) => updateNotifPref("quietHoursEnd", e.target.value || null)}
+                    className="min-h-11 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-sm text-slate-900 focus:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/25"
+                  />
+                </div>
+              </div>
+              <div className="pt-3 border-t border-slate-100">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">Phone escalation</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Calls you once when an urgent notification goes unacknowledged for 5 minutes.
+                      Max 3 calls/day. Quiet hours always win. Requires a verified phone number and
+                      server-side Twilio setup.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={phoneEscalationEnabled}
+                    onChange={(next) => updatePhoneEscalation(next)}
+                    label="Phone escalation"
+                    hideLabel
+                    className="shrink-0"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -1196,8 +1196,8 @@ export default function SettingsPage() {
 
         {/* Decision Agent */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-slate-500 mb-3">Decision agent</h2>
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+          <h2 className={SECTION_TITLE}>Decision agent</h2>
+          <div className={`${PANEL} p-5 space-y-4`}>
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-medium">Execution boundary</h3>
@@ -1225,7 +1225,7 @@ export default function SettingsPage() {
                         key={option.mode}
                         type="button"
                         onClick={() => toggleAgentMode(option.mode)}
-                        className={`min-h-16 min-w-0 rounded-lg border px-3 py-2.5 text-sm transition ${agentModeClasses(
+                        className={`ease-strong min-h-16 min-w-0 rounded-lg border px-3 py-2.5 text-sm transition duration-150 active:scale-[0.97] ${agentModeLightClasses(
                           option.mode,
                           agentMode === option.mode,
                         )}`}
@@ -1244,7 +1244,7 @@ export default function SettingsPage() {
                     </p>
                   )}
                   {agentMode === "AUTO" && (
-                    <p className="text-[10px] text-emerald-200/75 mt-2">
+                    <p className="text-[10px] text-emerald-600 mt-2">
                       Low-risk internal work can run automatically. Replies, calendar changes, and
                       destructive work still require explicit approval.
                     </p>
@@ -1265,10 +1265,10 @@ export default function SettingsPage() {
                             key={tool}
                             type="button"
                             onClick={() => toggleAlwaysAllowedTool(tool)}
-                            className={`flex min-h-11 w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition ${
+                            className={`ease-strong flex min-h-11 w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition duration-150 active:scale-[0.97] ${
                               enabled
-                                ? "bg-sky-600/15 border-sky-500/40 text-sky-700"
-                                : "bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300"
+                                ? "bg-sky-50 border-sky-200 text-sky-700"
+                                : "bg-white/70 border-slate-200 text-slate-500 hover:border-slate-300"
                             }`}
                             aria-pressed={enabled}
                           >
@@ -1311,10 +1311,10 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={() => updateAutoMarkRead(!autoMarkReadEnabled)}
-                    className={`flex min-h-11 w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition ${
+                    className={`ease-strong flex min-h-11 w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition duration-150 active:scale-[0.97] ${
                       autoMarkReadEnabled
-                        ? "bg-emerald-500/15 border-emerald-400/40 text-emerald-200"
-                        : "bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300"
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                        : "bg-white/70 border-slate-200 text-slate-500 hover:border-slate-300"
                     }`}
                     aria-pressed={autoMarkReadEnabled}
                   >
@@ -1352,10 +1352,10 @@ export default function SettingsPage() {
                         toast("Could not save setting.", "error");
                       }
                     }}
-                    className={`flex min-h-11 w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition ${
+                    className={`ease-strong flex min-h-11 w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition duration-150 active:scale-[0.97] ${
                       proactiveActionsEnabled
-                        ? "bg-sky-300/15 border-sky-300/40 text-sky-700"
-                        : "bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300"
+                        ? "bg-sky-50 border-sky-200 text-sky-700"
+                        : "bg-white/70 border-slate-200 text-slate-500 hover:border-slate-300"
                     }`}
                     aria-pressed={proactiveActionsEnabled}
                   >
@@ -1378,7 +1378,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={runAgentNow}
                     disabled={runningAgent}
-                    className="min-h-11 rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-sky-200 disabled:opacity-50"
+                    className={PRIMARY_BTN}
                   >
                     {runningAgent ? "Running..." : "Run agent now"}
                   </button>
@@ -1465,12 +1465,12 @@ export default function SettingsPage() {
                           p.confidence >= 0.8 ? "HIGH" : p.confidence >= 0.5 ? "MED" : "LOW";
                         const typeColor =
                           p.type === "rejection"
-                            ? "border-red-400/20 bg-red-400/5 text-red-300"
+                            ? "border-red-200 bg-red-50 text-red-600"
                             : p.type === "temporal"
-                              ? "border-blue-400/20 bg-blue-400/5 text-blue-300"
+                              ? "border-blue-200 bg-blue-50 text-blue-600"
                               : p.type === "tool_preference"
-                                ? "border-emerald-400/20 bg-emerald-400/5 text-emerald-300"
-                                : "border-sky-300/20 bg-sky-300/5 text-sky-600";
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-600"
+                                : "border-sky-200 bg-sky-50 text-sky-600";
                         return (
                           <div
                             key={i}
@@ -1498,20 +1498,19 @@ export default function SettingsPage() {
 
         {/* Integrations */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-slate-500 mb-3">Connections</h2>
+          <h2 className={SECTION_TITLE}>Connections</h2>
           <InAppBrowserNotice />
           <Suspense>
             <OAuthErrorBanner />
           </Suspense>
-          <div className="space-y-3">
+          <div className={`${PANEL} divide-y divide-slate-100`}>
             {loading ? (
-              <ListSkeleton count={3} />
+              <div className="p-4">
+                <ListSkeleton count={3} />
+              </div>
             ) : (
               integrations.map((int) => (
-                <div
-                  key={int.name}
-                  className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between"
-                >
+                <div key={int.name} className="flex items-center justify-between gap-4 p-4">
                   <div>
                     <h3 className="font-medium">{int.name}</h3>
                     <p className="text-sm text-slate-500">{int.description}</p>
@@ -1523,7 +1522,7 @@ export default function SettingsPage() {
                         <button
                           type="button"
                           onClick={disconnectGoogle}
-                          className="inline-flex min-h-11 items-center rounded-lg border border-slate-200 px-3 text-xs text-slate-500 transition hover:border-red-500/50 hover:text-red-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                          className="ease-strong inline-flex min-h-11 items-center rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-medium text-red-700 transition duration-150 hover:bg-red-100 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                         >
                           Disconnect
                         </button>
@@ -1533,7 +1532,7 @@ export default function SettingsPage() {
                           type="button"
                           onClick={testSlack}
                           disabled={slackTesting}
-                          className="inline-flex min-h-11 items-center rounded-lg border border-slate-200 px-3 text-xs text-accent transition hover:border-accent/50 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                          className="ease-strong inline-flex min-h-11 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-accent transition duration-150 hover:bg-white hover:border-accent/50 active:scale-[0.97] disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                         >
                           {slackTesting ? "Sending..." : "Send test"}
                         </button>
@@ -1553,15 +1552,12 @@ export default function SettingsPage() {
                       onClick={() => {
                         void startGoogleConnect();
                       }}
-                      className="bg-sky-500 hover:bg-sky-200 text-stone-950 px-4 py-2 rounded-lg text-sm font-medium transition"
+                      className={PRIMARY_BTN}
                     >
                       Connect
                     </button>
                   ) : int.connectUrl ? (
-                    <a
-                      href={int.connectUrl}
-                      className="bg-sky-500 hover:bg-sky-200 text-stone-950 px-4 py-2 rounded-lg text-sm font-medium transition"
-                    >
+                    <a href={int.connectUrl} className={PRIMARY_BTN}>
                       Connect
                     </a>
                   ) : (
@@ -1575,7 +1571,7 @@ export default function SettingsPage() {
           </div>
 
           {googleConnected && (
-            <div className="mt-4 bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between">
+            <div className={`mt-3 ${PANEL} p-4 flex items-center justify-between gap-4`}>
               <div>
                 <h3 className="font-medium">Real-time mail sync</h3>
                 <p className="text-sm text-slate-500">
@@ -1594,7 +1590,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={disableGmailPush}
                     disabled={gmailPushLoading}
-                    className="bg-slate-50 hover:bg-slate-100 disabled:opacity-50 text-slate-900 px-4 py-2 rounded-lg text-sm font-medium transition border border-slate-200"
+                    className={SECONDARY_BTN}
                   >
                     {gmailPushLoading ? "..." : "Turn off"}
                   </button>
@@ -1603,7 +1599,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={enableGmailPush}
                     disabled={gmailPushLoading}
-                    className="bg-sky-500 hover:bg-sky-200 disabled:opacity-50 text-stone-950 px-4 py-2 rounded-lg text-sm font-medium transition"
+                    className={PRIMARY_BTN}
                   >
                     {gmailPushLoading ? "..." : "Turn on"}
                   </button>
@@ -1642,20 +1638,16 @@ export default function SettingsPage() {
 
         {/* Manual Runs */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-slate-500 mb-3">Manual runs</h2>
+          <h2 className={SECTION_TITLE}>Manual runs</h2>
           <div className="space-y-3">
-            <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between">
+            <div className={`${PANEL} p-4 flex items-center justify-between gap-4`}>
               <div>
                 <h3 className="font-medium">Daily briefing</h3>
                 <p className="text-sm text-slate-500">
                   Build a priority briefing from tasks, calendar, and mail signals.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={generateBriefing}
-                className="bg-slate-50 hover:bg-slate-100 text-slate-900 px-4 py-2 rounded-lg text-sm font-medium transition border border-slate-200"
-              >
+              <button type="button" onClick={generateBriefing} className={SECONDARY_BTN}>
                 Generate briefing
               </button>
             </div>
@@ -1664,20 +1656,16 @@ export default function SettingsPage() {
 
         {/* Data Management */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-slate-500 mb-3">Workspace data</h2>
+          <h2 className={SECTION_TITLE}>Workspace data</h2>
           <div className="space-y-3">
-            <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between">
+            <div className={`${PANEL} p-4 flex items-center justify-between gap-4`}>
               <div>
                 <h3 className="font-medium">Export workspace data</h3>
                 <p className="text-sm text-slate-500">
                   Download decision threads, signals, memory, and execution history as JSON.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={exportData}
-                className="bg-slate-50 hover:bg-slate-100 text-slate-900 px-4 py-2 rounded-lg text-sm font-medium transition border border-slate-200"
-              >
+              <button type="button" onClick={exportData} className={SECONDARY_BTN}>
                 Export
               </button>
             </div>
@@ -1686,43 +1674,40 @@ export default function SettingsPage() {
 
         {/* Workspace Reset */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-red-300 mb-3">Workspace reset</h2>
-          <div className="bg-white border border-red-900/50 rounded-lg p-4 flex items-center justify-between">
-            <div>
-              <h3 className="font-medium">Delete workspace data</h3>
-              <p className="text-sm text-slate-500">
-                Permanently delete decision threads, tasks, memories, contacts, and reminders.
-              </p>
+          <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-red-400">
+            Workspace reset
+          </h2>
+          <div className="panel-elevated rounded-2xl border border-red-200 bg-white divide-y divide-red-100">
+            <div className="flex items-center justify-between gap-4 p-4">
+              <div>
+                <h3 className="font-medium">Delete workspace data</h3>
+                <p className="text-sm text-slate-500">
+                  Permanently delete decision threads, tasks, memories, contacts, and reminders.
+                </p>
+              </div>
+              <button type="button" onClick={clearAllData} className={DANGER_BTN}>
+                Delete workspace
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={clearAllData}
-              className="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition border border-red-900/50"
-            >
-              Delete workspace
-            </button>
-          </div>
-          <div className="flex items-center justify-between bg-white border border-red-900/50 rounded-xl p-4 mt-3">
-            <div>
-              <h3 className="font-medium">Delete account</h3>
-              <p className="text-sm text-slate-500 mt-0.5">
-                Permanently delete your account, Google access, and all data. This cannot be undone.
-              </p>
+            <div className="flex items-center justify-between gap-4 p-4">
+              <div>
+                <h3 className="font-medium">Delete account</h3>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  Permanently delete your account, Google access, and all data. This cannot be
+                  undone.
+                </p>
+              </div>
+              <button type="button" onClick={deleteAccount} className={DANGER_BTN}>
+                Delete account
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={deleteAccount}
-              className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-            >
-              Delete account
-            </button>
           </div>
         </section>
 
         {/* About */}
         <section>
-          <h2 className="text-sm font-semibold text-slate-500 mb-3">About</h2>
-          <div className="bg-white border border-slate-200 rounded-xl p-4">
+          <h2 className={SECTION_TITLE}>About</h2>
+          <div className={`${PANEL} p-4`}>
             <p className="text-sm text-slate-500">
               <span className="text-sky-600 font-medium">Klorn</span> · Decision OS
             </p>

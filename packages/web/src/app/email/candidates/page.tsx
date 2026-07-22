@@ -286,90 +286,90 @@ function CandidateIntakeView() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:py-10">
-      <header className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl shadow-black/10">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-light/80">
-              Candidate Intake
-            </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-              Candidate intake queue
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-              Resumes, profiles, portfolios, and audition materials found in email attachments are
-              grouped by review state.
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-2">
-            <Link
-              href="/email"
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500 transition hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-accent-dim"
-            >
-              Email list
-            </Link>
-            <button
-              type="button"
-              onClick={() => load(status, attention, true)}
-              disabled={refreshing}
-              className="rounded-lg border border-accent/30 px-3 py-1.5 text-xs text-accent-muted transition hover:bg-accent/10 disabled:opacity-50"
-            >
-              {refreshing ? "Refreshing..." : "Rescan candidates"}
-            </button>
-            <button
-              type="button"
-              onClick={exportCsv}
-              disabled={exporting}
-              className="rounded-lg border border-[#a8a29e]/30 px-3 py-1.5 text-xs text-slate-500 transition hover:bg-[#a8a29e]/10 disabled:opacity-50"
-            >
-              {exporting ? "Exporting..." : "Export CSV"}
-            </button>
-          </div>
+      <header className="mb-4 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
+            Candidates
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">
+            Resumes, portfolios, and audition materials from email attachments, grouped by review
+            state
+          </p>
         </div>
-        <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <QueueStat label="Needs info" value={needsCount} />
-          <QueueStat label="Ready" value={readyCount} />
-          <QueueStat label="Duplicates" value={duplicateCount} />
-          <QueueStat label="Source checks" value={manualReviewCount} />
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => load(status, attention, true)}
+            disabled={refreshing}
+            className="glow-primary ease-strong inline-flex h-9 items-center rounded-lg bg-gradient-to-b from-sky-400 to-sky-500 px-3.5 text-sm font-medium text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {refreshing ? "Refreshing…" : "Rescan"}
+          </button>
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={exporting}
+            className="ease-strong inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-50"
+          >
+            {exporting ? "Exporting…" : "Export CSV"}
+          </button>
+          <Link
+            href="/email"
+            className="ease-strong inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
+          >
+            Email list
+          </Link>
         </div>
+      </header>
+
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        <QueueStat label="Needs info" value={needsCount} />
+        <QueueStat label="Ready" value={readyCount} />
+        <QueueStat label="Duplicates" value={duplicateCount} />
+        <QueueStat label="Source checks" value={manualReviewCount} />
         {quality && (
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <>
             <QueueStat label="AI quality" value={`${Math.round(quality.qualityScore * 100)}%`} />
             <QueueStat label="Analyzed" value={quality.analyzedCount} />
             <QueueStat label="Corrected" value={quality.correctedCount} />
             <QueueStat label="Failed" value={quality.failedCount + quality.manualReviewCount} />
-          </div>
+          </>
         )}
-        {quality?.correctionSummary && quality.correctionSummary.total > 0 && (
-          <div className="mt-3 rounded-xl border border-accent/15 bg-accent/5 px-3 py-2 text-[11px] text-accent-dim/80">
-            Recent corrections {quality.correctionSummary.total} · categories{" "}
-            {quality.correctionSummary.categoryCorrectionCount} · fields{" "}
-            {quality.correctionSummary.fieldCorrectionCount} · summaries{" "}
-            {quality.correctionSummary.summaryCorrectionCount} · stability{" "}
-            {Math.round(quality.correctionSummary.categoryStability * 100)}%/
-            {Math.round(quality.correctionSummary.fieldStability * 100)}%
-          </div>
-        )}
-        {quality?.topIssues && quality.topIssues.length > 0 && (
-          <div className="mt-3 rounded-xl border border-rose-400/15 bg-rose-400/5 px-3 py-2">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-rose-200/80">
-              Quality issues
-            </p>
-            <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-              {quality.topIssues.slice(0, 4).map((issue) => (
-                <Link
-                  key={issue.attachmentId}
-                  href={`/email/${issue.emailId}`}
-                  className="truncate rounded border border-rose-400/10 bg-slate-50 px-2 py-1.5 text-[11px] text-rose-100/75 transition hover:border-rose-300/30 hover:text-rose-100"
-                >
-                  {issue.filename} · {issue.reason}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-      </header>
+      </div>
 
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 scrollbar-hide">
+      {quality?.correctionSummary && quality.correctionSummary.total > 0 && (
+        <div className="mb-3 rounded-xl border border-sky-200/70 bg-gradient-to-r from-sky-50 to-white px-3 py-2 text-[11px] text-sky-800">
+          Recent corrections {quality.correctionSummary.total} · categories{" "}
+          {quality.correctionSummary.categoryCorrectionCount} · fields{" "}
+          {quality.correctionSummary.fieldCorrectionCount} · summaries{" "}
+          {quality.correctionSummary.summaryCorrectionCount} · stability{" "}
+          {Math.round(quality.correctionSummary.categoryStability * 100)}%/
+          {Math.round(quality.correctionSummary.fieldStability * 100)}%
+        </div>
+      )}
+      {quality?.topIssues && quality.topIssues.length > 0 && (
+        <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-rose-600">
+            Quality issues
+          </p>
+          <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+            {quality.topIssues.slice(0, 4).map((issue) => (
+              <Link
+                key={issue.attachmentId}
+                href={`/email/${issue.emailId}`}
+                className="ease-strong truncate rounded-lg border border-rose-200/70 bg-white px-2 py-1.5 text-[11px] text-rose-700 transition duration-150 hover:border-rose-300 hover:text-rose-800"
+              >
+                {issue.filename} · {issue.reason}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 scrollbar-hide">
+        <span className="mr-0.5 shrink-0 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+          Status
+        </span>
         {STATUS_FILTERS.map((filter) => {
           const active = filter.status === status;
           return (
@@ -377,19 +377,25 @@ function CandidateIntakeView() {
               key={filter.status}
               type="button"
               onClick={() => setStatus(filter.status)}
-              className={`min-h-[32px] shrink-0 rounded-full px-3 py-1.5 text-xs transition ${
+              className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition duration-150 active:scale-[0.97] ${
                 active
-                  ? "bg-accent-light text-stone-950"
-                  : "border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                  ? "bg-accent/10 text-sky-700 ring-1 ring-inset ring-accent/30"
+                  : "text-slate-500 hover:bg-white/80 hover:text-slate-900 hover:shadow-sm"
               }`}
             >
+              {active && (
+                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+              )}
               {filter.label}
             </button>
           );
         })}
       </div>
 
-      <div className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 pb-2 scrollbar-hide">
+      <div className="-mx-4 mt-1 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 scrollbar-hide">
+        <span className="mr-0.5 shrink-0 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+          Focus
+        </span>
         {ATTENTION_FILTERS.map((filter) => {
           const active = filter.value === attention;
           return (
@@ -397,12 +403,15 @@ function CandidateIntakeView() {
               key={filter.value}
               type="button"
               onClick={() => setAttention(filter.value)}
-              className={`min-h-[32px] shrink-0 rounded-full px-3 py-1.5 text-xs transition ${
+              className={`ease-strong inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition duration-150 active:scale-[0.97] ${
                 active
-                  ? "bg-[#a8a29e] text-stone-950"
-                  : "border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                  ? "bg-accent/10 text-sky-700 ring-1 ring-inset ring-accent/30"
+                  : "text-slate-500 hover:bg-white/80 hover:text-slate-900 hover:shadow-sm"
               }`}
             >
+              {active && (
+                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+              )}
               {filter.label}
             </button>
           );
@@ -410,12 +419,12 @@ function CandidateIntakeView() {
       </div>
 
       {!loading && candidates.length > 0 && (
-        <div className="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="panel-elevated mt-3 flex flex-col gap-2 rounded-xl border border-slate-200/70 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={toggleAllVisible}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim"
+              className="ease-strong rounded-lg border border-slate-200 bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-500 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
             >
               {selectedCount > 0 ? `${selectedCount} selected` : "Select visible"}
             </button>
@@ -423,7 +432,7 @@ function CandidateIntakeView() {
               <button
                 type="button"
                 onClick={() => setSelectedIds(new Set())}
-                className="rounded-lg px-3 py-1.5 text-xs text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+                className="ease-strong rounded-lg px-3 py-1.5 text-xs text-slate-400 transition duration-150 hover:bg-slate-100 hover:text-slate-900 active:scale-[0.97]"
               >
                 Clear
               </button>
@@ -457,15 +466,15 @@ function CandidateIntakeView() {
       {loading && <p className="px-1 py-3 text-sm text-slate-400">Loading...</p>}
 
       {error && (
-        <div className="mt-3 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
       {!loading && !error && candidates.length === 0 && (
-        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-6 text-center">
+        <div className="panel-elevated mt-4 rounded-2xl border border-slate-200/70 bg-white p-6 text-center">
           <p className="text-sm text-slate-500">No candidate materials yet.</p>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-slate-400">
             After Gmail sync and attachment analysis, candidate signals appear here automatically.
           </p>
         </div>
@@ -487,14 +496,13 @@ function CandidateIntakeView() {
   );
 }
 
+// Quiet stat chip — flat on the canvas so the candidate grid stays the hero.
 function QueueStat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-        {label}
-      </p>
-      <p className="mt-1 text-lg font-semibold text-slate-900">{value}</p>
-    </div>
+    <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-slate-200 bg-white/70 px-3 text-[11px] font-medium text-slate-500">
+      {label}
+      <span className="font-semibold tabular-nums text-slate-900">{value}</span>
+    </span>
   );
 }
 
@@ -512,7 +520,7 @@ function BulkStatusButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim disabled:cursor-not-allowed disabled:opacity-40"
+      className="ease-strong rounded-lg border border-slate-200 bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-500 transition duration-150 hover:bg-sky-50 hover:text-sky-700 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
     >
       {label}
     </button>
@@ -529,37 +537,47 @@ function CandidateCard({
   onToggle: () => void;
 }) {
   const title = [candidate.name || "Unknown name", candidate.role].filter(Boolean).join(" · ");
+  const displayName = candidate.name || senderName(candidate.email.from);
   return (
     <article
-      className={`rounded-xl border p-4 transition ${
+      className={`panel-elevated relative overflow-hidden rounded-2xl border bg-white p-4 transition duration-150 ease-out ${
         selected
-          ? "border-accent-light/60 bg-accent/10"
-          : "border-sky-500/20 bg-sky-500/5 hover:border-accent/35 hover:bg-accent/10"
+          ? "border-sky-300 ring-2 ring-accent/20"
+          : "border-slate-200/70 hover:border-sky-200"
       }`}
     >
+      {selected && (
+        <span aria-hidden="true" className="absolute left-0 top-0 h-full w-[3px] bg-sky-400" />
+      )}
       <div className="flex items-start gap-3">
         <input
           type="checkbox"
           checked={selected}
           onChange={onToggle}
-          className="mt-1 h-4 w-4 rounded border-stone-600 bg-white text-accent-light"
+          className="mt-1 h-4 w-4 rounded border-slate-300 bg-white text-accent"
           aria-label={`Select ${title}`}
         />
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded border border-accent/25 bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent-muted">
+        <span
+          aria-hidden="true"
+          className={`avatar-ring mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[13px] font-semibold text-white ${avatarGradient(displayName)}`}
+        >
+          {senderInitials(displayName)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="shrink-0 rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-sky-700 ring-1 ring-inset ring-sky-500/20">
               {candidateStatusLabel(candidate.status)}
             </span>
-            <span className="text-[10px] tabular-nums text-accent-light/75">
+            <span className="text-[10px] tabular-nums text-slate-400">
               {Math.round(candidate.confidence * 100)}%
             </span>
             {candidate.duplicateCount > 1 && (
-              <span className="rounded border border-accent/25 bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent-muted">
-                Possible duplicate {candidate.duplicateCount}
+              <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-amber-700 ring-1 ring-inset ring-amber-500/20">
+                Duplicate {candidate.duplicateCount}
               </span>
             )}
           </div>
-          <h2 className="mt-2 truncate text-sm font-semibold text-slate-900">{title}</h2>
+          <h2 className="mt-1.5 truncate text-sm font-semibold text-slate-900">{title}</h2>
           <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{candidate.summary}</p>
         </div>
         <time className="shrink-0 text-[11px] tabular-nums text-slate-400">
@@ -570,24 +588,24 @@ function CandidateCard({
         {candidate.contact && <span className="truncate">Contact {candidate.contact}</span>}
         <span>{candidate.evidenceFiles.length} files</span>
         {candidate.evidenceFiles.some((file) => file.needsManualReview) && (
-          <span className="text-rose-300/80">
+          <span className="text-rose-600">
             Source check {candidate.evidenceFiles.filter((file) => file.needsManualReview).length}
           </span>
         )}
         {candidate.duplicateCount > 1 && (
-          <span className="text-accent/80">
+          <span className="text-amber-600">
             Duplicate match {candidate.duplicateReasons.map(candidateDuplicateLabel).join(", ")}
           </span>
         )}
         {candidate.missingFields.length > 0 && (
-          <span className="text-accent/80">
+          <span className="text-sky-600">
             Missing {candidate.missingFields.map(candidateMissingLabel).join(", ")}
           </span>
         )}
       </div>
-      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-        <p className="truncate text-xs text-slate-500">{candidate.email.subject || "Untitled"}</p>
-        <p className="mt-1 truncate text-[11px] text-slate-500">
+      <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
+        <p className="truncate text-xs text-slate-600">{candidate.email.subject || "Untitled"}</p>
+        <p className="mt-1 truncate text-[11px] text-slate-400">
           {senderName(candidate.email.from)}
         </p>
       </div>
@@ -598,18 +616,51 @@ function CandidateCard({
       )}
       <Link
         href={`/email/candidates/${candidate.emailId}`}
-        className="mt-3 inline-flex rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim"
+        className="ease-strong mt-3 inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-500 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
       >
         Candidate details
       </Link>
       <Link
         href={`/email/${candidate.emailId}`}
-        className="ml-2 mt-3 inline-flex rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-400 transition hover:border-accent/35 hover:bg-accent/10 hover:text-accent-dim"
+        className="ease-strong ml-2 mt-3 inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-xs font-medium text-slate-400 transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97]"
       >
         Email
       </Link>
     </article>
   );
+}
+
+// Monogram avatar helpers — local copy of the email page pattern (recognition
+// over decoration; deterministic gradient per person).
+const AVATAR_GRADIENTS = [
+  "from-sky-400 to-blue-500",
+  "from-teal-400 to-emerald-500",
+  "from-indigo-500 to-violet-600",
+  "from-amber-400 to-orange-500",
+  "from-rose-400 to-pink-500",
+  "from-cyan-400 to-sky-600",
+  "from-slate-600 to-slate-800",
+];
+
+function avatarGradient(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  }
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
+}
+
+function senderInitials(name: string): string {
+  const words = name
+    .replace(/["'()[\]]/g, "")
+    .split(/[\s·|,]+/)
+    .filter(Boolean);
+  if (words.length === 0) return "@";
+  return words
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
 }
 
 function candidateStatusLabel(status: string): string {

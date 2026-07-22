@@ -61,17 +61,61 @@ interface PrepPack {
 const READINESS_META: Record<Readiness, { label: string; className: string }> = {
   ready: {
     label: "Ready",
-    className: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
+    className: "bg-emerald-500/10 text-emerald-600 ring-1 ring-inset ring-emerald-500/20",
   },
   watch: {
     label: "Watch items",
-    className: "border-amber-400/30 bg-amber-400/10 text-amber-300",
+    className: "bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20",
   },
   needs_review: {
     label: "Needs review",
-    className: "border-red-500/30 bg-red-500/10 text-red-300",
+    className: "bg-rose-500/10 text-rose-600 ring-1 ring-inset ring-rose-500/20",
   },
 };
+
+// ─── Sender display (file-local copies of the email flagship's monogram
+// avatar helpers — kept local on purpose, no cross-page import) ────────────
+
+/** "Jane Doe <jane@x.com>" → "Jane Doe"; bare addresses stay as-is. */
+function senderName(from: string): string {
+  const match = /^"?([^"<]+)"?\s*</.exec(from);
+  return (match ? match[1] : from).trim();
+}
+
+// Latin ("Jamie Rivera" → JR), single-word senders ("Stripe" → S), and CJK
+// names (first grapheme). Falls back to "@" for empty/degenerate strings.
+function senderInitials(name: string): string {
+  const words = name
+    .replace(/["'()[\]]/g, "")
+    .split(/[\s·|,]+/)
+    .filter(Boolean);
+  if (words.length === 0) return "@";
+  const initials = words
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("");
+  return initials.toUpperCase();
+}
+
+// Deterministic gradient per sender so the same sender always gets the same
+// color (recognition over decoration). Simple 31-hash over the name.
+const AVATAR_GRADIENTS = [
+  "from-sky-400 to-blue-500",
+  "from-teal-400 to-emerald-500",
+  "from-indigo-500 to-violet-600",
+  "from-amber-400 to-orange-500",
+  "from-rose-400 to-pink-500",
+  "from-cyan-400 to-sky-600",
+  "from-slate-600 to-slate-800",
+];
+
+function avatarGradient(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  }
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
+}
 
 // `timeZone` is the user's stored IANA zone — never rely on the browser
 // default. 24-hour format keeps AM/PM ambiguity out of the rendered range.
@@ -211,7 +255,7 @@ function CalendarEventDetail({ id }: { id: string }) {
   const readiness = pack ? READINESS_META[pack.readiness] : null;
 
   return (
-    <div className="min-h-dvh bg-white">
+    <div className="min-h-dvh">
       <div className="mx-auto max-w-3xl px-6 py-6">
         <Link
           href="/calendar"
@@ -234,7 +278,7 @@ function CalendarEventDetail({ id }: { id: string }) {
         </Link>
 
         {/* Header */}
-        <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+        <section className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <h1 className="break-words text-xl font-semibold text-slate-900">{event.title}</h1>
@@ -263,7 +307,7 @@ function CalendarEventDetail({ id }: { id: string }) {
                   <button
                     type="button"
                     onClick={() => setConfirmDelete(false)}
-                    className="rounded-md px-2 py-1 text-[11px] text-slate-400 hover:text-slate-500 transition"
+                    className="ease-strong rounded-md px-2 py-1 text-[11px] text-slate-400 transition duration-150 hover:text-slate-600"
                   >
                     Cancel
                   </button>
@@ -271,7 +315,7 @@ function CalendarEventDetail({ id }: { id: string }) {
                     type="button"
                     onClick={handleDelete}
                     disabled={deleting}
-                    className="rounded-md bg-red-600/20 px-2 py-1 text-[11px] text-red-400 hover:bg-red-600/30 transition disabled:opacity-50"
+                    className="ease-strong rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-medium text-red-700 transition duration-150 hover:bg-red-100 active:scale-[0.97] disabled:opacity-50"
                   >
                     {deleting ? "Deleting…" : "Delete"}
                   </button>
@@ -280,7 +324,7 @@ function CalendarEventDetail({ id }: { id: string }) {
                 <button
                   type="button"
                   onClick={() => setConfirmDelete(true)}
-                  className="rounded-md p-1.5 text-slate-300 transition hover:text-red-400"
+                  className="ease-strong rounded-md p-1.5 text-slate-300 transition duration-150 hover:text-red-500"
                   aria-label="Delete event"
                 >
                   <svg
@@ -311,7 +355,7 @@ function CalendarEventDetail({ id }: { id: string }) {
 
         {/* Prep pack */}
         {pack && (
-          <section className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <section className="panel-elevated mt-6 rounded-2xl border border-slate-200/70 bg-white p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-sky-600">
@@ -324,7 +368,7 @@ function CalendarEventDetail({ id }: { id: string }) {
               </div>
               {readiness && (
                 <span
-                  className={`rounded-md border px-2 py-1 text-[11px] font-medium ${readiness.className}`}
+                  className={`rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${readiness.className}`}
                 >
                   {readiness.label}
                 </span>
@@ -332,12 +376,9 @@ function CalendarEventDetail({ id }: { id: string }) {
             </div>
 
             {pack.checklist.length > 0 && (
-              <ul className="space-y-1.5">
+              <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-100">
                 {pack.checklist.map((item) => (
-                  <li
-                    key={item}
-                    className="rounded-md border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-500"
-                  >
+                  <li key={item} className="row-wash px-3 py-2 text-[12px] text-slate-500">
                     {item}
                   </li>
                 ))}
@@ -349,23 +390,44 @@ function CalendarEventDetail({ id }: { id: string }) {
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
                   Related mail
                 </p>
-                <ul className="space-y-1.5">
-                  {pack.relatedEmails.map((m) => (
-                    <li
-                      key={m.id}
-                      className="rounded-md border border-slate-200 bg-white p-3 text-[12px]"
-                    >
-                      <Link href={`/email/${m.id}`} className="block transition hover:bg-slate-100">
-                        <p className="break-words font-medium text-slate-900">{m.subject}</p>
-                        <p className="mt-0.5 truncate text-[11px] text-slate-400">{m.from}</p>
-                        {m.snippet && (
-                          <p className="mt-1 line-clamp-2 text-[11px] text-slate-400">
-                            {m.snippet}
-                          </p>
+                <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-100">
+                  {pack.relatedEmails.map((m) => {
+                    const name = senderName(m.from);
+                    return (
+                      <li key={m.id} className="row-wash relative text-[12px]">
+                        {!m.isRead && (
+                          <span
+                            aria-hidden="true"
+                            className="absolute left-0 top-0 h-full w-[3px] bg-sky-400"
+                          />
                         )}
-                      </Link>
-                    </li>
-                  ))}
+                        <Link
+                          href={`/email/${m.id}`}
+                          className="flex items-start gap-3 p-3 transition duration-150"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={`avatar-ring mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[12px] font-semibold text-white ${avatarGradient(name)}`}
+                          >
+                            {senderInitials(name)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block break-words font-medium text-slate-900">
+                              {m.subject}
+                            </span>
+                            <span className="mt-0.5 block truncate text-[11px] text-slate-400">
+                              {name}
+                            </span>
+                            {m.snippet && (
+                              <span className="mt-1 line-clamp-2 block text-[11px] text-slate-400">
+                                {m.snippet}
+                              </span>
+                            )}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
@@ -375,12 +437,9 @@ function CalendarEventDetail({ id }: { id: string }) {
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
                   Open tasks
                 </p>
-                <ul className="space-y-1.5">
+                <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-100">
                   {pack.openTasks.map((t) => (
-                    <li
-                      key={t.id}
-                      className="rounded-md border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-500"
-                    >
+                    <li key={t.id} className="row-wash px-3 py-2 text-[12px] text-slate-500">
                       {t.title}
                     </li>
                   ))}
@@ -393,13 +452,16 @@ function CalendarEventDetail({ id }: { id: string }) {
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
                   Open commitments
                 </p>
-                <ul className="space-y-1.5">
+                <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-100">
                   {pack.openCommitments.map((c) => (
-                    <li
-                      key={c.id}
-                      className="rounded-md border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-500"
-                    >
-                      <span className="mr-2 text-[10px] uppercase tracking-wider text-slate-500">
+                    <li key={c.id} className="row-wash px-3 py-2 text-[12px] text-slate-500">
+                      <span
+                        className={`mr-2 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${
+                          c.owner === "USER"
+                            ? "bg-sky-500/10 text-sky-600 ring-1 ring-inset ring-sky-500/20"
+                            : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
                         {c.owner === "USER"
                           ? "I owe"
                           : c.owner === "COUNTERPARTY"

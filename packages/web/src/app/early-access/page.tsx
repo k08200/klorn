@@ -158,7 +158,7 @@ export default function EarlyAccessPage() {
           <div className="mt-5 grid grid-cols-2 gap-3">
             <Link
               href="/"
-              className="flex min-h-11 items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-stone-950 transition hover:bg-sky-200"
+              className="flex min-h-11 items-center justify-center rounded-md bg-sky-500 text-sm font-semibold text-white transition hover:bg-sky-600"
             >
               Back home
             </Link>

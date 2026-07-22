@@ -128,13 +128,18 @@ function ChatView() {
 
   return (
     <section className="mx-auto flex h-[calc(100dvh-4rem)] w-full max-w-3xl flex-col px-4 pb-24 pt-4 md:pb-6">
-      <div className="mb-3 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-slate-900">{t("nav.assistant")}</h1>
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
+            {t("nav.assistant")}
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">Ask about your mail, calendar, and briefing</p>
+        </div>
         <button
           type="button"
           onClick={() => setConversationId(null)}
           disabled={!activeId || sendMutation.isPending}
-          className="focus-ring min-h-[44px] rounded-md border border-slate-200 px-3 text-sm text-slate-500 transition hover:border-slate-200 hover:text-slate-900 disabled:opacity-40"
+          className="focus-ring ease-strong inline-flex min-h-[44px] shrink-0 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-sm font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-40 md:min-h-9"
         >
           {t("chat.newChat")}
         </button>
@@ -152,7 +157,7 @@ function ChatView() {
                   <button
                     type="button"
                     onClick={() => send(t(key))}
-                    className="focus-ring min-h-[44px] w-full rounded-lg border border-slate-200 px-3 py-2 text-left text-sm text-slate-500 transition hover:border-slate-200 hover:text-slate-900"
+                    className="focus-ring ease-strong row-wash min-h-[44px] w-full rounded-xl border border-slate-200 bg-white/70 px-4 py-2.5 text-left text-sm text-slate-600 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:text-slate-900 active:scale-[0.99]"
                   >
                     {t(key)}
                   </button>
@@ -166,21 +171,30 @@ function ChatView() {
               <MessageBubble key={m.id} message={m} />
             ))}
             {pendingText && (
-              <div className="flex justify-end">
-                <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-accent/15 px-4 py-2 text-sm text-slate-900">
+              <div className="flex justify-end transition duration-150 ease-strong starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
+                <div className="max-w-[85%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-2.5 text-sm text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]">
                   <p className="whitespace-pre-wrap">{pendingText}</p>
                 </div>
               </div>
             )}
             {sendMutation.isPending && (
-              <p role="status" className="text-sm text-slate-500">
-                {t("chat.thinking")}
-              </p>
+              <div role="status" className="flex items-center gap-2.5">
+                <span
+                  aria-hidden="true"
+                  className="avatar-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-sky-600 text-[11px] font-semibold text-white"
+                >
+                  K
+                </span>
+                <p className="text-sm text-slate-500">{t("chat.thinking")}</p>
+              </div>
             )}
           </>
         )}
         {sendError && (
-          <p role="alert" className="text-sm text-red-400">
+          <p
+            role="alert"
+            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          >
             {sendError}
           </p>
         )}
@@ -194,7 +208,7 @@ function ChatView() {
           send(input);
         }}
       >
-        <div className="flex min-h-[44px] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 focus-within:border-slate-200">
+        <div className="panel-elevated flex min-h-[44px] flex-1 items-center gap-2 rounded-2xl border border-slate-200/70 bg-white px-3.5 py-2 transition duration-150 ease-out focus-within:border-sky-300/70 focus-within:ring-2 focus-within:ring-accent/15">
           <textarea
             ref={inputRef}
             value={input}
@@ -220,7 +234,7 @@ function ChatView() {
         <button
           type="submit"
           disabled={!input.trim() || sendMutation.isPending}
-          className="focus-ring min-h-[44px] rounded-xl bg-accent px-4 text-sm font-semibold text-stone-950 transition hover:bg-accent/90 disabled:opacity-40"
+          className="focus-ring glow-primary ease-strong inline-flex min-h-[44px] items-center rounded-xl bg-gradient-to-b from-sky-400 to-sky-500 px-4 text-sm font-semibold text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {t("chat.send")}
         </button>
@@ -232,8 +246,8 @@ function ChatView() {
 function MessageBubble({ message }: { message: ChatMessage }) {
   if (message.role === "USER") {
     return (
-      <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-accent/15 px-4 py-2 text-sm text-slate-900">
+      <div className="flex justify-end transition duration-150 ease-strong starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
+        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-2.5 text-sm text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]">
           <p className="whitespace-pre-wrap">{message.content}</p>
         </div>
       </div>
@@ -242,8 +256,14 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
   const draft = message.metadata?.eventDraft;
   return (
-    <div className="flex justify-start">
-      <div className="max-w-[85%] rounded-2xl rounded-bl-sm border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-900">
+    <div className="flex justify-start gap-2.5 transition duration-150 ease-strong starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
+      <span
+        aria-hidden="true"
+        className="avatar-ring mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-sky-600 text-[11px] font-semibold text-white"
+      >
+        K
+      </span>
+      <div className="max-w-[85%] rounded-2xl rounded-tl-md border border-slate-200/70 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
         <p className="whitespace-pre-wrap">{message.content}</p>
         {draft && <EventDraftCard draft={draft} />}
       </div>

@@ -168,7 +168,7 @@ export function AttachmentAnalysis({
   return (
     <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[#a8a29e]">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
           Attachment analysis
         </h2>
         <div className="flex items-center gap-2">
@@ -185,7 +185,7 @@ export function AttachmentAnalysis({
             type="button"
             onClick={onReanalyze}
             disabled={reanalyzing}
-            className="rounded border border-[#a8a29e]/25 bg-[#a8a29e]/10 px-2 py-1 text-[11px] text-slate-500 transition hover:bg-[#a8a29e]/15 disabled:opacity-50"
+            className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] text-slate-500 transition hover:bg-slate-200 disabled:opacity-50"
           >
             {reanalyzing ? "Analyzing..." : "Reanalyze"}
           </button>
@@ -210,7 +210,7 @@ export function AttachmentAnalysis({
                 {attachment.filename}
               </span>
               {attachment.category && (
-                <span className="rounded border border-[#a8a29e]/30 bg-[#a8a29e]/10 px-1.5 py-0.5 text-[10px] text-slate-500">
+                <span className="rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">
                   {attachmentCategoryLabel(attachment.category)}
                 </span>
               )}
@@ -226,7 +226,7 @@ export function AttachmentAnalysis({
                 type="button"
                 onClick={() => downloadAttachment(attachment)}
                 disabled={downloading === attachment.id}
-                className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-500 transition hover:border-[#a8a29e]/30 hover:text-slate-500 disabled:opacity-50"
+                className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-500 transition hover:border-slate-300 hover:text-slate-500 disabled:opacity-50"
               >
                 {downloading === attachment.id ? "Downloading" : "Download original"}
               </button>
@@ -255,7 +255,7 @@ export function AttachmentAnalysis({
                     converting ===
                     `${attachment.id}:${conversionTargets[attachment.id] ?? defaultConversionTarget(attachment)}`
                   }
-                  className="rounded bg-[#a8a29e] px-2 py-0.5 text-[10px] font-medium text-stone-950 transition hover:bg-stone-300 disabled:opacity-50"
+                  className="rounded bg-slate-600 px-2 py-0.5 text-[10px] font-medium text-white transition hover:bg-slate-700 disabled:opacity-50"
                 >
                   {converting?.startsWith(`${attachment.id}:`) ? "Converting" : "Convert"}
                 </button>
@@ -276,7 +276,7 @@ export function AttachmentAnalysis({
                     key={`${attachment.id}-${index}`}
                     className="flex gap-1.5 text-xs text-slate-500"
                   >
-                    <span className="text-[#a8a29e]/80">•</span>
+                    <span className="text-slate-300">•</span>
                     <span>{point}</span>
                   </li>
                 ))}
@@ -474,7 +474,7 @@ function AttachmentCorrectionForm({
           <button
             type="button"
             onClick={() => setFields((prev) => [...prev, { key: "", value: "" }])}
-            className="text-[11px] text-[#a8a29e] transition hover:text-slate-500"
+            className="text-[11px] text-slate-400 transition hover:text-slate-500"
           >
             Add field
           </button>
@@ -533,7 +533,7 @@ function AttachmentCorrectionForm({
           type="button"
           onClick={save}
           disabled={saving}
-          className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-stone-950 transition hover:bg-accent-muted disabled:opacity-50"
+          className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:bg-sky-600 disabled:opacity-50"
         >
           {saving ? "Saving..." : "Save changes"}
         </button>

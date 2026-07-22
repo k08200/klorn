@@ -107,20 +107,20 @@ function PlaybookCard({
   const active = Boolean(recommendation.playbook.active);
 
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 transition hover:bg-slate-50">
+    <article className="panel-elevated ease-strong rounded-2xl border border-slate-200/70 bg-white p-4 transition duration-150">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${domain.className}`}
+              className={`rounded-md px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ring-1 ring-inset ${domain.className}`}
             >
               {domain.label}
             </span>
-            <span className="text-[11px] text-slate-400">
+            <span className="text-[11px] tabular-nums text-slate-400">
               {Math.round(recommendation.confidence * 100)}%
             </span>
             {active && (
-              <span className="rounded border border-emerald-400/20 bg-emerald-400/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+              <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-emerald-600 ring-1 ring-inset ring-emerald-500/20">
                 Active
               </span>
             )}
@@ -132,7 +132,7 @@ function PlaybookCard({
             {displayText(recommendation.reasons[0] || recommendation.playbook.bestFor)}
           </p>
         </div>
-        <span className="shrink-0 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-500">
+        <span className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] tabular-nums text-slate-500">
           {recommendation.score}
         </span>
       </div>
@@ -153,10 +153,10 @@ function PlaybookCard({
         type="button"
         onClick={onToggle}
         disabled={updating}
-        className={`mt-3 h-8 rounded-md border px-3 text-xs transition disabled:opacity-50 ${
+        className={`ease-strong mt-3 h-8 rounded-md border px-3 text-xs font-medium transition duration-150 active:scale-[0.97] disabled:opacity-50 ${
           active
-            ? "border-slate-200 text-slate-500 hover:bg-slate-100"
-            : "border-sky-300/25 bg-sky-300/10 text-sky-600 hover:bg-sky-300/15"
+            ? "border-slate-200 bg-white/70 text-slate-500 hover:bg-white hover:text-slate-900"
+            : "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
         }`}
       >
         {updating ? "Saving..." : active ? "Pause" : "Apply"}
@@ -189,7 +189,7 @@ function ContextLink({ context }: { context: PlaybookContextHit }) {
 
 function RiskDot({ risk }: { risk: PlaybookContextHit["risk"] }) {
   const className =
-    risk === "high" ? "bg-red-400" : risk === "medium" ? "bg-amber-300" : "bg-stone-500";
+    risk === "high" ? "bg-rose-500" : risk === "medium" ? "bg-amber-500" : "bg-slate-400";
   return <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${className}`} />;
 }
 
@@ -198,17 +198,17 @@ function domainMeta(domain: KlornPlaybookDomain): { label: string; className: st
     case "investment":
       return {
         label: "Investors",
-        className: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
+        className: "bg-emerald-500/10 text-emerald-600 ring-emerald-500/20",
       };
     case "customer_success":
-      return { label: "Customers", className: "border-sky-400/20 bg-sky-400/10 text-sky-600" };
+      return { label: "Customers", className: "bg-sky-500/10 text-sky-600 ring-sky-500/20" };
     case "launch":
       return {
         label: "Launch",
-        className: "border-fuchsia-400/20 bg-fuchsia-400/10 text-fuchsia-300",
+        className: "bg-fuchsia-500/10 text-fuchsia-600 ring-fuchsia-500/20",
       };
     case "hiring":
-      return { label: "Hiring", className: "border-amber-400/20 bg-amber-400/10 text-amber-300" };
+      return { label: "Hiring", className: "bg-amber-500/10 text-amber-600 ring-amber-500/20" };
   }
 }
 

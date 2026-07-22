@@ -129,7 +129,7 @@ export function ByokKeysSection() {
   };
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5">
+    <section className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-5">
       <header className="mb-3">
         <h2 className="text-base font-semibold text-slate-900">Bring your own LLM key</h2>
         <p className="mt-1 text-xs text-slate-500">
@@ -149,7 +149,7 @@ export function ByokKeysSection() {
         <div className="text-xs text-slate-400">Loading…</div>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-sm font-medium text-slate-900">{OPENROUTER.label}</span>
               {status?.hasOpenRouterApiKey && (
@@ -210,10 +210,10 @@ export function ByokKeysSection() {
           </div>
 
           {status?.hasGeminiApiKey && (
-            <div className="rounded-md border border-amber-900/40 bg-slate-50 p-3">
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-sm font-medium text-slate-900">
-                  Google Gemini <span className="text-[11px] text-amber-500">legacy</span>
+                  Google Gemini <span className="text-[11px] text-amber-600">legacy</span>
                 </span>
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -237,7 +237,7 @@ export function ByokKeysSection() {
           {(() => {
             const options = status?.availableModels ?? [];
             return (
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
                 <Select
                   id="byok-model"
                   label="Assistant model"

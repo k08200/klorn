@@ -28,7 +28,7 @@ function Stat({
   return (
     <div
       className={`rounded-xl border p-4 ${
-        highlight ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"
+        highlight ? "border-sky-300 bg-sky-50" : "border-slate-200/70 bg-white"
       }`}
     >
       <div className="text-2xl font-semibold tracking-tight text-slate-900 tabular-nums">
@@ -51,7 +51,7 @@ export default function RetentionDashboard() {
   }, []);
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4">
+    <section className="panel-elevated rounded-2xl border border-slate-200/70 bg-white p-4">
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="text-sm font-medium text-slate-900">Retention (Phase 1)</h2>
         <span className="text-[11px] text-slate-400">
