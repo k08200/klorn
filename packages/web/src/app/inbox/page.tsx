@@ -482,7 +482,12 @@ function DecisionsBody({
             )}
 
             {!loading && actions.length === 0 && (
-              <HonestEmptyState commitmentCount={commitments.length} />
+              <div className="space-y-5">
+                <HonestEmptyState commitmentCount={commitments.length} />
+                {/* With nothing to approve, today's REAL work — mail waiting on
+                    you — takes the main stage instead of hiding in the rail. */}
+                <ReplyNeededPanel hero />
+              </div>
             )}
 
             {/* Today's real substance below the queue: Top-3 attention + TODAY
@@ -536,7 +541,7 @@ function DecisionsBody({
           </section>
 
           <div className="space-y-4">
-            <ReplyNeededPanel />
+            {(loading || actions.length > 0) && <ReplyNeededPanel />}
             <BriefingCard />
             <QuickLinksPanel />
           </div>
@@ -553,12 +558,16 @@ function Greeting() {
   const hour = new Date().getHours();
   const timeOfDay =
     hour < 5 ? "evening" : hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
-  const first = user?.name?.trim().split(/\s+/)[0];
-  if (!first) return <>Good {timeOfDay}</>;
+  // Display type stays English-only: the serif italic accent lives on the
+  // time-of-day word. A non-Latin name (한글) has no italic serif variant and
+  // read as broken typography (founder 2026-07-22), so names only render when
+  // they are plain Latin.
+  const raw = user?.name?.trim().split(/\s+/)[0] ?? "";
+  const first = /^[A-Za-z][A-Za-z.'-]*$/.test(raw) ? raw : null;
   return (
     <>
-      Good {timeOfDay},{" "}
-      <span className="font-serif italic tracking-tight text-slate-800">{first}</span>
+      Good <span className="font-serif italic tracking-tight">{timeOfDay}</span>
+      {first ? `, ${first}` : ""}
     </>
   );
 }
@@ -946,10 +955,10 @@ function SignalStrip({
   ];
 
   const cellClass =
-    "ease-strong group flex flex-col gap-1.5 px-5 py-4 text-left transition duration-150 hover:bg-slate-50/70 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent";
+    "ease-strong group flex flex-1 flex-col gap-1.5 px-5 py-4 text-left transition duration-150 hover:bg-slate-50/70 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent";
 
   return (
-    <div className="panel-elevated mb-5 grid grid-cols-4 divide-x divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
+    <div className="panel-elevated mb-5 flex divide-x divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
       {cells.map((cell) => {
         const inner = (
           <>
@@ -983,7 +992,7 @@ function SignalStrip({
 
 // ─── Reply Needed panel ────────────────────────────────────────────────────
 
-function ReplyNeededPanel() {
+function ReplyNeededPanel({ hero = false }: { hero?: boolean }) {
   // Shares one cache entry with the "Needs reply" stat tile (same queryKey),
   // so both surfaces read a single fetch. Errors resolve to an empty list —
   // the panel simply stays hidden, matching the previous behavior.
@@ -1022,10 +1031,15 @@ function ReplyNeededPanel() {
           const fromName = formatFrom(email.from);
           return (
             <li key={email.id} className="row-wash">
-              <Link href="/email" className="flex items-start gap-3 px-4 py-3">
+              <Link
+                href="/email"
+                className={`flex items-start gap-3 px-4 ${hero ? "gap-3.5 py-3.5" : "py-3"}`}
+              >
                 <span
                   aria-hidden="true"
-                  className={`avatar-ring mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[11px] font-semibold text-white ${avatarGradient(fromName)}`}
+                  className={`avatar-ring mt-0.5 flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br font-semibold text-white ${
+                    hero ? "h-9 w-9 text-[13px]" : "h-8 w-8 text-[11px]"
+                  } ${avatarGradient(fromName)}`}
                 >
                   {senderInitials(fromName)}
                 </span>
@@ -1034,9 +1048,23 @@ function ReplyNeededPanel() {
                     eight identical "85%" chips read as generated noise, not
                     information. Sender + reason carry the real signal. */}
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-medium text-slate-900">
-                    {email.subject || "(no subject)"}
+                  <span className="flex items-baseline gap-2">
+                    <span
+                      className={`min-w-0 flex-1 truncate font-medium text-slate-900 ${hero ? "text-[13.5px]" : "text-xs"}`}
+                    >
+                      {email.subject || "(no subject)"}
+                    </span>
+                    {hero && (
+                      <time className="shrink-0 text-[11px] tabular-nums text-slate-400">
+                        {formatRelative(email.receivedAt)}
+                      </time>
+                    )}
                   </span>
+                  {hero && email.snippet && (
+                    <span className="mt-0.5 line-clamp-1 block text-xs leading-5 text-slate-400">
+                      {email.snippet}
+                    </span>
+                  )}
                   <span className="mt-0.5 block truncate text-[11px] text-slate-400">
                     {fromName}
                     {email.needsReplyReason && (
