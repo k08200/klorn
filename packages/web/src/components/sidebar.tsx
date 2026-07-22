@@ -1,12 +1,72 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
 import { NavIcon, type NavIconType } from "./nav-icons";
 import NotificationBell from "./notification-bell";
+
+// Live nav counts — server truth, cheap, and shared with the pages' own
+// caches where the keys overlap. Only rendered when > 0 so the rail never
+// shows a fake zero.
+function useNavCounts(enabled: boolean) {
+  const pendingQuery = useQuery({
+    queryKey: ["sidebar", "pending-decisions"],
+    queryFn: async () => {
+      const data = await apiFetch<{ actions: unknown[] }>("/api/chat/pending-actions");
+      return Array.isArray(data.actions) ? data.actions.length : 0;
+    },
+    enabled,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const replyQuery = useQuery({
+    queryKey: ["sidebar", "reply-needed-total"],
+    queryFn: async () => {
+      const data = await apiFetch<{ total?: number }>("/api/email?filter=reply-needed&page=1");
+      return typeof data.total === "number" ? data.total : 0;
+    },
+    enabled,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
+
+  // Real-time WS push announces new mail — refresh both counts on that signal
+  // so the rail stays honest without tightening the poll.
+  const refetchPending = pendingQuery.refetch;
+  const refetchReply = replyQuery.refetch;
+  useEffect(() => {
+    if (!enabled) return;
+    const handler = () => {
+      void refetchPending();
+      void refetchReply();
+    };
+    window.addEventListener("conversations-updated", handler);
+    return () => window.removeEventListener("conversations-updated", handler);
+  }, [enabled, refetchPending, refetchReply]);
+
+  return {
+    "/inbox": pendingQuery.data ?? 0,
+    "/email": replyQuery.data ?? 0,
+  } as Record<string, number>;
+}
+
+function NavCountBadge({ count, active }: { count: number; active: boolean }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+        active ? "bg-sky-500 text-white shadow-sm" : "bg-slate-100 text-slate-500"
+      }`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
 
 // Desktop-only workspace nav. On mobile the bottom tab bar (+ account sheet)
 // is the whole navigation, so this sidebar renders `hidden md:block` and there
@@ -21,9 +81,10 @@ const NAV_ITEMS: { href: string; labelKey: string; icon: NavIconType }[] = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { t } = useT();
-  const { user, logout, loading: authLoading } = useAuth();
+  const { user, logout, loading: authLoading, googleConnected } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const navCounts = useNavCounts(!!user);
 
   // Close user menu on outside click
   useEffect(() => {
@@ -93,6 +154,7 @@ export default function Sidebar() {
                   )}
                   <NavIcon type={item.icon} size={16} />
                   <span className="flex-1">{t(item.labelKey)}</span>
+                  <NavCountBadge count={navCounts[item.href] ?? 0} active={active} />
                 </Link>
               );
             })}
@@ -121,6 +183,24 @@ export default function Sidebar() {
 
         {/* Spacer pushes the account card to the bottom. */}
         <div aria-hidden="true" className="flex-1" />
+
+        {/* Real-time status — only shown when Google is actually connected
+            (the Gmail watch auto-registers on connect), so this is a true
+            statement, not decoration. */}
+        {user && googleConnected === true && (
+          <div className="mx-2 mb-2 rounded-xl border border-sky-100 bg-gradient-to-br from-sky-50 to-white p-3 shadow-[0_1px_2px_rgba(2,60,110,0.05)]">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-sky-700">
+              <span aria-hidden="true" className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              </span>
+              Real-time on
+            </div>
+            <p className="mt-1 text-[11px] leading-4 text-slate-500">
+              New mail lands in seconds — no refresh.
+            </p>
+          </div>
+        )}
 
         {/* User */}
         <div className="border-t border-slate-200/70 p-2" ref={userMenuRef}>

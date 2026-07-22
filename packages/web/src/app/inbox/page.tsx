@@ -1,9 +1,9 @@
 "use client";
 
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import AuthGuard from "../../components/auth-guard";
 import BriefingCard from "../../components/briefing-card";
 import CommandCenterSummary from "../../components/command-center-summary";
@@ -14,7 +14,7 @@ import { useToast } from "../../components/toast";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
-import type { ReplyNeededEmail } from "../../lib/inbox-summary";
+import type { InboxSummary, ReplyNeededEmail } from "../../lib/inbox-summary";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { formatRelative } from "../../lib/text";
@@ -454,6 +454,16 @@ function DecisionsBody({
 
         <OnboardingHint />
 
+        {/* Real-data stat tiles — command-center density between the toolbar
+            and the grid. Counts come from the queries already on this page
+            (plus the shared reply-needed/summary caches); never estimated. */}
+        <StatTilesRow
+          pendingCount={pendingCount}
+          commitmentCount={commitments.length}
+          countsLoading={loading}
+          onPendingClick={() => setFilter("pending")}
+        />
+
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
@@ -569,6 +579,7 @@ function CommitmentsPanel({ commitments }: { commitments: CommitmentItem[] }) {
   if (commitments.length === 0) return null;
   return (
     <section
+      id="open-commitments"
       aria-label="Commitments"
       className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white"
     >
@@ -795,20 +806,201 @@ function OnboardingHint() {
   );
 }
 
+// ─── Stat tiles (desktop density row) ──────────────────────────────────────
+//
+// Four real-data counters between the surface toolbar and the grid. Pending
+// and commitments reuse the page's own query results; reply-needed shares one
+// cache entry with ReplyNeededPanel (same queryKey, so the tile and the rail
+// never double-fetch); today's events is a light 60s-cached read of
+// /api/inbox/summary that leaves CommandCenterSummary untouched.
+
+const replyNeededQueryKey = [...queryKeys.inbox.all, "reply-needed"] as const;
+
+/** Shared fetch behind both the Reply Needed rail and its stat tile. */
+function useReplyNeeded() {
+  return useQuery({
+    queryKey: replyNeededQueryKey,
+    retry: false,
+    queryFn: async () => {
+      const data = await apiFetch<{ emails: ReplyNeededEmail[] }>("/api/inbox/reply-needed");
+      return Array.isArray(data.emails) ? data.emails : [];
+    },
+  });
+}
+
+/** Today's event count from the summary endpoint (tile-only consumer). */
+function useTodayEventCount() {
+  return useQuery({
+    queryKey: queryKeys.inbox.summary(),
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async () => {
+      const summary = await apiFetch<InboxSummary>("/api/inbox/summary");
+      return Array.isArray(summary?.today?.events) ? summary.today.events.length : 0;
+    },
+  });
+}
+
+const STAT_TONE_CLASS = {
+  amber: "bg-amber-500/10 text-amber-600",
+  sky: "bg-sky-500/10 text-sky-600",
+  violet: "bg-violet-500/10 text-violet-600",
+  emerald: "bg-emerald-500/10 text-emerald-600",
+} as const;
+
+type StatTone = keyof typeof STAT_TONE_CLASS;
+
+const STAT_TILE_CLASS =
+  "panel-elevated ease-strong flex w-full items-center gap-3 rounded-2xl border border-slate-200/70 bg-white px-4 py-3 text-left transition duration-150 hover:-translate-y-px";
+
+function StatTile({
+  href,
+  onClick,
+  tone,
+  icon,
+  value,
+  label,
+}: {
+  href?: string;
+  onClick?: () => void;
+  tone: StatTone;
+  icon: ReactNode;
+  /** Real count, or null while the source is still loading (renders "—"). */
+  value: number | null;
+  label: string;
+}) {
+  const inner = (
+    <>
+      <span
+        aria-hidden="true"
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${STAT_TONE_CLASS[tone]}`}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-2xl font-semibold leading-tight tabular-nums text-slate-900">
+          {value ?? "—"}
+        </span>
+        <span className="block truncate text-[11px] text-slate-500">{label}</span>
+      </span>
+    </>
+  );
+  if (href) {
+    return (
+      <Link href={href} className={STAT_TILE_CLASS}>
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} className={STAT_TILE_CLASS}>
+      {inner}
+    </button>
+  );
+}
+
+const STAT_ICON_PROPS = {
+  width: 15,
+  height: 15,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+} as const;
+
+function StatTilesRow({
+  pendingCount,
+  commitmentCount,
+  countsLoading,
+  onPendingClick,
+}: {
+  pendingCount: number;
+  commitmentCount: number;
+  countsLoading: boolean;
+  onPendingClick: () => void;
+}) {
+  const replyQuery = useReplyNeeded();
+  const eventsQuery = useTodayEventCount();
+
+  // Show "—" only while a count is genuinely unknown; once a real number is
+  // on screen a background refresh never blanks it out.
+  const pendingValue = countsLoading && pendingCount === 0 ? null : pendingCount;
+  const commitmentValue = countsLoading && commitmentCount === 0 ? null : commitmentCount;
+
+  const scrollToCommitments = () => {
+    document
+      .getElementById("open-commitments")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  return (
+    <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <StatTile
+        tone="amber"
+        value={pendingValue}
+        label="Pending decisions"
+        onClick={onPendingClick}
+        icon={
+          <svg {...STAT_ICON_PROPS} aria-hidden="true">
+            <path d="M9 11l3 3L22 4" />
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+          </svg>
+        }
+      />
+      <StatTile
+        tone="sky"
+        value={commitmentValue}
+        label="Open commitments"
+        onClick={scrollToCommitments}
+        icon={
+          <svg {...STAT_ICON_PROPS} aria-hidden="true">
+            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+            <line x1="4" y1="22" x2="4" y2="15" />
+          </svg>
+        }
+      />
+      <StatTile
+        tone="violet"
+        value={replyQuery.data?.length ?? null}
+        label="Needs reply"
+        href="/email"
+        icon={
+          <svg {...STAT_ICON_PROPS} aria-hidden="true">
+            <polyline points="9 17 4 12 9 7" />
+            <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+          </svg>
+        }
+      />
+      <StatTile
+        tone="emerald"
+        value={eventsQuery.data ?? null}
+        label="Today's events"
+        href="/calendar"
+        icon={
+          <svg {...STAT_ICON_PROPS} aria-hidden="true">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+        }
+      />
+    </div>
+  );
+}
+
 // ─── Reply Needed panel ────────────────────────────────────────────────────
 
 function ReplyNeededPanel() {
-  const [emails, setEmails] = useState<ReplyNeededEmail[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Shares one cache entry with the "Needs reply" stat tile (same queryKey),
+  // so both surfaces read a single fetch. Errors resolve to an empty list —
+  // the panel simply stays hidden, matching the previous behavior.
+  const { data, isLoading } = useReplyNeeded();
+  const emails = data ?? [];
 
-  useEffect(() => {
-    apiFetch<{ emails: ReplyNeededEmail[] }>("/api/inbox/reply-needed")
-      .then((data) => setEmails(Array.isArray(data.emails) ? data.emails : []))
-      .catch(() => setEmails([]))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div className="h-6 w-24 animate-pulse rounded bg-slate-100" />
