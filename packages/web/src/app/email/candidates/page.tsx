@@ -348,22 +348,7 @@ function CandidateIntakeView() {
         </div>
       )}
       {quality?.topIssues && quality.topIssues.length > 0 && (
-        <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-rose-600">
-            Quality issues
-          </p>
-          <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-            {quality.topIssues.slice(0, 4).map((issue) => (
-              <Link
-                key={issue.attachmentId}
-                href={`/email/${issue.emailId}`}
-                className="ease-strong truncate rounded-lg border border-rose-200/70 bg-white px-2 py-1.5 text-[11px] text-rose-700 transition duration-150 hover:border-rose-300 hover:text-rose-800"
-              >
-                {issue.filename} · {issue.reason}
-              </Link>
-            ))}
-          </div>
-        </div>
+        <QualityIssuesStrip issues={quality.topIssues} />
       )}
 
       <div className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 scrollbar-hide">
@@ -496,12 +481,62 @@ function CandidateIntakeView() {
   );
 }
 
-// Quiet stat chip — flat on the canvas so the candidate grid stays the hero.
-function QueueStat({ label, value }: { label: string; value: number | string }) {
+// Collapsed one-line warning strip — the failure count is one calm sentence,
+// and the noisy per-file list only appears on demand.
+function QualityIssuesStrip({ issues }: { issues: NonNullable<AttachmentQuality["topIssues"]> }) {
+  const [expanded, setExpanded] = useState(false);
+  const count = issues.length;
   return (
-    <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-slate-200 bg-white/70 px-3 text-[11px] font-medium text-slate-500">
+    <div className="mb-3 overflow-hidden rounded-lg border border-amber-200/70 bg-amber-50/60">
+      <div className="flex items-center gap-3 px-3 py-2">
+        <p className="min-w-0 flex-1 truncate text-xs text-amber-800">
+          <span className="font-semibold tabular-nums">{count}</span>{" "}
+          {count === 1 ? "attachment" : "attachments"} failed analysis — add your own key
+        </p>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="ease-strong shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-amber-700 transition duration-150 hover:bg-amber-100 hover:text-amber-900 active:scale-[0.97]"
+        >
+          {expanded ? "Hide" : "Details"}
+        </button>
+      </div>
+      {expanded && (
+        <ul className="divide-y divide-amber-200/50 border-t border-amber-200/50 bg-white/60">
+          {issues.slice(0, 4).map((issue) => (
+            <li key={issue.attachmentId}>
+              <Link
+                href={`/email/${issue.emailId}`}
+                className="ease-strong flex items-baseline gap-2 px-3 py-2 text-[11px] transition duration-150 hover:bg-amber-50"
+              >
+                <span className="truncate font-medium text-slate-700">{issue.filename}</span>
+                <span className="min-w-0 truncate text-slate-400">{issue.reason}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Quiet stat chip — flat on the canvas so the candidate grid stays the hero.
+// Zero-value chips fade back so the eye lands on the counts that matter.
+function QueueStat({ label, value }: { label: string; value: number | string }) {
+  const isZero = value === 0 || value === "0";
+  return (
+    <span
+      className={`inline-flex h-7 items-center gap-1.5 rounded-full border border-slate-200 bg-white/70 px-3 text-[11px] font-medium tabular-nums ${
+        isZero ? "text-slate-400 opacity-60" : "text-slate-500"
+      }`}
+    >
       {label}
-      <span className="font-semibold tabular-nums text-slate-900">{value}</span>
+      <span
+        className={`font-semibold tabular-nums ${isZero ? "text-slate-400" : "text-slate-900"}`}
+      >
+        {value}
+      </span>
     </span>
   );
 }
@@ -584,22 +619,22 @@ function CandidateCard({
           {formatRelative(candidate.email.receivedAt)}
         </time>
       </div>
-      <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-400">
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-400">
         {candidate.contact && <span className="truncate">Contact {candidate.contact}</span>}
-        <span>{candidate.evidenceFiles.length} files</span>
+        <span className="tabular-nums">{candidate.evidenceFiles.length} files</span>
         {candidate.evidenceFiles.some((file) => file.needsManualReview) && (
-          <span className="text-rose-600">
+          <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-amber-700 ring-1 ring-inset ring-amber-500/20">
             Source check {candidate.evidenceFiles.filter((file) => file.needsManualReview).length}
           </span>
         )}
         {candidate.duplicateCount > 1 && (
-          <span className="text-amber-600">
+          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 ring-1 ring-inset ring-slate-200">
             Duplicate match {candidate.duplicateReasons.map(candidateDuplicateLabel).join(", ")}
           </span>
         )}
         {candidate.missingFields.length > 0 && (
-          <span className="text-sky-600">
-            Missing {candidate.missingFields.map(candidateMissingLabel).join(", ")}
+          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-500 ring-1 ring-inset ring-slate-200">
+            {formatMissingBadge(candidate.missingFields)}
           </span>
         )}
       </div>
@@ -675,6 +710,14 @@ function candidateStatusLabel(status: string): string {
     ARCHIVED: "Archived",
   };
   return labels[status] || status;
+}
+
+// "Missing: Name +3" — lead with the first missing field, fold the rest into
+// a count so the badge stays one quiet token instead of a red laundry list.
+function formatMissingBadge(fields: string[]): string {
+  const first = candidateMissingLabel(fields[0]);
+  const rest = fields.length - 1;
+  return rest > 0 ? `Missing: ${first} +${rest}` : `Missing: ${first}`;
 }
 
 function candidateMissingLabel(field: string): string {

@@ -5,35 +5,15 @@
 // drafts render as confirm cards (EventDraftCard); the save stays on the
 // Pro-gated POST /api/calendar.
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import AuthGuard from "../../components/auth-guard";
-import EventDraftCard, { type EventDraft } from "../../components/event-draft-card";
+import EventDraftCard from "../../components/event-draft-card";
 import VoiceButton from "../../components/voice-button";
-import { apiFetch } from "../../lib/api";
 import { useT } from "../../lib/i18n";
-import { queryKeys } from "../../lib/query-keys";
-import { captureClientError } from "../../lib/sentry";
-
-interface ConversationSummary {
-  id: string;
-  title: string | null;
-  updatedAt: string;
-}
-
-interface ChatMessage {
-  id: string;
-  role: "USER" | "ASSISTANT" | "SYSTEM";
-  content: string;
-  metadata: { eventDraft?: EventDraft; turnError?: string } | null;
-  createdAt: string;
-}
-
-interface TurnResponse {
-  reply: string;
-  eventDraft: EventDraft | null;
-  error?: string;
-}
+import {
+  type AssistantChatMessage as ChatMessage,
+  useAssistantChat,
+} from "../../lib/use-assistant-chat";
 
 // Suggestion labels resolve via t() inside the component.
 const SUGGESTION_KEYS = [
@@ -53,72 +33,20 @@ export default function ChatPage() {
 
 function ChatView() {
   const { t } = useT();
-  const queryClient = useQueryClient();
-  const [conversationId, setConversationId] = useState<string | null>(null);
-  const [input, setInput] = useState("");
-  // Optimistic echo of the user's message while the turn is in flight.
-  const [pendingText, setPendingText] = useState<string | null>(null);
-  const [sendError, setSendError] = useState<string | null>(null);
+  const {
+    activeId,
+    input,
+    setInput,
+    send,
+    newChat,
+    pendingText,
+    sendError,
+    sending,
+    messages,
+    messagesLoading,
+  } = useAssistantChat();
   const threadEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  const conversationsQuery = useQuery({
-    queryKey: queryKeys.chat.conversations(),
-    queryFn: () => apiFetch<{ conversations: ConversationSummary[] }>("/api/chat/conversations"),
-  });
-
-  // Latest conversation resumes by default; "New chat" resets to null.
-  const activeId = conversationId ?? conversationsQuery.data?.conversations[0]?.id ?? null;
-
-  const messagesQuery = useQuery({
-    queryKey: queryKeys.chat.messages(activeId ?? "none"),
-    queryFn: () =>
-      apiFetch<{ messages: ChatMessage[] }>(`/api/chat/conversations/${activeId}/messages`),
-    enabled: !!activeId,
-  });
-
-  const sendMutation = useMutation({
-    mutationFn: async (text: string) => {
-      let id = activeId;
-      if (!id) {
-        const created = await apiFetch<ConversationSummary>("/api/chat/conversations", {
-          method: "POST",
-        });
-        id = created.id;
-        setConversationId(id);
-      }
-      const turn = await apiFetch<TurnResponse>(`/api/chat/conversations/${id}/messages`, {
-        method: "POST",
-        body: JSON.stringify({ text }),
-      });
-      return { id, turn };
-    },
-    onSuccess: async ({ id }) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.chat.messages(id) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.chat.conversations() }),
-      ]);
-    },
-    onError: (err, text) => {
-      console.error("[CHAT] send failed:", err);
-      captureClientError(err);
-      // Never eat the user's words: put the failed message back in the box.
-      setInput((prev) => (prev.trim() ? prev : text));
-      setSendError(t("chat.sendFailed"));
-    },
-    onSettled: () => setPendingText(null),
-  });
-
-  const send = (raw: string) => {
-    const text = raw.trim();
-    if (!text || sendMutation.isPending) return;
-    setSendError(null);
-    setPendingText(text);
-    setInput("");
-    sendMutation.mutate(text);
-  };
-
-  const messages = messagesQuery.data?.messages ?? [];
 
   // Keep the newest message in view as the thread grows.
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on thread growth
@@ -137,8 +65,8 @@ function ChatView() {
         </div>
         <button
           type="button"
-          onClick={() => setConversationId(null)}
-          disabled={!activeId || sendMutation.isPending}
+          onClick={newChat}
+          disabled={!activeId || sending}
           className="focus-ring ease-strong inline-flex min-h-[44px] shrink-0 items-center rounded-lg border border-slate-200 bg-white/70 px-3 text-sm font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-white hover:text-slate-900 active:scale-[0.97] disabled:opacity-40 md:min-h-9"
         >
           {t("chat.newChat")}
@@ -146,7 +74,7 @@ function ChatView() {
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto pr-1" aria-live="polite">
-        {activeId && messagesQuery.isLoading ? (
+        {messagesLoading ? (
           <p className="text-sm text-slate-500">{t("chat.loadingConversation")}</p>
         ) : messages.length === 0 && !pendingText ? (
           <div className="mt-8 space-y-3">
@@ -177,7 +105,7 @@ function ChatView() {
                 </div>
               </div>
             )}
-            {sendMutation.isPending && (
+            {sending && (
               <div role="status" className="flex items-center gap-2.5">
                 <span
                   aria-hidden="true"
@@ -195,7 +123,7 @@ function ChatView() {
             role="alert"
             className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
           >
-            {sendError}
+            {t("chat.sendFailed")}
           </p>
         )}
         <div ref={threadEndRef} />
@@ -233,7 +161,7 @@ function ChatView() {
         </div>
         <button
           type="submit"
-          disabled={!input.trim() || sendMutation.isPending}
+          disabled={!input.trim() || sending}
           className="focus-ring glow-primary ease-strong inline-flex min-h-[44px] items-center rounded-xl bg-gradient-to-b from-sky-400 to-sky-500 px-4 text-sm font-semibold text-white transition duration-150 hover:from-sky-400 hover:to-sky-600 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {t("chat.send")}
