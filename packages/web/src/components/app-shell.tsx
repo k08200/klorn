@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useAuth } from "../lib/auth";
 import { useT } from "../lib/i18n";
+import AssistantDock from "./assistant-dock";
 import BottomTabs from "./bottom-tabs";
 import Sidebar from "./sidebar";
 
@@ -104,6 +105,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </main>
         <BottomTabs />
       </div>
+      {/* Global assistant — bottom-right on every app surface. The full /chat
+          page keeps its own composer, so the dock stays out of the way there. */}
+      {!pathname.startsWith("/chat") && <AssistantDock />}
     </div>
   );
 }

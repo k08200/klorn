@@ -19,7 +19,6 @@ const TABS: Tab[] = [
   { href: "/email", labelKey: "nav.mail", icon: "mail" },
   { href: "/calendar", labelKey: "nav.calendar", icon: "calendar" },
   { href: "/briefing", labelKey: "nav.briefing", icon: "bell" },
-  { href: "/chat", labelKey: "nav.assistant", icon: "chat" },
 ];
 
 // Routes the account sheet owns — the account tab reads as "active" on these so
