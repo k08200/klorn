@@ -575,22 +575,40 @@ const COMMITMENT_KIND_LABEL: Record<CommitmentItem["kind"], string> = {
   REVIEW: "Review",
 };
 
+// Only surface extractions the judge is confident about — low-confidence rows
+// were exactly the ones that read as meaningless AI fragments on the home
+// (an automated appointment notice shown as "waiting on", reply-draft phrases
+// shown as promises). Below this bar they stay on the record but off the home.
+const COMMITMENT_MIN_CONFIDENCE = 0.7;
+const COMMITMENT_MAX_VISIBLE = 6;
+
 function CommitmentsPanel({ commitments }: { commitments: CommitmentItem[] }) {
-  if (commitments.length === 0) return null;
+  const visible = commitments
+    .filter((c) => c.confidence >= COMMITMENT_MIN_CONFIDENCE)
+    .slice(0, COMMITMENT_MAX_VISIBLE);
+  if (visible.length === 0) return null;
   return (
     <section
       id="open-commitments"
       aria-label="Commitments"
       className="panel-elevated overflow-hidden rounded-2xl border border-slate-200/70 bg-white"
     >
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-        <h2 className="text-sm font-semibold text-slate-900">Commitments</h2>
-        <span className="rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-sky-700">
-          {commitments.length}
-        </span>
+      <div className="border-b border-slate-100 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-900">Commitments</h2>
+          <span className="rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-sky-700">
+            {visible.length}
+          </span>
+        </div>
+        {/* Plain-language legend — without it the extracted sentences read as
+            unexplained AI output ("뭔지 모르겠고", founder 2026-07-22). */}
+        <p className="mt-1 text-[11px] leading-4 text-slate-400">
+          Promises Klorn spotted in your mail — <span className="text-sky-600">Waiting on</span> =
+          they promised you, <span className="text-amber-600">I owe</span> = you promised them.
+        </p>
       </div>
       <ul className="divide-y divide-slate-100">
-        {commitments.map((c) => {
+        {visible.map((c) => {
           const iOwe = c.owner === "USER";
           return (
             <li key={c.id} className="row-wash relative">
@@ -611,10 +629,17 @@ function CommitmentsPanel({ commitments }: { commitments: CommitmentItem[] }) {
                   {iOwe ? "I owe" : "Waiting on"}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-medium text-slate-800">{c.title}</p>
+                  <p className="line-clamp-1 text-[13px] font-medium text-slate-800">“{c.title}”</p>
+                  {c.description && (
+                    <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-500">
+                      {c.description}
+                    </p>
+                  )}
                   <p className="mt-0.5 text-[11px] text-slate-400">
                     {COMMITMENT_KIND_LABEL[c.kind]}
                     {c.dueText ? ` · due ${c.dueText}` : ""}
+                    <span className="text-slate-300"> · </span>
+                    {formatRelative(c.createdAt)}
                   </p>
                 </div>
               </div>
@@ -833,7 +858,9 @@ function useTodayEventCount() {
   return useQuery({
     queryKey: queryKeys.inbox.summary(),
     staleTime: 60_000,
-    retry: false,
+    // One retry: with retry:false a single slow/failed summary call froze the
+    // tile at "—" for the whole session (observed on the founder's screen).
+    retry: 1,
     queryFn: async () => {
       const summary = await apiFetch<InboxSummary>("/api/inbox/summary");
       return Array.isArray(summary?.today?.events) ? summary.today.events.length : 0;
@@ -1039,23 +1066,24 @@ function ReplyNeededPanel() {
                 >
                   {senderInitials(fromName)}
                 </span>
+                {/* No confidence badge here: the reply-needed signal is mostly
+                    rule-based, so every row carried the same rounded number —
+                    eight identical "85%" chips read as generated noise, not
+                    information. Sender + reason carry the real signal. */}
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-start justify-between gap-2">
-                    <span className="flex-1 truncate text-xs font-medium text-slate-900">
-                      {email.subject || "(no subject)"}
-                    </span>
-                    <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tabular-nums tracking-wide text-amber-600 ring-1 ring-inset ring-amber-500/20">
-                      {Math.round(email.needsReplyConfidence * 100)}%
-                    </span>
+                  <span className="block truncate text-xs font-medium text-slate-900">
+                    {email.subject || "(no subject)"}
                   </span>
                   <span className="mt-0.5 block truncate text-[11px] text-slate-400">
                     {fromName}
+                    {email.needsReplyReason && (
+                      <>
+                        {" "}
+                        <span className="text-slate-300">·</span>{" "}
+                        {humanizeReplyReason(email.needsReplyReason)}
+                      </>
+                    )}
                   </span>
-                  {email.needsReplyReason && (
-                    <span className="mt-1 line-clamp-1 block text-[11px] text-slate-500">
-                      {humanizeReplyReason(email.needsReplyReason)}
-                    </span>
-                  )}
                 </span>
               </Link>
             </li>
