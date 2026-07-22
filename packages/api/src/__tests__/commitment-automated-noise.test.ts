@@ -55,6 +55,53 @@ describe("extractCommitmentCandidates — second-person / policy-notice filter",
   });
 });
 
+describe("extractCommitmentCandidates — round-2 noise (prod ledger audit 2026-07-22)", () => {
+  it("drops announcements about audience cohorts (not promises to the user)", () => {
+    expect(
+      extractCommitmentCandidates("Attendees will be entered for a chance to win a gift card."),
+    ).toHaveLength(0);
+    expect(
+      extractCommitmentCandidates("Students will still be able to register for 500-level courses."),
+    ).toHaveLength(0);
+    expect(
+      extractCommitmentCandidates("Volunteers will play an important role at the event."),
+    ).toHaveLength(0);
+    expect(
+      extractCommitmentCandidates("Patients will use AI to direct their own health."),
+    ).toHaveLength(0);
+    expect(
+      extractCommitmentCandidates("Participants will receive a confirmation email."),
+    ).toHaveLength(0);
+  });
+
+  it("drops expiry notices (OTP codes, offers)", () => {
+    expect(extractCommitmentCandidates("It will expire in 5 minutes.")).toHaveLength(0);
+    expect(extractCommitmentCandidates("The offer will expire on Friday.")).toHaveLength(0);
+  });
+
+  it("drops Korean formulaic closings (politeness, not commitments)", () => {
+    expect(
+      extractCommitmentCandidates("언제나 여러분들의 쾌적한 근무환경을 위해 노력하겠습니다."),
+    ).toHaveLength(0);
+    expect(
+      extractCommitmentCandidates("앞으로도 더 나은 서비스 제공을 위해 최선을 다하겠습니다."),
+    ).toHaveLength(0);
+    expect(
+      extractCommitmentCandidates("어떤 조항이 우려되는지 알려주시면 감사하겠습니다."),
+    ).toHaveLength(0);
+  });
+
+  it("KEEPS real promises through the round-2 filters (no over-blocking)", () => {
+    expect(
+      extractCommitmentCandidates("Sarah will send the contract tomorrow afternoon.").length,
+    ).toBeGreaterThan(0);
+    expect(extractCommitmentCandidates("자료는 내일까지 보내드릴게요.").length).toBeGreaterThan(0);
+    expect(
+      extractCommitmentCandidates("검토 마치는 대로 금요일까지 회신드릴게요.").length,
+    ).toBeGreaterThan(0);
+  });
+});
+
 describe("isNoReplySender — case-insensitive machine addresses", () => {
   it("flags mixed-case no-reply variants (the appointment notice sender form)", () => {
     expect(isNoReplySender("No-Reply@ttp.example.gov")).toBe(true);
