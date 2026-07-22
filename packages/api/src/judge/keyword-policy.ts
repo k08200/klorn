@@ -74,17 +74,23 @@ const MARKETING_RE =
   /newsletter|digest|marketing|promo|\[광고\]|\[알림\]|\(광고\)|unsubscribe|수신거부/;
 /** Broader system-notification signal (from) → still QUEUE, not SILENT. */
 const SYSTEM_NOTIFICATION_RE =
-  /no[-_]?reply@|noreply@|donotreply@|notifications?@|@updates\.|@email\.|@notifications\./;
+  /no[-_]?reply@|noreply@|donotreply@|notifications?@|@updates\.|@email\.|@notifications\./i;
 
-/** No-reply / do-not-reply machine sender (from). */
-const NO_REPLY_RE = /no[-_]?reply@|donotreply@/;
+/** No-reply / do-not-reply machine sender (from). Case-insensitive: real
+ * automated senders write "No-Reply@" / "DoNotReply@" as often as lowercase —
+ * a case-sensitive match let a mixed-case appointment notice through the
+ * commitment-mining gate (founder screen 2026-07-22). */
+const NO_REPLY_RE = /no[-_]?reply@|donotreply@/i;
 
 /**
  * No-reply sender check — a machine address that never carries an interpersonal
- * promise. Deliberately narrower than SYSTEM_NOTIFICATION_RE: notifications@
- * (GitHub/Jira/Linear) and marketing subdomains DO relay human commitments
- * ("Sarah will review the PR Friday"), so callers that gate commitment mining
- * must not treat them as automated.
+ * promise. Narrower than SYSTEM_NOTIFICATION_RE (notifications@, updates
+ * subdomains). Commitment mining used to gate on this narrow check alone so
+ * project-tool relays ("Sarah will review the PR Friday" via GitHub) kept
+ * flowing; the founder reversed that on 2026-07-22 after automated notices
+ * kept landing on the ledger — commitment ingestion now gates the broader
+ * {@link isAutomatedSender}. This narrow check remains for callers that only
+ * care about "is this literally a no-reply address".
  */
 export function isNoReplySender(from: string): boolean {
   return NO_REPLY_RE.test(from);
