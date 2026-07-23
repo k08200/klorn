@@ -289,6 +289,9 @@ struct ExpandedPanel: View {
             }
         }
         .frame(width: TopBarMetrics.expanded.width, height: TopBarMetrics.expanded.height)
+        // Fresh-release discovery: re-check (15-min debounced) every time the
+        // panel opens instead of waiting for the 6h background tick.
+        .onAppear { model.checkForUpdateOnPanelOpen() }
     }
 
     private var header: some View {
