@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "How Klorn handles Gmail, Calendar, and account data during beta.",
 };
 
-const updatedAt = "May 4, 2026";
+const updatedAt = "July 23, 2026";
 
 /** Stable, URL-safe anchor id so the TOC links line up with each section. */
 function slug(title: string): string {
@@ -97,9 +97,10 @@ export default function PrivacyPage() {
         <div className="mt-12 space-y-10">
           <Section title="What Klorn Does">
             <p>
-              Klorn is a work Decision OS that reviews Gmail, Calendar, tasks, reminders,
-              notifications, and related work context so important replies, meetings, and follow-ups
-              are easier to decide on.
+              Klorn is an AI attention firewall for your email. It reviews Gmail and Calendar
+              context, classifies incoming messages into attention tiers (PUSH / QUEUE / SILENT /
+              AUTO), summarizes what matters into daily briefings, and prepares actions — replies,
+              labels, archiving — that touch your mailbox only with your approval.
             </p>
           </Section>
 
@@ -109,6 +110,12 @@ export default function PrivacyPage() {
               <li>Account information such as email address and name.</li>
               <li>
                 Google OAuth tokens needed to connect Gmail and Calendar and run background sync.
+              </li>
+              <li>
+                If you link a secondary Google account, the same categories of data for that
+                account. A calendar-only link grants read-only calendar access; a full inbox link
+                grants Gmail access. Each linked account grants Klorn only the scopes shown on its
+                own Google consent screen.
               </li>
               <li>
                 Gmail metadata and content such as sender, recipients, subject, snippet, body,
@@ -186,14 +193,31 @@ export default function PrivacyPage() {
                 deadlines, and prepare daily briefings.
               </li>
               <li>
-                <code className="text-slate-900">gmail.modify</code> — toggle read/star labels and
-                archive on user-initiated commands; send replies only when the user explicitly
-                approves a draft.
+                <code className="text-slate-900">gmail.modify</code> — toggle read/star labels,
+                archive, and move messages to trash (reversible) on commands you initiate or
+                approve.
+              </li>
+              <li>
+                <code className="text-slate-900">gmail.send</code> — send a reply only after you
+                explicitly approve it. Every send is verified against a receipt of the exact content
+                you approved.
               </li>
               <li>
                 <code className="text-slate-900">calendar.events</code> — read upcoming events to
                 surface meetings, link commitment due dates, and prepare meeting context. Edits
                 require user approval.
+              </li>
+              <li>
+                <code className="text-slate-900">calendar.readonly</code> — check availability
+                across all your calendars to detect scheduling conflicts. When you link a secondary
+                Google account for calendar visibility, this read-only scope is the only calendar
+                access requested for it.
+              </li>
+              <li>
+                <code className="text-slate-900">openid</code>,{" "}
+                <code className="text-slate-900">userinfo.email</code>,{" "}
+                <code className="text-slate-900">userinfo.profile</code> — sign you in and show
+                which Google account is connected.
               </li>
             </ul>
           </Section>
@@ -251,8 +275,14 @@ export default function PrivacyPage() {
           <Section title="Security">
             <p>
               Klorn uses access controls, authentication, and operational safeguards to protect user
-              data. Because Klorn is a beta product, avoid connecting accounts that contain
-              information you are not comfortable using with a beta service.
+              data. Google OAuth tokens are encrypted at rest using AES-256-GCM. All data access is
+              scoped to your account, transport is TLS-encrypted, and your Google user data is
+              stored only in Klorn&apos;s own database — it is not shared with analytics or
+              advertising services.
+            </p>
+            <p>
+              Because Klorn is a beta product, avoid connecting accounts that contain information
+              you are not comfortable using with a beta service.
             </p>
           </Section>
 
