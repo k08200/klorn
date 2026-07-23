@@ -101,6 +101,21 @@ services:
         sync: false
       - key: VAPID_EMAIL
         value: "mailto:hello@klorn.ai"
+      # Token-at-rest encryption + Google OAuth client — ADDITIVE declarations
+      # (sync:false, no values), same prune-protection pattern as the VAPID
+      # block above: these are required for the API to boot/log in but were
+      # previously dashboard-only, so a blueprint sync could PRUNE them.
+      # Declaring them (a) preserves the existing dashboard values on sync
+      # (sync:false is never overwritten by the blueprint) and (b) makes a
+      # fresh Deploy-to-Render self-host prompt for them at create time
+      # instead of crash-looping on a missing TOKEN_ENCRYPTION_KEY
+      # (packages/api/src/crypto-tokens.ts fails closed outside dev/test).
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
       # Real-time Gmail push (else the scheduler falls back to polling).
       - key: GMAIL_PUBSUB_TOPIC
         sync: false

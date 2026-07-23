@@ -3,7 +3,7 @@
 > **An attention firewall for your inbox. Not a suggestion engine.**
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-[![Self-hosted](https://img.shields.io/badge/deploy-self--hosted-success.svg)](#local-development)
+[![Self-hosted](https://img.shields.io/badge/deploy-self--hosted-success.svg)](docs/self-hosting.md)
 [![Version](https://img.shields.io/badge/version-v0.3.0-blue.svg)](CHANGELOG.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
@@ -28,7 +28,7 @@ Klorn does the opposite. Each inbound email gets exactly **one** classification 
 
 ## How it decides — and why a cheap model runs it
 
-The LLM does **not** pick the tier. On every email it scores four features between 0 and 1 — `confidence`, `senderTrust`, `reversibility`, `urgency` — and a deterministic rule in [`tier-policy.ts`](packages/api/src/tier-policy.ts) maps those four numbers to a tier. The model perceives; a rule you can read and unit-test decides. The policy is auditable without the model in the loop.
+The LLM does **not** pick the tier. On every email it scores four features between 0 and 1 — `confidence`, `senderTrust`, `reversibility`, `urgency` — and a deterministic rule in [`tier-policy.ts`](packages/api/src/judge/tier-policy.ts) maps those four numbers to a tier. The model perceives; a rule you can read and unit-test decides. The policy is auditable without the model in the loop.
 
 Two consequences fall out of that split:
 
@@ -144,6 +144,18 @@ KLORN_API_URL=https://klorn-api.onrender.com swift run KlornMac   # or plain `sw
 
 See [`apps/desktop-mac/README.md`](apps/desktop-mac/README.md) for the full guide
 (sign-in, hotkey, packaging a double-clickable `Klorn.app`, tests).
+
+## Self-hosting
+
+Self-host is the primary way to run Klorn today: full feature parity, your own Google OAuth client (no test-user cap, no verification needed — it's your account on your client), your own Postgres, your own LLM keys or a fully local model. Two paths:
+
+- **Deploy to Render** — the repo's [`render.yaml`](render.yaml) blueprint deploys the API; pair it with a free Postgres and a Vercel web deploy.
+
+  [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/k08200/klorn)
+
+- **Docker Compose** — [`docker-compose.selfhost.yml`](docker-compose.selfhost.yml) runs postgres + api + web on one box, migrations included.
+
+The complete guide (OAuth client setup, env reference, real-time Gmail push, updating) is **[docs/self-hosting.md](docs/self-hosting.md)**.
 
 ## Local development
 
@@ -349,6 +361,10 @@ When touching core UX, verify at least:
 ## Contributing
 
 Issues and pull requests are welcome. For anything non-trivial, open an issue first to discuss the approach. Run `pnpm -r test` and `biome check packages/` before submitting.
+
+## Security
+
+Klorn treats email as hostile input — prompt injection is in scope, and the deterministic floor keeps irreversible actions out of the LLM's reach entirely: see [SECURITY.md](SECURITY.md) for the trust model and how to report a vulnerability.
 
 ## License
 

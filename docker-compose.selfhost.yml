@@ -1,0 +1,115 @@
+# Self-host production stack — postgres + api + web on one machine.
+#
+# This file is for RUNNING Klorn as your own service (a VPS, a home server).
+# For local development, use docker-compose.yml + the README "Local
+# development" flow instead — that one binds dev ports and dev credentials.
+#
+# Usage:
+#   cp .env.selfhost.example .env.selfhost      # then fill in the values
+#   docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml up -d --build
+#
+# Migrations run automatically: the api image's entrypoint
+# (packages/api/scripts/start.sh) executes `prisma migrate deploy` with
+# cold-start retry before starting the server, so a fresh `up` creates the
+# schema by itself. The Prisma client is generated at image build time
+# (Dockerfile.api).
+#
+# Full guide (OAuth client setup, env reference, updates): docs/self-hosting.md
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: klorn
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.selfhost}
+      POSTGRES_DB: klorn
+    # Intentionally NOT published to the host — the api reaches it over the
+    # compose network. Uncomment to expose for psql/backups from the host:
+    # ports:
+    #   - "127.0.0.1:5432:5432"
+    volumes:
+      - klorn-selfhost-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U klorn"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      # NODE_ENV=production keeps every insecure dev fallback OFF (see
+      # packages/api/src/env.ts — anything that isn't development/test fails
+      # closed; missing JWT_SECRET / TOKEN_ENCRYPTION_KEY aborts boot).
+      NODE_ENV: production
+      PORT: "3001"
+      DATABASE_URL: postgresql://klorn:${POSTGRES_PASSWORD}@postgres:5432/klorn
+
+      # ── Required secrets ─────────────────────────────────────────────
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env.selfhost}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?set TOKEN_ENCRYPTION_KEY (base64 32 bytes) in .env.selfhost}
+
+      # ── Google OAuth (your own client — see docs/self-hosting.md) ────
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID in .env.selfhost}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?set GOOGLE_CLIENT_SECRET in .env.selfhost}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3001/api/auth/google/callback}
+
+      # ── LLM provider (set at least one; local-first is supported) ────
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_COMPAT_BASE_URL: ${OPENAI_COMPAT_BASE_URL:-}
+      OPENAI_COMPAT_MODEL: ${OPENAI_COMPAT_MODEL:-}
+      OPENAI_COMPAT_API_KEY: ${OPENAI_COMPAT_API_KEY:-}
+
+      # ── URLs the API must know about ─────────────────────────────────
+      # Where the browser reaches the web app (OAuth redirects land here).
+      WEB_URL: ${WEB_URL:-http://localhost:3000}
+      # Browser origins allowed to call the API with credentials. Must
+      # include the web app origin — production fails CLOSED without it.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+
+      # ── Optional: real-time Gmail push (polling fallback otherwise) ──
+      GMAIL_PUBSUB_TOPIC: ${GMAIL_PUBSUB_TOPIC:-}
+      GMAIL_PUSH_OIDC_EMAIL: ${GMAIL_PUSH_OIDC_EMAIL:-}
+      GMAIL_PUSH_TOKEN: ${GMAIL_PUSH_TOKEN:-}
+
+      # ── Optional: notifications ──────────────────────────────────────
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_EMAIL: ${VAPID_EMAIL:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+
+      # ── Optional: operator conveniences ──────────────────────────────
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      JUDGE_MODEL: ${JUDGE_MODEL:-}
+      CHAT_MODEL: ${CHAT_MODEL:-}
+      AGENT_MODEL: ${AGENT_MODEL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        # Inlined into the client bundle at BUILD time — a runtime env entry
+        # cannot change it. Point it at where browsers reach the API (your
+        # public API URL when serving beyond localhost), then rebuild.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  klorn-selfhost-pgdata:
