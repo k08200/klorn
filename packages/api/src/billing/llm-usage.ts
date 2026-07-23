@@ -25,7 +25,7 @@ import { captureError } from "../sentry.js";
 // injecting real API keys into unit tests and flipping them from offline to
 // live-LLM on any machine with a local .env. cents.ts exists for the same
 // reason (usdToCents without the cost-guard → db.js chain).
-import { usdToCents } from "./cents.js";
+import { usdToFractionalCents } from "./cents.js";
 
 export type LlmCallSource = "foreground" | "background";
 
@@ -81,9 +81,14 @@ const PREBILL_NOMINAL_COMPLETION_TOKENS = 500;
  * Pre-bill estimate for `model` — the single source of truth used both by
  * enforceCostGates() in openai.ts (what the gate charges) and by the ledger
  * row (what we record), so the two can never diverge.
+ *
+ * Returns FRACTIONAL cents (0.01¢ precision): a flash classification
+ * pre-bills its true ~0.19¢, not a 1¢ floor that would trip the $10 global
+ * ceiling at ~1,000 classifications/day. Model-aware pricing means a
+ * sonnet-class call pre-bills >= 1¢ on its own.
  */
 export function estimatePrebillCents(model: string): number {
-  return usdToCents(
+  return usdToFractionalCents(
     estimateModelCostUsd(model, PREBILL_NOMINAL_PROMPT_TOKENS, PREBILL_NOMINAL_COMPLETION_TOKENS),
   );
 }
@@ -118,10 +123,12 @@ export async function trueUpCostLedgers(input: {
     const completionTokens = input.usage?.completion_tokens ?? null;
     if (promptTokens == null && completionTokens == null) return;
 
-    const actualCents = usdToCents(
+    const actualCents = usdToFractionalCents(
       estimateModelCostUsd(input.model, promptTokens ?? 0, completionTokens ?? 0),
     );
-    const deltaCents = actualCents - Math.max(0, Math.round(input.prebilledCents));
+    // Both sides are fractional cents now — no 1¢ floor on either, so the
+    // delta settles at 0.01¢ precision.
+    const deltaCents = actualCents - Math.max(0, input.prebilledCents);
     if (deltaCents <= 0) return;
 
     const { recordCostUsage, recordGlobalCostUsage } = await import("./cost-guard.js");

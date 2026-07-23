@@ -3,6 +3,7 @@ import { MULTI_INBOX_SYNC_ENABLED } from "../config.js";
 import { decryptOptional, decryptToken, encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
+import { ensureGmailReconnectNotification } from "../notify/reconnect-notification.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
 
@@ -184,6 +185,26 @@ async function invalidateGoogleToken(
     })
     .catch(() => null);
   console.warn(`[GOOGLE] Token for user ${token.userId} marked for reconnect: ${reason}`);
+
+  // Actively tell the user (in-app bell + web push → /settings). Without this
+  // the 7-day Testing-mode token death is silent for anyone with the app
+  // closed — the old websocket-only broadcast never reached them. Best-effort:
+  // an alert failure must never fail the invalidation itself.
+  await notifyGmailReconnect(token.userId);
+}
+
+/**
+ * Best-effort reconnect alert (see notify/reconnect-notification.ts). Deduped
+ * to once per account per day; failures are logged, never thrown — the mark-*
+ * callers run inside sync/error paths that must not gain a new failure mode.
+ */
+async function notifyGmailReconnect(userId: string, linkedInboxAccountId?: string): Promise<void> {
+  const pending = linkedInboxAccountId
+    ? ensureGmailReconnectNotification(userId, { linkedInboxAccountId })
+    : ensureGmailReconnectNotification(userId);
+  await pending.catch((err) => {
+    console.warn(`[GOOGLE] reconnect notification failed for user ${userId}:`, err);
+  });
 }
 
 export function isGoogleAuthError(err: unknown): boolean {
@@ -781,10 +802,14 @@ export async function markLinkedInboxForReconnect(
   userId: string,
   linkedInboxAccountId: string,
 ): Promise<void> {
-  await prisma.linkedInboxAccount.updateMany({
+  const { count } = await prisma.linkedInboxAccount.updateMany({
     where: { id: linkedInboxAccountId, userId },
     data: { needsReconnect: true },
   });
+  // Same active alert as the primary token path, scoped per linked account.
+  // Only when the {id, userId} scope actually matched — a miss means the
+  // account isn't this user's (or is gone), so there is nothing to reconnect.
+  if (count > 0) await notifyGmailReconnect(userId, linkedInboxAccountId);
 }
 
 /**

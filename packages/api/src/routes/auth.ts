@@ -172,23 +172,38 @@ function isLoginBriefingDue(
   return localMinuteOfDay(new Date(), normalizeTimeZone(timeZone)) >= targetMinutes;
 }
 
-function triggerDueLoginBriefing(userId: string, delayMs = 0): void {
-  const run = async () => {
-    const config = await prisma.automationConfig.upsert({
-      where: { userId },
-      create: { userId },
-      update: {},
+/**
+ * Decide-and-run body of triggerDueLoginBriefing (exported for tests).
+ *
+ * Regular users only get the login catch-up once their configured briefing
+ * time has passed. D0 exception: a user with ZERO briefings ever (no Note row
+ * with a dayKey — the daily-briefing marker) gets their FIRST briefing
+ * immediately instead of waiting for tomorrow's slot. Delivery itself stays
+ * capped at once per local day by the (userId, dayKey) unique inside
+ * createDailyBriefingDelivery, so this exception can never double-send.
+ */
+export async function runLoginBriefingCatchUp(userId: string): Promise<void> {
+  const config = await prisma.automationConfig.upsert({
+    where: { userId },
+    create: { userId },
+    update: {},
+  });
+  const configAny = config as unknown as { timezone?: string | null };
+  if (!config.dailyBriefing) return;
+  if (!isLoginBriefingDue(config.briefingTime, configAny.timezone)) {
+    const everBriefed = await prisma.note.findFirst({
+      where: { userId, dayKey: { not: null } },
+      select: { id: true },
     });
-    const configAny = config as unknown as { timezone?: string | null };
-    if (!config.dailyBriefing || !isLoginBriefingDue(config.briefingTime, configAny.timezone)) {
-      return;
-    }
-    const { createDailyBriefingDelivery } = await import("../pim/briefing.js");
-    await createDailyBriefingDelivery(userId);
-  };
+    if (everBriefed) return; // not day zero — respect the schedule
+  }
+  const { createDailyBriefingDelivery } = await import("../pim/briefing.js");
+  await createDailyBriefingDelivery(userId);
+}
 
+function triggerDueLoginBriefing(userId: string, delayMs = 0): void {
   const timer = setTimeout(() => {
-    run().catch((err) => {
+    runLoginBriefingCatchUp(userId).catch((err) => {
       console.warn(`[AUTH] Login briefing catch-up failed for ${userId}:`, err);
     });
   }, delayMs);
@@ -836,13 +851,30 @@ export function authRoutes(app: FastifyInstance) {
 
   // GET /api/auth/google/callback — OAuth callback (handles both login and integration)
   app.get("/google/callback", async (request, reply) => {
-    const { code, state } = request.query as { code?: string; state?: string };
+    const {
+      code,
+      state,
+      error: oauthError,
+    } = request.query as { code?: string; state?: string; error?: string };
+
+    const webUrl = process.env.WEB_URL || "http://localhost:8001";
+
+    // Consent denied (or any provider-side error): Google redirects back with
+    // ?error=access_denied and no code. A raw JSON 400 here strands the user on
+    // an API URL — send them to the login page instead, where a friendly toast
+    // explains and retry is one click. The error value is attacker-influenced
+    // (it rides the redirect), so it is never reflected or logged verbatim —
+    // every variant maps to the fixed google_denied marker.
+    if (oauthError) {
+      console.warn(
+        `[OAUTH] callback returned provider error (access_denied=${oauthError === "access_denied"})`,
+      );
+      return reply.redirect(`${webUrl}/login?error=google_denied`);
+    }
 
     if (!code) {
       return reply.code(400).send({ error: "Missing authorization code" });
     }
-
-    const webUrl = process.env.WEB_URL || "http://localhost:8001";
 
     // Validate state parameter — must be a valid server-signed JWT
     if (!state) {

@@ -378,13 +378,68 @@ export function isFreeModel(model: string): boolean {
   return model.endsWith(":free") || model === "openrouter/free";
 }
 
-/** Conservative cost estimate for token ledger/admin UI. */
+/** USD per MILLION tokens (input = prompt, output = completion). */
+interface ModelRateUsdPerMTok {
+  input: number;
+  output: number;
+}
+
+/**
+ * Model-family pricing table. Matched case-insensitively: EVERY substring in
+ * `match` must appear in the model id; first matching row wins, so keep
+ * specific rows (flash-lite, gpt+mini) above their generic family row.
+ *
+ * Rates are current public list prices (2026-07), deliberately rounded UP
+ * where a family spans several SKUs — this feeds protective cost caps, so
+ * overestimating slightly is safe and underestimating is the bug (the old
+ * code priced every paid model at flash rates, undercounting sonnet ~20x).
+ */
+const MODEL_RATES: ReadonlyArray<{ match: readonly string[]; rate: ModelRateUsdPerMTok }> = [
+  { match: ["gemini", "flash-lite"], rate: { input: 0.1, output: 0.4 } },
+  { match: ["gemini", "flash"], rate: { input: 0.3, output: 2.5 } },
+  { match: ["gemini", "pro"], rate: { input: 1.25, output: 10 } },
+  { match: ["gemma"], rate: { input: 0.1, output: 0.4 } },
+  { match: ["claude", "haiku"], rate: { input: 1, output: 5 } },
+  { match: ["claude", "sonnet"], rate: { input: 3, output: 15 } },
+  { match: ["claude", "opus"], rate: { input: 15, output: 75 } },
+  { match: ["gpt", "mini"], rate: { input: 0.6, output: 2.4 } },
+  { match: ["gpt", "nano"], rate: { input: 0.1, output: 0.4 } },
+  { match: ["gpt"], rate: { input: 2.5, output: 10 } },
+  { match: ["grok"], rate: { input: 3, output: 15 } },
+  { match: ["llama"], rate: { input: 0.4, output: 0.8 } },
+  { match: ["deepseek"], rate: { input: 0.6, output: 2.2 } },
+  { match: ["mistral"], rate: { input: 2, output: 6 } },
+];
+
+/**
+ * Unknown paid models price at the sonnet tier, NOT at flash rates: a new
+ * frontier model landing in CHAT_MODEL before this table learns it must be
+ * over-billed against the caps, never 20x under-billed (the original bug).
+ */
+const DEFAULT_MODEL_RATE: ModelRateUsdPerMTok = { input: 3, output: 15 };
+
+/** Resolve the per-M-token USD rate for a model id (family-prefix match). */
+export function resolveModelRateUsdPerMTok(model: string): ModelRateUsdPerMTok {
+  const id = model.toLowerCase();
+  const hit = MODEL_RATES.find((entry) => entry.match.every((needle) => id.includes(needle)));
+  return hit?.rate ?? DEFAULT_MODEL_RATE;
+}
+
+const TOKENS_PER_M = 1_000_000;
+
+/**
+ * Model-aware cost estimate feeding the token ledger, admin UI, and the
+ * daily cost caps (via estimatePrebillCents / trueUpCostLedgers).
+ */
 export function estimateModelCostUsd(
   model: string,
   promptTokens: number,
   completionTokens: number,
 ): number {
   if (isFreeModel(model)) return 0;
-  // Legacy rough estimate used by the app before model-specific pricing.
-  return (promptTokens * 0.00015 + completionTokens * 0.0006) / 1000;
+  const rate = resolveModelRateUsdPerMTok(model);
+  const prompt = Number.isFinite(promptTokens) && promptTokens > 0 ? promptTokens : 0;
+  const completion =
+    Number.isFinite(completionTokens) && completionTokens > 0 ? completionTokens : 0;
+  return (prompt * rate.input + completion * rate.output) / TOKENS_PER_M;
 }

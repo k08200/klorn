@@ -4,6 +4,8 @@ import { Resend } from "resend";
 import { runAllScenarios, summarizeEval } from "../agentcore/agent-eval.js";
 import { getRetentionMetrics } from "../analytics.js";
 import { getUserId, requireAdmin } from "../auth.js";
+import { checkGlobalCostGate } from "../billing/cost-guard.js";
+import { getCostTripSnapshot } from "../billing/cost-trip-alert.js";
 import { getUsageSummary } from "../billing/llm-usage.js";
 import { db, prisma } from "../db.js";
 import type { CalibrationSnapshotPayload } from "../judge/calibration-snapshot.js";
@@ -74,8 +76,20 @@ export async function adminRoutes(app: FastifyInstance) {
   // GET /api/admin/flags — one truthful "what is actually on?" snapshot
   // (import-time consts vs dynamic env reads, labeled; presence-only for
   // operational config — never values). Ends the probe-behavior-to-find-out
-  // loop every flag flip used to require.
-  app.get("/flags", async () => collectFeatureFlags());
+  // loop every flag flip used to require. `costGuard` adds today's cost-cap
+  // trip state so a silently-degraded judge (ceiling tripped → keyword
+  // fallback → PUSH dead) is visible here instead of only in logs.
+  app.get("/flags", async () => {
+    const globalGate = checkGlobalCostGate();
+    return {
+      ...collectFeatureFlags(),
+      costGuard: {
+        ...getCostTripSnapshot(),
+        globalUsedCents: globalGate.usedCents,
+        globalCapCents: globalGate.capCents,
+      },
+    };
+  });
 
   // GET /api/admin/analytics — Phase 1 retention dashboard (DAU/WAU, D1/D7/D14
   // retention, queue-actions/day, PUSH open-rate, notification-mute rate).
