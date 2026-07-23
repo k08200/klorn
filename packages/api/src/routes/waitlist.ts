@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { db } from "../db.js";
-import { sendWaitlistAdminAlert } from "../mail/email.js";
+import { sendWaitlistAdminAlert, sendWaitlistConfirmationEmail } from "../mail/email.js";
 
 const waitlistBodySchema = {
   type: "object",
@@ -77,6 +77,14 @@ export function waitlistRoutes(app: FastifyInstance) {
       sendWaitlistAdminAlert({ ...entry, isResubmission: !!existing }).catch((err) => {
         console.error("[WAITLIST] Admin alert failed:", err);
       });
+
+      // Fire-and-forget applicant confirmation — same best-effort pattern.
+      // First submission only: re-submissions already got one, don't spam.
+      if (!existing) {
+        sendWaitlistConfirmationEmail(entry.email, entry.name).catch((err) => {
+          console.error("[WAITLIST] Applicant confirmation failed:", err);
+        });
+      }
 
       return reply.code(200).send({ ok: true, alreadyOnList: !!existing });
     },

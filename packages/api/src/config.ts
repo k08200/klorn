@@ -165,6 +165,20 @@ export const FREE_DAILY_COST_CAP_CENTS = intEnv("FREE_DAILY_COST_CAP_CENTS", 10)
 // Default 1000¢ = $10/day — generous for a small beta, fatal-bill-proof.
 export const GLOBAL_DAILY_COST_CAP_CENTS = intEnv("GLOBAL_DAILY_COST_CAP_CENTS", 1000);
 
+// ── Playground key-free demo ──────────────────────────────────────────
+// Server-paid, no-key demo path on POST /api/playground/classify. OFF by
+// default (doctrine: new features ship dark) — while false the playground
+// behaves exactly as before: bring-your-own-key or 401 key_required.
+export const PLAYGROUND_NO_KEY_DEMO_ENABLED =
+  process.env.PLAYGROUND_NO_KEY_DEMO_ENABLED === "true";
+
+// Global daily budget for the key-free demo, in cents (USD), accumulated
+// in-memory at 0.01¢ granularity. Default 50¢ = $0.50/day ≈ 260 gemini-flash
+// classifications at the measured ~0.19¢ real cost — plenty of top-of-funnel
+// demos, fatal-bill-proof. Exhausted ⇒ 429 demo_budget_exhausted and the
+// landing falls back to the BYOK key UI.
+export const DEMO_DAILY_BUDGET_CENTS = intEnv("DEMO_DAILY_BUDGET_CENTS", 50);
+
 // ── Email classifier ──────────────────────────────────────────────────
 export const EMAIL_CLASSIFY_BATCH_SIZE = intEnv("EMAIL_CLASSIFY_BATCH_SIZE", 15);
 

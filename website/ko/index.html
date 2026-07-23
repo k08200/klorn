@@ -741,12 +741,12 @@
             <textarea id="kf-snippet" class="kf-field" placeholder="미리보기 / 첫 줄 (선택)"></textarea>
             <div class="klassify-presets" id="kf-presets"></div>
             <button type="button" id="kf-run" class="btn btn-sky klassify-run">이 메일 분류하기</button>
-            <p class="klassify-note">실제 4등급 모델을 실행합니다. 키는 이 호출에 한 번만 전송되며 Klorn 서버에 저장되지 않습니다. 키가 없으신가요? <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer noopener">OpenRouter 키 발급받기</a>.</p>
+            <p class="klassify-note">실제 4등급 모델을 실행합니다. 키가 없어도 분류 버튼을 누르면 — 무료 데모가 열려 있는 동안 Klorn 자체 모델로 실행됩니다. 키를 넣으면 이 호출에 한 번만 전송되며 Klorn 서버에 저장되지 않습니다. <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer noopener">OpenRouter 키 발급받기</a>.</p>
           </div>
           <div class="klassify-result">
             <div class="klassify-tier">
               <span class="klassify-tier-badge" id="kf-badge" data-tier="">준비됨</span>
-              <span class="klassify-tier-desc" id="kf-desc">예시를 고르거나 메일을 붙여넣고, 키를 넣은 뒤 분류를 누르면 Klorn 모델이 매기는 정확한 등급(PUSH·QUEUE·SILENT·AUTO)이 표시됩니다.</span>
+              <span class="klassify-tier-desc" id="kf-desc">예시를 고르거나 메일을 붙여넣고 분류를 누르면 Klorn 모델이 매기는 정확한 등급(PUSH·QUEUE·SILENT·AUTO)이 표시됩니다.</span>
             </div>
             <p class="klassify-reason" id="kf-reason"></p>
             <div class="klassify-features" id="kf-features"></div>
@@ -1067,7 +1067,8 @@
         const snippet = kfSnippet.value.trim();
         const model = kfModel.value.trim();
 
-        if (!apiKey) { showError('API 키를 먼저 넣어주세요 — 본인 키로 한 번 분류합니다.'); kfKey.focus(); return; }
+        // No key is fine: the request goes key-free first (server-paid demo);
+        // if the server answers key_required / demo_*, we fall back to the key UI.
         if (!from || !subject) { showError('최소한 보낸사람 주소와 제목을 채워주세요.'); return; }
 
         try {
@@ -1082,9 +1083,9 @@
         kfReason.textContent = '';
         renderFeatures(null);
 
-        const body = { from, subject, provider, apiKey };
+        const body = apiKey ? { from, subject, provider, apiKey } : { from, subject };
         if (snippet) body.snippet = snippet;
-        if (model) body.model = model;
+        if (apiKey && model) body.model = model;
 
         try {
           const res = await fetch(CLASSIFY_URL, {
@@ -1094,6 +1095,21 @@
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
+            if (!apiKey && (res.status === 401 || data.error === 'key_required')) {
+              showError('지금은 키 없는 데모가 닫혀 있어요 — 본인 API 키를 넣으면 바로 분류할 수 있습니다.');
+              kfKey.focus();
+              return;
+            }
+            if (!apiKey && data.error === 'demo_budget_exhausted') {
+              showError('오늘의 무료 데모 예산이 모두 소진됐어요 — 본인 API 키를 넣으면 계속 분류할 수 있습니다.');
+              kfKey.focus();
+              return;
+            }
+            if (!apiKey && res.status === 429) {
+              showError('데모 한도 도달(분당 3회·하루 10회) — 잠시 후 다시 시도하거나 본인 API 키를 넣어주세요.');
+              kfKey.focus();
+              return;
+            }
             let msg = data.error || `Request failed (${res.status}).`;
             if (res.status === 429) msg = '요청 한도 초과(분당 8회). 잠시 후 다시 시도하세요.';
             if (data.detail) msg += ` — ${data.detail}`;

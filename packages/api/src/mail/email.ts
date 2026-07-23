@@ -66,11 +66,11 @@ export async function sendPasswordResetEmail(to: string, resetToken: string): Pr
       subject: "Reset your Klorn password",
       html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-          <h2 style="color: #d8a45d; margin-bottom: 24px;">Klorn</h2>
+          <h2 style="color: #0ea5e9; margin-bottom: 24px;">Klorn</h2>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
             You requested a password reset. Click the button below to set a new password.
           </p>
-          <a href="${resetUrl}" style="display: inline-block; background: #d8a45d; color: #10100d; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
+          <a href="${resetUrl}" style="display: inline-block; background: #0ea5e9; color: #10100d; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
             Reset Password
           </a>
           <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
@@ -132,7 +132,7 @@ export async function sendWaitlistAdminAlert(entry: {
         : `[Klorn] New waitlist signup: ${safeEmail}`,
       html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-          <h2 style="color: #d8a45d; margin: 0 0 16px;">${entry.isResubmission ? "Waitlist re-submission" : "New early-access request"}</h2>
+          <h2 style="color: #0ea5e9; margin: 0 0 16px;">${entry.isResubmission ? "Waitlist re-submission" : "New early-access request"}</h2>
           <p style="color: #374151; font-size: 14px; margin: 0 0 4px;"><strong>Email:</strong> ${safeEmail}</p>
           ${safeName ? `<p style="color: #374151; font-size: 14px; margin: 0 0 4px;"><strong>Name:</strong> ${safeName}</p>` : ""}
           ${safeUseCase ? `<p style="color: #374151; font-size: 14px; margin: 0 0 12px;"><strong>How they use email:</strong> ${safeUseCase}</p>` : ""}
@@ -146,6 +146,67 @@ export async function sendWaitlistAdminAlert(entry: {
     return true;
   } catch (err) {
     console.error("[EMAIL] Failed to send waitlist alert:", err);
+    return false;
+  }
+}
+
+/**
+ * Applicant-facing confirmation sent right after a waitlist signup, so the
+ * request doesn't feel like it vanished into a black hole while a human
+ * reviews it. Best-effort: callers must not block the signup response on it.
+ */
+export async function sendWaitlistConfirmationEmail(
+  to: string,
+  name?: string | null,
+): Promise<boolean> {
+  const safeAddr = maskEmail(to);
+  const safeName = name?.trim()?.replace(/[<>]/g, "");
+  const greeting = safeName ? `Hi ${escapeHtml(safeName)},` : "Hi,";
+
+  if (!resend) {
+    console.log("[EMAIL] No RESEND_API_KEY — waitlist confirmation skipped for", safeAddr);
+    return true;
+  }
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject: "You're on the Klorn early-access list",
+      html: `
+        <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px;">
+          <h2 style="color: #0ea5e9; margin-bottom: 24px;">You're on the list</h2>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            ${greeting}
+          </p>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            Got your request — you're on the Klorn early-access list. Klorn is a
+            <strong style="color: #111827;">4-tier attention firewall</strong> for your email:
+            every signal sorts into push / queue / silent / auto, so only the clear signal interrupts you.
+          </p>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            Invites are approved personally by the founder — a human reads every request, not a queue bot.
+            Most requests are approved within a few hours during daytime hours (KST).
+          </p>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            When you're in, you'll get an email titled
+            <strong style="color: #111827;">"You're approved — sign in to Klorn"</strong>
+            with your sign-in steps. Nothing else to do until then.
+          </p>
+          <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
+            Questions in the meantime? Just reply to this email — I read every one personally.
+          </p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
+          <p style="color: #9ca3af; font-size: 12px;">
+            Klorn — the clear signal worth acting on
+          </p>
+        </div>
+      `,
+    });
+    console.log("[EMAIL] Waitlist confirmation sent to", safeAddr);
+    return true;
+  } catch (err) {
+    console.error("[EMAIL] Failed to send waitlist confirmation:", err);
     return false;
   }
 }
@@ -168,7 +229,7 @@ export async function sendBetaInviteEmail(to: string, name?: string | null): Pro
       subject: "You're approved — sign in to Klorn",
       html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px;">
-          <h2 style="color: #d8a45d; margin-bottom: 24px;">You're approved</h2>
+          <h2 style="color: #0ea5e9; margin-bottom: 24px;">You're approved</h2>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
             ${greeting}
           </p>
@@ -178,7 +239,7 @@ export async function sendBetaInviteEmail(to: string, name?: string | null): Pro
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
             Open the login page below and click <strong>Continue with Google</strong> using this exact address. Klorn will start connecting your Gmail and Calendar into a single decision queue — every send, permanent delete, or external forward stops at an approval step with a verifiable receipt.
           </p>
-          <a href="${loginUrl}" style="display: inline-block; background: #d8a45d; color: #10100d; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
+          <a href="${loginUrl}" style="display: inline-block; background: #0ea5e9; color: #10100d; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
             Open Klorn → Continue with Google
           </a>
           <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
@@ -218,11 +279,11 @@ export async function sendVerificationEmail(to: string, verifyToken: string): Pr
       subject: "Verify your Klorn account",
       html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-          <h2 style="color: #d8a45d; margin-bottom: 24px;">Klorn</h2>
+          <h2 style="color: #0ea5e9; margin-bottom: 24px;">Klorn</h2>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
             Welcome to Klorn! Please verify your email address to get started.
           </p>
-          <a href="${verifyUrl}" style="display: inline-block; background: #d8a45d; color: #10100d; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
+          <a href="${verifyUrl}" style="display: inline-block; background: #0ea5e9; color: #10100d; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
             Verify Email
           </a>
           <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">

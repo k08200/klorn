@@ -16,7 +16,9 @@
  *    persisted, logged, or attached to Sentry. Email content is never logged.
  */
 
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { usdToFractionalCents } from "../billing/cents.js";
+import { DEMO_DAILY_BUDGET_CENTS, PLAYGROUND_NO_KEY_DEMO_ENABLED } from "../config.js";
 import { judgeEmail } from "../judge/poc-judge.js";
 import { TIERS } from "../judge/tiers.js";
 import type { ProviderCredentials } from "../providers/index.js";
@@ -31,7 +33,10 @@ function sanitizeForLog(value: string): string {
 const classifyBodySchema = {
   type: "object",
   additionalProperties: false,
-  required: ["from", "subject", "apiKey"],
+  // apiKey is optional at the schema level: without it the request is routed
+  // to the server-paid demo path, which is OFF by default
+  // (PLAYGROUND_NO_KEY_DEMO_ENABLED) and answers 401 key_required when dark.
+  required: ["from", "subject"],
   properties: {
     from: { type: "string", minLength: 1, maxLength: 320 },
     subject: { type: "string", minLength: 1, maxLength: 998 },
@@ -76,7 +81,7 @@ interface ClassifyBody {
   subject: string;
   snippet?: string;
   provider?: PlaygroundProvider;
-  apiKey: string;
+  apiKey?: string;
   model?: string;
 }
 
@@ -88,6 +93,140 @@ interface FeedbackBody {
   source?: string;
 }
 
+// ── Key-free demo mode (server-paid, triple defense) ─────────────────────
+//
+// A request WITHOUT an apiKey runs one classification on the server's own env
+// keys so a visitor sees value before connecting anything. Server money is at
+// stake on a zero-auth route, so three independent walls guard it:
+//   1. Per-IP rate limit (3/min AND 10/UTC-day, in-memory).
+//   2. Global daily demo budget, pre-charged per call in fractional cents.
+//   3. Model pinned to the server default (JUDGE_MODEL); visitor-supplied
+//      provider/model fields are ignored on this path. Input length caps and
+//      the judge's strict classify-only JSON prompt are shared with BYOK.
+// The whole path sits behind PLAYGROUND_NO_KEY_DEMO_ENABLED (OFF by default):
+// dark ⇒ key-free requests get 401 key_required, BYOK is untouched.
+
+const DEMO_IP_PER_MINUTE = 3;
+const DEMO_IP_PER_DAY = 10;
+// Measured real cost of one gemini-flash classification (~0.19¢). Pre-charged
+// against the daily budget BEFORE the provider call so the budget fails closed.
+const DEMO_CLASSIFY_EST_USD = 0.0019;
+const DEMO_CLASSIFY_COST_FRACTIONAL_CENTS = usdToFractionalCents(DEMO_CLASSIFY_EST_USD);
+// Bound the per-IP map so a botnet of unique IPs can't grow it forever; stale
+// (previous-day) entries are evicted once the map crosses this size.
+const DEMO_IP_MAP_MAX_ENTRIES = 10_000;
+
+interface DemoIpUsage {
+  minuteKey: number;
+  minuteCount: number;
+  dayKey: string;
+  dayCount: number;
+}
+
+const demoIpUsage = new Map<string, DemoIpUsage>();
+let demoBudget = { dayKey: "", usedFractionalCents: 0 };
+
+function utcDayKey(now: Date): string {
+  return now.toISOString().slice(0, 10);
+}
+
+/** Test seam: clears the in-memory demo rate/budget ledgers between tests. */
+export function _resetPlaygroundDemoState(): void {
+  demoIpUsage.clear();
+  demoBudget = { dayKey: "", usedFractionalCents: 0 };
+}
+
+/** Defense 1 — take one per-IP slot; false when the minute or day cap is hit. */
+function takeDemoIpSlot(ip: string): boolean {
+  const now = new Date();
+  const minuteKey = Math.floor(now.getTime() / 60_000);
+  const dayKey = utcDayKey(now);
+  const prev = demoIpUsage.get(ip);
+  const minuteCount = prev && prev.minuteKey === minuteKey ? prev.minuteCount : 0;
+  const dayCount = prev && prev.dayKey === dayKey ? prev.dayCount : 0;
+  if (minuteCount >= DEMO_IP_PER_MINUTE || dayCount >= DEMO_IP_PER_DAY) return false;
+  if (demoIpUsage.size >= DEMO_IP_MAP_MAX_ENTRIES) {
+    for (const [key, usage] of demoIpUsage) {
+      if (usage.dayKey !== dayKey) demoIpUsage.delete(key);
+    }
+  }
+  demoIpUsage.set(ip, {
+    minuteKey,
+    minuteCount: minuteCount + 1,
+    dayKey,
+    dayCount: dayCount + 1,
+  });
+  return true;
+}
+
+/** Defense 2 — pre-charge one call against the global daily demo budget. */
+function takeDemoBudget(): boolean {
+  const dayKey = utcDayKey(new Date());
+  const used = demoBudget.dayKey === dayKey ? demoBudget.usedFractionalCents : 0;
+  if (used + DEMO_CLASSIFY_COST_FRACTIONAL_CENTS > DEMO_DAILY_BUDGET_CENTS) return false;
+  demoBudget = {
+    dayKey,
+    usedFractionalCents: used + DEMO_CLASSIFY_COST_FRACTIONAL_CENTS,
+  };
+  return true;
+}
+
+async function handleNoKeyDemo(request: FastifyRequest, reply: FastifyReply, body: ClassifyBody) {
+  if (!PLAYGROUND_NO_KEY_DEMO_ENABLED) {
+    // Feature dark (the default): behave as the old key-required playground.
+    return reply.code(401).send({ error: "key_required" });
+  }
+  if (!takeDemoIpSlot(request.ip)) {
+    return reply.code(429).send({ error: "demo_rate_limited", byokAvailable: true });
+  }
+  if (!takeDemoBudget()) {
+    return reply.code(429).send({ error: "demo_budget_exhausted", byokAvailable: true });
+  }
+
+  let llmError: string | undefined;
+  try {
+    const result = await judgeEmail(
+      {
+        from: body.from.trim(),
+        subject: body.subject.trim(),
+        snippet: body.snippet?.trim() || null,
+        labels: [],
+      },
+      undefined, // no userId — same as BYOK, the per-user ledger is bypassed
+      undefined,
+      undefined, // no credentials — the server's env chain pays (global cost caps still apply)
+      undefined, // no model override — Defense 3: pinned to the JUDGE_MODEL default
+      (message) => {
+        llmError = scrubKeys(message);
+      },
+    );
+
+    if (result.source === "keyword-fallback") {
+      // Server-side outage/quota problem, not the visitor's fault — never show
+      // a keyword guess as Klorn's verdict; nudge toward BYOK instead.
+      console.warn(`[PLAYGROUND_DEMO] llm did not run: ${sanitizeForLog(llmError ?? "?")}`);
+      return reply.code(502).send({
+        error: "The demo model didn't run — try again in a minute, or use your own API key.",
+        byokAvailable: true,
+      });
+    }
+
+    return reply.code(200).send({
+      tier: result.tier,
+      reason: result.reason,
+      features: result.features,
+      source: result.source,
+    });
+  } catch (err) {
+    const message = sanitizeForLog(scrubKeys(err instanceof Error ? err.message : String(err)));
+    console.warn(`[PLAYGROUND_DEMO] classify failed: ${message}`);
+    return reply.code(502).send({
+      error: "Demo classification failed — try again shortly, or use your own API key.",
+      byokAvailable: true,
+    });
+  }
+}
+
 export function playgroundRoutes(app: FastifyInstance) {
   app.post(
     "/classify",
@@ -97,6 +236,10 @@ export function playgroundRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const body = request.body as ClassifyBody;
+      if (!body.apiKey) {
+        // Key-free → server-paid demo path (or 401 key_required while dark).
+        return handleNoKeyDemo(request, reply, body);
+      }
       const provider: PlaygroundProvider =
         body.provider === "gemini" || body.provider === "openai" ? body.provider : "openrouter";
 
