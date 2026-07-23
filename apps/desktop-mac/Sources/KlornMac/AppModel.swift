@@ -75,10 +75,21 @@ final class AppModel {
     /// the firewall fetch via firewallPath). The "all" fallback in
     /// refreshInboxes can't loop: with "all" selected firewallPath's guard
     /// fails and the stale-id branch never fires again.
+    /// Last-known queue per inbox selection — stale-while-revalidate so an
+    /// inbox switch paints instantly from the previous fetch instead of
+    /// blanking for a full server round trip (founder: "숫자 갈림 좀 느림",
+    /// 2026-07-23). Session-scoped by design: repainted by every loadQueue.
+    private var queueCache: [String: FirewallResponse] = [:]
+
     func selectInbox(_ value: String) {
         guard value != selectedInbox else { return }
         selectedInbox = value
         UserDefaults.standard.set(value, forKey: Self.selectedInboxKey)
+        // Paint the cached snapshot for this inbox immediately (if any), then
+        // revalidate against the server in the background.
+        if let cached = queueCache[value] {
+            queue = cached.removingIDs(dismissed)
+        }
         Task { await loadQueue() }
     }
 
@@ -659,8 +670,13 @@ final class AppModel {
         Task { await refreshAgentToday() }
         Task { await checkForUpdateIfDue() }
         do {
+            let selectionAtFetch = selectedInbox
             let fetched = try await api.get(
-                firewallPath(selected: selectedInbox), as: FirewallResponse.self)
+                firewallPath(selected: selectionAtFetch), as: FirewallResponse.self)
+            queueCache[selectionAtFetch] = fetched
+            // A slow response for a selection the user has already left must
+            // not clobber the queue they're looking at now.
+            guard selectionAtFetch == selectedInbox else { return }
             // Drop dismissed ids the server has since resolved; hide the rest.
             dismissed.formIntersection(fetched.allItemIDs)
             queue = fetched.removingIDs(dismissed)
