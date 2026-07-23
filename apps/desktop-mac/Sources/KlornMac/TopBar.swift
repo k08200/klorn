@@ -353,26 +353,7 @@ private struct TodayColumn: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 14) {
             if let briefing = model.briefing {
-                Button { if let url = URL(string: Config.webBaseURL) { NSWorkspace.shared.open(url) } } label: {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "sun.max").font(.caption2).foregroundStyle(Theme.accent)
-                                .accessibilityHidden(true)
-                            Text("BRIEFING").font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
-                        }
-                        Text(briefing).font(.caption).foregroundStyle(Theme.text)
-                            .lineLimit(3).multilineTextAlignment(.leading)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8).padding(.leading, 6)
-                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 1).fill(Theme.accent.opacity(0.7))
-                            .frame(width: 2).padding(.vertical, 6)
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Today's briefing: \(briefing)")
+                BriefingCard(briefing: briefing)
             }
             if let today = model.today, today.total > 0 {
                 if let current = today.current {
@@ -422,42 +403,11 @@ private struct TodayColumn: View {
                 .padding(.top, 6)
                 .accessibilityLabel("Klorn today: \(line). Opens the web inbox to review.")
             }
-            upcomingSection
+            UpcomingSection()
                 }
             }
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// UPCOMING — tomorrow through the next 7 days, grouped by day (calendar
-    /// parity with the web: the desktop must not know less about the week
-    /// than it knows about the day). Rows open a detail popover.
-    @ViewBuilder
-    private var upcomingSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ColumnHeader(title: "UPCOMING")
-            if let week = model.weekAhead {
-                let days = upcomingAgenda(now: Date(), events: week)
-                if days.isEmpty {
-                    EmptyState(icon: "calendar", title: "No events this week")
-                        .padding(.vertical, Theme.s2)
-                } else {
-                    ForEach(days) { day in
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(day.label)
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(Theme.textDim)
-                            ForEach(day.events) { event in
-                                UpcomingEventRow(event: event)
-                            }
-                        }
-                    }
-                }
-            } else {
-                Text("Loading…").font(.caption).foregroundStyle(Theme.textDim)
-            }
-        }
-        .padding(.top, 6)
     }
 
     @ViewBuilder
@@ -493,6 +443,72 @@ private struct TodayColumn: View {
         } else {
             row.accessibilityElement(children: .combine)
         }
+    }
+}
+
+/// BRIEFING preview card — the day's AI briefing, click-through to the web
+/// app. One view shared by the compact panel's TodayColumn and the full-mode
+/// sidebar so both surfaces render the same card (dogfood 2026-07-23).
+private struct BriefingCard: View {
+    let briefing: String
+
+    var body: some View {
+        Button { if let url = URL(string: Config.webBaseURL) { NSWorkspace.shared.open(url) } } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) {
+                    Image(systemName: "sun.max").font(.caption2).foregroundStyle(Theme.accent)
+                        .accessibilityHidden(true)
+                    Text("BRIEFING").font(.caption2.weight(.semibold)).foregroundStyle(Theme.textDim)
+                }
+                Text(briefing).font(.caption).foregroundStyle(Theme.text)
+                    .lineLimit(3).multilineTextAlignment(.leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8).padding(.leading, 6)
+            .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 1).fill(Theme.accent.opacity(0.7))
+                    .frame(width: 2).padding(.vertical, 6)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Today's briefing: \(briefing)")
+    }
+}
+
+/// UPCOMING — tomorrow through the next 7 days, grouped by day (calendar
+/// parity with the web: the desktop must not know less about the week
+/// than it knows about the day). Rows open a detail popover. Shared by the
+/// compact panel's TodayColumn and the full-mode sidebar — same view, same
+/// `model.weekAhead` + `upcomingAgenda` data path.
+private struct UpcomingSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ColumnHeader(title: "UPCOMING")
+            if let week = model.weekAhead {
+                let days = upcomingAgenda(now: Date(), events: week)
+                if days.isEmpty {
+                    EmptyState(icon: "calendar", title: "No events this week")
+                        .padding(.vertical, Theme.s2)
+                } else {
+                    ForEach(days) { day in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(day.label)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(Theme.textDim)
+                            ForEach(day.events) { event in
+                                UpcomingEventRow(event: event)
+                            }
+                        }
+                    }
+                }
+            } else {
+                Text("Loading…").font(.caption).foregroundStyle(Theme.textDim)
+            }
+        }
+        .padding(.top, 6)
     }
 }
 
@@ -997,26 +1013,39 @@ private struct FullSidebar: View {
 
             // TODAY lives in the full view too — the biggest surface must not
             // know less about the day than the compact panel (dogfood 2026-07-16).
+            // Briefing + today + UPCOMING mirror the panel's TodayColumn (same
+            // shared views, dogfood 2026-07-23); scrollable so a busy week never
+            // pushes ACCOUNT off the sidebar.
             ColumnHeader(title: "TODAY").padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 6)
-            if let today = model.today, today.total > 0 {
-                if let current = today.current {
-                    sidebarEventRow(current, isNow: true)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let briefing = model.briefing {
+                        BriefingCard(briefing: briefing).padding(.horizontal, 12)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let today = model.today, today.total > 0 {
+                            if let current = today.current {
+                                sidebarEventRow(current, isNow: true)
+                            }
+                            ForEach(today.upcoming.prefix(3)) { event in
+                                sidebarEventRow(event, isNow: false)
+                            }
+                            if today.upcoming.count > 3 {
+                                Text("+\(today.upcoming.count - 3) more")
+                                    .font(.caption2).foregroundStyle(Theme.textDim)
+                                    .padding(.horizontal, 20)
+                            }
+                        } else {
+                            Text(model.today == nil ? "Loading…" : "No events today")
+                                .font(.caption).foregroundStyle(Theme.textDim)
+                                .padding(.horizontal, 20)
+                        }
+                    }
+                    UpcomingSection().padding(.horizontal, 12)
                 }
-                ForEach(today.upcoming.prefix(3)) { event in
-                    sidebarEventRow(event, isNow: false)
-                }
-                if today.upcoming.count > 3 {
-                    Text("+\(today.upcoming.count - 3) more")
-                        .font(.caption2).foregroundStyle(Theme.textDim)
-                        .padding(.horizontal, 20)
-                }
-            } else {
-                Text(model.today == nil ? "Loading…" : "No events today")
-                    .font(.caption).foregroundStyle(Theme.textDim)
-                    .padding(.horizontal, 20)
+                .padding(.bottom, 8)
             }
-
-            Spacer()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             ColumnHeader(title: "ACCOUNT").padding(.horizontal, 20).padding(.bottom, 6)
             if model.phase == .signedIn {
