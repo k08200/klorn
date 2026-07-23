@@ -775,27 +775,7 @@ private struct AccountColumn: View {
             ColumnHeader(title: "ACCOUNT")
             if model.phase == .signedIn {
                 if let version = model.updateAvailable {
-                    // Quiet update signal (auto-checked every 6h) — a normal
-                    // row, never a popup. One click downloads the notarized
-                    // build, verifies its signature, swaps, and relaunches;
-                    // any failure falls back to the release page.
-                    Button {
-                        guard !updating else { return }
-                        updating = true
-                        Task {
-                            _ = await SelfUpdate.run(version: version)
-                            updating = false  // reached only on fallback
-                        }
-                    } label: {
-                        Label(updating ? "Updating…" : "Update to v\(version)",
-                              systemImage: updating ? "arrow.triangle.2.circlepath" : "arrow.down.circle")
-                            .font(.body).foregroundStyle(Theme.accent)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(updating)
-                    .accessibilityLabel(updating
-                        ? "Updating to version \(version)"
-                        : "Update available: version \(version). Installs and relaunches.")
+                    UpdateRow(version: version)
                 }
                 SubtleTextButton(title: "Open web inbox", dim: false) { actions.onOpenWeb(nil) }
                 SubtleTextButton(title: "Sign out") { actions.onSignOut() }
@@ -1049,6 +1029,9 @@ private struct FullSidebar: View {
 
             ColumnHeader(title: "ACCOUNT").padding(.horizontal, 20).padding(.bottom, 6)
             if model.phase == .signedIn {
+                if let version = model.updateAvailable {
+                    UpdateRow(version: version)
+                }
                 sidebarAction("Open web inbox") { actions.onOpenWeb(nil) }
                 sidebarAction("Sign out", dim: true) { actions.onSignOut() }
             } else {
@@ -1831,5 +1814,66 @@ private struct ReadingPane: View {
         guard let date = iso1.date(from: iso) ?? iso2.date(from: iso) else { return "" }
         let out = DateFormatter(); out.dateFormat = "MMM d · h:mm a"
         return out.string(from: date)
+    }
+}
+
+
+/// The update affordance, shared by the panel's ACCOUNT column and the
+/// full-window sidebar. Never a popup (never-steal-focus) — but no longer
+/// invisible either: a tinted capsule with a pulsing dot and a gentle
+/// appear transition says "one click waiting" the moment the row exists.
+/// Pulse respects Reduce Motion.
+private struct UpdateRow: View {
+    let version: String
+    @State private var updating = false
+    @State private var pulsing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button {
+            guard !updating else { return }
+            updating = true
+            Task {
+                _ = await SelfUpdate.run(version: version)
+                updating = false  // reached only on fallback
+            }
+        } label: {
+            HStack(spacing: 8) {
+                ZStack {
+                    if !reduceMotion {
+                        Circle()
+                            .fill(Theme.accent.opacity(0.35))
+                            .frame(width: 7, height: 7)
+                            .scaleEffect(pulsing ? 2.1 : 1.0)
+                            .opacity(pulsing ? 0.0 : 0.7)
+                    }
+                    Circle().fill(Theme.accent).frame(width: 7, height: 7)
+                }
+                Text(updating ? "Updating…" : "Update to v\(version)")
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(Theme.accent)
+                Spacer(minLength: 0)
+                Image(systemName: updating ? "arrow.triangle.2.circlepath" : "arrow.down.circle.fill")
+                    .foregroundStyle(Theme.accent)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Theme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9)
+                    .strokeBorder(Theme.accent.opacity(0.25), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(updating)
+        .accessibilityLabel(updating
+            ? "Updating to version \(version)"
+            : "Update available: version \(version). Installs and relaunches.")
+        .transition(.opacity.combined(with: .move(edge: .top)))
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) {
+                pulsing = true
+            }
+        }
     }
 }
