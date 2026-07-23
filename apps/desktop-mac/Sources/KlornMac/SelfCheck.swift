@@ -641,6 +641,12 @@ func runSelfChecks() async -> Bool {
               == "/api/email?search=deal&inbox=primary")
     check("search path omits all-inboxes scope",
           emailSearchPath(query: "deal", selectedInbox: "all") == "/api/email?search=deal")
+    check("firewall path — all unscoped",
+          firewallPath(selected: "all") == "/api/inbox/firewall")
+    check("firewall path — primary scoped",
+          firewallPath(selected: "primary") == "/api/inbox/firewall?inbox=primary")
+    check("firewall path — linked id scoped (hyphen encoded)",
+          firewallPath(selected: "li-1") == "/api/inbox/firewall?inbox=li%2D1")
     check("inbox display label falls back by kind",
           inboxDisplayLabel(email: nil, kind: "primary") == "Primary"
           && inboxDisplayLabel(email: nil, kind: "linked") == "Linked inbox"
