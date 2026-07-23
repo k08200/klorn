@@ -169,8 +169,7 @@ export const GLOBAL_DAILY_COST_CAP_CENTS = intEnv("GLOBAL_DAILY_COST_CAP_CENTS",
 // Server-paid, no-key demo path on POST /api/playground/classify. OFF by
 // default (doctrine: new features ship dark) — while false the playground
 // behaves exactly as before: bring-your-own-key or 401 key_required.
-export const PLAYGROUND_NO_KEY_DEMO_ENABLED =
-  process.env.PLAYGROUND_NO_KEY_DEMO_ENABLED === "true";
+export const PLAYGROUND_NO_KEY_DEMO_ENABLED = process.env.PLAYGROUND_NO_KEY_DEMO_ENABLED === "true";
 
 // Global daily budget for the key-free demo, in cents (USD), accumulated
 // in-memory at 0.01¢ granularity. Default 50¢ = $0.50/day ≈ 260 gemini-flash
