@@ -541,20 +541,41 @@ final class AppModel {
     private(set) var updateAvailable: String?
     private var lastUpdateCheck: Date?
     nonisolated static let updateCheckIntervalHours: Double = 6
+    /// Opening the panel re-checks on a much shorter leash than the 6h
+    /// background cadence: a release published while the app sat idle used to
+    /// stay invisible until relaunch or the next 6h tick (founder-reported,
+    /// 2026-07-23). 15 min keeps us far under GitHub's 60 req/h anonymous cap
+    /// even with obsessive panel toggling.
+    nonisolated static let updateCheckPanelIntervalMinutes: Double = 15
 
-    /// Whether a background update check should run now. Pure for testing.
-    nonisolated static func updateCheckDue(now: Date, last: Date?) -> Bool {
+    /// Whether an update check should run now, given the caller's interval.
+    /// Pure for testing.
+    nonisolated static func updateCheckDue(
+        now: Date, last: Date?, intervalSeconds: Double = updateCheckIntervalHours * 3600
+    ) -> Bool {
         guard let last else { return true }
-        return now.timeIntervalSince(last) >= updateCheckIntervalHours * 3600
+        return now.timeIntervalSince(last) >= intervalSeconds
     }
 
-    private func checkForUpdateIfDue() async {
-        guard Self.updateCheckDue(now: Date(), last: lastUpdateCheck) else { return }
+    private func checkForUpdateIfDue(intervalSeconds: Double = updateCheckIntervalHours * 3600)
+        async
+    {
+        guard Self.updateCheckDue(now: Date(), last: lastUpdateCheck, intervalSeconds: intervalSeconds)
+        else { return }
         lastUpdateCheck = Date()
         if case .updateAvailable(let version) = await UpdateCheck.run() {
             updateAvailable = version
         } else {
             updateAvailable = nil  // up to date, dev build, or network hiccup
+        }
+    }
+
+    /// Called when the expanded panel opens — the moment the user is actually
+    /// looking at the ACCOUNT column where the update row lives.
+    func checkForUpdateOnPanelOpen() {
+        Task {
+            await checkForUpdateIfDue(
+                intervalSeconds: Self.updateCheckPanelIntervalMinutes * 60)
         }
     }
 

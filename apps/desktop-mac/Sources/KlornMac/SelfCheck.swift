@@ -663,6 +663,16 @@ func runSelfChecks() async -> Bool {
           !AppModel.updateCheckDue(now: t0.addingTimeInterval(5 * 3600), last: t0))
     check("6h later → due",
           AppModel.updateCheckDue(now: t0.addingTimeInterval(6 * 3600), last: t0))
+    check(
+        "panel interval: 10min after check → not due",
+        !AppModel.updateCheckDue(
+            now: t0.addingTimeInterval(10 * 60), last: t0,
+            intervalSeconds: AppModel.updateCheckPanelIntervalMinutes * 60))
+    check(
+        "panel interval: 15min after check → due",
+        AppModel.updateCheckDue(
+            now: t0.addingTimeInterval(15 * 60), last: t0,
+            intervalSeconds: AppModel.updateCheckPanelIntervalMinutes * 60))
 
     print("Shortcut:")
     check("default toggle displays as ⌥⌘K", ShortcutFormat.display(.defaultToggle) == "⌥⌘K")
