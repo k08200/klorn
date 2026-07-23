@@ -741,12 +741,12 @@
             <textarea id="kf-snippet" class="kf-field" placeholder="Preview / first line (optional)"></textarea>
             <div class="klassify-presets" id="kf-presets"></div>
             <button type="button" id="kf-run" class="btn btn-sky klassify-run">Classify this email</button>
-            <p class="klassify-note">Runs the real 4-tier model. Your key is sent once for this call and is never stored on Klorn's servers. No key yet? <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer noopener">Get an OpenRouter key</a>.</p>
+            <p class="klassify-note">Runs the real 4-tier model. No key? Just press Classify — when the free demo is open it runs on Klorn's own model. With a key, it's sent once for this call and never stored on Klorn's servers. <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer noopener">Get an OpenRouter key</a>.</p>
           </div>
           <div class="klassify-result">
             <div class="klassify-tier">
               <span class="klassify-tier-badge" id="kf-badge" data-tier="">READY</span>
-              <span class="klassify-tier-desc" id="kf-desc">Pick an example (or paste an email), add your key, then Classify to see the exact tier Klorn's model assigns — PUSH, QUEUE, SILENT, or AUTO.</span>
+              <span class="klassify-tier-desc" id="kf-desc">Pick an example (or paste an email), then Classify to see the exact tier Klorn's model assigns — PUSH, QUEUE, SILENT, or AUTO.</span>
             </div>
             <p class="klassify-reason" id="kf-reason"></p>
             <div class="klassify-features" id="kf-features"></div>
@@ -1067,7 +1067,8 @@
         const snippet = kfSnippet.value.trim();
         const model = kfModel.value.trim();
 
-        if (!apiKey) { showError('Add your API key first — it runs one classification on your own key.'); kfKey.focus(); return; }
+        // No key is fine: the request goes key-free first (server-paid demo);
+        // if the server answers key_required / demo_*, we fall back to the key UI.
         if (!from || !subject) { showError('Fill in at least a From address and a Subject.'); return; }
 
         try {
@@ -1082,9 +1083,9 @@
         kfReason.textContent = '';
         renderFeatures(null);
 
-        const body = { from, subject, provider, apiKey };
+        const body = apiKey ? { from, subject, provider, apiKey } : { from, subject };
         if (snippet) body.snippet = snippet;
-        if (model) body.model = model;
+        if (apiKey && model) body.model = model;
 
         try {
           const res = await fetch(CLASSIFY_URL, {
@@ -1094,6 +1095,21 @@
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
+            if (!apiKey && (res.status === 401 || data.error === 'key_required')) {
+              showError('The key-free demo isn\'t open right now — add your own API key to run the classifier.');
+              kfKey.focus();
+              return;
+            }
+            if (!apiKey && data.error === 'demo_budget_exhausted') {
+              showError('Today\'s free demo budget is used up — add your own API key to keep classifying.');
+              kfKey.focus();
+              return;
+            }
+            if (!apiKey && res.status === 429) {
+              showError('Demo limit reached (3/min, 10/day per visitor) — wait a moment or add your own API key.');
+              kfKey.focus();
+              return;
+            }
             let msg = data.error || `Request failed (${res.status}).`;
             if (res.status === 429) msg = 'Rate limit hit (8/min). Wait a moment and try again.';
             if (data.detail) msg += ` — ${data.detail}`;
