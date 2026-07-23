@@ -22,6 +22,20 @@
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
 		<dict>
+			<!-- Display name — collected at signup for account identity;
+			     linked; not used for tracking. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeName</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
 			<!-- Email address — used to sign in and to run the mail firewall;
 			     linked to the user's identity; not used for tracking. -->
 			<key>NSPrivacyCollectedDataType</key>
