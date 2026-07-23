@@ -22,6 +22,7 @@ import {
 } from "../config.js";
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
+import { notifyCostCapTrip } from "./cost-trip-alert.js";
 import { isEntitled } from "./stripe.js";
 
 export interface CostGateResult {
@@ -96,6 +97,8 @@ export async function checkCostGate(userId: string): Promise<CostGateResult> {
   });
   const used = row?.cents ?? 0;
   if (used >= cap) {
+    // Fire-and-forget visibility: once per user per UTC day (deduped inside).
+    void notifyCostCapTrip({ scope: "user", userId, usedCents: used, capCents: cap });
     return {
       allowed: false,
       remainingCents: 0,
@@ -114,18 +117,31 @@ export async function checkCostGate(userId: string): Promise<CostGateResult> {
   };
 }
 
+// Fractional-cent carry per user for today. The DB column stays integer
+// cents (no schema change): sub-cent charges accumulate here and flush to
+// the ledger as whole cents once they add up. In-memory and single-instance
+// by the same argument as the global accumulator below; worst case on a
+// restart is under 1¢ of forgiven carry per active user.
+const fractionalCarry = new Map<string, { dayKey: string; frac: number }>();
+
 /**
- * Record an LLM call against today's ledger. `cents` should be the actual
- * estimated cost in USD cents (rounded up to the nearest integer). Use 0
- * for free models so the call still counts toward usage tracking.
+ * Record an LLM call against today's ledger. `cents` is the estimated cost
+ * in USD cents and MAY be fractional (0.01¢ precision) — whole cents land in
+ * the integer DB column, the sub-cent remainder carries in memory. Use 0 for
+ * free models so the call still counts toward usage tracking.
  */
 export async function recordCostUsage(
   userId: string,
   cents: number,
   model: string | null,
 ): Promise<{ totalCents: number; overCap: boolean } | null> {
-  const safeCents = Math.max(0, Math.round(cents));
+  const safeCents = Number.isFinite(cents) ? Math.max(0, cents) : 0;
   const dayKey = utcDayKey();
+  const carried = fractionalCarry.get(userId);
+  const priorFrac = carried && carried.dayKey === dayKey ? carried.frac : 0;
+  const combined = priorFrac + safeCents;
+  const wholeCents = Math.floor(combined + 1e-9);
+  const nextFrac = Math.max(0, Math.round((combined - wholeCents) * 10_000) / 10_000);
   try {
     // The increment is atomic, and we read the post-increment total back so the
     // caller can close the check-then-act TOCTOU: two concurrent calls can both
@@ -136,19 +152,27 @@ export async function recordCostUsage(
       create: {
         userId,
         dayKey,
-        cents: safeCents,
+        cents: wholeCents,
         callCount: 1,
         lastModel: model,
       },
       update: {
-        cents: { increment: safeCents },
+        cents: { increment: wholeCents },
         callCount: { increment: 1 },
         lastModel: model ?? undefined,
       },
       select: { cents: true },
     });
+    // Commit the carry only after the DB write landed: on failure the whole
+    // charge is dropped (existing best-effort contract), not half-absorbed.
+    fractionalCarry.set(userId, { dayKey, frac: nextFrac });
     const { capCents: cap } = await resolveCapCents(userId);
-    return { totalCents: row.cents, overCap: cap > 0 && row.cents > cap };
+    const overCap = cap > 0 && row.cents > cap;
+    if (overCap) {
+      // The increment that crossed the cap — surface it (deduped per day).
+      void notifyCostCapTrip({ scope: "user", userId, usedCents: row.cents, capCents: cap });
+    }
+    return { totalCents: row.cents, overCap };
   } catch (err) {
     // The ledger is best-effort accounting; never fail the user-facing call
     // because of a write here. But a sustained failure means we're silently
@@ -193,25 +217,41 @@ export function checkGlobalCostGate(): CostGateResult {
   rollGlobalDayIfNeeded();
   const used = globalSpend.cents;
   if (used >= cap) {
+    // Fire-and-forget visibility: once per UTC day (deduped inside).
+    void notifyCostCapTrip({ scope: "global", usedCents: used, capCents: cap });
     return {
       allowed: false,
       remainingCents: 0,
       usedCents: used,
       capCents: cap,
-      reason: `Global daily cap reached (${used}¢/${cap}¢)`,
+      reason: `Global daily cap reached (${Math.round(used * 100) / 100}¢/${cap}¢)`,
     };
   }
   return { allowed: true, remainingCents: cap - used, usedCents: used, capCents: cap };
 }
 
-/** Record cost against the global ceiling. Called for every LLM call. */
+/**
+ * Record cost against the global ceiling. Called for every LLM call.
+ * `cents` may be fractional (0.01¢ precision) — the accumulator is a float,
+ * rounded at comparison time only, so ~0.19¢ classifications no longer
+ * round up to 1¢ each and burn the $10 ceiling at 20x their real cost.
+ */
 export function recordGlobalCostUsage(cents: number): void {
   rollGlobalDayIfNeeded();
-  globalSpend.cents += Math.max(0, Math.round(cents));
+  const amount = Number.isFinite(cents) ? Math.max(0, cents) : 0;
+  if (amount <= 0) return;
+  const before = globalSpend.cents;
+  // Keep the accumulator at 0.01¢-ish precision so float error can't creep.
+  globalSpend.cents = Math.round((before + amount) * 10_000) / 10_000;
+  const cap = GLOBAL_DAILY_COST_CAP_CENTS;
+  if (cap > 0 && before < cap && globalSpend.cents >= cap) {
+    void notifyCostCapTrip({ scope: "global", usedCents: globalSpend.cents, capCents: cap });
+  }
 }
 
-/** Test seam: reset the in-memory global accumulator. */
+/** Test seam: reset the in-memory global accumulator + fractional carries. */
 export function __resetGlobalSpendForTest(): void {
   globalSpend.dayKey = utcDayKey();
   globalSpend.cents = 0;
+  fractionalCarry.clear();
 }

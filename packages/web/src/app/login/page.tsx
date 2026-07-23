@@ -104,13 +104,15 @@ function LoginForm() {
       const message =
         error === "google_failed"
           ? t("auth.googleSignInError")
-          : error === "google_unverified"
-            ? t("auth.googleUnverified")
-            : error === "session_expired"
-              ? t("auth.sessionExpired")
-              : error === "invite_only"
-                ? t("auth.inviteOnlyRedirect")
-                : error;
+          : error === "google_denied"
+            ? t("auth.googleDenied")
+            : error === "google_unverified"
+              ? t("auth.googleUnverified")
+              : error === "session_expired"
+                ? t("auth.sessionExpired")
+                : error === "invite_only"
+                  ? t("auth.inviteOnlyRedirect")
+                  : error;
       toast(message, "error");
     }
     if (verified) {

@@ -88,6 +88,7 @@ const enTranslations: Record<string, string> = {
   "auth.openSourceVersion": "Open source · AGPLv3 · v0.3.0",
   "auth.signInToContinue": "Sign in to continue to {destination}.",
   "auth.googleSignInError": "Google sign-in could not be completed. Please try again.",
+  "auth.googleDenied": "Google connection was canceled — just try again whenever you're ready.",
   "auth.googleUnverified":
     "Google hasn't finished verifying Klorn for your account yet. Approved testers can retry shortly; otherwise request early access.",
   "auth.sessionExpired": "Your session expired. Please sign in again.",
@@ -327,6 +328,7 @@ const koTranslations: Record<string, string> = {
   "auth.openSourceVersion": "오픈소스 · AGPLv3 · v0.3.0",
   "auth.signInToContinue": "{destination}(으)로 이어가려면 로그인하세요.",
   "auth.googleSignInError": "Google 로그인을 완료하지 못했습니다. 다시 시도해 주세요.",
+  "auth.googleDenied": "Google 연결이 취소되었어요 — 준비되면 다시 시도하면 됩니다.",
   "auth.googleUnverified":
     "Google이 아직 회원님 계정에 대한 Klorn 검증을 마치지 않았습니다. 승인된 테스터는 잠시 후 다시 시도할 수 있으며, 그 외에는 얼리 액세스를 신청해 주세요.",
   "auth.sessionExpired": "세션이 만료되었습니다. 다시 로그인해 주세요.",

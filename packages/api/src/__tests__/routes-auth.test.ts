@@ -258,6 +258,31 @@ describe("GET /api/auth/google/callback — error handling", () => {
     await app.close();
   });
 
+  it("redirects consent denial (?error=access_denied) to /login?error=google_denied", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/auth/google/callback?error=access_denied",
+    });
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe("http://localhost:8001/login?error=google_denied");
+    await app.close();
+  });
+
+  it("never reflects the provider error value — any ?error maps to the fixed marker", async () => {
+    const app = await buildApp();
+    const hostile = encodeURIComponent("<script>alert(1)</script>");
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/auth/google/callback?error=${hostile}&code=abc`,
+    });
+    expect(res.statusCode).toBe(302);
+    const location = res.headers.location as string;
+    expect(location).toBe("http://localhost:8001/login?error=google_denied");
+    expect(location).not.toContain("script");
+    await app.close();
+  });
+
   it("returns a generic error on the integration 500, never the raw provider error", async () => {
     makeTokenExchangeThrow();
     const state = signToken({ userId: "u-int", email: "user@example.com" });
