@@ -70,11 +70,16 @@ final class AppModel {
     static let selectedInboxKey = "klorn.selectedInbox"
 
     /// Change the per-inbox scope and persist it. The list view's task keys on
-    /// this value, so an active search re-fetches with the new scope.
+    /// this value, so an active search re-fetches with the new scope; the tier
+    /// list is fetched imperatively, so reload the queue too (loadQueue scopes
+    /// the firewall fetch via firewallPath). The "all" fallback in
+    /// refreshInboxes can't loop: with "all" selected firewallPath's guard
+    /// fails and the stale-id branch never fires again.
     func selectInbox(_ value: String) {
         guard value != selectedInbox else { return }
         selectedInbox = value
         UserDefaults.standard.set(value, forKey: Self.selectedInboxKey)
+        Task { await loadQueue() }
     }
 
     /// Refresh the mailbox list (poll + WS cadence, like the other surfaces).
@@ -633,7 +638,8 @@ final class AppModel {
         Task { await refreshAgentToday() }
         Task { await checkForUpdateIfDue() }
         do {
-            let fetched = try await api.get("/api/inbox/firewall", as: FirewallResponse.self)
+            let fetched = try await api.get(
+                firewallPath(selected: selectedInbox), as: FirewallResponse.self)
             // Drop dismissed ids the server has since resolved; hide the rest.
             dismissed.formIntersection(fetched.allItemIDs)
             queue = fetched.removingIDs(dismissed)

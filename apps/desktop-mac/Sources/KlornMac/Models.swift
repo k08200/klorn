@@ -430,6 +430,18 @@ func emailSearchPath(query: String, selectedInbox: String) -> String {
     return base + "&inbox=\(enc)"
 }
 
+/// Firewall queue path with the optional per-inbox scope: "all" (or blank)
+/// sends nothing — the server treats an absent `inbox=` as every inbox
+/// (routes/firewall.ts mirrors routes/email.ts's param). Encoded like
+/// emailSearchPath so hyphenated linked ids survive the round trip. Pure.
+func firewallPath(selected: String) -> String {
+    let base = "/api/inbox/firewall"
+    guard let inbox = inboxQueryParam(selected: selected),
+          let enc = inbox.addingPercentEncoding(withAllowedCharacters: .alphanumerics)
+    else { return base }
+    return base + "?inbox=\(enc)"
+}
+
 /// Full menu-row label for one inbox: the address, falling back by kind
 /// (mirrors the web selector's fallback copy). Pure.
 func inboxDisplayLabel(email: String?, kind: String) -> String {

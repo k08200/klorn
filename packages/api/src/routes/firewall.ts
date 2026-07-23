@@ -3,6 +3,10 @@
  *
  * GET  /api/inbox/firewall      — open AttentionItems grouped by tier
  *                                 plus today's receipt summary counts.
+ *                                 Optional `?inbox=` scope (mirrors
+ *                                 routes/email.ts): absent/"all" = every
+ *                                 inbox, "primary" = primary-account mail +
+ *                                 non-email items, a linked id = that inbox.
  *                                 Each PENDING_ACTION item is enriched
  *                                 with toolName/toolArgs and, when the
  *                                 args reference an email_id, with the
@@ -304,6 +308,13 @@ export async function firewallRoutes(app: FastifyInstance) {
 
   app.get("/", async (request): Promise<FirewallResponse> => {
     const userId = getUserId(request);
+    // Per-inbox scope (mirrors routes/email.ts's `inbox=` param): absent/"all"
+    // → every inbox (100% backward compatible); "primary" → primary-account
+    // mail plus items with no email at all (GitHub etc. — the primary is the
+    // home workspace); a linked id → only that inbox's mail. The userId scope
+    // on every query below is the IDOR guard — a foreign or malformed id can
+    // only ever match the caller's own rows (zero).
+    const { inbox } = request.query as { inbox?: string };
 
     // Activity-driven self-heal: the firewall view is the app's front door,
     // so opening it re-registers an expired Gmail watch even when the
@@ -378,7 +389,14 @@ export async function firewallRoutes(app: FastifyInstance) {
       gmailIdsNeeded.size
         ? prisma.emailMessage.findMany({
             where: { userId, gmailId: { in: [...gmailIdsNeeded] } },
-            select: { id: true, gmailId: true, subject: true, from: true, snippet: true },
+            select: {
+              id: true,
+              gmailId: true,
+              subject: true,
+              from: true,
+              snippet: true,
+              linkedInboxAccountId: true,
+            },
           })
         : Promise.resolve([] as never[]),
       emailRowIds.length
@@ -396,6 +414,8 @@ export async function firewallRoutes(app: FastifyInstance) {
               // Gmail thread id — used to collapse a multi-message conversation
               // (N EmailMessage rows) to a single firewall card. See below.
               threadId: true,
+              // Which mailbox the message lives on — drives the `inbox=` scope.
+              linkedInboxAccountId: true,
             },
           })
         : Promise.resolve([] as never[]),
@@ -426,13 +446,37 @@ export async function firewallRoutes(app: FastifyInstance) {
       AUTO: [],
     };
 
+    // Apply the per-inbox scope. An item's mailbox is its linked email's
+    // linkedInboxAccountId; items with no email at all (GITHUB source, or a
+    // PENDING_ACTION whose tool doesn't reference mail) have none and belong
+    // to "primary" and "all" only. undefined = no email; null = primary mail.
+    const linkedInboxIdOf = (row: (typeof items)[number]): string | null | undefined => {
+      if (row.source === "EMAIL") {
+        return emailById.get(row.sourceId)?.linkedInboxAccountId;
+      }
+      if (row.source === "PENDING_ACTION") {
+        const pa = paById.get(row.sourceId);
+        const emailId = pa ? extractEmailId(pa.toolName, safeRecord(pa.toolArgs)) : undefined;
+        return emailId ? emailByGmailId.get(emailId)?.linkedInboxAccountId : undefined;
+      }
+      return undefined;
+    };
+    const scopedItems =
+      !inbox || inbox === "all"
+        ? items
+        : items.filter((row) => {
+            const linkedId = linkedInboxIdOf(row);
+            // == null covers both "primary mail" (null) and "no email" (undefined).
+            return inbox === "primary" ? linkedId == null : linkedId === inbox;
+          });
+
     // Collapse a multi-message email conversation to one card. Items are ordered
     // [priority desc, surfacedAt desc], so the kept row is the thread's
     // highest-priority (newest on ties) message. Without this, a reschedule
     // thread or a repeated "Deployment failed" shows once per message, each with
     // a different judge-authored tierReason (the duplicate seen in dogfooding).
     const dedupedItems = collapseEmailThreads(
-      items,
+      scopedItems,
       (row) => emailById.get(row.sourceId)?.threadId ?? null,
     );
 
@@ -558,7 +602,7 @@ export async function firewallRoutes(app: FastifyInstance) {
         QUEUE: tiers.QUEUE.length,
         PUSH: tiers.PUSH.length,
         AUTO: tiers.AUTO.length,
-        total: items.length,
+        total: scopedItems.length,
       },
     };
   });
