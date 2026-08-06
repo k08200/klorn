@@ -334,7 +334,7 @@ export async function firewallRoutes(app: FastifyInstance) {
     // lazy; anything still null gets bucketed as QUEUE so it's visible.
     // inputHash is also nullable (legacy rows pre-PR #468) and is verified
     // soft-mode below; null hash short-circuits the check.
-    const items = await (
+    const recentItems = await (
       prisma.attentionItem as unknown as {
         findMany: (args: unknown) => Promise<
           Array<{
@@ -365,9 +365,21 @@ export async function firewallRoutes(app: FastifyInstance) {
         surfacedAt: true,
         inputHash: true,
       },
-      orderBy: [{ priority: "desc" }, { surfacedAt: "desc" }],
+      // Window by RECENCY, rank by priority below. Windowing by priority was
+      // the board-freeze bug: email items are never auto-resolved, so once
+      // the OPEN pool passed 200 the query returned the same high-priority
+      // set forever and every newer (lower-priority) mail was invisible in
+      // all four lanes — the board pinned itself to the saturation date
+      // (observed in production 2026-08-07, frozen at 07-21 with lane counts
+      // summing to exactly the window size).
+      orderBy: [{ surfacedAt: "desc" }],
       take: 200,
     });
+    // Priority still decides presentation order WITHIN the visible window —
+    // the lanes below are built in iteration order.
+    const items = [...recentItems].sort(
+      (a, b) => b.priority - a.priority || b.surfacedAt.getTime() - a.surfacedAt.getTime(),
+    );
 
     // Batch-fetch PendingActions referenced by the PENDING_ACTION items —
     // gives us toolName / toolArgs / reasoning to render in the card.

@@ -42,10 +42,12 @@ enum TopBarMetrics {
     static let collapsed = NSSize(width: 400, height: 52)
     static let expanded = NSSize(width: 1140, height: 380)
     static let full = NSSize(width: 1400, height: 860)
-    /// Smallest full window that still fits the fixed sidebar (220) + list
-    /// (420) columns plus a usable reading pane. Floor for both the panel's
-    /// contentMinSize and screen fitting.
-    static let fullMin = NSSize(width: 1000, height: 560)
+    /// Smallest full window the user may drag-resize down to. 880 keeps the
+    /// fixed sidebar (220) + list (420) columns with a readable ~240pt
+    /// reading pane — the previous 1000×560 floor sat above many fitted
+    /// window sizes, which made edge-drag feel dead ("can't shrink it",
+    /// 2026-08-07). Floor for the panel's contentMinSize and screen fitting.
+    static let fullMin = NSSize(width: 880, height: 520)
     /// Gap kept to the screen edges when the ideal size doesn't fit.
     static let screenMargin: CGFloat = 12
     static let corner: CGFloat = 20
@@ -63,15 +65,19 @@ enum TopBarMetrics {
         }
     }
 
-    /// `ideal` shrunk to fit inside `visible` (with a margin), never below
-    /// `floor`. The full view was a hardcoded 1400×860 that clipped on 13"
-    /// displays — the frame math never consulted the screen.
+    /// `ideal` shrunk to fit inside `visible` (with a margin), lifted to
+    /// `floor` when there is room. The SCREEN clamp wins over the floor: a
+    /// window wider than the display is unreachable and clipped, which is
+    /// strictly worse than temporarily cramped columns (the old floor-wins
+    /// math re-introduced the 13"-clipping this function was added to fix).
     nonisolated static func fittedSize(
         ideal: NSSize, visible: NSSize, floor: NSSize = .zero
     ) -> NSSize {
-        NSSize(
-            width: max(floor.width, min(ideal.width, visible.width - screenMargin * 2)),
-            height: max(floor.height, min(ideal.height, visible.height - screenMargin * 2)))
+        let maxW = max(visible.width - screenMargin * 2, 320)
+        let maxH = max(visible.height - screenMargin * 2, 240)
+        return NSSize(
+            width: min(max(floor.width, min(ideal.width, maxW)), maxW),
+            height: min(max(floor.height, min(ideal.height, maxH)), maxH))
     }
 
     /// Top-center placement clamped into the visible rect, so no state can

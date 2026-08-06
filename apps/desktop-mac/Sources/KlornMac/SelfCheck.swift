@@ -278,9 +278,17 @@ func runSelfChecks() async -> Bool {
     check("full shrinks to fit a small display",
           fittedFull.width <= smallScreen.width - TopBarMetrics.screenMargin * 2
           && fittedFull.height <= smallScreen.height - TopBarMetrics.screenMargin * 2)
-    check("fit never drops below the column floor",
+    check("screen clamp beats the floor — no off-screen window on tiny displays",
+          {
+              let s = TopBarMetrics.fittedSize(
+                  ideal: TopBarMetrics.full, visible: NSSize(width: 640, height: 400),
+                  floor: TopBarMetrics.fullMin)
+              return s.width <= 640 - TopBarMetrics.screenMargin * 2
+                  && s.height <= 400 - TopBarMetrics.screenMargin * 2
+          }())
+    check("floor still lifts a too-small ideal on a roomy display",
           TopBarMetrics.fittedSize(
-              ideal: TopBarMetrics.full, visible: NSSize(width: 640, height: 400),
+              ideal: NSSize(width: 300, height: 300), visible: NSSize(width: 1512, height: 950),
               floor: TopBarMetrics.fullMin) == TopBarMetrics.fullMin)
     check("large displays keep the ideal size",
           TopBarMetrics.fittedSize(
@@ -293,6 +301,20 @@ func runSelfChecks() async -> Bool {
           && fittedFrame.maxY == smallScreen.maxY - 8)
     check("full panel is user-resizable",
           TopBarController.styleMask(focusable: true).contains(.resizable))
+    check("same-state re-render never reframes (snap-back fix)",
+          !TopBarController.shouldSetFrame(
+              renderedState: .full, state: .full, panelVisible: true, frameLost: false))
+    check("state morph, first show, and a lost frame each reframe",
+          TopBarController.shouldSetFrame(
+              renderedState: .collapsed, state: .full, panelVisible: true, frameLost: false)
+          && TopBarController.shouldSetFrame(
+              renderedState: .full, state: .full, panelVisible: false, frameLost: false)
+          && TopBarController.shouldSetFrame(
+              renderedState: .full, state: .full, panelVisible: true, frameLost: true))
+    check("drag floor is screen-clamped on small displays",
+          TopBarMetrics.fittedSize(
+              ideal: TopBarMetrics.fullMin, visible: NSSize(width: 800, height: 500)).width
+              <= 800 - TopBarMetrics.screenMargin * 2)
     check("pill/expanded panel stays fixed and non-activating",
           !TopBarController.styleMask(focusable: false).contains(.resizable)
           && TopBarController.styleMask(focusable: false).contains(.nonactivatingPanel))
