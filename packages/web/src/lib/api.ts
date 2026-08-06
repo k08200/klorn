@@ -1,4 +1,7 @@
-import { isNativePlatform } from "./native/capacitor";
+// Auth-shaped flows must ask isNativeShell(), never isNativePlatform() — the
+// Capacitor-only test answers "no" inside the Tauri wrapper. capacitor.ts is
+// deliberately NOT imported here so that mistake cannot be made in this file.
+import { isNativeShell, openExternal } from "./native/shell";
 
 // Keep SSR and client in sync: both must resolve to the same string so React
 // hydration does not mismatch (e.g. an <a href> rendered on the server must
@@ -95,34 +98,39 @@ export function authHeaders(extra?: Record<string, string>): Record<string, stri
   return h;
 }
 
-// Start the Gmail/Calendar OAuth flow without leaking the user's JWT into the
-// URL. Calls the header-authed start endpoint, then navigates to the returned
-// Google URL. Throws if there is no session or the API rejects.
-export async function startGoogleConnect(): Promise<void> {
-  const { url } = await apiFetch<{ url: string }>("/api/auth/google/start", {
-    method: "POST",
-  });
-  if (typeof window !== "undefined") {
-    window.location.href = url;
-  }
-}
-
 // Open a Google OAuth URL the right way for the platform. The authenticated POST
 // that mints this URL already ran in the WebView (carrying the JWT) and baked the
 // userId into a signed state, so the URL itself needs no app session — we just
-// have to open it where Google ALLOWS OAuth. In the native shell that means the
+// have to open it where Google ALLOWS OAuth. In a native shell that means the
 // SYSTEM browser: Google blocks OAuth inside embedded WebViews (RFC 8252
 // "disallowed_useragent"), which is why an in-WebView window.location bounced the
-// user back to the app login. On the web, a normal navigation is correct.
+// user back to the app login. On the web, a normal same-tab navigation is correct.
+//
+// The shell test MUST be isNativeShell(), not isNativePlatform(): the latter only
+// sees Capacitor, so inside the Tauri Windows wrapper it answers "no" and this
+// falls through to an in-WebView navigation that Google rejects. openExternal()
+// then picks the right handoff per shell (Capacitor Browser / Tauri opener).
+// Its plain-web branch (window.open) is deliberately NOT used here — the web
+// OAuth flow must stay a same-tab navigation so the redirect back lands in the
+// app rather than in a popup a blocker may have eaten.
 async function openOAuthUrl(url: string): Promise<void> {
-  if (isNativePlatform()) {
-    const { Browser } = await import("@capacitor/browser");
-    await Browser.open({ url });
+  if (isNativeShell()) {
+    await openExternal(url);
     return;
   }
   if (typeof window !== "undefined") {
     window.location.href = url;
   }
+}
+
+// Start the Gmail/Calendar OAuth flow without leaking the user's JWT into the
+// URL. Calls the header-authed start endpoint, then opens the returned Google
+// URL. Throws if there is no session or the API rejects.
+export async function startGoogleConnect(): Promise<void> {
+  const { url } = await apiFetch<{ url: string }>("/api/auth/google/start", {
+    method: "POST",
+  });
+  await openOAuthUrl(url);
 }
 
 // Start the OAuth flow to link a SECONDARY Google account for calendar

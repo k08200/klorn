@@ -19,13 +19,16 @@ Klorn — an AI email chief-of-staff. Emails are triaged into exactly **4 tiers:
 pnpm install --frozen-lockfile
 (cd packages/api && npx prisma generate)         # ALWAYS before typecheck/tests; re-run after every rebase
 biome check --diagnostic-level=error packages/   # lint gate is errors-only
-(cd packages/api && npx tsc --noEmit)            # repeat for packages/web
+pnpm --filter @klorn/api typecheck               # and @klorn/web — CI runs these same scripts
 (cd packages/api && npx vitest run)
 pnpm -r build
 ```
 
 Gotchas:
 - Fresh clone/worktree: typecheck fails until `prisma generate` has run.
+- Typecheck via the package script, not a bare `npx tsc --noEmit`: api's `typecheck`
+  carries `--max-old-space-size=4096` (as its `build` does) because a bare run peaks
+  just over 2 GB and aborts with SIGABRT wherever node's default heap is 2 GB.
 - Warnings don't block the lint gate; errors do.
 - CI jobs run in parallel with a warm pnpm cache — the local gate above is the sum
   of them; a green local run means a green CI.

@@ -88,14 +88,19 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Generate Prisma types
         run: cd packages/api && pnpm exec prisma generate
+      # Both go through the package `typecheck` script rather than a bare `tsc`
+      # so CI and the CLAUDE.md gate run the SAME command. api's script carries
+      # --max-old-space-size=4096 (same as its `build`): a bare `tsc --noEmit`
+      # peaks just over 2 GB and aborts on any machine whose default heap is
+      # 2 GB, so the documented local gate died where CI's roomier runner passed.
       - name: Typecheck API
-        run: cd packages/api && pnpm exec tsc --noEmit
+        run: pnpm --filter @klorn/api typecheck
       # Web was previously unchecked here — a broken packages/web tsc slipped
       # through CI on 2026-07-03 (missing @capacitor/app types) because only
       # only api was gated. Next.js `build` type-checks too, but tsc is the
       # cheap fast signal on every PR.
       - name: Typecheck Web
-        run: cd packages/web && pnpm exec tsc --noEmit
+        run: pnpm --filter @klorn/web typecheck
 
   test:
     name: Test

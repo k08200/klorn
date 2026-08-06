@@ -9,6 +9,7 @@
     "dev": "NEXT_DEV_DIST=1 next dev --port 8001",
     "build": "next build || (node scripts/ensure-next-dev-manifests.mjs && next build)",
     "start": "next start",
+    "typecheck": "tsc --noEmit",
     "lint": "next lint"
   },
   "dependencies": {
