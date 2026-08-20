@@ -28,7 +28,7 @@
     "@fastify/formbody": "^8.0.2",
     "@fastify/helmet": "^13.1.0",
     "@fastify/multipart": "^10.1.0",
-    "@fastify/rate-limit": "^10.2.1",
+    "@fastify/rate-limit": "^11.2.0",
     "@prisma/client": "^6.8.2",
     "@sentry/node": "^10.70.0",
     "@types/web-push": "^3.6.4",
