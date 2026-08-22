@@ -29,6 +29,7 @@ import { formatCalendarFacts, getMeetingContext } from "../mail/meeting-context.
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { buildReplySystemPrompt } from "../mail/reply-prompt.js";
 import { senderDossierFacts } from "../mail/sender-dossier.js";
+import { cachedThreadBrief, threadBriefFacts } from "../mail/thread-brief.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { parseJsonArray, safeAttachmentFilename } from "./email.js";
@@ -119,6 +120,22 @@ async function senderContextFor(
   }
 }
 
+/**
+ * Thread reasoning for the draft prompt. Cached-only by default: drafting is
+ * already one LLM call on a 10/min route, and a thread read on top would
+ * double it. The reading pane's brief fetch is what warms this cache, so by
+ * the time the user clicks "AI 답장" on a mail they opened, it is hot.
+ */
+async function threadBriefFor(uid: string, threadId: string | null): Promise<string | null> {
+  try {
+    const brief = await cachedThreadBrief(uid, threadId);
+    return threadBriefFacts(brief) || null;
+  } catch (err) {
+    console.warn("[EMAIL] thread brief unavailable:", err);
+    return null;
+  }
+}
+
 async function calendarFactsFor(
   uid: string,
   dbEmail: {
@@ -159,6 +176,8 @@ async function generateReplyDraft(input: {
   intent?: string;
   calendarFacts?: string | null;
   senderContext?: string | null;
+  /** Thread reasoning: why they wrote NOW, what is owed either way. */
+  threadBrief?: string | null;
 }): Promise<string> {
   const [credentials, voiceHint, toneHint] = await Promise.all([
     getUserLlmCredentials(input.userId),
@@ -203,7 +222,7 @@ Subject: ${wrapUntrusted(input.subject, "email:subject")}
 Klorn summary: ${wrapUntrusted(input.summary || "", "email:summary")}
 Action items: ${wrapUntrusted(input.actionItems.join("; "), "email:actions")}
 ${wrapUntrusted(candidateContext, "email:candidate")}
-${input.calendarFacts ? `\n${input.calendarFacts}\n` : ""}${input.senderContext ? `\n${input.senderContext}\n` : ""}
+${input.calendarFacts ? `\n${input.calendarFacts}\n` : ""}${input.senderContext ? `\n${input.senderContext}\n` : ""}${input.threadBrief ? `\nThread context (why this arrived now — answer THIS, not just the last message):\n${input.threadBrief}\n` : ""}
 Email body:
 ${wrapUntrusted((input.body || "").slice(0, 3000), "email:body")}`,
         },
@@ -264,6 +283,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       const candidateProfile = buildAttachmentCandidateProfile(attachments);
       const calendarFacts = await calendarFactsFor(uid, dbEmail);
       const senderContext = await senderContextFor(uid, dbEmail.from);
+      const threadBrief = await threadBriefFor(uid, dbEmail.threadId);
 
       // The draft is one LLM call. Without this catch a provider outage / quota
       // lockout surfaced as a bare 500 and a generic "Could not draft a reply"
@@ -282,6 +302,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
           intent,
           calendarFacts,
           senderContext,
+          threadBrief,
         });
       } catch (err) {
         // A per-user quota trip (quota-limiter self-throttling) is the user
@@ -366,6 +387,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       // makes this a single parse per email regardless).
       const calendarFacts = await calendarFactsFor(uid, dbEmail);
       const senderContext = await senderContextFor(uid, dbEmail.from);
+      const threadBrief = await threadBriefFor(uid, dbEmail.threadId);
 
       let bodies: string[];
       try {
@@ -382,6 +404,7 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
               intent: preset.intent,
               calendarFacts,
               senderContext,
+              threadBrief,
             }),
           ),
         );

@@ -153,6 +153,10 @@ async function parseGmailMessageDetail(
   gmail: gmail_v1.Gmail,
   messageId: string,
   detail: gmail_v1.Schema$Message,
+  // Thread reads want text only: downloading attachment bytes for every
+  // message in a thread costs a multiple of the fetch and feeds nothing the
+  // reasoning needs.
+  opts?: { skipAttachments?: boolean },
 ): Promise<GmailRawEmail> {
   const headers = detail.payload?.headers || [];
   const getHeader = (name: string) =>
@@ -200,7 +204,9 @@ async function parseGmailMessageDetail(
   }
 
   if (payload) {
-    attachments.push(...(await extractAttachmentsFromPayload(gmail, messageId, payload)));
+    if (!opts?.skipAttachments) {
+      attachments.push(...(await extractAttachmentsFromPayload(gmail, messageId, payload)));
+    }
   }
 
   const labelIds = detail.labelIds || [];
@@ -368,6 +374,64 @@ export async function fetchGmailEmailById(
       }
       return null;
     }
+    throw err;
+  }
+}
+
+/**
+ * Every message in a Gmail thread, oldest first — INCLUDING the user's own
+ * sent replies. The local mirror is INBOX-only (see `fetchGmailEmails`), so
+ * this is the only way to see both sides of a conversation. Needs no extra
+ * scope: `gmail.readonly` already covers every label.
+ *
+ * Attachment bytes are deliberately NOT downloaded here (`skipAttachments`):
+ * a thread read is for reasoning about text, and pulling binaries for a whole
+ * thread would cost a multiple of the message fetch itself.
+ */
+export async function fetchGmailThread(
+  userId: string,
+  threadId: string,
+  authClient?: InstanceType<typeof google.auth.OAuth2> | null,
+): Promise<GmailRawEmail[] | null> {
+  const auth = authClient ?? (await getAuthedClient(userId));
+  if (!auth) return null;
+
+  const gmail = google.gmail({ version: "v1", auth });
+  try {
+    const res = await gmail.users.threads.get({
+      userId: "me",
+      id: threadId,
+      format: "full",
+    });
+    const messages = res.data.messages ?? [];
+    const parsed: GmailRawEmail[] = [];
+    for (const message of messages) {
+      if (!message.id) continue;
+      parsed.push(
+        await parseGmailMessageDetail(gmail, message.id, message, { skipAttachments: true }),
+      );
+    }
+    return parsed.sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime());
+  } catch (err) {
+    if (isGoogleAuthError(err)) {
+      if (authClient) {
+        console.warn(
+          `[GMAIL-FETCH] linked-inbox auth error for user ${userId} (thread ${threadId}); primary token left intact`,
+        );
+        captureError(err, {
+          tags: { scope: "gmail.fetch.thread.linked-auth" },
+          extra: { userId, threadId },
+        });
+      } else {
+        await markGoogleTokenForReconnect(userId);
+      }
+      return null;
+    }
+    // A thread that vanished (deleted/expunged) is a 404, not an outage —
+    // the caller degrades to single-message context.
+    const status =
+      (err as { code?: number; status?: number })?.code ?? (err as { status?: number })?.status;
+    if (status === 404) return null;
     throw err;
   }
 }

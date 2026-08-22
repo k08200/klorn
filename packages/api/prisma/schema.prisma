@@ -116,6 +116,7 @@ model User {
   emailRules                EmailRule[]
   attentionItems            AttentionItem[]
   contactDossiers           ContactDossier[]
+  threadBriefs              ThreadBrief[]
   teams                     Team[]
   commitments               Commitment[]
   feedbackEvents            FeedbackEvent[]
@@ -1663,6 +1664,38 @@ model ContactDossier {
   updatedAt          DateTime @updatedAt
 
   @@unique([userId, senderEmail])
+}
+
+/// Per-THREAD reasoning cache: "why did this person write, now?" Built from
+/// the whole Gmail thread — both directions, including the user's own sent
+/// replies, which the INBOX-only local mirror does not have. Feeds the reply
+/// prompt, the assistant, and the reading pane, so the expensive read happens
+/// once per thread state instead of once per surface.
+model ThreadBrief {
+  id       String @id @default(uuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  threadId String @db.VarChar(120)
+
+  /// Why this message arrived NOW — the trigger, not a summary.
+  whyNow String @db.VarChar(400)
+  /// Concrete things the sender is asking for. String[] as Json.
+  asks   Json?
+  /// Outstanding commitment the USER owes them, if any.
+  weOwe  String? @db.VarChar(300)
+  /// Outstanding commitment THEY owe the user, if any.
+  theyOwe String? @db.VarChar(300)
+  /// One-line recommended stance for a reply.
+  stance String? @db.VarChar(300)
+
+  /// How many thread messages the brief covered — staleness check, mirroring
+  /// ContactDossier.analyzedEmailCount: regenerate when the count differs.
+  analyzedMessageCount Int
+  lastMessageAt        DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([userId, threadId])
 }
 
 // Public early-access waitlist. Submissions land here before the founder

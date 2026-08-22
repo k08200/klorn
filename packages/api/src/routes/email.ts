@@ -57,6 +57,7 @@ import { getLinkedInboxClients, resolveMailClient } from "../mail/gmail.js";
 import { getMeetingContext } from "../mail/meeting-context.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { getSenderDossier } from "../mail/sender-dossier.js";
+import { getThreadBrief } from "../mail/thread-brief.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { createTask } from "../pim/tasks.js";
 import { captureError } from "../sentry.js";
@@ -1526,6 +1527,38 @@ export async function emailRoutes(app: FastifyInstance) {
     }
     return { pinned: false, sender };
   });
+
+  // GET /api/email/:id/thread-brief — "why did this person write, now?"
+  // Reads the WHOLE Gmail thread (both directions, including the user's own
+  // sent replies the INBOX-only mirror never stored) and caches the result
+  // per thread state. This is also what warms the cache the reply drafter
+  // reads, so opening a mail pays the read once for every later surface.
+  app.get(
+    "/:id/thread-brief",
+    {
+      preHandler: [requireAuth, requireEntitled],
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const uid = getUserId(request);
+      const { lang } = (request.query as { lang?: string }) ?? {};
+
+      const dbEmail = await prisma.emailMessage.findFirst({
+        where: { userId: uid, OR: [{ id }, { gmailId: id }] },
+        select: { threadId: true },
+      });
+      if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
+      // IMAP-sourced mail has no thread id — an honest empty answer beats a
+      // 404 the client has to special-case.
+      if (!dbEmail.threadId) return { brief: null };
+
+      const brief = await getThreadBrief(uid, dbEmail.threadId, {
+        lang: lang === "ko" ? "ko" : "en",
+      });
+      return { brief: brief.whyNow ? brief : null };
+    },
+  );
 
   // GET /api/email/:id/sender-dossier — relationship context for the mail's
   // sender ("why did this person write"). Cache-by-count inside the module:

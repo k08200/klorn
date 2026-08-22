@@ -355,6 +355,21 @@ struct TeamAvailabilityWire: Codable, Sendable {
 }
 
 /// GET /api/email/:id/sender-dossier — relationship context for the sender.
+/// GET /api/email/:id/thread-brief → { brief: … | null }. Why the sender wrote
+/// NOW, read from the whole Gmail thread — including the user's own replies,
+/// which the local INBOX mirror never stored.
+struct ThreadBriefWire: Codable, Sendable {
+    let whyNow: String
+    let asks: [String]
+    let weOwe: String?
+    let theyOwe: String?
+    let stance: String?
+}
+
+struct ThreadBriefResponse: Codable, Sendable {
+    let brief: ThreadBriefWire?
+}
+
 struct SenderDossierWire: Codable, Sendable {
     let summary: String
     let openThreads: [String]

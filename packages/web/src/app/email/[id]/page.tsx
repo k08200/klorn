@@ -821,6 +821,7 @@ function EmailDetailView() {
               onSummarize={summarize}
               summarizing={summarizing}
             />
+            <ThreadBriefCard emailId={email.id} />
             <SenderContextCard emailId={email.id} />
           </div>
         </article>
@@ -1478,6 +1479,62 @@ function SummarizeButton({
     >
       {summarizing ? t("emailDetail.analysis.summarizing") : t("emailDetail.analysis.summarize")}
     </button>
+  );
+}
+
+/** Why this message arrived NOW — read from the whole thread, both
+ *  directions. Distinct from the dossier: the dossier is who they are, this
+ *  is what just happened. Fetching it here also warms the cache the reply
+ *  drafter reads. */
+function ThreadBriefCard({ emailId }: { emailId: string }) {
+  const { t, locale } = useT();
+  const [brief, setBrief] = useState<{
+    whyNow: string;
+    asks: string[];
+    weOwe: string | null;
+    stance: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setBrief(null);
+    apiFetch<{
+      brief: { whyNow: string; asks: string[]; weOwe: string | null; stance: string | null } | null;
+    }>(`/api/email/${emailId}/thread-brief?lang=${locale}`)
+      .then((d) => {
+        if (alive && d.brief?.whyNow) setBrief(d.brief);
+      })
+      .catch(() => {
+        // Best-effort: a single-message thread or an unreachable Gmail shows
+        // nothing rather than an error the user can do nothing about.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [emailId, locale]);
+
+  if (!brief) return null;
+  return (
+    <section className="panel-elevated rounded-2xl border border-line/70 bg-surface-panel p-4">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
+        {t("emailDetail.threadBrief.title")}
+      </p>
+      <p className="text-sm leading-relaxed text-ink">{brief.whyNow}</p>
+      {brief.weOwe && (
+        <p className="mt-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+          {t("emailDetail.threadBrief.weOwe")}: {brief.weOwe}
+        </p>
+      )}
+      {brief.asks.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {brief.asks.map((ask) => (
+            <li key={ask} className="text-xs text-ink-mid">
+              · {ask}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

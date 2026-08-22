@@ -14,6 +14,7 @@ import { runChatTurn } from "../agentcore/chat-engine.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
+import { cachedThreadBrief, threadBriefFacts } from "../mail/thread-brief.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
 
@@ -35,7 +36,14 @@ async function buildViewContext(userId: string, rawEmailId: unknown): Promise<st
   try {
     const email = await prisma.emailMessage.findFirst({
       where: { userId, OR: [{ id }, { gmailId: id }] },
-      select: { id: true, from: true, subject: true, summary: true, snippet: true },
+      select: {
+        id: true,
+        from: true,
+        subject: true,
+        summary: true,
+        snippet: true,
+        threadId: true,
+      },
     });
     if (!email) return null;
     const gist = email.summary || email.snippet || "";
@@ -46,6 +54,13 @@ async function buildViewContext(userId: string, rawEmailId: unknown): Promise<st
     ];
     if (gist) {
       lines.push(`- gist: ${wrapUntrusted(gist.slice(0, VIEW_CONTEXT_SNIPPET), "email-summary")}`);
+    }
+    // Cached-only: the turn already costs an LLM call, and the reading pane
+    // warms this when the user opens the mail. Absent is fine — the model
+    // still has read_email.
+    const brief = threadBriefFacts(await cachedThreadBrief(userId, email.threadId));
+    if (brief) {
+      lines.push(`- thread context: ${wrapUntrusted(brief, "thread-brief")}`);
     }
     return lines.join("\n");
   } catch (err) {

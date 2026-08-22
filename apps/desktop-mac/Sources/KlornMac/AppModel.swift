@@ -70,6 +70,7 @@ final class AppModel {
     /// Relationship context for the opened mail's sender (nil while loading
     /// or when there is no history/provider).
     private(set) var senderDossier: SenderDossierWire?
+    private(set) var threadBrief: ThreadBriefWire?
     private(set) var isLoadingEmail = false
     private(set) var emailError: String?
     private(set) var replyError: String?
@@ -497,6 +498,7 @@ final class AppModel {
             Task { try? await api.patch("/api/email/\(emailDbId)/read", json: [:]) }
             loadMeetingContext(for: emailDbId, guardId: item.id)
             loadSenderDossier(for: emailDbId, guardId: item.id)
+            loadThreadBrief(for: emailDbId, guardId: item.id)
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -534,6 +536,21 @@ final class AppModel {
         }
     }
 
+    /// Why this person wrote NOW — a whole-thread read (both directions).
+    /// Fetching it here is also what warms the server cache the reply drafter
+    /// reads, so "AI 답장" on an opened mail costs no extra thread read.
+    private func loadThreadBrief(for emailDbId: String, guardId: String) {
+        threadBrief = nil
+        Task {
+            let lang = L10n.resolvedCode(override: L10n.override)
+            let response = try? await api.get(
+                "/api/email/\(emailDbId)/thread-brief?lang=\(lang)", as: ThreadBriefResponse.self)
+            if selectedItemId == guardId, let brief = response?.brief, !brief.whyNow.isEmpty {
+                threadBrief = brief
+            }
+        }
+    }
+
     private func loadMeetingContext(for emailDbId: String, guardId: String) {
         meetingContext = nil
         guard openedEmail?.category == "meeting" else { return }
@@ -546,6 +563,7 @@ final class AppModel {
 
     func clearSelection() {
         selectedItemId = nil
+        threadBrief = nil
         openedEmail = nil
         meetingContext = nil
         senderDossier = nil

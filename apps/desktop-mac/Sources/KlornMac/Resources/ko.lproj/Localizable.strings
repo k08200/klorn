@@ -468,3 +468,7 @@
 "assistant.dock.toggle" = "어시스턴트 (⌘J)";
 "assistant.dock.close.a11y" = "어시스턴트 닫기";
 "assistant.dock.context.a11y" = "이 메일에 대해: %@";
+
+/* Thread brief (why they wrote now) */
+"thread.weOwe" = "아직 안 준 것: %@";
+"thread.brief.a11y" = "이 메일이 온 이유: %@";

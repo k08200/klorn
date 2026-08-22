@@ -3081,6 +3081,36 @@ struct ReadingPane: View {
                             .font(.caption).foregroundStyle(Theme.textDim)
                     }
                 }
+                // Why this arrived NOW — read from the whole thread, both
+                // directions. Sits ABOVE the relationship dossier: the
+                // trigger is what the user needs before deciding anything.
+                if let brief = model.threadBrief, !brief.whyNow.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline, spacing: 5) {
+                            Image(systemName: "arrow.triangle.branch").font(.caption2)
+                                .foregroundStyle(Theme.accent).accessibilityHidden(true)
+                            Text(brief.whyNow).font(.caption).foregroundStyle(Theme.text)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if let owe = brief.weOwe, !owe.isEmpty {
+                            Text(L("thread.weOwe", owe))
+                                .font(.caption2).foregroundStyle(.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        ForEach(brief.asks.prefix(2), id: \.self) { ask in
+                            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                                Text("·").font(.caption2).foregroundStyle(Theme.textDim)
+                                Text(ask).font(.caption2).foregroundStyle(Theme.textDim)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(L("thread.brief.a11y", brief.whyNow))
+                }
                 if let dossier = model.senderDossier, !dossier.summary.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(alignment: .firstTextBaseline, spacing: 5) {

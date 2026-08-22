@@ -469,3 +469,7 @@
 "assistant.dock.toggle" = "Assistant (⌘J)";
 "assistant.dock.close.a11y" = "Close assistant";
 "assistant.dock.context.a11y" = "Asking about: %@";
+
+/* Thread brief (why they wrote now) */
+"thread.weOwe" = "You still owe: %@";
+"thread.brief.a11y" = "Why this arrived: %@";
