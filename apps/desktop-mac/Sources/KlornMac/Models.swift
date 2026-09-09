@@ -802,6 +802,27 @@ func firewallPath(selected: String) -> String {
     return base + "?inbox=\(enc)"
 }
 
+/// Folder listing path with the per-inbox scope. Unlike firewallPath, "all"
+/// is sent EXPLICITLY: a folder's server default is the primary account
+/// (older builds only ever read that), and `inbox=all` is what asks it to
+/// merge every connected account. Pure for testing.
+func mailboxPath(box: MailboxKind, selectedInbox: String, pageToken: String? = nil) -> String {
+    let scope = selectedInbox.isEmpty ? "all" : selectedInbox
+    var query = URLComponents()
+    query.queryItems =
+        [URLQueryItem(name: "inbox", value: scope)]
+        + (pageToken.map { [URLQueryItem(name: "pageToken", value: $0)] } ?? [])
+    return "/api/email/mailbox/\(box.rawValue)?\(query.percentEncodedQuery ?? "")"
+}
+
+/// Single-message follow-ups (open, delete the draft) go back to the account
+/// the row came from. A row from an older server carries no `inbox` and
+/// reads as the primary — the only account that server ever listed.
+func mailboxItemQuery(inbox: String?) -> String {
+    let scope = (inbox ?? "primary").addingPercentEncoding(withAllowedCharacters: .alphanumerics)
+    return "?inbox=\(scope ?? "primary")"
+}
+
 /// `GET /api/ops/readiness` — the per-account truth the app can show the user
 /// instead of making them guess why mail stopped (founder, 2026-08-10).
 struct ReadinessCheck: Decodable, Identifiable, Sendable {
@@ -1282,6 +1303,10 @@ struct MailboxItem: Codable, Sendable, Identifiable, Hashable {
     let snippet: String
     let receivedAt: String
     let isRead: Bool
+    /// "primary" or a linked inbox id — which account issued this Gmail id,
+    /// so opening / deleting goes back to the same account. Optional: an
+    /// older server omits it, and that reads as the primary.
+    let inbox: String?
 
     var id: String { gmailId }
 }

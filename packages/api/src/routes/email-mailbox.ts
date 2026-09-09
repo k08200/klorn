@@ -19,6 +19,7 @@ import {
   MAILBOXES,
   type Mailbox,
   type MailboxItemWire,
+  resolveMailboxClient,
 } from "../mail/gmail-mailbox.js";
 
 /** Demo rows so a signed-out / disconnected session still shows the shape. */
@@ -33,6 +34,7 @@ const DEMO_ROWS: Record<Mailbox, MailboxItemWire[]> = {
       snippet: "Signed and attached. Clause 4 reads fine after legal's change.",
       receivedAt: "2026-07-29T05:40:00.000Z",
       isRead: true,
+      inbox: "primary",
     },
   ],
   drafts: [
@@ -45,6 +47,7 @@ const DEMO_ROWS: Record<Mailbox, MailboxItemWire[]> = {
       snippet: "Before we renew, can you break the invoice into",
       receivedAt: "2026-07-29T03:12:00.000Z",
       isRead: true,
+      inbox: "primary",
     },
   ],
   archived: [
@@ -57,12 +60,18 @@ const DEMO_ROWS: Record<Mailbox, MailboxItemWire[]> = {
       snippet: "Invoice #4783 for July is attached. No action needed.",
       receivedAt: "2026-07-28T22:05:00.000Z",
       isRead: true,
+      inbox: "primary",
     },
   ],
 };
 
 function isMailbox(value: string): value is Mailbox {
   return (MAILBOXES as readonly string[]).includes(value);
+}
+
+/** `inbox=` names ONE linked account (not absent / primary / all). */
+function isLinkedInboxScope(inbox: string | undefined): inbox is string {
+  return Boolean(inbox) && inbox !== "primary" && inbox !== "all";
 }
 
 export function registerEmailMailboxRoutes(app: FastifyInstance) {
@@ -72,8 +81,13 @@ export function registerEmailMailboxRoutes(app: FastifyInstance) {
       return reply.code(404).send({ success: false, error: "Unknown mailbox" });
     }
     const uid = getUserId(request);
-    const { pageToken } = request.query as { pageToken?: string };
-    const page = await listGmailMailbox(uid, box, pageToken);
+    const { pageToken, inbox } = request.query as { pageToken?: string; inbox?: string };
+    const page = await listGmailMailbox(uid, box, pageToken, inbox);
+    // A linked id that does not resolve (unknown, foreign, non-Google) is a
+    // miss, never demo mail dressed up as that account.
+    if (page === null && isLinkedInboxScope(inbox)) {
+      return reply.code(404).send({ success: false, error: "Inbox not found" });
+    }
     // null = Gmail not connected — same demo fallback contract as GET /.
     return {
       success: true,
@@ -91,8 +105,15 @@ export function registerEmailMailboxRoutes(app: FastifyInstance) {
   // cost the metadata-only listing avoids paying fifty times.
   app.get("/live/:gmailId", async (request, reply) => {
     const { gmailId } = request.params as { gmailId: string };
+    const { inbox } = request.query as { inbox?: string };
     const uid = getUserId(request);
-    const raw = await fetchGmailEmailById(uid, gmailId);
+    // The row said which account issued this id; open it THERE. The primary
+    // path keeps fetchGmailEmailById's own token handling (no client passed).
+    const linked = isLinkedInboxScope(inbox) ? await resolveMailboxClient(uid, inbox) : null;
+    if (isLinkedInboxScope(inbox) && !linked) {
+      return reply.code(404).send({ success: false, error: "Inbox not found" });
+    }
+    const raw = await fetchGmailEmailById(uid, gmailId, linked);
     if (!raw) {
       return reply.code(404).send({ success: false, error: "Message not found" });
     }
@@ -129,8 +150,9 @@ export function registerEmailMailboxRoutes(app: FastifyInstance) {
   // have been sent or deleted from another client already.
   app.delete("/draft/by-message/:gmailId", async (request, reply) => {
     const { gmailId } = request.params as { gmailId: string };
+    const { inbox } = request.query as { inbox?: string };
     const uid = getUserId(request);
-    const deleted = await deleteGmailDraftByMessageId(uid, gmailId);
+    const deleted = await deleteGmailDraftByMessageId(uid, gmailId, inbox);
     if (!deleted) {
       return reply.code(404).send({ success: false, error: "Draft not found" });
     }
