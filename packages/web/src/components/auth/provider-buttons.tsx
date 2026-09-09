@@ -3,7 +3,7 @@
 import type { AuthProviderId } from "@klorn/contract";
 import { type MouseEvent, useEffect, useState } from "react";
 import { API_BASE } from "../../lib/api";
-import { storedAttribution } from "../../lib/attribution";
+import { captureFirstTouchAttribution, storedAttribution } from "../../lib/attribution";
 import { useT } from "../../lib/i18n";
 import { AppleMark, GoogleMark, NaverMark } from "./provider-marks";
 
@@ -61,6 +61,12 @@ export default function ProviderButtons({
   // is not available on the server and would desync hydration.
   const [attr, setAttr] = useState<string | null>(null);
   useEffect(() => {
+    // React runs child effects before the parent's, so on a first visit this
+    // fires before the login page's own capture effect and the store is still
+    // empty — every OAuth signup then lands with attribution NULL (0/15 users
+    // as of 2026-09-08). Capture is idempotent (first touch wins), so do it
+    // here before reading instead of depending on effect order.
+    captureFirstTouchAttribution();
     setAttr(storedAttribution());
   }, []);
   const googleHref = attr
