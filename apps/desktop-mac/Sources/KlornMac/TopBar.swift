@@ -3655,9 +3655,11 @@ struct ReadingPane: View {
             if let renderHtml = detail.renderHtml, !renderHtml.isEmpty {
                 EmailHtmlView(
                     html: renderHtml,
-                    // Live folder messages have no inline-image fetch path yet;
-                    // cid images degrade to their alt text.
-                    inlineImage: { _ in nil },
+                    // Live folder messages resolve cid: images through the
+                    // live route, on the account the row came from.
+                    inlineImage: { [gmailId = detail.gmailId, inbox = model.selectedMailboxItem?.inbox] cid in
+                        await model.liveInlineImage(gmailId: gmailId, inbox: inbox, cid: cid)
+                    },
                     blockRemote: !model.settings.loadRemoteImages)
                     .id(detail.gmailId)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

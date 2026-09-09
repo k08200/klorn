@@ -26,6 +26,11 @@ const state = vi.hoisted(() => ({
   linked: {} as Record<string, { ids: string[]; nextPageToken: string | null }>,
   // internalDate per message id so a merged page can be checked for order.
   internalDates: {} as Record<string, string>,
+  // Live inline images: the MIME tree a format:"full" get returns, and the
+  // attachment bodies by id.
+  fullPayload: null as Record<string, unknown> | null,
+  attachmentData: {} as Record<string, string>,
+  attachmentGets: [] as Record<string, unknown>[],
 }));
 
 vi.mock("../mail/gmail.js", () => ({
@@ -56,7 +61,16 @@ vi.mock("googleapis", () => ({
               },
             };
           }),
+          attachments: {
+            get: vi.fn(async (params: { messageId: string; id: string }) => {
+              state.attachmentGets.push({ ...params, account: auth.key });
+              return { data: { data: state.attachmentData[params.id] ?? null } };
+            }),
+          },
           get: vi.fn(async (params: Record<string, unknown>) => {
+            if (params.format === "full") {
+              return { data: { id: params.id, payload: state.fullPayload } };
+            }
             state.metaCalls.push({ ...params, account: auth.key });
             return {
               data: {
@@ -249,6 +263,90 @@ describe("listGmailMailbox — per-inbox scope", () => {
     const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
     const page = await listGmailMailbox("user-1", "sent", "not-base64-json", "all");
     expect(page?.items).toHaveLength(3);
+  });
+});
+
+// Folder rows are never synced, so src="cid:…" had no attachment row to
+// resolve through and every logo degraded to alt text. The live path walks
+// the MIME tree instead.
+describe("inline images of live messages", () => {
+  const cidHeader = (value: string) => [{ name: "Content-ID", value }];
+  const tree = {
+    mimeType: "multipart/alternative",
+    parts: [
+      { mimeType: "text/plain", body: { data: "aGk" } },
+      {
+        mimeType: "multipart/related",
+        parts: [
+          { mimeType: "text/html", body: { data: "PGI+" } },
+          {
+            mimeType: "image/png",
+            headers: cidHeader("<logo@x>"),
+            body: { attachmentId: "att-logo", size: 1234 },
+          },
+          {
+            mimeType: "image/gif",
+            headers: cidHeader("<tiny@x>"),
+            body: { data: "R0lGODlh", size: 8 },
+          },
+          {
+            mimeType: "text/html",
+            headers: cidHeader("<evil@x>"),
+            body: { attachmentId: "att-evil" },
+          },
+        ],
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    state.hasToken = true;
+    state.fullPayload = tree;
+    state.attachmentData = { "att-logo": "iVBORw0KGgo" };
+    state.attachmentGets.length = 0;
+  });
+
+  it("findInlinePart — finds the image through nested multiparts, brackets stripped", async () => {
+    const { findInlinePart } = await import("../mail/inline-image.js");
+    expect(findInlinePart(tree, "logo@x")).toEqual({
+      mimeType: "image/png",
+      attachmentId: "att-logo",
+      data: null,
+    });
+  });
+
+  it("findInlinePart — a small part carries its bytes inline", async () => {
+    const { findInlinePart } = await import("../mail/inline-image.js");
+    expect(findInlinePart(tree, "tiny@x")).toEqual({
+      mimeType: "image/gif",
+      attachmentId: null,
+      data: "R0lGODlh",
+    });
+  });
+
+  it("findInlinePart — a non-image part with a matching cid is NOT served", async () => {
+    const { findInlinePart } = await import("../mail/inline-image.js");
+    expect(findInlinePart(tree, "evil@x")).toBeNull();
+    expect(findInlinePart(tree, "missing@x")).toBeNull();
+    expect(findInlinePart(undefined, "logo@x")).toBeNull();
+  });
+
+  it("fetchInlineImage — reads the message once, then exactly the matching attachment", async () => {
+    const { fetchInlineImage } = await import("../mail/inline-image.js");
+    const image = await fetchInlineImage({ key: "primary" } as never, "m-1", "logo@x");
+    expect(image?.mimeType).toBe("image/png");
+    expect(image?.bytes).toEqual(Buffer.from("iVBORw0KGgo", "base64url"));
+    expect(state.attachmentGets).toEqual([
+      { messageId: "m-1", id: "att-logo", account: "primary", userId: "me" },
+    ]);
+  });
+
+  it("fetchInlineImage — inline bytes need no attachment fetch; a miss is null", async () => {
+    const { fetchInlineImage } = await import("../mail/inline-image.js");
+    const tiny = await fetchInlineImage({ key: "primary" } as never, "m-1", "tiny@x");
+    expect(tiny?.mimeType).toBe("image/gif");
+    expect(state.attachmentGets).toEqual([]);
+    expect(await fetchInlineImage({ key: "primary" } as never, "m-1", "missing@x")).toBeNull();
   });
 });
 
