@@ -21,6 +21,7 @@ import {
   type MailboxItemWire,
   resolveMailboxClient,
 } from "../mail/gmail-mailbox.js";
+import { fetchInlineImage } from "../mail/inline-image.js";
 
 /** Demo rows so a signed-out / disconnected session still shows the shape. */
 const DEMO_ROWS: Record<Mailbox, MailboxItemWire[]> = {
@@ -143,6 +144,34 @@ export function registerEmailMailboxRoutes(app: FastifyInstance) {
       },
     };
   });
+
+  // Inline (cid:) image of a live folder message — the folder counterpart of
+  // GET /:id/inline/:cid. No DB row to consult, so the live MIME tree is
+  // walked for the Content-ID; image/* only. Misses and Gmail errors are a
+  // plain 404: the webview paints a transparent placeholder, never a broken
+  // icon, and the mail itself is unaffected.
+  app.get(
+    "/live/:gmailId/inline/:cid",
+    { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { gmailId, cid } = request.params as { gmailId: string; cid: string };
+      const { inbox } = request.query as { inbox?: string };
+      const uid = getUserId(request);
+      const auth = await resolveMailboxClient(uid, inbox);
+      if (!auth) return reply.code(404).send({ error: "Mail source not connected" });
+      try {
+        const image = await fetchInlineImage(auth, gmailId, cid);
+        if (!image) return reply.code(404).send({ error: "Inline image not found" });
+        return reply
+          .type(image.mimeType)
+          .header("cache-control", "private, max-age=3600")
+          .send(image.bytes);
+      } catch (err) {
+        console.warn(`[EMAIL] live inline image fetch failed for ${gmailId}/${cid}:`, err);
+        return reply.code(404).send({ error: "Inline image not found" });
+      }
+    },
+  );
 
   // Remove the ORIGINAL Gmail draft after a draft-based send — without this
   // the sent mail and its stale draft coexist and the folder looks broken.

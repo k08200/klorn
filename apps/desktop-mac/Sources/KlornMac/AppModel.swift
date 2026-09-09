@@ -552,6 +552,18 @@ final class AppModel {
         return (data, mime ?? "image/png")
     }
 
+    /// The folder-row counterpart of inlineImage: live messages have no DB
+    /// row, so the API walks the message's MIME tree — on the account the
+    /// row came from. Same alphanumerics-only encoding, same nil-on-failure.
+    func liveInlineImage(gmailId: String, inbox: String?, cid: String) async -> (Data, String)? {
+        guard let id = gmailId.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              let encoded = cid.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+              let (data, mime) = try? await api.rawGet(
+                "/api/email/live/\(id)/inline/\(encoded)\(mailboxItemQuery(inbox: inbox))")
+        else { return nil }
+        return (data, mime ?? "image/png")
+    }
+
     /// Meeting mail only: fetch the calendar cross-reference (proposed slot,
     /// conflict verdict, nearby events) without blocking the pane. The guard
     /// keeps a slow response from painting over a different, newer selection.
