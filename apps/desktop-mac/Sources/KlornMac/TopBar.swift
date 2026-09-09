@@ -3131,8 +3131,22 @@ struct MailboxRow: View {
         } label: {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(counterparty).font(Theme.Typo.label)
-                        .foregroundStyle(Theme.textDim).lineLimit(1)
+                    HStack(spacing: 8) {
+                        Text(counterparty).font(Theme.Typo.label)
+                            .foregroundStyle(Theme.textDim).lineLimit(1)
+                        // Which account the row came from — only meaningful
+                        // with 2+ inboxes (inboxRowBadge stays quiet otherwise).
+                        if let badge = inboxRowBadge(
+                            linkedId: item.inbox == "primary" ? nil : item.inbox,
+                            inboxes: model.inboxes)
+                        {
+                            Text(badge).font(.caption2).foregroundStyle(Theme.textDim)
+                                .lineLimit(1)
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .background(Theme.surfaceRaised, in: Capsule())
+                                .accessibilityLabel(L("mail.inbox.a11y", badge))
+                        }
+                    }
                     Text(decodeHTMLEntities(item.subject.isEmpty
                         ? L("mailbox.noSubject") : item.subject))
                         .font(Theme.Typo.head)

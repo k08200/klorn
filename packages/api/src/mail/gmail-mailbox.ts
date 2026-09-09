@@ -15,7 +15,9 @@
 
 import { google } from "googleapis";
 import { Semaphore } from "../semaphore.js";
-import { getAuthedClient } from "./gmail.js";
+import { getAuthedClient, getAuthedInboxClient, getLinkedInboxClients } from "./gmail.js";
+
+type OAuth2 = InstanceType<typeof google.auth.OAuth2>;
 
 export const MAILBOXES = ["sent", "drafts", "archived"] as const;
 export type Mailbox = (typeof MAILBOXES)[number];
@@ -31,6 +33,84 @@ export interface MailboxItemWire {
   /** ISO. Gmail's internalDate (epoch ms) is the arrival authority. */
   receivedAt: string;
   isRead: boolean;
+  /**
+   * Which account the row lives in: "primary" or a LinkedInboxAccount id.
+   * Every follow-up (open, delete the draft) must go back to the same
+   * account — a Gmail message id only exists in the mailbox that issued it.
+   */
+  inbox: string;
+}
+
+/** One connected Google account the folders can read, keyed like `inbox`. */
+interface MailboxAccount {
+  key: string;
+  auth: OAuth2;
+}
+
+/**
+ * The OAuth client an `inbox=` scope acts on, for single-message follow-ups
+ * (open, delete draft). Absent / "primary" / "all" = the user's own Google
+ * account; anything else = one LinkedInboxAccount id, userId-scoped by the
+ * lookup so a foreign id resolves to null rather than someone else's mail.
+ */
+export async function resolveMailboxClient(
+  userId: string,
+  inbox: string | undefined,
+): Promise<OAuth2 | null> {
+  if (!inbox || inbox === "primary" || inbox === "all") return getAuthedClient(userId);
+  return getAuthedInboxClient(userId, inbox);
+}
+
+/**
+ * Which accounts a listing scope names (mirrors routes/email.ts's `inbox=`):
+ * absent or "primary" = the user's own inbox, "all" = every connected Google
+ * account, anything else = one linked account. Null = nothing connected for
+ * that scope — the route decides between demo rows (primary) and 404 (a
+ * linked id that does not resolve must never show demo mail).
+ */
+async function accountsFor(
+  userId: string,
+  inbox: string | undefined,
+): Promise<MailboxAccount[] | null> {
+  if (inbox === "all") {
+    const [primary, linked] = await Promise.all([
+      getAuthedClient(userId),
+      getLinkedInboxClients(userId),
+    ]);
+    const accounts = [
+      ...(primary ? [{ key: "primary", auth: primary }] : []),
+      ...linked.map((l) => ({ key: l.id, auth: l.client })),
+    ];
+    return accounts.length ? accounts : null;
+  }
+  const auth = await resolveMailboxClient(userId, inbox);
+  if (!auth) return null;
+  return [{ key: inbox && inbox !== "primary" ? inbox : "primary", auth }];
+}
+
+/**
+ * "all" pages every account on its own Gmail cursor while the client sees ONE
+ * opaque token: base64url JSON of {accountKey: cursor}, listing only the
+ * accounts that still have a page. Garbage decodes to null (= first page),
+ * never a throw — a stale token from an older build is a retry, not a 500.
+ */
+export function encodeCompositeToken(cursors: Record<string, string>): string | null {
+  if (!Object.keys(cursors).length) return null;
+  return Buffer.from(JSON.stringify(cursors), "utf8").toString("base64url");
+}
+
+export function decodeCompositeToken(token: string | undefined): Record<string, string> | null {
+  if (!token) return null;
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(token, "base64url").toString("utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const cursors = Object.fromEntries(
+      Object.entries(parsed).filter((e): e is [string, string] => typeof e[1] === "string"),
+    );
+    return Object.keys(cursors).length ? cursors : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -76,11 +156,46 @@ export async function listGmailMailbox(
   userId: string,
   box: Mailbox,
   pageToken?: string,
+  inbox?: string,
 ): Promise<MailboxPage | null> {
-  const auth = await getAuthedClient(userId);
-  if (!auth) return null;
+  const accounts = await accountsFor(userId, inbox);
+  if (!accounts) return null;
+  if (inbox !== "all") return listAccountPage(accounts[0], box, pageToken);
+  return listAllAccountsPage(accounts, box, pageToken);
+}
 
-  const gmail = google.gmail({ version: "v1", auth });
+/** One page across every connected account, merged newest-first. Each
+ *  account advances on its own cursor (see encodeCompositeToken); a page
+ *  boundary can interleave slightly across accounts, which Gmail's own
+ *  list order does not promise either. */
+async function listAllAccountsPage(
+  accounts: MailboxAccount[],
+  box: Mailbox,
+  pageToken: string | undefined,
+): Promise<MailboxPage> {
+  const cursors = decodeCompositeToken(pageToken);
+  const targets = cursors ? accounts.filter((a) => a.key in cursors) : accounts;
+  const pages = await Promise.all(
+    targets.map((account) => listAccountPage(account, box, cursors?.[account.key])),
+  );
+  const next = Object.fromEntries(
+    targets.flatMap((account, i) => {
+      const token = pages[i].nextPageToken;
+      return token ? [[account.key, token] as const] : [];
+    }),
+  );
+  const items = pages
+    .flatMap((page) => page.items)
+    .sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0));
+  return { items, nextPageToken: encodeCompositeToken(next) };
+}
+
+async function listAccountPage(
+  account: MailboxAccount,
+  box: Mailbox,
+  pageToken: string | undefined,
+): Promise<MailboxPage> {
+  const gmail = google.gmail({ version: "v1", auth: account.auth });
   const res = await gmail.users.messages.list({
     userId: "me",
     maxResults: PAGE_SIZE,
@@ -112,6 +227,7 @@ export async function listGmailMailbox(
             ? new Date(internal).toISOString()
             : new Date(0).toISOString(),
           isRead: !(detail.data.labelIds ?? []).includes("UNREAD"),
+          inbox: account.key,
         };
       } catch {
         // One unreadable message must not blank the folder.
@@ -137,8 +253,9 @@ export async function listGmailMailbox(
 export async function deleteGmailDraftByMessageId(
   userId: string,
   gmailId: string,
+  inbox?: string,
 ): Promise<boolean> {
-  const auth = await getAuthedClient(userId);
+  const auth = await resolveMailboxClient(userId, inbox);
   if (!auth) return false;
 
   const gmail = google.gmail({ version: "v1", auth });

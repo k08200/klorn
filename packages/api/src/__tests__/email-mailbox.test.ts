@@ -21,35 +21,50 @@ const state = vi.hoisted(() => ({
   ],
   draftDeletes: [] as string[],
   nextPageToken: null as string | null,
+  // Multi-account (2026-09-04): every linked GOOGLE row the user has, keyed
+  // by its LinkedInboxAccount id, each with its own page of ids + cursor.
+  linked: {} as Record<string, { ids: string[]; nextPageToken: string | null }>,
+  // internalDate per message id so a merged page can be checked for order.
+  internalDates: {} as Record<string, string>,
 }));
 
 vi.mock("../mail/gmail.js", () => ({
-  getAuthedClient: vi.fn(async () => (state.hasToken ? {} : null)),
+  getAuthedClient: vi.fn(async () => (state.hasToken ? { key: "primary" } : null)),
+  getAuthedInboxClient: vi.fn(async (_userId: string, id: string) =>
+    state.linked[id] ? { key: id } : null,
+  ),
+  getLinkedInboxClients: vi.fn(async () =>
+    Object.keys(state.linked).map((id) => ({ client: { key: id }, id, email: `${id}@x.test` })),
+  ),
 }));
 
 vi.mock("googleapis", () => ({
   google: {
-    gmail: vi.fn(() => ({
+    gmail: vi.fn(({ auth }: { auth: { key: string } }) => ({
       users: {
         messages: {
           list: vi.fn(async (params: Record<string, unknown>) => {
-            state.listCalls.push(params);
+            state.listCalls.push({ ...params, account: auth.key });
+            const page =
+              auth.key === "primary"
+                ? { ids: state.listIds, nextPageToken: state.nextPageToken }
+                : state.linked[auth.key];
             return {
               data: {
-                messages: state.listIds.map((id) => ({ id })),
-                nextPageToken: state.nextPageToken,
+                messages: page.ids.map((id) => ({ id })),
+                nextPageToken: page.nextPageToken,
               },
             };
           }),
           get: vi.fn(async (params: Record<string, unknown>) => {
-            state.metaCalls.push(params);
+            state.metaCalls.push({ ...params, account: auth.key });
             return {
               data: {
                 id: params.id,
                 threadId: `t-${params.id}`,
                 snippet: `snippet ${params.id}`,
                 labelIds: ["SENT"],
-                internalDate: "1756100000000",
+                internalDate: state.internalDates[params.id as string] ?? "1756100000000",
                 payload: {
                   headers: [
                     { name: "From", value: "me@klorn.ai" },
@@ -150,6 +165,106 @@ describe("listGmailMailbox", () => {
     expect(state.listCalls[0]).not.toHaveProperty("pageToken");
     expect(page?.nextPageToken).toBeNull();
   });
+
+  it("stamps every row with the account it came from (primary by default)", async () => {
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    const page = await listGmailMailbox("user-1", "sent");
+    expect(page?.items.map((r) => r.inbox)).toEqual(["primary", "primary"]);
+  });
+});
+
+// The inbox selector scopes the queue and the search; the folders read the
+// primary account no matter what was selected — a second account's Sent
+// mail was simply unreachable. `inbox=` mirrors routes/email.ts's param.
+describe("listGmailMailbox — per-inbox scope", () => {
+  beforeEach(() => {
+    state.listCalls.length = 0;
+    state.metaCalls.length = 0;
+    state.listIds = ["p1", "p2"];
+    state.nextPageToken = null;
+    state.hasToken = true;
+    state.linked = { "lnk-a": { ids: ["a1"], nextPageToken: null } };
+    state.internalDates = {};
+  });
+
+  it("a linked id reads THAT account only, and stamps its rows with the id", async () => {
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    const page = await listGmailMailbox("user-1", "sent", undefined, "lnk-a");
+    expect(state.listCalls.map((c) => c.account)).toEqual(["lnk-a"]);
+    expect(page?.items.map((r) => [r.gmailId, r.inbox])).toEqual([["a1", "lnk-a"]]);
+  });
+
+  it("an unknown / non-Google linked id is null (route → 404, never demo rows)", async () => {
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    expect(await listGmailMailbox("user-1", "sent", undefined, "lnk-missing")).toBeNull();
+  });
+
+  it("'all' merges every account newest-first and stamps each row", async () => {
+    state.internalDates = { p1: "1000", p2: "3000", a1: "2000" };
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    const page = await listGmailMailbox("user-1", "sent", undefined, "all");
+    expect(new Set(state.listCalls.map((c) => c.account))).toEqual(new Set(["primary", "lnk-a"]));
+    expect(page?.items.map((r) => [r.gmailId, r.inbox])).toEqual([
+      ["p2", "primary"],
+      ["a1", "lnk-a"],
+      ["p1", "primary"],
+    ]);
+    // Every account exhausted → no next page.
+    expect(page?.nextPageToken).toBeNull();
+  });
+
+  it("'all' pages each account on its own cursor, folded into one opaque token", async () => {
+    state.nextPageToken = "p-tok-2";
+    state.linked = { "lnk-a": { ids: ["a1"], nextPageToken: null } };
+    const { decodeCompositeToken, listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    const first = await listGmailMailbox("user-1", "sent", undefined, "all");
+    // Only the primary has more; the token says exactly that.
+    expect(first?.nextPageToken).not.toBeNull();
+    expect(decodeCompositeToken(first?.nextPageToken ?? "")).toEqual({ primary: "p-tok-2" });
+
+    state.listCalls.length = 0;
+    state.nextPageToken = null;
+    const second = await listGmailMailbox("user-1", "sent", first?.nextPageToken ?? "", "all");
+    // Page two hits ONLY the account that still had a cursor, with its cursor.
+    expect(state.listCalls).toHaveLength(1);
+    expect(state.listCalls[0]).toMatchObject({ account: "primary", pageToken: "p-tok-2" });
+    expect(second?.nextPageToken).toBeNull();
+  });
+
+  it("'all' with no connected account at all is null (demo fallback)", async () => {
+    state.hasToken = false;
+    state.linked = {};
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    expect(await listGmailMailbox("user-1", "sent", undefined, "all")).toBeNull();
+  });
+
+  it("'all' still works when only a linked account is connected", async () => {
+    state.hasToken = false;
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    const page = await listGmailMailbox("user-1", "sent", undefined, "all");
+    expect(page?.items.map((r) => r.inbox)).toEqual(["lnk-a"]);
+  });
+
+  it("a garbage composite token is treated as the first page, not a crash", async () => {
+    const { listGmailMailbox } = await import("../mail/gmail-mailbox.js");
+    const page = await listGmailMailbox("user-1", "sent", "not-base64-json", "all");
+    expect(page?.items).toHaveLength(3);
+  });
+});
+
+describe("resolveMailboxClient", () => {
+  beforeEach(() => {
+    state.hasToken = true;
+    state.linked = { "lnk-a": { ids: [], nextPageToken: null } };
+  });
+
+  it("absent / 'primary' / 'all' act on the primary; a linked id on that account", async () => {
+    const { resolveMailboxClient } = await import("../mail/gmail-mailbox.js");
+    expect(await resolveMailboxClient("user-1", undefined)).toEqual({ key: "primary" });
+    expect(await resolveMailboxClient("user-1", "primary")).toEqual({ key: "primary" });
+    expect(await resolveMailboxClient("user-1", "lnk-a")).toEqual({ key: "lnk-a" });
+    expect(await resolveMailboxClient("user-1", "lnk-missing")).toBeNull();
+  });
 });
 
 describe("deleteGmailDraftByMessageId", () => {
@@ -176,5 +291,12 @@ describe("deleteGmailDraftByMessageId", () => {
     state.hasToken = false;
     const { deleteGmailDraftByMessageId } = await import("../mail/gmail-mailbox.js");
     expect(await deleteGmailDraftByMessageId("user-1", "m-draft-1")).toBe(false);
+  });
+
+  it("deletes on the LINKED account when the draft came from one", async () => {
+    state.linked = { "lnk-a": { ids: [], nextPageToken: null } };
+    const { deleteGmailDraftByMessageId } = await import("../mail/gmail-mailbox.js");
+    expect(await deleteGmailDraftByMessageId("user-1", "m-draft-1", "lnk-a")).toBe(true);
+    expect(state.draftDeletes).toEqual(["draft-1"]);
   });
 });

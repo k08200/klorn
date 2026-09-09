@@ -138,19 +138,19 @@ enum PreviewRender {
                 subject: "Re: Contract review — needs your sign-off today",
                 from: "you@company.com", to: "Sarah Kim <sarah.kim@northwind-partners.com>",
                 snippet: "Signed and attached. Clause 4 reads fine after legal's change.",
-                receivedAt: "2026-07-29T05:40:00Z", isRead: true),
+                receivedAt: "2026-07-29T05:40:00Z", isRead: true, inbox: "primary"),
             MailboxItem(
                 gmailId: "s2", threadId: nil,
                 subject: "Q3 numbers for the board deck",
                 from: "you@company.com", to: "Priya Patel <priya@company.com>",
                 snippet: "Final revenue table attached — the churn note is on slide 9.",
-                receivedAt: "2026-07-28T09:12:00Z", isRead: true),
+                receivedAt: "2026-07-28T09:12:00Z", isRead: true, inbox: "primary"),
             MailboxItem(
                 gmailId: "s3", threadId: nil,
                 subject: "Intro: Alex ↔ Jamie",
                 from: "you@company.com", to: "Alex Carter <alex@team.co>",
                 snippet: "Jamie runs infra at Northwind — you two should talk. Moving you both to bcc.",
-                receivedAt: "2026-07-25T18:03:00Z", isRead: true),
+                receivedAt: "2026-07-25T18:03:00Z", isRead: true, inbox: "primary"),
         ])
         model.seedMailboxForRender(.drafts, items: [
             MailboxItem(
@@ -158,7 +158,7 @@ enum PreviewRender {
                 subject: "Q3 vendor consolidation",
                 from: "you@company.com", to: "billing@vendor.io",
                 snippet: "Before we renew, can you break the invoice into",
-                receivedAt: "2026-07-29T03:12:00Z", isRead: true),
+                receivedAt: "2026-07-29T03:12:00Z", isRead: true, inbox: "primary"),
         ])
         model.seedMailboxForRender(.archived, items: [
             MailboxItem(
@@ -166,7 +166,7 @@ enum PreviewRender {
                 subject: "Your July invoice is available",
                 from: "billing@saas.example", to: "you@company.com",
                 snippet: "Invoice #4783 for July is attached. No action needed.",
-                receivedAt: "2026-07-28T22:05:00Z", isRead: true),
+                receivedAt: "2026-07-28T22:05:00Z", isRead: true, inbox: "primary"),
         ])
 
         var ok = true

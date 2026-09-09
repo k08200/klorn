@@ -1047,6 +1047,19 @@ func runSelfChecks() async -> Bool {
           firewallPath(selected: "primary") == "/api/inbox/firewall?inbox=primary")
     check("firewall path — linked id scoped (hyphen encoded)",
           firewallPath(selected: "li-1") == "/api/inbox/firewall?inbox=li%2D1")
+    // Folders: "all" is EXPLICIT (the server's folder default is the primary),
+    // and the page token rides along verbatim.
+    check("mailbox path — all is explicit",
+          mailboxPath(box: .sent, selectedInbox: "all") == "/api/email/mailbox/sent?inbox=all")
+    check("mailbox path — blank selection is all",
+          mailboxPath(box: .drafts, selectedInbox: "") == "/api/email/mailbox/drafts?inbox=all")
+    check("mailbox path — linked id + page token",
+          mailboxPath(box: .archived, selectedInbox: "li-1", pageToken: "tok 2")
+              == "/api/email/mailbox/archived?inbox=li-1&pageToken=tok%202")
+    check("mailbox item query — row from an older server reads as primary",
+          mailboxItemQuery(inbox: nil) == "?inbox=primary")
+    check("mailbox item query — linked id (hyphen encoded)",
+          mailboxItemQuery(inbox: "li-1") == "?inbox=li%2D1")
     check("inbox display label falls back by kind",
           inboxDisplayLabel(email: nil, kind: "primary") == L("mail.inboxPrimary")
           && inboxDisplayLabel(email: nil, kind: "linked") == L("mail.inboxLinked")

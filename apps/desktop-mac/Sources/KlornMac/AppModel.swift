@@ -248,6 +248,14 @@ final class AppModel {
         guard value != selectedInbox else { return }
         selectedInbox = value
         UserDefaults.standard.set(value, forKey: Self.selectedInboxKey)
+        // The folders are scoped by the same selector (2026-09-04): drop the
+        // other account's pages and re-read the open folder, if one is open.
+        mailboxItems = [:]
+        mailboxNextToken = [:]
+        clearMailboxSelection()
+        if case .mailbox(let box) = listMode {
+            Task { await loadMailbox(box) }
+        }
         // Paint the cached snapshot for this inbox immediately (if any), then
         // revalidate against the server in the background.
         if let cached = queueCache[value] {
@@ -708,6 +716,9 @@ final class AppModel {
     /// this the sent mail and its stale draft coexist and the folder looks
     /// broken. Cleared on discard: cancelling an edit leaves the draft alone.
     private(set) var editingDraftGmailId: String?
+    /// The account that draft lives in ("primary" / linked id / nil = older
+    /// server = primary) — the delete after send must hit the same account.
+    private(set) var editingDraftInbox: String?
 
     /// Open a Drafts-folder row for EDITING: fetch the live body and prefill
     /// the composer. Every mail client opens a draft into its editor — the
@@ -718,12 +729,14 @@ final class AppModel {
         Task {
             do {
                 let resp: LiveEmailDetail = try await api.get(
-                    "/api/email/live/\(item.gmailId)", as: LiveEmailDetail.self)
+                    "/api/email/live/\(item.gmailId)\(mailboxItemQuery(inbox: item.inbox))",
+                    as: LiveEmailDetail.self)
                 composeTo = extractRecipient(resp.data.to)
                 composeSubject = resp.data.subject
                 composeBody = resp.data.body
                 composeError = nil
                 editingDraftGmailId = item.gmailId
+                editingDraftInbox = item.inbox
                 showCompose = true
             } catch {
                 mailboxError = L("mailbox.loadFailed")
@@ -759,7 +772,8 @@ final class AppModel {
             // The mail was SENT either way; cleanup failure must never read
             // as a send failure.
             if let draftId = editingDraftGmailId {
-                try? await api.delete("/api/email/draft/by-message/\(draftId)")
+                try? await api.delete(
+                    "/api/email/draft/by-message/\(draftId)\(mailboxItemQuery(inbox: editingDraftInbox))")
                 await loadMailbox(.drafts)
             }
             discardComposeDraft()
@@ -775,6 +789,7 @@ final class AppModel {
         composeBody = ""
         composeError = nil
         editingDraftGmailId = nil
+        editingDraftInbox = nil
     }
 
     /// Send a BRAND-NEW email (POST /api/email/send — Pro-gated server-side).
@@ -1093,7 +1108,7 @@ final class AppModel {
         defer { mailboxLoading = nil }
         do {
             let resp: MailboxListResponse = try await api.get(
-                "/api/email/mailbox/\(box.rawValue)", as: MailboxListResponse.self)
+                mailboxPath(box: box, selectedInbox: selectedInbox), as: MailboxListResponse.self)
             mailboxItems[box] = resp.data.items
             mailboxNextToken[box] = resp.data.nextPageToken
         } catch APIError.unauthorized {
@@ -1117,10 +1132,8 @@ final class AppModel {
         mailboxLoading = box
         defer { mailboxLoading = nil }
         do {
-            var query = URLComponents()
-            query.queryItems = [URLQueryItem(name: "pageToken", value: token)]
             let resp: MailboxListResponse = try await api.get(
-                "/api/email/mailbox/\(box.rawValue)?\(query.percentEncodedQuery ?? "")",
+                mailboxPath(box: box, selectedInbox: selectedInbox, pageToken: token),
                 as: MailboxListResponse.self)
             let seen = Set((mailboxItems[box] ?? []).map(\.gmailId))
             mailboxItems[box, default: []]
@@ -1142,7 +1155,8 @@ final class AppModel {
             defer { mailboxDetailLoading = false }
             do {
                 let resp: LiveEmailDetail = try await api.get(
-                    "/api/email/live/\(item.gmailId)", as: LiveEmailDetail.self)
+                    "/api/email/live/\(item.gmailId)\(mailboxItemQuery(inbox: item.inbox))",
+                    as: LiveEmailDetail.self)
                 // Stale-response guard: the user may have clicked another row
                 // while this one was in flight.
                 if selectedMailboxItem?.gmailId == item.gmailId {
