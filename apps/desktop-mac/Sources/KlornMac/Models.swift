@@ -110,7 +110,36 @@ enum RowSignal: Sendable, Hashable {
         }
     }
 
-    enum CodingKeysImpl: String, CodingKey { case kind, category, count }
+    enum CodingKeysImpl: String, CodingKey { case kind, category, count, byUser }
+}
+
+/// The categories a user may pin on a sender (mirrors USER_LABEL_CATEGORIES
+/// in the API's sender-labels.ts): the relationship / function words, not
+/// Gmail's own tabs (social / updates / forums stay Gmail's call).
+let userLabelCategories = ["internal", "customer", "investor", "system", "billing", "promotions"]
+
+/// The bare address in a From header ("Sarah Kim <sarah@acme.com>" →
+/// "sarah@acme.com", lowercase); nil when there is none. Pure.
+func mailAddress(in from: String?) -> String? {
+    guard let from else { return nil }
+    let trimmed = from.trimmingCharacters(in: .whitespaces)
+    var candidate = trimmed
+    if trimmed.hasSuffix(">"), let open = trimmed.lastIndex(of: "<") {
+        candidate = String(trimmed[trimmed.index(after: open)..<trimmed.index(before: trimmed.endIndex)])
+    }
+    let address = candidate.trimmingCharacters(in: .whitespaces).lowercased()
+    guard let at = address.firstIndex(of: "@"), at != address.startIndex,
+          address[address.index(after: at)...].contains("."),
+          !address.contains(" ")
+    else { return nil }
+    return address
+}
+
+/// The domain of an address ("sarah@acme.com" → "acme.com"). Pure.
+func mailDomain(of address: String) -> String? {
+    guard let at = address.lastIndex(of: "@") else { return nil }
+    let domain = String(address[address.index(after: at)...])
+    return domain.isEmpty ? nil : domain
 }
 
 /// Email enrichment for a firewall row (best-effort; fields may be nil).
@@ -126,6 +155,9 @@ struct EmailContext: Codable, Sendable, Hashable {
     /// See RowSignal. Optional + failable: absent on older servers, and an
     /// unknown shape must never fail the whole queue decode.
     let signal: RowSignal?
+    /// True when `signal` is the USER's own correction (a sender label) —
+    /// the chip menu offers "clear" instead of a fresh pick. Absent = derived.
+    let signalByUser: Bool
 
     enum CodingKeys: String, CodingKey {
         case emailDbId, subject, from, snippet, receivedAt, signal
@@ -142,8 +174,10 @@ struct EmailContext: Codable, Sendable, Hashable {
             keyedBy: RowSignal.CodingKeysImpl.self, forKey: .signal)
         {
             signal = RowSignal(from: nested)
+            signalByUser = (try? nested.decode(Bool.self, forKey: .byUser)) ?? false
         } else {
             signal = nil
+            signalByUser = false
         }
     }
 
@@ -160,7 +194,7 @@ struct EmailContext: Codable, Sendable, Hashable {
 
     init(
         emailDbId: String, subject: String?, from: String?, snippet: String?,
-        receivedAt: String?, signal: RowSignal? = nil
+        receivedAt: String?, signal: RowSignal? = nil, signalByUser: Bool = false
     ) {
         self.emailDbId = emailDbId
         self.subject = subject
@@ -168,6 +202,7 @@ struct EmailContext: Codable, Sendable, Hashable {
         self.snippet = snippet
         self.receivedAt = receivedAt
         self.signal = signal
+        self.signalByUser = signalByUser
     }
 }
 

@@ -61,6 +61,26 @@ describe("gmailCategoryOf", () => {
 });
 
 describe("rowSignalFor", () => {
+  it("the user's own label outranks even the company domain, and says so", () => {
+    // "This colleague's address is actually our investor" — the user said so.
+    expect(
+      rowSignalFor({
+        userLabel: "investor",
+        internal: true,
+        judgeCategory: "billing",
+        category: "updates",
+        repliedCount: 9,
+      }),
+    ).toEqual({ kind: "category", category: "investor", byUser: true });
+    // Derived chips never claim byUser.
+    expect(
+      rowSignalFor({ userLabel: null, internal: true, category: null, repliedCount: 0 }),
+    ).toEqual({
+      kind: "category",
+      category: "internal",
+    });
+  });
+
   it("a declared company domain outranks everything — it is a recorded fact about WHO", () => {
     // A colleague forwarding a receipt: 회사 (declared), not 청구 (judged).
     expect(

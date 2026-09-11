@@ -1009,6 +1009,47 @@ final class AppModel {
         }
     }
 
+    // MARK: Sender labels (2026-09-11)
+
+    /// "This sender is a customer" — the user's correction, PUT to the API,
+    /// then the queue re-reads so every row from that sender (or domain)
+    /// carries the chip. scope: "sender" (address) | "domain" (hostname).
+    func setSenderLabel(scope: String, value: String, category: String) async {
+        struct Body: Encodable {
+            let scope: String
+            let value: String
+            let category: String
+        }
+        do {
+            try await api.put(
+                "/api/email/sender-labels",
+                encodable: Body(scope: scope, value: value, category: category))
+            await loadQueue()
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            Log.app.warning("sender label update failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    /// Forget one correction (a miss is fine — the row simply falls back to
+    /// the evidence below the label).
+    func clearSenderLabel(scope: String, value: String) async {
+        var query = URLComponents()
+        query.queryItems = [
+            URLQueryItem(name: "scope", value: scope), URLQueryItem(name: "value", value: value),
+        ]
+        do {
+            try await api.delete("/api/email/sender-labels?\(query.percentEncodedQuery ?? "")")
+        } catch APIError.unauthorized {
+            signOut()
+            return
+        } catch {
+            Log.app.debug("sender label clear: \(String(describing: error), privacy: .private)")
+        }
+        await loadQueue()
+    }
+
     // MARK: Company domains (2026-09-10)
 
     /// The user's declared company email domains (GET /inboxes). A sender on

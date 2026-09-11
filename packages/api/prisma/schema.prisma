@@ -143,6 +143,7 @@ model User {
   llmUsageLogs              LlmUsageLog[]
   analyticsEvents           AnalyticsEvent[]
   senderTraits              SenderTrait[]
+  senderLabels              SenderLabel[]
   learnedRules              LearnedRule[]
   apiKeys                   ApiKey[]
 }
@@ -1381,6 +1382,27 @@ model SenderTrait {
   @@unique([userId, sender, factKind])
   @@index([userId, sender])
   @@index([userId, factKind, status])
+}
+
+/// The user's correction of who a sender IS (2026-09-11): "this address is
+/// a customer", "everyone at acme.io is an investor". Sender (address) or
+/// domain scope, the address wins. The strongest row-chip evidence there is
+/// — the user said so — and one line in the analysis prompt. Validated in
+/// mail/sender-labels.ts (vocabulary, public providers refused).
+model SenderLabel {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  scope    String // "sender" | "domain"
+  value    String // lowercase address or hostname
+  category String // internal | customer | investor | system | billing | promotions
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, scope, value])
+  @@index([userId])
 }
 
 /// A standing, user-made decision about whether a sender may reach them.

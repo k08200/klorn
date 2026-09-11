@@ -76,6 +76,9 @@ export type RowSignalWire =
         | "investor"
         | "system"
         | "billing";
+      /** True when the category is the USER's own correction (sender label)
+       *  — clients offer "clear" instead of a fresh pick. Absent = derived. */
+      byUser?: boolean;
     }
   | { kind: "replied"; count: number }
   | { kind: "first" }

@@ -557,3 +557,10 @@
 "company.label" = "公司域名";
 "company.none" = "未设置";
 "company.saveFailed" = "保存失败 — 请检查域名（不能是 gmail.com/naver.com，最多 10 个）。";
+
+// Sender label corrections (2026-09-11).
+"label.correct" = "更正标签";
+"label.correct.domain" = "整个域名：%@";
+"label.correct.clear" = "清除对此发件人的更正";
+"label.correct.clearDomain" = "清除对该域名的更正";
+"label.correct.a11y" = "%@ — 更正标签";

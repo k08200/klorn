@@ -40,6 +40,7 @@ import { getTrustScoresBulk } from "../learning/trust-score.js";
 import { ensureRecentMailSync } from "../mail/activity-sync.js";
 import { isInternalSender } from "../mail/company-domains.js";
 import { ensureFreshGmailWatch } from "../mail/gmail.js";
+import { senderLabelsFor, type UserLabelCategory } from "../mail/sender-labels.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { captureError } from "../sentry.js";
@@ -542,6 +543,15 @@ export async function firewallRoutes(app: FastifyInstance) {
         captureError(err, { tags: { scope: "firewall.companyDomains" } });
       }
 
+      // The user's own corrections ("this sender is a customer") — the top
+      // of the evidence ladder. Same fail-open contract as the lookups above.
+      let userLabels = new Map<string, UserLabelCategory>();
+      try {
+        userLabels = await senderLabelsFor(userId, [...senderAddrs]);
+      } catch (err) {
+        captureError(err, { tags: { scope: "firewall.senderLabels" } });
+      }
+
       const tiers: Record<Tier, FirewallItem[]> = {
         SILENT: [],
         INFO: [],
@@ -621,6 +631,7 @@ export async function firewallRoutes(app: FastifyInstance) {
                   snippet: email.snippet ?? null,
                   receivedAt: email.receivedAt?.toISOString() ?? null,
                   signal: rowSignalFor({
+                    userLabel: addr ? (userLabels.get(addr) ?? null) : null,
                     internal: isInternalSender(email.from, companyDomains),
                     judgeCategory: email.category,
                     category: null,
@@ -693,6 +704,7 @@ export async function firewallRoutes(app: FastifyInstance) {
               snippet: email.snippet ?? null,
               receivedAt: email.receivedAt?.toISOString() ?? null,
               signal: rowSignalFor({
+                userLabel: addr ? (userLabels.get(addr) ?? null) : null,
                 internal: isInternalSender(email.from, companyDomains),
                 judgeCategory: email.category,
                 category: gmailCategoryOf(email.labels),

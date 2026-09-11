@@ -3588,7 +3588,13 @@ struct LaneChip: View {
 /// The row's one relationship/category chip. Renders nothing for nil —
 /// a missing fact must never become a label.
 struct SignalChip: View {
+    @Environment(AppModel.self) private var model
     let signal: RowSignal?
+    /// The row's From header — the chip is also the correction menu ("this
+    /// sender is a customer") when an address can be read from it.
+    var from: String? = nil
+    /// The chip is the user's own correction → the menu offers "clear".
+    var byUser = false
 
     private var text: String? {
         switch signal {
@@ -3602,12 +3608,56 @@ struct SignalChip: View {
     var body: some View {
         if let text, let signal {
             let tint = Theme.signalTint(signal)
-            Text(text)
+            let label = Text(text)
                 .font(Theme.Typo.micro)
                 .foregroundStyle(tint)
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(tint.opacity(0.13), in: Capsule())
-                .accessibilityLabel(text)
+            if let address = mailAddress(in: from), !Theme.isRenderingOffscreen {
+                Menu {
+                    correctionItems(address: address)
+                } label: {
+                    label
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                .accessibilityLabel(L("label.correct.a11y", text))
+            } else {
+                label.accessibilityLabel(text)
+            }
+        }
+    }
+
+    /// The user's correction of who this sender IS — the strongest evidence
+    /// a chip can have. Address first; the whole domain as a submenu; clear
+    /// when the current chip is already the user's own.
+    @ViewBuilder
+    private func correctionItems(address: String) -> some View {
+        Section(L("label.correct")) {
+            ForEach(userLabelCategories, id: \.self) { category in
+                Button(L("chip.\(category)")) {
+                    Task { await model.setSenderLabel(scope: "sender", value: address, category: category) }
+                }
+            }
+        }
+        if let domain = mailDomain(of: address) {
+            Menu(L("label.correct.domain", domain)) {
+                ForEach(userLabelCategories, id: \.self) { category in
+                    Button(L("chip.\(category)")) {
+                        Task { await model.setSenderLabel(scope: "domain", value: domain, category: category) }
+                    }
+                }
+            }
+        }
+        if byUser {
+            Divider()
+            Button(L("label.correct.clear")) {
+                Task { await model.clearSenderLabel(scope: "sender", value: address) }
+            }
+            if let domain = mailDomain(of: address) {
+                Button(L("label.correct.clearDomain")) {
+                    Task { await model.clearSenderLabel(scope: "domain", value: domain) }
+                }
+            }
         }
     }
 }
@@ -3656,7 +3706,9 @@ struct FullRow: View {
                             if showLaneChip {
                                 LaneChip(tier: item.tier)
                             }
-                            SignalChip(signal: item.email?.signal)
+                            SignalChip(
+                                signal: item.email?.signal, from: item.email?.from,
+                                byUser: item.email?.signalByUser ?? false)
                             if let reason = rowTierReason(item.tierReason) {
                                 Text(reason).font(Theme.Typo.caption)
                                     .foregroundStyle(Theme.textDim).lineLimit(1)

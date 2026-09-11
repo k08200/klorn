@@ -557,3 +557,10 @@
 "company.label" = "회사 도메인";
 "company.none" = "미설정";
 "company.saveFailed" = "저장 실패 — 도메인을 확인하세요(gmail.com/naver.com 불가, 최대 10개).";
+
+// Sender label corrections (2026-09-11).
+"label.correct" = "라벨 정정";
+"label.correct.domain" = "도메인 전체: %@";
+"label.correct.clear" = "이 발신자 정정 해제";
+"label.correct.clearDomain" = "도메인 정정 해제";
+"label.correct.a11y" = "%@ — 라벨 정정";

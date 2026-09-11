@@ -557,3 +557,10 @@
 "company.label" = "Dominios de la empresa";
 "company.none" = "Sin definir";
 "company.saveFailed" = "No se pudo guardar — revisa los dominios (sin gmail.com / naver.com, máximo 10).";
+
+// Sender label corrections (2026-09-11).
+"label.correct" = "Corregir la etiqueta";
+"label.correct.domain" = "Todo el dominio: %@";
+"label.correct.clear" = "Quitar mi corrección para este remitente";
+"label.correct.clearDomain" = "Quitar mi corrección para el dominio";
+"label.correct.a11y" = "%@ — corregir la etiqueta";

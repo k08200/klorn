@@ -94,6 +94,11 @@ vi.mock("../db.js", () => {
       findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })),
       update: vi.fn(async () => ({})),
     },
+    senderLabel: {
+      findMany: vi.fn(async () => []),
+      upsert: vi.fn(async () => ({})),
+      deleteMany: vi.fn(async () => ({ count: 1 })),
+    },
     device: {
       findUnique: vi.fn(async () => ({ id: "d1" })),
       findMany: vi.fn(async () => []),
@@ -402,6 +407,75 @@ describe("email routes (demo mode)", () => {
     });
     expect(garbage.statusCode).toBe(400);
     expect(prisma.user.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("PUT /sender-labels stores the user's correction, canonicalized", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.senderLabel.upsert).mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/email/sender-labels",
+      headers: auth(),
+      payload: { scope: "sender", value: "Sarah Kim <Sarah@Acme.com>", category: "customer" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      success: true,
+      label: { scope: "sender", value: "sarah@acme.com", category: "customer" },
+    });
+    expect(prisma.senderLabel.upsert).toHaveBeenCalledWith({
+      where: { userId_scope_value: { userId: "user-1", scope: "sender", value: "sarah@acme.com" } },
+      create: { userId: "user-1", scope: "sender", value: "sarah@acme.com", category: "customer" },
+      update: { category: "customer" },
+    });
+    await app.close();
+  });
+
+  it("PUT /sender-labels refuses a public-provider domain and an unknown category", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.senderLabel.upsert).mockClear();
+    const app = await buildApp();
+    const pub = await app.inject({
+      method: "PUT",
+      url: "/api/email/sender-labels",
+      headers: auth(),
+      payload: { scope: "domain", value: "gmail.com", category: "customer" },
+    });
+    expect(pub.statusCode).toBe(400);
+    expect(pub.json().error).toContain("public mail provider");
+    const cat = await app.inject({
+      method: "PUT",
+      url: "/api/email/sender-labels",
+      headers: auth(),
+      payload: { scope: "sender", value: "a@b.com", category: "vip" },
+    });
+    expect(cat.statusCode).toBe(400);
+    expect(prisma.senderLabel.upsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("DELETE /sender-labels forgets one correction; a miss is 404", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.senderLabel.deleteMany).mockResolvedValueOnce({ count: 1 } as never);
+    const app = await buildApp();
+    const ok = await app.inject({
+      method: "DELETE",
+      url: "/api/email/sender-labels?scope=domain&value=Acme.io",
+      headers: auth(),
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(prisma.senderLabel.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", scope: "domain", value: "acme.io" },
+    });
+    vi.mocked(prisma.senderLabel.deleteMany).mockResolvedValueOnce({ count: 0 } as never);
+    const miss = await app.inject({
+      method: "DELETE",
+      url: "/api/email/sender-labels?scope=sender&value=nobody@acme.io",
+      headers: auth(),
+    });
+    expect(miss.statusCode).toBe(404);
     await app.close();
   });
 

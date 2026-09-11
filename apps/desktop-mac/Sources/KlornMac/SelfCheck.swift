@@ -1616,6 +1616,7 @@ func runSelfChecks() async -> Bool {
         L("engagement.combined.a11y", "x", "y"), L("proposals.row.a11y", "x", "y"),
         L("mail.needsReconnect", "x"), L("calendar.eventRow.a11y", "x", "y"),
         L("mail.noMatches", "x", "y"), L("purpose.title.linked", "x"),
+        L("label.correct.domain", "x"), L("label.correct.a11y", "x"),
     ].allSatisfy { $0.contains("x") && !$0.contains("%") })
     // Mixed string+integer formats: the argument ORDER must survive too, since
     // a "%1$@ %2$d" fed the wrong way round is the same pointer-read crash.
@@ -1656,6 +1657,26 @@ func runSelfChecks() async -> Bool {
           && suggestedCompanyDomain(for: "x@naver.com") == nil
           && suggestedCompanyDomain(for: nil) == nil
           && suggestedCompanyDomain(for: "not-an-address") == nil)
+    // Sender labels (2026-09-11): the chip menu needs the bare address, and
+    // the wire says when a chip is the user's own correction.
+    check("mail address — bare address from a display-name From",
+          mailAddress(in: "Sarah Kim <Sarah@Acme.com>") == "sarah@acme.com"
+          && mailAddress(in: "bob@acme.io") == "bob@acme.io"
+          && mailAddress(in: "no address here") == nil
+          && mailAddress(in: nil) == nil)
+    check("mail domain — of an address",
+          mailDomain(of: "sarah@acme.com") == "acme.com" && mailDomain(of: "nope") == nil)
+    do {
+        let byUser = try? JSONDecoder().decode(
+            EmailContext.self,
+            from: Data(#"{"emailDbId":"e","signal":{"kind":"category","category":"customer","byUser":true}}"#.utf8))
+        let derived = try? JSONDecoder().decode(
+            EmailContext.self,
+            from: Data(#"{"emailDbId":"e","signal":{"kind":"category","category":"customer"}}"#.utf8))
+        check("signal byUser — decoded when present, false when absent",
+              byUser?.signal == .category("customer") && byUser?.signalByUser == true
+              && derived?.signalByUser == false)
+    }
     check("company domains — input splits on commas, spaces, newlines",
           parseCompanyDomainsInput(" acme.com, acme.io\nsub.acme.co.kr  ")
               == ["acme.com", "acme.io", "sub.acme.co.kr"]
