@@ -564,3 +564,4 @@
 "label.correct.clear" = "清除对此发件人的更正";
 "label.correct.clearDomain" = "清除对该域名的更正";
 "label.correct.a11y" = "%@ — 更正标签";
+"label.add" = "＋ 标签";

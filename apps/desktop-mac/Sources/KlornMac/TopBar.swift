@@ -3627,11 +3627,46 @@ struct SignalChip: View {
         }
     }
 
-    /// The user's correction of who this sender IS — the strongest evidence
-    /// a chip can have. Address first; the whole domain as a submenu; clear
-    /// when the current chip is already the user's own.
-    @ViewBuilder
     private func correctionItems(address: String) -> some View {
+        SenderLabelMenuItems(address: address, byUser: byUser)
+    }
+}
+
+/// A row with no chip has no evidence yet — still a sender the user may know.
+/// Shown on hover / focus only (a resting placeholder on every row would be
+/// noise); opens the same correction menu as the chip.
+struct AddLabelChip: View {
+    let address: String
+
+    var body: some View {
+        if Theme.isRenderingOffscreen {
+            EmptyView()
+        } else {
+            Menu {
+                SenderLabelMenuItems(address: address, byUser: false)
+            } label: {
+                Text(L("label.add"))
+                    .font(Theme.Typo.micro)
+                    .foregroundStyle(Theme.textDim)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .overlay(Capsule().strokeBorder(Theme.line))
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .accessibilityLabel(L("label.add"))
+        }
+    }
+}
+
+/// The user's correction of who a sender IS — the strongest evidence a chip
+/// can have. Address first; the whole domain as a submenu; clear when the
+/// current chip is already the user's own. Shared by the signal chip and the
+/// add-label placeholder on rows that have no chip at all.
+struct SenderLabelMenuItems: View {
+    @Environment(AppModel.self) private var model
+    let address: String
+    let byUser: Bool
+
+    var body: some View {
         Section(L("label.correct")) {
             ForEach(userLabelCategories, id: \.self) { category in
                 Button(L("chip.\(category)")) {
@@ -3709,6 +3744,11 @@ struct FullRow: View {
                             SignalChip(
                                 signal: item.email?.signal, from: item.email?.from,
                                 byUser: item.email?.signalByUser ?? false)
+                            if item.email?.signal == nil, hovering || focused,
+                               let address = mailAddress(in: item.email?.from)
+                            {
+                                AddLabelChip(address: address)
+                            }
                             if let reason = rowTierReason(item.tierReason) {
                                 Text(reason).font(Theme.Typo.caption)
                                     .foregroundStyle(Theme.textDim).lineLimit(1)

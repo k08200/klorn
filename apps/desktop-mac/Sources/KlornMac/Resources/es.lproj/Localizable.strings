@@ -564,3 +564,4 @@
 "label.correct.clear" = "Quitar mi corrección para este remitente";
 "label.correct.clearDomain" = "Quitar mi corrección para el dominio";
 "label.correct.a11y" = "%@ — corregir la etiqueta";
+"label.add" = "＋ etiqueta";
