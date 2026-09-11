@@ -774,7 +774,7 @@ struct CalendarScreen: View {
     let actions: TopBarActions
 
     enum Scope: String, CaseIterable, Identifiable {
-        case day, month, year
+        case day, week, month, year
         var id: String { rawValue }
         var label: String { L("cal.scope.\(rawValue)") }
     }
@@ -811,7 +811,10 @@ struct CalendarScreen: View {
             let start = c.date(from: comps) ?? anchor
             let end = c.date(byAdding: DateComponents(year: 1, day: -1), to: start) ?? anchor
             return (start, c.date(byAdding: .day, value: 1, to: end) ?? end)
-        case .month, .day:
+        case .month, .week, .day:
+            // A week always sits inside its month's drawn grid (whole weeks
+            // from the 1st's week to the last day's), so the month fetch
+            // covers it and ‹› stays warm across the month boundary.
             let comps = c.dateComponents([.year, .month], from: anchor)
             let days = monthGridDays(year: comps.year ?? 2026, month: comps.month ?? 1, calendar: c)
             guard let first = days.first, let last = days.last else { return (anchor, anchor) }
@@ -820,12 +823,21 @@ struct CalendarScreen: View {
     }
 
     private var rangeTitle: String {
+        if scope == .week {
+            let days = weekDays(containing: anchor, calendar: calendar)
+            guard let first = days.first, let last = days.last else { return "" }
+            let interval = DateIntervalFormatter()
+            interval.calendar = calendar
+            interval.locale = L10n.activeLocale
+            interval.dateTemplate = "yMMMd"
+            return interval.string(from: first, to: last)
+        }
         let formatter = DateFormatter()
         formatter.calendar = calendar
         formatter.locale = L10n.activeLocale
         switch scope {
         case .day: formatter.setLocalizedDateFormatFromTemplate("yMMMMdEEE")
-        case .month: formatter.setLocalizedDateFormatFromTemplate("yMMMM")
+        case .week, .month: formatter.setLocalizedDateFormatFromTemplate("yMMMM")
         case .year: formatter.setLocalizedDateFormatFromTemplate("y")
         }
         return formatter.string(from: anchor)
@@ -835,6 +847,7 @@ struct CalendarScreen: View {
         let component: Calendar.Component =
             switch scope {
             case .day: .day
+            case .week: .weekOfYear
             case .month: .month
             case .year: .year
             }
@@ -848,6 +861,7 @@ struct CalendarScreen: View {
             Group {
                 switch scope {
                 case .day: dayView
+                case .week: weekView
                 case .month: monthView
                 case .year: yearView
                 }
@@ -937,6 +951,53 @@ struct CalendarScreen: View {
         }
     }
 
+    // MARK: 주 — seven columns, the week containing the anchor. Each day's
+    // events in time order (all-day first); every chip opens the detail.
+
+    private var weekView: some View {
+        let days = weekDays(containing: anchor, calendar: calendar)
+        let todayKey = localDayKey(Date(), calendar: calendar)
+        let symbols = orderedWeekdaySymbols
+        return OffscreenFriendlyScroll {
+            HStack(alignment: .top, spacing: 1) {
+                ForEach(Array(days.enumerated()), id: \.element) { index, day in
+                    weekColumn(day, symbol: index < symbols.count ? symbols[index] : "",
+                               todayKey: todayKey)
+                }
+            }
+            .background(Theme.line)
+        }
+    }
+
+    private func weekColumn(_ day: Date, symbol: String, todayKey: String) -> some View {
+        let key = localDayKey(day, calendar: calendar)
+        let events = sortedForDay(buckets[key] ?? [])
+        let isToday = key == todayKey
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(symbol).font(Theme.Typo.micro).foregroundStyle(Theme.textDim)
+                Text("\(calendar.component(.day, from: day))")
+                    .font(Theme.Typo.caption.monospacedDigit().weight(isToday ? .bold : .regular))
+                    .foregroundStyle(isToday ? Color.white : Theme.text)
+                    .frame(width: 22, height: 22)
+                    .background(isToday ? Theme.accent : .clear, in: Circle())
+            }
+            .padding(.bottom, 2)
+            ForEach(events) { event in
+                WeekEventChip(
+                    event: event,
+                    continuation: eventStartDayKey(event, calendar: calendar) != key,
+                    actions: actions)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(6)
+        .frame(maxWidth: .infinity, minHeight: 360, alignment: .topLeading)
+        .background(Theme.panel.opacity(isToday ? 1 : 0.85))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(L("cal.cell.a11y", key, events.count))
+    }
+
     // MARK: 월 — the grid. Whole weeks, out-of-month days dim, today ringed.
 
     private var monthView: some View {
@@ -968,7 +1029,7 @@ struct CalendarScreen: View {
 
     private func monthCell(_ day: Date, inMonth: Bool, todayKey: String) -> some View {
         let key = localDayKey(day, calendar: calendar)
-        let events = buckets[key] ?? []
+        let events = sortedForDay(buckets[key] ?? [])
         let isToday = key == todayKey
         return Button {
             anchor = day
@@ -982,14 +1043,23 @@ struct CalendarScreen: View {
                     .frame(width: 22, height: 22)
                     .background(isToday ? Theme.accent : .clear, in: Circle())
                 ForEach(events.prefix(2)) { event in
-                    Text(event.title)
-                        .font(Theme.Typo.micro)
-                        .foregroundStyle(inMonth ? Theme.text : Theme.textDim)
-                        .lineLimit(1)
-                        .padding(.horizontal, 4).padding(.vertical, 1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Theme.accent.opacity(inMonth ? 0.16 : 0.08),
-                                    in: RoundedRectangle(cornerRadius: 3))
+                    // A spanning event shows on every day it covers; days
+                    // after its first carry an arrow so the chip reads as
+                    // "continues", not as a second event.
+                    let continues = eventStartDayKey(event, calendar: calendar) != key
+                    HStack(spacing: 3) {
+                        if continues {
+                            Image(systemName: "arrow.right").font(.system(size: 8))
+                                .accessibilityHidden(true)
+                        }
+                        Text(event.title).lineLimit(1)
+                    }
+                    .font(Theme.Typo.micro)
+                    .foregroundStyle(inMonth ? Theme.text : Theme.textDim)
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.accent.opacity(inMonth ? 0.16 : 0.08),
+                                in: RoundedRectangle(cornerRadius: 3))
                 }
                 if events.count > 2 {
                     Text(L("cal.more", events.count - 2))
@@ -1113,10 +1183,66 @@ private struct UpcomingEventRow: View {
         .animation(.easeOut(duration: 0.12), value: hovering)
         .accessibilityLabel(
             L("calendar.eventRow.a11y", event.title, event.allDay ? L("calendar.allDay") : timeLabel))
-        .popover(isPresented: $showDetail, arrowEdge: .trailing) { detail }
+        .popover(isPresented: $showDetail, arrowEdge: .trailing) {
+            EventDetailPopover(event: event, actions: actions)
+        }
+    }
+}
+
+/// One event in a week column: title (+ continuation arrow on days after
+/// its first), start time for timed events. Opens the same detail popover
+/// as the agenda rows.
+private struct WeekEventChip: View {
+    let event: CalendarEventWire
+    let continuation: Bool
+    let actions: TopBarActions
+    @State private var showDetail = false
+
+    private var timeLabel: String {
+        eventTimeLabel(startISO: event.startTime, endISO: event.endTime, allDay: event.allDay)
     }
 
-    private var detail: some View {
+    var body: some View {
+        Button { showDetail = true } label: {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 3) {
+                    if continuation {
+                        Image(systemName: "arrow.right").font(.system(size: 8))
+                            .accessibilityHidden(true)
+                    }
+                    Text(event.title).lineLimit(2)
+                }
+                .font(Theme.Typo.micro).foregroundStyle(Theme.text)
+                if !event.allDay, !timeLabel.isEmpty {
+                    Text(String(timeLabel.prefix(5)))
+                        .font(.system(size: 9).monospacedDigit()).foregroundStyle(Theme.textDim)
+                }
+            }
+            .padding(.horizontal, 5).padding(.vertical, 3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.accent.opacity(event.allDay ? 0.24 : 0.14),
+                        in: RoundedRectangle(cornerRadius: 4))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            L("calendar.eventRow.a11y", event.title, event.allDay ? L("calendar.allDay") : timeLabel))
+        .popover(isPresented: $showDetail, arrowEdge: .trailing) {
+            EventDetailPopover(event: event, actions: actions)
+        }
+    }
+}
+
+/// The event detail every calendar surface opens — agenda rows, week chips.
+private struct EventDetailPopover: View {
+    let event: CalendarEventWire
+    let actions: TopBarActions
+
+    private var timeLabel: String {
+        eventTimeLabel(startISO: event.startTime, endISO: event.endTime, allDay: event.allDay)
+    }
+
+    var body: some View {
         VStack(alignment: .leading, spacing: Theme.s2) {
             Text(event.title).font(.headline).foregroundStyle(Theme.text).lineLimit(3)
             if !timeLabel.isEmpty {

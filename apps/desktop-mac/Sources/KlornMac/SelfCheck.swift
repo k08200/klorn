@@ -652,6 +652,63 @@ func runSelfChecks() async -> Bool {
     check("events bucket on the local day, malformed dropped",
           buckets["2026-08-26"]?.map(\.id) == ["e1"] && buckets.count == 1)
 
+    // Spanning (2026-09-10): an event shows on EVERY day it covers.
+    func ev(_ id: String, _ start: String, _ end: String, allDay: Bool) -> CalendarEventWire {
+        CalendarEventWire(id: id, title: id, startTime: start, endTime: end,
+                          location: nil, meetingLink: nil, allDay: allDay)
+    }
+    // 01:30 KST on the 26th → 12:00 KST on the 27th: two local days.
+    check("spanning — a timed event covers each local day",
+          eventDayKeys(ev("s", "2026-08-25T16:30:00.000Z", "2026-08-27T03:00:00.000Z",
+                          allDay: false), calendar: sunFirst)
+              == ["2026-08-26", "2026-08-27"])
+    // 15:00Z is exactly 00:00 KST on the 27th — the 27th is not covered.
+    check("spanning — an end at local midnight adds no day",
+          eventDayKeys(ev("m", "2026-08-26T05:00:00Z", "2026-08-26T15:00:00Z", allDay: false),
+                       calendar: sunFirst) == ["2026-08-26"])
+    // All-day rows are dates with an EXCLUSIVE end (Google) — read as dates,
+    // so the KST reader's 09:00 local instant never adds a phantom day.
+    check("spanning — all-day dates, exclusive end",
+          eventDayKeys(ev("a", "2026-08-30T00:00:00Z", "2026-09-01T00:00:00Z", allDay: true),
+                       calendar: sunFirst) == ["2026-08-30", "2026-08-31"])
+    check("spanning — a one-day all-day event is one day",
+          eventDayKeys(ev("o", "2026-07-24T00:00:00Z", "2026-07-25T00:00:00Z", allDay: true),
+                       calendar: sunFirst) == ["2026-07-24"])
+    check("spanning — capped at maxSpannedDays",
+          eventDayKeys(ev("r", "2026-01-01T00:00:00Z", "2030-01-01T00:00:00Z", allDay: true),
+                       calendar: sunFirst).count == maxSpannedDays)
+    check("spanning — malformed end keeps the start day",
+          eventDayKeys(ev("x", "2026-08-26T05:00:00Z", "nope", allDay: false),
+                       calendar: sunFirst) == ["2026-08-26"])
+    check("spanning — buckets carry the event under both days",
+          eventsByDay([ev("s", "2026-08-25T16:30:00.000Z", "2026-08-27T03:00:00.000Z",
+                          allDay: false)], calendar: sunFirst).keys.sorted()
+              == ["2026-08-26", "2026-08-27"])
+    // Week view: seven days from the calendar's firstWeekday, around Aug 5.
+    let aug5 = aug.count > 10 ? aug[10] : Date()
+    let sunWeek = weekDays(containing: aug5, calendar: sunFirst)
+    check("week — seven days from Sunday",
+          sunWeek.count == 7
+          && localDayKey(sunWeek[0], calendar: sunFirst) == "2026-08-02"
+          && localDayKey(sunWeek[6], calendar: sunFirst) == "2026-08-08")
+    check("week — Monday-first locales start on Monday",
+          localDayKey(weekDays(containing: aug5, calendar: monFirst).first ?? Date(),
+                      calendar: monFirst) == "2026-08-03")
+    check("day order — all-day first, then by start time",
+          sortedForDay([
+              ev("t2", "2026-08-26T08:00:00Z", "2026-08-26T09:00:00Z", allDay: false),
+              ev("a", "2026-08-26T00:00:00Z", "2026-08-27T00:00:00Z", allDay: true),
+              ev("t1", "2026-08-26T05:00:00Z", "2026-08-26T06:00:00Z", allDay: false),
+          ]).map(\.id) == ["a", "t1", "t2"])
+    // The chip's time label must not vanish on a plain (no-millis) ISO row —
+    // fixtures and older clients write those, the API writes millis.
+    check("event time label — plain ISO renders too",
+          eventTimeLabel(startISO: "2026-08-26T05:00:00Z", endISO: "2026-08-26T06:30:00Z",
+                         allDay: false, calendar: sunFirst) == "14:00–15:30"
+          && eventTimeLabel(startISO: "2026-08-26T05:00:00.000Z",
+                            endISO: "2026-08-26T06:30:00.000Z",
+                            allDay: false, calendar: sunFirst) == "14:00–15:30")
+
 
     // Label categories (2026-08-27): the filter reads the SAME signal the
     // chip renders, so sidebar counts can never disagree with row labels.

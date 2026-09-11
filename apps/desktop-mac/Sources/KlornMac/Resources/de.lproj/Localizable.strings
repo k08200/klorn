@@ -503,6 +503,7 @@
 
 // Real calendar views — 일/월/년 (2026-08-26).
 "cal.scope.day" = "Tag";
+"cal.scope.week" = "Woche";
 "cal.scope.month" = "Monat";
 "cal.scope.year" = "Jahr";
 "cal.today" = "Heute";
