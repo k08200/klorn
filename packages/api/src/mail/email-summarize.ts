@@ -11,12 +11,14 @@ import { asEnum, asString, asStringArray } from "../llm/llm-coerce.js";
 import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
+import { senderEmail } from "../notify/notification-format.js";
 import { getProviderChain, type ProviderCredentials } from "../providers/index.js";
 import { resolveUserEmail } from "../resolve-user-email.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { classifyNeedsReplyFromSignals } from "./email-priority.js";
 import { htmlToPlainText } from "./email-text.js";
+import { senderLabelsFor, userLabelLine } from "./sender-labels.js";
 
 // ─── AI Summarization ─────────────────────────────────────────────────────
 
@@ -98,6 +100,15 @@ async function resolveInboxPurpose(
   return user?.primaryInboxPurpose ?? null;
 }
 
+/** The user's own label for this sender ("declared customer"), if any —
+ *  the prompt must follow the correction. One query; absent = no line. */
+async function resolveUserLabel(userId: string, from: string): Promise<string | null> {
+  const address = senderEmail(from).toLowerCase();
+  if (!address) return null;
+  const labels = await senderLabelsFor(userId, [address]);
+  return labels.get(address) ?? null;
+}
+
 /** The user's declared company domains (company-domains.ts) — one read per
  *  call / per batch; an empty list keeps the preamble byte-identical. */
 async function resolveCompanyDomains(userId: string): Promise<string[]> {
@@ -128,6 +139,7 @@ export async function summarizeEmailOnDemand(
   if (getProviderChain(credentials).length === 0) return null;
   const purpose = await resolveInboxPurpose(userId, email.linkedInboxAccountId);
   const companyDomains = await resolveCompanyDomains(userId);
+  const userLabel = await resolveUserLabel(userId, email.from);
 
   const body =
     email.body || (email.htmlBody ? htmlToPlainText(email.htmlBody) : "") || email.snippet || "";
@@ -147,7 +159,7 @@ export async function summarizeEmailOnDemand(
         { role: "system", content: detailedAnalysisPrompt(lang, purpose, companyDomains) },
         {
           role: "user",
-          content: `From: ${wrapUntrusted(email.from, "email:from")}\nSubject: ${wrapUntrusted(email.subject, "email:subject")}\n\n${wrapUntrusted(truncatedBody, "email:body")}`,
+          content: `From: ${wrapUntrusted(email.from, "email:from")}\n${userLabelLine(userLabel)}Subject: ${wrapUntrusted(email.subject, "email:subject")}\n\n${wrapUntrusted(truncatedBody, "email:body")}`,
         },
       ],
     },
@@ -266,6 +278,10 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
   // mailbox that appears in this page.
   const primaryPurpose = await resolveInboxPurpose(userId, null);
   const companyDomains = await resolveCompanyDomains(userId);
+  const userLabels = await senderLabelsFor(
+    userId,
+    unsummarized.map((e) => senderEmail(e.from).toLowerCase()).filter(Boolean),
+  );
   const linkedIds = [
     ...new Set(unsummarized.map((e) => e.linkedInboxAccountId).filter((id): id is string => !!id)),
   ];
@@ -296,6 +312,7 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
           ? (linkedPurpose.get(email.linkedInboxAccountId) ?? null)
           : primaryPurpose,
         companyDomains,
+        userLabels.get(senderEmail(email.from).toLowerCase()) ?? null,
       );
       await persistSummaryResult(email, result, userEmail);
       count++;
@@ -510,6 +527,7 @@ async function summarizeEmail(
   credentials?: ProviderCredentials,
   purpose?: string | null,
   companyDomains: readonly string[] = [],
+  userLabel: string | null = null,
 ): Promise<AISummaryResult> {
   // Truncate very long bodies
   const truncatedBody = body.length > 3000 ? body.slice(0, 3000) + "\n...(truncated)" : body;
@@ -526,7 +544,7 @@ async function summarizeEmail(
         },
         {
           role: "user",
-          content: `From: ${wrapUntrusted(from, "email:from")}\nSubject: ${wrapUntrusted(subject, "email:subject")}\n\n${wrapUntrusted(truncatedBody, "email:body")}`,
+          content: `From: ${wrapUntrusted(from, "email:from")}\n${userLabelLine(userLabel)}Subject: ${wrapUntrusted(subject, "email:subject")}\n\n${wrapUntrusted(truncatedBody, "email:body")}`,
         },
       ],
     },

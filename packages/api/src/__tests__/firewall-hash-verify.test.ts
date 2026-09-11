@@ -86,6 +86,7 @@ vi.mock("../db.js", () => ({
     // Company-domain chip lookup (fail-open, but a missing model would log
     // a TypeError to Sentry and pollute the assertions below).
     user: { findUnique: vi.fn(async () => ({ companyDomains: [] })) },
+    senderLabel: { findMany: vi.fn(async () => []) },
   },
 }));
 

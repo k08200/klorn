@@ -557,3 +557,10 @@
 "company.label" = "会社ドメイン";
 "company.none" = "未設定";
 "company.saveFailed" = "保存できません — ドメインを確認してください（gmail.com/naver.com 不可、最大10件）。";
+
+// Sender label corrections (2026-09-11).
+"label.correct" = "ラベルを修正";
+"label.correct.domain" = "ドメイン全体: %@";
+"label.correct.clear" = "この送信者の修正を解除";
+"label.correct.clearDomain" = "ドメインの修正を解除";
+"label.correct.a11y" = "%@ — ラベルを修正";

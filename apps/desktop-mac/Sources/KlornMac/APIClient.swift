@@ -123,6 +123,13 @@ struct APIClient: Sendable {
         _ = try await data(path, method: "PATCH", body: body, contentType: "application/json", authed: authed)
     }
 
+    /// PUT an Encodable body; discard the response (e.g. a sender label —
+    /// "this address is X", create-or-overwrite semantics).
+    func put(_ path: String, encodable: some Encodable, authed: Bool = true) async throws {
+        let body = try JSONEncoder().encode(encodable)
+        _ = try await data(path, method: "PUT", body: body, contentType: "application/json", authed: authed)
+    }
+
     /// PATCH a JSON object; discard the response body (e.g. commitment status).
     func patch(_ path: String, json: [String: String], authed: Bool = true) async throws {
         let body = try JSONEncoder().encode(json)

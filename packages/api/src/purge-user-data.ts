@@ -25,6 +25,8 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.linkedCalendarAccount.deleteMany(scope);
   // SenderTrait.evidenceText holds verbatim quoted email content.
   await tx.senderTrait.deleteMany(scope);
+  // SenderLabel: the user's own relationship corrections, keyed by address.
+  await tx.senderLabel.deleteMany(scope);
 
   await tx.emailAttachment.deleteMany(scope);
   await tx.candidateIntake.deleteMany(scope);

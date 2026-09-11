@@ -32,6 +32,7 @@ describe("purgeUserData", () => {
       "linkedInboxAccount",
       "linkedCalendarAccount",
       "senderTrait",
+      "senderLabel",
       "userToken",
       "emailMessage",
       "emailAttachment",
