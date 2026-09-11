@@ -1172,12 +1172,95 @@ final class AppModel {
                 "/api/calendar?start=\(iso.string(from: start))&end=\(iso.string(from: end))",
                 as: CalendarListResponse.self)
             calendarRangeKey = key
+            calendarRangeBounds = (start, end)
             calendarRangeEvents = resp.events
         } catch APIError.unauthorized {
             signOut()
         } catch {
             Log.app.warning("calendar range fetch failed: \(String(describing: error), privacy: .private)")
         }
+    }
+
+    // MARK: Calendar editing (2026-09-11)
+
+    /// The range the calendar is showing — re-read after a write.
+    private(set) var calendarRangeBounds: (start: Date, end: Date)?
+    var showEventEditor = false
+    private(set) var editingEvent: CalendarEventWire?
+    private(set) var eventEditorAnchor = Date()
+    private(set) var eventEditorError: String?
+    private(set) var eventEditorSaving = false
+
+    func beginNewEvent(at day: Date) {
+        editingEvent = nil
+        eventEditorAnchor = day
+        eventEditorError = nil
+        showEventEditor = true
+    }
+
+    func beginEditingEvent(_ event: CalendarEventWire) {
+        editingEvent = event
+        eventEditorError = nil
+        showEventEditor = true
+    }
+
+    func dismissEventEditor() {
+        showEventEditor = false
+        editingEvent = nil
+        eventEditorError = nil
+    }
+
+    /// Re-read the visible range after a write (drops the cache key first,
+    /// so loadCalendarRange does not short-circuit on the same bounds).
+    func refreshCalendarRange() async {
+        guard let bounds = calendarRangeBounds else { return }
+        calendarRangeKey = nil
+        await loadCalendarRange(start: bounds.start, end: bounds.end)
+    }
+
+    /// POST (new) or PATCH (edit). The server validates too; its message is
+    /// shown as-is (a 400 names what was wrong), a Pro gate reads as
+    /// error.needsPro, and the draft is kept on any failure.
+    func saveEvent(_ draft: CalendarEventDraft) async -> Bool {
+        struct Created: Decodable { let id: String }
+        eventEditorSaving = true
+        defer { eventEditorSaving = false }
+        eventEditorError = nil
+        let payload = calendarEventPayload(draft)
+        do {
+            if let editing = editingEvent {
+                try await api.patch("/api/calendar/\(editing.id)", encodable: payload)
+            } else {
+                _ = try await api.post("/api/calendar", encodable: payload, as: Created.self)
+            }
+            await refreshCalendarRange()
+            return true
+        } catch APIError.unauthorized {
+            signOut()
+        } catch APIError.forbidden {
+            eventEditorError = L("error.needsPro")
+        } catch APIError.http(_, let message) {
+            eventEditorError = message ?? L("cal.save.failed")
+        } catch {
+            eventEditorError = L("cal.save.failed")
+            Log.app.warning("calendar save failed: \(String(describing: error), privacy: .private)")
+        }
+        return false
+    }
+
+    /// DELETE — Google copy too, server-side. False = refused / failed; the
+    /// caller shows it next to the button.
+    func deleteEvent(_ event: CalendarEventWire) async -> Bool {
+        do {
+            try await api.delete("/api/calendar/\(event.id)")
+            await refreshCalendarRange()
+            return true
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            Log.app.warning("calendar delete failed: \(String(describing: error), privacy: .private)")
+        }
+        return false
     }
 
     /// Render-probe seam: the offscreen calendar shots need events without a

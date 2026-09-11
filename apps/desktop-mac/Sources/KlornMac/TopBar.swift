@@ -886,6 +886,12 @@ struct CalendarScreen: View {
                 ProgressView().controlSize(.mini)
             }
             Spacer()
+            Button { model.beginNewEvent(at: anchor) } label: {
+                Image(systemName: "plus").iconTarget(26)
+            }
+            .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+            .help(L("cal.new"))
+            .accessibilityLabel(L("cal.new"))
             Button { step(-1) } label: {
                 Image(systemName: "chevron.left").iconTarget(26)
             }
@@ -1235,8 +1241,13 @@ private struct WeekEventChip: View {
 
 /// The event detail every calendar surface opens — agenda rows, week chips.
 private struct EventDetailPopover: View {
+    @Environment(AppModel.self) private var model
     let event: CalendarEventWire
     let actions: TopBarActions
+    /// Delete is two clicks inside the popover (no system dialog over a
+    /// floating panel): 삭제 → 정말 삭제.
+    @State private var confirmDelete = false
+    @State private var deleteFailed = false
 
     private var timeLabel: String {
         eventTimeLabel(startISO: event.startTime, endISO: event.endTime, allDay: event.allDay)
@@ -1266,6 +1277,23 @@ private struct EventDetailPopover: View {
                 .buttonStyle(.bordered).controlSize(.small)
             }
             .padding(.top, 4)
+            // Edit / delete (2026-09-11) — the server pushes both to Google.
+            HStack(spacing: 8) {
+                Button(L("cal.edit")) { model.beginEditingEvent(event) }
+                    .buttonStyle(.bordered).controlSize(.small)
+                if confirmDelete {
+                    Button(L("cal.delete.confirm")) {
+                        Task { deleteFailed = !(await model.deleteEvent(event)) }
+                    }
+                    .buttonStyle(.bordered).controlSize(.small).tint(Theme.tint(.push))
+                } else {
+                    Button(L("cal.delete")) { confirmDelete = true }
+                        .buttonStyle(.bordered).controlSize(.small)
+                }
+            }
+            if deleteFailed {
+                Text(L("cal.delete.failed")).font(.caption2).foregroundStyle(Theme.tint(.push))
+            }
         }
         .padding(Theme.s4)
         .frame(width: 250, alignment: .leading)
@@ -1970,6 +1998,14 @@ struct FullView: View {
                     .onTapGesture { model.dismissPurposePrompt() }
                     .accessibilityHidden(true)
                 PurposePrompt()
+            }
+            // Event editor (2026-09-11) — a user action opened it, so it sits
+            // above the connect-time question but below Preferences.
+            if model.showEventEditor && !model.showPreferences {
+                Theme.text.opacity(0.45)
+                    .onTapGesture { model.dismissEventEditor() }
+                    .accessibilityHidden(true)
+                CalendarEventEditor()
             }
             if model.showTierGuide && !model.showPreferences {
                 Theme.text.opacity(0.45)

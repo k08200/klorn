@@ -565,3 +565,18 @@
 "label.correct.clearDomain" = "ドメインの修正を解除";
 "label.correct.a11y" = "%@ — ラベルを修正";
 "label.add" = "＋ ラベル";
+
+// Calendar editor (2026-09-11).
+"cal.new" = "新しい予定";
+"cal.edit" = "編集";
+"cal.delete" = "削除";
+"cal.delete.confirm" = "本当に削除";
+"cal.delete.failed" = "削除できません — もう一度お試しください。";
+"cal.editor.newTitle" = "新しい予定";
+"cal.editor.editTitle" = "予定を編集";
+"cal.editor.title" = "タイトル";
+"cal.editor.start" = "開始";
+"cal.editor.end" = "終了";
+"cal.editor.location" = "場所";
+"cal.save" = "保存";
+"cal.save.failed" = "保存できません — もう一度お試しください。";

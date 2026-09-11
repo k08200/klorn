@@ -694,6 +694,60 @@ func runSelfChecks() async -> Bool {
     check("week — Monday-first locales start on Monday",
           localDayKey(weekDays(containing: aug5, calendar: monFirst).first ?? Date(),
                       calendar: monFirst) == "2026-08-03")
+    // Calendar editor (2026-09-11): the wire body a draft becomes, and the
+    // draft an existing event opens as — all-day dates must round-trip
+    // without gaining or losing a day across the UTC/local seam.
+    do {
+        let sept26 = ISO8601DateFormatter().date(from: "2026-08-26T01:00:00Z") ?? Date()  // 10:00 KST 26일
+        let timed = calendarEventPayload(
+            CalendarEventDraft(title: " Sync ", allDay: false, start: sept26,
+                               end: sept26.addingTimeInterval(3600), location: " HQ "),
+            calendar: sunFirst)
+        check("event payload — timed: UTC instants, trimmed text",
+              timed.startTime == "2026-08-26T01:00:00.000Z"
+              && timed.endTime == "2026-08-26T02:00:00.000Z"
+              && timed.title == "Sync" && timed.location == "HQ" && timed.allDay == false)
+        let oneDay = calendarEventPayload(
+            CalendarEventDraft(title: "Offsite", allDay: true, start: sept26, end: sept26, location: ""),
+            calendar: sunFirst)
+        check("event payload — all-day: local date, exclusive next-day end",
+              oneDay.startTime == "2026-08-26T00:00:00.000Z"
+              && oneDay.endTime == "2026-08-27T00:00:00.000Z" && oneDay.allDay)
+        let twoDays = calendarEventPayload(
+            CalendarEventDraft(title: "Offsite", allDay: true, start: sept26,
+                               end: sept26.addingTimeInterval(86_400), location: ""),
+            calendar: sunFirst)
+        check("event payload — all-day: inclusive last day → exclusive end",
+              twoDays.endTime == "2026-08-28T00:00:00.000Z")
+        check("draft validity — title required, timed end after start",
+              !calendarDraftIsValid(CalendarEventDraft(
+                  title: " ", allDay: false, start: sept26, end: sept26.addingTimeInterval(60),
+                  location: ""))
+              && !calendarDraftIsValid(CalendarEventDraft(
+                  title: "x", allDay: false, start: sept26, end: sept26, location: ""))
+              && calendarDraftIsValid(CalendarEventDraft(
+                  title: "x", allDay: true, start: sept26, end: sept26, location: "")))
+        // The fixture's 오프사이트: 24T00Z … 25T00Z (all-day) opens as ONE day,
+        // the 24th, in the editor — not the 25th, and not two days.
+        let opened = calendarDraft(
+            from: CalendarEventWire(
+                id: "o", title: "오프사이트", startTime: "2026-07-24T00:00:00Z",
+                endTime: "2026-07-25T00:00:00Z", location: nil, meetingLink: nil, allDay: true),
+            calendar: sunFirst)
+        check("draft from all-day event — exclusive end becomes the inclusive last day",
+              opened.map { localDayKey($0.start, calendar: sunFirst) } == "2026-07-24"
+              && opened.map { localDayKey($0.end, calendar: sunFirst) } == "2026-07-24"
+              && opened?.allDay == true)
+        check("draft from event — malformed time is nil, never a crash",
+              calendarDraft(from: CalendarEventWire(
+                  id: "b", title: "x", startTime: "nope", endTime: "nope", location: nil,
+                  meetingLink: nil, allDay: false), calendar: sunFirst) == nil)
+        let fresh = newCalendarDraft(on: sept26, now: sept26, calendar: sunFirst)
+        check("new draft — next full hour, one hour long",
+              sunFirst.component(.hour, from: fresh.start) == 11
+              && fresh.end.timeIntervalSince(fresh.start) == 3600 && !fresh.allDay)
+    }
+
     check("day order — all-day first, then by start time",
           sortedForDay([
               ev("t2", "2026-08-26T08:00:00Z", "2026-08-26T09:00:00Z", allDay: false),

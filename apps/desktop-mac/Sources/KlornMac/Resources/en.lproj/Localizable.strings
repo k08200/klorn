@@ -565,3 +565,18 @@
 "label.correct.clearDomain" = "Clear my correction for the domain";
 "label.correct.a11y" = "%@ — correct the label";
 "label.add" = "＋ label";
+
+// Calendar editor (2026-09-11).
+"cal.new" = "New event";
+"cal.edit" = "Edit";
+"cal.delete" = "Delete";
+"cal.delete.confirm" = "Really delete";
+"cal.delete.failed" = "Couldn't delete — try again.";
+"cal.editor.newTitle" = "New event";
+"cal.editor.editTitle" = "Edit event";
+"cal.editor.title" = "Title";
+"cal.editor.start" = "Start";
+"cal.editor.end" = "End";
+"cal.editor.location" = "Location";
+"cal.save" = "Save";
+"cal.save.failed" = "Couldn't save — try again.";

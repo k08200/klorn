@@ -1239,6 +1239,98 @@ func eventsByDay(
     return out
 }
 
+// MARK: - Calendar editing (2026-09-11)
+
+/// What the editor holds. Timed: two instants. All-day: the LOCAL days the
+/// user picked, `end` INCLUSIVE (the last day shown) — the wire's exclusive
+/// end is made in calendarEventPayload.
+struct CalendarEventDraft: Equatable, Sendable {
+    var title: String
+    var allDay: Bool
+    var start: Date
+    var end: Date
+    var location: String
+}
+
+/// POST /api/calendar and PATCH /api/calendar/:id body.
+struct CalendarEventPayload: Encodable, Equatable, Sendable {
+    let title: String
+    let startTime: String
+    let endTime: String
+    let location: String
+    let allDay: Bool
+}
+
+/// Wire body for a draft. Timed → UTC instants. All-day → the picked LOCAL
+/// dates as UTC-midnight ISO with an EXCLUSIVE end (the API and Google read
+/// all-day times as dates off the string): a one-day event on the 24th is
+/// 24T00:00Z … 25T00:00Z. Pure.
+func calendarEventPayload(
+    _ draft: CalendarEventDraft, calendar: Calendar = .current
+) -> CalendarEventPayload {
+    let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+    let location = draft.location.trimmingCharacters(in: .whitespacesAndNewlines)
+    if draft.allDay {
+        let lastDay = calendar.startOfDay(for: max(draft.end, draft.start))
+        let endExclusive = calendar.date(byAdding: .day, value: 1, to: lastDay) ?? lastDay
+        return CalendarEventPayload(
+            title: title,
+            startTime: "\(localDayKey(draft.start, calendar: calendar))T00:00:00.000Z",
+            endTime: "\(localDayKey(endExclusive, calendar: calendar))T00:00:00.000Z",
+            location: location, allDay: true)
+    }
+    let iso = ISO8601DateFormatter()
+    iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return CalendarEventPayload(
+        title: title, startTime: iso.string(from: draft.start), endTime: iso.string(from: draft.end),
+        location: location, allDay: false)
+}
+
+/// Saveable: a title, and a timed end after the start (all-day: the last
+/// day is not before the first). Pure.
+func calendarDraftIsValid(_ draft: CalendarEventDraft, calendar: Calendar = .current) -> Bool {
+    guard !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+    if draft.allDay {
+        return calendar.startOfDay(for: draft.end) >= calendar.startOfDay(for: draft.start)
+    }
+    return draft.end > draft.start
+}
+
+/// A draft from an existing event, for editing. All-day: the wire's UTC
+/// dates become local days, and the exclusive end becomes the inclusive
+/// last day the editor shows. nil when a time is malformed. Pure.
+func calendarDraft(from event: CalendarEventWire, calendar: Calendar = .current) -> CalendarEventDraft? {
+    let withMillis = ISO8601DateFormatter()
+    withMillis.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let plain = ISO8601DateFormatter()
+    func parse(_ iso: String) -> Date? { withMillis.date(from: iso) ?? plain.date(from: iso) }
+    guard let start = parse(event.startTime), let end = parse(event.endTime) else { return nil }
+    if event.allDay, let utcZone = TimeZone(identifier: "UTC") {
+        var utc = calendar
+        utc.timeZone = utcZone
+        let startDay = calendar.date(from: utc.dateComponents([.year, .month, .day], from: start)) ?? start
+        let endExclusive = calendar.date(from: utc.dateComponents([.year, .month, .day], from: end)) ?? end
+        let lastDay = calendar.date(byAdding: .day, value: -1, to: endExclusive) ?? endExclusive
+        return CalendarEventDraft(
+            title: event.title, allDay: true, start: startDay, end: max(lastDay, startDay),
+            location: event.location ?? "")
+    }
+    return CalendarEventDraft(
+        title: event.title, allDay: false, start: start, end: end, location: event.location ?? "")
+}
+
+/// A fresh draft on a day: the next full hour today, 09:00 on any other
+/// day, one hour long. Pure.
+func newCalendarDraft(on day: Date, now: Date = Date(), calendar: Calendar = .current) -> CalendarEventDraft {
+    var comps = calendar.dateComponents([.year, .month, .day], from: day)
+    comps.hour = calendar.isDate(day, inSameDayAs: now)
+        ? min(calendar.component(.hour, from: now) + 1, 23) : 9
+    comps.minute = 0
+    let start = calendar.date(from: comps) ?? day
+    let end = calendar.date(byAdding: .hour, value: 1, to: start) ?? start
+    return CalendarEventDraft(title: "", allDay: false, start: start, end: end, location: "")
+}
+
 /// GET /api/calendar/today/summary.
 struct TodaySummary: Codable, Sendable {
     let total: Int
