@@ -75,6 +75,32 @@ export async function listEvents(userId: string, maxResults = 10) {
   }
 }
 
+/**
+ * The start/end Google wants for an event. Timed events carry the user's
+ * IANA zone so a naive dateTime is read in THEIR wall clock (#676). All-day
+ * events are DATES (end exclusive, Google's contract) — the date is read
+ * off the string, never off an instant, so "2026-08-01T00:00:00Z" and
+ * "2026-08-01T00:00:00+09:00" both mean August 1st. Pure, exported for
+ * its tests.
+ */
+export function googleEventTimes(input: {
+  startTime: string;
+  endTime: string;
+  allDay: boolean;
+  timeZone: string;
+}): { start: calendar_v3.Schema$EventDateTime; end: calendar_v3.Schema$EventDateTime } {
+  if (input.allDay) {
+    return {
+      start: { date: input.startTime.slice(0, 10) },
+      end: { date: input.endTime.slice(0, 10) },
+    };
+  }
+  return {
+    start: { dateTime: input.startTime, timeZone: input.timeZone },
+    end: { dateTime: input.endTime, timeZone: input.timeZone },
+  };
+}
+
 export async function createEvent(
   userId: string,
   summary: string,
@@ -83,6 +109,7 @@ export async function createEvent(
   description?: string,
   location?: string,
   attendees?: string[],
+  allDay = false,
 ) {
   const auth = await getAuthedClient(userId);
   if (!auth) return { error: "Google Calendar not connected." };
@@ -99,8 +126,7 @@ export async function createEvent(
         summary,
         description: description || "",
         location: location || "",
-        start: { dateTime: startTime, timeZone: userZone },
-        end: { dateTime: endTime, timeZone: userZone },
+        ...googleEventTimes({ startTime, endTime, allDay, timeZone: userZone }),
         ...(attendees && attendees.length > 0
           ? { attendees: attendees.map((email) => ({ email })) }
           : {}),
@@ -137,6 +163,65 @@ export async function createEvent(
     const status = gaxiosErr.response?.status;
     const apiMsg = gaxiosErr.response?.data?.error?.message || gaxiosErr.message || "Unknown error";
     console.error(`[CALENDAR] createEvent failed (HTTP ${status}):`, apiMsg);
+    return { error: `Calendar API error (${status}): ${apiMsg}` };
+  }
+}
+
+export interface GoogleEventPatch {
+  summary?: string;
+  description?: string | null;
+  location?: string | null;
+  /** Both or neither — Google needs a consistent start/end pair. */
+  startTime?: string;
+  endTime?: string;
+  allDay?: boolean;
+}
+
+/**
+ * Push an edit to the Google copy of a synced event (2026-09-11). Without
+ * this, an edit made in Klorn lived only in the local row and the next
+ * Google sync (upsert by googleId) silently reverted it. Same timezone and
+ * all-day rules as createEvent; auth failures flag the token for reconnect
+ * like every other calendar write.
+ */
+export async function updateEvent(userId: string, eventId: string, patch: GoogleEventPatch) {
+  const auth = await getAuthedClient(userId);
+  if (!auth) return { error: "Google Calendar not connected." };
+
+  try {
+    const userZone = await getUserTimeZone(userId);
+    const calendar = google.calendar({ version: "v3", auth });
+    const requestBody: calendar_v3.Schema$Event = {
+      ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
+      ...(patch.description !== undefined ? { description: patch.description ?? "" } : {}),
+      ...(patch.location !== undefined ? { location: patch.location ?? "" } : {}),
+      ...(patch.startTime && patch.endTime
+        ? googleEventTimes({
+            startTime: patch.startTime,
+            endTime: patch.endTime,
+            allDay: patch.allDay ?? false,
+            timeZone: userZone,
+          })
+        : {}),
+    };
+    const res = await calendar.events.patch({ calendarId: "primary", eventId, requestBody });
+    return {
+      success: true,
+      canonicalStart: res.data.start?.dateTime ?? res.data.start?.date ?? null,
+      canonicalEnd: res.data.end?.dateTime ?? res.data.end?.date ?? null,
+    };
+  } catch (err: unknown) {
+    if (isGoogleAuthError(err)) {
+      await markGoogleTokenForReconnect(userId);
+      return { error: "Google Calendar not connected. Please reconnect your Google account." };
+    }
+    const gaxiosErr = err as {
+      response?: { status?: number; data?: { error?: { message?: string } } };
+      message?: string;
+    };
+    const status = gaxiosErr.response?.status;
+    const apiMsg = gaxiosErr.response?.data?.error?.message || gaxiosErr.message || "Unknown error";
+    console.error(`[CALENDAR] updateEvent failed (HTTP ${status}):`, apiMsg);
     return { error: `Calendar API error (${status}): ${apiMsg}` };
   }
 }
