@@ -1272,6 +1272,68 @@ private struct EventDetailPopover: View {
     }
 }
 
+/// Account section: the declared company domains, editable in place. Enter
+/// or the save button PATCHes; the server validates and the row reflects
+/// the canonical list. Offscreen: a text stand-in (ImageRenderer draws
+/// NSTextField as a placeholder).
+private struct CompanyDomainsRow: View {
+    @Environment(AppModel.self) private var model
+    @State private var text = ""
+    @State private var editing = false
+
+    private var current: String {
+        model.companyDomains.isEmpty ? L("company.none") : model.companyDomains.joined(separator: ", ")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(L("company.label")).font(.caption).foregroundStyle(Theme.textDim)
+                Spacer()
+                if !editing {
+                    Button {
+                        text = model.companyDomains.joined(separator: ", ")
+                        editing = true
+                    } label: {
+                        Text(current).font(Theme.Typo.label).foregroundStyle(Theme.text)
+                            .lineLimit(1).truncationMode(.middle)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(L("company.label")). \(current)")
+                }
+            }
+            if editing {
+                if Theme.isRenderingOffscreen {
+                    Text(text.isEmpty ? L("company.placeholder") : text)
+                        .font(Theme.Typo.label).foregroundStyle(Theme.textDim)
+                } else {
+                    TextField(L("company.placeholder"), text: $text)
+                        .textFieldStyle(.roundedBorder).font(Theme.Typo.label)
+                        .onSubmit { Task { await save() } }
+                        .accessibilityLabel(L("company.label"))
+                }
+                if let error = model.companyDomainsError {
+                    Text(error).font(.caption2).foregroundStyle(Theme.tint(.push))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(spacing: 8) {
+                    SubtleTextButton(title: L("company.save"), dim: false) { Task { await save() } }
+                    SubtleTextButton(title: L("compose.cancel")) { editing = false }
+                }
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 3)
+    }
+
+    private func save() async {
+        // An empty field clears the list — that is a valid answer ("no
+        // company domain"), and the server accepts [] as such.
+        if await model.setCompanyDomains(parseCompanyDomainsInput(text)) {
+            editing = false
+        }
+    }
+}
+
 /// Per-inbox scope selector (web parity: email/page.tsx InboxSelector) —
 /// rendered only when the account actually has 2+ mailboxes. Values: "all",
 /// "primary", or a linked inbox id; addresses come straight from the API,
@@ -2652,6 +2714,10 @@ private struct FullSidebar: View {
                     .accessibilityLabel(
                         "\(inbox.email ?? ""). \(purposeLabel(inbox.purpose))")
                 }
+                // The company's email domains — a sender on one is 회사 on
+                // the row as a recorded fact, and the analysis reads them as
+                // colleagues. Editable here any time; first asked at connect.
+                CompanyDomainsRow()
                 Divider().padding(.horizontal, 16).padding(.vertical, 4)
                 maintenanceDisclosureRow
                 if showMaintenance {

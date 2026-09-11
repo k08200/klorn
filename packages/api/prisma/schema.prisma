@@ -15,6 +15,7 @@ model User {
   // Purpose of the PRIMARY inbox (the account the user signed in with) —
   // same vocabulary as LinkedInboxAccount.purpose. Null = never asked.
   primaryInboxPurpose       String?
+  companyDomains            String[]  @default([])
   passwordHash              String?
   name                      String?
   role                      UserRole                   @default(USER)

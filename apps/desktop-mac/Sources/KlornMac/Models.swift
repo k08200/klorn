@@ -769,6 +769,37 @@ func canSubmitImapConnect(email: String, password: String) -> Bool {
 /// GET /api/email/inboxes response envelope.
 struct InboxesResponse: Codable, Sendable {
     let inboxes: [InboxOption]
+    /// The user's declared company email domains — a sender on one is 회사
+    /// as a recorded fact. Optional decode: an older server omits it.
+    let companyDomains: [String]?
+}
+
+/// Consumer mail providers — never a company, never prefilled as one.
+/// Mirrors PUBLIC_MAIL_DOMAINS in the API's company-domains.ts; the server
+/// re-validates, this list only decides what to SUGGEST.
+let publicMailDomains: Set<String> = [
+    "gmail.com", "googlemail.com", "naver.com", "daum.net", "hanmail.net", "kakao.com",
+    "nate.com", "outlook.com", "hotmail.com", "live.com", "msn.com", "yahoo.com",
+    "yahoo.co.jp", "icloud.com", "me.com", "mac.com", "proton.me", "protonmail.com",
+    "qq.com", "163.com", "126.com",
+]
+
+/// The account's own domain as the prefill for the company-domain question
+/// — nil for public providers (no guess to offer). Pure.
+func suggestedCompanyDomain(for email: String?) -> String? {
+    guard let email, let at = email.lastIndex(of: "@") else { return nil }
+    let domain = email[email.index(after: at)...].trimmingCharacters(in: .whitespaces).lowercased()
+    guard domain.contains("."), !publicMailDomains.contains(domain) else { return nil }
+    return domain
+}
+
+/// What the user typed in the domains field → the list the API validates.
+/// Splits on commas, whitespace and newlines; the server does the real
+/// validation (hostname shape, public providers, cap). Pure.
+func parseCompanyDomainsInput(_ text: String) -> [String] {
+    text.split(whereSeparator: { $0 == "," || $0.isWhitespace || $0.isNewline })
+        .map { String($0) }
+        .filter { !$0.isEmpty }
 }
 
 /// `inbox=` query value for a mail-list fetch: "all" (or blank) sends nothing —

@@ -83,6 +83,9 @@ vi.mock("../db.js", () => ({
     },
     // Row-signal chips batch reply history per page; empty = no chips.
     contactEngagementScore: { findMany: vi.fn(async () => []) },
+    // Company-domain chip lookup (fail-open, but a missing model would log
+    // a TypeError to Sentry and pollute the assertions below).
+    user: { findUnique: vi.fn(async () => ({ companyDomains: [] })) },
   },
 }));
 

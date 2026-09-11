@@ -1646,6 +1646,21 @@ func runSelfChecks() async -> Bool {
               AppModel.newlyLinkedInbox(baseline: [], now: [inbox(nil, "primary")]) == nil)
     }
 
+    // Company domains (2026-09-10): the connect-time question offers the
+    // account's own domain — never a public provider — and the field splits
+    // on what people type. The SERVER validates; these only shape the ask.
+    check("company domain — suggested from the account's address",
+          suggestedCompanyDomain(for: "yong@Acme.com") == "acme.com")
+    check("company domain — public providers suggest nothing",
+          suggestedCompanyDomain(for: "k0820086@gmail.com") == nil
+          && suggestedCompanyDomain(for: "x@naver.com") == nil
+          && suggestedCompanyDomain(for: nil) == nil
+          && suggestedCompanyDomain(for: "not-an-address") == nil)
+    check("company domains — input splits on commas, spaces, newlines",
+          parseCompanyDomainsInput(" acme.com, acme.io\nsub.acme.co.kr  ")
+              == ["acme.com", "acme.io", "sub.acme.co.kr"]
+          && parseCompanyDomainsInput("").isEmpty)
+
     // Three separate passes each missed strings here, because the misses were
     // never in `Text("…")` — they were in helpers that take a plain String
     // (ColumnHeader, EmptyState, sidebarAction, SubtleTextButton). Grepping for

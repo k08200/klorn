@@ -61,6 +61,22 @@ describe("gmailCategoryOf", () => {
 });
 
 describe("rowSignalFor", () => {
+  it("a declared company domain outranks everything — it is a recorded fact about WHO", () => {
+    // A colleague forwarding a receipt: 회사 (declared), not 청구 (judged).
+    expect(
+      rowSignalFor({
+        internal: true,
+        judgeCategory: "billing",
+        category: "updates",
+        repliedCount: 0,
+      }),
+    ).toEqual({ kind: "category", category: "internal" });
+    // Not on a company domain: the rest of the ladder is untouched.
+    expect(
+      rowSignalFor({ internal: false, judgeCategory: "billing", category: null, repliedCount: 0 }),
+    ).toEqual({ kind: "category", category: "billing" });
+  });
+
   it("the judge's verdict outranks Gmail's tab — 회사 beats a stray label", () => {
     expect(
       rowSignalFor({ judgeCategory: "internal", category: "updates", repliedCount: 6 }),

@@ -140,11 +140,27 @@ enum GuideSeen {
 struct PurposePrompt: View {
     @Environment(AppModel.self) private var model
 
+    /// Step 1 asks what the mailbox is for; step 2 (work / mixed only, and
+    /// only while no company domain is declared) asks which email domain is
+    /// the company — the fact that turns colleagues into 회사 chips.
+    private enum Step { case purpose, domains }
+    @State private var step: Step = .purpose
+    @State private var domainsText = ""
+
+    private var targetEmail: String? {
+        model.purposePromptTarget?.email
+            ?? model.inboxes.first(where: { $0.kind == "primary" })?.email
+    }
+
     private func choice(_ purpose: String, _ title: String) -> some View {
         Button(title) {
             let target = model.purposePromptTarget?.id
-            model.dismissPurposePrompt()
             Task { await model.setInboxPurpose(inboxId: target, purpose: purpose) }
+            if (purpose == "work" || purpose == "mixed"), model.companyDomains.isEmpty {
+                withAnimation(.easeOut(duration: 0.15)) { step = .domains }
+            } else {
+                model.dismissPurposePrompt()
+            }
         }
         .buttonStyle(PrimaryButtonStyle())
     }
@@ -152,6 +168,7 @@ struct PurposePrompt: View {
     /// Names the linked account when the question is about one — "this
     /// mailbox" is ambiguous the moment there are two.
     private var title: String {
+        if step == .domains { return L("company.title") }
         if let email = model.purposePromptTarget?.email {
             return L("purpose.title.linked", email)
         }
@@ -162,6 +179,29 @@ struct PurposePrompt: View {
         VStack(alignment: .leading, spacing: Theme.s3) {
             Text(title)
                 .font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+            if step == .purpose {
+                purposeStep
+            } else {
+                domainsStep
+            }
+        }
+        .padding(22)
+        .frame(width: 430)
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
+        .shadow(color: Theme.panelShadow, radius: 24, y: 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+        .onAppear {
+            if model.purposePromptStartsAtDomains { step = .domains }
+            // The account's own domain is the likely answer — offered, not
+            // assumed (a public provider offers nothing).
+            domainsText = suggestedCompanyDomain(for: targetEmail) ?? ""
+        }
+    }
+
+    private var purposeStep: some View {
+        Group {
             Text(L("purpose.detail"))
                 .font(.callout).foregroundStyle(Theme.textDim)
                 .fixedSize(horizontal: false, vertical: true)
@@ -175,13 +215,39 @@ struct PurposePrompt: View {
                 .buttonStyle(.plain).font(Theme.Typo.label)
                 .foregroundStyle(Theme.textDim)
         }
-        .padding(22)
-        .frame(width: 430)
-        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.line))
-        .shadow(color: Theme.panelShadow, radius: 24, y: 8)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(title)
+    }
+
+    private var domainsStep: some View {
+        Group {
+            Text(L("company.detail"))
+                .font(.callout).foregroundStyle(Theme.textDim)
+                .fixedSize(horizontal: false, vertical: true)
+            TextField(L("company.placeholder"), text: $domainsText)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { Task { await save() } }
+                .accessibilityLabel(L("company.title"))
+            if let error = model.companyDomainsError {
+                Text(error).font(.caption).foregroundStyle(Theme.tint(.push))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: Theme.s2) {
+                Button(L("company.save")) { Task { await save() } }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(parseCompanyDomainsInput(domainsText).isEmpty)
+                Button(L("company.skip")) { model.dismissPurposePrompt() }
+                    .buttonStyle(.plain).font(Theme.Typo.label)
+                    .foregroundStyle(Theme.textDim)
+            }
+            .padding(.top, Theme.s1)
+        }
+    }
+
+    private func save() async {
+        let domains = parseCompanyDomainsInput(domainsText)
+        guard !domains.isEmpty else { return }
+        if await model.setCompanyDomains(domains) {
+            model.dismissPurposePrompt()
+        }
     }
 }
 

@@ -547,3 +547,13 @@
 "purpose.loginPick" = "此账户的用途";
 // Linked-account purpose question (2026-09-03).
 "purpose.title.linked" = "%@ 的用途是什么？";
+
+// Company domains (2026-09-10).
+"company.title" = "你的公司邮箱域名是什么？";
+"company.detail" = "来自公司域名的邮件会标为「公司」，并按同事而非客户来分析。包含子域名。可随时在账户栏更改。";
+"company.placeholder" = "acme.com, acme.io";
+"company.save" = "保存";
+"company.skip" = "跳过";
+"company.label" = "公司域名";
+"company.none" = "未设置";
+"company.saveFailed" = "保存失败 — 请检查域名（不能是 gmail.com/naver.com，最多 10 个）。";
