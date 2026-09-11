@@ -565,3 +565,18 @@
 "label.correct.clearDomain" = "도메인 정정 해제";
 "label.correct.a11y" = "%@ — 라벨 정정";
 "label.add" = "＋ 라벨";
+
+// Calendar editor (2026-09-11).
+"cal.new" = "새 일정";
+"cal.edit" = "편집";
+"cal.delete" = "삭제";
+"cal.delete.confirm" = "정말 삭제";
+"cal.delete.failed" = "삭제 실패 — 다시 시도하세요.";
+"cal.editor.newTitle" = "새 일정";
+"cal.editor.editTitle" = "일정 편집";
+"cal.editor.title" = "제목";
+"cal.editor.start" = "시작";
+"cal.editor.end" = "종료";
+"cal.editor.location" = "장소";
+"cal.save" = "저장";
+"cal.save.failed" = "저장 실패 — 다시 시도하세요.";

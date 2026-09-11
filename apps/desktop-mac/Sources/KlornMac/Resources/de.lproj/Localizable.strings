@@ -565,3 +565,18 @@
 "label.correct.clearDomain" = "Meine Korrektur für die Domain löschen";
 "label.correct.a11y" = "%@ — Label korrigieren";
 "label.add" = "＋ Label";
+
+// Calendar editor (2026-09-11).
+"cal.new" = "Neuer Termin";
+"cal.edit" = "Bearbeiten";
+"cal.delete" = "Löschen";
+"cal.delete.confirm" = "Wirklich löschen";
+"cal.delete.failed" = "Löschen fehlgeschlagen — erneut versuchen.";
+"cal.editor.newTitle" = "Neuer Termin";
+"cal.editor.editTitle" = "Termin bearbeiten";
+"cal.editor.title" = "Titel";
+"cal.editor.start" = "Beginn";
+"cal.editor.end" = "Ende";
+"cal.editor.location" = "Ort";
+"cal.save" = "Speichern";
+"cal.save.failed" = "Speichern fehlgeschlagen — erneut versuchen.";
