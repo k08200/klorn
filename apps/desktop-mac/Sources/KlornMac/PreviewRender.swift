@@ -87,7 +87,9 @@ enum PreviewRender {
      {"id":"c4","title":"파트너 콜","startTime":"2026-07-31T08:00:00Z",
       "endTime":"2026-07-31T09:00:00Z","location":null,"meetingLink":null,"allDay":false},
      {"id":"c5","title":"오프사이트","startTime":"2026-07-24T00:00:00Z",
-      "endTime":"2026-07-25T00:00:00Z","location":null,"meetingLink":null,"allDay":true}]
+      "endTime":"2026-07-25T00:00:00Z","location":null,"meetingLink":null,"allDay":true},
+     {"id":"c6","title":"워크숍","startTime":"2026-07-30T00:00:00Z",
+      "endTime":"2026-08-01T00:00:00Z","location":"강릉","meetingLink":null,"allDay":true}]
     """
 
     private static let emailJSON = """
@@ -260,6 +262,12 @@ enum PreviewRender {
         shot("calendar", size: CGSize(width: 760, height: 560), align: .top) {
             CalendarScreen(
                 actions: actions, initialScope: .month,
+                initialAnchor: ISO8601DateFormatter().date(from: "2026-07-29T03:00:00Z") ?? Date())
+        }
+        // Week view — seven columns, the spanning 워크숍 on two of them.
+        shot("calendar-week", size: CGSize(width: 760, height: 460), align: .top) {
+            CalendarScreen(
+                actions: actions, initialScope: .week,
                 initialAnchor: ISO8601DateFormatter().date(from: "2026-07-29T03:00:00Z") ?? Date())
         }
         // The mail level of the two-level sidebar — Back / Compose / folders /

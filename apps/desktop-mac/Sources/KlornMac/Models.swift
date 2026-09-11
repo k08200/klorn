@@ -1104,20 +1104,71 @@ func monthGridDays(year: Int, month: Int, calendar: Calendar = .current) -> [Dat
     return days
 }
 
-/// Events bucketed by local day. A malformed startTime drops that event —
-/// never a crash; a multi-day event buckets on its start day (v1 scope:
-/// spanning bars are a later refinement, stated not hidden).
-func eventsByDay(
-    _ events: [CalendarEventWire], calendar: Calendar = .current
-) -> [String: [CalendarEventWire]] {
+/// The seven dates of the week containing `date`, from the calendar's own
+/// firstWeekday (Sunday-first ko/en_US, Monday-first de/fr). Pure.
+func weekDays(containing date: Date, calendar: Calendar = .current) -> [Date] {
+    let weekday = calendar.component(.weekday, from: date)
+    let offset = (weekday - calendar.firstWeekday + 7) % 7
+    guard let start = calendar.date(
+        byAdding: .day, value: -offset, to: calendar.startOfDay(for: date))
+    else { return [] }
+    return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
+}
+
+/// A spanning event is drawn on at most this many days — a malformed or
+/// absurd end date must not turn one row into thousands of chips.
+let maxSpannedDays = 60
+
+/// Every day an event covers, start day first (2026-09-10: a multi-day
+/// event used to bucket on its start day only). Timed events span the LOCAL
+/// days of [start, end) — an end exactly at local midnight adds no day.
+/// All-day rows are DATE-based (Google: end exclusive) and are read as UTC
+/// dates, so a KST reader never gets a phantom extra day from the 09:00
+/// local instant. Malformed start → no days (the event is dropped, never a
+/// crash); malformed end → the start day alone.
+func eventDayKeys(_ event: CalendarEventWire, calendar: Calendar = .current) -> [String] {
     let withMillis = ISO8601DateFormatter()
     withMillis.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     let plain = ISO8601DateFormatter()
+    func parse(_ iso: String) -> Date? { withMillis.date(from: iso) ?? plain.date(from: iso) }
+    guard let start = parse(event.startTime) else { return [] }
+    var cal = calendar
+    if event.allDay, let utc = TimeZone(identifier: "UTC") { cal.timeZone = utc }
+    guard let end = parse(event.endTime), end > start else {
+        return [localDayKey(start, calendar: cal)]
+    }
+    var keys: [String] = []
+    var day = cal.startOfDay(for: start)
+    while day < end, keys.count < maxSpannedDays {
+        keys.append(localDayKey(day, calendar: cal))
+        guard let next = cal.date(byAdding: .day, value: 1, to: day) else { break }
+        day = next
+    }
+    return keys
+}
+
+/// The day an event starts on — what a chip on a later day is "continued"
+/// against. nil when the start is malformed.
+func eventStartDayKey(_ event: CalendarEventWire, calendar: Calendar = .current) -> String? {
+    eventDayKeys(event, calendar: calendar).first
+}
+
+/// The order a day's events are drawn in: all-day rows first (they frame
+/// the day), then by start time. Stable for equal keys. Pure.
+func sortedForDay(_ events: [CalendarEventWire]) -> [CalendarEventWire] {
+    events.sorted { ($0.allDay ? 0 : 1, $0.startTime) < ($1.allDay ? 0 : 1, $1.startTime) }
+}
+
+/// Events bucketed by day — a spanning event appears under EVERY day it
+/// covers (see eventDayKeys). A malformed startTime drops that event.
+func eventsByDay(
+    _ events: [CalendarEventWire], calendar: Calendar = .current
+) -> [String: [CalendarEventWire]] {
     var out: [String: [CalendarEventWire]] = [:]
     for event in events {
-        guard let start = withMillis.date(from: event.startTime)
-            ?? plain.date(from: event.startTime) else { continue }
-        out[localDayKey(start, calendar: calendar), default: []].append(event)
+        for key in eventDayKeys(event, calendar: calendar) {
+            out[key, default: []].append(event)
+        }
     }
     return out
 }
@@ -1140,11 +1191,14 @@ func eventTimeLabel(
     calendar: Calendar = .current
 ) -> String {
     if allDay { return L("calendar.allDay") }
-    let parser = ISO8601DateFormatter()
-    parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    guard let start = parser.date(from: startISO), let end = parser.date(from: endISO) else {
-        return ""
-    }
+    // Both ISO shapes: the API's toISOString() carries millis, hand-written
+    // rows (fixtures, older clients) do not — a missing time label on a
+    // timed event is a real information gap, not a style choice.
+    let withMillis = ISO8601DateFormatter()
+    withMillis.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let plain = ISO8601DateFormatter()
+    func parse(_ iso: String) -> Date? { withMillis.date(from: iso) ?? plain.date(from: iso) }
+    guard let start = parse(startISO), let end = parse(endISO) else { return "" }
     func hhmm(_ date: Date) -> String {
         let parts = calendar.dateComponents([.hour, .minute], from: date)
         return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
