@@ -564,3 +564,4 @@
 "label.correct.clear" = "Meine Korrektur für diesen Absender löschen";
 "label.correct.clearDomain" = "Meine Korrektur für die Domain löschen";
 "label.correct.a11y" = "%@ — Label korrigieren";
+"label.add" = "＋ Label";

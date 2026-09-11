@@ -564,3 +564,4 @@
 "label.correct.clear" = "이 발신자 정정 해제";
 "label.correct.clearDomain" = "도메인 정정 해제";
 "label.correct.a11y" = "%@ — 라벨 정정";
+"label.add" = "＋ 라벨";
