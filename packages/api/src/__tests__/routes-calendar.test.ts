@@ -17,6 +17,7 @@ vi.mock("../mail/gmail.js", () => ({
 }));
 vi.mock("../pim/calendar.js", () => ({
   createEvent: vi.fn(async () => ({ eventId: null })),
+  updateEvent: vi.fn(async () => ({ success: true })),
   deleteEvent: vi.fn(async () => {}),
 }));
 
@@ -228,6 +229,154 @@ describe("calendar routes", () => {
       headers: auth(OTHER),
     });
     expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+});
+
+describe("calendar write validation + Google update (2026-09-11)", () => {
+  beforeEach(() => {
+    store.clear();
+  });
+
+  it("POST refuses an empty title, a garbage time, and an end before the start", async () => {
+    const app = await buildApp();
+    const post = (payload: Record<string, unknown>) =>
+      app.inject({ method: "POST", url: "/api/calendar", headers: auth(), payload });
+    expect(
+      (
+        await post({
+          title: " ",
+          startTime: "2026-08-01T09:00:00Z",
+          endTime: "2026-08-01T10:00:00Z",
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (await post({ title: "x", startTime: "yesterday", endTime: "2026-08-01T10:00:00Z" }))
+        .statusCode,
+    ).toBe(400);
+    const backwards = await post({
+      title: "x",
+      startTime: "2026-08-01T10:00:00Z",
+      endTime: "2026-08-01T09:00:00Z",
+    });
+    expect(backwards.statusCode).toBe(400);
+    expect(backwards.json().error).toBe("endTime must be after startTime");
+    expect(store.size).toBe(0);
+    await app.close();
+  });
+
+  it("POST passes allDay through to the Google create (a date, not an instant)", async () => {
+    const { createEvent } = await import("../pim/calendar.js");
+    vi.mocked(createEvent).mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/calendar",
+      headers: auth(),
+      payload: {
+        title: "Offsite",
+        startTime: "2026-08-01T00:00:00Z",
+        endTime: "2026-08-02T00:00:00Z",
+        allDay: true,
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(vi.mocked(createEvent).mock.calls[0]?.[7]).toBe(true);
+    await app.close();
+  });
+
+  it("PATCH pushes the edit to Google when the event is synced — the next sync would revert a local-only edit", async () => {
+    const { updateEvent } = await import("../pim/calendar.js");
+    vi.mocked(updateEvent).mockClear();
+    store.set("ev-g", {
+      id: "ev-g",
+      userId: "user-1",
+      title: "Old",
+      startTime: new Date("2026-08-01T09:00:00Z"),
+      endTime: new Date("2026-08-01T10:00:00Z"),
+      allDay: false,
+      googleId: "goog-1",
+    });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/calendar/ev-g",
+      headers: auth(),
+      payload: { title: "New", startTime: "2026-08-01T08:00:00Z" },
+    });
+    expect(res.statusCode).toBe(200);
+    // Only the start moved: the merged pair goes out so Google stays ordered.
+    expect(updateEvent).toHaveBeenCalledWith("user-1", "goog-1", {
+      summary: "New",
+      startTime: "2026-08-01T08:00:00.000Z",
+      endTime: "2026-08-01T10:00:00.000Z",
+      allDay: false,
+    });
+    await app.close();
+  });
+
+  it("PATCH refuses a move that lands the end before the existing start", async () => {
+    store.set("ev-h", {
+      id: "ev-h",
+      userId: "user-1",
+      title: "T",
+      startTime: new Date("2026-08-01T09:00:00Z"),
+      endTime: new Date("2026-08-01T10:00:00Z"),
+      allDay: false,
+      googleId: null,
+    });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/calendar/ev-h",
+      headers: auth(),
+      payload: { endTime: "2026-08-01T08:00:00Z" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(store.get("ev-h")?.endTime.toISOString()).toBe("2026-08-01T10:00:00.000Z");
+    await app.close();
+  });
+
+  it("PATCH on an unsynced event never calls Google; a Google failure still saves locally", async () => {
+    const { updateEvent } = await import("../pim/calendar.js");
+    vi.mocked(updateEvent).mockClear();
+    store.set("ev-l", {
+      id: "ev-l",
+      userId: "user-1",
+      title: "T",
+      startTime: new Date("2026-08-01T09:00:00Z"),
+      endTime: new Date("2026-08-01T10:00:00Z"),
+      allDay: false,
+      googleId: null,
+    });
+    store.set("ev-f", {
+      id: "ev-f",
+      userId: "user-1",
+      title: "T",
+      startTime: new Date("2026-08-01T09:00:00Z"),
+      endTime: new Date("2026-08-01T10:00:00Z"),
+      allDay: false,
+      googleId: "goog-f",
+    });
+    const app = await buildApp();
+    const local = await app.inject({
+      method: "PATCH",
+      url: "/api/calendar/ev-l",
+      headers: auth(),
+      payload: { title: "L2" },
+    });
+    expect(local.statusCode).toBe(200);
+    expect(updateEvent).not.toHaveBeenCalled();
+    vi.mocked(updateEvent).mockRejectedValueOnce(new Error("quota"));
+    const failed = await app.inject({
+      method: "PATCH",
+      url: "/api/calendar/ev-f",
+      headers: auth(),
+      payload: { title: "F2" },
+    });
+    expect(failed.statusCode).toBe(200);
+    expect(store.get("ev-f")?.title).toBe("F2");
     await app.close();
   });
 });
