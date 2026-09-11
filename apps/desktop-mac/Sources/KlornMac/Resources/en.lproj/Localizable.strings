@@ -547,3 +547,13 @@
 "purpose.loginPick" = "THIS ACCOUNT IS FOR";
 // Linked-account purpose question (2026-09-03).
 "purpose.title.linked" = "What is %@ for?";
+
+// Company domains (2026-09-10).
+"company.title" = "Which email domain is your company?";
+"company.detail" = "Mail from your company's domain is labeled 회사 and read as colleagues, not customers. Subdomains count. You can change this anytime under Accounts.";
+"company.placeholder" = "acme.com, acme.io";
+"company.save" = "Save";
+"company.skip" = "Skip";
+"company.label" = "Company domains";
+"company.none" = "Not set";
+"company.saveFailed" = "Couldn't save — check the domains (no gmail.com / naver.com, up to 10).";

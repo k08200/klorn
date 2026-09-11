@@ -98,6 +98,16 @@ async function resolveInboxPurpose(
   return user?.primaryInboxPurpose ?? null;
 }
 
+/** The user's declared company domains (company-domains.ts) — one read per
+ *  call / per batch; an empty list keeps the preamble byte-identical. */
+async function resolveCompanyDomains(userId: string): Promise<string[]> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { companyDomains: true },
+  });
+  return user?.companyDomains ?? [];
+}
+
 export async function summarizeEmailOnDemand(
   userId: string,
   email: {
@@ -117,6 +127,7 @@ export async function summarizeEmailOnDemand(
   const credentials = await getUserLlmCredentials(userId);
   if (getProviderChain(credentials).length === 0) return null;
   const purpose = await resolveInboxPurpose(userId, email.linkedInboxAccountId);
+  const companyDomains = await resolveCompanyDomains(userId);
 
   const body =
     email.body || (email.htmlBody ? htmlToPlainText(email.htmlBody) : "") || email.snippet || "";
@@ -133,7 +144,7 @@ export async function summarizeEmailOnDemand(
       temperature: 0.1,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: detailedAnalysisPrompt(lang, purpose) },
+        { role: "system", content: detailedAnalysisPrompt(lang, purpose, companyDomains) },
         {
           role: "user",
           content: `From: ${wrapUntrusted(email.from, "email:from")}\nSubject: ${wrapUntrusted(email.subject, "email:subject")}\n\n${wrapUntrusted(truncatedBody, "email:body")}`,
@@ -158,9 +169,13 @@ export async function summarizeEmailOnDemand(
  *  deep read: summary ≤160 chars, up to 6 keyPoints ≤90 chars keeping concrete
  *  numbers/dates/names, actionItems naming the concrete move (+ deadline when
  *  the email states one). Output language follows the user's UI. */
-function detailedAnalysisPrompt(lang: "en" | "ko", purpose?: string | null): string {
+function detailedAnalysisPrompt(
+  lang: "en" | "ko",
+  purpose?: string | null,
+  companyDomains: readonly string[] = [],
+): string {
   const language = lang === "ko" ? "Korean" : "English";
-  return `${analysisPreamble(purpose)}${EMAIL_ANALYSIS_BODY}
+  return `${analysisPreamble(purpose, companyDomains)}${EMAIL_ANALYSIS_BODY}
 
 ## Detailed mode overrides (this request only)
 - summary: <=160 chars, still WHO + WHAT first
@@ -250,6 +265,7 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
   // One purpose lookup per batch, exact per account: primary + every linked
   // mailbox that appears in this page.
   const primaryPurpose = await resolveInboxPurpose(userId, null);
+  const companyDomains = await resolveCompanyDomains(userId);
   const linkedIds = [
     ...new Set(unsummarized.map((e) => e.linkedInboxAccountId).filter((id): id is string => !!id)),
   ];
@@ -279,6 +295,7 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
         email.linkedInboxAccountId
           ? (linkedPurpose.get(email.linkedInboxAccountId) ?? null)
           : primaryPurpose,
+        companyDomains,
       );
       await persistSummaryResult(email, result, userEmail);
       count++;
@@ -315,7 +332,21 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
  * old text hardcoded "a work inbox", which skewed category and priority on
  * personal accounts — a friend's mail scored like a prospect's.
  */
-export function analysisPreamble(purpose?: string | null): string {
+export function analysisPreamble(
+  purpose?: string | null,
+  companyDomains: readonly string[] = [],
+): string {
+  // Declared company domains (company-domains.ts, already validated as
+  // hostnames): a colleague must read as a colleague, not a customer. The
+  // list is appended only when present so the purpose-only wording stays
+  // byte-identical for everyone who has not declared any.
+  const internal = companyDomains.length
+    ? ` Mail from these domains is INTERNAL — the user's own company (${companyDomains.join(", ")}): treat such senders as colleagues, not customers or investors.`
+    : "";
+  return purposeSentence(purpose) + internal;
+}
+
+function purposeSentence(purpose?: string | null): string {
   switch (purpose) {
     case "personal":
       return "You are Klorn's email triage analyst for the user's PERSONAL inbox. Expect friends, family, subscriptions, receipts and services — business categories (investor, customer) should be rare here, and a personal note from a friend is never LOW just because it is casual.";
@@ -478,6 +509,7 @@ async function summarizeEmail(
   userId?: string,
   credentials?: ProviderCredentials,
   purpose?: string | null,
+  companyDomains: readonly string[] = [],
 ): Promise<AISummaryResult> {
   // Truncate very long bodies
   const truncatedBody = body.length > 3000 ? body.slice(0, 3000) + "\n...(truncated)" : body;
@@ -488,7 +520,10 @@ async function summarizeEmail(
       temperature: 0.1,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: analysisPreamble(purpose) + EMAIL_ANALYSIS_BODY },
+        {
+          role: "system",
+          content: analysisPreamble(purpose, companyDomains) + EMAIL_ANALYSIS_BODY,
+        },
         {
           role: "user",
           content: `From: ${wrapUntrusted(from, "email:from")}\nSubject: ${wrapUntrusted(subject, "email:subject")}\n\n${wrapUntrusted(truncatedBody, "email:body")}`,

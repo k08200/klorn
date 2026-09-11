@@ -271,6 +271,7 @@ final class AppModel {
         do {
             let resp = try await api.fetchInboxes()
             inboxes = resp.inboxes
+            companyDomains = resp.companyDomains ?? []
             // A purpose chosen on the signed-out screen lands here, the first
             // moment the primary inbox is confirmed to exist.
             applyPendingPurposeIfNeeded()
@@ -1000,7 +1001,55 @@ final class AppModel {
               inboxes.contains(where: { $0.kind == "primary" })
         else { return }
         pendingPurpose = nil
-        Task { await setInboxPurpose(inboxId: nil, purpose: purpose) }
+        Task {
+            await setInboxPurpose(inboxId: nil, purpose: purpose)
+            // A work / mixed mailbox has a company — ask which domain right
+            // after the purpose lands, exactly as the in-app card does.
+            presentCompanyDomainPromptIfNeeded(purpose: purpose)
+        }
+    }
+
+    // MARK: Company domains (2026-09-10)
+
+    /// The user's declared company email domains (GET /inboxes). A sender on
+    /// one is 회사 on the row as a recorded fact; the analysis preamble names
+    /// them too. Empty until declared.
+    private(set) var companyDomains: [String] = []
+    private(set) var companyDomainsError: String?
+    /// Open the purpose card straight on its domain step (the purpose is
+    /// already known — pre-login pick or account menu).
+    private(set) var purposePromptStartsAtDomains = false
+
+    /// PATCH the list; the server validates (hostname shape, public
+    /// providers, cap) and echoes the canonical list. False = rejected or
+    /// failed — the field keeps the user's text so they can fix it.
+    @discardableResult
+    func setCompanyDomains(_ domains: [String]) async -> Bool {
+        struct Body: Encodable { let domains: [String] }
+        companyDomainsError = nil
+        do {
+            try await api.patch("/api/email/inboxes/company-domains", encodable: Body(domains: domains))
+            await refreshInboxes()
+            return true
+        } catch APIError.unauthorized {
+            signOut()
+            return false
+        } catch {
+            companyDomainsError = L("company.saveFailed")
+            Log.app.warning("company domains update failed: \(String(describing: error), privacy: .private)")
+            return false
+        }
+    }
+
+    /// Ask for the company domain once the purpose says there is a company
+    /// (work / mixed) and none is declared yet. Never for personal.
+    func presentCompanyDomainPromptIfNeeded(purpose: String) {
+        guard !Theme.isRenderingOffscreen, phase == .signedIn,
+              purpose == "work" || purpose == "mixed", companyDomains.isEmpty
+        else { return }
+        purposePromptTarget = nil
+        purposePromptStartsAtDomains = true
+        showPurposePrompt = true
     }
 
     /// Which mailbox the open prompt is asking about. Nil = the primary
@@ -1032,10 +1081,13 @@ final class AppModel {
     /// primary's first-run card must not be silenced by it.
     func dismissPurposePrompt() {
         showPurposePrompt = false
-        if purposePromptTarget == nil {
+        // The domain-only card is a follow-up, not the first-run question:
+        // skipping it must not silence the purpose question.
+        if purposePromptTarget == nil, !purposePromptStartsAtDomains {
             UserDefaults.standard.set(true, forKey: Self.purposePromptDismissedKey)
         }
         purposePromptTarget = nil
+        purposePromptStartsAtDomains = false
     }
 
     /// Write one mailbox's purpose ("primary" or a linked id; nil clears).

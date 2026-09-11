@@ -547,3 +547,13 @@
 "purpose.loginPick" = "이 계정의 용도";
 // Linked-account purpose question (2026-09-03).
 "purpose.title.linked" = "%@ 계정은 어떤 용도인가요?";
+
+// Company domains (2026-09-10).
+"company.title" = "회사 이메일 도메인은 무엇인가요?";
+"company.detail" = "회사 도메인에서 온 메일은 회사 라벨이 붙고, 고객이 아닌 동료로 분석됩니다. 하위 도메인도 포함됩니다. 계정 섹션에서 언제든 바꿀 수 있습니다.";
+"company.placeholder" = "acme.com, acme.io";
+"company.save" = "저장";
+"company.skip" = "건너뛰기";
+"company.label" = "회사 도메인";
+"company.none" = "미설정";
+"company.saveFailed" = "저장 실패 — 도메인을 확인하세요(gmail.com/naver.com 불가, 최대 10개).";

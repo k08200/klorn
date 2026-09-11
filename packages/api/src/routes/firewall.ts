@@ -38,6 +38,7 @@ import { getInteractionGraph } from "../learning/interaction-graph.js";
 import { describePolicy } from "../learning/ontology.js";
 import { getTrustScoresBulk } from "../learning/trust-score.js";
 import { ensureRecentMailSync } from "../mail/activity-sync.js";
+import { isInternalSender } from "../mail/company-domains.js";
 import { ensureFreshGmailWatch } from "../mail/gmail.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
@@ -527,6 +528,20 @@ export async function firewallRoutes(app: FastifyInstance) {
         }
       }
 
+      // Declared company domains → the 회사 chip is a recorded fact (the
+      // sender's domain), never a guess. FAIL-OPEN like the reply lookup:
+      // a failed read means no chip, never a 500.
+      let companyDomains: string[] = [];
+      try {
+        const owner = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { companyDomains: true },
+        });
+        companyDomains = owner?.companyDomains ?? [];
+      } catch (err) {
+        captureError(err, { tags: { scope: "firewall.companyDomains" } });
+      }
+
       const tiers: Record<Tier, FirewallItem[]> = {
         SILENT: [],
         INFO: [],
@@ -606,6 +621,7 @@ export async function firewallRoutes(app: FastifyInstance) {
                   snippet: email.snippet ?? null,
                   receivedAt: email.receivedAt?.toISOString() ?? null,
                   signal: rowSignalFor({
+                    internal: isInternalSender(email.from, companyDomains),
                     judgeCategory: email.category,
                     category: null,
                     repliedCount: addr && repliedMap ? (repliedMap.get(addr) ?? 0) : null,
@@ -677,6 +693,7 @@ export async function firewallRoutes(app: FastifyInstance) {
               snippet: email.snippet ?? null,
               receivedAt: email.receivedAt?.toISOString() ?? null,
               signal: rowSignalFor({
+                internal: isInternalSender(email.from, companyDomains),
                 judgeCategory: email.category,
                 category: gmailCategoryOf(email.labels),
                 repliedCount: addr && repliedMap ? (repliedMap.get(addr) ?? 0) : null,

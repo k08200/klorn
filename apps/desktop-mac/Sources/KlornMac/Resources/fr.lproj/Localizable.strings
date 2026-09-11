@@ -547,3 +547,13 @@
 "purpose.loginPick" = "CE COMPTE SERT À";
 // Linked-account purpose question (2026-09-03).
 "purpose.title.linked" = "À quoi sert %@ ?";
+
+// Company domains (2026-09-10).
+"company.title" = "Quel est le domaine e-mail de votre entreprise ?";
+"company.detail" = "Le courrier du domaine de votre entreprise est étiqueté Entreprise et lu comme des collègues, pas des clients. Les sous-domaines comptent. Modifiable dans Comptes.";
+"company.placeholder" = "acme.com, acme.io";
+"company.save" = "Enregistrer";
+"company.skip" = "Passer";
+"company.label" = "Domaines de l'entreprise";
+"company.none" = "Non défini";
+"company.saveFailed" = "Enregistrement impossible — vérifiez les domaines (pas de gmail.com / naver.com, 10 max).";

@@ -152,6 +152,9 @@ export interface InboxOption {
 /** `GET /api/email/inboxes` — the caller's mailboxes for the inbox selector. */
 export interface InboxesResponse {
   inboxes: InboxOption[];
+  /** The user's declared company email domains (lowercase hostnames) — a
+   *  sender on one is 회사 as a recorded fact. Empty until declared. */
+  companyDomains: string[];
 }
 
 export interface EmailThreadRow {

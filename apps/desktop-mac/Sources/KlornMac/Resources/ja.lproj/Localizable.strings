@@ -547,3 +547,13 @@
 "purpose.loginPick" = "このアカウントの用途";
 // Linked-account purpose question (2026-09-03).
 "purpose.title.linked" = "%@ の用途は？";
+
+// Company domains (2026-09-10).
+"company.title" = "会社のメールドメインは？";
+"company.detail" = "会社ドメインからのメールは「社内」ラベルが付き、顧客ではなく同僚として分析されます。サブドメインも含みます。アカウント欄でいつでも変更できます。";
+"company.placeholder" = "acme.com, acme.io";
+"company.save" = "保存";
+"company.skip" = "スキップ";
+"company.label" = "会社ドメイン";
+"company.none" = "未設定";
+"company.saveFailed" = "保存できません — ドメインを確認してください（gmail.com/naver.com 不可、最大10件）。";

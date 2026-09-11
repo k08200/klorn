@@ -32,6 +32,7 @@ import {
   type TrustScoreResult,
 } from "../learning/trust-score.js";
 import { describeLlmFailure } from "../llm/describe-failure.js";
+import { normalizeCompanyDomains } from "../mail/company-domains.js";
 import { extractEmailAddress } from "../mail/email-address.js";
 import {
   analyzePendingEmailAttachments,
@@ -1404,7 +1405,7 @@ export async function emailRoutes(app: FastifyInstance) {
     const uid = getUserId(request);
     const user = await prisma.user.findUnique({
       where: { id: uid },
-      select: { email: true, primaryInboxPurpose: true },
+      select: { email: true, primaryInboxPurpose: true, companyDomains: true },
     });
     // Primary reconnect state: an invalidated token keeps its row but loses
     // the refresh token — that IS "needs reconnect" for the primary account.
@@ -1450,6 +1451,7 @@ export async function emailRoutes(app: FastifyInstance) {
           provider: l.provider,
         })),
       ],
+      companyDomains: user?.companyDomains ?? [],
     };
   });
 
@@ -1488,6 +1490,20 @@ export async function emailRoutes(app: FastifyInstance) {
       return reply.code(404).send({ success: false, error: "Unknown inbox" });
     }
     return { success: true };
+  });
+
+  // The user's company email domains — a sender on one is 회사 as a recorded
+  // fact (row chip + analysis preamble). Validated once, here; the stored
+  // list is always canonical lowercase hostnames.
+  app.patch("/inboxes/company-domains", async (request, reply) => {
+    const uid = getUserId(request);
+    const { domains } = (request.body ?? {}) as { domains?: unknown };
+    const result = normalizeCompanyDomains(domains);
+    if ("error" in result) {
+      return reply.code(400).send({ success: false, error: result.error });
+    }
+    await prisma.user.update({ where: { id: uid }, data: { companyDomains: result.domains } });
+    return { success: true, companyDomains: result.domains };
   });
 
   app.post("/reconcile", async (request, reply) => {

@@ -90,7 +90,10 @@ vi.mock("../db.js", () => {
     },
     attentionItem: { upsert: vi.fn(async () => ({})) },
     linkedInboxAccount: { findMany: vi.fn(async () => []) },
-    user: { findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })) },
+    user: {
+      findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })),
+      update: vi.fn(async () => ({})),
+    },
     device: {
       findUnique: vi.fn(async () => ({ id: "d1" })),
       findMany: vi.fn(async () => []),
@@ -283,6 +286,7 @@ describe("email routes (demo mode)", () => {
           provider: "GOOGLE",
         },
       ],
+      companyDomains: [],
     });
     // Self-scoped: linked lookup keyed by the caller's userId. Flag off →
     // the historical GOOGLE-only selector.
@@ -339,7 +343,66 @@ describe("email routes (demo mode)", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().inboxes[0]).toMatchObject({ kind: "primary", needsReconnect: true });
-    purpose: null, await app.close();
+    await app.close();
+  });
+
+  it("GET /inboxes carries the declared company domains", async () => {
+    const { prisma } = await import("../db.js");
+    const owner = {
+      id: "user-1",
+      email: "primary@example.com",
+      plan: "PRO",
+      role: "USER",
+      companyDomains: ["acme.com"],
+    } as never;
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(owner).mockResolvedValueOnce(owner);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/email/inboxes", headers: auth() });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().companyDomains).toEqual(["acme.com"]);
+    await app.close();
+  });
+
+  it("PATCH /inboxes/company-domains stores canonical hostnames and echoes them", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.user.update).mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/email/inboxes/company-domains",
+      headers: auth(),
+      payload: { domains: [" Acme.com", "acme.com", "*.acme.io"] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, companyDomains: ["acme.com", "acme.io"] });
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { companyDomains: ["acme.com", "acme.io"] },
+    });
+    await app.close();
+  });
+
+  it("PATCH /inboxes/company-domains refuses a public provider / non-domain and stores nothing", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.user.update).mockClear();
+    const app = await buildApp();
+    const bad = await app.inject({
+      method: "PATCH",
+      url: "/api/email/inboxes/company-domains",
+      headers: auth(),
+      payload: { domains: ["acme.com", "Gmail.com"] },
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().error).toContain("gmail.com is a public mail provider");
+    const garbage = await app.inject({
+      method: "PATCH",
+      url: "/api/email/inboxes/company-domains",
+      headers: auth(),
+      payload: { domains: "acme.com" },
+    });
+    expect(garbage.statusCode).toBe(400);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    await app.close();
   });
 
   it("GET /inboxes includes non-Google inboxes with their provider when the selector flag is on", async () => {
