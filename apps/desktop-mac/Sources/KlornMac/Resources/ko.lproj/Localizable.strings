@@ -580,3 +580,11 @@
 "cal.editor.location" = "장소";
 "cal.save" = "저장";
 "cal.save.failed" = "저장 실패 — 다시 시도하세요.";
+
+// Triage priorities (2026-09-11).
+"priorities.title" = "무엇이 가장 급한가요?";
+"priorities.detail" = "당신 말로 적어주세요. Klorn이 긴급도와 알림 판단에 이 기준을 씁니다 — 모든 메일, 모든 계정에. 계정 섹션에서 언제든 바꿀 수 있습니다.";
+"priorities.placeholder" = "예: 투자자 메일은 항상 급함. 뉴스레터는 나중에. 김대표 메일은 바로 알려줘.";
+"priorities.label" = "우선순위";
+"priorities.none" = "미설정";
+"priorities.saveFailed" = "저장 실패 — 다시 시도하세요(500자 이내).";

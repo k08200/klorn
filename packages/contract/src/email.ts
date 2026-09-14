@@ -155,6 +155,9 @@ export interface InboxesResponse {
   /** The user's declared company email domains (lowercase hostnames) — a
    *  sender on one is 회사 as a recorded fact. Empty until declared. */
   companyDomains: string[];
+  /** The user's own words about what matters ("investor mail first"),
+   *  read by the lane judge and the analysis preamble. Null until set. */
+  priorities: string | null;
 }
 
 export interface EmailThreadRow {

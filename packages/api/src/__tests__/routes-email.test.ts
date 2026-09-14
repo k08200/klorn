@@ -292,6 +292,7 @@ describe("email routes (demo mode)", () => {
         },
       ],
       companyDomains: [],
+      priorities: null,
     });
     // Self-scoped: linked lookup keyed by the caller's userId. Flag off →
     // the historical GOOGLE-only selector.
@@ -407,6 +408,61 @@ describe("email routes (demo mode)", () => {
     });
     expect(garbage.statusCode).toBe(400);
     expect(prisma.user.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("PATCH /inboxes/priorities stores the user's words collapsed; GET echoes them", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.user.update).mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/email/inboxes/priorities",
+      headers: auth(),
+      payload: { text: "  investor mail\n first " },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, priorities: "investor mail first" });
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { triagePriorities: "investor mail first" },
+    });
+    const owner = {
+      id: "user-1",
+      email: "primary@example.com",
+      plan: "PRO",
+      role: "USER",
+      triagePriorities: "investor mail first",
+    } as never;
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(owner).mockResolvedValueOnce(owner);
+    const get = await app.inject({ method: "GET", url: "/api/email/inboxes", headers: auth() });
+    expect(get.json().priorities).toBe("investor mail first");
+    await app.close();
+  });
+
+  it("PATCH /inboxes/priorities refuses over-cap text and stores nothing; null clears", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.user.update).mockClear();
+    const app = await buildApp();
+    const long = await app.inject({
+      method: "PATCH",
+      url: "/api/email/inboxes/priorities",
+      headers: auth(),
+      payload: { text: "x".repeat(501) },
+    });
+    expect(long.statusCode).toBe(400);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    const clear = await app.inject({
+      method: "PATCH",
+      url: "/api/email/inboxes/priorities",
+      headers: auth(),
+      payload: { text: null },
+    });
+    expect(clear.statusCode).toBe(200);
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { triagePriorities: null },
+    });
     await app.close();
   });
 

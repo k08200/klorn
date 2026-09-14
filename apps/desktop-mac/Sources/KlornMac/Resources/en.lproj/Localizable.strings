@@ -580,3 +580,11 @@
 "cal.editor.location" = "Location";
 "cal.save" = "Save";
 "cal.save.failed" = "Couldn't save — try again.";
+
+// Triage priorities (2026-09-11).
+"priorities.title" = "What matters most to you?";
+"priorities.detail" = "In your own words. Klorn weighs urgency and who to interrupt you for by this — every email, every account. Change it anytime under Accounts.";
+"priorities.placeholder" = "e.g. Investor mail is always urgent. Newsletters can wait. Anything from Sarah goes straight to me.";
+"priorities.label" = "Priorities";
+"priorities.none" = "Not set";
+"priorities.saveFailed" = "Couldn't save — try again (up to 500 characters).";
