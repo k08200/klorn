@@ -807,6 +807,9 @@ struct InboxesResponse: Codable, Sendable {
     /// The user's declared company email domains — a sender on one is 회사
     /// as a recorded fact. Optional decode: an older server omits it.
     let companyDomains: [String]?
+    /// The user's own words about what matters ("investor mail first") —
+    /// read by the lane judge and the analysis. Optional decode.
+    let priorities: String?
 }
 
 /// Consumer mail providers — never a company, never prefilled as one.

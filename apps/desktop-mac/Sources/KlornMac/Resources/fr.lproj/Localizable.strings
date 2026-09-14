@@ -580,3 +580,11 @@
 "cal.editor.location" = "Lieu";
 "cal.save" = "Enregistrer";
 "cal.save.failed" = "Enregistrement impossible — réessayez.";
+
+// Triage priorities (2026-09-11).
+"priorities.title" = "Qu'est-ce qui compte le plus pour vous ?";
+"priorities.detail" = "Avec vos mots. Klorn pèse l'urgence et quand vous interrompre selon cela — chaque e-mail, chaque compte. Modifiable à tout moment dans Comptes.";
+"priorities.placeholder" = "ex. Le courrier des investisseurs est toujours urgent. Les newsletters peuvent attendre. Tout ce qui vient de Sarah me parvient directement.";
+"priorities.label" = "Priorités";
+"priorities.none" = "Non défini";
+"priorities.saveFailed" = "Enregistrement impossible — réessayez (500 caractères max).";

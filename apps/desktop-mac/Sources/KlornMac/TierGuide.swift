@@ -143,9 +143,10 @@ struct PurposePrompt: View {
     /// Step 1 asks what the mailbox is for; step 2 (work / mixed only, and
     /// only while no company domain is declared) asks which email domain is
     /// the company — the fact that turns colleagues into 회사 chips.
-    private enum Step { case purpose, domains }
+    private enum Step { case purpose, domains, priorities }
     @State private var step: Step = .purpose
     @State private var domainsText = ""
+    @State private var prioritiesText = ""
 
     private var targetEmail: String? {
         model.purposePromptTarget?.email
@@ -159,7 +160,7 @@ struct PurposePrompt: View {
             if (purpose == "work" || purpose == "mixed"), model.companyDomains.isEmpty {
                 withAnimation(.easeOut(duration: 0.15)) { step = .domains }
             } else {
-                model.dismissPurposePrompt()
+                advanceToPrioritiesOrClose()
             }
         }
         .buttonStyle(PrimaryButtonStyle())
@@ -167,7 +168,18 @@ struct PurposePrompt: View {
 
     /// Names the linked account when the question is about one — "this
     /// mailbox" is ambiguous the moment there are two.
+    /// Step 3 — what matters, in their words — only while nothing is
+    /// declared; otherwise the card closes.
+    private func advanceToPrioritiesOrClose() {
+        if model.triagePriorities == nil {
+            withAnimation(.easeOut(duration: 0.15)) { step = .priorities }
+        } else {
+            model.dismissPurposePrompt()
+        }
+    }
+
     private var title: String {
+        if step == .priorities { return L("priorities.title") }
         if step == .domains { return L("company.title") }
         if let email = model.purposePromptTarget?.email {
             return L("purpose.title.linked", email)
@@ -179,10 +191,10 @@ struct PurposePrompt: View {
         VStack(alignment: .leading, spacing: Theme.s3) {
             Text(title)
                 .font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
-            if step == .purpose {
-                purposeStep
-            } else {
-                domainsStep
+            switch step {
+            case .purpose: purposeStep
+            case .domains: domainsStep
+            case .priorities: prioritiesStep
             }
         }
         .padding(22)
@@ -194,6 +206,7 @@ struct PurposePrompt: View {
         .accessibilityLabel(title)
         .onAppear {
             if model.purposePromptStartsAtDomains { step = .domains }
+            if model.purposePromptStartsAtPriorities { step = .priorities }
             // The account's own domain is the likely answer — offered, not
             // assumed (a public provider offers nothing).
             domainsText = suggestedCompanyDomain(for: targetEmail) ?? ""
@@ -234,6 +247,28 @@ struct PurposePrompt: View {
                 Button(L("company.save")) { Task { await save() } }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(parseCompanyDomainsInput(domainsText).isEmpty)
+                Button(L("company.skip")) { advanceToPrioritiesOrClose() }
+                    .buttonStyle(.plain).font(Theme.Typo.label)
+                    .foregroundStyle(Theme.textDim)
+            }
+            .padding(.top, Theme.s1)
+        }
+    }
+
+    private var prioritiesStep: some View {
+        Group {
+            Text(L("priorities.detail"))
+                .font(.callout).foregroundStyle(Theme.textDim)
+                .fixedSize(horizontal: false, vertical: true)
+            PrioritiesEditor(text: $prioritiesText)
+            if let error = model.prioritiesError {
+                Text(error).font(.caption).foregroundStyle(Theme.tint(.push))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: Theme.s2) {
+                Button(L("company.save")) { Task { await savePriorities() } }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(prioritiesText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 Button(L("company.skip")) { model.dismissPurposePrompt() }
                     .buttonStyle(.plain).font(Theme.Typo.label)
                     .foregroundStyle(Theme.textDim)
@@ -246,7 +281,38 @@ struct PurposePrompt: View {
         let domains = parseCompanyDomainsInput(domainsText)
         guard !domains.isEmpty else { return }
         if await model.setCompanyDomains(domains) {
+            advanceToPrioritiesOrClose()
+        }
+    }
+
+    private func savePriorities() async {
+        if await model.setTriagePriorities(prioritiesText) {
             model.dismissPurposePrompt()
+        }
+    }
+}
+
+/// A short multi-line field for "what matters to me" with the examples as
+/// a placeholder — the same editor the account section reuses.
+struct PrioritiesEditor: View {
+    @Binding var text: String
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            TextEditor(text: $text)
+                .font(Theme.Typo.label)
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .frame(minHeight: 84, maxHeight: 140)
+                .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line))
+                .accessibilityLabel(L("priorities.title"))
+            if text.isEmpty {
+                Text(L("priorities.placeholder"))
+                    .font(Theme.Typo.label).foregroundStyle(Theme.textDim)
+                    .padding(.horizontal, 11).padding(.vertical, 10)
+                    .allowsHitTesting(false)
+            }
         }
     }
 }

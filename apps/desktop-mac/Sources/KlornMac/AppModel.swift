@@ -272,6 +272,7 @@ final class AppModel {
             let resp = try await api.fetchInboxes()
             inboxes = resp.inboxes
             companyDomains = resp.companyDomains ?? []
+            triagePriorities = resp.priorities
             // A purpose chosen on the signed-out screen lands here, the first
             // moment the primary inbox is confirmed to exist.
             applyPendingPurposeIfNeeded()
@@ -1004,9 +1005,54 @@ final class AppModel {
         Task {
             await setInboxPurpose(inboxId: nil, purpose: purpose)
             // A work / mixed mailbox has a company — ask which domain right
-            // after the purpose lands, exactly as the in-app card does.
+            // after the purpose lands, exactly as the in-app card does; then
+            // (or instead, for a personal mailbox) what matters to them.
             presentCompanyDomainPromptIfNeeded(purpose: purpose)
+            if !showPurposePrompt { presentPrioritiesPromptIfNeeded() }
         }
+    }
+
+    // MARK: Triage priorities (2026-09-11)
+
+    /// The user's own words about what matters — read by the lane judge and
+    /// the analysis preamble (GET /inboxes). Nil until they say.
+    private(set) var triagePriorities: String?
+    private(set) var prioritiesError: String?
+    /// Open the purpose card straight on its priorities step.
+    private(set) var purposePromptStartsAtPriorities = false
+
+    /// PATCH the text (nil / blank clears). The server collapses whitespace
+    /// and refuses text past its cap; the message shows inline.
+    @discardableResult
+    func setTriagePriorities(_ text: String?) async -> Bool {
+        struct Body: Encodable { let text: String? }
+        prioritiesError = nil
+        let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            try await api.patch(
+                "/api/email/inboxes/priorities",
+                encodable: Body(text: (trimmed?.isEmpty ?? true) ? nil : trimmed))
+            await refreshInboxes()
+            return true
+        } catch APIError.unauthorized {
+            signOut()
+        } catch APIError.http(_, let message) {
+            prioritiesError = message ?? L("priorities.saveFailed")
+        } catch {
+            prioritiesError = L("priorities.saveFailed")
+            Log.app.warning("priorities update failed: \(String(describing: error), privacy: .private)")
+        }
+        return false
+    }
+
+    /// Ask what matters once, after the purpose (and domain) questions,
+    /// while nothing is declared yet.
+    func presentPrioritiesPromptIfNeeded() {
+        guard !Theme.isRenderingOffscreen, phase == .signedIn, triagePriorities == nil
+        else { return }
+        purposePromptTarget = nil
+        purposePromptStartsAtPriorities = true
+        showPurposePrompt = true
     }
 
     // MARK: Sender labels (2026-09-11)
@@ -1124,11 +1170,12 @@ final class AppModel {
         showPurposePrompt = false
         // The domain-only card is a follow-up, not the first-run question:
         // skipping it must not silence the purpose question.
-        if purposePromptTarget == nil, !purposePromptStartsAtDomains {
+        if purposePromptTarget == nil, !purposePromptStartsAtDomains, !purposePromptStartsAtPriorities {
             UserDefaults.standard.set(true, forKey: Self.purposePromptDismissedKey)
         }
         purposePromptTarget = nil
         purposePromptStartsAtDomains = false
+        purposePromptStartsAtPriorities = false
     }
 
     /// Write one mailbox's purpose ("primary" or a linked id; nil clears).

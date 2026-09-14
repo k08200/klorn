@@ -1362,6 +1362,56 @@ private struct CompanyDomainsRow: View {
     }
 }
 
+/// Account section: the user's priorities text, editable in place. Save
+/// PATCHes; the server collapses whitespace and caps length, and its
+/// message shows inline. Offscreen: text stand-in.
+private struct PrioritiesRow: View {
+    @Environment(AppModel.self) private var model
+    @State private var text = ""
+    @State private var editing = false
+
+    private var current: String { model.triagePriorities ?? L("priorities.none") }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(L("priorities.label")).font(.caption).foregroundStyle(Theme.textDim)
+                Spacer()
+                if !editing {
+                    Button {
+                        text = model.triagePriorities ?? ""
+                        editing = true
+                    } label: {
+                        Text(current).font(Theme.Typo.label).foregroundStyle(Theme.text)
+                            .lineLimit(1).truncationMode(.tail)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(L("priorities.label")). \(current)")
+                }
+            }
+            if editing {
+                if Theme.isRenderingOffscreen {
+                    Text(text.isEmpty ? L("priorities.placeholder") : text)
+                        .font(Theme.Typo.label).foregroundStyle(Theme.textDim)
+                } else {
+                    PrioritiesEditor(text: $text)
+                }
+                if let error = model.prioritiesError {
+                    Text(error).font(.caption2).foregroundStyle(Theme.tint(.push))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(spacing: 8) {
+                    SubtleTextButton(title: L("company.save"), dim: false) {
+                        Task { if await model.setTriagePriorities(text) { editing = false } }
+                    }
+                    SubtleTextButton(title: L("compose.cancel")) { editing = false }
+                }
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 3)
+    }
+}
+
 /// Per-inbox scope selector (web parity: email/page.tsx InboxSelector) —
 /// rendered only when the account actually has 2+ mailboxes. Values: "all",
 /// "primary", or a linked inbox id; addresses come straight from the API,
@@ -2754,6 +2804,9 @@ private struct FullSidebar: View {
                 // the row as a recorded fact, and the analysis reads them as
                 // colleagues. Editable here any time; first asked at connect.
                 CompanyDomainsRow()
+                // What matters to the user, in their words — the lane judge
+                // and the analysis read it. Editable any time.
+                PrioritiesRow()
                 Divider().padding(.horizontal, 16).padding(.vertical, 4)
                 maintenanceDisclosureRow
                 if showMaintenance {

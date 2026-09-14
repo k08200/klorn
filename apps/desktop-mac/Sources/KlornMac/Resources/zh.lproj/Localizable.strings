@@ -580,3 +580,11 @@
 "cal.editor.location" = "地点";
 "cal.save" = "保存";
 "cal.save.failed" = "保存失败 — 请重试。";
+
+// Triage priorities (2026-09-11).
+"priorities.title" = "什么对你最重要？";
+"priorities.detail" = "用你自己的话写。Klorn 会据此判断紧急程度和是否打扰你 — 每封邮件、每个账户。可随时在账户栏更改。";
+"priorities.placeholder" = "例如：投资人邮件永远紧急。新闻简报可以晚点看。来自张总的邮件立刻通知我。";
+"priorities.label" = "优先事项";
+"priorities.none" = "未设置";
+"priorities.saveFailed" = "保存失败 — 请重试（不超过 500 字）。";

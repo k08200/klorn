@@ -63,6 +63,10 @@ import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { isPublicMailboxDomain } from "../mail/public-mailbox-domains.js";
 import { getSenderDossier } from "../mail/sender-dossier.js";
 import { getThreadBrief } from "../mail/thread-brief.js";
+import {
+  invalidateTriagePriorities,
+  normalizeTriagePriorities,
+} from "../mail/triage-priorities.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { createTask } from "../pim/tasks.js";
 import { captureError } from "../sentry.js";
@@ -1407,7 +1411,12 @@ export async function emailRoutes(app: FastifyInstance) {
     const uid = getUserId(request);
     const user = await prisma.user.findUnique({
       where: { id: uid },
-      select: { email: true, primaryInboxPurpose: true, companyDomains: true },
+      select: {
+        email: true,
+        primaryInboxPurpose: true,
+        companyDomains: true,
+        triagePriorities: true,
+      },
     });
     // Primary reconnect state: an invalidated token keeps its row but loses
     // the refresh token — that IS "needs reconnect" for the primary account.
@@ -1454,6 +1463,7 @@ export async function emailRoutes(app: FastifyInstance) {
         })),
       ],
       companyDomains: user?.companyDomains ?? [],
+      priorities: user?.triagePriorities ?? null,
     };
   });
 
@@ -1506,6 +1516,20 @@ export async function emailRoutes(app: FastifyInstance) {
     }
     await prisma.user.update({ where: { id: uid }, data: { companyDomains: result.domains } });
     return { success: true, companyDomains: result.domains };
+  });
+
+  // What matters to the user, in their words — read by the lane judge and
+  // the analysis preamble. Validated once (cap, whitespace); null clears.
+  app.patch("/inboxes/priorities", async (request, reply) => {
+    const uid = getUserId(request);
+    const { text } = (request.body ?? {}) as { text?: unknown };
+    const result = normalizeTriagePriorities(text);
+    if ("error" in result) {
+      return reply.code(400).send({ success: false, error: result.error });
+    }
+    await prisma.user.update({ where: { id: uid }, data: { triagePriorities: result.text } });
+    invalidateTriagePriorities(uid);
+    return { success: true, priorities: result.text };
   });
 
   app.post("/reconcile", async (request, reply) => {

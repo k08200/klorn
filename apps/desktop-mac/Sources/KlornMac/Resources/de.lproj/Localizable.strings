@@ -580,3 +580,11 @@
 "cal.editor.location" = "Ort";
 "cal.save" = "Speichern";
 "cal.save.failed" = "Speichern fehlgeschlagen — erneut versuchen.";
+
+// Triage priorities (2026-09-11).
+"priorities.title" = "Was ist Ihnen am wichtigsten?";
+"priorities.detail" = "In Ihren Worten. Klorn gewichtet Dringlichkeit und Unterbrechungen danach — jede Mail, jedes Konto. Jederzeit unter Konten änderbar.";
+"priorities.placeholder" = "z. B. Investoren-Mails sind immer dringend. Newsletter können warten. Alles von Sarah kommt direkt zu mir.";
+"priorities.label" = "Prioritäten";
+"priorities.none" = "Nicht gesetzt";
+"priorities.saveFailed" = "Speichern fehlgeschlagen — erneut versuchen (max. 500 Zeichen).";
