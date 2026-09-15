@@ -3721,6 +3721,36 @@ struct SignalChip: View {
     }
 }
 
+/// The reply axis on a row (2026-09-14): "답장 필요" when the analysis judged
+/// a reply is owed and none went out through Klorn; "답장함" once the user
+/// answered through Klorn. Sits beside the relationship chip — a different
+/// axis, the one Spark / Superhuman / Inbox Zero all label first.
+struct ReplyStateChip: View {
+    let state: String?
+
+    var body: some View {
+        if let state, let text = label(for: state) {
+            let tint: Color = state == "needsReply" ? Theme.labelTint(.needsReply) : Theme.textDim
+            Text(text)
+                .font(Theme.Typo.micro)
+                .foregroundStyle(tint)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(tint.opacity(0.13), in: Capsule())
+                .accessibilityLabel(text)
+        }
+    }
+
+    private func label(for state: String) -> String? {
+        switch state {
+        case "needsReply": L("chip.needsReply")
+        // chip.replied is the "replied N×" relationship chip's key — this
+        // axis has its own word.
+        case "replied": L("chip.answered")
+        default: nil
+        }
+    }
+}
+
 /// A row with no chip has no evidence yet — still a sender the user may know.
 /// Shown on hover / focus only (a resting placeholder on every row would be
 /// noise); opens the same correction menu as the chip.
@@ -3838,6 +3868,7 @@ struct FullRow: View {
                             {
                                 AddLabelChip(address: address)
                             }
+                            ReplyStateChip(state: item.email?.replyState)
                             if let reason = rowTierReason(item.tierReason) {
                                 Text(reason).font(Theme.Typo.caption)
                                     .foregroundStyle(Theme.textDim).lineLimit(1)

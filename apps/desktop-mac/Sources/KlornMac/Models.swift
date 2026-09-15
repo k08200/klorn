@@ -158,9 +158,13 @@ struct EmailContext: Codable, Sendable, Hashable {
     /// True when `signal` is the USER's own correction (a sender label) —
     /// the chip menu offers "clear" instead of a fresh pick. Absent = derived.
     let signalByUser: Bool
+    /// The reply axis: "needsReply" (judged, no reply sent through Klorn) or
+    /// "replied" (the user answered through Klorn — recorded). Nil = no
+    /// claim, or an older server.
+    let replyState: String?
 
     enum CodingKeys: String, CodingKey {
-        case emailDbId, subject, from, snippet, receivedAt, signal
+        case emailDbId, subject, from, snippet, receivedAt, signal, replyState
     }
 
     init(from decoder: Decoder) throws {
@@ -170,6 +174,7 @@ struct EmailContext: Codable, Sendable, Hashable {
         from = try c.decodeIfPresent(String.self, forKey: .from)
         snippet = try c.decodeIfPresent(String.self, forKey: .snippet)
         receivedAt = try c.decodeIfPresent(String.self, forKey: .receivedAt)
+        replyState = try? c.decodeIfPresent(String.self, forKey: .replyState)
         if let nested = try? c.nestedContainer(
             keyedBy: RowSignal.CodingKeysImpl.self, forKey: .signal)
         {
@@ -194,7 +199,8 @@ struct EmailContext: Codable, Sendable, Hashable {
 
     init(
         emailDbId: String, subject: String?, from: String?, snippet: String?,
-        receivedAt: String?, signal: RowSignal? = nil, signalByUser: Bool = false
+        receivedAt: String?, signal: RowSignal? = nil, signalByUser: Bool = false,
+        replyState: String? = nil
     ) {
         self.emailDbId = emailDbId
         self.subject = subject
@@ -203,6 +209,7 @@ struct EmailContext: Codable, Sendable, Hashable {
         self.receivedAt = receivedAt
         self.signal = signal
         self.signalByUser = signalByUser
+        self.replyState = replyState
     }
 }
 
@@ -1424,6 +1431,9 @@ enum LabelFilter: String, CaseIterable, Sendable, Identifiable {
     case forums
     /// A sender the user has never replied to (and no category claim).
     case firstContact
+    /// The reply axis (2026-09-14): a reply is owed and none went out
+    /// through Klorn. Reads `replyState`, not the relationship signal.
+    case needsReply
 
     var id: String { rawValue }
 
@@ -1440,6 +1450,7 @@ enum LabelFilter: String, CaseIterable, Sendable, Identifiable {
         case .updates: L("chip.updates")
         case .forums: L("chip.forums")
         case .firstContact: L("chip.first")
+        case .needsReply: L("chip.needsReply")
         }
     }
 
@@ -1456,6 +1467,7 @@ enum LabelFilter: String, CaseIterable, Sendable, Identifiable {
         case .updates: "bell"
         case .forums: "bubble.left.and.bubble.right"
         case .firstContact: "hand.wave"
+        case .needsReply: "arrowshape.turn.up.left"
         }
     }
 
@@ -1463,7 +1475,7 @@ enum LabelFilter: String, CaseIterable, Sendable, Identifiable {
     /// row's recorded signal, the same fact the chip renders, so the filter
     /// can never disagree with what the row says about itself. Pure for the
     /// harness.
-    func matches(_ signal: RowSignal?) -> Bool {
+    func matches(_ signal: RowSignal?, replyState: String? = nil) -> Bool {
         switch self {
         case .personal:
             // Anything without a category claim (judge or Gmail).
@@ -1473,6 +1485,7 @@ enum LabelFilter: String, CaseIterable, Sendable, Identifiable {
              .promotions, .social, .updates, .forums:
             return signal == .category(rawValue)
         case .firstContact: return signal == .first
+        case .needsReply: return replyState == "needsReply"
         }
     }
 }
@@ -1482,7 +1495,7 @@ extension FirewallResponse {
     /// filtering share this so the sidebar number always equals what a click
     /// shows (both run over the fetched window, never a separate DB count).
     func items(matching filter: LabelFilter) -> [FirewallItem] {
-        itemsByTime.filter { filter.matches($0.email?.signal) }
+        itemsByTime.filter { filter.matches($0.email?.signal, replyState: $0.email?.replyState) }
     }
 }
 

@@ -60,6 +60,11 @@ export interface FirewallEmailContext {
    *  recorded fact supports a claim — clients render no chip, never a guess. */
   signal: RowSignalWire;
   trust: TrustWire | null;
+  /** The reply axis (reply-state.ts): "needsReply" = the analysis judged a
+   *  reply is owed and none went out through Klorn; "replied" = the user
+   *  answered through Klorn (recorded). Absent / null = no claim. Replies
+   *  sent from Gmail directly are not seen. */
+  replyState?: "needsReply" | "replied" | null;
 }
 
 export type RowSignalWire =

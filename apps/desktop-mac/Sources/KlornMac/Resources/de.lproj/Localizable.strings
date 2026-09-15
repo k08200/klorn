@@ -588,3 +588,7 @@
 "priorities.label" = "Prioritäten";
 "priorities.none" = "Nicht gesetzt";
 "priorities.saveFailed" = "Speichern fehlgeschlagen — erneut versuchen (max. 500 Zeichen).";
+
+// Reply state chips (2026-09-14).
+"chip.needsReply" = "Antwort nötig";
+"chip.answered" = "Beantwortet";

@@ -588,3 +588,7 @@
 "priorities.label" = "Priorités";
 "priorities.none" = "Non défini";
 "priorities.saveFailed" = "Enregistrement impossible — réessayez (500 caractères max).";
+
+// Reply state chips (2026-09-14).
+"chip.needsReply" = "Réponse attendue";
+"chip.answered" = "Répondu";

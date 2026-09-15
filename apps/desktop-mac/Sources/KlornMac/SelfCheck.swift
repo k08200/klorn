@@ -792,6 +792,22 @@ func runSelfChecks() async -> Bool {
           && !LabelFilter.company.matches(.replied(9)))
     check("label — a judge category is NOT 개인 (the claim excludes it)",
           !LabelFilter.personal.matches(.category("system")))
+    // Reply axis (2026-09-14): its filter reads replyState, never the
+    // relationship signal — and no other filter reads replyState.
+    check("label — needsReply reads the reply axis only",
+          LabelFilter.needsReply.matches(.category("customer"), replyState: "needsReply")
+          && !LabelFilter.needsReply.matches(nil, replyState: "replied")
+          && !LabelFilter.needsReply.matches(nil)
+          && LabelFilter.customer.matches(.category("customer"), replyState: "needsReply"))
+    do {
+        let owed = try? JSONDecoder().decode(
+            EmailContext.self,
+            from: Data(#"{"emailDbId":"e","replyState":"needsReply"}"#.utf8))
+        let older = try? JSONDecoder().decode(
+            EmailContext.self, from: Data(#"{"emailDbId":"e"}"#.utf8))
+        check("replyState — decoded when present, nil on an older server",
+              owed?.replyState == "needsReply" && older?.replyState == nil)
+    }
 
     print("Row signals + chronological inbox:")
     func ctx(_ json: String) -> EmailContext? {

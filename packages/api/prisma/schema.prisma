@@ -971,6 +971,8 @@ model EmailMessage {
   needsReply              Boolean           @default(false)
   needsReplyReason        String?
   needsReplyConfidence    Float             @default(0.0)
+  /// When the user answered this mail through Klorn (reply-state.ts). Null = not via Klorn.
+  repliedAt               DateTime?
   sentiment               String? // positive | negative | neutral
   receivedAt              DateTime // Original email date
   syncedAt                DateTime          @default(now()) // When we synced from Gmail
