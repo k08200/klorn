@@ -122,6 +122,9 @@ enum Theme {
         case .updates: dyn(light: (0.55, 0.38, 0.0, 1), dark: (0.95, 0.76, 0.28, 1))
         case .forums: dyn(light: (0.42, 0.26, 0.74, 1), dark: (0.74, 0.64, 1.0, 1))
         case .firstContact: dyn(light: (0.0, 0.40, 0.54, 1), dark: (0.32, 0.76, 0.90, 1))
+        // The reply axis — a mint apart from every category hue, so "you
+        // owe an answer" never reads as a kind of sender.
+        case .needsReply: dyn(light: (0.0, 0.46, 0.36, 1), dark: (0.40, 0.86, 0.70, 1))
         }
     }
 

@@ -19,6 +19,7 @@ import { upsertAttentionForCalendarEvent } from "../judge/attention-mirror.js";
 import { forget, MEMORY_TOOLS, recall, remember } from "../learning/memory.js";
 import { classifyEmails, GMAIL_TOOLS, listEmails, readEmail } from "../mail/gmail.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
+import { markEmailReplied } from "../mail/reply-state.js";
 import { getSenderDossier } from "../mail/sender-dossier.js";
 import { BRIEFING_TOOLS } from "../pim/briefing.js";
 import {
@@ -314,9 +315,16 @@ async function executeToolCallInternal(
           linkedInboxAccountId = source?.linkedInboxAccountId ?? undefined;
         }
         const actions = await mailActionsFor(userId, linkedInboxAccountId ?? null);
-        return JSON.stringify(
-          await actions.sendEmail(userId, to, subject, body, [], { linkedInboxAccountId }),
-        );
+        const sent = await actions.sendEmail(userId, to, subject, body, [], {
+          linkedInboxAccountId,
+        });
+        // A reply that went out (agent or auto mode) flips the source row's
+        // reply chip to "replied". Only on success — a refused send is not
+        // an answer.
+        if (inReplyToId && !("error" in sent) && !("unsupported" in sent)) {
+          await markEmailReplied(userId, inReplyToId);
+        }
+        return JSON.stringify(sent);
       }
       case "classify_emails":
         return JSON.stringify(await classifyEmails(userId, safeInt(args.max_results, 10, 100)));

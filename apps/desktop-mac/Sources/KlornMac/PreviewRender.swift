@@ -22,7 +22,7 @@ enum PreviewRender {
       {"id":"p1","source":"email","sourceId":"e1","type":"email","title":"Contract review",
        "tier":"PUSH","tierReason":"You replied to this sender 6 times","priority":9,
        "surfacedAt":"2026-07-29T08:12:00Z",
-       "email":{"emailDbId":"d1","subject":"Re: Contract review — needs your sign-off today",
+       "email":{"emailDbId":"d1","replyState":"needsReply","subject":"Re: Contract review — needs your sign-off today",
                 "from":"Sarah Kim <sarah.kim@northwind-partners.com>",
                 "snippet":"Legal came back with two changes on clause 4…",
                 "signal":{"kind":"replied","count":6}},"hashStale":false},

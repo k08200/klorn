@@ -588,3 +588,7 @@
 "priorities.label" = "Priorities";
 "priorities.none" = "Not set";
 "priorities.saveFailed" = "Couldn't save — try again (up to 500 characters).";
+
+// Reply state chips (2026-09-14).
+"chip.needsReply" = "Needs reply";
+"chip.answered" = "Answered";

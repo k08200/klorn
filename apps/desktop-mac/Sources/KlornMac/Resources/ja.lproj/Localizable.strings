@@ -588,3 +588,7 @@
 "priorities.label" = "優先事項";
 "priorities.none" = "未設定";
 "priorities.saveFailed" = "保存できません — もう一度お試しください（500文字以内）。";
+
+// Reply state chips (2026-09-14).
+"chip.needsReply" = "返信が必要";
+"chip.answered" = "返信済み";

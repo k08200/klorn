@@ -8,6 +8,7 @@ import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sendEmail = vi.hoisted(() => vi.fn());
+const emailUpdateMany = vi.hoisted(() => vi.fn(async () => ({ count: 1 })));
 const getReplyHeaders = vi.hoisted(() => vi.fn());
 const emailFindFirst = vi.hoisted(() => vi.fn());
 
@@ -18,7 +19,7 @@ vi.mock("../auth.js", () => ({
 }));
 vi.mock("../db.js", () => {
   const prisma = {
-    emailMessage: { findFirst: emailFindFirst },
+    emailMessage: { findFirst: emailFindFirst, updateMany: emailUpdateMany },
     // The provider dispatch resolves a linked id to its provider row.
     linkedInboxAccount: { findFirst: vi.fn(async () => ({ provider: "GOOGLE" })) },
   };
@@ -91,6 +92,13 @@ describe("POST /api/email/:id/reply", () => {
       inReplyTo: "<orig@corp.com>",
       references: "<a@corp.com> <orig@corp.com>", // original chain + original Message-ID
     });
+    // The row's reply chip flips to "replied" — stamped on the user's own row.
+    expect(emailUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: "user-1" }),
+        data: { repliedAt: expect.any(Date) },
+      }),
+    );
     await app.close();
   });
 

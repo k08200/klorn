@@ -588,3 +588,7 @@
 "priorities.label" = "우선순위";
 "priorities.none" = "미설정";
 "priorities.saveFailed" = "저장 실패 — 다시 시도하세요(500자 이내).";
+
+// Reply state chips (2026-09-14).
+"chip.needsReply" = "답장 필요";
+"chip.answered" = "답장함";

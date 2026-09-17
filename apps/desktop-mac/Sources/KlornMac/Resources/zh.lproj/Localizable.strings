@@ -588,3 +588,7 @@
 "priorities.label" = "优先事项";
 "priorities.none" = "未设置";
 "priorities.saveFailed" = "保存失败 — 请重试（不超过 500 字）。";
+
+// Reply state chips (2026-09-14).
+"chip.needsReply" = "需要回复";
+"chip.answered" = "已回复";
