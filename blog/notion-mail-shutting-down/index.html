@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Notion Mail is gone. The reason they gave is the interesting part. — Klorn</title>
+<meta name="description" content="Notion Mail shut down on 22 September 2026 because most of its users never opened the inbox — agents did. What survived, what didn't, and what to move to.">
+<meta property="og:title" content="Notion Mail is gone. The reason they gave is the interesting part.">
+<meta property="og:description" content="Notion Mail shut down on 22 September 2026 because most of its users never opened the inbox — agents did. What survived, what didn't, and what to move to.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://klorn.ai/blog/notion-mail-shutting-down/">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Notion Mail is gone. The reason they gave is the interesting part.">
+<meta name="twitter:description" content="Notion Mail shut down on 22 September 2026 because most of its users never opened the inbox — agents did. What survived, what didn't, and what to move to.">
+<meta name="twitter:image" content="https://klorn.ai/brand/og-image.png?v=k2">
+<link rel="canonical" href="https://klorn.ai/blog/notion-mail-shutting-down/">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/geist-var.woff2" crossorigin>
+<link rel="stylesheet" href="/compare.css">
+<style>
+.meta { margin: 14px 0 0; font-size: 13.5px; color: var(--ink-3); }
+article h2 { margin-top: 40px; }
+ol, ul { margin: 12px 0 0; padding-left: 22px; }
+li { margin-top: 6px; }
+table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14.5px; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--ink-3); font-weight: 600; }
+.tablewrap { overflow-x: auto; }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Notion Mail is gone. The reason they gave is the interesting part.",
+  "datePublished": "2026-09-24",
+  "dateModified": "2026-09-24",
+  "author": {"@type": "Person", "name": "Yongrean Kim", "url": "https://github.com/k08200"},
+  "publisher": {"@type": "Organization", "name": "Klorn", "url": "https://klorn.ai"},
+  "mainEntityOfPage": "https://klorn.ai/blog/notion-mail-shutting-down/"
+}
+</script>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top">
+    <a class="home" href="/">Klorn</a>
+    <span class="lang"><a href="/blog/" aria-current="true">Blog</a><a href="/security/">Security</a><a href="/pricing/">Pricing</a><a href="/self-host/">Self-host</a></span>
+  </nav>
+
+  <article>
+  <h1>Notion Mail is gone. The <em>reason</em> they gave is the interesting part.</h1>
+  <p class="meta">2026-09-24 · migration notes · written two days after the shutdown</p>
+
+  <p class="thesis">Notion Mail's inbox shut down on 22 September 2026. Notion's own explanation is the part worth sitting with: more than half of its email users never opened the inbox at all — they handed the whole thing to agents. Notion read that and concluded the inbox was obsolete. I read the same fact and conclude something else, and I'll argue for it below. First, the practical part, because some of you are landing here with a dead app.</p>
+
+  <h2>What happened, from the official notice</h2>
+  <p>Notion announced the shutdown on 25 June 2026 and closed the inbox on <strong>22 September 2026</strong>. The last day to export Notion&nbsp;Mail-only data was <strong>21 September</strong>. The details are in <a href="https://www.notion.com/help/notion-mail-inbox-is-going-away-what-to-do-next" rel="noreferrer noopener">Notion's help page</a>; the reporting is at <a href="https://techcrunch.com/2026/06/25/notion-mail-shuts-down-amid-agent-takeover/" rel="noreferrer noopener">TechCrunch</a>.</p>
+
+  <h2>What you still have, and what is actually gone</h2>
+  <p>The good news is bigger than the bad news, and it is worth reading before you panic about your archive.</p>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Thing</th><th>Status</th></tr>
+    <tr><td>Your email — every message sent and received</td><td><strong>Safe, in Gmail.</strong> Notion Mail always synced two ways, so the mail itself never only lived there.</td></tr>
+    <tr><td>Drafts, scheduled sends, snippets, auto-label instructions</td><td><strong>Gone</strong> if you did not export by 21 September. These were Notion Mail-only data.</td></tr>
+    <tr><td>Custom views and sorting</td><td><strong>Gone.</strong> Notion states these do not transfer to Gmail.</td></tr>
+    <tr><td>Synced email databases in your workspace</td><td>Still readable; they stop receiving new mail.</td></tr>
+  </table>
+  </div>
+  <p>If you missed the export window, the honest answer is that the snippets and label instructions are not coming back, and no third-party tool can recover them — they lived in Notion's service, not in your mailbox. What you rebuild, you rebuild from scratch. That is the real cost of this shutdown, and it is small only because the mail itself was mirrored.</p>
+
+  <h2>The sentence Notion said out loud</h2>
+  <p>Vendors rarely tell you why a product died in a way that is useful to anyone else. Notion did: most of the people paying for an inbox were not using the inbox. Agents were reading, triaging, and replying, and the human opened the app to check on the agent, if at all.</p>
+  <p>Notion's conclusion was that the destination is obsolete — put the mail in front of agents and stop maintaining a place for people to look. I think that reads the fact correctly and then draws exactly the wrong line from it. If an agent is handling your mail, the interesting question stops being <em>"what does my inbox look like"</em> and becomes <em>"what did it do while I wasn't looking, and how would I know if it got one wrong?"</em> Deleting the inbox does not answer that question. It removes the only place the answer could have been displayed.</p>
+  <p>That is the bet Klorn is built on, so treat this as a disclosed interest rather than a neutral survey. The wager is that when software acts on your mail, two properties stop being nice-to-haves: a measured floor on what it is allowed to hide from you, and a record of what it did that you can check afterwards. Neither is a UI feature. Both have to be in the part that decides.</p>
+
+  <h2>Where to go now — honestly</h2>
+  <p>No benchmark was run across these products; I have not measured anyone's classifier but my own, and I am not going to pretend otherwise. Prices below were read from each vendor's own pricing page on 14 September 2026.</p>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Option</th><th>Best at</th><th>The catch</th></tr>
+    <tr>
+      <td><strong>Gmail as-is</strong> + filters and labels</td>
+      <td>Free, nothing to migrate, rules you can read and edit forever.</td>
+      <td>Rules cannot generalize. Every new sender is a new rule you write by hand.</td>
+    </tr>
+    <tr>
+      <td><strong>Gemini in Gmail</strong> (Google AI Plus, $9.99/mo)</td>
+      <td>Cheapest AI path and the deepest possible Gmail integration — it is the platform owner.</td>
+      <td>Gmail only, and nothing about the decision is inspectable. No published miss rate, no record you can audit.</td>
+    </tr>
+    <tr>
+      <td><strong>Superhuman Mail</strong> ($25/user/mo annual in the Starter suite, $33 Business)</td>
+      <td>The fastest keyboard-driven mail client there is. If speed of handling is your bottleneck, it is genuinely the best product here.</td>
+      <td>Sold only inside a suite, and closed — same audit problem.</td>
+    </tr>
+    <tr>
+      <td><strong>Shortwave</strong> ($30/seat/mo Business)</td>
+      <td>The strongest AI search and assistant over your own mail history.</td>
+      <td>Closed, and priced per seat at the top of this band.</td>
+    </tr>
+    <tr>
+      <td><strong>Inbox Zero</strong> (AGPL, open source)</td>
+      <td>The closest open-source analogue, and more mature than us at bulk cleanup and unsubscribing. If that is your problem, start there.</td>
+      <td>Different shape: it optimizes for emptying an inbox, not for deciding what may interrupt you.</td>
+    </tr>
+    <tr>
+      <td><strong>Klorn</strong> (AGPL, this site)</td>
+      <td>Five lanes with only one allowed to notify you, a CI-enforced floor on urgent recall, a receipt for every action taken for you, a hard spend cap, and a self-host path.</td>
+      <td>Younger and smaller. Gmail and IMAP today; Microsoft 365 is written but not switched on. Fewer people have used it than any other row in this table.</td>
+    </tr>
+  </table>
+  </div>
+
+  <h2>If the lesson you took was "never again"</h2>
+  <p>The migration you just did was cheap because the mail was mirrored in Gmail. The next one might not be. The version of this that cannot happen to you is the one where the software runs on your own box:</p>
+  <pre><code>git clone https://github.com/k08200/klorn.git
+cd klorn
+cp .env.selfhost.example .env.selfhost
+# fill in: postgres password, JWT secret, encryption key,
+# your own Google OAuth client, one LLM provider key
+docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml up -d</code></pre>
+  <p>Images are prebuilt, so there is no toolchain to install. The full walkthrough, including what self-hosting does <em>not</em> remove, is at <a href="/self-host/">klorn.ai/self-host</a>.</p>
+
+  <h2>What to actually do this week</h2>
+  <ol>
+    <li>Confirm your mail is intact in Gmail. It should be — the sync was two-way — but check a thread you remember from Notion Mail.</li>
+    <li>Rewrite the handful of snippets you used daily. Most people have three or four, not thirty.</li>
+    <li>Write down what your auto-labels were doing <em>before</em> you pick a replacement. That list is your requirements document, and it is the only artifact from Notion Mail you can still reconstruct from memory.</li>
+    <li>When you evaluate the replacement, ask it one question the closed products cannot answer: <em>how often do you hide something urgent, and how would I check?</em></li>
+  </ol>
+
+  <p>For our part, that number is published and gated in CI: on a committed 56-email set, a change to the judge does not merge unless it holds at least 90% recall on urgent mail and at least 90% precision on the silent lane. The last full sweep ran ten models three times each; across the 23 clean runs, the count of urgent emails sent to the hide-forever lane was zero. Details, including the models that failed the gate, are in <a href="/blog/which-llm-is-best-for-email-classification/">the bake-off writeup</a>. Every number re-runs from the repository with one command.</p>
+  <a class="cta" href="https://app.klorn.ai/login?mode=register">Try Klorn free</a>
+  </article>
+
+  <footer>
+    <p>Klorn is <a href="https://github.com/k08200/klorn" rel="noreferrer noopener">AGPL-3.0</a> — every claim in
+      this post is checkable against the source. More notes at <a href="/blog/">/blog</a>.</p>
+  </footer>
+</div>
+<script>
+// Same block as every other page: carry the campaign through to the app so a
+// signup can be credited to the page that earned it.
+(function () {
+  try {
+    var p = new URLSearchParams(location.search);
+    var q = [];
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content"].forEach(function (k) {
+      var v = p.get(k);
+      if (v) q.push(k + "=" + encodeURIComponent(v.slice(0, 60)));
+    });
+    if (document.referrer) {
+      try {
+        var h = new URL(document.referrer).hostname;
+        if (h && h !== location.hostname) q.push("ref=" + encodeURIComponent(h));
+      } catch (e) {}
+    }
+    q.push("lp=" + encodeURIComponent(location.pathname.slice(0, 60)));
+    var qs = q.join("&");
+    document.querySelectorAll('a[href^="https://app.klorn.ai/"]').forEach(function (a) {
+      a.href += (a.href.indexOf("?") === -1 ? "?" : "&") + qs;
+    });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
