@@ -16,6 +16,8 @@ import { db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
 import { isDevOrTestEnv } from "./env.js";
 import { handleError } from "./error-handler.js";
+import { warnIfJudgeModelFailsGate } from "./llm/judge-model-gate.js";
+import { JUDGE_MODEL } from "./llm/openai.js";
 import { IMAP_PROVIDERS } from "./mail/imap-providers.js";
 import { attachPerfMonitor } from "./perf-monitor.js";
 import { briefingRoutes } from "./pim/briefing.js";
@@ -488,6 +490,12 @@ app.addHook("onClose", async () => {
 });
 
 // --- Server Startup ---
+// Before anything else: say so if the judge is pinned to a model our own
+// committed eval records as failing the urgent-recall gate. This costs one
+// string comparison and needs no DB, so it runs first — the 2026-09 incident
+// it exists for ran for three weeks precisely because nothing announced it.
+warnIfJudgeModelFailsGate(JUDGE_MODEL);
+
 // Startup DB calls are wrapped in withDbRetry so a Neon cold-start (suspended
 // compute waking up) does not kill the container. If retries are exhausted we
 // exit so Render restarts the process — this is safer than a permanent 503
