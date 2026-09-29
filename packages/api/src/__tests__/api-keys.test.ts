@@ -6,7 +6,7 @@
  * one-time-token standard); the raw key is shown once at creation.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const keyFindUnique = vi.hoisted(() => vi.fn(async () => null as unknown));
 const keyUpdate = vi.hoisted(() => vi.fn(async () => ({})));
@@ -17,6 +17,7 @@ vi.mock("../db.js", () => {
 });
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
+import { mcpWriteToolsEnabled } from "../config.js";
 import { authenticateApiKey, hashApiKey, mintApiKey } from "../mcp/api-keys.js";
 
 beforeEach(() => {
@@ -45,10 +46,11 @@ describe("authenticateApiKey", () => {
     keyFindUnique.mockResolvedValue({
       id: "k1",
       userId: "u1",
+      permission: "read",
       revokedAt: null,
     });
     const out = await authenticateApiKey(`Bearer ${minted.token}`);
-    expect(out).toEqual({ userId: "u1", keyId: "k1" });
+    expect(out).toEqual({ userId: "u1", keyId: "k1", permission: "read" });
     expect(keyFindUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { keyHash: hashApiKey(minted.token) } }),
     );
@@ -79,12 +81,14 @@ describe("lastUsedAt throttle", () => {
     keyFindUnique.mockResolvedValue({
       id: "k1",
       userId: "u1",
+      permission: "read",
       revokedAt: null,
       lastUsedAt: new Date(),
     });
     expect(await authenticateApiKey(`Bearer ${minted.token}`)).toEqual({
       userId: "u1",
       keyId: "k1",
+      permission: "read",
     });
     expect(keyUpdate).not.toHaveBeenCalled();
   });
@@ -101,5 +105,97 @@ describe("lastUsedAt throttle — stale branch", () => {
     });
     await authenticateApiKey(`Bearer ${minted.token}`);
     await vi.waitFor(() => expect(keyUpdate).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("authenticateApiKey — permission", () => {
+  it("asks the database for the key's permission", async () => {
+    const minted = mintApiKey();
+    keyFindUnique.mockResolvedValue({
+      id: "k1",
+      userId: "u1",
+      permission: "read",
+      revokedAt: null,
+    });
+    await authenticateApiKey(`Bearer ${minted.token}`);
+    expect(keyFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ permission: true }) }),
+    );
+  });
+
+  it("returns read for a read key", async () => {
+    keyFindUnique.mockResolvedValue({
+      id: "k1",
+      userId: "u1",
+      permission: "read",
+      revokedAt: null,
+    });
+    const out = await authenticateApiKey(`Bearer ${mintApiKey().token}`);
+    expect(out?.permission).toBe("read");
+  });
+
+  it("returns read_write for a read-write key", async () => {
+    keyFindUnique.mockResolvedValue({
+      id: "k2",
+      userId: "u1",
+      permission: "read_write",
+      revokedAt: null,
+    });
+    const out = await authenticateApiKey(`Bearer ${mintApiKey().token}`);
+    expect(out).toEqual({ userId: "u1", keyId: "k2", permission: "read_write" });
+  });
+
+  it("fails closed to read when the stored value is missing or unrecognised", async () => {
+    for (const permission of [undefined, null, "admin", "READ_WRITE", ""]) {
+      keyFindUnique.mockResolvedValue({ id: "k3", userId: "u1", permission, revokedAt: null });
+      const out = await authenticateApiKey(`Bearer ${mintApiKey().token}`);
+      expect(out?.permission).toBe("read");
+    }
+  });
+
+  it("still rejects a revoked read-write key", async () => {
+    keyFindUnique.mockResolvedValue({
+      id: "k2",
+      userId: "u1",
+      permission: "read_write",
+      revokedAt: new Date("2026-08-01T00:00:00Z"),
+    });
+    expect(await authenticateApiKey(`Bearer ${mintApiKey().token}`)).toBeNull();
+  });
+});
+
+describe("mcpWriteToolsEnabled", () => {
+  const ORIGINAL = process.env.MCP_WRITE_TOOLS_ENABLED;
+  afterEach(() => {
+    if (ORIGINAL === undefined) delete process.env.MCP_WRITE_TOOLS_ENABLED;
+    else process.env.MCP_WRITE_TOOLS_ENABLED = ORIGINAL;
+  });
+
+  it("is OFF by default", () => {
+    delete process.env.MCP_WRITE_TOOLS_ENABLED;
+    expect(mcpWriteToolsEnabled()).toBe(false);
+  });
+
+  it("stays OFF for falsy and unrecognised values", () => {
+    for (const raw of ["", "false", "0", "no", "off", "enabled", "2"]) {
+      process.env.MCP_WRITE_TOOLS_ENABLED = raw;
+      expect(mcpWriteToolsEnabled(), `raw=${JSON.stringify(raw)}`).toBe(false);
+    }
+  });
+
+  it("turns ON with the lenient truthy parse (case and whitespace tolerant)", () => {
+    for (const raw of ["true", "1", "yes", "on", "TRUE", " On ", "Yes"]) {
+      process.env.MCP_WRITE_TOOLS_ENABLED = raw;
+      expect(mcpWriteToolsEnabled(), `raw=${JSON.stringify(raw)}`).toBe(true);
+    }
+  });
+
+  it("is read at request time, not import time", () => {
+    delete process.env.MCP_WRITE_TOOLS_ENABLED;
+    expect(mcpWriteToolsEnabled()).toBe(false);
+    process.env.MCP_WRITE_TOOLS_ENABLED = "true";
+    expect(mcpWriteToolsEnabled()).toBe(true);
+    process.env.MCP_WRITE_TOOLS_ENABLED = "false";
+    expect(mcpWriteToolsEnabled()).toBe(false);
   });
 });

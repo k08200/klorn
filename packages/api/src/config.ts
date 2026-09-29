@@ -173,6 +173,17 @@ export function outlookInboxEnabled(): boolean {
     (process.env.OUTLOOK_INBOX_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// MCP write tools (unified platform plan, step A1). OFF by
+// default (repo doctrine). While OFF, POST /api/keys refuses to mint a
+// read-write API key, so every key stays read-only. Read at request time
+// (PROVIDER_INBOX_SELECTOR_ENABLED precedent) with the same lenient truthy
+// parse, so a flip needs no redeploy. No write tool exists yet — this flag
+// only gates which permission a new key may carry.
+export function mcpWriteToolsEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.MCP_WRITE_TOOLS_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // Social LOGIN providers beyond Google (Sign in with Apple, Naver OAuth) —
 // OFF by default (repo doctrine). While OFF, every /api/auth/apple/* and
 // /api/auth/naver/* route 404s with the same cloak as the dark IMAP providers
