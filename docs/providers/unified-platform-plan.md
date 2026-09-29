@@ -176,16 +176,20 @@ records the question in this file first.
   `{name}` only. `authenticateApiKey` returns `{userId, keyId}`. The contract
   package is type-only, so runtime constants cannot be imported from it.
 - Tasks: add `mcpWriteToolsEnabled()` to `config.ts`, read at request time.
-  Add a two-value permission (read, read-write) defaulting to read, so
-  existing keys stay read-only. Return it on list and from
-  `authenticateApiKey`. `POST /api/keys` accepts read-write only while the
-  flag is on and rejects it with a clear error otherwise. Define the two
-  values as runtime constants in api; web gets its own in A3. No UI in this
-  step.
-- Verify: extend `api-keys.test.ts` and `routes-api-keys.test.ts` first (RED).
+  The flag gates both minting and use. Add a two-value permission (read,
+  read-write) defaulting to read, so existing keys stay read-only.
+  `authenticateApiKey` returns the effective permission: read-write only when
+  the stored value is read-write and the flag is on at that moment. List
+  returns the stored value. `POST /api/keys` ignores the permission field
+  while the flag is off, exactly as main ignores unknown body fields, and
+  validates it while the flag is on. The create response echoes the granted
+  permission, so a caller is never silently downgraded. Define the two values
+  as runtime constants in api; web gets its own in A3. No UI in this step.
+- Verify: extend `api-keys.test.ts` and `routes-api-keys.test.ts` first (RED),
+  including flag off, on, off for an existing read-write key.
   `prisma migrate diff` shows only the additive column. Full gate.
-- Exit: with the flag off, every request and response is unchanged except the
-  additive `permission` field on list.
+- Exit: with the flag off, every request behaves as it does on main. The only
+  response change is the additive `permission` field on list and create.
 - Rollback: revert the PR; the column is additive and ignorable.
 
 **A2 — MCP write gating, `mark_read`, `set_tier`, audit.** Depends on: A1.
