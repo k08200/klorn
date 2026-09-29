@@ -16,6 +16,8 @@ import { db, INTERACTIVE_TX_OPTIONS, prisma } from "./db.js";
 import { withDbRetry } from "./db-retry.js";
 import { isDevOrTestEnv } from "./env.js";
 import { handleError } from "./error-handler.js";
+import { reportJudgeModelResolution } from "./llm/judge-model-gate.js";
+import { JUDGE_MODEL_RESOLUTION } from "./llm/openai.js";
 import { IMAP_PROVIDERS } from "./mail/imap-providers.js";
 import { attachPerfMonitor } from "./perf-monitor.js";
 import { briefingRoutes } from "./pim/briefing.js";
@@ -488,6 +490,13 @@ app.addHook("onClose", async () => {
 });
 
 // --- Server Startup ---
+// Before anything else: report what the judge is actually running. The pin is
+// validated at module load (openai.ts) — a model our committed eval records as
+// failing the urgent-recall gate is refused and replaced unless the operator
+// opted in explicitly. This line is what makes either outcome visible; the
+// 2026-09 incident ran for three weeks precisely because nothing announced it.
+reportJudgeModelResolution(JUDGE_MODEL_RESOLUTION);
+
 // Startup DB calls are wrapped in withDbRetry so a Neon cold-start (suspended
 // compute waking up) does not kill the container. If retries are exhausted we
 // exit so Render restarts the process — this is safer than a permanent 503
