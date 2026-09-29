@@ -173,12 +173,13 @@ export function outlookInboxEnabled(): boolean {
     (process.env.OUTLOOK_INBOX_ENABLED ?? "").trim().toLowerCase(),
   );
 }
-// MCP write tools (unified platform plan, step A1). OFF by
-// default (repo doctrine). While OFF, POST /api/keys refuses to mint a
-// read-write API key, so every key stays read-only. Read at request time
+// MCP write tools — API key permission level (step A1 of
+// docs/providers/unified-platform-plan.md). OFF by default (repo doctrine). It
+// gates both minting a read-write API key and using one: while OFF, POST
+// /api/keys ignores the permission field (every new key is read) and a stored
+// read-write key acts as read at the MCP endpoint. Read at request time
 // (PROVIDER_INBOX_SELECTOR_ENABLED precedent) with the same lenient truthy
-// parse, so a flip needs no redeploy. No write tool exists yet — this flag
-// only gates which permission a new key may carry.
+// parse, so a flip needs no redeploy. No write tool exists yet.
 export function mcpWriteToolsEnabled(): boolean {
   return ["true", "1", "yes", "on"].includes(
     (process.env.MCP_WRITE_TOOLS_ENABLED ?? "").trim().toLowerCase(),

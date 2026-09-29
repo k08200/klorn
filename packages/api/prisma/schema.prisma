@@ -166,9 +166,10 @@ model ApiKey {
   name       String
   keyHash    String           @unique
   prefix     String // display stub: "klorn_sk_ab12cd"
-  // What the key may do over MCP. Defaults to read so every key that existed
-  // before this column stays read-only; read_write is only mintable while
-  // MCP_WRITE_TOOLS_ENABLED is on (routes/api-keys.ts).
+  // What the key may do over MCP. Defaults to read, so every key that existed
+  // before this column stays read-only. read_write is only granted, and only
+  // honoured, while MCP_WRITE_TOOLS_ENABLED is on: with the flag off a
+  // read_write key acts as read (authenticateApiKey).
   permission ApiKeyPermission @default(read)
   createdAt  DateTime         @default(now())
   lastUsedAt DateTime?
@@ -177,8 +178,8 @@ model ApiKey {
   @@index([userId])
 }
 
-// Lowercase on purpose (unlike the UPPERCASE enums here): these exact strings
-// are the wire values of @klorn/contract's ApiKeyWire.permission, so the DB,
+// Lowercase like SenderTraitKind and SenderTraitStatus: these exact strings are
+// also the wire values of @klorn/contract's ApiKeyWire.permission, so the DB,
 // the API and every client share one spelling and no mapping layer exists.
 enum ApiKeyPermission {
   read

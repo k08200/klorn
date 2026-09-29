@@ -20,10 +20,18 @@ vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 import { mcpWriteToolsEnabled } from "../config.js";
 import { authenticateApiKey, hashApiKey, mintApiKey } from "../mcp/api-keys.js";
 
+const ORIGINAL_WRITE_FLAG = process.env.MCP_WRITE_TOOLS_ENABLED;
+
 beforeEach(() => {
+  delete process.env.MCP_WRITE_TOOLS_ENABLED;
   keyFindUnique.mockReset();
   keyFindUnique.mockResolvedValue(null);
   keyUpdate.mockClear();
+});
+
+afterEach(() => {
+  if (ORIGINAL_WRITE_FLAG === undefined) delete process.env.MCP_WRITE_TOOLS_ENABLED;
+  else process.env.MCP_WRITE_TOOLS_ENABLED = ORIGINAL_WRITE_FLAG;
 });
 
 describe("mintApiKey", () => {
@@ -108,69 +116,76 @@ describe("lastUsedAt throttle — stale branch", () => {
   });
 });
 
-describe("authenticateApiKey — permission", () => {
-  it("asks the database for the key's permission", async () => {
-    const minted = mintApiKey();
-    keyFindUnique.mockResolvedValue({
-      id: "k1",
-      userId: "u1",
-      permission: "read",
-      revokedAt: null,
-    });
-    await authenticateApiKey(`Bearer ${minted.token}`);
+describe("authenticateApiKey — effective permission", () => {
+  const stored = (permission: unknown) => ({
+    id: "k1",
+    userId: "u1",
+    permission,
+    revokedAt: null,
+  });
+  const authenticate = () => authenticateApiKey(`Bearer ${mintApiKey().token}`);
+
+  it("asks the database for the key's stored permission", async () => {
+    keyFindUnique.mockResolvedValue(stored("read"));
+    await authenticate();
     expect(keyFindUnique).toHaveBeenCalledWith(
       expect.objectContaining({ select: expect.objectContaining({ permission: true }) }),
     );
   });
 
-  it("returns read for a read key", async () => {
-    keyFindUnique.mockResolvedValue({
-      id: "k1",
-      userId: "u1",
-      permission: "read",
-      revokedAt: null,
-    });
-    const out = await authenticateApiKey(`Bearer ${mintApiKey().token}`);
-    expect(out?.permission).toBe("read");
-  });
-
-  it("returns read_write for a read-write key", async () => {
-    keyFindUnique.mockResolvedValue({
-      id: "k2",
-      userId: "u1",
-      permission: "read_write",
-      revokedAt: null,
-    });
-    const out = await authenticateApiKey(`Bearer ${mintApiKey().token}`);
-    expect(out).toEqual({ userId: "u1", keyId: "k2", permission: "read_write" });
-  });
-
-  it("fails closed to read when the stored value is missing or unrecognised", async () => {
-    for (const permission of [undefined, null, "admin", "READ_WRITE", ""]) {
-      keyFindUnique.mockResolvedValue({ id: "k3", userId: "u1", permission, revokedAt: null });
-      const out = await authenticateApiKey(`Bearer ${mintApiKey().token}`);
-      expect(out?.permission).toBe("read");
+  it("returns read for a read key, whatever the flag", async () => {
+    keyFindUnique.mockResolvedValue(stored("read"));
+    for (const flag of [undefined, "true"]) {
+      if (flag === undefined) delete process.env.MCP_WRITE_TOOLS_ENABLED;
+      else process.env.MCP_WRITE_TOOLS_ENABLED = flag;
+      expect(await authenticate()).toEqual({ userId: "u1", keyId: "k1", permission: "read" });
     }
   });
 
-  it("still rejects a revoked read-write key", async () => {
+  it("returns read_write for a stored read_write key while the flag is ON", async () => {
+    process.env.MCP_WRITE_TOOLS_ENABLED = "true";
+    keyFindUnique.mockResolvedValue(stored("read_write"));
+    expect(await authenticate()).toEqual({ userId: "u1", keyId: "k1", permission: "read_write" });
+  });
+
+  it("acts as read for a stored read_write key while the flag is OFF", async () => {
+    keyFindUnique.mockResolvedValue(stored("read_write"));
+    expect(await authenticate()).toEqual({ userId: "u1", keyId: "k1", permission: "read" });
+  });
+
+  it("follows the flag per call: read, then read_write, then read again", async () => {
+    keyFindUnique.mockResolvedValue(stored("read_write"));
+    const seen: Array<string | undefined> = [];
+    for (const flag of [undefined, "true", "false"]) {
+      if (flag === undefined) delete process.env.MCP_WRITE_TOOLS_ENABLED;
+      else process.env.MCP_WRITE_TOOLS_ENABLED = flag;
+      seen.push((await authenticate())?.permission);
+    }
+    expect(seen).toEqual(["read", "read_write", "read"]);
+  });
+
+  it("fails closed to read for a missing or unrecognised stored value, even with the flag ON", async () => {
+    process.env.MCP_WRITE_TOOLS_ENABLED = "true";
+    for (const permission of [undefined, null, "admin", "READ_WRITE", "", 1]) {
+      keyFindUnique.mockResolvedValue(stored(permission));
+      expect((await authenticate())?.permission, `stored=${String(permission)}`).toBe("read");
+    }
+  });
+
+  it("still rejects a revoked read-write key, flag ON or OFF", async () => {
     keyFindUnique.mockResolvedValue({
-      id: "k2",
-      userId: "u1",
-      permission: "read_write",
+      ...stored("read_write"),
       revokedAt: new Date("2026-08-01T00:00:00Z"),
     });
-    expect(await authenticateApiKey(`Bearer ${mintApiKey().token}`)).toBeNull();
+    for (const flag of [undefined, "true"]) {
+      if (flag === undefined) delete process.env.MCP_WRITE_TOOLS_ENABLED;
+      else process.env.MCP_WRITE_TOOLS_ENABLED = flag;
+      expect(await authenticate()).toBeNull();
+    }
   });
 });
 
 describe("mcpWriteToolsEnabled", () => {
-  const ORIGINAL = process.env.MCP_WRITE_TOOLS_ENABLED;
-  afterEach(() => {
-    if (ORIGINAL === undefined) delete process.env.MCP_WRITE_TOOLS_ENABLED;
-    else process.env.MCP_WRITE_TOOLS_ENABLED = ORIGINAL;
-  });
-
   it("is OFF by default", () => {
     delete process.env.MCP_WRITE_TOOLS_ENABLED;
     expect(mcpWriteToolsEnabled()).toBe(false);

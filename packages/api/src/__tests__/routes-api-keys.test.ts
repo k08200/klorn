@@ -175,60 +175,80 @@ describe("GET /api/keys — permission", () => {
   });
 });
 
-describe("POST /api/keys — permission", () => {
-  it("defaults to read when permission is omitted, and the response shape is unchanged", async () => {
+describe("POST /api/keys — permission, write flag OFF (dark)", () => {
+  it("mints a read key and the response gains only the granted permission", async () => {
     const app = await buildApp();
     const res = await postKey(app, { name: "laptop" });
     expect(res.statusCode).toBe(200);
-    expect(Object.keys(res.json()).sort()).toEqual(["id", "key", "name", "prefix"]);
-    expect(keyCreate.mock.calls[0][0].data).toMatchObject({ permission: "read" });
+    const body = res.json();
+    expect(Object.keys(body).sort()).toEqual(["id", "key", "name", "permission", "prefix"]);
+    expect(body.permission).toBe("read");
+    expect(keyCreate).toHaveBeenCalledTimes(1);
+    expect(keyCreate.mock.calls[0][0].data).toEqual({
+      userId: "user-1",
+      name: "laptop",
+      keyHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+      prefix: expect.stringMatching(/^klorn_sk_/),
+      permission: "read",
+    });
     await app.close();
   });
 
-  it("stores an explicit read permission", async () => {
+  it.each([
+    ["read_write", "read_write"],
+    ["null", null],
+    ["an unknown word", "x"],
+    ["a number", 42],
+    ["an object", { level: "read_write" }],
+  ])("ignores permission entirely (%s): 200, stored and echoed as read, no code", async (_l, value) => {
+    const app = await buildApp();
+    const res = await postKey(app, { name: "agent", permission: value });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().permission).toBe("read");
+    expect(res.json()).not.toHaveProperty("code");
+    expect(keyCreate).toHaveBeenCalledTimes(1);
+    expect(keyCreate.mock.calls[0][0].data.permission).toBe("read");
+    await app.close();
+  });
+});
+
+describe("POST /api/keys — permission, write flag ON", () => {
+  beforeEach(() => {
+    process.env.MCP_WRITE_TOOLS_ENABLED = "true";
+  });
+
+  it("defaults to read when permission is omitted", async () => {
+    const app = await buildApp();
+    const res = await postKey(app, { name: "laptop" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().permission).toBe("read");
+    expect(keyCreate.mock.calls[0][0].data.permission).toBe("read");
+    await app.close();
+  });
+
+  it("grants an explicit read", async () => {
     const app = await buildApp();
     const res = await postKey(app, { name: "laptop", permission: "read" });
     expect(res.statusCode).toBe(200);
-    expect(keyCreate.mock.calls[0][0].data).toMatchObject({ permission: "read" });
+    expect(res.json().permission).toBe("read");
+    expect(keyCreate.mock.calls[0][0].data.permission).toBe("read");
     await app.close();
   });
 
-  it("stores read_write when the write flag is ON", async () => {
-    process.env.MCP_WRITE_TOOLS_ENABLED = "true";
+  it("grants read_write and echoes it once, next to the raw key", async () => {
     const app = await buildApp();
     const res = await postKey(app, { name: "agent", permission: "read_write" });
     expect(res.statusCode).toBe(200);
-    expect(res.json().key).toMatch(/^klorn_sk_[0-9a-f]{64}$/);
-    expect(keyCreate.mock.calls[0][0].data).toMatchObject({ permission: "read_write" });
-    await app.close();
-  });
-
-  it("rejects read_write with a stable code while the write flag is OFF", async () => {
-    const app = await buildApp();
-    const res = await postKey(app, { name: "agent", permission: "read_write" });
-    expect(res.statusCode).toBe(403);
     const body = res.json();
-    expect(body.code).toBe("API_KEY_WRITE_DISABLED");
-    expect(typeof body.error).toBe("string");
-    expect(body.error.length).toBeGreaterThan(0);
-    expect(body).not.toHaveProperty("key");
-    expect(keyCreate).not.toHaveBeenCalled();
-    await app.close();
-  });
-
-  it("still allows an explicit read key while the write flag is OFF", async () => {
-    const app = await buildApp();
-    expect((await postKey(app, { name: "laptop", permission: "read" })).statusCode).toBe(200);
-    await app.close();
-  });
-
-  it("reads the flag per request: one app instance follows a flip", async () => {
-    const app = await buildApp();
-    expect((await postKey(app, { name: "a", permission: "read_write" })).statusCode).toBe(403);
-    process.env.MCP_WRITE_TOOLS_ENABLED = "1";
-    expect((await postKey(app, { name: "b", permission: "read_write" })).statusCode).toBe(200);
-    process.env.MCP_WRITE_TOOLS_ENABLED = "off";
-    expect((await postKey(app, { name: "c", permission: "read_write" })).statusCode).toBe(403);
+    expect(body.key).toMatch(/^klorn_sk_[0-9a-f]{64}$/);
+    expect(body.permission).toBe("read_write");
+    expect(keyCreate.mock.calls[0][0].data).toEqual({
+      userId: "user-1",
+      name: "agent",
+      keyHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+      prefix: expect.stringMatching(/^klorn_sk_/),
+      permission: "read_write",
+    });
     await app.close();
   });
 
@@ -242,24 +262,84 @@ describe("POST /api/keys — permission", () => {
     ["a boolean", true],
     ["an object", { level: "read" }],
     ["an array", ["read"]],
-  ])("400s an invalid permission (%s) with a stable code, flag ON or OFF", async (_label, bad) => {
-    for (const flag of [undefined, "true"]) {
-      if (flag === undefined) delete process.env.MCP_WRITE_TOOLS_ENABLED;
-      else process.env.MCP_WRITE_TOOLS_ENABLED = flag;
-      const app = await buildApp();
-      const res = await postKey(app, { name: "agent", permission: bad });
-      expect(res.statusCode).toBe(400);
-      expect(res.json().code).toBe("INVALID_API_KEY_PERMISSION");
-      await app.close();
-    }
+    ["an inherited property name", "constructor"],
+  ])("400s an invalid permission (%s) with a stable code and no DB work", async (_l, bad) => {
+    const app = await buildApp();
+    const res = await postKey(app, { name: "agent", permission: bad });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("INVALID_API_KEY_PERMISSION");
+    expect(keyCount).not.toHaveBeenCalled();
     expect(keyCreate).not.toHaveBeenCalled();
+    await app.close();
   });
 
-  it("does not consult the database for a rejected permission", async () => {
+  it("returns the name error when the name and the permission are both invalid", async () => {
     const app = await buildApp();
-    await postKey(app, { name: "agent", permission: "read_write" });
-    await postKey(app, { name: "agent", permission: "nope" });
-    expect(keyCount).not.toHaveBeenCalled();
+    const res = await postKey(app, { name: "", permission: "admin" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/name/i);
+    expect(res.json()).not.toHaveProperty("code");
+    await app.close();
+  });
+});
+
+describe("POST /api/keys — permission follows the flag per request", () => {
+  it("one app instance: OFF -> read, ON -> read_write, OFF -> read", async () => {
+    const app = await buildApp();
+    const grants: unknown[] = [];
+    for (const flag of [undefined, "1", "off"]) {
+      if (flag === undefined) delete process.env.MCP_WRITE_TOOLS_ENABLED;
+      else process.env.MCP_WRITE_TOOLS_ENABLED = flag;
+      const res = await postKey(app, { name: "agent", permission: "read_write" });
+      expect(res.statusCode).toBe(200);
+      grants.push(res.json().permission);
+    }
+    expect(grants).toEqual(["read", "read_write", "read"]);
+    await app.close();
+  });
+});
+
+describe("POST /api/keys — body handling", () => {
+  it.each([
+    ["flag OFF", undefined],
+    ["flag ON", "true"],
+  ])("never lets the body set a server-owned field (%s)", async (_l, flag) => {
+    if (flag) process.env.MCP_WRITE_TOOLS_ENABLED = flag;
+    const app = await buildApp();
+    const res = await postKey(app, {
+      name: "laptop",
+      userId: "attacker",
+      keyHash: "chosen-by-caller",
+      prefix: "evil",
+      revokedAt: "2020-01-01T00:00:00.000Z",
+      permission: "read",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().prefix).not.toBe("evil");
+    expect(keyCreate.mock.calls[0][0].data).toEqual({
+      userId: "user-1",
+      name: "laptop",
+      keyHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+      prefix: expect.stringMatching(/^klorn_sk_/),
+      permission: "read",
+    });
+    await app.close();
+  });
+
+  it("400s the name for a missing body and for a JSON null body", async () => {
+    const app = await buildApp();
+    const missing = await app.inject({ method: "POST", url: "/api/keys", headers: auth() });
+    const jsonNull = await app.inject({
+      method: "POST",
+      url: "/api/keys",
+      headers: { ...auth(), "content-type": "application/json" },
+      payload: "null",
+    });
+    for (const res of [missing, jsonNull]) {
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toMatch(/name/i);
+    }
+    expect(keyCreate).not.toHaveBeenCalled();
     await app.close();
   });
 });

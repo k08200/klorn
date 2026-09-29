@@ -27,9 +27,10 @@ export interface ApiKeysListResponse {
 export interface CreateApiKeyRequest {
   name: string;
   /**
-   * Omitted means `read`. `read_write` is refused (403, code
-   * `API_KEY_WRITE_DISABLED`) while the server's write flag is off; any other
-   * value is a 400 (code `INVALID_API_KEY_PERMISSION`).
+   * Omitted means `read`. Honoured only while the server's MCP write flag is
+   * on, and then any value other than `read` / `read_write` is a 400 with code
+   * `INVALID_API_KEY_PERMISSION`. While the flag is off the field is ignored and
+   * the key is `read`; the response says which permission was granted.
    */
   permission?: ApiKeyPermissionWire;
 }
@@ -37,6 +38,8 @@ export interface CreateApiKeyResponse {
   id: string;
   name: string;
   prefix: string;
+  /** The permission granted — `read` unless a read-write key was requested and allowed. */
+  permission: ApiKeyPermissionWire;
   /** The raw key — shown once, never retrievable again. */
   key: string;
 }

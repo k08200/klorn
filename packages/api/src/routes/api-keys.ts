@@ -6,13 +6,12 @@
  * no-op, and the row stays listable so the user can see what existed.
  */
 
-import type { ApiKeyWire } from "@klorn/contract";
+import type { ApiKeyPermissionWire, ApiKeyWire } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { mcpWriteToolsEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import {
-  type ApiKeyPermission,
   DEFAULT_API_KEY_PERMISSION,
   isApiKeyPermission,
   MAX_ACTIVE_KEYS,
@@ -21,37 +20,30 @@ import {
 
 const MAX_NAME_CHARS = 60;
 
-/** Stable machine-readable codes on POST / permission errors — clients branch on these, not on `error`. */
+/** Stable machine-readable code on the 400 — clients branch on it, not on `error`. */
 const CODE_INVALID_PERMISSION = "INVALID_API_KEY_PERMISSION";
-const CODE_WRITE_DISABLED = "API_KEY_WRITE_DISABLED";
 
 type PermissionChoice =
-  | { ok: true; permission: ApiKeyPermission }
-  | { ok: false; status: 400 | 403; error: string; code: string };
+  | { ok: true; permission: ApiKeyPermissionWire }
+  | { ok: false; error: string; code: string };
 
 /**
- * Validate the requested permission at the route boundary. Only `undefined`
- * means "omitted" (→ read); null and every other non-member is invalid, so a
- * malformed body can never be mistaken for a choice. read_write is refused —
- * not downgraded — while the write flag is off, so a client that asked for
- * write never silently receives a read-only key.
+ * Decide the permission of a new key from the request body.
+ *
+ * Flag OFF: the field is ignored whatever its value, so the request behaves
+ * exactly as it did before the field existed and a caller cannot tell
+ * read_write from any other value. Flag ON: omitted means read; only a member
+ * of the wire type is granted; anything else is a 400 (null included), so a
+ * malformed body is never mistaken for a choice.
  */
 function chooseNewKeyPermission(raw: unknown, writeEnabled: boolean): PermissionChoice {
-  if (raw === undefined) return { ok: true, permission: DEFAULT_API_KEY_PERMISSION };
+  if (!writeEnabled || raw === undefined)
+    return { ok: true, permission: DEFAULT_API_KEY_PERMISSION };
   if (!isApiKeyPermission(raw)) {
     return {
       ok: false,
-      status: 400,
       error: 'Key permission must be "read" or "read_write".',
       code: CODE_INVALID_PERMISSION,
-    };
-  }
-  if (raw === "read_write" && !writeEnabled) {
-    return {
-      ok: false,
-      status: 403,
-      error: "Read-write API keys are not available yet.",
-      code: CODE_WRITE_DISABLED,
     };
   }
   return { ok: true, permission: raw };
@@ -103,7 +95,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       }
       const choice = chooseNewKeyPermission(permission, mcpWriteToolsEnabled());
       if (!choice.ok) {
-        return reply.code(choice.status).send({ error: choice.error, code: choice.code });
+        return reply.code(400).send({ error: choice.error, code: choice.code });
       }
       const active = await prisma.apiKey.count({ where: { userId: uid, revokedAt: null } });
       if (active >= MAX_ACTIVE_KEYS) {
@@ -122,7 +114,13 @@ export async function apiKeyRoutes(app: FastifyInstance) {
         },
       });
       // The ONLY response that ever carries the raw key.
-      return { id: created.id, name: trimmed, prefix: minted.prefix, key: minted.token };
+      return {
+        id: created.id,
+        name: trimmed,
+        prefix: minted.prefix,
+        permission: choice.permission,
+        key: minted.token,
+      };
     },
   );
 

@@ -2,9 +2,10 @@
 -- Two levels — read and read_write — so a later step can let an agent act on
 -- mail (mark read, set lane) without widening any key that already exists.
 --
--- Every existing key gets the DEFAULT 'read', so it stays read-only. read_write
--- is only mintable while MCP_WRITE_TOOLS_ENABLED is on (off by default), and no
--- write tool exists yet.
+-- Every existing key gets the DEFAULT 'read', so it stays read-only. The
+-- MCP_WRITE_TOOLS_ENABLED flag (off by default) gates both minting a read_write
+-- key and using one: while it is off, a read_write key acts as read. No write
+-- tool exists yet.
 --
 -- Additive only: one new enum type and one new NOT NULL column with a default.
 -- No existing column is altered and no row is rewritten by application code,
