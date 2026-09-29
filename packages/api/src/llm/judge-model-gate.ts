@@ -80,6 +80,11 @@ export const RECOMMENDED_JUDGE_MODEL = "google/gemini-2.5-flash";
  * typed by hand should not be able to slip past the check.
  */
 export function normalizeModelId(raw: string): string {
+  // Tolerates a missing or non-string value on purpose. This module's whole
+  // contract is that it cannot be the reason a boot fails, and it is exported,
+  // so it must survive being handed whatever a caller has — including the
+  // `undefined` that an unset env var produces in a path that forgot a default.
+  if (typeof raw !== "string") return "";
   return raw.trim().toLowerCase().split(":")[0] ?? "";
 }
 
@@ -106,48 +111,132 @@ export function judgeModelVerdict(model: string): JudgeModelVerdict {
   return { status: "not-measured", model: id };
 }
 
-/** The operator-facing message for a model that failed the gate. */
-export function gateFailureMessage(model: string, result: GateResult): string {
-  return [
-    `[JUDGE-MODEL] ${model} is pinned as the judge, and our own committed eval says it fails the gate.`,
-    `  Measured (eval/README.md, 2026-09-04, 3 runs each): accuracy ${result.accuracy}, urgent recall ${result.urgentRecall}, gate ${result.gate}.`,
-    `  Mechanism: ${result.mechanism}.`,
-    `  Effect in production: PUSH goes to zero while every other lane looks healthy, so nothing appears broken.`,
-    `  Fix: set JUDGE_MODEL=${RECOMMENDED_JUDGE_MODEL} (54/56 on all three runs, 13/13 urgent, $0.30/M),`,
-    `  or re-run 'pnpm eval:judge' and update eval/README.md if you believe this measurement is stale.`,
-  ].join("\n");
+/**
+ * Env var that lets an operator keep a gate-failing pin on purpose.
+ *
+ * It exists because "we measured this and it fails" is a statement about our
+ * 56-email set, not about every inbox. Someone re-measuring on their own mail,
+ * or deliberately trading urgent recall for something else, is entitled to do
+ * that — they just have to say so in writing rather than discover it in three
+ * weeks of silence.
+ */
+export const ALLOW_GATE_FAILURE_ENV = "JUDGE_MODEL_ALLOW_GATE_FAILURE";
+
+export interface JudgeModelResolution {
+  /** What the operator configured (env var, or the built-in default). */
+  readonly configured: string;
+  /** What the judge will actually run. */
+  readonly effective: string;
+  readonly verdict: JudgeModelVerdict;
+  /** True when we declined the configured pin and used the recommended one. */
+  readonly substituted: boolean;
+  /** True when the pin fails the gate and the operator opted in anyway. */
+  readonly overridden: boolean;
 }
 
 /**
- * Called once at boot. Emits to stderr and to Sentry so the swap is visible in
+ * Decide which model the judge actually runs.
+ *
+ * `JUDGE_MODEL` is not an ordinary knob. The judge is the one component with a
+ * published contract — urgent recall at or above 90% on the committed set — and
+ * a model that fails that contract is not a judge, in the same way a negative
+ * ceiling is not a cost cap. So this validates the value the way we validate
+ * any other external input at a boundary: reject what cannot satisfy the
+ * contract, substitute a known-good default, and say so loudly.
+ *
+ * This is not the "amputate" the cost-cap postmortem warned about. Refusing to
+ * boot would be amputation. Serving every request with a model that meets the
+ * contract is the opposite — it is the degraded path staying inside the
+ * promise. What we will not do is keep the failing pin *silently*: the
+ * 2026-09 incident ran three weeks because nothing in the system objected.
+ *
+ * Pure: takes env explicitly so tests need no global mutation, and logs
+ * nothing. Callers report the resolution at startup.
+ */
+export function resolveJudgeModel(
+  configured: string,
+  env: Record<string, string | undefined> = process.env,
+): JudgeModelResolution {
+  const verdict = judgeModelVerdict(configured);
+  if (verdict.status !== "failed-gate") {
+    return { configured, effective: configured, verdict, substituted: false, overridden: false };
+  }
+
+  const allowed = env[ALLOW_GATE_FAILURE_ENV] === "true";
+  if (allowed) {
+    return { configured, effective: configured, verdict, substituted: false, overridden: true };
+  }
+  return {
+    configured,
+    effective: RECOMMENDED_JUDGE_MODEL,
+    verdict,
+    substituted: true,
+    overridden: false,
+  };
+}
+
+/** The operator-facing message for a resolution that had to act. */
+export function gateFailureMessage(resolution: JudgeModelResolution): string {
+  const { configured, result } = { configured: resolution.configured, result: resolution.verdict };
+  if (result.status !== "failed-gate") return "";
+  const head = resolution.substituted
+    ? `[JUDGE-MODEL] Declined ${configured} as the judge — our own committed eval says it fails the gate. Running ${resolution.effective} instead.`
+    : `[JUDGE-MODEL] Running ${configured} as the judge even though our committed eval says it fails the gate (${ALLOW_GATE_FAILURE_ENV}=true).`;
+  const lines = [
+    head,
+    `  Measured (eval/README.md, 2026-09-04, 3 runs each): accuracy ${result.result.accuracy}, urgent recall ${result.result.urgentRecall}, gate ${result.result.gate}.`,
+    `  Mechanism: ${result.result.mechanism}.`,
+    `  Effect when it runs: PUSH goes to zero while every other lane looks healthy, so nothing appears broken.`,
+  ];
+  if (resolution.substituted) {
+    lines.push(
+      `  To make this explicit, set JUDGE_MODEL=${RECOMMENDED_JUDGE_MODEL} (54/56 on all three runs, 13/13 urgent, $0.30/M).`,
+      `  To keep ${configured} anyway, set ${ALLOW_GATE_FAILURE_ENV}=true — or re-run 'pnpm eval:judge' and update eval/README.md if this measurement is stale.`,
+    );
+  } else {
+    lines.push(
+      `  This is your explicit choice; nothing was substituted. Unset ${ALLOW_GATE_FAILURE_ENV} to fall back to ${RECOMMENDED_JUDGE_MODEL}.`,
+    );
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Called once at boot. Emits to stderr and to Sentry so the state is visible in
  * both the place an operator looks during a deploy and the place they get
  * paged from. Never throws — a guard that can take the process down is a
  * bigger risk than the thing it guards against.
  */
-export function warnIfJudgeModelFailsGate(model: string): JudgeModelVerdict {
-  let verdict: JudgeModelVerdict;
+export function reportJudgeModelResolution(resolution: JudgeModelResolution): void {
+  if (resolution.verdict.status !== "failed-gate") return;
+
   try {
-    verdict = judgeModelVerdict(model);
+    console.error(gateFailureMessage(resolution));
   } catch {
-    return { status: "not-measured", model: String(model) };
+    // Logging must never be the reason a boot fails.
   }
-
-  if (verdict.status !== "failed-gate") return verdict;
-
-  const message = gateFailureMessage(verdict.model, verdict.result);
-  console.error(message);
   try {
-    captureError(new Error(`Judge model ${verdict.model} fails the committed urgent-recall gate`), {
-      tags: { scope: "judge.model_fails_gate", model: verdict.model },
-      extra: {
-        accuracy: verdict.result.accuracy,
-        urgentRecall: verdict.result.urgentRecall,
-        gate: verdict.result.gate,
-        recommended: RECOMMENDED_JUDGE_MODEL,
+    const what = resolution.substituted ? "substituted" : "kept by operator override";
+    captureError(
+      new Error(
+        `Judge model ${resolution.configured} fails the committed urgent-recall gate — ${what}`,
+      ),
+      {
+        tags: {
+          scope: "judge.model_fails_gate",
+          configured: resolution.configured,
+          effective: resolution.effective,
+          substituted: String(resolution.substituted),
+        },
+        extra: {
+          accuracy: resolution.verdict.result.accuracy,
+          urgentRecall: resolution.verdict.result.urgentRecall,
+          gate: resolution.verdict.result.gate,
+          recommended: RECOMMENDED_JUDGE_MODEL,
+        },
       },
-    });
+    );
   } catch {
     // Sentry must never be the reason a boot fails.
   }
-  return verdict;
 }
