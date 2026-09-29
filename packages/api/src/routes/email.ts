@@ -1274,6 +1274,9 @@ export async function emailRoutes(app: FastifyInstance) {
         actionItems,
         sentiment: dbEmail.sentiment,
         needsReplyReason: dbEmail.needsReplyReason,
+        // A reply written ahead of time (proactive drafts) — the client
+        // offers it in the composer; null once answered or when none exists.
+        proactiveDraft: dbEmail.repliedAt ? null : (dbEmail.proactiveDraft ?? null),
         needsReplyConfidence: dbEmail.needsReplyConfidence,
         needsReply: looksReplyNeeded({
           needsReply: dbEmail.needsReply,

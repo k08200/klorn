@@ -8,9 +8,11 @@
  */
 
 import type { ReplyOptionsResponseWire, ReplyOptionTone } from "@klorn/contract";
+import type { EmailMessage } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
+import type { CallPriority } from "../billing/quota-limiter.js";
 import { prisma } from "../db.js";
 import { recordContactEngagement } from "../learning/contact-engagement.js";
 import { buildReplyToneHint } from "../learning/reply-tone.js";
@@ -180,6 +182,9 @@ async function generateReplyDraft(input: {
   senderContext?: string | null;
   /** Thread reasoning: why they wrote NOW, what is owed either way. */
   threadBrief?: string | null;
+  /** "background" for drafts nobody asked for yet (proactive drafts), so
+   *  the quota limiter ranks them below what the user is waiting on. */
+  priority?: CallPriority;
 }): Promise<string> {
   const [credentials, voiceHint, toneHint] = await Promise.all([
     getUserLlmCredentials(input.userId),
@@ -230,9 +235,56 @@ ${wrapUntrusted((input.body || "").slice(0, 3000), "email:body")}`,
         },
       ],
     },
-    { credentials, userId: input.userId },
+    {
+      credentials,
+      userId: input.userId,
+      ...(input.priority ? { priority: input.priority } : {}),
+    },
   );
   return response.choices[0]?.message?.content?.trim() || "";
+}
+
+/**
+ * One reply draft for one stored email: the context gathering and the LLM
+ * call behind POST /:id/reply-draft, reusable by the proactive sweep so the
+ * two can never drift into different prompts.
+ */
+export async function buildReplyDraftForEmail(
+  uid: string,
+  dbEmail: EmailMessage,
+  opts: { intent?: string; priority?: CallPriority } = {},
+): Promise<string> {
+  const actionItems = parseJsonArray(dbEmail.actionItems);
+  const attachments = await listEmailAttachments([dbEmail.id], uid);
+  const candidateProfile = buildAttachmentCandidateProfile(attachments);
+  const calendarFacts = await calendarFactsFor(uid, dbEmail);
+  const senderContext = await senderContextFor(uid, dbEmail.from);
+  const threadBrief = await threadBriefFor(uid, dbEmail.threadId);
+  return generateReplyDraft({
+    userId: uid,
+    from: dbEmail.from,
+    subject: dbEmail.subject,
+    body: dbEmail.body,
+    summary: dbEmail.summary,
+    actionItems,
+    candidateProfile,
+    intent: opts.intent,
+    calendarFacts,
+    senderContext,
+    threadBrief,
+    priority: opts.priority,
+  });
+}
+
+/**
+ * The proactive sweep's builder (mail/proactive-drafts.ts DraftBuilder):
+ * the user's own row by id, drafted at background priority. Null when the
+ * row is gone.
+ */
+export async function draftReplyForEmailId(userId: string, emailId: string): Promise<string | null> {
+  const dbEmail = await prisma.emailMessage.findFirst({ where: { id: emailId, userId } });
+  if (!dbEmail) return null;
+  return buildReplyDraftForEmail(userId, dbEmail, { priority: "background" });
 }
 
 // Fixed tone presets for /reply-options. The order is wire contract: clients
@@ -280,32 +332,13 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       });
       if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
 
-      const actionItems = parseJsonArray(dbEmail.actionItems);
-      const attachments = await listEmailAttachments([dbEmail.id], uid);
-      const candidateProfile = buildAttachmentCandidateProfile(attachments);
-      const calendarFacts = await calendarFactsFor(uid, dbEmail);
-      const senderContext = await senderContextFor(uid, dbEmail.from);
-      const threadBrief = await threadBriefFor(uid, dbEmail.threadId);
-
       // The draft is one LLM call. Without this catch a provider outage / quota
       // lockout surfaced as a bare 500 and a generic "Could not draft a reply"
       // with nothing in the logs — the failure was invisible. Capture the real
       // cause and return a 503 the client can show as "temporarily unavailable".
       let body: string;
       try {
-        body = await generateReplyDraft({
-          userId: uid,
-          from: dbEmail.from,
-          subject: dbEmail.subject,
-          body: dbEmail.body,
-          summary: dbEmail.summary,
-          actionItems,
-          candidateProfile,
-          intent,
-          calendarFacts,
-          senderContext,
-          threadBrief,
-        });
+        body = await buildReplyDraftForEmail(uid, dbEmail, { intent });
       } catch (err) {
         // A per-user quota trip (quota-limiter self-throttling) is the user
         // going fast, not a provider outage: return the standard 429 +

@@ -30,6 +30,17 @@ export function replyStateOf(email: {
 }
 
 /**
+ * A draft is waiting for this mail: one was written ahead of time
+ * (proactive-drafts.ts) and the mail has not been answered since.
+ */
+export function draftReadyFor(email: {
+  proactiveDraft?: string | null;
+  repliedAt?: Date | null;
+}): boolean {
+  return Boolean(email.proactiveDraft) && !email.repliedAt;
+}
+
+/**
  * Record that the user answered this mail. `ref` is the EmailMessage id or
  * its gmailId (the reply routes hold either). Scoped by userId so a foreign
  * id is a no-op; fail-soft — a bookkeeping miss must never fail a send

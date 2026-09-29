@@ -48,7 +48,9 @@ import {
   syncSpamLane,
 } from "./mail/email-sync.js";
 import { getAuthedClient, getLinkedInboxClients, renewExpiringGmailWatches } from "./mail/gmail.js";
+import { runProactiveDrafts } from "./mail/proactive-drafts.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
+import { draftReplyForEmailId } from "./routes/email-replies.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
@@ -1136,6 +1138,10 @@ async function runUserCycle(
         await summarizeUnsummarizedEmails(config.userId, Math.max(syncResult.newCount, 10));
         await syncRecentCandidateIntakes(config.userId, Math.max(syncResult.newCount, 10));
         await notifyCandidateEmails(config.userId);
+        // Proactive reply drafts for fresh PUSH mail that needs an answer.
+        // No-op unless PROACTIVE_DRAFT_ENABLED; capped per user and per
+        // tick inside, and it never throws.
+        await runProactiveDrafts(config.userId, draftReplyForEmailId);
 
         // Multi-account (Pro): also sync each LINKED secondary inbox via
         // its own OAuth client so the firewall classifies its mail too.
