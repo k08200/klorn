@@ -592,3 +592,10 @@
 // Reply state chips (2026-09-14).
 "chip.needsReply" = "답장 필요";
 "chip.answered" = "답장함";
+
+// Waiting on (2026-09-18).
+"waiting.title" = "회신 대기";
+"waiting.hint" = "보낸 뒤 %d일 넘게 답장이 없는 메일 — Klorn과 Gmail 보낸함 기준.";
+"waiting.empty" = "답장을 기다리는 메일이 없습니다.";
+"waiting.days" = "%d일째";
+"waiting.row.a11y" = "%@ — %@, %d일째 회신 대기";

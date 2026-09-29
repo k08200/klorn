@@ -199,3 +199,23 @@ export interface EmailUndoActionResponse {
   gmailId: string;
   emailId: string;
 }
+
+/** One thread I am waiting on — the latest thing I sent, unanswered. */
+export interface WaitingOnItemWire {
+  gmailId: string;
+  threadId: string;
+  to: string;
+  subject: string;
+  /** ISO — when I sent it. */
+  sentAt: string;
+  daysWaiting: number;
+  /** "primary" | linked inbox id — where the live read must go. */
+  inbox: string;
+}
+
+/** `GET /api/email/waiting-on?days=` — oldest wait first. */
+export interface WaitingOnResponse {
+  items: WaitingOnItemWire[];
+  /** The floor that was applied (the request's `days`, or the default). */
+  minDays: number;
+}

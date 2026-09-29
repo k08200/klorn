@@ -1310,6 +1310,41 @@ final class AppModel {
         return false
     }
 
+    // MARK: Waiting on (2026-09-18)
+
+    /// Threads where the latest thing I sent is unanswered (server rule:
+    /// at least minDays old, nothing from someone else since). Oldest first.
+    private(set) var waitingOn: [WaitingOnItem] = []
+    private(set) var waitingOnMinDays = 2
+    private(set) var waitingOnLoading = false
+
+    func loadWaitingOn() async {
+        waitingOnLoading = true
+        defer { waitingOnLoading = false }
+        do {
+            let resp: WaitingOnResponse = try await api.get(
+                "/api/email/waiting-on", as: WaitingOnResponse.self)
+            waitingOn = resp.items
+            waitingOnMinDays = resp.minDays
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            // An older server has no route: keep whatever we had.
+            Log.app.debug("waiting-on fetch failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    /// Open the thread's last message (mine) in the reading pane through
+    /// the live folder path — it is not in the local mirror.
+    func openWaitingOn(_ item: WaitingOnItem) {
+        selectMailboxItem(item.asMailboxItem)
+    }
+
+    /// Render-probe seam, like the calendar's.
+    func seedWaitingOnForRender(_ items: [WaitingOnItem]) {
+        waitingOn = items
+    }
+
     /// Render-probe seam: the offscreen calendar shots need events without a
     /// network. Internal, used only by PreviewRender.
     func seedCalendarForRender(_ events: [CalendarEventWire]) {
@@ -1914,6 +1949,8 @@ final class AppModel {
             // Drop dismissed ids the server has since resolved; hide the rest.
             dismissed.formIntersection(fetched.allItemIDs)
             queue = fetched.removingIDs(dismissed)
+            // The reply axis's other half rides the same poll — one DB-only GET.
+            await loadWaitingOn()
             loadError = nil
             reconcilePush()
             ensureActive()

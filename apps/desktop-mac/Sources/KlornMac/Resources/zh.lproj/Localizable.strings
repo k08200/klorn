@@ -592,3 +592,10 @@
 // Reply state chips (2026-09-14).
 "chip.needsReply" = "需要回复";
 "chip.answered" = "已回复";
+
+// Waiting on (2026-09-18).
+"waiting.title" = "等待回复";
+"waiting.hint" = "发出后 %d 天以上无人回复的邮件 — 来自 Klorn 和 Gmail 已发送。";
+"waiting.empty" = "没有在等待回复的邮件。";
+"waiting.days" = "第 %d 天";
+"waiting.row.a11y" = "%@ — %@，等待回复第 %d 天";

@@ -592,3 +592,10 @@
 // Reply state chips (2026-09-14).
 "chip.needsReply" = "返信が必要";
 "chip.answered" = "返信済み";
+
+// Waiting on (2026-09-18).
+"waiting.title" = "返信待ち";
+"waiting.hint" = "送信後 %d 日以上返信がないメール — Klorn と Gmail の送信済みが対象。";
+"waiting.empty" = "返信を待っているメールはありません。";
+"waiting.days" = "%d日目";
+"waiting.row.a11y" = "%@ — %@、%d日目返信待ち";

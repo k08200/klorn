@@ -48,6 +48,7 @@ import {
   syncSpamLane,
 } from "./mail/email-sync.js";
 import { getAuthedClient, getLinkedInboxClients, renewExpiringGmailWatches } from "./mail/gmail.js";
+import { syncSentMessages } from "./mail/sent-messages.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
@@ -1125,6 +1126,9 @@ async function runUserCycle(
         // INBOX watermark.
         const spamNew = await syncSpamLane(config.userId);
         if (spamNew > 0) notifyConversationsUpdated(config.userId);
+        // Sent-folder scan for "waiting on" — throttled to every 30 min per
+        // user inside, fail-soft, so it can ride every sync tick.
+        await syncSentMessages(config.userId);
 
         // AI summarize new emails — floor 10 so a zero-new tick still drains
         // the backlog (same #725 floor the interactive routes already have;
