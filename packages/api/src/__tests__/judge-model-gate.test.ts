@@ -135,7 +135,9 @@ describe("judge model gate guard", () => {
     it("still reports when the operator overrode — an opt-in is not a reason to go quiet", () => {
       const spy = vi.spyOn(console, "error").mockImplementation(() => {});
       try {
-        reportJudgeModelResolution(resolveJudgeModel(FAILING, { [ALLOW_GATE_FAILURE_ENV]: "true" }));
+        reportJudgeModelResolution(
+          resolveJudgeModel(FAILING, { [ALLOW_GATE_FAILURE_ENV]: "true" }),
+        );
         expect(spy).toHaveBeenCalledTimes(1);
       } finally {
         spy.mockRestore();
