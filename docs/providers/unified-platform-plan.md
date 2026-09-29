@@ -135,16 +135,18 @@ readable after one permission grant.
 | L31 | Public registry listing | after write tools and client docs |
 | L32 | Agent-owned addresses | v2 |
 
-## Open questions (proposed, not decided)
+**Follow-up decisions**
 
-| # | Question | Proposal | Blocks |
+Raised by the 2026-09-28 audit and decided by the founder the same day.
+
+| # | Decision | Value | Applies to |
 |---|---|---|---|
-| P1 | `team-mode-v3.md` says implementation waits until after launch. Does the company edition move earlier? | No change. It starts after C2 because it reads each member's own synced calendars | F |
-| P2 | Admin onboarding for company accounts | Add a PR-0 to team mode v3: admin guide plus detection of the admin-policy error with in-product guidance | F0, B5 |
-| P3 | Klorn drive quota per plan | Decide at flip time. The schema does not depend on it | D3 flip |
-| P4 | Are on-device calendar events and files uploaded to the server? | Yes, behind explicit per-source opt-in. Summaries and the assistant run server-side | C5, C6, D7 |
-| P5 | Google Drive scope path | `drive.file` with the Picker first; restricted read scope only if that proves insufficient | D5 |
-| P6 | Object storage vendor | L15 stands. Code targets the S3-compatible API, so Supabase Storage remains a drop-in alternative | none |
+| P1 | Company edition timing | unchanged: implementation stays after launch, and after C2 because it reads each member's own synced calendars | F |
+| P2 | Admin onboarding for company accounts | added as PR-0 of team mode v3: admin guide plus detection of the admin-policy error with in-product guidance | F0, B5 |
+| P3 | Klorn drive quota per plan | decided at flip time. The schema does not depend on it | D3 flip |
+| P4 | On-device calendar events and files | uploaded to the server only behind explicit per-source opt-in. Summaries and the assistant run server-side | C5, C6, D7 |
+| P5 | Google Drive scope path | `drive.file` with the Picker first; a restricted read scope only if that proves insufficient | D5 |
+| P6 | Object storage vendor | L15 stands. Code targets the S3-compatible API, so Supabase Storage remains a drop-in alternative | D1 |
 
 Notes on decided rows. They clarify; they do not change the decision.
 
@@ -164,8 +166,8 @@ Notes on decided rows. They clarify; they do not change the decision.
 
 Every step follows the repo gate in `CLAUDE.md` and ends with the flag OFF.
 Steps marked *outline* must be expanded into a full brief, in this file, by the
-PR that starts them. A step blocked on an open question does not start until
-the founder answers it.
+PR that starts them. A step that raises a new founder decision stops and
+records the question in this file first.
 
 ### Workstream A — agent connectivity
 
@@ -291,9 +293,10 @@ consulted for conflicts.
 **C3 — CalDAV connector for iCloud and Naver** (*outline*). Read-only v1.
 **C4 — Microsoft Graph calendar** (*outline*). Needs calendar permissions
 added to the Azure app (FA-9); existing users re-consent.
-**C5 — mobile device bridge** (*outline*). Blocked on P4 and FA-8.
-**C6 — desktop device bridge** (*outline*). EventKit in KlornMac. Blocked on
+**C5 — mobile device bridge** (*outline*). Blocked on FA-8. Upload policy per
 P4.
+**C6 — desktop device bridge** (*outline*). EventKit in KlornMac. Upload
+policy per P4.
 **C7 — unified calendar read path** (*outline*). Depends on: C2. `list_events`,
 briefing and conflict checks read rows across providers. Each connector joins
 as it lands; C7 does not wait for them.
@@ -310,11 +313,11 @@ delete. Upload is inherent here; V4 restricts external connectors, not
 Klorn-owned storage.
 **D4 — file summaries and search** (*outline*). Depends on: D1, D2. Reuses the
 attachment analysis pipeline. Cost caps apply.
-**D5 — Google Drive connector** (*outline*). Depends on: D2. Blocked by V2 and
-P5.
+**D5 — Google Drive connector** (*outline*). Depends on: D2. Blocked by V2.
+Scope path per P5.
 **D6 — OneDrive connector** (*outline*). Depends on: D2, FA-9 with file
 permissions.
-**D7 — device import** (*outline*). Depends on: D3. Blocked on P4. The desktop
+**D7 — device import** (*outline*). Depends on: D3. Upload policy per P4. The desktop
 and mobile apps import files from iCloud Drive, MYBOX and on-device storage
 into the Klorn drive.
 
@@ -341,7 +344,7 @@ before E0.
 ### Workstream F — company edition
 
 Canonical design: `../design/team-mode-v3.md` (PR-A, PR-B, PR-C). This plan
-adds **F0 — admin onboarding** (blocked on P2). PR-B depends on C2, because v3
+adds **F0 — admin onboarding** (P2). Timing per P1. PR-B depends on C2, because v3
 availability reads each member's own synced calendars.
 
 ## Order and parallelism
