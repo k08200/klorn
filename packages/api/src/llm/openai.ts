@@ -17,6 +17,7 @@ import {
 } from "../providers/index.js";
 import { captureError } from "../sentry.js";
 import { backgroundLlmPacer } from "./background-pacer.js";
+import { resolveJudgeModel } from "./judge-model-gate.js";
 import {
   FALLBACK_MODEL,
   getProviderCooldownInfo,
@@ -59,7 +60,21 @@ export const AGENT_MODEL = process.env.AGENT_MODEL || MODEL;
 // < the 0.7 rule floor). Classification is ~700 tokens/email — cents per
 // month at dogfood volume on a paid model. Self-hosters without paid
 // credit: set JUDGE_MODEL to a :free or local model (see .env.example).
-export const JUDGE_MODEL = process.env.JUDGE_MODEL || "google/gemini-2.5-flash";
+// The configured pin, before validation. Exported so startup can report what
+// the operator actually set alongside what we run.
+export const CONFIGURED_JUDGE_MODEL = process.env.JUDGE_MODEL || "google/gemini-2.5-flash";
+/**
+ * The pin the judge actually runs.
+ *
+ * Validated, not just read: a model our committed eval records as failing the
+ * urgent-recall gate is refused here and replaced with the measured default,
+ * because "PUSH never hides urgent mail" is the product's contract and a pin
+ * that cannot hold it is an invalid config value, not a preference. An
+ * operator who means it sets JUDGE_MODEL_ALLOW_GATE_FAILURE=true. Either way
+ * the boot logs say what happened — see judge-model-gate.ts for why.
+ */
+export const JUDGE_MODEL_RESOLUTION = resolveJudgeModel(CONFIGURED_JUDGE_MODEL);
+export const JUDGE_MODEL = JUDGE_MODEL_RESOLUTION.effective;
 // Reply-draft model. Defaults to the same reliable (paid) model as the judge
 // rather than the :free CHAT_MODEL: "Draft reply" is a user-initiated,
 // quality-sensitive action, and a :free daily-quota lockout turned it into a
