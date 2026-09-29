@@ -79,6 +79,7 @@ import { registerEmailMutationsRoutes } from "./email-mutations.js";
 import { registerEmailRepliesRoutes } from "./email-replies.js";
 import { registerEmailRulesRoutes } from "./email-rules.js";
 import { registerEmailSenderLabelRoutes } from "./email-sender-labels.js";
+import { registerEmailWaitingRoutes } from "./email-waiting.js";
 
 const MAX_PAGE = 10_000; // guardrail: paging past ~500k rows is a client bug, not a real request
 
@@ -678,6 +679,7 @@ export async function emailRoutes(app: FastifyInstance) {
   await registerEmailMutationsRoutes(app);
   registerEmailMailboxRoutes(app);
   registerEmailSenderLabelRoutes(app);
+  registerEmailWaitingRoutes(app);
   await registerEmailBulkRoutes(app);
 
   // ─── Sync & List Emails ───────────────────────────────────────────────

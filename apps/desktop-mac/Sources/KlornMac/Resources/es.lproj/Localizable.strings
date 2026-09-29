@@ -592,3 +592,10 @@
 // Reply state chips (2026-09-14).
 "chip.needsReply" = "Requiere respuesta";
 "chip.answered" = "Respondido";
+
+// Waiting on (2026-09-18).
+"waiting.title" = "Esperando respuesta";
+"waiting.hint" = "Correos enviados sin respuesta durante %d+ días — de Klorn y tu carpeta Enviados de Gmail.";
+"waiting.empty" = "Nada espera respuesta.";
+"waiting.days" = "%d días";
+"waiting.row.a11y" = "%@ — %@, esperando %d días";

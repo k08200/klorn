@@ -18,6 +18,7 @@ import { recordContactEngagement } from "../learning/contact-engagement.js";
 import { syncEmailByGmailId } from "../mail/email-sync.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import type { MailAttachment, SendMailResult } from "../mail/providers/types.js";
+import { recordSentMessage } from "../mail/sent-messages.js";
 import { captureError } from "../sentry.js";
 import { safeAttachmentFilename } from "./email.js";
 
@@ -165,6 +166,17 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       // Manual send = genuine engagement with this recipient (an importance-graph
       // edge). Only user-initiated routes record this — never the auto-reply path.
       await recordContactEngagement(uid, to, "outbound");
+      // A new thread I am now waiting on (sent-messages.ts).
+      if ("success" in result && result.success && result.messageId) {
+        await recordSentMessage(uid, {
+          gmailId: result.messageId,
+          threadId: result.threadId ?? null,
+          to,
+          subject,
+          sentAt: new Date(),
+          inbox: "primary",
+        });
+      }
       return result;
     },
   );
@@ -270,6 +282,16 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         return reply.code(400).send(result);
       }
       await recordContactEngagement(uid, to, "outbound");
+      if ("success" in result && result.success && result.messageId) {
+        await recordSentMessage(uid, {
+          gmailId: result.messageId,
+          threadId: result.threadId ?? null,
+          to,
+          subject,
+          sentAt: new Date(),
+          inbox: "primary",
+        });
+      }
       return { ...result, attachedCount: attachments.length };
     },
   );

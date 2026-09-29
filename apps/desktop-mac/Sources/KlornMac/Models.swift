@@ -1539,6 +1539,35 @@ struct MailboxItem: Codable, Sendable, Identifiable, Hashable {
     var id: String { gmailId }
 }
 
+/// One thread I am waiting on — the latest thing I sent, unanswered
+/// (GET /api/email/waiting-on, mirrors WaitingOnItemWire).
+struct WaitingOnItem: Codable, Sendable, Identifiable, Hashable {
+    let gmailId: String
+    let threadId: String
+    let to: String
+    let subject: String
+    /// ISO — when I sent it.
+    let sentAt: String
+    let daysWaiting: Int
+    /// "primary" | linked inbox id — where the live read must go.
+    let inbox: String
+
+    var id: String { gmailId }
+
+    /// The live-read row for this thread: my sent message, opened through
+    /// the same folder path the Sent list uses.
+    var asMailboxItem: MailboxItem {
+        MailboxItem(
+            gmailId: gmailId, threadId: threadId, subject: subject, from: "", to: to,
+            snippet: "", receivedAt: sentAt, isRead: true, inbox: inbox)
+    }
+}
+
+struct WaitingOnResponse: Codable, Sendable {
+    let items: [WaitingOnItem]
+    let minDays: Int
+}
+
 struct MailboxListResponse: Codable, Sendable {
     struct Payload: Codable, Sendable {
         let items: [MailboxItem]

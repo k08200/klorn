@@ -99,6 +99,10 @@ vi.mock("../db.js", () => {
       upsert: vi.fn(async () => ({})),
       deleteMany: vi.fn(async () => ({ count: 1 })),
     },
+    sentMessage: {
+      findMany: vi.fn(async () => []),
+      upsert: vi.fn(async () => ({})),
+    },
     device: {
       findUnique: vi.fn(async () => ({ id: "d1" })),
       findMany: vi.fn(async () => []),
@@ -463,6 +467,56 @@ describe("email routes (demo mode)", () => {
       where: { id: "user-1" },
       data: { triagePriorities: null },
     });
+    await app.close();
+  });
+
+  it("GET /waiting-on lists my unanswered threads, oldest first, with the applied floor", async () => {
+    const { prisma } = await import("../db.js");
+    const day = 86_400_000;
+    vi.mocked(prisma.sentMessage.findMany).mockResolvedValueOnce([
+      {
+        gmailId: "s1",
+        threadId: "t1",
+        to: "a@x.com",
+        subject: "A",
+        sentAt: new Date(Date.now() - 3 * day),
+        inbox: "primary",
+      },
+      {
+        gmailId: "s2",
+        threadId: "t2",
+        to: "b@x.com",
+        subject: "B",
+        sentAt: new Date(Date.now() - 5 * day),
+        inbox: "primary",
+      },
+    ] as never);
+    // t2 was answered yesterday; t1 was not.
+    vi.mocked(prisma.emailMessage.findMany).mockResolvedValueOnce([
+      { threadId: "t2", receivedAt: new Date(Date.now() - day), from: "b@x.com" },
+    ] as never);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email/waiting-on?days=2",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().minDays).toBe(2);
+    expect(
+      res
+        .json()
+        .items.map((i: { threadId: string; daysWaiting: number }) => [i.threadId, i.daysWaiting]),
+    ).toEqual([["t1", 3]]);
+    // Garbage days falls back to the default floor, never a 400.
+    vi.mocked(prisma.sentMessage.findMany).mockResolvedValueOnce([] as never);
+    const bad = await app.inject({
+      method: "GET",
+      url: "/api/email/waiting-on?days=abc",
+      headers: auth(),
+    });
+    expect(bad.statusCode).toBe(200);
+    expect(bad.json()).toEqual({ items: [], minDays: 2 });
     await app.close();
   });
 

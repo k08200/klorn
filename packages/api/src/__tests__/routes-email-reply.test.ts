@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sendEmail = vi.hoisted(() => vi.fn());
 const emailUpdateMany = vi.hoisted(() => vi.fn(async () => ({ count: 1 })));
+const sentUpsert = vi.hoisted(() => vi.fn(async () => ({})));
 const getReplyHeaders = vi.hoisted(() => vi.fn());
 const emailFindFirst = vi.hoisted(() => vi.fn());
 
@@ -20,6 +21,7 @@ vi.mock("../auth.js", () => ({
 vi.mock("../db.js", () => {
   const prisma = {
     emailMessage: { findFirst: emailFindFirst, updateMany: emailUpdateMany },
+    sentMessage: { upsert: sentUpsert },
     // The provider dispatch resolves a linked id to its provider row.
     linkedInboxAccount: { findFirst: vi.fn(async () => ({ provider: "GOOGLE" })) },
   };
@@ -97,6 +99,14 @@ describe("POST /api/email/:id/reply", () => {
       expect.objectContaining({
         where: expect.objectContaining({ userId: "user-1" }),
         data: { repliedAt: expect.any(Date) },
+      }),
+    );
+    // And the thread joins "waiting on": recorded by the Gmail message id,
+    // on the thread I replied in, on the account the mail lives on.
+    expect(sentUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId_gmailId: { userId: "user-1", gmailId: "sent-1" } },
+        create: expect.objectContaining({ threadId: "t1", to: "boss@corp.com", inbox: "primary" }),
       }),
     );
     await app.close();
