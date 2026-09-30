@@ -14,9 +14,9 @@
 import { decryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
-import { hostMatchesProvider, type ImapProviderConfig } from "./imap-providers.js";
+import { checkImapRow } from "./imap-connection.js";
+import type { ImapProviderConfig } from "./imap-providers.js";
 import { syncImapInbox } from "./imap-sync.js";
-import { isAllowedImapHost } from "./is-allowed-imap-host.js";
 
 export interface ImapSyncAggregate {
   fetched: number;
@@ -44,34 +44,31 @@ export async function syncImapAccountsForUser(
 
   const total: ImapSyncAggregate = { fetched: 0, inserted: 0, classified: 0, errors: 0 };
   for (const row of rows) {
-    // A row without IMAP credentials is half-migrated or hand-edited:
-    // skip it (it will surface as needsReconnect through the UI), never throw.
-    if (!row.email || !row.imapHost || !row.imapPasswordCipher) continue;
-    // Re-validate the stored host at the connection boundary, not only at the
-    // /connect write — a host that reaches this row by any other write path
-    // must never open a TLS connection to an internal target.
-    if (!isAllowedImapHost(row.imapHost)) {
-      console.warn(
-        `[${scope}] poll skipped — host not allowlisted for row ${row.id}: ${row.imapHost}`,
-      );
-      continue;
-    }
-    // Re-pin host↔provider too: /connect is the only writer and enforces
-    // this, but a row that arrives by any other path must not connect a
-    // NAVER account to the iCloud host (or vice versa).
-    if (!hostMatchesProvider(row.imapHost, provider)) {
-      console.warn(
-        `[${scope}] poll skipped — host does not match provider for row ${row.id}: ${row.imapHost}`,
-      );
+    // Connection-boundary guards shared with the flag actions (imap-connection
+    // .ts): a row without credentials is half-migrated or hand-edited — skipped
+    // silently (it surfaces as needsReconnect through the UI), never thrown; a
+    // host outside the allowlist, or one pinned to the other provider, must
+    // never open a TLS connection.
+    const checked = checkImapRow(row, provider);
+    if (!checked.ok) {
+      if (checked.reason === "host-not-allowlisted") {
+        console.warn(
+          `[${scope}] poll skipped — host not allowlisted for row ${row.id}: ${row.imapHost}`,
+        );
+      } else if (checked.reason === "host-provider-mismatch") {
+        console.warn(
+          `[${scope}] poll skipped — host does not match provider for row ${row.id}: ${row.imapHost}`,
+        );
+      }
       continue;
     }
     try {
       const result = await syncImapInbox({
         provider,
         userId,
-        email: row.email,
-        password: decryptToken(row.imapPasswordCipher),
-        host: row.imapHost,
+        email: checked.email,
+        password: decryptToken(checked.passwordCipher),
+        host: checked.host,
         linkedInboxAccountId: row.id,
       });
       total.fetched += result.fetched;

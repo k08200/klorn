@@ -173,6 +173,17 @@ export function outlookInboxEnabled(): boolean {
     (process.env.OUTLOOK_INBOX_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// IMAP flag actions (read, unread, star) for Naver and iCloud — step B1 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
+// OFF, mail/providers/dispatch.ts routes NAVER and ICLOUD to the unsupported
+// refusal exactly as before (501 at the routes). Generic IMAP stays unsupported
+// either way. Read at request time (PROVIDER_INBOX_SELECTOR_ENABLED precedent)
+// with the same lenient truthy parse, so a flip needs no redeploy.
+export function imapActionsEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.IMAP_ACTIONS_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // MCP write tools — API key permission level and the MCP write set (steps A1
 // and A2a of docs/providers/unified-platform-plan.md). OFF by default (repo
 // doctrine). It gates minting a read-write API key, using one, the MCP-only
