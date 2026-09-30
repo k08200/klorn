@@ -67,7 +67,10 @@ export async function mcpRoutes(app: FastifyInstance) {
       });
     }
 
-    const server = buildMcpServer(key.userId, user.plan);
+    const server = buildMcpServer(key.userId, user.plan, {
+      keyId: key.keyId,
+      permission: key.permission,
+    });
     const transport = new StreamableHTTPServerTransport({
       // Stateless: no session ids, every POST self-contained.
       sessionIdGenerator: undefined,

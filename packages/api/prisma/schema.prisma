@@ -148,6 +148,7 @@ model User {
   sentMessages              SentMessage[]
   learnedRules              LearnedRule[]
   apiKeys                   ApiKey[]
+  mcpWriteAudits            McpWriteAudit[]
 }
 
 enum UserRole {
@@ -176,6 +177,42 @@ model ApiKey {
   revokedAt  DateTime?
 
   @@index([userId])
+}
+
+/// One row per MCP write-tool call (step A2a of
+/// docs/providers/unified-platform-plan.md), refused calls included: what an
+/// agent tried to change, through which key, and how it ended. An ALLOWED call is
+/// inserted BEFORE the tool runs as outcome=ok (a failed insert refuses the
+/// call, so every executed write has a row) and downgraded to error if the run
+/// fails. A refused call (read key, flag off, over the cap) is inserted
+/// best-effort. Never holds mail content: targetId is an opaque message id and
+/// argsHash is SHA-256 over the canonical JSON of the arguments.
+///
+/// apiKeyId is deliberately NOT a foreign key: the history must outlive the key
+/// (revoke today, row removal tomorrow) and a read of "writes per key" only
+/// needs the id. Rows die with the User (cascade) and in purgeUserData.
+model McpWriteAudit {
+  id       String @id @default(uuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKeyId String
+
+  tool     String
+  targetId String? // e.g. the message id the call named; null when absent or oversized
+  argsHash String // SHA-256 hex of the canonical JSON of the call's arguments
+  outcome  McpAuditOutcome
+  reason   String? // short code: permission_denied | rate_limited | tool_error | exception
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([apiKeyId, createdAt])
+}
+
+enum McpAuditOutcome {
+  ok
+  refused
+  error
 }
 
 // Lowercase like SenderTraitKind and SenderTraitStatus: these exact strings are

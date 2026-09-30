@@ -34,6 +34,7 @@ describe("purgeUserData", () => {
       "senderTrait",
       "senderLabel",
       "sentMessage",
+      "mcpWriteAudit",
       "userToken",
       "emailMessage",
       "emailAttachment",

@@ -193,34 +193,100 @@ records the question in this file first.
   response change is the additive `permission` field on list and create.
 - Rollback: revert the PR; the column is additive and ignorable.
 
-**A2 — MCP write gating, `mark_read`, `set_tier`, audit.** Depends on: A1.
-- Context: see "Tool registry" and "Tier learning" above. Tool results carry
-  untrusted mail content, so a hostile message can try to steer an agent.
-  `buildMcpServer` and the CallTool guard see only `plan` today.
+**A2 — split on 2026-09-29 into A2a and A2b.** Reason: `set_tier` crosses the
+judge trust boundary. It changes what the human-ground-truth flag and the
+learning inputs are allowed to mean, so it needs its own code and security
+review. The gate, permission plumbing, audit and rate cap are a self-contained
+unit that `mark_read` alone can exercise end to end. Elsewhere in this file
+"A2" reads as A2a (A3, A4). A5's write part and A8 also wait for A2b, because
+L26 lists `set_tier` among the v1 write tools.
+
+**A2a — MCP write gate, audit, rate cap, `mark_read`.** Depends on: A1.
+- Context: see "Tool registry" above. Tool results carry untrusted mail
+  content, so a hostile message can try to steer an agent. `buildMcpServer` and
+  the CallTool guard saw only `plan` before this step.
 - Tasks:
-  - One gate function takes (plan, permission, flag) and is the only source
-    for both ListTools and CallTool. The write set is MCP-only. It is not
-    added to `CHAT_TOOL_NAMES`, and new tools are not added to `ALL_TOOLS`.
-  - `set_tier` takes `email_id`, resolves the open item server-side
-    (`findOpenEmailAttentionItemId`) and accepts only PUSH, MEETING, QUEUE,
-    INFO, SILENT. It records agent provenance. It never sets
-    `isManualOverride`, uses a distinct ledger outcome, and is excluded from
-    judge context, sender priors and accuracy metrics. A human override
-    always wins over an agent's.
-  - Read tools return the current lane so an agent can see what it changes.
-  - One audit row per write call, including refused calls: key, user, tool,
-    target id, argument hash, outcome, time. New table, so a migration.
-    `purge-user-data.ts` covers it.
-  - A write-specific rate cap per user, not per key. Five keys must not
-    multiply the budget.
-- Verify: tests first for flag × permission × plan, for rejected tier values,
-  for the audit row, and for the learning exclusion (an agent tier change
-  must not appear in correction examples or sender priors). Tests pin the
-  chat and autonomous tool lists as unchanged. `prisma migrate diff`. Code
-  review and security review, including the `attention-override.ts` change.
+  - One gate function (`mcp/tool-gate.ts`, `mcpToolDefs(plan, permission)`) is
+    the only source for both ListTools and CallTool. It reads
+    `mcpWriteToolsEnabled()` itself, in addition to the permission
+    `authenticateApiKey` already folds it into. The read set is exactly the old
+    `mcpToolDefs(plan)`. The write set is a separate MCP-only constant,
+    `mark_read` alone in this step, reusing its `ALL_TOOLS` definition and
+    executor case. Nothing is added to `CHAT_TOOL_NAMES` or `ALL_TOOLS`.
+  - `routes/mcp.ts` passes the key's id and permission into `buildMcpServer`.
+  - One `McpWriteAudit` row per write call, refused calls included: user, key,
+    tool, target id, SHA-256 of the canonical argument JSON, outcome
+    (`ok` / `refused` / `error`), short reason, time. `apiKeyId` is not a
+    foreign key, so the history outlives the key; rows cascade with the user and
+    `purge-user-data.ts` deletes them. An allowed call is inserted before it
+    runs, and a failed insert refuses the call. The row is written as `ok` and
+    downgraded to `error` if the run throws or the executor reports its in-band
+    `{"error"}` failure. A refused call is audited best-effort and
+    fire-and-forget, and its response stays exactly `Unknown tool: <name>`, so
+    a read key cannot tell a write tool exists.
+  - A write cap per user, not per key: 30 per minute (proposed number, no
+    measurement behind it), in-process sliding window, so per instance
+    (`mcp/write-rate-cap.ts`). Over the cap the call is refused, audited with
+    reason `rate_limited`, and answers an explicit `RATE_LIMITED` error.
+  - Id contract checked 2026-09-29: `list_emails` returns the raw Gmail message
+    id of the primary account and `read_email` echoes it. `mark_read` takes
+    that id, resolves the caller's own row (`userId` in the lookup), routes a
+    linked-inbox row through its own account, and with no row acts through the
+    caller's primary client only.
+- Verify: tests first (`mcp-tool-gate`, `mcp-write-audit`, `mcp-write-rate-cap`,
+  `mcp-mark-read-contract`, `routes-mcp`): flag × permission × plan; flag off and
+  read keys byte-identical to the old list and to every old result; chat,
+  autonomous and `ALL_TOOLS` lists pinned; audit before execution; failed insert
+  refuses; a throw records `error`; the cap is shared by two keys of one user.
+  `prisma migrate diff` shows only the new enum, table, indexes and foreign key.
   Full gate.
 - Exit: with the flag off, the tool list and every tool result are
-  byte-identical to today.
+  byte-identical to before. Nothing writes to the audit table until a key is
+  read_write and the flag is on, except best-effort refused rows for write-tool
+  names.
+- Rollback: flag off. The table is additive and ignorable.
+
+**A2b — `set_tier`, current lane in read results, learning exclusion.**
+Depends on: A2a. Needs its own code review and security review, including every
+change to `attention-override.ts` and `attention-mirror.ts`.
+- Context, audited 2026-09-29 (03de6426). These facts constrain the design:
+  - `attention-mirror.ts` resets `isManualOverride: false` on every producer
+    write for the non-email sources (`upsertAttentionFor*` for pending action,
+    task, calendar event, notification and commitment; the pending-action write is
+    at `:227` and `:249`). Only `upsertAttentionForEmailJudgement` leaves it.
+  - `fallback-rejudge.ts` rewrites only items with `isManualOverride: false`
+    (`:159`). An agent change stored with `isManualOverride: false` can be
+    silently overwritten by a re-judge. A2b must decide how an agent's lane
+    survives one, without setting the flag, or state plainly that it does not.
+  - `overrideAttentionTier` stamps `DecisionLabel.outcome` only where
+    `outcome` is null (`attention-override.ts:67-75`), and the first stamp
+    wins. An agent stamp, distinct outcome or not, would block a later human
+    stamp. **A2b must not stamp `DecisionLabel`.** This replaces the earlier
+    wording "uses a distinct ledger outcome".
+  - Readers of `isManualOverride`, `MANUAL_OVERRIDE_PREFIX` or the
+    `DecisionLabel` outcome: `judge/judge-context.ts`, `learning/sender-policy.ts`,
+    `judge/calibration-snapshot.ts`, `learning/correction-eval.ts`,
+    `judge/decision-metrics.ts`, `pim/weekly-report.ts`,
+    `learning/ontology-proposals-store.ts`. Each needs a test that an agent
+    change is not counted.
+- Tasks:
+  - `set_tier` takes `email_id`, resolves the open item server-side
+    (`findOpenEmailAttentionItemId`) and accepts only PUSH, MEETING, QUEUE,
+    INFO, SILENT. It joins the write set in `mcp/tool-gate.ts`, so the A2a
+    gate, audit and cap apply unchanged. It records agent provenance somewhere
+    other than `DecisionLabel`. It never sets `isManualOverride`. It is
+    excluded from judge context, sender priors and accuracy metrics. A human
+    override always wins over an agent's.
+  - Read tools return the current lane so an agent can see what it changes.
+- Verify: tests first for rejected tier values, the audit row, and the learning
+  exclusion (an agent tier change must not appear in correction examples,
+  sender priors, calibration, decision metrics, the weekly report or ontology
+  proposals), and for a re-judge and a later human override against an agent
+  change. Tests pin the chat and autonomous tool lists as unchanged.
+  `prisma migrate diff` if a column is added. Full gate.
+- Exit: with the flag off, the tool list and every tool result are
+  byte-identical to today. `MCP_WRITE_TOOLS_ENABLED` does not flip before A2b
+  and A3 have both merged.
 - Rollback: flag off.
 
 **A3 — activity log and key permission UI.** Depends on: A2. Web settings
@@ -419,7 +485,8 @@ availability reads each member's own synced calendars.
 ## Order and parallelism
 
 ```
-A1 → A2 → A3            A2 + B0 → A4            A2 + A4 + A5 → A8
+A1 → A2a → A2b        A2a → A3        A2a + B0 → A4        A2a + A2b + A4 + A5 → A8
+MCP_WRITE_TOOLS_ENABLED flips only after A2b and A3 have both merged
 A5 (read-only part), A6 independent
 B0 → B3                 B0 → B0b                B1 → B2
 B4 after security design
@@ -438,7 +505,8 @@ time, whatever the graph says. The later step rebases, reruns
 
 | File | Steps |
 |---|---|
-| `packages/api/prisma/schema.prisma` | A1, A2, B2, C1, D2, E1, F |
+| `packages/api/prisma/schema.prisma` | A1, A2a, A2b, B2, C1, D2, E1, F |
+| `packages/api/src/mcp/tool-gate.ts`, `mcp/server.ts` | A2a, A2b, A4 |
 | `mail/providers/types.ts`, `dispatch.ts` | A4, B0, B0b, B1, B2, B3, E2 |
 | `mail/providers/outlook.ts`, `routes/email-replies.ts` | B0b, the `gmail-draft` follow-up under B0 |
 | `mail/reply-headers.ts` | B0, B3 |

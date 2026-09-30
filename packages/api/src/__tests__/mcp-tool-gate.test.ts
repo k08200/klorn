@@ -1,0 +1,194 @@
+/**
+ * MCP tool gate (step A2a of docs/providers/unified-platform-plan.md) — the ONE
+ * function that decides which tools a key may see and call. Real registry, real
+ * chat whitelist, real plan gate: only the DB and Sentry are mocked, so a change
+ * to ALL_TOOLS, CHAT_TOOL_NAMES or the autonomous agent's risk table fails here.
+ */
+
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../db.js", () => ({ prisma: {}, db: {} }));
+vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+
+import { TOOL_RISK_LEVELS } from "../agentcore/agent-logic.js";
+import { CHAT_TOOL_NAMES } from "../agentcore/chat-engine.js";
+import { ALL_TOOLS, isToolAllowedForPlan } from "../agentcore/tool-executor.js";
+import { teamModeEnabled } from "../config.js";
+import { MCP_WRITE_TOOL_NAMES, mcpToolDefs } from "../mcp/tool-gate.js";
+
+/** `mcpToolDefs(plan)` exactly as it shipped on main at 03de6426, verbatim. */
+function legacyMcpToolDefs(plan: string) {
+  const MCP_EXCLUDED = new Set(["create_event"]);
+  return ALL_TOOLS.filter(
+    (tool) =>
+      CHAT_TOOL_NAMES.has(tool.function.name) &&
+      !MCP_EXCLUDED.has(tool.function.name) &&
+      (tool.function.name !== "team_availability" || teamModeEnabled()) &&
+      isToolAllowedForPlan(tool.function.name, plan),
+  );
+}
+
+const names = (defs: readonly { function: { name: string } }[]) => defs.map((d) => d.function.name);
+
+const READ_TOOLS_TEAM_OFF = [
+  "generate_briefing",
+  "sender_context",
+  "get_current_time",
+  "list_emails",
+  "read_email",
+  "classify_emails",
+  "list_events",
+  "check_calendar_conflicts",
+];
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe("surfaces other than MCP are pinned (A2a adds nothing to them)", () => {
+  it("ALL_TOOLS is exactly today's registry — feeds the autonomous agent", () => {
+    expect(names(ALL_TOOLS)).toEqual([
+      "generate_briefing",
+      "get_upcoming_meetings",
+      "join_meeting",
+      "summarize_meeting",
+      "calculate",
+      "generate_password",
+      "remember",
+      "recall",
+      "forget",
+      "execute_skill",
+      "list_skills",
+      "sender_context",
+      "team_availability",
+      "get_current_time",
+      "list_emails",
+      "read_email",
+      "classify_emails",
+      "send_email",
+      "mark_read",
+      "list_events",
+      "create_event",
+      "check_calendar_conflicts",
+      "delete_event",
+    ]);
+  });
+
+  it("CHAT_TOOL_NAMES is exactly today's chat surface and does not contain mark_read", () => {
+    expect([...CHAT_TOOL_NAMES]).toEqual([
+      "list_emails",
+      "read_email",
+      "sender_context",
+      "team_availability",
+      "classify_emails",
+      "list_events",
+      "check_calendar_conflicts",
+      "get_current_time",
+      "generate_briefing",
+      "create_event",
+    ]);
+    expect(CHAT_TOOL_NAMES.has("mark_read")).toBe(false);
+  });
+
+  it("the autonomous agent's risk table is unchanged (its tool list is ALL_TOOLS filtered by it)", () => {
+    expect([...TOOL_RISK_LEVELS.entries()]).toEqual([
+      ["classify_emails", "LOW"],
+      ["mark_read", "LOW"],
+      ["generate_briefing", "LOW"],
+      ["send_email", "MEDIUM"],
+      ["create_event", "MEDIUM"],
+      ["execute_skill", "LOW"],
+      ["list_skills", "LOW"],
+      ["record_skill", "MEDIUM"],
+      ["delete_event", "HIGH"],
+      ["archive_email", "HIGH"],
+      ["delete_email", "HIGH"],
+    ]);
+  });
+});
+
+describe("the write set", () => {
+  it("is exactly mark_read in this step, and every member has an ALL_TOOLS definition", () => {
+    expect([...MCP_WRITE_TOOL_NAMES]).toEqual(["mark_read"]);
+    for (const name of MCP_WRITE_TOOL_NAMES) {
+      expect(names(ALL_TOOLS)).toContain(name);
+    }
+  });
+
+  it("is disjoint from the chat whitelist, so it can never reach chat by accident", () => {
+    for (const name of MCP_WRITE_TOOL_NAMES) {
+      expect(CHAT_TOOL_NAMES.has(name)).toBe(false);
+    }
+  });
+});
+
+describe("mcpToolDefs(plan, permission) — flag x permission x plan", () => {
+  const PLANS = ["FREE", "PRO", "TEAM", "ENTERPRISE", "NO_SUCH_PLAN"];
+  const FLAGS = [
+    { label: "off (unset)", value: undefined },
+    { label: "off (false)", value: "false" },
+    { label: "on", value: "true" },
+  ];
+
+  for (const plan of PLANS) {
+    for (const flag of FLAGS) {
+      for (const permission of ["read", "read_write"] as const) {
+        const writesVisible =
+          permission === "read_write" && flag.value === "true" && plan !== "NO_SUCH_PLAN";
+        it(`plan=${plan} flag=${flag.label} permission=${permission} -> ${
+          writesVisible ? "read set + mark_read" : "read set only"
+        }`, () => {
+          if (flag.value !== undefined) vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", flag.value);
+          const legacy = legacyMcpToolDefs(plan);
+          const got = mcpToolDefs(plan, permission);
+          const expected = writesVisible
+            ? [...legacy, ...ALL_TOOLS.filter((t) => t.function.name === "mark_read")]
+            : legacy;
+          // Byte-identical: same definitions, same order, same serialisation.
+          expect(JSON.stringify(got)).toBe(JSON.stringify(expected));
+        });
+      }
+    }
+  }
+
+  it("read keys and flag OFF give today's eight tools, byte for byte (team mode off)", () => {
+    expect(names(mcpToolDefs("PRO", "read"))).toEqual(READ_TOOLS_TEAM_OFF);
+    expect(JSON.stringify(mcpToolDefs("PRO", "read"))).toBe(
+      JSON.stringify(legacyMcpToolDefs("PRO")),
+    );
+  });
+
+  it("team_availability still needs teamModeEnabled(), for read and read_write alike", () => {
+    vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "true");
+    vi.stubEnv("TEAM_MODE_ENABLED", "true");
+    expect(names(mcpToolDefs("PRO", "read"))).toContain("team_availability");
+    expect(names(mcpToolDefs("PRO", "read_write"))).toContain("team_availability");
+    vi.stubEnv("TEAM_MODE_ENABLED", "false");
+    expect(names(mcpToolDefs("PRO", "read_write"))).not.toContain("team_availability");
+  });
+
+  it("re-reads the flag on every call (defence in depth: permission alone never grants a write)", () => {
+    expect(names(mcpToolDefs("PRO", "read_write"))).not.toContain("mark_read");
+    vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "true");
+    expect(names(mcpToolDefs("PRO", "read_write"))).toContain("mark_read");
+    vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "false");
+    expect(names(mcpToolDefs("PRO", "read_write"))).not.toContain("mark_read");
+  });
+
+  it("keeps create_event, send_email and delete_event out for every combination", () => {
+    vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "true");
+    for (const permission of ["read", "read_write"] as const) {
+      const listed = names(mcpToolDefs("PRO", permission));
+      for (const banned of ["create_event", "send_email", "delete_event", "delete_email"]) {
+        expect(listed).not.toContain(banned);
+      }
+    }
+  });
+
+  it("treats anything but the exact read_write string as read", () => {
+    vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "true");
+    for (const bogus of ["", "READ_WRITE", "write", "admin", undefined, null]) {
+      expect(names(mcpToolDefs("PRO", bogus as never))).not.toContain("mark_read");
+    }
+  });
+});

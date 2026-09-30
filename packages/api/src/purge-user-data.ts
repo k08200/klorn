@@ -29,6 +29,9 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.senderLabel.deleteMany(scope);
   // SentMessage: headers of the user's own sent mail.
   await tx.sentMessage.deleteMany(scope);
+  // McpWriteAudit: what an agent changed through the user's API keys — opaque
+  // message ids and argument hashes, no content, but still the user's history.
+  await tx.mcpWriteAudit.deleteMany(scope);
 
   await tx.emailAttachment.deleteMany(scope);
   await tx.candidateIntake.deleteMany(scope);
