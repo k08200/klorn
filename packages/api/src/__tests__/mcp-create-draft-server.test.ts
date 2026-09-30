@@ -241,9 +241,11 @@ describe("a read_write key with the flag on", () => {
     expect(executeToolCall).not.toHaveBeenCalled();
   });
 
-  it("an Outlook mailbox answers an explicit unsupported result, creates nothing, and settles error", async () => {
+  it("an Outlook mailbox with Outlook switched off answers unsupported, creates nothing and settles error", async () => {
+    vi.stubEnv("OUTLOOK_INBOX_ENABLED", "");
     mailActionsFor.mockResolvedValue({
       provider: "OUTLOOK",
+      nativeReply: true,
       sendEmail,
       createDraft,
       getReplyHeaders,
@@ -252,10 +254,41 @@ describe("a read_write key with the flag on", () => {
     const result = await draftCall(client);
     expect(JSON.parse(textOf(result))).toMatchObject({ unsupported: true });
     expect(createDraft).not.toHaveBeenCalled();
+    expect(db.tables.mcpWriteAudit[0]).toMatchObject({ outcome: "error", reason: "tool_error" });
+  });
+
+  it("an Outlook mailbox drafts natively: the row's provider id is the reply target, the audit row settles ok", async () => {
+    vi.stubEnv("OUTLOOK_INBOX_ENABLED", "true");
+    mailActionsFor.mockResolvedValue({
+      provider: "OUTLOOK",
+      nativeReply: true,
+      sendEmail,
+      createDraft,
+      getReplyHeaders: vi.fn(async () => ({})),
+    });
+    createDraft.mockResolvedValueOnce({ success: true, draftId: "graph-draft-1", url: "u" });
+    const client = await connect("read_write");
+    const result = await draftCall(client);
+    expect(result.isError).toBeUndefined();
+    expect(JSON.parse(textOf(result))).toEqual({
+      success: true,
+      draft_id: "graph-draft-1",
+      provider: "OUTLOOK",
+      to: "alice@example.com",
+    });
+    expect(createDraft).toHaveBeenCalledWith(user, {
+      to: "alice@example.com",
+      subject: "Re: Plan",
+      body: BODY,
+      threadId: "thread-1",
+      linkedInboxAccountId: null,
+      replyToProviderMessageId: EMAIL_ID,
+    });
+    expect(sendEmail).not.toHaveBeenCalled();
     expect(db.tables.mcpWriteAudit[0]).toMatchObject({
       tool: "create_draft",
-      outcome: "error",
-      reason: "tool_error",
+      outcome: "ok",
+      reason: null,
     });
   });
 
