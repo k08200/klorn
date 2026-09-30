@@ -21,6 +21,42 @@ export interface ApiKeyWire {
 /** `GET /api/keys` */
 export interface ApiKeysListResponse {
   keys: ApiKeyWire[];
+  /**
+   * Present, and `true`, only while the server's MCP write flag is on: clients
+   * show the read-write choice and each key's agent activity only then. While
+   * the flag is off the field is absent and the body is exactly `{ keys }`.
+   */
+  writeToolsAvailable?: true;
+}
+
+/** How one audited write call ended. `attempted` means the outcome is unknown. */
+export type ApiKeyActivityOutcomeWire = "attempted" | "ok" | "refused" | "error";
+
+/**
+ * One audited write-tool call made through a key. Deliberately narrow: no
+ * argument hash and no row identifiers ever cross the wire.
+ */
+export interface ApiKeyActivityWire {
+  /** The MCP tool the agent called, e.g. "mark_read". */
+  tool: string;
+  outcome: ApiKeyActivityOutcomeWire;
+  /**
+   * Short code, null on success. Known codes: permission_denied, rate_limited,
+   * tool_error, exception. A client must tolerate a code it does not know.
+   */
+  reason: string | null;
+  /** Opaque message id the call named; null when it named none. */
+  targetId: string | null;
+  createdAt: string;
+}
+
+/**
+ * `GET /api/keys/:id/activity` — newest first, at most 50 rows. Answers 404
+ * `{ error }` for an unknown or foreign key id, and exactly like an unregistered
+ * route while the server's MCP write flag is off.
+ */
+export interface ApiKeyActivityResponse {
+  activity: ApiKeyActivityWire[];
 }
 
 /** `POST /api/keys` */

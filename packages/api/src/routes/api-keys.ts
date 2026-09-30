@@ -17,8 +17,26 @@ import {
   MAX_ACTIVE_KEYS,
   mintApiKey,
 } from "../mcp/api-keys.js";
+import { listKeyActivity } from "../mcp/key-activity.js";
+import { darkRouteGate } from "./dark-route-gate.js";
 
 const MAX_NAME_CHARS = 60;
+
+/** Sibling read routes allow 30 a minute (auth.ts) to 60 (email-mailbox.ts); this takes the lower. */
+const ACTIVITY_RATE_LIMIT = { max: 30, timeWindow: "1 minute" } as const;
+
+/**
+ * What a key id can look like: ApiKey.id is a uuid, so letters, digits and
+ * hyphens, bounded. Checked before any query, so a NUL byte, a space or an
+ * over-long value never reaches Prisma and is answered like an id that matches
+ * no key.
+ */
+const API_KEY_ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/;
+
+const isApiKeyId = (value: unknown): value is string =>
+  typeof value === "string" && API_KEY_ID_PATTERN.test(value);
+
+const KEY_NOT_FOUND = { error: "API key not found" } as const;
 
 /** Stable machine-readable code on the 400 — clients branch on it, not on `error`. */
 const CODE_INVALID_PERMISSION = "INVALID_API_KEY_PERMISSION";
@@ -74,8 +92,33 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       lastUsedAt: row.lastUsedAt ? row.lastUsedAt.toISOString() : null,
       revoked: row.revokedAt !== null,
     }));
-    return { keys };
+    // Flag OFF: the body is exactly `{ keys }`, as before the field existed.
+    return mcpWriteToolsEnabled() ? { keys, writeToolsAvailable: true as const } : { keys };
   });
+
+  // Agent activity of ONE owned key. Dark (an unregistered route, byte for
+  // byte) while the write flag is off: the gate runs in onRequest, before auth
+  // and before any query. A foreign id and an unknown id share one lookup and
+  // one response, so a caller cannot tell another user's key from no key.
+  app.get(
+    "/:id/activity",
+    {
+      onRequest: darkRouteGate(mcpWriteToolsEnabled),
+      preHandler: requireAuth,
+      config: { rateLimit: ACTIVITY_RATE_LIMIT },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!isApiKeyId(id)) return reply.code(404).send(KEY_NOT_FOUND);
+      const uid = getUserId(request);
+      const owned = await prisma.apiKey.findFirst({
+        where: { id, userId: uid },
+        select: { id: true },
+      });
+      if (!owned) return reply.code(404).send(KEY_NOT_FOUND);
+      return { activity: await listKeyActivity(uid, owned.id) };
+    },
+  );
 
   app.post(
     "/",
@@ -127,10 +170,14 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   app.delete("/:id", { preHandler: requireAuth }, async (request) => {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
-    await prisma.apiKey.updateMany({
-      where: { id, userId: uid, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
+    // A malformed id matches no key, and an id that matches no key is already a
+    // no-op with this exact answer, so it stays one — without the query.
+    if (isApiKeyId(id)) {
+      await prisma.apiKey.updateMany({
+        where: { id, userId: uid, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    }
     return { revoked: true };
   });
 }
