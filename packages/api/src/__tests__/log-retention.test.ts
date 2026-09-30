@@ -12,6 +12,7 @@ const TABLES = [
   "pushRingEvent",
   "webhookEvent",
   "llmUsageLog",
+  "mcpWriteAudit",
 ] as const;
 
 const prismaMock = vi.hoisted(() => {
@@ -26,6 +27,7 @@ const prismaMock = vi.hoisted(() => {
     pushRingEvent: make(),
     webhookEvent: make(),
     llmUsageLog: make(),
+    mcpWriteAudit: make(),
   };
 });
 
@@ -34,6 +36,7 @@ vi.mock("../db.js", () => ({ prisma: prismaMock }));
 import {
   isLogRetentionEnabled,
   LOG_RETENTION_POLICIES,
+  MCP_WRITE_AUDIT_RETENTION_DAYS,
   retentionCutoff,
   runLogRetentionSweep,
 } from "../log-retention.js";
@@ -117,6 +120,25 @@ describe("log-retention", () => {
       where: { id: { in: ["a0", "a1", "a2"] } },
     });
     expect(result.agentLog).toBe(4);
+  });
+
+  it("sweeps the MCP write audit after 90 days by createdAt, in id-paged batches", async () => {
+    expect(MCP_WRITE_AUDIT_RETENTION_DAYS).toBe(90);
+    const policy = LOG_RETENTION_POLICIES.find((p) => p.name === "mcpWriteAudit");
+    expect(policy).toMatchObject({ column: "createdAt", days: MCP_WRITE_AUDIT_RETENTION_DAYS });
+
+    const audit = tableMock("mcpWriteAudit");
+    audit.findMany.mockResolvedValueOnce([{ id: "m0" }, { id: "m1" }]);
+    audit.deleteMany.mockResolvedValueOnce({ count: 2 });
+    const result = await runLogRetentionSweep(NOW, 3);
+
+    expect(audit.findMany).toHaveBeenCalledWith({
+      where: { createdAt: { lt: retentionCutoff(MCP_WRITE_AUDIT_RETENTION_DAYS, NOW) } },
+      select: { id: true },
+      take: 3,
+    });
+    expect(audit.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ["m0", "m1"] } } });
+    expect(result.mcpWriteAudit).toBe(2);
   });
 
   it("skips the delete entirely when a table has nothing expired", async () => {

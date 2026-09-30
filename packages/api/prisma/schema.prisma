@@ -148,6 +148,7 @@ model User {
   sentMessages              SentMessage[]
   learnedRules              LearnedRule[]
   apiKeys                   ApiKey[]
+  mcpWriteAudits            McpWriteAudit[]
 }
 
 enum UserRole {
@@ -176,6 +177,53 @@ model ApiKey {
   revokedAt  DateTime?
 
   @@index([userId])
+}
+
+/// One row per MCP write-tool call (step A2a of
+/// docs/providers/unified-platform-plan.md): what an agent tried to change,
+/// through which key, and how it ended. Nothing is written while
+/// MCP_WRITE_TOOLS_ENABLED is off, on any path.
+///
+/// An ALLOWED call is inserted BEFORE the tool runs as `attempted` (a failed
+/// insert refuses the call, so every executed write has a row) and settled after
+/// it: `ok` only when the tool reported success, `error` otherwise. `error` does
+/// NOT guarantee "no effect" (e.g. the Gmail change succeeded and the local
+/// update failed); `attempted` means the run never settled (crash, or the
+/// settle write failed) and the outcome is unknown. A REFUSED call (read key,
+/// over the cap) is `refused`, inserted best-effort and throttled to one row
+/// per (key, tool, reason) per minute, so a burst never becomes a burst of inserts.
+///
+/// Never holds mail content: targetId is an opaque message id and argsHash is
+/// SHA-256 over the canonical JSON of the arguments. Rows are swept after 90
+/// days by log-retention.ts, removed with the User (cascade) and by purgeUserData.
+///
+/// apiKeyId is deliberately NOT a foreign key: the history must outlive the key
+/// (revoke today, row removal tomorrow) and a read of "writes per key" only
+/// needs the id.
+model McpWriteAudit {
+  id       String @id @default(uuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKeyId String
+
+  tool     String
+  targetId String? // opaque message id the call named; null when absent or not id-shaped
+  argsHash String // SHA-256 hex of the canonical JSON of the call's arguments
+  outcome  McpAuditOutcome
+  reason   String? // short code: permission_denied | rate_limited | tool_error | exception
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([apiKeyId, createdAt])
+  @@index([createdAt]) // the retention sweep's range scan
+}
+
+enum McpAuditOutcome {
+  attempted
+  ok
+  refused
+  error
 }
 
 // Lowercase like SenderTraitKind and SenderTraitStatus: these exact strings are

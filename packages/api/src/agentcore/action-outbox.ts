@@ -46,6 +46,7 @@ import { db } from "../db.js";
 import type { ActionReceipt } from "../judge/attention-floor.js";
 import { isConnectionError, isKeyLimitError } from "../llm/model-fallback.js";
 import { captureError } from "../sentry.js";
+import { stableStringify } from "../stable-json.js";
 import { pushNotification } from "../websocket.js";
 import { executeToolCall } from "./tool-executor.js";
 
@@ -88,14 +89,6 @@ export function deriveIdempotencyKey(
 ): string {
   const argsJson = stableStringify(toolArgs);
   return createHash("sha256").update(`${pendingActionId}\n${toolName}\n${argsJson}`).digest("hex");
-}
-
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
-  const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
-  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
 }
 
 /**
