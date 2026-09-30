@@ -237,9 +237,26 @@ follows A2 and A4. One page with snippets for Claude Code, Codex, Cursor,
 Gemini CLI and the xAI API. Each snippet is checked against the vendor's
 current documentation on the day it is written, and the date is recorded.
 
-**A6 — specification drift check.** Depends on: nothing. Determine whether
-SDK 1.30.0 implements revision 2026-07-28. Upgrade if not. Investigation
-first; the PR exists only if a change is needed.
+**A6 — specification drift check.** Done 2026-09-29.
+- The installed SDK speaks protocol revisions up to 2025-11-25. The latest
+  1.x release (1.31.0) still does. Revision 2026-07-28 ships only in the v2
+  split packages (`@modelcontextprotocol/server` 2.x).
+- A client that speaks both eras falls back to `initialize` against our
+  server, so today's CLI clients keep working. A client that speaks only
+  2026-07-28 fails. Evidence: the spec's versioning and transport pages, and
+  Claude Code issue 96183 (MED).
+- Stateless mode with GET and DELETE answering 405 does not conflict with
+  2026-07-28.
+- Action taken: SDK 1.30.0 to 1.31.0. Release 1.30.1 bounds JSON-RPC batches
+  at 100 messages. One POST counts once against the per-key rate limit, so
+  an unbounded batch multiplied tool calls per request. A route test pins
+  the cap. No GitHub advisory covers 1.30.0.
+
+**A6b — v2 SDK and revision 2026-07-28** (*outline*). Depends on: A2a. Move
+to `@modelcontextprotocol/server` and `@modelcontextprotocol/node` in
+dual-era mode. Recommended, not urgent: start when a target client ships
+without the legacy fallback, or before A8. Auth, paywall, rate limit and
+`cache-control` handling in `routes/mcp.ts` stay.
 
 **A7 — OAuth 2.1 authorisation server** (*outline*, deferred by L25).
 **A8 — public registry listing** (*outline*). Depends on: A2, A4, A5. Needs
