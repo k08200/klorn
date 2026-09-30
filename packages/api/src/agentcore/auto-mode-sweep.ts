@@ -68,8 +68,17 @@ export interface AutoModeSweepDeps {
     body: string,
     inReplyToEmailId: string,
   ) => Promise<void>;
-  /** Send failed after the ledger committed — rewrite it as a failure record. */
-  markLedgerFailed: (ledgerId: string, toAddr: string, gmailId: string) => Promise<void>;
+  /**
+   * Send failed after the ledger committed — rewrite it as a failure record.
+   * `sendErr` lets the record say whether delivery is unknown or certainly not
+   * happened.
+   */
+  markLedgerFailed: (
+    ledgerId: string,
+    toAddr: string,
+    gmailId: string,
+    sendErr: unknown,
+  ) => Promise<void>;
   resolveItem: (itemId: string) => Promise<void>;
   warn: (message: string) => void;
   reportError: (err: unknown, itemId: string) => void;
@@ -130,7 +139,7 @@ export async function runAutoModeSweep(
         // The ledger must not lie: rewrite it as a failure record so the
         // user is never told a reply went out when it didn't. No retry
         // (at-most-once holds); the item stays OPEN for the human lane.
-        await deps.markLedgerFailed(ledger.id, toAddr, email.gmailId);
+        await deps.markLedgerFailed(ledger.id, toAddr, email.gmailId, sendErr);
         throw sendErr;
       }
       // Klorn handled it — resolve the item so the queue stays clean.

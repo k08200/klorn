@@ -37,16 +37,15 @@
  * the same flags from the server, so it agrees with the mirror.
  */
 
-import { decryptToken } from "../../crypto-tokens.js";
 import { prisma } from "../../db.js";
-import { captureError } from "../../sentry.js";
-import { checkImapRow } from "../imap-connection.js";
 import { parseImapMessageId } from "../imap-message-id.js";
 import {
   IMAP_PROVIDERS,
   type ImapProviderConfig,
   type ImapProviderKey,
 } from "../imap-providers.js";
+import { fail } from "./action-failure.js";
+import { databaseFailure, findCheckedAccount, sessionAccountFor } from "./imap-account.js";
 import { type FlagChange, readChange, type ServerOutcome, starChange } from "./imap-flags.js";
 import { type SessionAccount, submitFlagOp } from "./imap-session.js";
 import type { MailActionFailure, MailProviderActions, SimpleMailActionResult } from "./types.js";
@@ -57,66 +56,10 @@ interface ResolvedTarget {
   uid: number;
 }
 
-/** The columns `resolveTarget` selects from LinkedInboxAccount. */
-interface AccountRow {
-  id: string;
-  email: string | null;
-  imapHost: string | null;
-  imapPasswordCipher: string | null;
-}
-
-const fail = (error: string): MailActionFailure => ({ error });
-const reconnectHint = (label: string) => `Reconnect your ${label} mailbox in Settings.`;
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
-/**
- * A database failure: log and report once, answer softly — actions never throw.
- *
- * Only the error's name and code are used, never its text: Prisma messages can
- * embed the query arguments, and for an IMAP row those include the gmailId,
- * which contains the mailbox address. The reported error is a fresh one built
- * from a fixed message, so the raw text cannot reach Sentry either.
- */
-function databaseFailure(
-  err: unknown,
-  provider: ImapProviderConfig,
-  ids: { userId: string; rowId: string },
-  what: string,
-): void {
-  const e = err as { name?: unknown; code?: unknown } | null;
-  const name = typeof e?.name === "string" ? e.name : "NonError";
-  const code = typeof e?.code === "string" ? ` ${e.code}` : "";
-  console.warn(`[${provider.logScope}] ${what} for row ${ids.rowId} (${name}${code})`);
-  const safe = new Error(`${provider.logScope} ${what} (${name}${code})`);
-  safe.name = name;
-  captureError(safe, {
-    tags: { scope: `${provider.logScope}.action-db` },
-    extra: { userId: ids.userId, linkedInboxAccountId: ids.rowId },
-  });
-}
-
-function decryptPassword(
-  cipher: string,
-  rowId: string,
-  provider: ImapProviderConfig,
-): string | null {
-  try {
-    return decryptToken(cipher);
-  } catch (err) {
-    console.warn(
-      `[${provider.logScope}] action skipped — stored password unreadable for row ${rowId}: ${errorMessage(err)}`,
-    );
-    return null;
-  }
-}
-
 /**
  * The caller's own account, the UID the message id addresses on it, and the
  * decrypted credentials — or the soft failure to return. Nothing here opens a
- * connection.
+ * connection, and a malformed id is refused before the password is decrypted.
  */
 async function resolveTarget(
   provider: ImapProviderConfig,
@@ -124,50 +67,14 @@ async function resolveTarget(
   linkedInboxAccountId: string,
   messageId: string,
 ): Promise<ResolvedTarget | MailActionFailure> {
-  let row: AccountRow | null;
-  try {
-    // The caller's own account of this provider only — never crosses users.
-    row = await prisma.linkedInboxAccount.findFirst({
-      where: { id: linkedInboxAccountId, userId, provider: provider.provider },
-      select: { id: true, email: true, imapHost: true, imapPasswordCipher: true },
-    });
-  } catch (err) {
-    databaseFailure(
-      err,
-      provider,
-      { userId, rowId: linkedInboxAccountId },
-      "account lookup failed",
-    );
-    return fail(`Could not look up your ${provider.label} mailbox. Try again shortly.`);
-  }
-  if (!row) return fail(`${provider.label} mailbox is not connected.`);
-
-  const checked = checkImapRow(row, provider);
-  if (!checked.ok) {
-    console.warn(`[${provider.logScope}] action skipped — ${checked.reason} for row ${row.id}`);
-    return fail(
-      checked.reason === "missing-credentials"
-        ? `${provider.label} mailbox credentials are missing. ${reconnectHint(provider.label)}`
-        : `${provider.label} mailbox is not connected.`,
-    );
-  }
+  const checked = await findCheckedAccount(provider, userId, linkedInboxAccountId);
+  if ("error" in checked) return checked;
   const uid = parseImapMessageId(messageId, provider.idPrefix, checked.email);
   if (uid === null) return fail(`That message does not belong to this ${provider.label} mailbox.`);
 
-  const password = decryptPassword(checked.passwordCipher, row.id, provider);
-  if (password === null) return fail(reconnectHint(provider.label));
-
-  return {
-    uid,
-    session: {
-      userId,
-      rowId: row.id,
-      email: checked.email,
-      host: checked.host,
-      password,
-      credentialKey: `${row.id}:${checked.passwordCipher}`,
-    },
-  };
+  const session = sessionAccountFor(provider, userId, checked);
+  if ("error" in session) return session;
+  return { uid, session };
 }
 
 function outcomeError(

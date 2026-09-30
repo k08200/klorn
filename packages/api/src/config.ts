@@ -184,6 +184,19 @@ export function imapActionsEnabled(): boolean {
     (process.env.IMAP_ACTIONS_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Send, reply and drafts for Naver and iCloud over SMTP and IMAP — step B3 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and
+// independent of IMAP_ACTIONS_ENABLED. While OFF, mail/providers/dispatch.ts
+// leaves NAVER and ICLOUD `sendEmail`, `createDraft` and `getReplyHeaders` as the
+// unsupported stubs, exactly as before. ICLOUD additionally needs
+// ICLOUD_INBOX_ENABLED (the CASA surface freeze). Generic IMAP stays unsupported
+// either way. Read at request time (PROVIDER_INBOX_SELECTOR_ENABLED precedent)
+// with the same lenient truthy parse, so a flip needs no redeploy.
+export function imapSendEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.IMAP_SEND_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // MCP write tools — API key permission level and the MCP write set (steps A1
 // and A2a of docs/providers/unified-platform-plan.md). OFF by default (repo
 // doctrine). It gates minting a read-write API key, using one, the MCP-only
