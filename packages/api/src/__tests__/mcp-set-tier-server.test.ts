@@ -134,9 +134,15 @@ describe("every read result is byte-identical to the shared executor's output, f
 describe("a read_write key with the flag on", () => {
   beforeEach(() => vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "true"));
 
-  it("lists set_tier after mark_read, with the five-lane enum in its schema", async () => {
+  it("lists set_tier after mark_read (create_draft last), with the five-lane enum in its schema", async () => {
     const client = await connect("read_write");
-    expect(await toolNames(client)).toEqual(["list_emails", "read_email", "mark_read", "set_tier"]);
+    expect(await toolNames(client)).toEqual([
+      "list_emails",
+      "read_email",
+      "mark_read",
+      "set_tier",
+      "create_draft",
+    ]);
     const tool = (await client.listTools()).tools.find((t) => t.name === "set_tier");
     expect(tool?.inputSchema).toMatchObject({
       properties: { tier: { enum: ["PUSH", "MEETING", "QUEUE", "INFO", "SILENT"] } },

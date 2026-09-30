@@ -337,9 +337,14 @@ describe("MCP write gate — ListTools (flag x permission)", () => {
     expect(await toolNames("read")).toEqual(LEGACY_TOOL_NAMES);
   });
 
-  it("flag ON: a read_write key additionally lists mark_read (its ALL_TOOLS definition) then set_tier (MCP-only)", async () => {
+  it("flag ON: a read_write key additionally lists mark_read (its ALL_TOOLS definition) then set_tier and create_draft (MCP-only)", async () => {
     vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "true");
-    expect(await toolNames("rw")).toEqual([...LEGACY_TOOL_NAMES, "mark_read", "set_tier"]);
+    expect(await toolNames("rw")).toEqual([
+      ...LEGACY_TOOL_NAMES,
+      "mark_read",
+      "set_tier",
+      "create_draft",
+    ]);
     const app = await buildApp();
     const res = await app.inject(list("rw"));
     await app.close();

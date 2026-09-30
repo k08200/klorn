@@ -20,6 +20,7 @@ vi.mock("../db.js", () => {
 vi.mock("../sentry.js", () => ({ captureError }));
 
 import {
+  auditIdOf,
   droppedRefusedAuditCount,
   hashToolArgs,
   MAX_ARGS_DEPTH,
@@ -29,6 +30,7 @@ import {
   recordAllowedWrite,
   recordRefusedWrite,
   settleWriteAudit,
+  sha256Hex,
 } from "../mcp/write-audit.js";
 
 let seq = 0;
@@ -291,5 +293,100 @@ describe("settleWriteAudit", () => {
     expect(captureError.mock.calls[0]?.[1]).toMatchObject({
       extra: { userId: "u1", apiKeyId: i.apiKeyId, auditId: "audit-1" },
     });
+  });
+});
+
+describe("audit identity for a draft (step A4): hashes and ids only, never the text", () => {
+  const BODY_HASH = sha256("the reply text");
+
+  it("sha256Hex is the plain SHA-256 hex digest", () => {
+    expect(sha256Hex("the reply text")).toBe(BODY_HASH);
+    expect(sha256Hex("")).toBe(sha256(""));
+  });
+
+  it("an allowed write inserts the body hash it is given, alongside the usual columns", async () => {
+    const input = {
+      ...freshInput({ email_id: "g-1", body: "the reply text" }),
+      tool: "create_draft",
+    };
+    await recordAllowedWrite({ ...input, bodyHash: BODY_HASH });
+    expect(create).toHaveBeenCalledWith({
+      data: {
+        userId: "u1",
+        apiKeyId: input.apiKeyId,
+        tool: "create_draft",
+        targetId: "g-1",
+        argsHash: hashToolArgs({ email_id: "g-1", body: "the reply text" }),
+        outcome: "attempted",
+        reason: null,
+        bodyHash: BODY_HASH,
+      },
+      select: { id: true },
+    });
+    expect(JSON.stringify(create.mock.calls[0])).not.toContain("the reply text");
+  });
+
+  it("without a body hash the row has no bodyHash key at all (every other tool is unchanged)", async () => {
+    await recordAllowedWrite(freshInput({ email_id: "g-1" }));
+    const data = (create.mock.calls[0]?.[0] as { data: Record<string, unknown> }).data;
+    expect(Object.keys(data)).not.toContain("bodyHash");
+  });
+
+  it("a refused write never stores a body hash, even when the input carries one", async () => {
+    const input = { ...freshInput({ email_id: "g-1" }), tool: "create_draft" };
+    await recordRefusedWrite({ ...input, bodyHash: BODY_HASH, reason: "permission_denied" });
+    const data = (create.mock.calls[0]?.[0] as { data: Record<string, unknown> }).data;
+    expect(Object.keys(data)).not.toContain("bodyHash");
+  });
+
+  it("settling ok records the draft id and the recipient hash", async () => {
+    const recipientHash = sha256("alice@example.com");
+    await settleWriteAudit(freshInput(), "row-9", {
+      outcome: "ok",
+      draft: { draftId: "r-123_AB", recipientHash },
+    });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "row-9" },
+      data: { outcome: "ok", reason: null, draftId: "r-123_AB", recipientHash },
+    });
+  });
+
+  it("settling ok with no draft id still records the recipient hash", async () => {
+    const recipientHash = sha256("alice@example.com");
+    await settleWriteAudit(freshInput(), "row-9", {
+      outcome: "ok",
+      draft: { draftId: null, recipientHash },
+    });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "row-9" },
+      data: { outcome: "ok", reason: null, draftId: null, recipientHash },
+    });
+  });
+
+  it("an ok settle with no draft and an error settle write neither column", async () => {
+    await settleWriteAudit(freshInput(), "row-1", { outcome: "ok" });
+    await settleWriteAudit(freshInput(), "row-2", { outcome: "error", reason: "tool_error" });
+    for (const call of update.mock.calls) {
+      expect(Object.keys((call[0] as { data: object }).data)).not.toEqual(
+        expect.arrayContaining(["draftId"]),
+      );
+    }
+  });
+
+  it("auditIdOf keeps only id-shaped strings (1-256 of [A-Za-z0-9_-])", () => {
+    expect(auditIdOf("r-123_AB")).toBe("r-123_AB");
+    expect(auditIdOf("x".repeat(MAX_TARGET_ID_LENGTH))).toBe("x".repeat(MAX_TARGET_ID_LENGTH));
+    for (const bad of [
+      "",
+      " r1",
+      "r 1",
+      "r\u0000",
+      "x".repeat(MAX_TARGET_ID_LENGTH + 1),
+      42,
+      null,
+      {},
+    ]) {
+      expect(auditIdOf(bad), JSON.stringify(bad)?.slice(0, 30)).toBeNull();
+    }
   });
 });

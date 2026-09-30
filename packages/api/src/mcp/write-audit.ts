@@ -16,6 +16,10 @@
  * No mail content is stored: `targetId` is an opaque message id and `argsHash`
  * is SHA-256 over the canonical JSON of the arguments, with guards so hostile
  * arguments can neither throw nor cost more than a bounded amount of hashing.
+ * `argsHash` marks an argument object over 4 KB as oversize, so a tool whose
+ * arguments can be that long and whose content matters (create_draft) also passes
+ * a `bodyHash` of its own, and its settle carries the created draft's id and a hash
+ * of the recipient: identities, never the text or the address.
  */
 
 import crypto from "node:crypto";
@@ -49,8 +53,14 @@ export type McpAuditReason = "permission_denied" | "rate_limited" | "tool_error"
  * lane change (only when the lane actually changed), so the log can show it and a
  * later step can revert it. */
 export type McpSettleVerdict =
-  | { outcome: "ok"; tiers?: { from: string; to: string } }
+  | { outcome: "ok"; tiers?: { from: string; to: string }; draft?: DraftIdentity }
   | { outcome: "error"; reason: "tool_error" | "exception" };
+
+/** What identifies a created draft: the provider's draft id (id-shaped only) and SHA-256 hex of the lowercased recipient. */
+export interface DraftIdentity {
+  draftId: string | null;
+  recipientHash: string;
+}
 
 export interface McpWriteAuditInput {
   userId: string;
@@ -59,7 +69,14 @@ export interface McpWriteAuditInput {
   args: Record<string, unknown>;
 }
 
-const sha256 = (text: string) => crypto.createHash("sha256").update(text).digest("hex");
+/** An allowed write may also carry the SHA-256 of the content it is about to act on. */
+export interface McpAllowedWriteInput extends McpWriteAuditInput {
+  bodyHash?: string | null;
+}
+
+/** SHA-256 hex digest of `text`. */
+export const sha256Hex = (text: string): string =>
+  crypto.createHash("sha256").update(text).digest("hex");
 
 /** True when a container is nested deeper than the bound. Recursion stops at the bound. */
 function exceedsDepth(value: unknown, depth = 0): boolean {
@@ -77,21 +94,25 @@ function exceedsDepth(value: unknown, depth = 0): boolean {
  */
 export function hashToolArgs(args: Record<string, unknown>): string {
   try {
-    if (exceedsDepth(args)) return sha256(MARKER_TOO_DEEP);
+    if (exceedsDepth(args)) return sha256Hex(MARKER_TOO_DEEP);
     const canonical = stableStringify(args);
     const bytes = Buffer.byteLength(canonical, "utf8");
-    if (bytes > MAX_HASHED_ARGS_BYTES) return sha256(`${MARKER_OVERSIZE}:${bytes}`);
-    return sha256(canonical);
+    if (bytes > MAX_HASHED_ARGS_BYTES) return sha256Hex(`${MARKER_OVERSIZE}:${bytes}`);
+    return sha256Hex(canonical);
   } catch {
-    return sha256(MARKER_UNHASHABLE);
+    return sha256Hex(MARKER_UNHASHABLE);
   }
 }
 
-/** The message id a write call names, only if it is id-shaped. NUL bytes, spaces
- * and non-ASCII never reach the database. */
+/** `value` when it is an id-shaped string (1-256 of [A-Za-z0-9_-]), else null. NUL
+ * bytes, spaces and non-ASCII never reach the database. */
+export function auditIdOf(value: unknown): string | null {
+  return typeof value === "string" && TARGET_ID_PATTERN.test(value) ? value : null;
+}
+
+/** The message id a write call names, only if it is id-shaped. */
 function targetIdOf(args: Record<string, unknown>): string | null {
-  const id = args.email_id;
-  return typeof id === "string" && TARGET_ID_PATTERN.test(id) ? id : null;
+  return auditIdOf(args.email_id);
 }
 
 function rowData(
@@ -120,9 +141,12 @@ function failureExtra(input: McpWriteAuditInput, more: Record<string, unknown> =
  * its id. Throws on failure: the caller must refuse the call, never execute it
  * un-audited.
  */
-export async function recordAllowedWrite(input: McpWriteAuditInput): Promise<string> {
+export async function recordAllowedWrite(input: McpAllowedWriteInput): Promise<string> {
   const row = await prisma.mcpWriteAudit.create({
-    data: rowData(input, "attempted", null),
+    data: {
+      ...rowData(input, "attempted", null),
+      ...(input.bodyHash ? { bodyHash: input.bodyHash } : {}),
+    },
     select: { id: true },
   });
   return row.id;
@@ -143,6 +167,9 @@ export async function settleWriteAudit(
         reason: verdict.outcome === "error" ? verdict.reason : null,
         ...(verdict.outcome === "ok" && verdict.tiers
           ? { tierFrom: verdict.tiers.from, tierTo: verdict.tiers.to }
+          : {}),
+        ...(verdict.outcome === "ok" && verdict.draft
+          ? { draftId: verdict.draft.draftId, recipientHash: verdict.draft.recipientHash }
           : {}),
       },
     });
