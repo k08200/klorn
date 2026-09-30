@@ -231,6 +231,9 @@ export const TOOL_FEATURE_MAP: Record<string, FeatureKey> = {
   read_email: "email_read",
   classify_emails: "email_read",
   mark_read: "email_read",
+  // MCP-only write tool (mcp/set-tier.ts): not in ALL_TOOLS, so this entry only
+  // lets the MCP gate plan-gate it exactly like mark_read.
+  set_tier: "email_read",
   send_email: "email_write",
   // Calendar
   list_events: "calendar_read",
