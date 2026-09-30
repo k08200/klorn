@@ -9,14 +9,20 @@
  *   1. `findCheckedAccount` — the row, scoped to the user and the provider, with
  *      the SSRF allowlist and host pin re-checked. No secret is read.
  *   2. `sessionAccountFor` — decrypts the stored app password.
- * Neither opens a connection.
+ * Neither opens a connection. `resolveTarget` is both stages plus the strict parse
+ * of the message id between them, for the actions that address one INBOX UID.
+ *
+ * The row's stored INBOX UIDVALIDITY (step B2) travels with the credentials: the
+ * session compares it with the live value before any action touches a UID.
  */
 
 import { decryptToken } from "../../crypto-tokens.js";
 import { prisma } from "../../db.js";
 import { captureError } from "../../sentry.js";
 import { checkImapRow } from "../imap-connection.js";
+import { parseImapMessageId } from "../imap-message-id.js";
 import type { ImapProviderConfig } from "../imap-providers.js";
+import { canonicalUidValidity } from "../imap-uidvalidity.js";
 import { errorMessage, fail } from "./action-failure.js";
 import type { SessionAccount } from "./imap-session.js";
 import type { MailActionFailure } from "./types.js";
@@ -27,6 +33,7 @@ interface AccountRow {
   email: string | null;
   imapHost: string | null;
   imapPasswordCipher: string | null;
+  inboxUidValidity: string | null;
 }
 
 /** A row that passed the credential, allowlist and host-pin checks. */
@@ -35,6 +42,8 @@ export interface CheckedAccount {
   email: string;
   host: string;
   passwordCipher: string;
+  /** The INBOX UIDVALIDITY the poller stored, or null when none is (or it is not a valid value). */
+  inboxUidValidity: string | null;
 }
 
 export const reconnectHint = (label: string) => `Reconnect your ${label} mailbox in Settings.`;
@@ -94,7 +103,13 @@ export async function findCheckedAccount(
     // The caller's own account of this provider only — never crosses users.
     row = await prisma.linkedInboxAccount.findFirst({
       where: { id: linkedInboxAccountId, userId, provider: provider.provider },
-      select: { id: true, email: true, imapHost: true, imapPasswordCipher: true },
+      select: {
+        id: true,
+        email: true,
+        imapHost: true,
+        imapPasswordCipher: true,
+        inboxUidValidity: true,
+      },
     });
   } catch (err) {
     databaseFailure(
@@ -121,6 +136,7 @@ export async function findCheckedAccount(
     email: checked.email,
     host: checked.host,
     passwordCipher: checked.passwordCipher,
+    inboxUidValidity: canonicalUidValidity(row.inboxUidValidity),
   };
 }
 
@@ -143,5 +159,32 @@ export function sessionAccountFor(
     host: checked.host,
     password,
     credentialKey: `${checked.id}:${checked.passwordCipher}`,
+    inboxUidValidity: checked.inboxUidValidity,
   };
+}
+
+export interface ResolvedTarget {
+  session: SessionAccount;
+  uid: number;
+}
+
+/**
+ * The caller's own account, the UID the message id addresses on it, and the
+ * decrypted credentials — or the soft failure to return. Nothing here opens a
+ * connection, and a malformed id is refused before the password is decrypted.
+ */
+export async function resolveTarget(
+  provider: ImapProviderConfig,
+  userId: string,
+  linkedInboxAccountId: string,
+  messageId: string,
+): Promise<ResolvedTarget | MailActionFailure> {
+  const checked = await findCheckedAccount(provider, userId, linkedInboxAccountId);
+  if ("error" in checked) return checked;
+  const uid = parseImapMessageId(messageId, provider.idPrefix, checked.email);
+  if (uid === null) return fail(`That message does not belong to this ${provider.label} mailbox.`);
+
+  const session = sessionAccountFor(provider, userId, checked);
+  if ("error" in session) return session;
+  return { uid, session };
 }

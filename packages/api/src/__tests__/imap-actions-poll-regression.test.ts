@@ -41,6 +41,7 @@ const world = vi.hoisted(() => ({
 }));
 
 class FakeImapFlow {
+  mailbox = { path: "INBOX", uidValidity: 7n };
   connect = async () => undefined;
   logout = async () => undefined;
   close = () => undefined;
@@ -117,6 +118,7 @@ vi.mock("../db.js", () => {
             email: "me@naver.com",
             imapHost: "imap.naver.com:993",
             imapPasswordCipher: "cipher",
+            inboxUidValidity: "7",
           };
         }
         if (where.id === "row-2" && where.provider === "ICLOUD") {
@@ -125,6 +127,7 @@ vi.mock("../db.js", () => {
             email: "me@icloud.com",
             imapHost: "imap.mail.me.com:993",
             imapPasswordCipher: "cipher",
+            inboxUidValidity: "7",
           };
         }
         return null;

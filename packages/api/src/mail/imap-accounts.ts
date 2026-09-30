@@ -15,8 +15,10 @@ import { decryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
 import { checkImapRow } from "./imap-connection.js";
+import { parseImapMessageId } from "./imap-message-id.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
-import { syncImapInbox } from "./imap-sync.js";
+import { syncImapInbox, syncImapMessage } from "./imap-sync.js";
+import { canonicalUidValidity } from "./imap-uidvalidity.js";
 
 export interface ImapSyncAggregate {
   fetched: number;
@@ -70,6 +72,7 @@ export async function syncImapAccountsForUser(
         password: decryptToken(checked.passwordCipher),
         host: checked.host,
         linkedInboxAccountId: row.id,
+        inboxUidValidity: canonicalUidValidity(row.inboxUidValidity),
       });
       total.fetched += result.fetched;
       total.inserted += result.inserted;
@@ -93,4 +96,37 @@ export async function syncImapAccountsForUser(
     }
   }
   return total;
+}
+
+/**
+ * Ingest one message of a linked mailbox's INBOX by its message id, for the undo
+ * routes (step B2): a MOVE back into INBOX gives the message a new UID, hence a new
+ * id, and the route needs the row at once. Scoped to the user's own account of this
+ * provider; the id must be exactly this mailbox's (`<idPrefix>:<email>:<uid>`).
+ * Resolves with the row id, or null when the account, the id or the message is not
+ * there. Throws on connection and database failures.
+ */
+export async function syncImapMessageForUser(
+  userId: string,
+  provider: ImapProviderConfig,
+  linkedInboxAccountId: string,
+  messageId: string,
+): Promise<{ emailId: string } | null> {
+  const row = await prisma.linkedInboxAccount.findFirst({
+    where: { id: linkedInboxAccountId, userId, provider: provider.provider },
+  });
+  if (!row) return null;
+  const checked = checkImapRow(row, provider);
+  if (!checked.ok) return null;
+  const uid = parseImapMessageId(messageId, provider.idPrefix, checked.email);
+  if (uid === null) return null;
+  return syncImapMessage({
+    provider,
+    userId,
+    email: checked.email,
+    password: decryptToken(checked.passwordCipher),
+    host: checked.host,
+    linkedInboxAccountId: row.id,
+    uid,
+  });
 }

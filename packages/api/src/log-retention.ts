@@ -1,7 +1,7 @@
 /**
  * Operational-log retention sweep.
  *
- * Seven append-only log tables grow without bound (the decision/feedback
+ * Append-only log tables grow without bound (the decision/feedback
  * ledgers — DecisionLabel, FeedbackEvent — are deliberately NOT here: they
  * feed calibration and learned rules and must be kept). Today a DELETE is one
  * cheap statement; at hundreds of millions of rows the same cleanup becomes a
@@ -21,6 +21,7 @@
  */
 
 import { prisma } from "./db.js";
+import { MOVED_MESSAGE_RETENTION_DAYS } from "./mail/providers/imap-moved.js";
 import {
   markSchedulerDisabled,
   recordSchedulerTick,
@@ -123,6 +124,20 @@ export const LOG_RETENTION_POLICIES: LogRetentionPolicy[] = [
         .findMany({ where: { createdAt: { lt: cutoff } }, select: { id: true }, take })
         .then((rows) => rows.map((r) => r.id)),
     deleteByIds: (ids) => prisma.mcpWriteAudit.deleteMany({ where: { id: { in: ids } } }),
+  },
+  {
+    // Where trash/archive parked a Naver or iCloud message so undo can restore it
+    // (step B2). Undo consumes a record; the rest expire with Trash's own window.
+    // recordMove also sweeps its own account on every move, but an account that
+    // stops moving would keep its records forever without this.
+    name: "imapMovedMessage",
+    column: "createdAt",
+    days: MOVED_MESSAGE_RETENTION_DAYS,
+    findExpiredIds: (cutoff, take) =>
+      prisma.imapMovedMessage
+        .findMany({ where: { createdAt: { lt: cutoff } }, select: { id: true }, take })
+        .then((rows) => rows.map((r) => r.id)),
+    deleteByIds: (ids) => prisma.imapMovedMessage.deleteMany({ where: { id: { in: ids } } }),
   },
 ];
 

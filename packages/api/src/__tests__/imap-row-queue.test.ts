@@ -58,6 +58,7 @@ const account = {
   host: "imap.naver.com:993",
   password: "pw",
   credentialKey: `row-1:${CIPHER}`,
+  inboxUidValidity: "7",
 };
 const otherAccount = { ...account, rowId: "row-2", credentialKey: `row-2:${CIPHER}` };
 

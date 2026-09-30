@@ -38,6 +38,7 @@ const h = vi.hoisted(() => ({
 }));
 
 class FakeImapFlow {
+  mailbox = { path: "INBOX", uidValidity: 7n };
   connect = h.connect;
   getMailboxLock = h.getMailboxLock;
   messageFlagsAdd = h.messageFlagsAdd;
@@ -94,6 +95,7 @@ function armAccounts() {
     email: `${where.id}@naver.com`,
     imapHost: "imap.naver.com:993",
     imapPasswordCipher: cipherOf(where.id),
+    inboxUidValidity: "7",
   }));
   h.decryptToken.mockReturnValue("pw");
   h.updateMany.mockResolvedValue({ count: 1 });

@@ -913,12 +913,208 @@ production.
   store the validity with the row. Cheap mitigation to consider first: before
   the STORE, fetch the envelope of the UID and compare subject and date with
   the local row, and refuse on mismatch.
+  Resolved by B2: the validity is stored per account and compared by every
+  IMAP action, read and star included (see B2).
 
-**B2 — IMAP move actions.** Depends on: B1. Archive, trash and their
-inverses. A MOVE assigns a new UID, so the row must store where the message
-went; that is a schema change. Trash is a MOVE to the Trash folder. It is
-never `\Deleted` plus EXPUNGE, which is `delete_permanent` and sits on the
-floor.
+**B2 — IMAP move actions.** Depends on: B1. Landed 2026-09-30, flag OFF.
+- Context: NAVER and ICLOUD `trash`, `untrash`, `archive` and `unarchive` were the
+  unsupported stubs. An IMAP MOVE gives the message a NEW UID in the destination
+  folder, and trash and archive remove the local row (as Gmail's do), so where the
+  message went has to be recorded somewhere that outlives the row. Trash is a MOVE
+  to the Trash folder. It is never `\Deleted` plus EXPUNGE, which is
+  `delete_permanent` and sits on the floor.
+- Landed:
+  - Flag: `IMAP_MOVE_ACTIONS_ENABLED` (`imapMoveActionsEnabled()` in `config.ts`,
+    lenient parse, read at request time), independent of `IMAP_ACTIONS_ENABLED` and
+    `IMAP_SEND_ENABLED`. `dispatch.ts` builds each combination of the three flags
+    once, on first use (`composeImapActions`); every part overrides only its own
+    actions. All three off returns the same unsupported object as before. ICLOUD
+    additionally needs `ICLOUD_INBOX_ENABLED`; generic IMAP is unsupported whatever
+    the flags say. `imap-move-dispatch.test.ts` pins the matrix and that the
+    flag-off answers equal the stubs' and build no IMAP client.
+  - UIDVALIDITY, per account, fail closed. `LinkedInboxAccount.inboxUidValidity`
+    (nullable TEXT, canonical decimal: the value is an unsigned 32-bit integer, over
+    a signed INTEGER, is only compared for equality, and a BigInt column would make
+    any code that serializes a whole row throw). The poller (`imap-poll-guards.ts`)
+    compares the INBOX value the server reports with the stored one each cycle:
+    none stored, it stores it (the baseline); unchanged, nothing; the server reports
+    no usable value, nothing; a different value is a reset (holding pattern, below).
+    Actions (`imap-session.ts`,
+    `imap-move-run.ts`) compare the live value after selecting a mailbox: INBOX against the
+    account's value, for the flag runs of B1 (read and star) and for moves out of
+    INBOX; a parked folder against the value recorded with the move; and an undo
+    also checks INBOX, where the message lands, with STATUS. A mismatch answers
+    `{error}` with no command sent and is logged once per row and change. A row with
+    no stored value (no poll since deploy) is refused too, so read and star answer
+    `{error}` until the first poll after this lands has baselined the account.
+  - Reset handling: a holding pattern (decision, revised 2026-09-30 after the security
+    and database reviews; the first version deleted the mailbox's rows on a reset).
+    On a reset (stored differs from live) the poller changes NOTHING: it does not
+    delete, resolve attention items or store the new value, and it does not stop. It
+    logs a warning and reports one Sentry event per account and live value (in-process
+    dedupe, row id and the two numbers only), then ingests exactly as before B2.
+    Because the stored value stays the old one, every action keeps refusing that
+    mailbox, read and star included. The poll's race cleanup for moved messages is
+    skipped while the mailbox is held. The collision that a repair would fix (a NEW
+    message that reuses an old UID is deduped against the stale row, so it is not
+    ingested) exists on main and is unchanged; `imap-moves-poll-regression.test.ts`
+    pins it as a characterisation. Why not repair on the spot: one observation of one
+    value, from a poller that may overlap itself, against a server that could be
+    flapping, would delete rows with user work attached (attachments, candidate
+    intakes, summaries, stars, replied state). The repair is B2b below. Until B2b
+    lands, a held mailbox stays refusing IMAP actions until an operator resolves it.
+  - Envelope guard. Before any MOVE, `UID FETCH (ENVELOPE)` of the UIDs, compared with
+    what Klorn knows (`imap-envelope.ts`): Message-ID when both sides have one,
+    otherwise the subject as the poller stores it and the date (skipped when the
+    message has no Date header). Moving out, what Klorn knows is the local row
+    (subject and `receivedAt`; the row has no Message-ID column); moving back, the
+    record. A mismatch answers `{error}`, and an undo then drops the dead record.
+    B1's flag runs do not get this guard (one more FETCH per run; a wrong flag is
+    recoverable).
+  - Folders (`providers/imap-folders.ts`), same trust model as B3: a SPECIAL-USE flag
+    the server reported (`specialUseSource` "extension", or the caller's "user"
+    hint) is trusted; imapflow 1.7.0 also reports looser name guesses as "name",
+    which proves nothing, and the exact-name lists for `\Trash` and `\Archive` are
+    EMPTY. The Apple and Naver help pages B3 cites, fetched on 2026-09-30 without running
+    their scripts, contained no IMAP folder name for either role, so none is invented;
+    adding one is a one-line change once a real LIST documents it. One trusted folder per role,
+    never INBOX, nothing when two claim the role. No trustworthy folder: that action
+    is `unsupported` on that account. Naver is not known to have an archive folder (not
+    verified), so archive may be unsupported there. The folder list is asked for once per
+    session. B3's copy of these rules in `imap-send.ts` is not touched (another
+    change edits that file); folding the two together is a follow-up.
+  - MOVE only. The session requires the MOVE capability. imapflow 1.7.0's
+    `messageMove` without it falls back to COPY, `\Deleted` and EXPUNGE, which is a
+    permanent delete by another name, so without MOVE nothing is sent and the answer
+    is `unsupported`. The fake server models that fallback, and a test fails if any
+    path reaches it (`destructiveCommands` is asserted empty after every test).
+  - Where moved messages are tracked: table `ImapMovedMessage` (migration
+    `20261003010000_imap_move_tracking`), not columns on the row, because trash and
+    archive delete the row. One row per parked message, unique on
+    (`linkedInboxAccountId`, `sourceId`) where `sourceId` is the INBOX id it had:
+    `role` (TRASH or ARCHIVE, so an undo of one never restores the other),
+    `folderPath`, `folderUid` (BIGINT), the folder's own `folderUidValidity`, and
+    `messageIdHeader`, `subject`, `sentAt` for the envelope guard. It is written
+    after the server confirmed the move and before the row is deleted; if writing it
+    fails the move still succeeds (the message IS parked) and only undo is lost. Undo
+    consumes it; a record older than 30 days is swept by the next move for the same
+    account and by the log-retention job (`imapMovedMessage`, on `createdAt`, which is
+    indexed for that range scan; that job is off until `LOG_RETENTION_ENABLED` is set).
+    Both foreign keys cascade and `purgeUserData` deletes it.
+  - Undo and the poller's dedup key. The MOVE back gives the message a new INBOX UID,
+    so `untrash` and `unarchive` answer `restoredMessageId` (the new id). The route
+    (`routes/email-undo.ts`) re-syncs that one message through the same persist path
+    as the poll (`syncImapMessageForUser`, one UID fetch) and answers
+    `{gmailId: new id, emailId}`; the next poll finds the key already there and
+    creates nothing. If that re-sync fails after a confirmed restore the answer is 502
+    "Restored on <provider>, but Klorn could not refresh its copy. It will reappear
+    after the next sync." Web clients send no account id on undo, so for an
+    IMAP-looking id the account comes from the record, and only while the flag is on.
+    A poll that read its window before a trash landed would write the row back;
+    after persisting its window the poll removes rows for INBOX ids moved out within
+    the last 10 minutes (`removeRecentlyMovedRows`), so that race heals in the same
+    cycle. `imap-moves-poll-regression.test.ts` runs the real poll, the real
+    persist path and the real provider against the stateful fake server: action, then
+    poll, then poll again, with no duplicate, no resurrection and no loss, for trash,
+    archive and both undos, plus a reset (held, not repaired).
+  - Result honesty. `{success: true}` only when the server confirmed where the message
+    went: the COPYUID of the MOVE answer, or, when the server sends none, a search of
+    the destination for the message's own Message-ID. The destination's UIDNEXT and
+    UIDVALIDITY are read before the MOVE, and only a hit at or above that UIDNEXT counts
+    (a copy of the same Message-ID that was already in Trash is never taken for the
+    moved message, which would make an undo restore the old copy); more than one new
+    hit, or a destination renumbered in between, claims nothing. Anything
+    else is `{error}`; no folder or no MOVE is `unsupported`. The trash and archive
+    routes used to delete or hide the row on any `{error}`, which is right for
+    Gmail and Outlook (`{error}` means "not connected") and wrong here, where it
+    means the message is still in the mailbox. `isImapFamily` (`error-semantics.ts`)
+    makes both routes answer 502 and keep the row for NAVER, ICLOUD and IMAP;
+    Gmail and Outlook behave as before. A retry after a confirmed move whose local
+    delete failed completes from the record instead of failing on a message that is
+    no longer in INBOX.
+  - Concurrency. Moves run through the same per-account queue and session slots as
+    B1 and B3. Consecutive moves to the same destination become one `UID MOVE`; a
+    refused set is halved and retried down to single UIDs within 40 commands
+    (`MAX_MOVE_COMMANDS_PER_RUN`). A session selects one mailbox at a time
+    (`imap-mailbox-switch.ts`): a second `getMailboxLock` while one is held waits
+    forever in imapflow, and the fake throws on it. A session that only touches INBOX
+    still takes one lock. The bulk archive route used to await each message in turn,
+    which would have cost one login per message; it now starts the IMAP moves together
+    (Gmail keeps its order), so they coalesce into one login and one MOVE.
+  - Tests: `imap-move-actions.test.ts` (provider, fake server and strict database),
+    `imap-moves-poll-regression.test.ts`, `routes-email-moves.test.ts`,
+    `imap-move-dispatch.test.ts`, `imap-uidvalidity.test.ts`, `imap-folders.test.ts`,
+    and the UIDVALIDITY cases added to `imap-provider-actions.test.ts`. Mutation
+    checks, each caught: the validity check removed (before a move, for flag runs,
+    for the parked folder, for the INBOX an undo lands in, and the poller's reset
+    detection);
+    the MOVE-capability guard removed, and trash written as COPY plus delete (the
+    EXPUNGE path); the destination UID or its validity not stored, or stored wrong; the
+    envelope guard removed; the read-back replaced by a claimed success; the routes'
+    `{error}` rule removed; the poll's cleanup removed, and the holding pattern made to
+    delete, resolve or store; the read-back's UIDNEXT filter removed; role
+    confusion; coalescing and split-retry removed; the strict id parse replaced; the
+    iCloud gate removed.
+- Not verified: no real Naver or iCloud server has been reached. Behaviour rests on
+  a stateful fake imapflow server and the strict in-memory database. Whether each
+  server advertises MOVE and UIDPLUS, flags its Trash and Archive folders with
+  SPECIAL-USE, sends COPYUID in the MOVE answer, and how it answers a MOVE whose set
+  contains a missing UID are all unknown.
+- Known limits: a connection lost after the MOVE but before it is confirmed answers
+  `{error}` for a message that may have moved (the row stays, a retry says it is no
+  longer in INBOX, and no record exists to restore it); B3's `getReplyHeaders`, Sent
+  copy and Drafts do not compare the stored UIDVALIDITY yet (`imap-send.ts` was not
+  touched); a poll and the undo re-sync can race to create the same new row, and the
+  loser's unique violation is reported as a late re-sync, the row existing; undo
+  works for 30 days after the move, then answers that nothing was recorded; a held
+  mailbox (reset observed) refuses every IMAP action until it is repaired, and its new
+  mail that reuses an old UID is not ingested (as on main); a read-back that finds
+  the moved message neither by COPYUID nor as the single new hit above the prior
+  UIDNEXT answers `{error}` for a message that did move. Relinking a held account
+  (unlink, link again) creates a new row whose stored value is NULL, so the next poll
+  baselines it from the live value and the pre-reset EmailMessage rows, which survive
+  an unlink, become actionable again, guarded only by the envelope check. Until B2b,
+  treat a relink of a held mailbox as a repair that needs its old rows retired first.
+- Before the flip: first let one poll cycle pass after the deploy so that
+  `inboxUidValidity` is set on every NAVER and ICLOUD row (count the NULLs); until then
+  every IMAP action, read and star included, refuses. Then, on one real Naver and one
+  real iCloud account (iCloud also needs `ICLOUD_INBOX_ENABLED`): record CAPABILITY
+  (MOVE, UIDPLUS), the LIST with every folder name and SPECIAL-USE flag (Trash,
+  Archive, Junk), and whether a MOVE answer carries COPYUID. Trash a message and see it
+  in the provider's webmail Trash, its row gone, and two polls leave it gone. Untrash
+  it: it is back in INBOX once, under a new id, after two polls. Repeat with archive and
+  unarchive on iCloud; on Naver record whether archive works or answers the 501 copy. Bulk-archive five
+  messages and confirm one login and one `UID MOVE` in the logs. Try the holding
+  pattern on a test account: set `inboxUidValidity` to another value in the database and
+  confirm that every action (read, star, trash, archive, undo) refuses, that polling goes
+  on, that one warning and one Sentry event appear however many polls run, and that no
+  row, attention item or move record changes; then set the value back. Do not rely on
+  a real reset being repaired until B2b has landed. Check what a MOVE with a missing UID
+  in the set returns (NO, which the split retry handles, or OK). Smoke-test Gmail
+  archive, trash and both undos, which share the routes.
+
+**B2b — non-destructive UIDVALIDITY reset** (*outline*). Depends on: B2. Required
+before anything relies on a server reset being repaired; B2 only holds (refuses
+actions, reports once). Deleting the mailbox's rows on a reset was rejected in review:
+it takes user work with it and acts on one observation. The repair keeps every row:
+- Stale rows are tombstoned by re-keying, in ONE transaction that is guarded by a
+  conditional `updateMany({where: {id, inboxUidValidity: stored}, data: {inboxUidValidity: live}})`
+  whose count must be 1, so two overlapping polls cannot both apply it.
+- The stale rows' `gmailId` gets the suffix `#uv<old>`. The strict id parse (B1) then
+  refuses them, and a NEW message that reuses an old UID gets its own row. Row ids are
+  kept, so commitments and other things keyed by the row id are unaffected.
+- Tombstoned rows are hidden explicitly from every list and count (an explicit
+  filter, not a side effect of the id), and their attention items are resolved. Nothing
+  is deleted.
+- The new value must be seen on two consecutive polls before anything changes, and at
+  most one reset is applied per account per day, so a flapping server cannot churn.
+- The PUSH dedupe marker is text of the form `[gmailId]`; a new message that reuses an
+  old UID would be suppressed by the old marker, so the marker is keyed by row id.
+- Relink: an unlink keeps the EmailMessage rows and a relink baselines from the live
+  value, so the relink path must tombstone rows of the old numbering too (or refuse to
+  baseline while rows exist under an unknown value).
+- Verify: the same fake server, a reset with a reused UID, overlapping polls, a
+  flapping value, a relink.
 
 **B3 — SMTP send for IMAP providers.** Depends on: B0, B1. Landed 2026-09-30,
 flag OFF.
@@ -1114,8 +1310,8 @@ flag OFF.
   verification on, against a local server that stalls, drops or acknowledges
   (`imap-send-wire.test.ts`).
 - Known limits: a connection lost after the body was sent is reported as "delivery
-  not confirmed" (it may have been delivered; SMTP cannot say); UIDVALIDITY is not stored (B1's blocker
-  for B2), so `getReplyHeaders` reads whichever message now holds the UID; mail
+  not confirmed" (it may have been delivered; SMTP cannot say); B2 stores the INBOX UIDVALIDITY but
+  `getReplyHeaders` does not compare it yet, so it reads whichever message now holds the UID; mail
   is always From the account's own address (aliases such as iCloud Hide My Email
   are not supported); SMTP 535 because the provider's own IMAP/SMTP toggle is off
   looks like a rejected password and pauses read and star for that mailbox too.
@@ -1486,7 +1682,7 @@ availability reads each member's own synced calendars.
 A1 → A2a → A2b        A2a → A3        A2a + B0 → A4        A2a + A2b + A4 + A5 → A8
 MCP_WRITE_TOOLS_ENABLED flips only after A2b and A3 have both merged
 A5 (read-only part), A6 independent
-B0 → B3                 B0 → B0b                B1 → B2
+B0 → B3                 B0 → B0b                B1 → B2 → B2b
 B4 after security design
 F0 → B5
 C1 → C2 → C7            C2 → {C3 | C4 | C5 | C6}            C2 → F (PR-B)

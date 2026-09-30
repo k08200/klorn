@@ -1,6 +1,6 @@
 /**
  * The session layer under the IMAP flag actions (step B1 of
- * docs/providers/unified-platform-plan.md).
+ * docs/providers/unified-platform-plan.md) and the IMAP move actions (step B2).
  *
  * Naver and iCloud rate-limit parallel logins from one IP (imap-scheduler.ts),
  * and a ban on our egress IP would stop polling for every user of the provider.
@@ -11,10 +11,13 @@
  *   1. Coalescing. Operations are queued per linked account; ONE worker opens
  *      ONE session, drains everything queued for that account (also what
  *      arrives while it is logging in or working), then logs out. Consecutive
- *      operations that want the same change become one STORE and one read-back.
- *      Order is preserved. Every caller still gets its own result. A session
- *      handles at most MAX_OPS_PER_IMAP_SESSION operations; the rest wait for
- *      the next login.
+ *      operations that want the same change become one STORE and one read-back;
+ *      consecutive moves to the same destination become one UID MOVE
+ *      (imap-move-run.ts). Order is preserved. Every caller still gets its own
+ *      result. A session handles at most MAX_OPS_PER_IMAP_SESSION operations; the
+ *      rest wait for the next login. One mailbox is selected at a time
+ *      (imap-mailbox-switch.ts), and before any run touches a UID the live
+ *      UIDVALIDITY of its mailbox is compared with the stored one (B2).
  *   2. Global cap. At most MAX_CONCURRENT_IMAP_ACTION_SESSIONS sessions run at
  *      once across all accounts. The poller is unaffected.
  *   3. Auth cooldown. After a rejected login, actions for that credential
@@ -49,9 +52,19 @@ import { Semaphore } from "../../semaphore.js";
 import { captureError } from "../../sentry.js";
 import { createImapClient, endImapSession } from "../imap-connection.js";
 import type { ImapProviderConfig } from "../imap-providers.js";
+import { checkLiveValidity, resetUidValidityLogState } from "../imap-uidvalidity.js";
 import { isSmtpAuthRejection } from "../smtp-transport.js";
 import { errorMessage, fail, sanitizedError } from "./action-failure.js";
 import { applyFlagRun, type FlagChange, type ServerOutcome, sameChange } from "./imap-flags.js";
+import { createFolderFinder } from "./imap-folders.js";
+import { createMailboxSwitch } from "./imap-mailbox-switch.js";
+import {
+  type MoveOp,
+  type MoveOpResult,
+  type RunContext,
+  runMoveRun,
+  sameMoveRun,
+} from "./imap-move-run.js";
 import type { MailActionFailure } from "./types.js";
 
 // A user is waiting on the route: fail fast rather than imapflow's defaults
@@ -82,6 +95,8 @@ export interface SessionAccount {
   password: string;
   /** Identifies THIS credential: row id plus the stored cipher. */
   credentialKey: string;
+  /** The INBOX UIDVALIDITY the poller stored; null = never recorded (actions on UIDs are refused). */
+  inboxUidValidity: string | null;
 }
 
 export interface FlagOp {
@@ -92,10 +107,19 @@ export interface FlagOp {
 /** A server outcome, or the failure to hand straight back to the caller. */
 export type OpResult = ServerOutcome | MailActionFailure;
 
-interface Queued {
+interface FlagQueued {
+  kind: "flag";
   op: FlagOp;
   settle: (result: OpResult) => void;
 }
+
+interface MoveQueued {
+  kind: "move";
+  op: MoveOp;
+  settle: (result: MoveOpResult) => void;
+}
+
+type Queued = FlagQueued | MoveQueued;
 
 interface AccountQueue {
   account: SessionAccount;
@@ -121,6 +145,7 @@ export function resetImapSessionState(): void {
   outstandingTasks.clear();
   authCooldownUntil.clear();
   lastTransportCapture.clear();
+  resetUidValidityLogState();
   sessionSlots = new Semaphore(MAX_CONCURRENT_IMAP_ACTION_SESSIONS);
 }
 
@@ -273,22 +298,6 @@ export async function withImapClient<T>(
   }
 }
 
-/** A session with INBOX selected for the whole run; the flag actions' shape. */
-function withInbox<T>(
-  provider: ImapProviderConfig,
-  account: SessionAccount,
-  run: (client: ImapFlow) => Promise<T>,
-): Promise<T> {
-  return withImapClient(provider, account, async (client) => {
-    const lock = await client.getMailboxLock(INBOX);
-    try {
-      return await run(client);
-    } finally {
-      lock.release();
-    }
-  });
-}
-
 function takeBatch(rowId: string, max: number): readonly Queued[] {
   const queue = queues.get(rowId);
   if (!queue) return [];
@@ -296,25 +305,63 @@ function takeBatch(rowId: string, max: number): readonly Queued[] {
   return queue.pending.slice(0, max);
 }
 
-/** Split into maximal consecutive runs wanting the same change (order kept). */
-function splitRuns(batch: readonly Queued[]): Queued[][] {
-  return batch.reduce<Queued[][]>((runs, item) => {
+type Run =
+  | { kind: "flag"; items: readonly FlagQueued[] }
+  | { kind: "move"; items: readonly MoveQueued[] };
+
+function joinsRun(run: Run, item: Queued): boolean {
+  const head = run.items[0];
+  if (run.kind === "flag" && item.kind === "flag") {
+    return sameChange((head as FlagQueued).op.change, item.op.change);
+  }
+  if (run.kind === "move" && item.kind === "move") {
+    return sameMoveRun((head as MoveQueued).op, item.op);
+  }
+  return false;
+}
+
+/** Split into maximal consecutive runs wanting the same thing (order kept). */
+function splitRuns(batch: readonly Queued[]): Run[] {
+  return batch.reduce<Run[]>((runs, item) => {
     const last = runs[runs.length - 1];
-    if (last && sameChange(last[0].op.change, item.op.change)) {
-      return [...runs.slice(0, -1), [...last, item]];
+    if (last && joinsRun(last, item)) {
+      const joined = { ...last, items: [...last.items, item] } as Run;
+      return [...runs.slice(0, -1), joined];
     }
-    return [...runs, [item]];
+    const fresh: Run =
+      item.kind === "flag" ? { kind: "flag", items: [item] } : { kind: "move", items: [item] };
+    return [...runs, fresh];
   }, []);
 }
 
-async function runBatch(client: ImapFlow, batch: readonly Queued[]): Promise<void> {
+async function runFlagRun(ctx: RunContext, items: readonly FlagQueued[]): Promise<void> {
+  const { provider, account } = ctx;
+  const live = await ctx.mailboxes.open(INBOX);
+  const refusal = checkLiveValidity(provider, account.rowId, account.inboxUidValidity, live);
+  if (refusal) {
+    for (const item of items) item.settle(refusal);
+    return;
+  }
+  const outcomes = await applyFlagRun(
+    ctx.client,
+    items.map((item) => item.op.uid),
+    items[0].op.change,
+  );
+  for (const item of items) item.settle(outcomes.get(item.op.uid) ?? "missing");
+}
+
+async function runMoves(ctx: RunContext, items: readonly MoveQueued[]): Promise<void> {
+  const results = await runMoveRun(
+    ctx,
+    items.map((item) => item.op),
+  );
+  for (const item of items) item.settle(results.get(item.op.uid) ?? { status: "refused" });
+}
+
+async function runBatch(ctx: RunContext, batch: readonly Queued[]): Promise<void> {
   for (const run of splitRuns(batch)) {
-    const outcomes = await applyFlagRun(
-      client,
-      run.map((item) => item.op.uid),
-      run[0].op.change,
-    );
-    for (const item of run) item.settle(outcomes.get(item.op.uid) ?? "missing");
+    if (run.kind === "flag") await runFlagRun(ctx, run.items);
+    else await runMoves(ctx, run.items);
   }
 }
 
@@ -340,13 +387,24 @@ async function runSession(provider: ImapProviderConfig, rowId: string): Promise<
   let inFlight: readonly Queued[] = [];
   let handled = 0;
   try {
-    await withInbox(provider, account, async (client) => {
-      while (handled < MAX_OPS_PER_IMAP_SESSION) {
-        // Taken AFTER the login, so everything queued while connecting joins.
-        inFlight = takeBatch(rowId, MAX_OPS_PER_IMAP_SESSION - handled);
-        if (inFlight.length === 0) return;
-        handled += inFlight.length;
-        await runBatch(client, inFlight);
+    await withImapClient(provider, account, async (client) => {
+      const ctx: RunContext = {
+        provider,
+        account,
+        client,
+        mailboxes: createMailboxSwitch(client),
+        folders: createFolderFinder(client),
+      };
+      try {
+        while (handled < MAX_OPS_PER_IMAP_SESSION) {
+          // Taken AFTER the login, so everything queued while connecting joins.
+          inFlight = takeBatch(rowId, MAX_OPS_PER_IMAP_SESSION - handled);
+          if (inFlight.length === 0) return;
+          handled += inFlight.length;
+          await runBatch(ctx, inFlight);
+        }
+      } finally {
+        ctx.mailboxes.release();
       }
     });
   } catch (err) {
@@ -398,6 +456,32 @@ async function withSessionSlot<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
+/** Queue one operation for `account`; resolves with its own result. Never rejects. */
+function submit<R>(
+  provider: ImapProviderConfig,
+  account: SessionAccount,
+  build: (settle: (result: R | MailActionFailure) => void) => Queued,
+): Promise<R | MailActionFailure> {
+  const cooling = cooldownFailure(provider, account);
+  if (cooling) return Promise.resolve(cooling);
+  return new Promise<R | MailActionFailure>((settle) => {
+    const existing = queues.get(account.rowId);
+    // The newest snapshot wins: a password rotated while ops were queued is
+    // used by the next session.
+    queues.set(account.rowId, {
+      account,
+      pending: [...(existing?.pending ?? []), build(settle)],
+    });
+    if (!existing) {
+      // drain() handles its own failures; this is the last net, so a detached
+      // worker can never become an unhandled rejection.
+      serially(account.rowId, () => drain(provider, account.rowId)).catch((err) => {
+        console.warn(`[${provider.logScope}] action worker failed: ${errorMessage(err)}`);
+      });
+    }
+  });
+}
+
 /**
  * Queue one flag change for `account` and resolve with its own result. Never
  * rejects. Opens no connection itself: the account's worker does, once for the
@@ -408,24 +492,16 @@ export function submitFlagOp(
   account: SessionAccount,
   op: FlagOp,
 ): Promise<OpResult> {
-  const cooling = cooldownFailure(provider, account);
-  if (cooling) return Promise.resolve(cooling);
-  return new Promise<OpResult>((settle) => {
-    const existing = queues.get(account.rowId);
-    // The newest snapshot wins: a password rotated while ops were queued is
-    // used by the next session.
-    queues.set(account.rowId, {
-      account,
-      pending: [...(existing?.pending ?? []), { op, settle }],
-    });
-    if (!existing) {
-      // drain() handles its own failures; this is the last net, so a detached
-      // worker can never become an unhandled rejection.
-      serially(account.rowId, () => drain(provider, account.rowId)).catch((err) => {
-        console.warn(`[${provider.logScope}] action worker failed: ${errorMessage(err)}`);
-      });
-    }
-  });
+  return submit<ServerOutcome>(provider, account, (settle) => ({ kind: "flag", op, settle }));
+}
+
+/** Queue one move (step B2); same contract as `submitFlagOp`, coalesced per destination. */
+export function submitMoveOp(
+  provider: ImapProviderConfig,
+  account: SessionAccount,
+  op: MoveOp,
+): Promise<MoveOpResult> {
+  return submit<MoveOpResult>(provider, account, (settle) => ({ kind: "move", op, settle }));
 }
 
 // --- one-shot tasks (step B3) -------------------------------------------------

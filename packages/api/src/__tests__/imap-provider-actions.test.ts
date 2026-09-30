@@ -33,11 +33,17 @@ const h = vi.hoisted(() => ({
   captureError: vi.fn(),
   server: new Map<number, Set<string>>(),
   ignoreStore: false,
+  /** What `client.mailbox` reports after INBOX is selected; false = nothing usable. */
+  liveMailbox: { path: "INBOX", uidValidity: 7n } as false | { path: string; uidValidity: bigint },
 }));
 
 class FakeImapFlow {
   constructor(opts: Record<string, unknown>) {
     h.ctorOpts.push(opts);
+  }
+  // What `client.mailbox` reports once INBOX is selected; the stored value below matches.
+  get mailbox() {
+    return h.liveMailbox;
   }
   connect = h.connect;
   getMailboxLock = h.getMailboxLock;
@@ -81,12 +87,14 @@ const NAVER_ROW = {
   email: "me@naver.com",
   imapHost: "imap.naver.com:993",
   imapPasswordCipher: CIPHER,
+  inboxUidValidity: "7",
 };
 const ICLOUD_ROW = {
   id: "row-2",
   email: "me@icloud.com",
   imapHost: "imap.mail.me.com:993",
   imapPasswordCipher: CIPHER,
+  inboxUidValidity: "7",
 };
 
 const NAVER_MSG = "naver-imap:me@naver.com:101";
@@ -149,6 +157,7 @@ function loggedText(): string {
 beforeEach(() => {
   vi.clearAllMocks();
   h.ctorOpts.length = 0;
+  h.liveMailbox = { path: "INBOX", uidValidity: 7n };
   resetImapSessionState();
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -162,6 +171,98 @@ function expectNoConnection() {
   expect(h.messageFlagsRemove).not.toHaveBeenCalled();
   expect(h.updateMany).not.toHaveBeenCalled();
 }
+
+describe("UIDVALIDITY guard on read and star (step B2)", () => {
+  const actions = () => imapMailActions("NAVER");
+  const FLAG_ACTIONS: Array<[string, () => Promise<unknown>]> = [
+    ["markAsRead", () => actions().markAsRead("u1", NAVER_MSG, "row-1")],
+    ["toggleRead", () => actions().toggleRead("u1", NAVER_MSG, false, "row-1")],
+    ["toggleStar", () => actions().toggleStar("u1", NAVER_MSG, true, "row-1")],
+  ];
+
+  function expectNothingTouched() {
+    expect(h.messageFlagsAdd).not.toHaveBeenCalled();
+    expect(h.messageFlagsRemove).not.toHaveBeenCalled();
+    expect(h.fetch).not.toHaveBeenCalled();
+    expect(h.updateMany).not.toHaveBeenCalled();
+  }
+
+  it.each(
+    FLAG_ACTIONS,
+  )("%s refuses, touching no UID, when the live UIDVALIDITY differs from the stored one", async (_name, run) => {
+    armAccount();
+    armServer([101]);
+    h.liveMailbox = { path: "INBOX", uidValidity: 8n };
+
+    const result = await run();
+
+    expect(result).toMatchObject({ error: expect.any(String) });
+    expect(result).not.toHaveProperty("success");
+    expectNothingTouched();
+    await flush();
+    expect(h.release).toHaveBeenCalledTimes(1);
+    expect(h.logout).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses when the poller never stored a value for the mailbox", async () => {
+    armAccount({ ...NAVER_ROW, inboxUidValidity: null });
+    armServer([101]);
+
+    const result = await actions().markAsRead("u1", NAVER_MSG, "row-1");
+
+    expect(result).toMatchObject({ error: expect.stringContaining("sync") });
+    expectNothingTouched();
+  });
+
+  it("refuses when a stored value is not a valid UIDVALIDITY (fails closed)", async () => {
+    armAccount({ ...NAVER_ROW, inboxUidValidity: "not-a-number" });
+    armServer([101]);
+
+    expect(await actions().markAsRead("u1", NAVER_MSG, "row-1")).toMatchObject({
+      error: expect.any(String),
+    });
+    expectNothingTouched();
+  });
+
+  it("refuses when the server reported no usable UIDVALIDITY for the selected mailbox", async () => {
+    armAccount();
+    armServer([101]);
+    h.liveMailbox = false;
+
+    expect(await actions().markAsRead("u1", NAVER_MSG, "row-1")).toMatchObject({
+      error: expect.any(String),
+    });
+    expectNothingTouched();
+  });
+
+  it("logs a refusal once for the whole burst, naming the row and never the message", async () => {
+    armAccount();
+    armServer([101, 102, 103]);
+    h.liveMailbox = { path: "INBOX", uidValidity: 8n };
+
+    await Promise.all(
+      [101, 102, 103].map((uid) =>
+        actions().markAsRead("u1", `naver-imap:me@naver.com:${uid}`, "row-1"),
+      ),
+    );
+
+    const lines = loggedText()
+      .split("\n")
+      .filter((line) => line.includes("UIDVALIDITY"));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("row-1");
+    expect(lines[0]).not.toContain("naver-imap:");
+  });
+
+  it("does not mix accounts: another mailbox with a matching value still works", async () => {
+    armAccount(ICLOUD_ROW);
+    armServer([202]);
+
+    expect(await imapMailActions("ICLOUD").markAsRead("u1", ICLOUD_MSG, "row-2")).toEqual({
+      success: true,
+    });
+  });
+});
 
 describe("read and star over IMAP flags — NAVER", () => {
   const actions = () => imapMailActions("NAVER");
@@ -226,7 +327,13 @@ describe("read and star over IMAP flags — NAVER", () => {
 
     expect(h.findFirst).toHaveBeenCalledWith({
       where: { id: "row-1", userId: "u1", provider: "NAVER" },
-      select: { id: true, email: true, imapHost: true, imapPasswordCipher: true },
+      select: {
+        id: true,
+        email: true,
+        imapHost: true,
+        imapPasswordCipher: true,
+        inboxUidValidity: true,
+      },
     });
     expect(h.decryptToken).toHaveBeenCalledWith(CIPHER);
     expect(h.ctorOpts).toHaveLength(1);
