@@ -3884,7 +3884,7 @@ struct ReplyStateChip: View {
     enum Kind: Equatable { case needsReply, draftReady, answered }
 
     /// What the chip says. Static and pure so --self-check can pin it.
-    static func kind(state: String, draftReady: Bool) -> Kind? {
+    nonisolated static func kind(state: String, draftReady: Bool) -> Kind? {
         switch state {
         case "needsReply": draftReady ? .draftReady : .needsReply
         case "replied": .answered
