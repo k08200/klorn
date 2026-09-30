@@ -659,12 +659,94 @@ needs FA-9 and the admin guidance from F0.
   or sample events and get a local provider value, not GOOGLE.
 - Verify: `prisma migrate diff`, the CI Migrations job, and a backfill test
   for both kinds of row.
+- Landed 2026-09-30 (expand phase only; branch `feat/calendar-provider-schema`,
+  PR not yet opened). Migration `20261001010000_calendar_provider`:
+  - New enum `CalendarProvider`: GOOGLE, OUTLOOK, ICLOUD, NAVER, DEVICE, LOCAL,
+    only the sources C2-C6 name. LOCAL appears only on `CalendarEvent`.
+  - `LinkedCalendarAccount`: `provider` (default GOOGLE), nullable `caldavUrl`
+    and `caldavPasswordCipher`, nullable `accessToken`, and a new unique key
+    (userId, provider, email) added alongside the old (userId, email), which
+    stays (see the deploy-overlap bullet). `CalendarEvent`: `provider`,
+    `externalId`, `sourceAccountId` (plain tag with no foreign key, like
+    `EmailMessage.linkedInboxAccountId`), unique (userId, provider,
+    externalId). `googleId` and its unique are untouched.
+  - Backfill is one idempotent UPDATE: a `googleId` makes the row GOOGLE with
+    `externalId = googleId`; none makes it LOCAL. Sample and demo rows have no
+    `googleId`, so they are LOCAL. That UPDATE is correct only now, while every
+    row is a Google or a local event; once OUTLOOK, ICLOUD, NAVER or DEVICE rows
+    exist it would flip them to LOCAL, so it is never re-run verbatim. Applied
+    to a scratch Postgres 16 holding both kinds of row (2026-09-30); the CI
+    drift check reports no difference.
+  - Both `provider` columns keep `DEFAULT 'GOOGLE'` so the previous release,
+    which inserts without it, keeps working during the deploy overlap. A row it
+    writes in that window is GOOGLE with a NULL `externalId`. The Google sync
+    upsert re-stamps both on update. The contract migration repairs the rest
+    with scoped statements (below) before it drops the default.
+  - Dual-write goes through `pim/calendar-rows.ts`, the single place that
+    decides provider, `externalId` and `sourceAccountId`. The three Google sync
+    sites (`POST /api/calendar/sync`, the scheduler tick, login init-sync)
+    upsert through it. Manual create and the agent `create_event` write GOOGLE
+    when Google returned an id and LOCAL when it did not. The demo seed writes
+    LOCAL. The link-calendar callback keys on (userId, provider, email) and
+    writes GOOGLE. `sourceAccountId` is NULL in every writer today: linked
+    calendars are not synced into rows until C2. A client cannot set any of the
+    three fields. `calendar-provider-writers-guard.test.ts` fails if a new
+    writer omits the provider or a reader starts using the new columns.
+  - Reads are unchanged, still by `googleId` and row id. The one wire change is
+    additive: the row JSON returned by `/api/calendar` (list, get, create,
+    update) now carries `provider`, `externalId` and `sourceAccountId`.
+  - Google-only `LinkedCalendarAccount` readers filter on `provider: "GOOGLE"`
+    (`getLinkedCalendarClients`, the linked-calendars list), so a later CalDAV
+    row with no token is never flagged for reconnect and an OUTLOOK row is
+    never given a Google client. The guard test fails for a reader without a
+    provider filter; the key-rotation sweep reads every provider on purpose.
+  - The migration opens with `SET LOCAL lock_timeout = '5s'`, so a deploy
+    blocked by a long transaction fails fast instead of queueing behind it.
+  - The key-rotation sweep (`scripts/reencrypt-tokens.ts`) covers
+    `caldavPasswordCipher` from day one. `purgeUserData` is unchanged: it
+    deletes both tables by `userId`.
+  - Deploy overlap, verified 2026-09-30 on a scratch Postgres 16 with the
+    previous release's generated client: its Google sync upsert keeps working,
+    and so does its link-calendar upsert (`ON CONFLICT ("userId","email")`),
+    because the old unique index stays. Dropping it first failed that upsert
+    with Postgres 42P10, so the old key is kept and the code can be rolled back
+    with no schema step.
+- For later steps: C2 has two gates (see C2). The contract phase flips reads to
+  (provider, externalId) and drops `LinkedCalendarAccount_userId_email_key`
+  when a second provider for the same email actually lands (C3/C4). Before it
+  drops the `CalendarEvent.provider` default it repairs rows the previous
+  release wrote, scoped to GOOGLE rows so no other provider's row is touched,
+  in this order:
+  `UPDATE "CalendarEvent" SET "externalId" = "googleId" WHERE "provider" =
+  'GOOGLE' AND "externalId" IS NULL;` then `UPDATE "CalendarEvent" SET
+  "provider" = 'LOCAL' WHERE "provider" = 'GOOGLE' AND "googleId" IS NULL;`.
+  Then it adds `CHECK (("provider" = 'LOCAL') = ("externalId" IS NULL))`. The
+  CHECK cannot ship in C1: the previous release inserts GOOGLE rows with no
+  `externalId`. Finally it drops `googleId` and the remaining defaults.
+- Exit: no user-visible change and no flag. The two index builds and the
+  backfill are the only non-metadata steps. Nothing is dropped.
+- Rollback: revert the PR. The columns and indexes are additive and ignorable,
+  and the old unique index is still there for the previous release.
 
 **C2 — calendar provider seam and linked-account sync** (*outline*). Mirrors
 `mail/providers/`. Linked Google calendars are synced into rows, not only
-consulted for conflicts.
+consulted for conflicts. Two gates from the C1 database review (2026-09-30),
+both settled before C2 writes a linked row:
+- Dedupe semantics. The unique (userId, provider, externalId) does not include
+  `sourceAccountId`, so an invite present in both the primary and a linked
+  Google calendar collides. Decide between a sentinel `sourceAccountId` for
+  primary rows and a `COALESCE(sourceAccountId, ...)` expression unique index
+  (raw SQL; confirm the CI drift check accepts it before choosing).
+- Unlinking. `DELETE /google/linked-calendars/:id` (`routes/auth.ts`, around
+  `:1590`) must delete that account's events in the same `$transaction` (or
+  the column becomes a foreign key with `ON DELETE CASCADE`), because
+  `/api/calendar` has no source filter and orphaned events would keep showing.
+  Add an index on (userId, sourceAccountId) when that query first exists.
 
 **C3 — CalDAV connector for iCloud and Naver** (*outline*). Read-only v1.
+`caldavUrl` is user-supplied and fetched server-side, so SSRF validation
+(resolve the host, pin the address, reject private ranges) is required before
+the first request, and the password is stored with `encryptToken`.
 **C4 — Microsoft Graph calendar** (*outline*). Needs calendar permissions
 added to the Azure app (FA-9); existing users re-consent.
 **C5 — mobile device bridge** (*outline*). Blocked on FA-8. Upload policy per

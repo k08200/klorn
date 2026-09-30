@@ -351,26 +351,64 @@ model UserIdentity {
   @@unique([userId, provider])
 }
 
-// A secondary Google account (e.g. work) linked ONLY for cross-account calendar
-// free/busy. Kept separate from UserToken (the single primary account that owns
-// email + the main calendar) so the email path stays single-account; this table
-// is read only by checkConflicts. Scope granted is calendar.readonly, nothing else.
+// Which calendar source a LinkedCalendarAccount or CalendarEvent row belongs to
+// (step C1, docs/providers/unified-platform-plan.md). Only the sources the plan's
+// C steps name: GOOGLE (today), OUTLOOK (C4, Graph), ICLOUD + NAVER (C3, CalDAV),
+// DEVICE (C5/C6, on-device calendars uploaded behind per-source opt-in) and LOCAL
+// (events created in Klorn with no external calendar; only ever on CalendarEvent,
+// never on an account row). OAuth sources use the token columns, CalDAV sources
+// the caldav* columns.
+enum CalendarProvider {
+  GOOGLE
+  OUTLOOK
+  ICLOUD
+  NAVER
+  DEVICE
+  LOCAL
+}
+
+// A secondary calendar account linked for cross-account free/busy. Historically
+// Google-only (calendar.readonly, nothing else), which is still the only provider
+// any code path writes; the provider column (C1) makes the row provider-aware for
+// C2-C6. Kept separate from UserToken (the single primary account that owns email
+// + the main calendar) so the email path stays single-account. Mirrors
+// LinkedInboxAccount: OAuth providers use accessToken/refreshToken, CalDAV
+// providers the caldav* columns.
 model LinkedCalendarAccount {
-  id             String    @id @default(uuid())
-  userId         String
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  email          String // the linked Google account address — label + dedup key
-  accessToken    String
-  refreshToken   String?
-  expiresAt      DateTime?
+  id                   String           @id @default(uuid())
+  userId               String
+  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider             CalendarProvider @default(GOOGLE)
+  email                String // the linked account address — label + dedup key
+  // OAuth providers (GOOGLE, OUTLOOK): encrypted token pair. Nullable because
+  // CalDAV rows never have one; readers already guard `row.accessToken ?`.
+  accessToken          String?
+  refreshToken         String?
+  expiresAt            DateTime?
+  // CalDAV providers (ICLOUD, NAVER): server URL + AES-256-GCM password cipher
+  // (an app-specific password), same crypto-tokens helper as the OAuth ciphers.
+  // Unused until C3; covered by the key-rotation sweep from day one. caldavUrl is
+  // user-supplied and fetched server-side, so C3 must validate it against SSRF
+  // (resolve-then-pin, reject private ranges) before the first request.
+  caldavUrl            String?
+  caldavPasswordCipher String?
   // Set true when this linked calendar's token is found revoked/undecryptable so
   // the UI can prompt a re-link instead of the account silently dropping out of
   // free/busy; cleared on a successful token refresh or re-link. Mirrors
   // LinkedInboxAccount.needsReconnect.
-  needsReconnect Boolean   @default(false)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  needsReconnect       Boolean          @default(false)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
+  // provider participates so the same address can exist on two services (an
+  // iCloud address linked into Google) without colliding. Mirrors
+  // LinkedInboxAccount.
+  @@unique([userId, provider, email])
+  // The old key, kept through the expand phase: the previous release's upsert is
+  // ON CONFLICT ("userId","email"), so dropping it breaks that release during the
+  // deploy overlap and on rollback. Redundant while every row is GOOGLE. The
+  // contract phase drops it once a second provider for the same address lands
+  // (C3/C4).
   @@unique([userId, email])
 }
 
@@ -531,25 +569,42 @@ model Contact {
 }
 
 model CalendarEvent {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title       String
-  description String?
-  startTime   DateTime
-  endTime     DateTime
-  location    String?
-  meetingLink String?
-  color       String?
-  allDay      Boolean  @default(false)
-  googleId    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String           @id @default(uuid())
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  startTime       DateTime
+  endTime         DateTime
+  location        String?
+  meetingLink     String?
+  color           String?
+  allDay          Boolean          @default(false)
+  // Legacy Google key. Still what every read and sync lookup uses; it is
+  // dual-written with provider/externalId (C1) and dropped in the contract phase.
+  googleId        String?
+  // C1 provider-aware identity. The DEFAULT only serves the previous release
+  // while the migration and the new code overlap — every writer here sets it
+  // explicitly (guarded by calendar-provider-writers-guard.test.ts).
+  provider        CalendarProvider @default(GOOGLE)
+  // The id in the source calendar (Google event id, CalDAV UID, Graph id).
+  // NULL for LOCAL rows. Equals googleId for GOOGLE rows.
+  externalId      String?
+  // Which LinkedCalendarAccount the row was synced from. NULL = the primary
+  // Google login calendar, or a LOCAL row. Plain tag (no FK), like
+  // EmailMessage.linkedInboxAccountId, so unlinking an account never cascades
+  // into events; C2 owns cleaning up by this tag when it syncs linked accounts.
+  sourceAccountId String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   // Scope the Google event id by user: the SAME googleId can appear in two
   // users' calendars (both attendees of one event), so a global unique would
   // force their rows to collide and lose one user's data. (Multi-tenant fix.)
   @@unique([userId, googleId])
+  // The provider-aware twin of the key above. Postgres treats NULLs as distinct,
+  // so LOCAL rows (externalId NULL) never collide.
+  @@unique([userId, provider, externalId])
   @@index([userId, startTime])
 }
 

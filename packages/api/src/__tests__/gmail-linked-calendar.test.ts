@@ -43,6 +43,12 @@ describe("getLinkedCalendarClients", () => {
     vi.clearAllMocks();
   });
 
+  it("asks only for GOOGLE rows — a CalDAV row has no token and an OUTLOOK row is not a Google client", async () => {
+    m.findMany.mockResolvedValue([]);
+    await getLinkedCalendarClients("u1");
+    expect(m.findMany).toHaveBeenCalledWith({ where: { userId: "u1", provider: "GOOGLE" } });
+  });
+
   it("returns one client per linked account, tagged with its email", async () => {
     m.findMany.mockResolvedValue([
       { id: "a", email: "work@x.com", accessToken: "AT1", refreshToken: "RT1", expiresAt: null },
