@@ -19,6 +19,7 @@ import { wrapUntrusted } from "../untrusted.js";
 import { classifyNeedsReplyFromSignals } from "./email-priority.js";
 import { htmlToPlainText } from "./email-text.js";
 import { senderLabelsFor, userLabelLine } from "./sender-labels.js";
+import { fetchTriagePriorities, prioritiesPreambleSentence } from "./triage-priorities.js";
 
 // ─── AI Summarization ─────────────────────────────────────────────────────
 
@@ -140,6 +141,7 @@ export async function summarizeEmailOnDemand(
   const purpose = await resolveInboxPurpose(userId, email.linkedInboxAccountId);
   const companyDomains = await resolveCompanyDomains(userId);
   const userLabel = await resolveUserLabel(userId, email.from);
+  const priorities = await fetchTriagePriorities(userId);
 
   const body =
     email.body || (email.htmlBody ? htmlToPlainText(email.htmlBody) : "") || email.snippet || "";
@@ -156,7 +158,10 @@ export async function summarizeEmailOnDemand(
       temperature: 0.1,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: detailedAnalysisPrompt(lang, purpose, companyDomains) },
+        {
+          role: "system",
+          content: detailedAnalysisPrompt(lang, purpose, companyDomains, priorities),
+        },
         {
           role: "user",
           content: `From: ${wrapUntrusted(email.from, "email:from")}\n${userLabelLine(userLabel)}Subject: ${wrapUntrusted(email.subject, "email:subject")}\n\n${wrapUntrusted(truncatedBody, "email:body")}`,
@@ -185,9 +190,10 @@ function detailedAnalysisPrompt(
   lang: "en" | "ko",
   purpose?: string | null,
   companyDomains: readonly string[] = [],
+  priorities: string | null = null,
 ): string {
   const language = lang === "ko" ? "Korean" : "English";
-  return `${analysisPreamble(purpose, companyDomains)}${EMAIL_ANALYSIS_BODY}
+  return `${analysisPreamble(purpose, companyDomains, priorities)}${EMAIL_ANALYSIS_BODY}
 
 ## Detailed mode overrides (this request only)
 - summary: <=160 chars, still WHO + WHAT first
@@ -278,6 +284,7 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
   // mailbox that appears in this page.
   const primaryPurpose = await resolveInboxPurpose(userId, null);
   const companyDomains = await resolveCompanyDomains(userId);
+  const priorities = await fetchTriagePriorities(userId);
   const userLabels = await senderLabelsFor(
     userId,
     unsummarized.map((e) => senderEmail(e.from).toLowerCase()).filter(Boolean),
@@ -313,6 +320,7 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
           : primaryPurpose,
         companyDomains,
         userLabels.get(senderEmail(email.from).toLowerCase()) ?? null,
+        priorities,
       );
       await persistSummaryResult(email, result, userEmail);
       count++;
@@ -352,6 +360,7 @@ export async function summarizeUnsummarizedEmails(userId: string, limit = 10): P
 export function analysisPreamble(
   purpose?: string | null,
   companyDomains: readonly string[] = [],
+  priorities: string | null = null,
 ): string {
   // Declared company domains (company-domains.ts, already validated as
   // hostnames): a colleague must read as a colleague, not a customer. The
@@ -360,7 +369,9 @@ export function analysisPreamble(
   const internal = companyDomains.length
     ? ` Mail from these domains is INTERNAL — the user's own company (${companyDomains.join(", ")}): treat such senders as colleagues, not customers or investors.`
     : "";
-  return purposeSentence(purpose) + internal;
+  // The user's own priorities (triage-priorities.ts) — quoted as their
+  // statement, appended last; empty keeps everything above byte-identical.
+  return purposeSentence(purpose) + internal + prioritiesPreambleSentence(priorities);
 }
 
 function purposeSentence(purpose?: string | null): string {
@@ -528,6 +539,7 @@ async function summarizeEmail(
   purpose?: string | null,
   companyDomains: readonly string[] = [],
   userLabel: string | null = null,
+  priorities: string | null = null,
 ): Promise<AISummaryResult> {
   // Truncate very long bodies
   const truncatedBody = body.length > 3000 ? body.slice(0, 3000) + "\n...(truncated)" : body;
@@ -540,7 +552,7 @@ async function summarizeEmail(
       messages: [
         {
           role: "system",
-          content: analysisPreamble(purpose, companyDomains) + EMAIL_ANALYSIS_BODY,
+          content: analysisPreamble(purpose, companyDomains, priorities) + EMAIL_ANALYSIS_BODY,
         },
         {
           role: "user",

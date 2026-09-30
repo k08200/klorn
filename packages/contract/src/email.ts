@@ -155,6 +155,9 @@ export interface InboxesResponse {
   /** The user's declared company email domains (lowercase hostnames) — a
    *  sender on one is 회사 as a recorded fact. Empty until declared. */
   companyDomains: string[];
+  /** The user's own words about what matters ("investor mail first"),
+   *  read by the lane judge and the analysis preamble. Null until set. */
+  priorities: string | null;
 }
 
 export interface EmailThreadRow {
@@ -195,4 +198,24 @@ export interface EmailUndoActionResponse {
   success: boolean;
   gmailId: string;
   emailId: string;
+}
+
+/** One thread I am waiting on — the latest thing I sent, unanswered. */
+export interface WaitingOnItemWire {
+  gmailId: string;
+  threadId: string;
+  to: string;
+  subject: string;
+  /** ISO — when I sent it. */
+  sentAt: string;
+  daysWaiting: number;
+  /** "primary" | linked inbox id — where the live read must go. */
+  inbox: string;
+}
+
+/** `GET /api/email/waiting-on?days=` — oldest wait first. */
+export interface WaitingOnResponse {
+  items: WaitingOnItemWire[];
+  /** The floor that was applied (the request's `days`, or the default). */
+  minDays: number;
 }

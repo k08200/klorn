@@ -22,7 +22,7 @@ export type MailActionFailure = { error: string };
 export type SimpleMailActionResult = { success: true } | MailActionFailure | MailActionUnsupported;
 
 export type SendMailResult =
-  | { success: true; messageId?: string | null }
+  | { success: true; messageId?: string | null; threadId?: string | null }
   | MailActionFailure
   | MailActionUnsupported;
 

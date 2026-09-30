@@ -99,6 +99,10 @@ vi.mock("../db.js", () => {
       upsert: vi.fn(async () => ({})),
       deleteMany: vi.fn(async () => ({ count: 1 })),
     },
+    sentMessage: {
+      findMany: vi.fn(async () => []),
+      upsert: vi.fn(async () => ({})),
+    },
     device: {
       findUnique: vi.fn(async () => ({ id: "d1" })),
       findMany: vi.fn(async () => []),
@@ -292,6 +296,7 @@ describe("email routes (demo mode)", () => {
         },
       ],
       companyDomains: [],
+      priorities: null,
     });
     // Self-scoped: linked lookup keyed by the caller's userId. Flag off →
     // the historical GOOGLE-only selector.
@@ -407,6 +412,111 @@ describe("email routes (demo mode)", () => {
     });
     expect(garbage.statusCode).toBe(400);
     expect(prisma.user.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("PATCH /inboxes/priorities stores the user's words collapsed; GET echoes them", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.user.update).mockClear();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/email/inboxes/priorities",
+      headers: auth(),
+      payload: { text: "  investor mail\n first " },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, priorities: "investor mail first" });
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { triagePriorities: "investor mail first" },
+    });
+    const owner = {
+      id: "user-1",
+      email: "primary@example.com",
+      plan: "PRO",
+      role: "USER",
+      triagePriorities: "investor mail first",
+    } as never;
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(owner).mockResolvedValueOnce(owner);
+    const get = await app.inject({ method: "GET", url: "/api/email/inboxes", headers: auth() });
+    expect(get.json().priorities).toBe("investor mail first");
+    await app.close();
+  });
+
+  it("PATCH /inboxes/priorities refuses over-cap text and stores nothing; null clears", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.user.update).mockClear();
+    const app = await buildApp();
+    const long = await app.inject({
+      method: "PATCH",
+      url: "/api/email/inboxes/priorities",
+      headers: auth(),
+      payload: { text: "x".repeat(501) },
+    });
+    expect(long.statusCode).toBe(400);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    const clear = await app.inject({
+      method: "PATCH",
+      url: "/api/email/inboxes/priorities",
+      headers: auth(),
+      payload: { text: null },
+    });
+    expect(clear.statusCode).toBe(200);
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { triagePriorities: null },
+    });
+    await app.close();
+  });
+
+  it("GET /waiting-on lists my unanswered threads, oldest first, with the applied floor", async () => {
+    const { prisma } = await import("../db.js");
+    const day = 86_400_000;
+    vi.mocked(prisma.sentMessage.findMany).mockResolvedValueOnce([
+      {
+        gmailId: "s1",
+        threadId: "t1",
+        to: "a@x.com",
+        subject: "A",
+        sentAt: new Date(Date.now() - 3 * day),
+        inbox: "primary",
+      },
+      {
+        gmailId: "s2",
+        threadId: "t2",
+        to: "b@x.com",
+        subject: "B",
+        sentAt: new Date(Date.now() - 5 * day),
+        inbox: "primary",
+      },
+    ] as never);
+    // t2 was answered yesterday; t1 was not.
+    vi.mocked(prisma.emailMessage.findMany).mockResolvedValueOnce([
+      { threadId: "t2", receivedAt: new Date(Date.now() - day), from: "b@x.com" },
+    ] as never);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/email/waiting-on?days=2",
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().minDays).toBe(2);
+    expect(
+      res
+        .json()
+        .items.map((i: { threadId: string; daysWaiting: number }) => [i.threadId, i.daysWaiting]),
+    ).toEqual([["t1", 3]]);
+    // Garbage days falls back to the default floor, never a 400.
+    vi.mocked(prisma.sentMessage.findMany).mockResolvedValueOnce([] as never);
+    const bad = await app.inject({
+      method: "GET",
+      url: "/api/email/waiting-on?days=abc",
+      headers: auth(),
+    });
+    expect(bad.statusCode).toBe(200);
+    expect(bad.json()).toEqual({ items: [], minDays: 2 });
     await app.close();
   });
 

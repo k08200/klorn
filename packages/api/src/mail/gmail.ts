@@ -1166,7 +1166,7 @@ export async function sendEmail(
     references: options?.references,
   });
 
-  let res: { data: { id?: string | null } };
+  let res: { data: { id?: string | null; threadId?: string | null } };
   try {
     res = await gmail.users.messages.send({
       userId: "me",
@@ -1180,7 +1180,9 @@ export async function sendEmail(
     throw err;
   }
 
-  return { success: true as const, messageId: res.data.id };
+  // threadId rides along so a compose can be tracked as a thread I am
+  // waiting on (sent-messages.ts) without a second Gmail call.
+  return { success: true as const, messageId: res.data.id, threadId: res.data.threadId ?? null };
 }
 
 export async function createEmailDraft(

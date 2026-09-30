@@ -27,6 +27,8 @@ export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> 
   await tx.senderTrait.deleteMany(scope);
   // SenderLabel: the user's own relationship corrections, keyed by address.
   await tx.senderLabel.deleteMany(scope);
+  // SentMessage: headers of the user's own sent mail.
+  await tx.sentMessage.deleteMany(scope);
 
   await tx.emailAttachment.deleteMany(scope);
   await tx.candidateIntake.deleteMany(scope);

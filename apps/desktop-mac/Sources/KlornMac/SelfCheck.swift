@@ -748,6 +748,22 @@ func runSelfChecks() async -> Bool {
               && fresh.end.timeIntervalSince(fresh.start) == 3600 && !fresh.allDay)
     }
 
+    // Waiting on (2026-09-18): the wire decodes, and a row opens through the
+    // live folder path as MY message on the right account.
+    do {
+        let resp = try? JSONDecoder().decode(
+            WaitingOnResponse.self,
+            from: Data(#"{"items":[{"gmailId":"g","threadId":"t","to":"Sarah <s@x.com>","subject":"S","sentAt":"2026-09-10T00:00:00.000Z","daysWaiting":8,"inbox":"li-1"}],"minDays":2}"#.utf8))
+        let row = resp?.items.first?.asMailboxItem
+        check("waiting on — decodes; row opens live on its account",
+              resp?.minDays == 2 && resp?.items.first?.daysWaiting == 8
+              && row?.gmailId == "g" && row?.inbox == "li-1" && row?.to == "Sarah <s@x.com>"
+              && row?.receivedAt == "2026-09-10T00:00:00.000Z")
+        check("waiting on — live mode flag covers folders and waiting-on only",
+              ListMode.waitingOn.showsLiveMessages && ListMode.mailbox(.sent).showsLiveMessages
+              && !ListMode.inbox.showsLiveMessages && !ListMode.calendar.showsLiveMessages)
+    }
+
     check("day order — all-day first, then by start time",
           sortedForDay([
               ev("t2", "2026-08-26T08:00:00Z", "2026-08-26T09:00:00Z", allDay: false),
@@ -792,6 +808,22 @@ func runSelfChecks() async -> Bool {
           && !LabelFilter.company.matches(.replied(9)))
     check("label — a judge category is NOT 개인 (the claim excludes it)",
           !LabelFilter.personal.matches(.category("system")))
+    // Reply axis (2026-09-14): its filter reads replyState, never the
+    // relationship signal — and no other filter reads replyState.
+    check("label — needsReply reads the reply axis only",
+          LabelFilter.needsReply.matches(.category("customer"), replyState: "needsReply")
+          && !LabelFilter.needsReply.matches(nil, replyState: "replied")
+          && !LabelFilter.needsReply.matches(nil)
+          && LabelFilter.customer.matches(.category("customer"), replyState: "needsReply"))
+    do {
+        let owed = try? JSONDecoder().decode(
+            EmailContext.self,
+            from: Data(#"{"emailDbId":"e","replyState":"needsReply"}"#.utf8))
+        let older = try? JSONDecoder().decode(
+            EmailContext.self, from: Data(#"{"emailDbId":"e"}"#.utf8))
+        check("replyState — decoded when present, nil on an older server",
+              owed?.replyState == "needsReply" && older?.replyState == nil)
+    }
 
     print("Row signals + chronological inbox:")
     func ctx(_ json: String) -> EmailContext? {
@@ -1655,7 +1687,7 @@ func runSelfChecks() async -> Bool {
     check("integer formats render", [
         L("bar.push", 3), L("bar.more", 2), L("commitments.a11y", 4),
         L("aiUsage.a11y", 7, 20), L("bar.menuBar.push", 9),
-        L("engagement.repliedTimes", 5),
+        L("engagement.repliedTimes", 5), L("waiting.days", 3), L("waiting.hint", 2),
     ].allSatisfy { $0.contains(where: \.isNumber) })
     check("string formats render", [
         L("today.a11y", "x"), L("briefing.a11y", "x"), L("commitments.markDone.a11y", "x"),
@@ -1676,6 +1708,7 @@ func runSelfChecks() async -> Bool {
     // a "%1$@ %2$d" fed the wrong way round is the same pointer-read crash.
     check("mixed formats render", [
         L("tier.row.a11y", "x", 3, "y"), L("proposals.a11y", 2),
+        L("waiting.row.a11y", "x", "y", 2),
     ].allSatisfy { !$0.contains("%") })
 
     // "Add account" → the purpose question for the NEW mailbox. Id-based

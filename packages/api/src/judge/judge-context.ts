@@ -43,6 +43,7 @@ import { getActiveSenderTraits, type SenderTraitFact } from "../learning/sender-
 import { getTrustScore } from "../learning/trust-score.js";
 import { extractEmailAddress } from "../mail/email-address.js";
 import { isPublicMailboxDomain } from "../mail/public-mailbox-domains.js";
+import { fetchTriagePriorities } from "../mail/triage-priorities.js";
 import { captureError } from "../sentry.js";
 import { EMPTY_JUDGE_CONTEXT, type JudgeContext } from "./poc-judge.js";
 import { isTier, type Tier } from "./tiers.js";
@@ -521,6 +522,21 @@ async function fetchReadBehaviorFact(
  * outer catch, so a rule outage never costs the correction loop. Returns ALL
  * the user's APPLIED rules; the per-email match runs in poc-judge.
  */
+/** The user's own priorities text — cached per user (triage-priorities.ts),
+ *  so a backfill does not read the row per email. Fail-soft like the rest. */
+async function fetchUserPriorities(userId: string): Promise<string | null> {
+  try {
+    return await fetchTriagePriorities(userId);
+  } catch (err) {
+    console.warn(
+      "[judge-context] priorities fetch failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    captureError(err, { tags: { scope: "judge-context-priorities" }, extra: { userId } });
+    return null;
+  }
+}
+
 async function fetchLearnedRules(userId: string): Promise<LearnedRule[]> {
   if (!LEARNED_RULES_IN_JUDGE) return [];
   try {
@@ -629,6 +645,7 @@ export async function buildJudgeContext(
       pinnedTier,
       engagement,
       readBehavior,
+      userPriorities,
     ] = await Promise.all([
       fetchCorrections(userId, senderAddress, correctionExcludeId, incomingText),
       fetchSenderItems(userId, senderAddress, input.excludeEmailId),
@@ -639,6 +656,7 @@ export async function buildJudgeContext(
       fetchPinnedTier(userId, senderAddress),
       fetchLearnedImportanceFact(userId, senderAddress),
       fetchReadBehaviorFact(userId, senderAddress),
+      fetchUserPriorities(userId),
     ]);
 
     const senderPrior = senderItems.length > 0 ? buildPrior(senderItems) : null;
@@ -655,7 +673,15 @@ export async function buildJudgeContext(
           }
         : null;
 
-    return { corrections, senderPrior, senderFacts, senderTraits, learnedRules, pinnedTier };
+    return {
+      corrections,
+      senderPrior,
+      senderFacts,
+      senderTraits,
+      learnedRules,
+      pinnedTier,
+      userPriorities,
+    };
   } catch (err) {
     // console + captureError: captureError is a no-op when Sentry is off, so a
     // failed judge-context build would otherwise degrade silently (CLAUDE.md).

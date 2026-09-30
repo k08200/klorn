@@ -109,6 +109,15 @@ describe("analysisPreamble + company domains", () => {
     expect(text).toContain("INTERNAL");
   });
 
+  it("the user's priorities are quoted last; absent → byte-identical", () => {
+    const withText = analysisPreamble("work", ["acme.com"], "investor mail first");
+    expect(withText.startsWith(analysisPreamble("work", ["acme.com"]))).toBe(true);
+    expect(withText).toContain('"investor mail first"');
+    expect(analysisPreamble("work", ["acme.com"], null)).toBe(
+      analysisPreamble("work", ["acme.com"]),
+    );
+  });
+
   it("no domains → byte-identical to the purpose-only preamble", () => {
     expect(analysisPreamble("work", [])).toBe(analysisPreamble("work"));
     expect(analysisPreamble(null, [])).toBe(analysisPreamble(null));

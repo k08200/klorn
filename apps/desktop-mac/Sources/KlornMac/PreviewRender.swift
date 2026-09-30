@@ -22,7 +22,7 @@ enum PreviewRender {
       {"id":"p1","source":"email","sourceId":"e1","type":"email","title":"Contract review",
        "tier":"PUSH","tierReason":"You replied to this sender 6 times","priority":9,
        "surfacedAt":"2026-07-29T08:12:00Z",
-       "email":{"emailDbId":"d1","subject":"Re: Contract review — needs your sign-off today",
+       "email":{"emailDbId":"d1","replyState":"needsReply","subject":"Re: Contract review — needs your sign-off today",
                 "from":"Sarah Kim <sarah.kim@northwind-partners.com>",
                 "snippet":"Legal came back with two changes on clause 4…",
                 "signal":{"kind":"replied","count":6}},"hashStale":false},
@@ -92,6 +92,13 @@ enum PreviewRender {
       "endTime":"2026-08-01T00:00:00Z","location":"강릉","meetingLink":null,"allDay":true}]
     """
 
+    private static let waitingOnJSON = """
+    [{"gmailId":"w1","threadId":"tw1","to":"Priya Patel <priya@northwind.io>","subject":"Q3 numbers for the board deck",
+      "sentAt":"2026-07-24T02:10:00.000Z","daysWaiting":5,"inbox":"primary"},
+     {"gmailId":"w2","threadId":"tw2","to":"legal@acme.com","subject":"NDA countersign",
+      "sentAt":"2026-07-26T09:00:00.000Z","daysWaiting":3,"inbox":"primary"}]
+    """
+
     private static let emailJSON = """
     {"id":"d1","from":"Sarah Kim <sarah.kim@northwind-partners.com>",
      "subject":"Re: Contract review — needs your sign-off today",
@@ -132,6 +139,11 @@ enum PreviewRender {
             [CalendarEventWire].self, from: Data(calendarSeedJSON.utf8))
         {
             model.seedCalendarForRender(seed)
+        }
+        if let seed = try? JSONDecoder().decode(
+            [WaitingOnItem].self, from: Data(waitingOnJSON.utf8))
+        {
+            model.seedWaitingOnForRender(seed)
         }
         // Folder counts in the sidebar + a populated Sent list for its shot.
         model.seedMailboxForRender(.sent, items: [
@@ -263,6 +275,10 @@ enum PreviewRender {
             CalendarScreen(
                 actions: actions, initialScope: .month,
                 initialAnchor: ISO8601DateFormatter().date(from: "2026-07-29T03:00:00Z") ?? Date())
+        }
+        // Waiting on — my unanswered threads, oldest first.
+        shot("waiting-on", size: CGSize(width: tourW, height: 430), align: .top) {
+            WaitingOnList()
         }
         // Week view — seven columns, the spanning 워크숍 on two of them.
         shot("calendar-week", size: CGSize(width: 760, height: 460), align: .top) {

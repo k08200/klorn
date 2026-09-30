@@ -1362,6 +1362,56 @@ private struct CompanyDomainsRow: View {
     }
 }
 
+/// Account section: the user's priorities text, editable in place. Save
+/// PATCHes; the server collapses whitespace and caps length, and its
+/// message shows inline. Offscreen: text stand-in.
+private struct PrioritiesRow: View {
+    @Environment(AppModel.self) private var model
+    @State private var text = ""
+    @State private var editing = false
+
+    private var current: String { model.triagePriorities ?? L("priorities.none") }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(L("priorities.label")).font(.caption).foregroundStyle(Theme.textDim)
+                Spacer()
+                if !editing {
+                    Button {
+                        text = model.triagePriorities ?? ""
+                        editing = true
+                    } label: {
+                        Text(current).font(Theme.Typo.label).foregroundStyle(Theme.text)
+                            .lineLimit(1).truncationMode(.tail)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(L("priorities.label")). \(current)")
+                }
+            }
+            if editing {
+                if Theme.isRenderingOffscreen {
+                    Text(text.isEmpty ? L("priorities.placeholder") : text)
+                        .font(Theme.Typo.label).foregroundStyle(Theme.textDim)
+                } else {
+                    PrioritiesEditor(text: $text)
+                }
+                if let error = model.prioritiesError {
+                    Text(error).font(.caption2).foregroundStyle(Theme.tint(.push))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(spacing: 8) {
+                    SubtleTextButton(title: L("company.save"), dim: false) {
+                        Task { if await model.setTriagePriorities(text) { editing = false } }
+                    }
+                    SubtleTextButton(title: L("compose.cancel")) { editing = false }
+                }
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 3)
+    }
+}
+
 /// Per-inbox scope selector (web parity: email/page.tsx InboxSelector) —
 /// rendered only when the account actually has 2+ mailboxes. Values: "all",
 /// "primary", or a linked inbox id; addresses come straight from the API,
@@ -1896,6 +1946,15 @@ private struct TeamsColumn: View {
 /// 2026-08-26): the root feature nav, or the mail client's own sidebar.
 enum SidebarLevel: Equatable { case root, mail }
 
+/// Modes whose selected row is a LIVE Gmail message (not in the local
+/// mirror) — the reading pane must take the folder path for them.
+extension ListMode {
+    var showsLiveMessages: Bool {
+        if case .mailbox = self { return true }
+        return self == .waitingOn
+    }
+}
+
 enum ListMode: Equatable, Hashable {
     /// The whole inbox as one chronological list — the default view. Lanes
     /// ride on the rows as chips and remain reachable behind the 레인 group.
@@ -1908,6 +1967,9 @@ enum ListMode: Equatable, Hashable {
     /// 2026-08-26: every client in the reference set has these; a triage app
     /// without them doesn't read as "my mail, organized").
     case mailbox(MailboxKind)
+    /// Mail I sent that nobody answered (2026-09-18) — the other half of
+    /// the reply axis. Rows open through the live folder path.
+    case waitingOn
     case commitments
     /// Actions Klorn wants approved. Approving these used to require the web
     /// app, which is what kept the agent receipt linking out of Klorn.
@@ -2406,6 +2468,26 @@ private struct FullSidebar: View {
                     .accessibilityLabel(box.label)
                 }
 
+                // Mail I sent that nobody answered — the reply axis's other
+                // half (2026-09-18). Sits with the folders: it is a view of
+                // Sent, not of the inbox.
+                Button { selected = .waitingOn } label: {
+                    HStack(spacing: 10) {
+                        FeatureIcon(systemName: "clock.arrow.circlepath")
+                        Text(L("waiting.title"))
+                            .font(.body.weight(selected == .waitingOn ? .semibold : .regular))
+                            .foregroundStyle(Theme.text)
+                        Spacer()
+                        if !model.waitingOn.isEmpty {
+                            Text("\(model.waitingOn.count)")
+                                .font(Theme.Typo.numeric).foregroundStyle(Theme.textDim)
+                        }
+                    }
+                    .modifier(SidebarRowChrome(selected: selected == .waitingOn))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L("waiting.title"))
+
                 // 카테고리, by what a mail IS (founder 2026-08-27: follow
                 // the labeling) — the same vocabulary as the row chips and
                 // Gmail's own tabs. Counts run over the fetched window, the
@@ -2754,6 +2836,9 @@ private struct FullSidebar: View {
                 // the row as a recorded fact, and the analysis reads them as
                 // colleagues. Editable here any time; first asked at connect.
                 CompanyDomainsRow()
+                // What matters to the user, in their words — the lane judge
+                // and the analysis read it. Editable any time.
+                PrioritiesRow()
                 Divider().padding(.horizontal, 16).padding(.vertical, 4)
                 maintenanceDisclosureRow
                 if showMaintenance {
@@ -2894,6 +2979,7 @@ private struct FullList: View {
             case .teams: TeamsColumn()
             case .inbox, .tier, .label: tierList
             case .mailbox(let box): MailboxList(box: box)
+            case .waitingOn: WaitingOnList()
             }
         }
         .id(mode)
@@ -3245,6 +3331,110 @@ private struct ChatBubble: View {
 /// fetched on entry; rows share the mail list's grammar (sender label /
 /// subject statement / snippet, time on the right) so the folders read as
 /// the same product, not a bolted-on debug view.
+/// Mail I sent that nobody answered (2026-09-18). Oldest wait first; a
+/// row opens my own message through the live folder path so the thread
+/// can be re-read before nudging. The floor (N days) comes from the server.
+struct WaitingOnList: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "clock.arrow.circlepath").font(.body).foregroundStyle(Theme.textDim)
+                    .accessibilityHidden(true)
+                Text(L("waiting.title")).font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+                Text("\(model.waitingOn.count)").font(.title3.monospacedDigit())
+                    .foregroundStyle(Theme.textDim)
+                Spacer()
+                Button {
+                    Task { await model.loadWaitingOn() }
+                } label: {
+                    Image(systemName: "arrow.clockwise").font(.callout.weight(.medium))
+                        .iconTarget(30)
+                }
+                .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+                .help(L("mailbox.refresh"))
+                .accessibilityLabel(L("mailbox.refresh"))
+            }
+            .padding(.horizontal, 24).padding(.top, 18).padding(.bottom, 6)
+            Text(L("waiting.hint", model.waitingOnMinDays))
+                .font(Theme.Typo.caption).foregroundStyle(Theme.textDim)
+                .padding(.horizontal, 24).padding(.bottom, 12)
+
+            Divider().overlay(Theme.line)
+
+            if model.waitingOn.isEmpty {
+                Spacer()
+                EmptyState(icon: "checkmark.circle", title: L("waiting.empty"))
+                Spacer()
+            } else if Theme.isRenderingOffscreen {
+                VStack(spacing: 0) {
+                    ForEach(model.waitingOn.prefix(8)) { item in
+                        WaitingOnRow(item: item)
+                        Divider().overlay(Theme.line).padding(.leading, 20)
+                    }
+                }
+                Spacer(minLength: 0)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(model.waitingOn) { item in
+                            WaitingOnRow(item: item)
+                            Divider().overlay(Theme.line).padding(.leading, 20)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct WaitingOnRow: View {
+    @Environment(AppModel.self) private var model
+    let item: WaitingOnItem
+    @State private var hovering = false
+
+    private var selected: Bool { model.selectedMailboxItem?.gmailId == item.gmailId }
+    private var counterparty: String {
+        let name = senderDisplayName(decodeHTMLEntities(item.to))
+        return name.isEmpty ? item.to : name
+    }
+
+    var body: some View {
+        Button { model.openWaitingOn(item) } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(counterparty).font(Theme.Typo.label)
+                        .foregroundStyle(Theme.textDim).lineLimit(1)
+                    Text(decodeHTMLEntities(item.subject.isEmpty
+                        ? L("mailbox.noSubject") : item.subject))
+                        .font(Theme.Typo.head)
+                        .foregroundStyle(Theme.text).lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(L("waiting.days", item.daysWaiting))
+                        .font(Theme.Typo.micro)
+                        .foregroundStyle(Theme.labelTint(.needsReply))
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Theme.labelTint(.needsReply).opacity(0.13), in: Capsule())
+                    let time = mailTimeLabel(iso: item.sentAt, now: Date())
+                    if !time.isEmpty {
+                        Text(time).font(Theme.Typo.caption.monospacedDigit())
+                            .foregroundStyle(Theme.textDim)
+                    }
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 20).padding(.vertical, 10)
+        .background(selected ? Theme.surfaceSelected : hovering ? Theme.surfaceHover : .clear)
+        .onHover { hovering = $0 }
+        .accessibilityLabel(L("waiting.row.a11y", counterparty, item.subject, item.daysWaiting))
+    }
+}
+
 struct MailboxList: View {
     @Environment(AppModel.self) private var model
     let box: MailboxKind
@@ -3668,6 +3858,36 @@ struct SignalChip: View {
     }
 }
 
+/// The reply axis on a row (2026-09-14): "답장 필요" when the analysis judged
+/// a reply is owed and none went out through Klorn; "답장함" once the user
+/// answered through Klorn. Sits beside the relationship chip — a different
+/// axis, the one Spark / Superhuman / Inbox Zero all label first.
+struct ReplyStateChip: View {
+    let state: String?
+
+    var body: some View {
+        if let state, let text = label(for: state) {
+            let tint: Color = state == "needsReply" ? Theme.labelTint(.needsReply) : Theme.textDim
+            Text(text)
+                .font(Theme.Typo.micro)
+                .foregroundStyle(tint)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(tint.opacity(0.13), in: Capsule())
+                .accessibilityLabel(text)
+        }
+    }
+
+    private func label(for state: String) -> String? {
+        switch state {
+        case "needsReply": L("chip.needsReply")
+        // chip.replied is the "replied N×" relationship chip's key — this
+        // axis has its own word.
+        case "replied": L("chip.answered")
+        default: nil
+        }
+    }
+}
+
 /// A row with no chip has no evidence yet — still a sender the user may know.
 /// Shown on hover / focus only (a resting placeholder on every row would be
 /// noise); opens the same correction menu as the chip.
@@ -3785,6 +4005,7 @@ struct FullRow: View {
                             {
                                 AddLabelChip(address: address)
                             }
+                            ReplyStateChip(state: item.email?.replyState)
                             if let reason = rowTierReason(item.tierReason) {
                                 Text(reason).font(Theme.Typo.caption)
                                     .foregroundStyle(Theme.textDim).lineLimit(1)
@@ -3905,7 +4126,7 @@ struct ReadingPane: View {
             // they are not in the local mirror, so the firewall branches below
             // can never serve them. Checked first: selecting a folder row is
             // the more recent intent when both selections exist.
-            if case .mailbox = model.listMode, let picked = model.selectedMailboxItem {
+            if model.listMode.showsLiveMessages, let picked = model.selectedMailboxItem {
                 if model.mailboxDetailLoading {
                     centered { ProgressView().controlSize(.small) }
                 } else if let detail = model.mailboxDetail {

@@ -28,7 +28,9 @@ import { type GmailDraftAttachment, resolveMailClient } from "../mail/gmail.js";
 import { formatCalendarFacts, getMeetingContext } from "../mail/meeting-context.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { buildReplySystemPrompt } from "../mail/reply-prompt.js";
+import { markEmailReplied } from "../mail/reply-state.js";
 import { senderDossierFacts } from "../mail/sender-dossier.js";
+import { recordSentMessage } from "../mail/sent-messages.js";
 import { cachedThreadBrief, threadBriefFacts } from "../mail/thread-brief.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
@@ -619,6 +621,19 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       // Manual reply = genuine engagement with this sender (an importance-graph
       // edge). Only user-initiated routes record this — never the auto-reply path.
       await recordContactEngagement(uid, to, "outbound");
+      // The row's reply chip flips to "replied" — a recorded fact.
+      await markEmailReplied(uid, dbEmail.id);
+      // And the thread joins "waiting on" until they answer (sent-messages.ts).
+      if (result.messageId) {
+        await recordSentMessage(uid, {
+          gmailId: result.messageId,
+          threadId: dbEmail.threadId ?? null,
+          to,
+          subject,
+          sentAt: new Date(),
+          inbox: dbEmail.linkedInboxAccountId ?? "primary",
+        });
+      }
 
       // threaded=false means we sent by threadId only (no RFC Message-ID found);
       // surfaced so a client can tell strict-threaded from best-effort.

@@ -16,6 +16,7 @@ model User {
   // same vocabulary as LinkedInboxAccount.purpose. Null = never asked.
   primaryInboxPurpose       String?
   companyDomains            String[]  @default([])
+  triagePriorities          String?
   passwordHash              String?
   name                      String?
   role                      UserRole                   @default(USER)
@@ -144,6 +145,7 @@ model User {
   analyticsEvents           AnalyticsEvent[]
   senderTraits              SenderTrait[]
   senderLabels              SenderLabel[]
+  sentMessages              SentMessage[]
   learnedRules              LearnedRule[]
   apiKeys                   ApiKey[]
 }
@@ -158,17 +160,30 @@ enum UserRole {
 // not the account. keyHash is the Device.tokenHash standard (SHA-256 of the
 // raw key; the raw key is shown once at creation and never stored).
 model ApiKey {
-  id         String    @id @default(uuid())
+  id         String           @id @default(uuid())
   userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   name       String
-  keyHash    String    @unique
+  keyHash    String           @unique
   prefix     String // display stub: "klorn_sk_ab12cd"
-  createdAt  DateTime  @default(now())
+  // What the key may do over MCP. Defaults to read, so every key that existed
+  // before this column stays read-only. read_write is only granted, and only
+  // honoured, while MCP_WRITE_TOOLS_ENABLED is on: with the flag off a
+  // read_write key acts as read (authenticateApiKey).
+  permission ApiKeyPermission @default(read)
+  createdAt  DateTime         @default(now())
   lastUsedAt DateTime?
   revokedAt  DateTime?
 
   @@index([userId])
+}
+
+// Lowercase like SenderTraitKind and SenderTraitStatus: these exact strings are
+// also the wire values of @klorn/contract's ApiKeyWire.permission, so the DB,
+// the API and every client share one spelling and no mapping layer exists.
+enum ApiKeyPermission {
+  read
+  read_write
 }
 
 model Device {
@@ -970,6 +985,8 @@ model EmailMessage {
   needsReply              Boolean           @default(false)
   needsReplyReason        String?
   needsReplyConfidence    Float             @default(0.0)
+  /// When the user answered this mail through Klorn (reply-state.ts). Null = not via Klorn.
+  repliedAt               DateTime?
   sentiment               String? // positive | negative | neutral
   receivedAt              DateTime // Original email date
   syncedAt                DateTime          @default(now()) // When we synced from Gmail
@@ -1403,6 +1420,27 @@ model SenderLabel {
 
   @@unique([userId, scope, value])
   @@index([userId])
+}
+
+/// Mail the user sent (2026-09-18) — recorded at send time through Klorn and
+/// by a throttled Sent-folder scan, so "waiting on" (mail/sent-messages.ts)
+/// can see what nobody answered. Headers only, never a body.
+model SentMessage {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  gmailId  String
+  threadId String?
+  to       String
+  subject  String
+  sentAt   DateTime
+  inbox    String // "primary" | LinkedInboxAccount id — where a live read must go
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, gmailId])
+  @@index([userId, sentAt])
 }
 
 /// A standing, user-made decision about whether a sender may reach them.

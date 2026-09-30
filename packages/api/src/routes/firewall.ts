@@ -40,6 +40,7 @@ import { getTrustScoresBulk } from "../learning/trust-score.js";
 import { ensureRecentMailSync } from "../mail/activity-sync.js";
 import { isInternalSender } from "../mail/company-domains.js";
 import { ensureFreshGmailWatch } from "../mail/gmail.js";
+import { replyStateOf } from "../mail/reply-state.js";
 import { senderLabelsFor, type UserLabelCategory } from "../mail/sender-labels.js";
 import { senderEmail } from "../notify/notification-format.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
@@ -464,6 +465,8 @@ export async function firewallRoutes(app: FastifyInstance) {
                 snippet: true,
                 receivedAt: true,
                 category: true,
+                needsReply: true,
+                repliedAt: true,
                 linkedInboxAccountId: true,
               },
             })
@@ -482,6 +485,8 @@ export async function firewallRoutes(app: FastifyInstance) {
                 labels: true,
                 receivedAt: true,
                 category: true,
+                needsReply: true,
+                repliedAt: true,
                 // Gmail thread id — used to collapse a multi-message conversation
                 // (N EmailMessage rows) to a single firewall card. See below.
                 threadId: true,
@@ -630,6 +635,7 @@ export async function firewallRoutes(app: FastifyInstance) {
                   from: email.from ?? null,
                   snippet: email.snippet ?? null,
                   receivedAt: email.receivedAt?.toISOString() ?? null,
+                  replyState: replyStateOf(email),
                   signal: rowSignalFor({
                     userLabel: addr ? (userLabels.get(addr) ?? null) : null,
                     internal: isInternalSender(email.from, companyDomains),
@@ -703,6 +709,7 @@ export async function firewallRoutes(app: FastifyInstance) {
               from: email.from ?? null,
               snippet: email.snippet ?? null,
               receivedAt: email.receivedAt?.toISOString() ?? null,
+              replyState: replyStateOf(email),
               signal: rowSignalFor({
                 userLabel: addr ? (userLabels.get(addr) ?? null) : null,
                 internal: isInternalSender(email.from, companyDomains),
