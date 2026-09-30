@@ -666,14 +666,179 @@ went; that is a schema change. Trash is a MOVE to the Trash folder. It is
 never `\Deleted` plus EXPUNGE, which is `delete_permanent` and sits on the
 floor.
 
-**B3 — SMTP send for IMAP providers.** Depends on: B0. SMTP client, a
-per-provider SMTP host pinned like `hostMatchesProvider`, draft support. The
-send path stays behind the deterministic floor. Security review is mandatory.
-Reply headers reuse `mail/reply-headers.ts`.
-- Before the flip: unattended auto-mode replies from IMAP accounts (NAVER,
-  ICLOUD, IMAP) stay excluded, even once SMTP send works, until a founder
-  decision enables them. The exclusion is `canAutoSendFromMailbox` in
-  `agentcore/auto-mode-candidates.ts`; widening it is that decision's change.
+**B3 — SMTP send for IMAP providers.** Depends on: B0, B1. Landed 2026-09-30,
+flag OFF.
+- Context: NAVER and ICLOUD `sendEmail`, `createDraft` and `getReplyHeaders` were
+  the unsupported stubs. The send path stays behind the deterministic floor.
+- Tasks: SMTP send, drafts and reply headers for both providers behind a new OFF
+  flag, each provider's SMTP host fixed in the registry, security review
+  mandatory.
+- Landed:
+  - `IMAP_SEND_ENABLED` (`imapSendEnabled()` in `config.ts`, lenient parse, read
+    at request time), independent of `IMAP_ACTIONS_ENABLED`. `dispatch.ts` builds
+    each combination once: neither flag returns the same unsupported object as
+    before; actions only is B1; send only is the three B3 actions over the
+    unsupported stubs; both is the union. ICLOUD additionally needs
+    `ICLOUD_INBOX_ENABLED` for either flag. Generic IMAP is unsupported whatever
+    the flags say. `imap-send-dispatch.test.ts` pins every combination and that
+    the flag-off surface is byte-identical (no transport, no IMAP client built).
+  - SMTP endpoints live in the provider registry (`imap-providers.ts`, field
+    `smtp`) with their source in a comment. Naver: `smtp.naver.com`, port 587,
+    STARTTLS (https://help.naver.com/service/30029/bookmark/21344, read
+    2026-09-30: "SMTP 포트 : 587, 보안 연결(TLS) 필요 (TLS가 없는 경우 SSL로
+    연결)"). The page names SSL (implicit TLS, port 465 by convention) only as
+    the fallback, so 587 is the default here; switching is one registry line. iCloud:
+    `smtp.mail.me.com`, port 587, STARTTLS, full address as user name and an
+    app-specific password (https://support.apple.com/en-us/102525, published
+    2026-02-03, read 2026-09-30). The host is never taken from the row, from
+    input or from the environment. A row whose stored IMAP host fails the
+    allowlist or the host pin is refused before any connection or decryption
+    (`findCheckedAccount`), so a tampered row neither sends nor leaks its
+    credential; the SMTP host would have been the registry's in any case.
+  - `nodemailer` ^10.0.13 is a new dependency of `@klorn/api`, and the root
+    override floor rises from `>=9.0.1` to `>=10.0.13`: `requireTLS` is honoured
+    from 10.0.12, and 10.0.13 (released 2026-09-30) contains the fix for
+    GHSA-g73g-hqqh-jr95, a comment inside an angle-addr reaching the SMTP
+    envelope, which is the path this step feeds. The package is imported when the
+    first transport is built (one shared import), so while the flag is off it
+    never loads. The package has
+    no dependencies and no install script, ships its own types and an ESM entry,
+    and is MIT-0. It adds no advisory: `pnpm audit --prod` on the rebased
+    branch reports no known vulnerabilities (the axios and `@grpc/grpc-js`
+    advisories seen on 2026-09-30 were cleared on main by #1337).
+  - Transport (`mail/smtp-transport.ts`): `rejectUnauthorized` on, TLS 1.2 or
+    newer, SNI pinned to the registry host, `requireTLS` for STARTTLS (a server
+    that does not offer the upgrade fails the send, no AUTH is sent), connection
+    10 s, greeting 10 s, socket 30 s, DNS 10 s as named constants, no logging of
+    SMTP traffic, no file or URL access, no proxy or custom socket, and a fixed
+    EHLO name (`klorn.ai`) instead of the machine's hostname. `smtp-wire.test.ts`
+    runs the REAL nodemailer against a local TCP socket: a refused STARTTLS fails
+    with ETLS, a peer that hangs up or answers the handshake in plaintext fails
+    too, and in every case only EHLO and STARTTLS were sent (no AUTH, no MAIL
+    FROM, no message); the exact `raw` bytes and the explicit envelope reach the
+    server dot-stuffed, with no header added, after EHLO `klorn.ai`.
+  - One MIME builder: `buildPlainTextRawEmail` moved from `gmail.ts` to
+    `mail/outbound-message.ts` (with the recipient helpers), `gmail.ts` imports it
+    and re-exports `isNoReplyAddress` and `safeMimeType`. Without the new
+    `standalone` argument the output is byte-identical: `outbound-message.test.ts`
+    replays 1440 combinations (recipient, subject, body, attachments, reply
+    headers) against `fixtures/gmail-mime-main.json`, the sha256 of what main's
+    own builder returned for each (captured from commit 1c7c767c). SMTP and APPEND
+    pass `standalone`, which adds From (the linked account), Date and Message-ID,
+    in that order after To and Subject, encodes the text part as base64 so the
+    bytes are 7-bit clean whether or not the server offers 8BITMIME, folds Subject
+    into encoded-words of at most 75 characters cut on code-point boundaries, and
+    folds a long attachment name into RFC 2231 continuations (ASCII fallback capped
+    at 40 characters), so no header line exceeds 998 octets and the ones it
+    controls stay within 78. Reply headers
+    go through `reply-headers.ts` exactly as on Gmail. The Message-ID is
+    generated here (`<uuid@sender-domain>`) and returned as `messageId`,
+    because nodemailer's `info.messageId` for a `raw` message is not the header's.
+  - Recipient: the Gmail `sendEmail` guard (one address, valid, not a no-reply
+    sender) is now one function, `checkSendRecipient`, used by both. Then
+    `toSmtpAddress` admits only a bounded ASCII dot-atom addr-spec, with no
+    control character anywhere in the input; quoted, bracketed, commented,
+    IP-literal and internationalized addresses are refused. The header carries
+    that bare address, so a display name is dropped and a non-ASCII one cannot
+    reach a header. The envelope sender is the account's own address, which must
+    pass the same check.
+  - Sent copy. Neither Apple's nor Naver's documentation says whether SMTP files
+    a copy in Sent, and mail clients that submit to iCloud store their own with an
+    APPEND. So the sender asks: after a successful SMTP send it opens IMAP, finds
+    the Sent folder by role (`list()`), searches it for the message's own
+    Message-ID, and APPENDs with `\Seen` only if it is absent. A server that
+    saves its own copy gets none from us; one that does not gets exactly one. The
+    copy has a hard deadline of 5 s (`SENT_COPY_DEADLINE_MS`: the IMAP client is
+    closed, a warning logged) and a failure here never changes the send's result.
+    Folder trust: imapflow 1.7.0 folds its looser name-guess tier into
+    `specialUseSource: "name"`, so that source alone proves nothing. A role from a
+    server SPECIAL-USE flag (`extension`) is trusted; one from the name only when
+    the leaf is exactly `Sent`, `Sent Messages` or `Drafts`, case-insensitive.
+    Anything else ("Sent Items", "Sent Mail", a localized name), a role with no
+    source, and any `\Noselect` or `\NonExistent` folder is not written to (no
+    copy, or a draft `{error}`). Korean names are deliberately not in the set:
+    Naver's help documents its web folders (for example "임시보관함",
+    https://help.naver.com/service/30029/contents/21155) but not what IMAP LIST
+    reports.
+  - Drafts: APPEND to the `\Drafts` folder, found the same way, with `\Draft`
+    and `\Seen`; the reply context is honoured. `draftId` and `messageId` are the
+    Message-ID. They are deliberately not a `<idPrefix>:<email>:<uid>` id: a UID
+    in Drafts used as an INBOX id would make the B1 flag actions hit an unrelated
+    INBOX message. `url` is the provider's webmail root (registry `webmailUrl`).
+    `/gmail-draft` still passes no `reply`, so route drafts are unthreaded until
+    that B0 follow-up.
+  - `getReplyHeaders`: the row's UID (strict id parse from B1, the email from the
+    row), one `UID FETCH` of Message-ID and References, the result parsed through
+    `reply-headers.ts` so only message ids cross the seam. `{}` for any failure.
+  - Concurrency and safety (`providers/imap-session.ts`): ONE per-account queue
+    carries both the B1 flag work and the B3 tasks (send, draft, header read)
+    of a linked account, one at a time in either order; the poller stays
+    separate. Each task holds one of the same three session slots as the flag
+    actions for its whole duration; the auth cooldown is B1's (row id plus
+    cipher), so a rejected SMTP login (reply 530, 534 or 535 on `EAUTH`) stops
+    read and star, and a rejected IMAP login stops sends, drafts and header reads,
+    until the user reconnects. Every wait is bounded, in this order: a task that
+    has not started within 20 s (`TASK_QUEUE_WAIT_MS`) answers `{error}` saying
+    the mailbox was busy and nothing was sent or saved, and is never started
+    afterwards, so "busy" can never become a late send; a user may have at most 10
+    tasks queued or running (`MAX_OUTSTANDING_TASKS_PER_USER`); a running task is
+    bounded at 60 s (`TASK_TOTAL_TIMEOUT_MS`), at which point its connection is
+    closed and the caller is told the outcome is unconfirmed. Worst case for a
+    caller is about 80 s. `withImapClient` (one session helper, also under the B1
+    `withInbox`) ends every session, LOGOUT then a hard close, and the tests pin
+    that the session ends and every mailbox lock is released on every path. Transport failures reach Sentry at
+    most once per account per 10 minutes. Logs and Sentry get only the error's
+    class, code, reply code and failing command, never its text (a server reply
+    can quote the recipient). Results follow B1: `{error}` for every failure,
+    never `unsupported`, never a throw.
+  - Floor: unchanged. `imap-send-floor.test.ts` drives `executeToolCall` for a
+    message on a Naver inbox: no receipt, a null receipt and a receipt for other
+    bytes are refused before any SMTP or IMAP object is built, exactly as for
+    Gmail; a matching receipt reaches SMTP with the flag on and the unsupported
+    answer with it off.
+  - Reachable callers once the flag is on: the reply route, `/:id/unsubscribe`
+    (its mailto branch sends from the user's own account; the sender-controlled
+    subject and body are now capped at 250 and 1000 characters for every provider,
+    Gmail included, and a mailto over a cap falls back to the link like any other
+    unusable target), the agent `send_email`
+    tool (receipt required) and, later, A4 `create_draft`. The reply route records
+    the Message-ID as the `SentMessage` key; "waiting on" joins by thread id, so
+    it still works.
+- Not verified: no real Naver or iCloud server has been reached. Behaviour rests
+  on a mocked nodemailer transport and imapflow client, plus the real nodemailer
+  against a local fake SMTP socket (`smtp-wire.test.ts`); no TLS certificate path
+  is exercised, because the transport correctly refuses an untrusted one.
+- Known limits: a connection lost after the body was sent reports `{error}` for a
+  message that may have been delivered; UIDVALIDITY is not stored (B1's blocker
+  for B2), so `getReplyHeaders` reads whichever message now holds the UID; mail
+  is always From the account's own address (aliases such as iCloud Hide My Email
+  are not supported); SMTP 535 because the provider's own IMAP/SMTP toggle is off
+  looks like a rejected password and pauses read and star for that mailbox too.
+- Before the flip: on one real Naver and one real iCloud account (iCloud also
+  needs `ICLOUD_INBOX_ENABLED`) run a plain send, a reply through
+  `POST /api/email/:id/reply` and a draft through `gmail-draft`. Check that the
+  reply threads in the recipient's client, that `From`, `Date` and `Message-ID`
+  look right, that an attachment and a non-Latin subject and body arrive intact,
+  and that the Sent folder holds exactly one copy of each send (no duplicate, and
+  not zero). A server that files its Sent copy asynchronously (after the 250) or
+  rewrites the Message-ID can still end up with two copies, because the sender
+  searches once, right after the send: verify on real Naver and iCloud. Record
+  whether each server files its own Sent copy, since the search-then-append design
+  assumes nothing, and which folder names and SPECIAL-USE flags each one reports
+  (a folder whose role comes only from a name outside Sent, Sent Messages and
+  Drafts gets no copy and no draft). Confirm that Naver accepts 587 with
+  STARTTLS from the Render egress IP (if not, switch the registry to 465 implicit
+  TLS), that the iCloud Drafts folder is found (a listing reported in the wild
+  shows `Drafts` without a SPECIAL-USE flag, which relies on imapflow's
+  name fallback), that a draft appears in the provider's webmail, and that a
+  `mailto:` unsubscribe from an IMAP inbox sends once. Deliberately revoke an app
+  password and confirm one rejected login pauses both send and read/star, and
+  that reconnecting clears it. Check rate behaviour with a burst of replies from
+  one account.
+- Unattended auto-mode replies from IMAP accounts (NAVER, ICLOUD, IMAP) stay
+  excluded even once SMTP send works, until a founder decision enables them. The
+  exclusion is `canAutoSendFromMailbox` in `agentcore/auto-mode-candidates.ts`;
+  widening it is that decision's change.
 
 **B4 — generic IMAP** (*outline*). Unchanged from Phase 4: the SSRF design
 passes security review first.
