@@ -68,6 +68,22 @@ export interface AttentionHashInput {
 }
 
 /**
+ * The hash input of any email-shaped row: exactly the four classification-
+ * relevant fields, in ONE place. The writer (attention-mirror), the verifier
+ * (the firewall read path) and the refresh-only heal all build the hash input
+ * through this, so they cannot drift apart — a field added to one and not the
+ * others would make every row look stale, or hide a real mutation.
+ */
+export function attentionHashInputOf(email: AttentionHashInput): AttentionHashInput {
+  return {
+    from: email.from,
+    subject: email.subject,
+    snippet: email.snippet,
+    labels: email.labels,
+  };
+}
+
+/**
  * Bumped any time the hash input shape OR the hash algorithm changes.
  * Old rows are still findable by their stored hash but won't match the
  * new function, which is the correct behaviour — they need re-decision

@@ -264,14 +264,23 @@ A2b, because L26 lists `set_tier` among the v1 write tools.
   and reason per minute.
 - Rollback: flag off. The table is additive and ignorable.
 
-**A2b — `set_tier`, current lane in read results, learning exclusion.**
+**A2b — `set_tier`, lane in the result, learning exclusion.**
 Depends on: A2a. Needs its own code review and security review, including every
 change to `attention-override.ts` and `attention-mirror.ts`.
+**Scope change, 2026-09-30, for the founder to confirm.** The original scope
+(L26 and this block) had the read tools return the current lane. What landed
+returns the previous and the new lane from `set_tier` and leaves `list_emails`
+and `read_email` untouched, so an agent sees a lane only when it writes. The
+reasons are under "Read visibility" below. Say so if A8 or the founder wants the
+read tools enriched instead.
 - Context, audited 2026-09-29 (03de6426). These facts constrain the design:
   - `attention-mirror.ts` resets `isManualOverride: false` on every producer
     write for the non-email sources (`upsertAttentionFor*` for pending action,
     task, calendar event, notification and commitment; the pending-action write is
-    at `:227` and `:249`). Only `upsertAttentionForEmailJudgement` leaves it.
+    at `:227` and `:249`). **Corrected 2026-09-30:** `upsertAttentionForEmailJudgement`
+    does not leave it either. Its update branch also writes `isManualOverride:
+    false` (pinned by `attention-mirror.test.ts`), so any re-judge through it
+    replaces a human override as well as an agent change.
   - `fallback-rejudge.ts` rewrites only items with `isManualOverride: false`
     (`:159`). An agent change stored with `isManualOverride: false` can be
     silently overwritten by a re-judge. A2b must decide how an agent's lane
@@ -295,7 +304,8 @@ change to `attention-override.ts` and `attention-mirror.ts`.
     other than `DecisionLabel`. It never sets `isManualOverride`. It is
     excluded from judge context, sender priors and accuracy metrics. A human
     override always wins over an agent's.
-  - Read tools return the current lane so an agent can see what it changes.
+  - The agent sees the lane it changes: the `set_tier` result carries the
+    previous and the new lane (chosen 2026-09-30, see "Landed").
 - Verify: tests first for rejected tier values, the audit row, and the learning
   exclusion (an agent tier change must not appear in correction examples,
   sender priors, calibration, decision metrics, the weekly report or ontology
@@ -305,7 +315,120 @@ change to `attention-override.ts` and `attention-mirror.ts`.
 - Exit: with the flag off, the tool list and every tool result are
   byte-identical to today. `MCP_WRITE_TOOLS_ENABLED` does not flip before A2b
   and A3 have both merged.
-- Rollback: flag off.
+- Rollback: flag off. The columns are additive and ignorable. The heal and
+  re-judge fix (human overrides survive a stale-hash re-judge, guarded re-judge
+  write) is its own commit: it is live with the flag off, so revert it alone if
+  it misbehaves.
+- **Landed 2026-09-30** (branch `feat/mcp-set-tier`, not yet merged):
+  - **Provenance.** Two nullable `AttentionItem` columns, `agentTierSetAt` and
+    `agentTierKeyId` (the API key id, not a foreign key). Non-null means the
+    current tier is the agent's. `isManualOverride` is never set, `DecisionLabel`
+    is never touched, and the `tierReason` is `Agent change — moved to <TIER> by
+    a connected agent`, which cannot match `MANUAL_OVERRIDE_PREFIX`. Shared
+    vocabulary in `judge/agent-tier.ts` (`NOT_AGENT_SET` for reads,
+    `CLEAR_AGENT_TIER` for writes). A separate column rather than a tierReason
+    marker because tierReason is free text that the judge also writes.
+  - **`set_tier(email_id, tier)`** (`mcp/set-tier.ts`). Definition is MCP-only
+    (not in `ALL_TOOLS`, `CHAT_TOOL_NAMES` or the risk table); plan-gated through
+    `TOOL_FEATURE_MAP` exactly like `mark_read`. Resolves the id like `mark_read`
+    (userId-scoped), then the OPEN email item. Results: `{success, email_id,
+    previous_tier, tier, changed}` or `{error, code}` with `INVALID_ARGUMENT`,
+    `NOT_FOUND`, `MANUAL_OVERRIDE`, `UNAVAILABLE`. AUTO and CALL are rejected.
+    `previous_tier` is the stored lane (CALL reads as PUSH, null as QUEUE); a
+    retired AUTO row is reported as `AUTO`, so a request for QUEUE is a real
+    change and is written. The requested lane already held is a no-op (no write,
+    no stamp). The write is
+    guarded in its WHERE on `status: OPEN` and `isManualOverride: false`, so a
+    human override that lands after the read still wins.
+  - **Read visibility.** Previous and new lane in the `set_tier` result, not
+    enrichment of `list_emails` / `read_email`. Smaller: no parse and re-serialise
+    of capped tool output, no extra queries on the hot read path, and the
+    byte-identity of every read result is structural instead of conditional. The
+    cost is that an agent learns the current lane only when it writes. Revisit
+    for A8 if it needs to filter by lane before acting.
+  - **Learning readers.** `judge-context` (sender items: history prior, tier
+    history, override count; corrections), `calibration-snapshot` and
+    `correction-eval` skip agent-set rows via `NOT_AGENT_SET`. Without the
+    sender-items filter an injected agent could build the unanimous-history prior
+    (QUEUE, three emails) that skips the LLM for that sender. `decision-metrics`,
+    `weekly-report` and `ontology-proposals-store` read only the ledger, which
+    `set_tier` never writes. All proved against the real readers in
+    `agent-tier-learning-exclusion.test.ts`, each with a human control.
+  - **Who rewrites an EMAIL item's tier.** New-mail ingest judges only new rows
+    (an existing row is never re-judged by `persistGmailEmail`) and the backfill
+    sweep only emails with no item, so neither reaches an agent-set or
+    human-overridden item; both keep the plain upsert.
+    - **Stale-hash heal (`routes/firewall.ts`).** UNREAD is one of the four hashed
+      fields, so a read-state flip (the agent's own `mark_read`, or the user
+      reading the mail) makes the next board read re-judge the item. On main that
+      reset `isManualOverride` and overwrote a human's lane, so this was a live
+      bug for every user, flag off included. Of the hashed inputs only the labels
+      change after delivery, so the heal now refreshes only `inputHash` for an
+      item that is agent-set or human-overridden (one guarded `updateMany` on
+      `status: OPEN` and the stamp or flag) and re-judges only when that matched
+      zero rows. The refresh bumps `@updatedAt`, which extends a human
+      override's recency in `judge-context` (override priors age out at 60 days
+      by `updatedAt`); accepted. Landed as its own commit so it can be reverted
+      alone.
+    - **Re-judge write.** A re-judge of an existing item (heal, operator script)
+      now writes through a guarded `updateMany` requiring `isManualOverride:
+      false` and no agent stamp, mirroring `fallback-rejudge`, and creates
+      nothing. Zero rows returns `preserved`; `judgeAndMirrorEmail` then skips
+      the ledger refresh, the wake-up, the push and the Gmail label, so a human
+      override or an agent lane that lands while the judge call runs is no
+      longer overwritten. `scripts/rejudge-open-email-items.ts` uses the same
+      path and counts the items it kept.
+    - **`fallback-rejudge`** skips agent-set items in both its read and its
+      guarded write.
+    - **The plain upsert** (new items only) still replaces the tier, resets the
+      flag and clears the stamp. Accepted residual: it is unguarded, so it can
+      overwrite an agent lane only if two judges of the same brand-new email race
+      each other and an agent acts in between. The heal's keep-lane choice is made
+      from the board row read at request time; a flag or stamp set after that is
+      caught by the guarded write, not by the choice.
+  - **Human after agent.** `overrideAttentionTier` clears the stamp. A
+    `confirmAttentionTier` on an agent-set item answers ok but does not stamp the
+    ledger: a `CONFIRM:` of the agent's lane against the judge's shown tier is a
+    contradictory label, and first-stamp-wins would block the user's real
+    override.
+  - **Side effects.** `set_tier` fires no push, banner, Telegram message, bell row
+    or client wake-up (those fire only inside `judgeAndMirrorEmail`). The next
+    generated briefing may list an item the agent moved to PUSH, as it lists any
+    open PUSH item. `autoEligible` is untouched, so an agent cannot add an item to
+    the auto-send sweep (it only ever selects judge-computed `autoEligible` on
+    QUEUE or MEETING); it can only move one out.
+  - **Gmail labels.** `set_tier` writes none. With `GMAIL_LABEL_MODE_ENABLED` the
+    stale label would be read by `reconcileLabelCorrection` as a human drag, undo
+    the change and mint a false human correction, so it now skips agent-set items.
+    Known limits: a human who drags the Gmail label on an agent-set item is not
+    recorded until they act in the app, and the Gmail label keeps the judge's
+    lane. Separately, and not changed here: the in-app override route writes no
+    label either, so with label mode on the same reconcile can read the stale
+    label against a human's in-app move (source reading only, not reproduced; the
+    flag is off by default).
+  - **Other surfaces that read an agent lane.** The aging sweep exempts agent-set
+    rows from SILENT and QUEUE age-out, so an injected agent cannot demote an old
+    mail to SILENT and have it resolved (acted-elsewhere resolution still applies).
+    Board items carry `agentSet: true` only when the stamp is set (the key is
+    absent otherwise, so responses without agent lanes are byte-identical); the
+    contract type is additive and optional, and no client renders it yet. A3 or a
+    later UI step renders it and adds the vocabulary row for the noun. The daily
+    receipt lists an agent-set PUSH as queued, not pushed, and does not count it
+    as an interruption. `scripts/calibration.ts` applies the same exclusion as the
+    daily snapshot.
+  - **Audit trail.** `McpWriteAudit` gains nullable `tierFrom` and `tierTo`
+    (separate migration `20260930020000`, the A2a migration is untouched),
+    filled when a `set_tier` call actually changed a lane, so A3 can show the
+    change and a later step can revert it. Recorded on settle, so a failed settle
+    leaves the row `attempted` with no lanes.
+  - **Verify result.** `prisma migrate diff` from origin/main: four nullable
+    `ADD COLUMN` statements (two migrations), nothing else. The implementer
+    (not CI) ran mutation checks on 2026-09-30: writing `isManualOverride` from
+    `set_tier`; dropping the sender-items and calibration filters; dropping the
+    corrections and correction-eval defence-in-depth filters; dropping the
+    re-judge guard's `isManualOverride: false`; dropping the agent handling in
+    `fallback-rejudge`, aging and the receipt. Each made the new tests fail and
+    was restored.
 
 **A3 — activity log and key permission UI.** Depends on: A2. Web settings
 lists write calls per key and offers the read-write choice, both shown only
@@ -536,12 +659,94 @@ needs FA-9 and the admin guidance from F0.
   or sample events and get a local provider value, not GOOGLE.
 - Verify: `prisma migrate diff`, the CI Migrations job, and a backfill test
   for both kinds of row.
+- Landed 2026-09-30 (expand phase only; branch `feat/calendar-provider-schema`,
+  PR not yet opened). Migration `20261001010000_calendar_provider`:
+  - New enum `CalendarProvider`: GOOGLE, OUTLOOK, ICLOUD, NAVER, DEVICE, LOCAL,
+    only the sources C2-C6 name. LOCAL appears only on `CalendarEvent`.
+  - `LinkedCalendarAccount`: `provider` (default GOOGLE), nullable `caldavUrl`
+    and `caldavPasswordCipher`, nullable `accessToken`, and a new unique key
+    (userId, provider, email) added alongside the old (userId, email), which
+    stays (see the deploy-overlap bullet). `CalendarEvent`: `provider`,
+    `externalId`, `sourceAccountId` (plain tag with no foreign key, like
+    `EmailMessage.linkedInboxAccountId`), unique (userId, provider,
+    externalId). `googleId` and its unique are untouched.
+  - Backfill is one idempotent UPDATE: a `googleId` makes the row GOOGLE with
+    `externalId = googleId`; none makes it LOCAL. Sample and demo rows have no
+    `googleId`, so they are LOCAL. That UPDATE is correct only now, while every
+    row is a Google or a local event; once OUTLOOK, ICLOUD, NAVER or DEVICE rows
+    exist it would flip them to LOCAL, so it is never re-run verbatim. Applied
+    to a scratch Postgres 16 holding both kinds of row (2026-09-30); the CI
+    drift check reports no difference.
+  - Both `provider` columns keep `DEFAULT 'GOOGLE'` so the previous release,
+    which inserts without it, keeps working during the deploy overlap. A row it
+    writes in that window is GOOGLE with a NULL `externalId`. The Google sync
+    upsert re-stamps both on update. The contract migration repairs the rest
+    with scoped statements (below) before it drops the default.
+  - Dual-write goes through `pim/calendar-rows.ts`, the single place that
+    decides provider, `externalId` and `sourceAccountId`. The three Google sync
+    sites (`POST /api/calendar/sync`, the scheduler tick, login init-sync)
+    upsert through it. Manual create and the agent `create_event` write GOOGLE
+    when Google returned an id and LOCAL when it did not. The demo seed writes
+    LOCAL. The link-calendar callback keys on (userId, provider, email) and
+    writes GOOGLE. `sourceAccountId` is NULL in every writer today: linked
+    calendars are not synced into rows until C2. A client cannot set any of the
+    three fields. `calendar-provider-writers-guard.test.ts` fails if a new
+    writer omits the provider or a reader starts using the new columns.
+  - Reads are unchanged, still by `googleId` and row id. The one wire change is
+    additive: the row JSON returned by `/api/calendar` (list, get, create,
+    update) now carries `provider`, `externalId` and `sourceAccountId`.
+  - Google-only `LinkedCalendarAccount` readers filter on `provider: "GOOGLE"`
+    (`getLinkedCalendarClients`, the linked-calendars list), so a later CalDAV
+    row with no token is never flagged for reconnect and an OUTLOOK row is
+    never given a Google client. The guard test fails for a reader without a
+    provider filter; the key-rotation sweep reads every provider on purpose.
+  - The migration opens with `SET LOCAL lock_timeout = '5s'`, so a deploy
+    blocked by a long transaction fails fast instead of queueing behind it.
+  - The key-rotation sweep (`scripts/reencrypt-tokens.ts`) covers
+    `caldavPasswordCipher` from day one. `purgeUserData` is unchanged: it
+    deletes both tables by `userId`.
+  - Deploy overlap, verified 2026-09-30 on a scratch Postgres 16 with the
+    previous release's generated client: its Google sync upsert keeps working,
+    and so does its link-calendar upsert (`ON CONFLICT ("userId","email")`),
+    because the old unique index stays. Dropping it first failed that upsert
+    with Postgres 42P10, so the old key is kept and the code can be rolled back
+    with no schema step.
+- For later steps: C2 has two gates (see C2). The contract phase flips reads to
+  (provider, externalId) and drops `LinkedCalendarAccount_userId_email_key`
+  when a second provider for the same email actually lands (C3/C4). Before it
+  drops the `CalendarEvent.provider` default it repairs rows the previous
+  release wrote, scoped to GOOGLE rows so no other provider's row is touched,
+  in this order:
+  `UPDATE "CalendarEvent" SET "externalId" = "googleId" WHERE "provider" =
+  'GOOGLE' AND "externalId" IS NULL;` then `UPDATE "CalendarEvent" SET
+  "provider" = 'LOCAL' WHERE "provider" = 'GOOGLE' AND "googleId" IS NULL;`.
+  Then it adds `CHECK (("provider" = 'LOCAL') = ("externalId" IS NULL))`. The
+  CHECK cannot ship in C1: the previous release inserts GOOGLE rows with no
+  `externalId`. Finally it drops `googleId` and the remaining defaults.
+- Exit: no user-visible change and no flag. The two index builds and the
+  backfill are the only non-metadata steps. Nothing is dropped.
+- Rollback: revert the PR. The columns and indexes are additive and ignorable,
+  and the old unique index is still there for the previous release.
 
 **C2 — calendar provider seam and linked-account sync** (*outline*). Mirrors
 `mail/providers/`. Linked Google calendars are synced into rows, not only
-consulted for conflicts.
+consulted for conflicts. Two gates from the C1 database review (2026-09-30),
+both settled before C2 writes a linked row:
+- Dedupe semantics. The unique (userId, provider, externalId) does not include
+  `sourceAccountId`, so an invite present in both the primary and a linked
+  Google calendar collides. Decide between a sentinel `sourceAccountId` for
+  primary rows and a `COALESCE(sourceAccountId, ...)` expression unique index
+  (raw SQL; confirm the CI drift check accepts it before choosing).
+- Unlinking. `DELETE /google/linked-calendars/:id` (`routes/auth.ts`, around
+  `:1590`) must delete that account's events in the same `$transaction` (or
+  the column becomes a foreign key with `ON DELETE CASCADE`), because
+  `/api/calendar` has no source filter and orphaned events would keep showing.
+  Add an index on (userId, sourceAccountId) when that query first exists.
 
 **C3 — CalDAV connector for iCloud and Naver** (*outline*). Read-only v1.
+`caldavUrl` is user-supplied and fetched server-side, so SSRF validation
+(resolve the host, pin the address, reject private ranges) is required before
+the first request, and the password is stored with `encryptToken`.
 **C4 — Microsoft Graph calendar** (*outline*). Needs calendar permissions
 added to the Azure app (FA-9); existing users re-consent.
 **C5 — mobile device bridge** (*outline*). Blocked on FA-8. Upload policy per
@@ -622,7 +827,7 @@ time, whatever the graph says. The later step rebases, reruns
 | File | Steps |
 |---|---|
 | `packages/api/prisma/schema.prisma` | A1, A2a, A2b, B2, C1, D2, E1, F |
-| `packages/api/src/mcp/tool-gate.ts`, `mcp/server.ts` | A2a, A2b, A4 |
+| `packages/api/src/mcp/tool-gate.ts`, `mcp/write-call.ts`, `mcp/server.ts` | A2a, A2b, A4 |
 | `mail/providers/types.ts`, `dispatch.ts` | A4, B0, B0b, B1, B2, B3, E2 |
 | `mail/imap-connection.ts`, `mail/imap-sync.ts`, `mail/providers/imap.ts` | B1, B2, B3 |
 | `mail/providers/outlook.ts`, `routes/email-replies.ts` | B0b, the `gmail-draft` follow-up under B0 |
