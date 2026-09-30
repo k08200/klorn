@@ -3,13 +3,25 @@
  * (POST /api/mcp). Create shows the raw key exactly once with a copy
  * affordance; the list carries display metadata only; revoke is a
  * timestamp, so revoked keys stay visible.
+ *
+ * Write tools (step A3): while GET /api/keys reports `writeToolsAvailable`, the
+ * create form offers Read only / Read and write, each key shows its permission
+ * and each read-write key can show its agent activity. Without that field the
+ * section is exactly what it was before, including the create request body.
  */
 
-import type { ApiKeysListResponse, CreateApiKeyResponse } from "@klorn/contract";
+import type {
+  ApiKeyPermissionWire,
+  ApiKeysListResponse,
+  CreateApiKeyResponse,
+} from "@klorn/contract";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { DEFAULT_API_KEY_PERMISSION } from "../lib/api-key-ui";
 import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
+import { ApiKeyPermissionPicker } from "./api-key-permission-picker";
+import { ApiKeyRow } from "./api-key-row";
 import { useConfirm } from "./confirm-dialog";
 import { useToast } from "./toast";
 
@@ -20,6 +32,11 @@ const BUTTON =
 const BUTTON_PRIMARY =
   "ease-strong inline-flex min-h-9 items-center rounded-lg bg-accent-solid px-3 text-xs font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35";
 
+/** With write tools on, every control in the section is a >= 44px target (WCAG 2.2 AA). */
+const FIELD_TALL = `${FIELD} min-h-11`;
+const BUTTON_TALL = BUTTON.replace("min-h-9", "min-h-11");
+const BUTTON_PRIMARY_TALL = BUTTON_PRIMARY.replace("min-h-9", "min-h-11");
+
 export function ApiKeysSection() {
   const { t } = useT();
   const { toast } = useToast();
@@ -29,10 +46,15 @@ export function ApiKeysSection() {
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
   const [freshKey, setFreshKey] = useState<CreateApiKeyResponse | null>(null);
+  const [writeTools, setWriteTools] = useState(false);
+  const [permission, setPermission] = useState<ApiKeyPermissionWire>(DEFAULT_API_KEY_PERMISSION);
 
   const load = useCallback(() => {
     apiFetch<ApiKeysListResponse>("/api/keys")
-      .then((d) => setKeys(d.keys))
+      .then((d) => {
+        setKeys(d.keys);
+        setWriteTools(d.writeToolsAvailable === true);
+      })
       .catch((err) => captureClientError(err, { scope: "settings.api-keys-list" }));
   }, []);
 
@@ -45,10 +67,12 @@ export function ApiKeysSection() {
     try {
       const res = await apiFetch<CreateApiKeyResponse>("/api/keys", {
         method: "POST",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify(writeTools ? { name, permission } : { name }),
       });
       setFreshKey(res);
       setName("");
+      // A read-write choice never carries over silently to the next key.
+      setPermission(DEFAULT_API_KEY_PERMISSION);
       load();
     } catch (err) {
       captureClientError(err, { scope: "settings.api-keys-create" });
@@ -96,17 +120,19 @@ export function ApiKeysSection() {
           onChange={(e) => setName(e.target.value)}
           maxLength={60}
           placeholder={t("settings.apiKeys.namePlaceholder")}
-          className={FIELD}
+          className={writeTools ? FIELD_TALL : FIELD}
         />
         <button
           type="button"
           onClick={create}
           disabled={creating || !name.trim()}
-          className={`${BUTTON_PRIMARY} shrink-0`}
+          className={`${writeTools ? BUTTON_PRIMARY_TALL : BUTTON_PRIMARY} shrink-0`}
         >
           {creating ? t("settings.apiKeys.creating") : t("settings.apiKeys.create")}
         </button>
       </div>
+
+      {writeTools && <ApiKeyPermissionPicker value={permission} onChange={setPermission} />}
 
       {freshKey && (
         <div className="space-y-2 rounded-xl border border-line bg-surface-raised p-3">
@@ -115,10 +141,18 @@ export function ApiKeysSection() {
             {freshKey.key}
           </code>
           <div className="flex gap-2">
-            <button type="button" onClick={copyFreshKey} className={BUTTON}>
+            <button
+              type="button"
+              onClick={copyFreshKey}
+              className={writeTools ? BUTTON_TALL : BUTTON}
+            >
               {t("settings.apiKeys.copy")}
             </button>
-            <button type="button" onClick={() => setFreshKey(null)} className={BUTTON}>
+            <button
+              type="button"
+              onClick={() => setFreshKey(null)}
+              className={writeTools ? BUTTON_TALL : BUTTON}
+            >
               {t("settings.apiKeys.dismiss")}
             </button>
           </div>
@@ -130,25 +164,7 @@ export function ApiKeysSection() {
       ) : (
         <ul className="divide-y divide-line-soft">
           {keys.map((key) => (
-            <li key={key.id} className="flex items-center gap-2 py-2">
-              <span className="min-w-0 flex-1 truncate text-sm text-ink">
-                {key.name}
-                <span className="ml-2 font-mono text-xs text-ink-dim">{key.prefix}…</span>
-              </span>
-              {key.revoked ? (
-                <span className="rounded-full bg-surface-raised px-2 py-0.5 text-[10px] font-medium text-ink-dim">
-                  {t("settings.apiKeys.revokedChip")}
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => revoke(key.id, key.name)}
-                  className="text-xs text-ink-dim hover:text-state-danger-ink"
-                >
-                  {t("settings.apiKeys.revoke")}
-                </button>
-              )}
-            </li>
+            <ApiKeyRow key={key.id} apiKey={key} writeTools={writeTools} onRevoke={revoke} />
           ))}
         </ul>
       )}

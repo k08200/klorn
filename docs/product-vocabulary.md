@@ -10,6 +10,9 @@ never names a screen.
 Updated 2026-08-23: the tier list below was stale at four (PUSH/QUEUE/SILENT/AUTO)
 while the schema had moved to five lanes. Realigned to the schema.
 
+Updated 2026-09-30: added **Key permission** and **Agent activity** (step A3 of
+`providers/unified-platform-plan.md`), the two nouns of the MCP write-tools UI.
+
 ## The nouns
 
 | Term | Means | Where it appears | Never means |
@@ -19,6 +22,8 @@ while the schema had moved to five lanes. Realigned to the schema.
 | **Firewall board** | The lane view of how mail was classified: PUSH / MEETING / QUEUE / INFO / SILENT. | `/inbox/firewall`, the desktop tier columns | A place to read mail. It shows *judgments*, not threads. |
 | **Receipt** | The record of what Klorn did today, after the fact. | `/inbox/receipt` | Something to act on. It is read-only history. |
 | **Mail** | The actual message list and reading view. | `/email`, desktop reading pane | The decision queue. |
+| **Key permission** | What an MCP API key may do: **Read only** (the default) or **Read and write**. Read and write lets an external agent mark mail as read and change lanes; it never allows send, delete or forward. Offered only while write tools are switched on. | Settings → "MCP API keys": the choice when creating a key, and a label on each key | Agent mode (`SHADOW` / `SUGGEST` / `AUTO`). A key's permission is about which tools an *external* agent may call; it says nothing about how much Klorn's own agent does without asking. |
+| **Agent activity** | The per-key history of write actions an external agent took through that key: when, what, and how it ended (Done / Refused / Error / Outcome unknown). | Settings → "MCP API keys", expandable on each Read and write key | The receipt (Klorn's own record of what Klorn did today), or agent mode. It never lists reads, and never shows message content. |
 
 ## The lanes
 

@@ -17,8 +17,13 @@ import {
   MAX_ACTIVE_KEYS,
   mintApiKey,
 } from "../mcp/api-keys.js";
+import { listKeyActivity } from "../mcp/key-activity.js";
+import { darkRouteGate } from "./dark-route-gate.js";
 
 const MAX_NAME_CHARS = 60;
+
+/** Same ceiling the sibling settings reads use (auth.ts, email-mailbox.ts). */
+const ACTIVITY_RATE_LIMIT = { max: 30, timeWindow: "1 minute" } as const;
 
 /** Stable machine-readable code on the 400 — clients branch on it, not on `error`. */
 const CODE_INVALID_PERMISSION = "INVALID_API_KEY_PERMISSION";
@@ -74,8 +79,32 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       lastUsedAt: row.lastUsedAt ? row.lastUsedAt.toISOString() : null,
       revoked: row.revokedAt !== null,
     }));
-    return { keys };
+    // Flag OFF: the body is exactly `{ keys }`, as before the field existed.
+    return mcpWriteToolsEnabled() ? { keys, writeToolsAvailable: true as const } : { keys };
   });
+
+  // Agent activity of ONE owned key. Dark (an unregistered route, byte for
+  // byte) while the write flag is off: the gate runs in onRequest, before auth
+  // and before any query. A foreign id and an unknown id share one lookup and
+  // one response, so a caller cannot tell another user's key from no key.
+  app.get(
+    "/:id/activity",
+    {
+      onRequest: darkRouteGate(mcpWriteToolsEnabled),
+      preHandler: requireAuth,
+      config: { rateLimit: ACTIVITY_RATE_LIMIT },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const uid = getUserId(request);
+      const owned = await prisma.apiKey.findFirst({
+        where: { id, userId: uid },
+        select: { id: true },
+      });
+      if (!owned) return reply.code(404).send({ error: "API key not found" });
+      return { activity: await listKeyActivity(uid, owned.id) };
+    },
+  );
 
   app.post(
     "/",
