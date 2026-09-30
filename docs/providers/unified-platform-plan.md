@@ -703,10 +703,9 @@ flag OFF.
     first transport is built (one shared import), so while the flag is off it
     never loads. The package has
     no dependencies and no install script, ships its own types and an ESM entry,
-    and is MIT-0. `pnpm audit --prod` on 2026-09-30 reports 14 advisories (axios
-    below 1.20.0 and `@grpc/grpc-js` below 1.14.5); `origin/main`'s lockfile
-    reports the identical set, and the new dependency adds none. Raising those
-    override floors is a separate change.
+    and is MIT-0. It adds no advisory: `pnpm audit --prod` on the rebased
+    branch reports no known vulnerabilities (the axios and `@grpc/grpc-js`
+    advisories seen on 2026-09-30 were cleared on main by #1337).
   - Transport (`mail/smtp-transport.ts`): `rejectUnauthorized` on, TLS 1.2 or
     newer, SNI pinned to the registry host, `requireTLS` for STARTTLS (a server
     that does not offer the upgrade fails the send, no AUTH is sent), connection
