@@ -471,8 +471,10 @@ model LinkedInboxAccount {
   // IMAP providers (NAVER, ICLOUD): the INBOX UIDVALIDITY the poller last saw, as
   // a canonical decimal string (step B2). A UID in EmailMessage.gmailId names a
   // message only under this value, so every IMAP action compares the live value
-  // with it before touching a UID; a poll that sees a different one re-baselines
-  // and retires the mailbox's stale rows. A String, not an Int or BigInt: the
+  // with it before touching a UID. The poller only ever FILLS it (the baseline); a
+  // poll that sees a different value leaves it alone, reports once, and every
+  // action then refuses the mailbox until a repair (plan step B2b). A String, not
+  // an Int or BigInt: the
   // value is an unsigned 32-bit integer (over a signed Int), is only compared for
   // equality, and BigInt would make any route that returns the whole row throw in
   // JSON.stringify. NULL until the first poll after this column exists.
@@ -547,8 +549,9 @@ model ImapMovedMessage {
   createdAt            DateTime           @default(now())
 
   @@unique([linkedInboxAccountId, sourceId])
-  // The retention sweep: delete by account and age.
-  @@index([linkedInboxAccountId, createdAt])
+  // The retention sweep (log-retention.ts, and recordMove's per-account sweep):
+  // an index range scan by age.
+  @@index([createdAt])
   // The cascade from User, and the per-user lookup.
   @@index([userId])
 }

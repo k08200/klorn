@@ -4,8 +4,8 @@
  *
  * A UID is only a stable name under an unchanged UIDVALIDITY, and even the stored
  * validity cannot prove that a UID Klorn remembers still names the message Klorn
- * has a row for (the poller re-baselines after a renumbering, and a row that
- * predates it keeps its old UID). So before an action MOVES a message, it fetches
+ * has a row for (a row that predates a renumbering keeps its old UID, and the
+ * stored value can be set to the live one again by a relink). So before an action MOVES a message, it fetches
  * the envelope of the UID and compares it with what Klorn knows: Message-ID when
  * both sides have one, otherwise subject and date. A mismatch refuses the action.
  *

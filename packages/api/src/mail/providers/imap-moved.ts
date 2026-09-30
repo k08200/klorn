@@ -14,7 +14,8 @@ import { prisma } from "../../db.js";
 export type MoveRoleName = "TRASH" | "ARCHIVE";
 
 /** How long a record outlives its move: Gmail's own Trash retention, which is what users expect of trash. */
-export const MOVED_MESSAGE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+export const MOVED_MESSAGE_RETENTION_DAYS = 30;
+export const MOVED_MESSAGE_RETENTION_MS = MOVED_MESSAGE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
 export interface MoveRecord {
   /** The EmailMessage.gmailId the message had in INBOX. */
@@ -140,20 +141,4 @@ export async function recentlyMovedSourceIds(scope: MoveScope): Promise<string[]
     select: { sourceId: true },
   });
   return rows.map((row) => row.sourceId);
-}
-
-/**
- * Drop the records made within MOVE_RACE_WINDOW_MS for one account. After a
- * UIDVALIDITY reset the INBOX ids in them can name NEW messages, and the poller's
- * race cleanup (`recentlyMovedSourceIds`) would delete those. Older records point at
- * other folders under their own UIDVALIDITY and stay.
- */
-export async function forgetRecentMoves(scope: MoveScope): Promise<void> {
-  await prisma.imapMovedMessage.deleteMany({
-    where: {
-      userId: scope.userId,
-      linkedInboxAccountId: scope.linkedInboxAccountId,
-      createdAt: { gte: new Date(Date.now() - MOVE_RACE_WINDOW_MS) },
-    },
-  });
 }

@@ -31,7 +31,7 @@ import { envelopeSubject } from "./imap-envelope.js";
 import { formatImapMessageId } from "./imap-message-id.js";
 import { reconcileInboxValidity, removeRecentlyMovedRows } from "./imap-poll-guards.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
-import { liveUidValidity } from "./imap-uidvalidity.js";
+import { liveUidValidity, type PollValidity } from "./imap-uidvalidity.js";
 
 interface VerifyArgs {
   provider: ImapProviderConfig;
@@ -235,10 +235,11 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
     await client.connect();
     const lock = await client.getMailboxLock("INBOX");
     try {
+      let validity: PollValidity = "unknown";
       if (args.linkedInboxAccountId) {
-        // Before anything is persisted: a renumbered mailbox must not have its
-        // new mail deduped against the old numbering (step B2, imap-poll-guards.ts).
-        await reconcileInboxValidity({
+        // Step B2, imap-poll-guards.ts: record the INBOX UIDVALIDITY, or hold (report
+        // once, change nothing) when the server renumbered the mailbox.
+        validity = await reconcileInboxValidity({
           provider: args.provider,
           userId: args.userId,
           email: args.email,
@@ -298,9 +299,10 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
           });
         }
       }
-      if (args.linkedInboxAccountId) {
+      if (args.linkedInboxAccountId && validity !== "reset") {
         // A message Klorn moved out while this window was being persisted must not
-        // stay behind as a row (step B2).
+        // stay behind as a row (step B2). Skipped while the mailbox is held: the
+        // moved ids are old numbers.
         await removeRecentlyMovedRows({
           userId: args.userId,
           linkedInboxAccountId: args.linkedInboxAccountId,

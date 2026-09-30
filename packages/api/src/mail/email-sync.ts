@@ -17,7 +17,6 @@ import { spamIntakeEnabled } from "../ops/feature-flags.js";
 import { resolveUserEmail } from "../resolve-user-email.js";
 import { Semaphore } from "../semaphore.js";
 import { captureError } from "../sentry.js";
-import { resolveAttentionForDeletedEmails } from "./attention-cleanup.js";
 import { summarizeUnsummarizedEmails } from "./email-summarize.js";
 import {
   getAuthedClient,
@@ -342,6 +341,28 @@ export async function syncSpamLane(userId: string): Promise<number> {
 }
 
 // ─── Gmail ↔ DB Reconciliation ────────────────────────────────────────────
+
+/**
+ * Resolve the EMAIL attention items mirroring the given EmailMessage ids. Called
+ * when those emails leave the INBOX (archived/trashed in Gmail) so a handled
+ * email also leaves the attention queue — otherwise the AttentionItem is orphaned
+ * OPEN and the priority amplifier keeps surfacing it (the stale-PUSH accumulation
+ * bug). Only OPEN/SNOOZED are touched, so a terminal user decision (already
+ * RESOLVED/DISMISSED) is preserved. Chunked for the bind-param cap.
+ */
+async function resolveAttentionForDeletedEmails(userId: string, emailIds: string[]): Promise<void> {
+  for (let i = 0; i < emailIds.length; i += INBOX_PARAM_CAP) {
+    await prisma.attentionItem.updateMany({
+      where: {
+        userId,
+        source: "EMAIL",
+        sourceId: { in: emailIds.slice(i, i + INBOX_PARAM_CAP) },
+        status: { in: ["OPEN", "SNOOZED"] },
+      },
+      data: { status: "RESOLVED", resolvedAt: new Date() },
+    });
+  }
+}
 
 /**
  * On-demand fan-out: sync every LINKED secondary inbox for a user, gated exactly

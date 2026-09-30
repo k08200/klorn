@@ -272,8 +272,8 @@ describe("UIDVALIDITY guard", () => {
     expect(moveCommands()).toEqual([]);
   });
 
-  it("refuses an INBOX id whose UID is a valid number but was minted under another validity, once the poller re-baselined", async () => {
-    // After a reset the stored value equals the live one again, so the row's stale
+  it("refuses an INBOX id whose UID is a valid number but was minted under another validity, even if the stored value was set to the live one again (a relink)", async () => {
+    // After a relink the stored value equals the live one again, so the row's stale
     // UID would pass the validity check. The envelope guard is what stops it.
     const id = deliver(db, NAVER, 101, { subject: "Old message" });
     fakeServer.renumber("INBOX", 1001n);
@@ -383,6 +383,58 @@ describe("a result is honest", () => {
     expect(result).not.toHaveProperty("success");
     expect(trackedRows()).toEqual([]);
     expect(localIds(db)).toEqual([id]);
+  });
+
+  it("finds the moved message among copies of the same Message-ID already in the destination (no COPYUID)", async () => {
+    const id = deliver(db, NAVER, 101, { messageId: "<dup@example.com>" });
+    // Trash already holds an older copy with the very same Message-ID.
+    fakeServer.add("Trash", { uid: 1, messageId: "<dup@example.com>" });
+    fakeServer.copyUid = false;
+
+    const result = await naver.trash(USER, id, NAVER.rowId);
+
+    expect(result).toEqual({ success: true });
+    expect(trackedRows()[0]).toMatchObject({ folderPath: "Trash", folderUid: 2n });
+    expect(localIds(db)).toEqual([]);
+  });
+
+  it("never mistakes the pre-existing copy for the moved one when the moved one cannot be found", async () => {
+    const id = deliver(db, NAVER, 101, { messageId: "<dup@example.com>" });
+    fakeServer.add("Trash", { uid: 1, messageId: "<dup@example.com>" });
+    fakeServer.copyUid = false;
+    fakeServer.searchHidesUids = new Set([2]);
+
+    const result = await naver.trash(USER, id, NAVER.rowId);
+
+    expect(result).toMatchObject({ error: expect.any(String) });
+    expect(result).not.toHaveProperty("success");
+    // Recording UID 1 would make an undo restore the OLD copy.
+    expect(trackedRows()).toEqual([]);
+    expect(localIds(db)).toEqual([id]);
+  });
+
+  it("does the same on the way back: a copy already in INBOX does not hide the restored one", async () => {
+    const id = deliver(db, NAVER, 101, { messageId: "<dup@example.com>" });
+    fakeServer.add("INBOX", { uid: 50, messageId: "<dup@example.com>" });
+    await naver.archive(USER, id, NAVER.rowId);
+    fakeServer.copyUid = false;
+
+    const result = await naver.unarchive(USER, id, NAVER.rowId);
+
+    expect(result).toEqual({ success: true, restoredMessageId: idOf(NAVER, 102) });
+  });
+
+  it("is an error when the destination was renumbered between the status and the read-back", async () => {
+    const id = deliver(db, NAVER, 101, { messageId: "<dup@example.com>" });
+    fakeServer.copyUid = false;
+    fakeServer.midMoveHook = () => {
+      fakeServer.folder("Trash").uidValidity = 2001n;
+    };
+
+    const result = await naver.trash(USER, id, NAVER.rowId);
+
+    expect(result).toMatchObject({ error: expect.any(String) });
+    expect(trackedRows()).toEqual([]);
   });
 
   it("is an error when there is no COPYUID and the message has no Message-ID to look for", async () => {

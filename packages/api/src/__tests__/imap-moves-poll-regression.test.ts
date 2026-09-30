@@ -61,6 +61,8 @@ vi.mock("../resolve-user-email.js", () => ({
 }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
+const { captureError } = await import("../sentry.js");
+const { resetPollGuardState } = await import("../mail/imap-poll-guards.js");
 const { syncImapAccountsForUser, syncImapMessageForUser } = await import(
   "../mail/imap-accounts.js"
 );
@@ -100,6 +102,8 @@ beforeEach(() => {
   fakeServer.reset();
   arm();
   resetImapSessionState();
+  resetPollGuardState();
+  vi.mocked(captureError).mockClear();
   process.env.IMAP_MOVE_ACTIONS_ENABLED = "true";
   delete process.env.IMAP_ACTIONS_ENABLED;
   delete process.env.ICLOUD_INBOX_ENABLED;
@@ -148,67 +152,116 @@ describe("the poller records the INBOX UIDVALIDITY", () => {
   });
 });
 
-describe("a server that renumbers the mailbox", () => {
-  it("refuses an action on a now-stale row, then the poll re-baselines and retires the stale rows", async () => {
+describe("a server that renumbers the mailbox: the poller holds, it does not repair", () => {
+  const writesTo = (model: string) => db.writes[model] ?? [];
+  const storedValueWrites = () =>
+    writesTo("linkedInboxAccount").filter((w) => w.data && "inboxUidValidity" in w.data);
+
+  it("deletes, resolves and stores nothing: rows, attention items, move records and the stored value stay", async () => {
+    await ingest(2);
+    const [first] = db.tables.emailMessage ?? [];
+    db.tables.attentionItem = [
+      { id: "open", userId: USER, source: "EMAIL", sourceId: first.id, status: "OPEN" },
+    ];
+    db.tables.imapMovedMessage = [
+      {
+        id: "recent",
+        userId: USER,
+        linkedInboxAccountId: NAVER.rowId,
+        sourceId: idOf(NAVER, 5),
+        role: "TRASH",
+        folderPath: "Trash",
+        folderUid: 1n,
+        folderUidValidity: "2000",
+        subject: "s",
+        createdAt: new Date(),
+      },
+    ];
+    const writtenBefore = Object.fromEntries(
+      ["attentionItem", "imapMovedMessage"].map((m) => [m, writesTo(m).length]),
+    );
+    fakeServer.renumber("INBOX", 1001n);
+
+    await poll();
+    await poll();
+
+    expect(writesTo("emailMessage").filter((w) => w.op === "deleteMany")).toEqual([]);
+    expect(writesTo("attentionItem")).toHaveLength(writtenBefore.attentionItem);
+    expect(writesTo("imapMovedMessage")).toHaveLength(writtenBefore.imapMovedMessage);
+    expect(storedValueWrites()).toEqual([]);
+    expect(storedValidity()).toBe("1000");
+    expect(db.tables.attentionItem?.[0]?.status).toBe("OPEN");
+    expect(db.tables.imapMovedMessage).toHaveLength(1);
+    expect(localIds(db)).toEqual(expect.arrayContaining([idOf(NAVER, 101), idOf(NAVER, 102)]));
+  });
+
+  it("keeps polling exactly as main does: the new window is ingested under its new numbers", async () => {
+    await ingest(2);
+    fakeServer.renumber("INBOX", 1001n);
+    const before = creates();
+
+    const result = await poll();
+
+    expect(result).toMatchObject({ fetched: 2, inserted: 2, errors: 0 });
+    expect(creates()).toBe(before + 2);
+    expect(localIds(db)).toEqual(
+      [idOf(NAVER, 1), idOf(NAVER, 2), idOf(NAVER, 101), idOf(NAVER, 102)].sort(),
+    );
+  });
+
+  it("reports the reset once per account and value across repeated polls, never a message id", async () => {
+    await ingest(1);
+    fakeServer.renumber("INBOX", 1001n);
+
+    await poll();
+    await poll();
+    await poll();
+
+    expect(captureError).toHaveBeenCalledTimes(1);
+    const [, context] = (captureError as unknown as { mock: { calls: unknown[][] } }).mock
+      .calls[0] as [unknown, { tags: Record<string, string>; extra: Record<string, unknown> }];
+    expect(context.tags.scope).toBe("naver-imap.uidvalidity-reset");
+    expect(JSON.stringify(context)).not.toContain(NAVER.email);
+    const lines = (console.warn as unknown as { mock: { calls: unknown[][] } }).mock.calls.filter(
+      ([line]) => String(line).includes("UIDVALIDITY changed"),
+    );
+    expect(lines).toHaveLength(1);
+    expect(String(lines[0][0])).toContain(NAVER.rowId);
+  });
+
+  it("reports again when the server reports yet another value", async () => {
+    await ingest(1);
+    fakeServer.renumber("INBOX", 1001n);
+    await poll();
+
+    fakeServer.folder("INBOX").uidValidity = 1002n;
+    await poll();
+    await poll();
+
+    expect(captureError).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not report a mailbox whose value is unchanged, or one being baselined", async () => {
+    arm(null);
+    await ingest(1);
+    await poll();
+
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("keeps refusing actions while the stored value differs, before and after polls", async () => {
     await ingest(2);
     fakeServer.renumber("INBOX", 1001n);
     fakeServer.commands = [];
 
-    const refused = await actions().trash(USER, idOf(NAVER, 101), NAVER.rowId);
+    const before = await actions().trash(USER, idOf(NAVER, 101), NAVER.rowId);
+    await poll();
+    const after = await actions().trash(USER, idOf(NAVER, 1), NAVER.rowId);
 
-    expect(refused).toMatchObject({ error: expect.any(String) });
+    expect(before).toMatchObject({ error: expect.any(String) });
+    expect(after).toMatchObject({ error: expect.any(String) });
     expect(fakeServer.commands.filter((c) => c.includes("MOVE"))).toEqual([]);
-    expect(localIds(db)).toEqual([idOf(NAVER, 101), idOf(NAVER, 102)]);
-
-    await poll();
-
-    expect(storedValidity()).toBe("1001");
-    // The same two messages, under their new numbers, and nothing left of the old keys.
-    expect(localIds(db)).toEqual([idOf(NAVER, 1), idOf(NAVER, 2)]);
-  });
-
-  it("does not mistake a reused UID for the message that used to have it (no lost mail)", async () => {
-    fakeServer.add("INBOX", { uid: 1, subject: "Old A" });
-    fakeServer.add("INBOX", { uid: 2, subject: "Old B" });
-    await poll();
-    // The mailbox is rebuilt: new validity, UID 1 now belongs to a different message.
-    const inbox = fakeServer.folder("INBOX");
-    inbox.messages.clear();
-    inbox.uidValidity = 1001n;
-    inbox.nextUid = 1;
-    fakeServer.add("INBOX", { uid: 1, subject: "Brand new C" });
-
-    await poll();
-
-    expect(rowFor(idOf(NAVER, 1))).toMatchObject({ subject: "Brand new C" });
-    expect(rowFor(idOf(NAVER, 2))).toBeUndefined();
-  });
-
-  it("resolves the open attention items of the rows it retires, and keeps a finished decision", async () => {
-    await ingest(2);
-    const [first, second] = db.tables.emailMessage ?? [];
-    const item = (id: string, userId: string, sourceId: unknown, status: string) => ({
-      id,
-      userId,
-      source: "EMAIL",
-      sourceId,
-      status,
-    });
-    db.tables.attentionItem = [
-      item("open", USER, first.id, "OPEN"),
-      item("snoozed", USER, second.id, "SNOOZED"),
-      item("dismissed", USER, first.id, "DISMISSED"),
-      item("other-user", "u2", first.id, "OPEN"),
-    ];
-    fakeServer.renumber("INBOX", 1001n);
-
-    await poll();
-
-    const status = (id: string) => db.tables.attentionItem?.find((row) => row.id === id)?.status;
-    expect(status("open")).toBe("RESOLVED");
-    expect(status("snoozed")).toBe("RESOLVED");
-    expect(status("dismissed")).toBe("DISMISSED");
-    expect(status("other-user")).toBe("OPEN");
+    expect(fakeServer.uidsIn("Trash")).toEqual([]);
   });
 
   it("does not let a just-recorded move delete a new message that reuses its UID", async () => {
@@ -225,20 +278,21 @@ describe("a server that renumbers the mailbox", () => {
     expect(rowFor(idOf(NAVER, 101))).toMatchObject({ subject: "Brand new after the rebuild" });
   });
 
-  it("acts on the fresh rows once the poll has re-baselined", async () => {
+  it("characterises the collision main already has: a reused UID is deduped against the stale row (B2b)", async () => {
     await ingest(1);
-    fakeServer.renumber("INBOX", 1001n);
+    const inbox = fakeServer.folder("INBOX");
+    inbox.messages.clear();
+    inbox.uidValidity = 1001n;
+    inbox.nextUid = 101;
+    fakeServer.add("INBOX", { uid: 101, subject: "A different message" });
+
     await poll();
 
-    const result = await actions().trash(USER, idOf(NAVER, 1), NAVER.rowId);
-
-    expect(result).toEqual({ success: true });
-    expect(fakeServer.uidsIn("Trash")).toHaveLength(1);
+    // Same as main: the key exists, so the new message is not a new row.
+    expect(rowFor(idOf(NAVER, 101))).toMatchObject({ subject: "Mail 101" });
   });
 
-  it("guards a row that predates the reset even after the poll re-baselined, by the envelope", async () => {
-    // A stale row survives only if something keeps it (here: seeded directly). The
-    // validity now matches, so the subject and date are the last line of defence.
+  it("guards a stale row by the envelope even when the stored value was set to the live one", async () => {
     const uid = fakeServer.add("INBOX", { uid: 101, subject: "Reused number, other mail" });
     arm("1000");
     db.tables.emailMessage = [
@@ -259,67 +313,6 @@ describe("a server that renumbers the mailbox", () => {
 
     expect(result).toMatchObject({ error: expect.any(String) });
     expect(fakeServer.uidsIn("INBOX")).toEqual([uid]);
-  });
-
-  it("purges only this mailbox's rows: another account and another user keep theirs", async () => {
-    await ingest(1);
-    db.tables.emailMessage = [
-      ...(db.tables.emailMessage ?? []),
-      {
-        id: "other-account",
-        userId: USER,
-        gmailId: "icloud-imap:me@icloud.com:101",
-        linkedInboxAccountId: "row-2",
-        from: "x",
-        to: "y",
-        subject: "s",
-        labels: [],
-        receivedAt: new Date(),
-      },
-      {
-        id: "other-user",
-        userId: "u2",
-        gmailId: idOf(NAVER, 101),
-        linkedInboxAccountId: NAVER.rowId,
-        from: "x",
-        to: "y",
-        subject: "s",
-        labels: [],
-        receivedAt: new Date(),
-      },
-      {
-        id: "gmail-row",
-        userId: USER,
-        gmailId: "18c2f0a1b2c3d4e5",
-        linkedInboxAccountId: null,
-        from: "x",
-        to: "y",
-        subject: "s",
-        labels: [],
-        receivedAt: new Date(),
-      },
-    ];
-    fakeServer.renumber("INBOX", 1001n);
-
-    await poll();
-
-    const remaining = (db.tables.emailMessage ?? []).map((r) => r.id);
-    expect(remaining).toEqual(expect.arrayContaining(["other-account", "other-user", "gmail-row"]));
-  });
-
-  it("does not re-baseline when the purge fails, so the next poll retries the reset", async () => {
-    await ingest(1);
-    fakeServer.renumber("INBOX", 1001n);
-    vi.spyOn(db.model("emailMessage"), "deleteMany").mockRejectedValueOnce(
-      new Error("pooler dropped"),
-    );
-
-    await poll();
-    expect(storedValidity()).toBe("1000");
-
-    await poll();
-    expect(storedValidity()).toBe("1001");
-    expect(localIds(db)).toEqual([idOf(NAVER, 1)]);
   });
 });
 

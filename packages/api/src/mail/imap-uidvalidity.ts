@@ -79,7 +79,7 @@ export function validityFailure(
     error:
       verdict === "unverified"
         ? `${label} mailbox has not been verified yet. Try again after the next sync.`
-        : `${label} reset its mailbox numbering. Klorn will resync it; try again after the next sync.`,
+        : `${label} reset its mailbox numbering. Klorn will not move or flag mail in this mailbox until that is resolved.`,
   };
 }
 
@@ -107,7 +107,7 @@ export function logValidityRefusalOnce(
   if (lastLogged.get(rowId) === change) return;
   lastLogged.set(rowId, change);
   console.warn(
-    `[${logScope}] action refused for row ${rowId} — UIDVALIDITY ${verdict} (stored ${stored ?? "none"}, live ${live ?? "none"}); the next poll re-baselines`,
+    `[${logScope}] action refused for row ${rowId} — UIDVALIDITY ${verdict} (stored ${stored ?? "none"}, live ${live ?? "none"}); the poller is holding this mailbox`,
   );
 }
 

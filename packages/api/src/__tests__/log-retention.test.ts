@@ -13,6 +13,7 @@ const TABLES = [
   "webhookEvent",
   "llmUsageLog",
   "mcpWriteAudit",
+  "imapMovedMessage",
 ] as const;
 
 const prismaMock = vi.hoisted(() => {
@@ -28,6 +29,7 @@ const prismaMock = vi.hoisted(() => {
     webhookEvent: make(),
     llmUsageLog: make(),
     mcpWriteAudit: make(),
+    imapMovedMessage: make(),
   };
 });
 
@@ -40,6 +42,7 @@ import {
   retentionCutoff,
   runLogRetentionSweep,
 } from "../log-retention.js";
+import { MOVED_MESSAGE_RETENTION_DAYS } from "../mail/providers/imap-moved.js";
 
 const NOW = new Date("2026-07-14T12:00:00.000Z");
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -139,6 +142,25 @@ describe("log-retention", () => {
     });
     expect(audit.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ["m0", "m1"] } } });
     expect(result.mcpWriteAudit).toBe(2);
+  });
+
+  it("sweeps IMAP move records after their 30-day window by createdAt, in id-paged batches (step B2)", async () => {
+    expect(MOVED_MESSAGE_RETENTION_DAYS).toBe(30);
+    const policy = LOG_RETENTION_POLICIES.find((p) => p.name === "imapMovedMessage");
+    expect(policy).toMatchObject({ column: "createdAt", days: MOVED_MESSAGE_RETENTION_DAYS });
+
+    const moved = tableMock("imapMovedMessage");
+    moved.findMany.mockResolvedValueOnce([{ id: "r0" }, { id: "r1" }]);
+    moved.deleteMany.mockResolvedValueOnce({ count: 2 });
+    const result = await runLogRetentionSweep(NOW, 3);
+
+    expect(moved.findMany).toHaveBeenCalledWith({
+      where: { createdAt: { lt: retentionCutoff(MOVED_MESSAGE_RETENTION_DAYS, NOW) } },
+      select: { id: true },
+      take: 3,
+    });
+    expect(moved.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ["r0", "r1"] } } });
+    expect(result.imapMovedMessage).toBe(2);
   });
 
   it("skips the delete entirely when a table has nothing expired", async () => {

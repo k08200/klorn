@@ -10,8 +10,9 @@
 --   only under the mailbox's UIDVALIDITY (RFC 3501 §2.3.1.1); when the server
 --   changes it, every stored UID points at a different message or none. The
 --   poller records the INBOX value here, every IMAP action compares the live value
---   with it before touching a UID, and a poll that sees a different one
---   re-baselines. TEXT, not INTEGER or BIGINT: the value is an unsigned 32-bit
+--   with it before touching a UID. The poller only fills it; a poll that sees a
+--   different value leaves it alone and reports it, and every action then refuses
+--   the mailbox until it is repaired. TEXT, not INTEGER or BIGINT: the value is an unsigned 32-bit
 --   integer (over a signed INTEGER), is only compared for equality, and a BigInt
 --   column would make any code path that serializes a whole LinkedInboxAccount row
 --   throw. NULL for every existing row; the first poll after deploy fills it, and
@@ -25,7 +26,8 @@
 --   UID and that folder's own UIDVALIDITY, and what the message looked like
 --   (Message-ID, subject, date) so undo can refuse if the UID now names something
 --   else. Undo consumes the row; rows older than 30 days are swept by the next
---   move for the same account.
+--   move for the same account and by the log-retention job (createdAt is indexed
+--   for that range scan).
 --   "folderUid" is BIGINT for the same reason as above (UIDs reach 4294967295).
 --   Both foreign keys cascade: unlinking a mailbox or deleting a user removes the
 --   tracking rows (and purgeUserData deletes them explicitly). Unlike
@@ -79,7 +81,7 @@ CREATE TABLE "ImapMovedMessage" (
 CREATE UNIQUE INDEX "ImapMovedMessage_linkedInboxAccountId_sourceId_key" ON "ImapMovedMessage"("linkedInboxAccountId", "sourceId");
 
 -- CreateIndex
-CREATE INDEX "ImapMovedMessage_linkedInboxAccountId_createdAt_idx" ON "ImapMovedMessage"("linkedInboxAccountId", "createdAt");
+CREATE INDEX "ImapMovedMessage_createdAt_idx" ON "ImapMovedMessage"("createdAt");
 
 -- CreateIndex
 CREATE INDEX "ImapMovedMessage_userId_idx" ON "ImapMovedMessage"("userId");

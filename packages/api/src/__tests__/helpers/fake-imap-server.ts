@@ -69,12 +69,16 @@ export class FakeImapServer {
   refuseMoveFor = new Set<number>();
   /** SEARCH answers with no hits whatever the folder holds (a server that cannot confirm a read-back). */
   searchFindsNothing = false;
+  /** UIDs SEARCH never reports, in any folder (a copy the server cannot find by Message-ID). */
+  searchHidesUids = new Set<number>();
   /**
    * Runs once inside the next sequence-number FETCH (a poll's window), AFTER the
    * messages were read and BEFORE the first one is handed back: the moment an
    * action can land while a poll already holds a stale snapshot.
    */
   midFetchHook: (() => Promise<void>) | null = null;
+  /** Runs once inside the next MOVE, after the messages moved and before the answer. */
+  midMoveHook: (() => void) | null = null;
   /** Every command the fake served, in order ("UID MOVE 101 Trash", "EXPUNGE", ...). */
   commands: string[] = [];
   logins = 0;
@@ -97,7 +101,9 @@ export class FakeImapServer {
     this.copyUid = true;
     this.refuseMoveFor = new Set();
     this.searchFindsNothing = false;
+    this.searchHidesUids = new Set();
     this.midFetchHook = null;
+    this.midMoveHook = null;
     this.commands = [];
     this.logins = 0;
     this.logouts = 0;
@@ -240,13 +246,17 @@ export class FakeImapFlow {
     };
   };
 
-  status = async (path: string, query: { messages?: boolean; uidValidity?: boolean }) => {
+  status = async (
+    path: string,
+    query: { messages?: boolean; uidValidity?: boolean; uidNext?: boolean },
+  ) => {
     const folder = fakeServer.folder(path);
     fakeServer.commands.push(`STATUS ${path}`);
     return {
       path,
       ...(query.messages ? { messages: folder.messages.size } : {}),
       ...(query.uidValidity ? { uidValidity: folder.uidValidity } : {}),
+      ...(query.uidNext ? { uidNext: folder.nextUid } : {}),
     };
   };
 
@@ -304,6 +314,7 @@ export class FakeImapFlow {
     if (fakeServer.searchFindsNothing) return [];
     return fakeServer
       .uidsIn(folder.path)
+      .filter((uid) => !fakeServer.searchHidesUids.has(uid))
       .filter((uid) => (folder.messages.get(uid) as FakeMessage).messageId === wanted);
   };
 
@@ -349,6 +360,9 @@ export class FakeImapFlow {
     const uids = expandRange(range, Math.max(0, ...fakeServer.uidsIn(source.path)));
     if (!target || uids.some((uid) => fakeServer.refuseMoveFor.has(uid))) return false;
     const map = this.transfer(source, target, range, true);
+    const hook = fakeServer.midMoveHook;
+    fakeServer.midMoveHook = null;
+    hook?.();
     return { path: source.path, destination, ...(map ? map : {}) };
   };
 

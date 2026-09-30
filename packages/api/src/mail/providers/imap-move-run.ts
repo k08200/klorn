@@ -204,18 +204,55 @@ function fromCopyUid(answer: MoveAnswer, uid: number, destination: string): Move
   return { path: destination, uid: newUid, uidValidity };
 }
 
-/** Where a moved message is now, found by searching the destination for its own Message-ID. */
+/** The destination as it was just before the MOVE: the next UID it would assign, and its UIDVALIDITY. */
+interface DestinationBefore {
+  uidNext: number;
+  uidValidity: string;
+}
+
+/**
+ * Ask for the destination's UIDNEXT and UIDVALIDITY before moving into it, so that
+ * a read-back can tell the message that just arrived from a copy that was already
+ * there. Null when the server does not answer usably; the read-back then accepts
+ * only an unambiguous single hit.
+ */
+async function destinationBefore(
+  client: ImapFlow,
+  path: string,
+): Promise<DestinationBefore | null> {
+  try {
+    const status = await client.status(path, { uidNext: true, uidValidity: true });
+    const uidNext = Number(status.uidNext);
+    const uidValidity = canonicalUidValidity(status.uidValidity);
+    return isValidUid(uidNext) && uidValidity ? { uidNext, uidValidity } : null;
+  } catch (err) {
+    if (!isServerRefusal(err)) throw err;
+    return null;
+  }
+}
+
+/**
+ * Where a moved message is now, found by searching the destination for its own
+ * Message-ID. A destination can already hold a copy with the same Message-ID (an
+ * earlier trash of the same message). UIDs only grow, so what the MOVE just added
+ * is at or above the UIDNEXT seen before it; a hit below that is a copy that was
+ * already there and is never taken for the moved message. If the destination was
+ * renumbered in between, or more than one new hit remains, nothing is claimed.
+ */
 async function fromReadBack(
   ctx: RunContext,
   seen: EnvelopeFacts,
   destination: string,
+  before: DestinationBefore | null,
 ): Promise<MovedTo | null> {
   if (!seen.messageId) return null;
   const uidValidity = await ctx.mailboxes.open(destination);
-  if (!uidValidity) return null;
+  if (!uidValidity || (before && before.uidValidity !== uidValidity)) return null;
   const hits = await ctx.client.search({ header: { "message-id": seen.messageId } }, { uid: true });
-  if (!Array.isArray(hits) || hits.length !== 1 || !isValidUid(hits[0])) return null;
-  return { path: destination, uid: hits[0], uidValidity };
+  if (!Array.isArray(hits)) return null;
+  const candidates = before ? hits.filter((uid) => uid >= before.uidNext) : hits;
+  if (candidates.length !== 1 || !isValidUid(candidates[0])) return null;
+  return { path: destination, uid: candidates[0], uidValidity };
 }
 
 /** Per UID: did the server confirm where it went? COPYUID first, a read-back otherwise. */
@@ -224,13 +261,15 @@ async function confirm(
   answers: readonly MoveAnswer[],
   seen: ReadonlyMap<number, EnvelopeFacts>,
   destination: string,
+  before: DestinationBefore | null,
 ): Promise<Map<number, MoveOpResult>> {
   const results = new Map<number, MoveOpResult>();
   for (const answer of answers) {
     for (const uid of answer.uids) {
       const facts = seen.get(uid) as EnvelopeFacts;
       const to =
-        fromCopyUid(answer, uid, destination) ?? (await fromReadBack(ctx, facts, destination));
+        fromCopyUid(answer, uid, destination) ??
+        (await fromReadBack(ctx, facts, destination, before));
       results.set(uid, to ? { status: "moved", to, seen: facts } : { status: "unconfirmed" });
     }
   }
@@ -284,10 +323,11 @@ export async function runMoveRun(
   const { candidates, settled } = screen(ops, seen);
   if (candidates.length === 0) return settled;
 
+  const before = await destinationBefore(ctx.client, destination.path);
   const { answered, refused } = await moveWithSplit(ctx.client, candidates, destination.path, {
     left: MAX_MOVE_COMMANDS_PER_RUN,
   });
-  const confirmed = await confirm(ctx, answered, seen, destination.path);
+  const confirmed = await confirm(ctx, answered, seen, destination.path, before);
   return new Map<number, MoveOpResult>([
     ...settled,
     ...refused.map((uid) => [uid, { status: "refused" } as const] as const),
