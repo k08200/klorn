@@ -12,7 +12,7 @@
  * calendar's rows key on (userId, provider, sourceKey, externalId).
  */
 
-import { prisma } from "../db.js";
+import { INTERACTIVE_TX_OPTIONS, prisma } from "../db.js";
 
 /** Mirrors the Prisma `CalendarProvider` enum (kept string-typed like InboxProviderName). */
 export type CalendarProviderName = "GOOGLE" | "OUTLOOK" | "ICLOUD" | "NAVER" | "DEVICE" | "LOCAL";
@@ -138,4 +138,49 @@ export async function upsertLinkedGoogleEventRow(
     create: { userId, ...fields, ...source },
     update: { ...fields },
   });
+}
+
+/**
+ * Remove the rows of events Google reports as cancelled (C2b), and resolve the
+ * attention items mirrored from them, in ONE transaction. Only ids Google named
+ * are touched - never a row merely absent from a listing, because the 100-event
+ * cap can truncate the window. The match is the row's whole identity: this user,
+ * GOOGLE, the source calendar (`linkedAccountId` null is the primary calendar)
+ * and the event id, so another account's row with the same id, another user's,
+ * and LOCAL rows (no externalId) are never reached. Items the user already
+ * dismissed keep their outcome; AttentionItem has no foreign key to an event, so
+ * they are resolved by (source, sourceId) like every other mirror. Returns the
+ * number of rows removed.
+ */
+export async function removeCancelledGoogleEventRows(
+  userId: string,
+  linkedAccountId: string | null,
+  externalIds: readonly string[],
+  now: Date = new Date(),
+): Promise<number> {
+  if (externalIds.length === 0) return 0;
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.calendarEvent.findMany({
+      where: {
+        userId,
+        provider: "GOOGLE",
+        sourceKey: sourceKeyFor(linkedAccountId),
+        externalId: { in: [...externalIds] },
+      },
+      select: { id: true },
+    });
+    if (rows.length === 0) return 0;
+    const ids = rows.map((row) => row.id);
+    await tx.attentionItem.updateMany({
+      where: {
+        userId,
+        source: "CALENDAR_EVENT",
+        sourceId: { in: ids },
+        status: { in: ["OPEN", "SNOOZED"] },
+      },
+      data: { status: "RESOLVED", resolvedAt: now },
+    });
+    const removed = await tx.calendarEvent.deleteMany({ where: { userId, id: { in: ids } } });
+    return removed.count;
+  }, INTERACTIVE_TX_OPTIONS);
 }

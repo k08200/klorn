@@ -199,6 +199,7 @@ describe("POST /api/auth/init-sync — Google request (characterisation, C2)", (
       timeMin: "2026-09-30T05:00:00.000Z",
       timeMax: "2026-10-30T05:00:00.000Z",
       singleEvents: true,
+      showDeleted: true,
       orderBy: "startTime",
       maxResults: 100,
       timeZone: "Asia/Seoul",

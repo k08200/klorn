@@ -1575,7 +1575,24 @@ needs FA-9 and the admin guidance from F0.
     20` (it already collapses copies by title and day, but copies spend the cap).
     Matching by event id misses an invite whose two accounts got different ids;
     the iCalUID is the reliable key and needs a column. Events deleted or
-    cancelled upstream are not removed from rows, for the primary sync as before.
+    cancelled in Google are removed on the next sync (C2b, next bullet); the
+    Outlook and CalDAV connectors must do the same.
+  - Cancelled events (C2b). Both Google syncs, the primary and every linked
+    account, list with `showDeleted` and act on Google's `status: "cancelled"`:
+    the row matching (user, GOOGLE, `sourceKey`, `externalId`) is deleted and its
+    open or snoozed attention items are resolved, in one transaction per sync
+    (`removeCancelledGoogleEventRows`). A row merely missing from the listing is
+    kept, because the 100-event cap can truncate the window. With `showDeleted`
+    and `singleEvents` both true Google returns cancelled instances of a
+    recurring event, never the master, so one cancelled instance removes only its
+    own row. A cancelled event is only guaranteed to carry its id, so the sync
+    reads the flag before the times. Only the sync asks (`includeCancelled` on the
+    list query), so `list_events` never sees a cancelled event, and the readers
+    of rows (the briefing, conflict checks) stop seeing them once the row is
+    gone. Known cost: cancelled events count against `maxResults`, so a
+    window with many of them can push live events past the cap of 100. Source:
+    developers.google.com/workspace/calendar/api/v3/reference/events/list
+    (`showDeleted`) and .../reference/events (`status`).
   - Migration locks, measured size and runbook. `ALTER TABLE "CalendarEvent" ADD
     COLUMN` takes ACCESS EXCLUSIVE on the table and, because Prisma wraps the
     migration in one transaction, holds it until commit: reads of CalendarEvent
@@ -1706,16 +1723,18 @@ does not wait for them.
     free/busy. The descriptions also say that an event deleted or cancelled in
     Google can still be listed until the sync removes it. Two consequences to weigh
     before the flip, inherited from the sync, not new: (1) a row is not removed
-    when its event is deleted or cancelled upstream (C2, above; the C2b step that
-    removes Google cancellations is in flight), so with the flag on `list_events`
-    can still list such an event until it ends, and a booking that overlaps it is
+    when its event is deleted or cancelled upstream, except for Google, where C2b
+    (C2, above) removes it on the next sync; the Outlook and CalDAV connectors must
+    do the same. Until then, and for a connector without it, `list_events` can
+    still list such an event until it ends, and a booking that overlaps it is
     refused by the conflict check (free/busy cannot override a row conflict); the
     Calendar page and the desktop app already show those rows today. (2) A row
     stores neither transparency nor the user's response, so a timed event marked
     free, or one the user declined, is a conflict from its row while free/busy
     would ignore it. Fixing (2) needs columns the sync fills (`transparency`,
     response status); that is not in C7. Recommendation: do not flip the flag until
-    the sync removes vanished events, and weigh (2). A founder decision.
+    the sync removes vanished events for the providers in use, and weigh (2). A
+    founder decision.
   - The C2 gaps, closed regardless of the flag (they only matter while linked rows
     are visible): the `/api/ops` events-today count, the interaction-graph meeting
     count (it only uses `> 0` today), the weekly-review meeting count and the

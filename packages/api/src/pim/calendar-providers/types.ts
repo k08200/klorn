@@ -58,6 +58,12 @@ export interface CalendarListQuery {
    * do not need a zone.
    */
   readonly timeZone?: string;
+  /**
+   * Also return events the provider reports as deleted or cancelled, flagged
+   * `cancelled`. Only the row sync asks (C2b), to remove what was deleted
+   * upstream; every reader leaves it unset and never sees a cancelled event.
+   */
+  readonly includeCancelled?: boolean;
 }
 
 /** One event of a provider calendar, as the provider reported it. */
@@ -75,6 +81,12 @@ export interface ProviderCalendarEvent {
   /** Instants; null unless the query named a `timeZone`, or when start/end is missing. */
   readonly startTime: Date | null;
   readonly endTime: Date | null;
+  /**
+   * True when the provider marks the event deleted or cancelled. Such an event
+   * may carry nothing but its id (Google guarantees no more), so read this flag
+   * before the times. Only ever set on a query with `includeCancelled`.
+   */
+  readonly cancelled?: boolean;
 }
 
 export interface CalendarCreateInput {

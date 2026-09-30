@@ -238,6 +238,7 @@ describe("scheduler calendar step — primary calendar", () => {
       timeMin: NOW.toISOString(),
       timeMax: new Date(NOW.getTime() + THIRTY_DAYS_MS).toISOString(),
       singleEvents: true,
+      showDeleted: true,
       orderBy: "startTime",
       maxResults: 100,
       timeZone: "Asia/Seoul",

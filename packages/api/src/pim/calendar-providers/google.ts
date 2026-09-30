@@ -91,6 +91,8 @@ function toProviderEvent(
     allDay: !item.start?.dateTime,
     startTime: times?.startTime ?? null,
     endTime: times?.endTime ?? null,
+    // Conditional, so a reader's events keep exactly the shape they always had.
+    ...(item.status === "cancelled" ? { cancelled: true } : {}),
   };
 }
 
@@ -149,6 +151,16 @@ function toPersonFreeBusy(
   return { email, blocks, anyBusy: (cal.busy?.length ?? 0) > 0 };
 }
 
+/**
+ * events.list, optionally with cancelled events (C2b). Google semantics
+ * (developers.google.com/workspace/calendar/api/v3/reference/events/list and
+ * .../reference/events, "status"): a deleted event is returned only when
+ * `showDeleted` is true, with status "cancelled"; with `showDeleted` and
+ * `singleEvents` both true, cancelled INSTANCES of a recurring series come back
+ * as single events (id `<seriesId>_<start>`, the same id their synced row holds)
+ * but never the recurring master. A cancelled event is only guaranteed to carry
+ * its id, so `toProviderEvent` flags it and the sync acts on the flag, not the times.
+ */
 async function listEventsVia(
   api: calendar_v3.Calendar,
   query: CalendarListQuery,
@@ -158,6 +170,7 @@ async function listEventsVia(
     timeMin: query.timeMin,
     ...(query.timeMax ? { timeMax: query.timeMax } : {}),
     singleEvents: true,
+    ...(query.includeCancelled ? { showDeleted: true } : {}),
     orderBy: "startTime",
     maxResults: query.maxResults,
     ...(query.timeZone ? { timeZone: query.timeZone } : {}),
