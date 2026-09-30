@@ -4,6 +4,10 @@ import { purgeUserData } from "../purge-user-data.js";
 function makeTxSpy() {
   const called = new Set<string>();
   const scopes: unknown[] = [];
+  const updates: {
+    model: string;
+    arg: { where: Record<string, unknown>; data: Record<string, unknown> };
+  }[] = [];
   const tx = new Proxy(
     {},
     {
@@ -14,11 +18,15 @@ function makeTxSpy() {
             scopes.push(arg);
             return { count: 0 };
           }),
+          updateMany: vi.fn(async (arg: never) => {
+            updates.push({ model, arg });
+            return { count: 0 };
+          }),
         };
       },
     },
   );
-  return { tx, called, scopes };
+  return { tx, called, scopes, updates };
 }
 
 describe("purgeUserData", () => {
@@ -53,6 +61,18 @@ describe("purgeUserData", () => {
     for (const model of required) {
       expect(called.has(model), `purgeUserData must delete ${model}`).toBe(true);
     }
+  });
+
+  it("revokes (never deletes) the user's API keys, so a purged account cannot be read by an old key", async () => {
+    const { tx, called, updates } = makeTxSpy();
+    await purgeUserData(tx as never, "u-7");
+    expect(called.has("apiKey")).toBe(false);
+    const revocations = updates.filter((u) => u.model === "apiKey");
+    expect(revocations).toHaveLength(1);
+    expect(revocations[0]?.arg.where).toEqual({ userId: "u-7", revokedAt: null });
+    expect(revocations[0]?.arg.data.revokedAt).toBeInstanceOf(Date);
+    // Only the api key table is revoked here; nothing else is updated.
+    expect(updates.map((u) => u.model)).toEqual(["apiKey"]);
   });
 
   it("scopes every delete to the target user (directly or via conversation)", async () => {

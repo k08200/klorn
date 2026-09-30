@@ -265,16 +265,16 @@ let seq = 0;
 let keys: Record<KeyKind, ReturnType<typeof mintApiKey>>;
 let owners: Record<KeyKind, { id: string; userId: string; permission: string }>;
 
-/** Fresh keys AND fresh user ids per test: the write cap lives in module state. */
+/** Fresh keys AND fresh user ids per test: the write cap and the refused-audit throttle live in module state. */
 function setupKeys() {
   seq += 1;
   const userId = `write-user-${seq}`;
   keys = { read: mintApiKey(), rw: mintApiKey(), rw2: mintApiKey(), other: mintApiKey() };
   owners = {
-    read: { id: "k-read", userId, permission: "read" },
-    rw: { id: "k-rw", userId, permission: "read_write" },
-    rw2: { id: "k-rw2", userId, permission: "read_write" },
-    other: { id: "k-other", userId: `${userId}-other`, permission: "read_write" },
+    read: { id: `k-read-${seq}`, userId, permission: "read" },
+    rw: { id: `k-rw-${seq}`, userId, permission: "read_write" },
+    rw2: { id: `k-rw2-${seq}`, userId, permission: "read_write" },
+    other: { id: `k-other-${seq}`, userId: `${userId}-other`, permission: "read_write" },
   };
   keyFindUnique.mockImplementation(async (args: { where: { keyHash: string } }) => {
     const kind = (Object.keys(keys) as KeyKind[]).find(
@@ -298,6 +298,25 @@ async function toolNames(kind: KeyKind): Promise<string[]> {
   await app.close();
   return res.json().result.tools.map((t: { name: string }) => t.name);
 }
+
+/** POST one JSON-RPC batch of `size` mark_read calls and return the per-call responses. */
+async function postBatch(kind: KeyKind, size: number): Promise<{ result: McpResultLike }[]> {
+  const batch = Array.from({ length: size }, (_, i) => ({
+    jsonrpc: "2.0",
+    id: i,
+    method: "tools/call",
+    params: { name: "mark_read", arguments: { email_id: `g${i}` } },
+  }));
+  const app = await buildApp();
+  const res = await app.inject({ ...rpc({}, keys[kind].token), payload: batch });
+  await app.close();
+  return res.json();
+}
+
+/** Refused audits are fire-and-forget: give any stray insert a chance to land before asserting none did. */
+const settleFireAndForget = () => new Promise((resolve) => setTimeout(resolve, 25));
+
+type McpResultLike = { content: { type: string; text: string }[]; isError?: boolean };
 
 async function callResult(kind: KeyKind, name: string, args: Record<string, unknown> = {}) {
   const app = await buildApp();
@@ -389,7 +408,7 @@ describe("MCP write gate — CallTool (flag x permission)", () => {
     const data = (auditCreate.mock.calls[0]?.[0] as { data: Record<string, unknown> }).data;
     expect(data).toMatchObject({
       userId: owners.read.userId,
-      apiKeyId: "k-read",
+      apiKeyId: owners.read.id,
       tool: "mark_read",
       targetId: "g1",
       outcome: "refused",
@@ -398,12 +417,11 @@ describe("MCP write gate — CallTool (flag x permission)", () => {
     expect(data.argsHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("flag OFF: a stored read_write key is refused and audited as refused too", async () => {
-    await callResult("rw", "mark_read", { email_id: "g1" });
-    await vi.waitFor(() => expect(auditCreate).toHaveBeenCalledTimes(1));
-    expect((auditCreate.mock.calls[0]?.[0] as { data: { outcome: string } }).data.outcome).toBe(
-      "refused",
-    );
+  it("flag OFF: a stored read_write key is refused and NOT audited (flag off means no new side effect)", async () => {
+    const got = await callResult("rw", "mark_read", { email_id: "g1" });
+    expect(got).toEqual(unknownToolResult("mark_read"));
+    await settleFireAndForget();
+    expect(auditCreate).not.toHaveBeenCalled();
     expect(executeToolCallMock).not.toHaveBeenCalled();
   });
 
@@ -417,6 +435,31 @@ describe("MCP write gate — CallTool (flag x permission)", () => {
     vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "true");
     auditCreate.mockImplementationOnce(() => new Promise(() => {}));
     expect(await callResult("read", "mark_read")).toEqual(unknownToolResult("mark_read"));
+  });
+
+  it("flag OFF: a 100-call mark_read batch writes ZERO audit rows and answers exactly as main", async () => {
+    for (const kind of ["read", "rw"] as const) {
+      const results = await postBatch(kind, 100);
+      expect(results).toHaveLength(100);
+      for (const r of results)
+        expect(JSON.stringify(r.result)).toBe(JSON.stringify(unknownToolResult("mark_read")));
+    }
+    await settleFireAndForget();
+    expect(auditCreate).not.toHaveBeenCalled();
+    expect(auditUpdate).not.toHaveBeenCalled();
+    expect(executeToolCallMock).not.toHaveBeenCalled();
+  });
+
+  it("flag ON: a 100-call mark_read batch from a read key writes ONE refused row, not 100", async () => {
+    vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "true");
+    const results = await postBatch("read", 100);
+    expect(results).toHaveLength(100);
+    for (const r of results) expect(r.result).toEqual(unknownToolResult("mark_read"));
+    await settleFireAndForget();
+    expect(auditCreate).toHaveBeenCalledTimes(1);
+    expect(auditCreate.mock.calls[0]?.[0]).toMatchObject({
+      data: { outcome: "refused", reason: "permission_denied", apiKeyId: owners.read.id },
+    });
   });
 
   it("does not audit read tools or tools outside the write set", async () => {
@@ -454,13 +497,17 @@ describe("MCP write gate — allowed write (flag ON, read_write key)", () => {
     const data = (auditCreate.mock.calls[0]?.[0] as { data: Record<string, unknown> }).data;
     expect(data).toMatchObject({
       userId: owners.rw.userId,
-      apiKeyId: "k-rw",
+      apiKeyId: owners.rw.id,
       tool: "mark_read",
       targetId: "g-42",
-      outcome: "ok",
+      outcome: "attempted",
       reason: null,
     });
-    expect(auditUpdate).not.toHaveBeenCalled();
+    // Settled only after the tool answered with success:true.
+    expect(auditUpdate).toHaveBeenCalledWith({
+      where: { id: "audit-77" },
+      data: { outcome: "ok", reason: null },
+    });
   });
 
   it("refuses the call when the audit insert fails: explicit error, executor never called", async () => {
@@ -541,7 +588,7 @@ describe("MCP write gate — per-user write cap", () => {
     await vi.waitFor(() => expect(auditCreate).toHaveBeenCalledTimes(1));
     expect(
       (auditCreate.mock.calls[0]?.[0] as { data: Record<string, unknown> }).data,
-    ).toMatchObject({ apiKeyId: "k-rw2", outcome: "refused", reason: "rate_limited" });
+    ).toMatchObject({ apiKeyId: owners.rw2.id, outcome: "refused", reason: "rate_limited" });
   });
 
   it("cannot be bypassed by a JSON-RPC batch: one POST counts each write call", async () => {
@@ -559,6 +606,11 @@ describe("MCP write gate — per-user write cap", () => {
     expect(results).toHaveLength(batchSize);
     expect(results.filter((r) => r.result.isError === true)).toHaveLength(10);
     expect(executeToolCallMock).toHaveBeenCalledTimes(CAP);
+    // 30 attempted rows, and the 10 rate-limited calls collapse into ONE refused row.
+    await settleFireAndForget();
+    const rows = auditCreate.mock.calls.map((c) => (c[0] as { data: { outcome: string } }).data);
+    expect(rows.filter((d) => d.outcome === "attempted")).toHaveLength(CAP);
+    expect(rows.filter((d) => d.outcome === "refused")).toHaveLength(1);
   });
 
   it("keeps separate users independent", async () => {

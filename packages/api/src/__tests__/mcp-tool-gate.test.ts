@@ -15,6 +15,7 @@ import { CHAT_TOOL_NAMES } from "../agentcore/chat-engine.js";
 import { ALL_TOOLS, isToolAllowedForPlan } from "../agentcore/tool-executor.js";
 import { teamModeEnabled } from "../config.js";
 import { MCP_WRITE_TOOL_NAMES, mcpToolDefs } from "../mcp/tool-gate.js";
+import { WRITE_TOOL_SUCCESS } from "../mcp/write-call.js";
 
 /** `mcpToolDefs(plan)` exactly as it shipped on main at 03de6426, verbatim. */
 function legacyMcpToolDefs(plan: string) {
@@ -107,7 +108,66 @@ describe("surfaces other than MCP are pinned (A2a adds nothing to them)", () => 
   });
 });
 
+describe("literal tool lists per plan (team mode off) — written out, not derived", () => {
+  const PAID_OR_FREE_READ = [
+    "generate_briefing",
+    "sender_context",
+    "get_current_time",
+    "list_emails",
+    "read_email",
+    "classify_emails",
+    "list_events",
+    "check_calendar_conflicts",
+  ];
+
+  for (const plan of ["FREE", "PRO"]) {
+    it(`${plan}: read key, flag off -> the eight read tools`, () => {
+      expect(names(mcpToolDefs(plan, "read"))).toEqual(PAID_OR_FREE_READ);
+    });
+
+    it(`${plan}: read_write key, flag off -> still the eight read tools`, () => {
+      expect(names(mcpToolDefs(plan, "read_write"))).toEqual(PAID_OR_FREE_READ);
+    });
+
+    it(`${plan}: read key, flag on -> still the eight read tools`, () => {
+      vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "true");
+      expect(names(mcpToolDefs(plan, "read"))).toEqual(PAID_OR_FREE_READ);
+    });
+
+    it(`${plan}: read_write key, flag on -> the eight read tools then mark_read`, () => {
+      vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "true");
+      expect(names(mcpToolDefs(plan, "read_write"))).toEqual([...PAID_OR_FREE_READ, "mark_read"]);
+    });
+  }
+
+  it("a plan with no features keeps only the ungated tools and gets no write tool either", () => {
+    vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "true");
+    const ungated = ["generate_briefing", "sender_context", "get_current_time"];
+    expect(names(mcpToolDefs("NO_SUCH_PLAN", "read"))).toEqual(ungated);
+    expect(names(mcpToolDefs("NO_SUCH_PLAN", "read_write"))).toEqual(ungated);
+  });
+
+  it("team mode on inserts team_availability after sender_context (PRO, read key)", () => {
+    vi.stubEnv("TEAM_MODE_ENABLED", "true");
+    expect(names(mcpToolDefs("PRO", "read"))).toEqual([
+      "generate_briefing",
+      "sender_context",
+      "team_availability",
+      "get_current_time",
+      "list_emails",
+      "read_email",
+      "classify_emails",
+      "list_events",
+      "check_calendar_conflicts",
+    ]);
+  });
+});
+
 describe("the write set", () => {
+  it("has a success predicate for every member, so no write tool settles by accident", () => {
+    expect(Object.keys(WRITE_TOOL_SUCCESS).sort()).toEqual([...MCP_WRITE_TOOL_NAMES].sort());
+  });
+
   it("is exactly mark_read in this step, and every member has an ALL_TOOLS definition", () => {
     expect([...MCP_WRITE_TOOL_NAMES]).toEqual(["mark_read"]);
     for (const name of MCP_WRITE_TOOL_NAMES) {

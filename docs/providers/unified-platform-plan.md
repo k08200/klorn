@@ -198,8 +198,8 @@ judge trust boundary. It changes what the human-ground-truth flag and the
 learning inputs are allowed to mean, so it needs its own code and security
 review. The gate, permission plumbing, audit and rate cap are a self-contained
 unit that `mark_read` alone can exercise end to end. Elsewhere in this file
-"A2" reads as A2a (A3, A4). A5's write part and A8 also wait for A2b, because
-L26 lists `set_tier` among the v1 write tools.
+"A2" reads as A2a (A3, A4). A5's write part waits for A2b, and A8 depends on
+A2b, because L26 lists `set_tier` among the v1 write tools.
 
 **A2a — MCP write gate, audit, rate cap, `mark_read`.** Depends on: A1.
 - Context: see "Tool registry" above. Tool results carry untrusted mail
@@ -215,35 +215,53 @@ L26 lists `set_tier` among the v1 write tools.
     executor case. Nothing is added to `CHAT_TOOL_NAMES` or `ALL_TOOLS`.
   - `routes/mcp.ts` passes the key's id and permission into `buildMcpServer`.
   - One `McpWriteAudit` row per write call, refused calls included: user, key,
-    tool, target id, SHA-256 of the canonical argument JSON, outcome
-    (`ok` / `refused` / `error`), short reason, time. `apiKeyId` is not a
-    foreign key, so the history outlives the key; rows cascade with the user and
-    `purge-user-data.ts` deletes them. An allowed call is inserted before it
-    runs, and a failed insert refuses the call. The row is written as `ok` and
-    downgraded to `error` if the run throws or the executor reports its in-band
-    `{"error"}` failure. A refused call is audited best-effort and
-    fire-and-forget, and its response stays exactly `Unknown tool: <name>`, so
-    a read key cannot tell a write tool exists.
+    tool, target id, SHA-256 of the canonical argument JSON, outcome, short
+    reason, time. `apiKeyId` is not a foreign key, so the history outlives the
+    key. Nothing is inserted while the flag is off, on any path. An allowed call
+    is inserted as `attempted` before it runs, and a failed insert refuses the
+    call. After the run it settles to `ok` only when the tool's own success
+    predicate holds (`mark_read`: the parsed result has `success === true`), and
+    to `error` for a throw or any other result. **`error` does not guarantee "no
+    effect"** (for example the Gmail change succeeded and the local update
+    failed), and `attempted` means the outcome is unknown (a crash, or the
+    settle write failed). A refused call is audited best-effort and
+    fire-and-forget, throttled to one row per (key, tool, reason) per minute
+    (the rest are dropped and counted in memory), and its response stays exactly
+    `Unknown tool: <name>`, so a read key cannot tell a write tool exists. The
+    argument hash falls back to a fixed marker for input nested deeper than 32
+    levels or larger than 4 KB of canonical JSON, and `targetId` is stored only
+    when it is 1-256 characters of `[A-Za-z0-9_-]`. Canonical JSON is the shared
+    `stable-json.ts`, also used by the action outbox (its keys are unchanged).
+  - Retention and deletion: rows are swept after 90 days by the `log-retention`
+    job (that job runs only where `LOG_RETENTION_ENABLED` is on), cascade with
+    the user, and `purge-user-data.ts` deletes them. The same purge now revokes
+    (never deletes) the user's API keys, so a purged account that re-links
+    Google cannot be read through an old key.
   - A write cap per user, not per key: 30 per minute (proposed number, no
     measurement behind it), in-process sliding window, so per instance
-    (`mcp/write-rate-cap.ts`). Over the cap the call is refused, audited with
+    (in `mcp/write-call.ts`). Over the cap the call is refused, audited with
     reason `rate_limited`, and answers an explicit `RATE_LIMITED` error.
+  - Known gap: a 401 (revoked or unknown key), a 403 (paywall) and a 429 (route
+    rate limit) never reach the tool layer and are not audited. A3 may surface
+    revoked-key use; nothing in A2a does.
   - Id contract checked 2026-09-29: `list_emails` returns the raw Gmail message
     id of the primary account and `read_email` echoes it. `mark_read` takes
     that id, resolves the caller's own row (`userId` in the lookup), routes a
     linked-inbox row through its own account, and with no row acts through the
     caller's primary client only.
-- Verify: tests first (`mcp-tool-gate`, `mcp-write-audit`, `mcp-write-rate-cap`,
-  `mcp-mark-read-contract`, `routes-mcp`): flag × permission × plan; flag off and
-  read keys byte-identical to the old list and to every old result; chat,
-  autonomous and `ALL_TOOLS` lists pinned; audit before execution; failed insert
-  refuses; a throw records `error`; the cap is shared by two keys of one user.
-  `prisma migrate diff` shows only the new enum, table, indexes and foreign key.
-  Full gate.
+- Verify: tests first (`mcp-tool-gate`, `mcp-write-audit`, `mcp-write-call`,
+  `mcp-mark-read-contract`, `routes-mcp`, `log-retention`, `purge-user-data`):
+  flag × permission × plan, with literal per-plan lists; flag off and read keys
+  byte-identical to the old list and to every old result, with zero audit
+  inserts even for a 100-call batch; chat, autonomous and `ALL_TOOLS` lists
+  pinned; audit before execution; failed insert refuses; the success predicate;
+  the refused-row throttle across a batch; the cap is shared by two keys of one
+  user. `prisma migrate diff` shows only the new enum, table, indexes and
+  foreign key. Full gate.
 - Exit: with the flag off, the tool list and every tool result are
-  byte-identical to before. Nothing writes to the audit table until a key is
-  read_write and the flag is on, except best-effort refused rows for write-tool
-  names.
+  byte-identical to before, and nothing is inserted into the audit table. With
+  the flag on, a key that cannot write leaves at most one refused row per tool
+  and reason per minute.
 - Rollback: flag off. The table is additive and ignorable.
 
 **A2b — `set_tier`, current lane in read results, learning exclusion.**

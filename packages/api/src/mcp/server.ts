@@ -65,7 +65,9 @@ export function buildMcpServer(userId: string, plan: string, key: McpKeyContext)
     if (!admitted) {
       // A refused write is audited best-effort, fire-and-forget: the response
       // is byte-identical to any unknown tool and arrives at the same speed,
-      // so a key without write access cannot tell a write tool exists.
+      // so a key without write access cannot tell a write tool exists. The
+      // audit is a no-op while the write flag is off and is throttled per key
+      // (write-audit.ts), so this path cannot be used to flood the database.
       if (isMcpWriteTool(name)) {
         void recordRefusedWrite({
           userId,
