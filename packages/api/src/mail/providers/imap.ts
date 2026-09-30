@@ -11,73 +11,53 @@
  * (501 at the routes) exactly as before. Archive and trash are step B2: an IMAP
  * MOVE assigns a new UID, which needs a schema change first.
  *
+ * This file validates and resolves; the connection work is in imap-session.ts,
+ * which coalesces concurrent callers into one login per account, caps
+ * concurrent sessions, and pauses an account after a rejected login.
+ *
  * Result contract (types.ts):
- *   - `{ success: true }` ONLY when the server confirmed the flag. STORE alone
- *     proves nothing — imapflow resolves true for a UID that no longer exists,
- *     and a server may ignore a flag — so the change is read back with a UID
- *     FETCH of FLAGS before it is reported.
+ *   - `{ success: true }` ONLY when the server confirmed the flag by reading it
+ *     back (imap-flags.ts).
  *   - `{ error }` for everything else the provider tried and failed: bad or
  *     foreign id, unusable account, auth rejection, transport failure, message
- *     gone from INBOX, flag not applied. Read and star are safe to fail softly
- *     because every caller writes the local row itself regardless of the
- *     result. That is NOT true of trash/archive (callers delete locally on
- *     `{ error }`), so B2 must revisit this choice — see outlook.ts.
+ *     gone from INBOX, flag not applied, a database failure. These actions
+ *     never throw. Read and star are safe to fail softly because every caller
+ *     writes the local row itself regardless of the result. That is NOT true of
+ *     trash/archive (callers delete locally on `{ error }`), so B2 must revisit
+ *     this choice — see outlook.ts.
  *   - Never `{ unsupported }` from these three actions.
  *
- * Auth failures mirror the poller (imap-accounts.ts): logged, captured nowhere
- * as a bug, and NOT flagged `needsReconnect`. The IMAP poller does not flag
- * either; Phase 0b deferred flagging and the Naver/iCloud reconnect copy as one
- * change (multi-provider-plan.md), so this step does not half-implement it.
+ * Auth failures mirror the poller (imap-accounts.ts): logged, and NOT flagged
+ * `needsReconnect`. The IMAP poller does not flag either; Phase 0b deferred
+ * flagging and the Naver/iCloud reconnect copy as one change
+ * (multi-provider-plan.md), so this step does not half-implement it.
  *
  * Local state: after a confirmed change the EmailMessage row is updated scoped
  * by userId and message id, exactly like the Gmail path. The next poll reads
  * the same flags from the server, so it agrees with the mirror.
  */
 
-import type { ImapFlow } from "imapflow";
-
 import { decryptToken } from "../../crypto-tokens.js";
 import { prisma } from "../../db.js";
 import { captureError } from "../../sentry.js";
-import { createImapClient, type ImapRowRejection, rejectImapRow } from "../imap-connection.js";
+import { checkImapRow } from "../imap-connection.js";
 import { parseImapMessageId } from "../imap-message-id.js";
 import {
   IMAP_PROVIDERS,
   type ImapProviderConfig,
   type ImapProviderKey,
 } from "../imap-providers.js";
+import { type FlagChange, readChange, type ServerOutcome, starChange } from "./imap-flags.js";
+import { type SessionAccount, submitFlagOp } from "./imap-session.js";
 import type { MailActionFailure, MailProviderActions, SimpleMailActionResult } from "./types.js";
 import { unsupportedMailActions } from "./unsupported.js";
 
-// A user is waiting on the route: fail fast rather than imapflow's defaults
-// (90 s connect, 16 s greeting, 300 s socket inactivity).
-export const IMAP_ACTION_CONNECT_TIMEOUT_MS = 10_000;
-export const IMAP_ACTION_GREETING_TIMEOUT_MS = 10_000;
-export const IMAP_ACTION_SOCKET_TIMEOUT_MS = 15_000;
-
-const INBOX = "INBOX";
-const FLAG_SEEN = "\\Seen";
-const FLAG_FLAGGED = "\\Flagged";
-
-interface FlagChange {
-  flag: string;
-  /** true = add the flag, false = remove it. */
-  set: boolean;
-  /** The EmailMessage columns that mirror it. */
-  local: { isRead: boolean } | { isStarred: boolean };
+interface ResolvedTarget {
+  session: SessionAccount;
+  uid: number;
 }
 
-const readChange = (isRead: boolean): FlagChange => ({
-  flag: FLAG_SEEN,
-  set: isRead,
-  local: { isRead },
-});
-const starChange = (starred: boolean): FlagChange => ({
-  flag: FLAG_FLAGGED,
-  set: starred,
-  local: { isStarred: starred },
-});
-
+/** The columns `resolveTarget` selects from LinkedInboxAccount. */
 interface AccountRow {
   id: string;
   email: string | null;
@@ -85,106 +65,89 @@ interface AccountRow {
   imapPasswordCipher: string | null;
 }
 
-/** What the server said once the change was read back. */
-type ServerOutcome = "confirmed" | "refused" | "missing" | "unconfirmed";
-
 const fail = (error: string): MailActionFailure => ({ error });
 const reconnectHint = (label: string) => `Reconnect your ${label} mailbox in Settings.`;
-
-function isAuthFailure(err: unknown): boolean {
-  const e = err as { authenticationFailed?: unknown; serverResponseCode?: unknown } | null;
-  return e?.authenticationFailed === true || e?.serverResponseCode === "AUTHENTICATIONFAILED";
-}
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function hasFlag(flags: Set<string> | string[] | undefined, flag: string): boolean {
-  if (!flags) return false;
-  return Array.isArray(flags) ? flags.includes(flag) : flags.has(flag);
-}
-
-/** The caller's own account of this provider, or null. Never crosses users. */
-function findAccount(
-  userId: string,
-  linkedInboxAccountId: string,
+/** A database failure: log, report once, and answer softly — actions never throw. */
+function databaseFailure(
+  err: unknown,
   provider: ImapProviderConfig,
-): Promise<AccountRow | null> {
-  return prisma.linkedInboxAccount.findFirst({
-    where: { id: linkedInboxAccountId, userId, provider: provider.provider },
-    select: { id: true, email: true, imapHost: true, imapPasswordCipher: true },
-  });
+  userId: string,
+  what: string,
+): void {
+  console.warn(`[${provider.logScope}] ${what}: ${errorMessage(err)}`);
+  captureError(err, { tags: { scope: `${provider.logScope}.action-db` }, extra: { userId } });
 }
 
-function decryptPassword(row: AccountRow, provider: ImapProviderConfig): string | null {
+function decryptPassword(
+  cipher: string,
+  rowId: string,
+  provider: ImapProviderConfig,
+): string | null {
   try {
-    return decryptToken(row.imapPasswordCipher as string);
+    return decryptToken(cipher);
   } catch (err) {
     console.warn(
-      `[${provider.logScope}] action skipped — stored password unreadable for row ${row.id}: ${errorMessage(err)}`,
+      `[${provider.logScope}] action skipped — stored password unreadable for row ${rowId}: ${errorMessage(err)}`,
     );
     return null;
   }
 }
 
-/** Close the session whatever happened; LOGOUT failing falls back to a hard close. */
-async function endSession(client: ImapFlow): Promise<void> {
-  try {
-    await client.logout();
-  } catch {
-    // The connection is already gone or broken; the hard close below is the
-    // recovery, and there is nothing a caller could do with this error.
-  } finally {
-    client.close();
-  }
-}
-
-async function withInbox<T>(
+/**
+ * The caller's own account, the UID the message id addresses on it, and the
+ * decrypted credentials — or the soft failure to return. Nothing here opens a
+ * connection.
+ */
+async function resolveTarget(
   provider: ImapProviderConfig,
-  account: { email: string; host: string; password: string },
-  run: (client: ImapFlow) => Promise<T>,
-): Promise<T> {
-  const client = createImapClient({
-    host: account.host,
-    email: account.email,
-    password: account.password,
-    socketTimeout: IMAP_ACTION_SOCKET_TIMEOUT_MS,
-    connectionTimeout: IMAP_ACTION_CONNECT_TIMEOUT_MS,
-    greetingTimeout: IMAP_ACTION_GREETING_TIMEOUT_MS,
-  });
-  // imapflow emits 'error' for socket failures outside a pending command; with
-  // no listener Node throws it, and nothing in the process catches that.
-  client.on("error", (err: unknown) => {
-    console.warn(`[${provider.logScope}] action connection error: ${errorMessage(err)}`);
-  });
+  userId: string,
+  linkedInboxAccountId: string,
+  messageId: string,
+): Promise<ResolvedTarget | MailActionFailure> {
+  let row: AccountRow | null;
   try {
-    await client.connect();
-    const lock = await client.getMailboxLock(INBOX);
-    try {
-      return await run(client);
-    } finally {
-      lock.release();
-    }
-  } finally {
-    await endSession(client);
+    // The caller's own account of this provider only — never crosses users.
+    row = await prisma.linkedInboxAccount.findFirst({
+      where: { id: linkedInboxAccountId, userId, provider: provider.provider },
+      select: { id: true, email: true, imapHost: true, imapPasswordCipher: true },
+    });
+  } catch (err) {
+    databaseFailure(err, provider, userId, "account lookup failed");
+    return fail(`Could not look up your ${provider.label} mailbox. Try again shortly.`);
   }
-}
+  if (!row) return fail(`${provider.label} mailbox is not connected.`);
 
-/** STORE the flag by UID, then read it back: success means the server holds it. */
-async function storeAndConfirm(
-  client: ImapFlow,
-  uid: number,
-  change: FlagChange,
-): Promise<ServerOutcome> {
-  const range = String(uid);
-  const stored = change.set
-    ? await client.messageFlagsAdd(range, [change.flag], { uid: true })
-    : await client.messageFlagsRemove(range, [change.flag], { uid: true });
-  if (!stored) return "refused";
-  const after = await client.fetchOne(range, { flags: true }, { uid: true });
-  if (!after) return "missing";
-  return hasFlag(after.flags, change.flag) === change.set ? "confirmed" : "unconfirmed";
+  const checked = checkImapRow(row, provider);
+  if (!checked.ok) {
+    console.warn(`[${provider.logScope}] action skipped — ${checked.reason} for row ${row.id}`);
+    return fail(
+      checked.reason === "missing-credentials"
+        ? `${provider.label} mailbox credentials are missing. ${reconnectHint(provider.label)}`
+        : `${provider.label} mailbox is not connected.`,
+    );
+  }
+  const uid = parseImapMessageId(messageId, provider.idPrefix, checked.email);
+  if (uid === null) return fail(`That message does not belong to this ${provider.label} mailbox.`);
+
+  const password = decryptPassword(checked.passwordCipher, row.id, provider);
+  if (password === null) return fail(reconnectHint(provider.label));
+
+  return {
+    uid,
+    session: {
+      userId,
+      rowId: row.id,
+      email: checked.email,
+      host: checked.host,
+      password,
+      credentialKey: `${row.id}:${checked.passwordCipher}`,
+    },
+  };
 }
 
 function outcomeError(
@@ -198,32 +161,25 @@ function outcomeError(
   );
 }
 
-function connectionError(
-  err: unknown,
+/** Mirror the Gmail path: local state follows only a confirmed server change. */
+async function mirrorLocally(
   provider: ImapProviderConfig,
-  rowId: string,
   userId: string,
-): MailActionFailure {
-  if (isAuthFailure(err)) {
-    console.warn(`[${provider.logScope}] action refused — login rejected for row ${rowId}`);
+  messageId: string,
+  change: FlagChange,
+): Promise<SimpleMailActionResult> {
+  try {
+    await prisma.emailMessage.updateMany({
+      where: { userId, gmailId: messageId },
+      data: change.local,
+    });
+  } catch (err) {
+    databaseFailure(err, provider, userId, "local update failed after a confirmed change");
     return fail(
-      `${provider.label} rejected the saved app password. ${reconnectHint(provider.label)}`,
+      `Changed on ${provider.label}, but the local copy could not be updated. The next sync will catch up.`,
     );
   }
-  console.warn(`[${provider.logScope}] action failed for row ${rowId}: ${errorMessage(err)}`);
-  captureError(err, {
-    tags: { scope: `${provider.logScope}.action` },
-    extra: { userId, linkedInboxAccountId: rowId },
-  });
-  return fail(`Could not reach ${provider.label}. Try again shortly.`);
-}
-
-function rejectionError(reason: ImapRowRejection, label: string): MailActionFailure {
-  return fail(
-    reason === "missing-credentials"
-      ? `${label} mailbox credentials are missing. ${reconnectHint(label)}`
-      : `${label} mailbox is not connected.`,
-  );
+  return { success: true };
 }
 
 async function changeFlag(
@@ -238,39 +194,13 @@ async function changeFlag(
   if (!linkedInboxAccountId) {
     return fail(`${provider.label} actions need the linked mailbox id.`);
   }
-  const row = await findAccount(userId, linkedInboxAccountId, provider);
-  if (!row) return fail(`${provider.label} mailbox is not connected.`);
+  const target = await resolveTarget(provider, userId, linkedInboxAccountId, messageId);
+  if ("error" in target) return target;
 
-  const rejection = rejectImapRow(row, provider);
-  if (rejection) {
-    console.warn(`[${provider.logScope}] action skipped — ${rejection} for row ${row.id}`);
-    return rejectionError(rejection, provider.label);
-  }
-  const email = row.email as string;
-  const uid = parseImapMessageId(messageId, provider.idPrefix, email);
-  if (uid === null) return fail(`That message does not belong to this ${provider.label} mailbox.`);
-
-  const password = decryptPassword(row, provider);
-  if (password === null) return fail(reconnectHint(provider.label));
-
-  let outcome: ServerOutcome;
-  try {
-    outcome = await withInbox(
-      provider,
-      { email, host: row.imapHost as string, password },
-      (client) => storeAndConfirm(client, uid, change),
-    );
-  } catch (err) {
-    return connectionError(err, provider, row.id, userId);
-  }
-  if (outcome !== "confirmed") return outcomeError(outcome, provider.label);
-
-  // Mirror the Gmail path: local state follows only a confirmed server change.
-  await prisma.emailMessage.updateMany({
-    where: { userId, gmailId: messageId },
-    data: change.local,
-  });
-  return { success: true };
+  const result = await submitFlagOp(provider, target.session, { uid: target.uid, change });
+  if (typeof result !== "string") return result;
+  if (result !== "confirmed") return outcomeError(result, provider.label);
+  return mirrorLocally(provider, userId, messageId, change);
 }
 
 export function imapMailActions(providerKey: ImapProviderKey): MailProviderActions {

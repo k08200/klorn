@@ -17,6 +17,7 @@ import { prisma } from "../db.js";
 import { recordContactEngagement } from "../learning/contact-engagement.js";
 import { syncEmailByGmailId } from "../mail/email-sync.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
+import { logProviderSoftFailure } from "../mail/providers/log-soft-failure.js";
 import type { MailAttachment, SendMailResult } from "../mail/providers/types.js";
 import { recordSentMessage } from "../mail/sent-messages.js";
 import { captureError } from "../sentry.js";
@@ -314,9 +315,15 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     // lookup itself lives inside the same guarded chain: even a DB blip there
     // must degrade to the local write below, never a 500.
     await mailActionsFor(uid, email.linkedInboxAccountId)
-      .then((actions) =>
-        actions.toggleRead(uid, email.gmailId, readVal, email.linkedInboxAccountId),
-      )
+      .then(async (actions) => {
+        const result = await actions.toggleRead(
+          uid,
+          email.gmailId,
+          readVal,
+          email.linkedInboxAccountId,
+        );
+        logProviderSoftFailure("EMAIL", email.id, result);
+      })
       .catch((err) => {
         // Provider sync failed — still update local DB, but surface the divergence
         // (DB will say read while the mailbox still shows unread) instead of hiding it.
@@ -343,9 +350,15 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     if (!email) return reply.code(404).send({ error: "Email not found" });
 
     await mailActionsFor(uid, email.linkedInboxAccountId)
-      .then((actions) =>
-        actions.toggleStar(uid, email.gmailId, starVal, email.linkedInboxAccountId),
-      )
+      .then(async (actions) => {
+        const result = await actions.toggleStar(
+          uid,
+          email.gmailId,
+          starVal,
+          email.linkedInboxAccountId,
+        );
+        logProviderSoftFailure("EMAIL", email.id, result);
+      })
       .catch((err) => {
         console.warn(`[EMAIL] toggleStar failed for ${email.id}:`, err);
         captureError(err, { tags: { scope: "email.star-sync" }, extra: { userId: uid } });

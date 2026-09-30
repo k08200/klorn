@@ -44,12 +44,23 @@ async function loadDispatch() {
 // The dispatch table reads IMAP_ACTIONS_ENABLED at request time; keep every
 // test in this file independent of the developer's shell.
 const ORIGINAL_IMAP_ACTIONS_FLAG = process.env.IMAP_ACTIONS_ENABLED;
+const ORIGINAL_ICLOUD_FLAG = process.env.ICLOUD_INBOX_ENABLED;
 function setImapActionsFlag(value: string | undefined) {
   if (value === undefined) delete process.env.IMAP_ACTIONS_ENABLED;
   else process.env.IMAP_ACTIONS_ENABLED = value;
 }
-beforeEach(() => setImapActionsFlag(undefined));
-afterEach(() => setImapActionsFlag(ORIGINAL_IMAP_ACTIONS_FLAG));
+function setIcloudFlag(value: string | undefined) {
+  if (value === undefined) delete process.env.ICLOUD_INBOX_ENABLED;
+  else process.env.ICLOUD_INBOX_ENABLED = value;
+}
+beforeEach(() => {
+  setImapActionsFlag(undefined);
+  setIcloudFlag(undefined);
+});
+afterEach(() => {
+  setImapActionsFlag(ORIGINAL_IMAP_ACTIONS_FLAG);
+  setIcloudFlag(ORIGINAL_ICLOUD_FLAG);
+});
 
 describe("mailActionsFor", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -308,6 +319,7 @@ describe("IMAP flag actions are gated by IMAP_ACTIONS_ENABLED (step B1)", () => 
       "ICLOUD",
     ] as const)("%s routes read and star to the IMAP implementation", async (provider) => {
       setImapActionsFlag("true");
+      setIcloudFlag("true");
       const { mailActionsForProvider } = await loadDispatch();
       const actions = mailActionsForProvider(provider);
       expect(actions.provider).toBe(provider);
@@ -329,6 +341,7 @@ describe("IMAP flag actions are gated by IMAP_ACTIONS_ENABLED (step B1)", () => 
       "ICLOUD",
     ] as const)("%s keeps send, drafts, trash and archive unsupported (B2/B3 territory)", async (provider) => {
       setImapActionsFlag("true");
+      setIcloudFlag("true");
       const { mailActionsForProvider } = await loadDispatch();
       const actions = mailActionsForProvider(provider);
       for (const name of [
@@ -342,6 +355,34 @@ describe("IMAP flag actions are gated by IMAP_ACTIONS_ENABLED (step B1)", () => 
         expect(await callMutation(actions, name)).toMatchObject({ unsupported: true });
       }
       expect(await actions.getReplyHeaders("u1", "m1")).toEqual({});
+    });
+
+    it("keeps ICLOUD unsupported while ICLOUD_INBOX_ENABLED is off (the iCloud freeze), NAVER unaffected", async () => {
+      setImapActionsFlag("true");
+      setIcloudFlag(undefined);
+      const { mailActionsForProvider } = await loadDispatch();
+      const { unsupportedMailActions } = await import("../mail/providers/unsupported.js");
+
+      const icloud = mailActionsForProvider("ICLOUD");
+      const baseline = unsupportedMailActions("ICLOUD");
+      for (const name of MUTATIONS) {
+        const got = await callMutation(icloud, name);
+        expect(got).toEqual(await callMutation(baseline, name));
+        expect(got).toMatchObject({ unsupported: true });
+      }
+
+      expect(await mailActionsForProvider("NAVER").markAsRead("u1", "m1")).not.toHaveProperty(
+        "unsupported",
+      );
+
+      setIcloudFlag("true");
+      expect(await mailActionsForProvider("ICLOUD").markAsRead("u1", "m1")).not.toHaveProperty(
+        "unsupported",
+      );
+      setIcloudFlag("false");
+      expect(await mailActionsForProvider("ICLOUD").markAsRead("u1", "m1")).toMatchObject({
+        unsupported: true,
+      });
     });
 
     it("leaves generic IMAP unsupported for every mutation", async () => {

@@ -14,7 +14,7 @@
 import { decryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
-import { rejectImapRow } from "./imap-connection.js";
+import { checkImapRow } from "./imap-connection.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
 import { syncImapInbox } from "./imap-sync.js";
 
@@ -49,28 +49,26 @@ export async function syncImapAccountsForUser(
     // silently (it surfaces as needsReconnect through the UI), never thrown; a
     // host outside the allowlist, or one pinned to the other provider, must
     // never open a TLS connection.
-    const rejection = rejectImapRow(row, provider);
-    if (rejection === "missing-credentials") continue;
-    if (rejection === "host-not-allowlisted") {
-      console.warn(
-        `[${scope}] poll skipped — host not allowlisted for row ${row.id}: ${row.imapHost}`,
-      );
-      continue;
-    }
-    if (rejection === "host-provider-mismatch") {
-      console.warn(
-        `[${scope}] poll skipped — host does not match provider for row ${row.id}: ${row.imapHost}`,
-      );
+    const checked = checkImapRow(row, provider);
+    if (!checked.ok) {
+      if (checked.reason === "host-not-allowlisted") {
+        console.warn(
+          `[${scope}] poll skipped — host not allowlisted for row ${row.id}: ${row.imapHost}`,
+        );
+      } else if (checked.reason === "host-provider-mismatch") {
+        console.warn(
+          `[${scope}] poll skipped — host does not match provider for row ${row.id}: ${row.imapHost}`,
+        );
+      }
       continue;
     }
     try {
-      // rejectImapRow returned null, so all three columns are present.
       const result = await syncImapInbox({
         provider,
         userId,
-        email: row.email as string,
-        password: decryptToken(row.imapPasswordCipher as string),
-        host: row.imapHost as string,
+        email: checked.email,
+        password: decryptToken(checked.passwordCipher),
+        host: checked.host,
         linkedInboxAccountId: row.id,
       });
       total.fetched += result.fetched;

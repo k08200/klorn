@@ -48,7 +48,20 @@ class FakeImapFlow {
   getMailboxLock = async () => ({ release: () => undefined });
   status = async () => ({ messages: world.server.size });
 
-  async *fetch() {
+  fetch(range: string, _query?: unknown, opts?: { uid?: boolean }) {
+    return opts?.uid ? this.readFlags(range) : this.readWindow();
+  }
+
+  /** The action's read-back: FLAGS of exactly the requested UIDs that exist. */
+  private async *readFlags(range: string) {
+    for (const uid of range.split(",").map(Number)) {
+      const held = world.server.get(uid);
+      if (held) yield { uid, flags: new Set(held) };
+    }
+  }
+
+  /** The poll's window fetch: everything, with the flags read up front. */
+  private async *readWindow() {
     const snapshot = [...world.server.entries()]
       .sort(([a], [b]) => a - b)
       .map(([uid, flags]) => ({ uid, flags: new Set(flags) }));
@@ -72,22 +85,21 @@ class FakeImapFlow {
   }
 
   private store(range: string, flags: string[], add: boolean) {
-    const held = world.server.get(Number(range));
     // Like a real server: STORE on a missing UID still answers OK.
-    if (!held || world.ignoreStore) return true;
-    for (const flag of flags) {
-      if (add) held.add(flag);
-      else held.delete(flag);
+    if (world.ignoreStore) return true;
+    for (const uid of range.split(",").map(Number)) {
+      const held = world.server.get(uid);
+      if (!held) continue;
+      for (const flag of flags) {
+        if (add) held.add(flag);
+        else held.delete(flag);
+      }
     }
     return true;
   }
 
   messageFlagsAdd = async (range: string, flags: string[]) => this.store(range, flags, true);
   messageFlagsRemove = async (range: string, flags: string[]) => this.store(range, flags, false);
-  fetchOne = async (range: string) => {
-    const held = world.server.get(Number(range));
-    return held ? { uid: Number(range), flags: new Set(held) } : false;
-  };
 }
 
 vi.mock("imapflow", () => ({ ImapFlow: FakeImapFlow }));
@@ -97,15 +109,26 @@ vi.mock("../db.js", () => {
     [...world.rows.values()].find((r) => r.userId === userId && r.gmailId === gmailId);
   const prisma = {
     linkedInboxAccount: {
-      findFirst: async ({ where }: { where: Record<string, string> }) =>
-        where.id === "row-1" && where.userId === "u1" && where.provider === "NAVER"
-          ? {
-              id: "row-1",
-              email: "me@naver.com",
-              imapHost: "imap.naver.com:993",
-              imapPasswordCipher: "cipher",
-            }
-          : null,
+      findFirst: async ({ where }: { where: Record<string, string> }) => {
+        if (where.userId !== "u1") return null;
+        if (where.id === "row-1" && where.provider === "NAVER") {
+          return {
+            id: "row-1",
+            email: "me@naver.com",
+            imapHost: "imap.naver.com:993",
+            imapPasswordCipher: "cipher",
+          };
+        }
+        if (where.id === "row-2" && where.provider === "ICLOUD") {
+          return {
+            id: "row-2",
+            email: "me@icloud.com",
+            imapHost: "imap.mail.me.com:993",
+            imapPasswordCipher: "cipher",
+          };
+        }
+        return null;
+      },
       updateMany: async () => ({ count: 1 }),
     },
     emailMessage: {
@@ -179,11 +202,13 @@ vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 const { syncImapInbox } = await import("../mail/imap-sync.js");
 const { IMAP_PROVIDERS } = await import("../mail/imap-providers.js");
 const { mailActionsForProvider } = await import("../mail/providers/dispatch.js");
+const { resetImapSessionState } = await import("../mail/providers/imap-session.js");
 
 const MSG_101 = `naver-imap:${EMAIL}:101`;
 const MSG_102 = `naver-imap:${EMAIL}:102`;
 
 const ORIGINAL_FLAG = process.env.IMAP_ACTIONS_ENABLED;
+const ORIGINAL_ICLOUD_FLAG = process.env.ICLOUD_INBOX_ENABLED;
 
 function poll() {
   return syncImapInbox({
@@ -213,12 +238,16 @@ beforeEach(() => {
   world.creates = 0;
   world.nextId = 1;
   process.env.IMAP_ACTIONS_ENABLED = "true";
+  process.env.ICLOUD_INBOX_ENABLED = "true";
+  resetImapSessionState();
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
 afterEach(() => {
   if (ORIGINAL_FLAG === undefined) delete process.env.IMAP_ACTIONS_ENABLED;
   else process.env.IMAP_ACTIONS_ENABLED = ORIGINAL_FLAG;
+  if (ORIGINAL_ICLOUD_FLAG === undefined) delete process.env.ICLOUD_INBOX_ENABLED;
+  else process.env.ICLOUD_INBOX_ENABLED = ORIGINAL_ICLOUD_FLAG;
   vi.restoreAllMocks();
 });
 
@@ -325,5 +354,73 @@ describe("a poll that read its flags before the action landed", () => {
     await poll();
     expect(localRow(MSG_101)).toMatchObject({ isRead: true });
     expect(world.creates).toBe(2);
+  });
+});
+
+describe("flag flipped off in the same process", () => {
+  it("answers unsupported without touching the server, and works again once flipped back on", async () => {
+    await poll();
+
+    expect(await actions().markAsRead("u1", MSG_101, ROW_ID)).toEqual({ success: true });
+    expect(world.server.get(101)?.has("\\Seen")).toBe(true);
+
+    process.env.IMAP_ACTIONS_ENABLED = "false";
+    const refused = await actions().toggleRead("u1", MSG_101, false, ROW_ID);
+    expect(refused).toMatchObject({ unsupported: true });
+    expect(world.server.get(101)?.has("\\Seen")).toBe(true);
+    await poll();
+    expect(localRow(MSG_101)).toMatchObject({ isRead: true });
+
+    process.env.IMAP_ACTIONS_ENABLED = "true";
+    expect(await actions().toggleRead("u1", MSG_101, false, ROW_ID)).toEqual({ success: true });
+    expect(world.server.get(101)?.has("\\Seen")).toBe(false);
+  });
+});
+
+describe("ICLOUD: action reports success -> next poll", () => {
+  const ICLOUD_EMAIL = "me@icloud.com";
+  const ICLOUD_ROW = "row-2";
+  const ICLOUD_MSG = (uid: number) => `icloud-imap:${ICLOUD_EMAIL}:${uid}`;
+
+  function pollIcloud() {
+    return syncImapInbox({
+      provider: IMAP_PROVIDERS.ICLOUD,
+      userId: "u1",
+      email: ICLOUD_EMAIL,
+      password: PASSWORD,
+      host: "imap.mail.me.com:993",
+      linkedInboxAccountId: ICLOUD_ROW,
+    });
+  }
+
+  it("keeps a read and a star across the next poll without re-creating rows", async () => {
+    await pollIcloud();
+    expect(localRow(ICLOUD_MSG(101))).toMatchObject({ isRead: false, isStarred: false });
+    const created = world.creates;
+
+    const icloud = mailActionsForProvider("ICLOUD");
+    expect(await icloud.markAsRead("u1", ICLOUD_MSG(101), ICLOUD_ROW)).toEqual({ success: true });
+    expect(await icloud.toggleStar("u1", ICLOUD_MSG(101), true, ICLOUD_ROW)).toEqual({
+      success: true,
+    });
+    await pollIcloud();
+
+    expect(localRow(ICLOUD_MSG(101))).toMatchObject({ isRead: true, isStarred: true });
+    expect(world.creates).toBe(created);
+  });
+
+  it("does not report success when the server never applies the change", async () => {
+    await pollIcloud();
+    world.ignoreStore = true;
+
+    const result = await mailActionsForProvider("ICLOUD").markAsRead(
+      "u1",
+      ICLOUD_MSG(101),
+      ICLOUD_ROW,
+    );
+
+    expect(result).toMatchObject({ error: expect.any(String) });
+    await pollIcloud();
+    expect(localRow(ICLOUD_MSG(101))).toMatchObject({ isRead: false });
   });
 });

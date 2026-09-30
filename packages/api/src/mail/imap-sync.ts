@@ -26,7 +26,7 @@ import sanitizeHtml from "sanitize-html";
 
 import { persistGmailEmail } from "../judge/email-firewall.js";
 import { captureError } from "../sentry.js";
-import { createImapClient } from "./imap-connection.js";
+import { createImapClient, endImapSession } from "./imap-connection.js";
 import { formatImapMessageId } from "./imap-message-id.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
 
@@ -43,22 +43,25 @@ interface VerifyResult {
 }
 
 export async function verifyImapCredentials(args: VerifyArgs): Promise<VerifyResult> {
-  const client = createImapClient({
-    host: args.host,
-    email: args.email,
-    password: args.password,
-    // Connection should fail fast — the settings UI is waiting on this.
-    socketTimeout: 12_000,
-  });
-
   try {
-    await client.connect();
-    // SELECT INBOX to confirm read access — not all credential errors
-    // surface at LOGIN; some only manifest on the first SELECT.
-    const lock = await client.getMailboxLock("INBOX");
-    lock.release();
-    await client.logout();
-    return { ok: true };
+    const client = createImapClient({
+      provider: args.provider,
+      host: args.host,
+      email: args.email,
+      password: args.password,
+      // Connection should fail fast — the settings UI is waiting on this.
+      socketTimeout: 12_000,
+    });
+    try {
+      await client.connect();
+      // SELECT INBOX to confirm read access — not all credential errors
+      // surface at LOGIN; some only manifest on the first SELECT.
+      const lock = await client.getMailboxLock("INBOX");
+      lock.release();
+      return { ok: true };
+    } finally {
+      await endImapSession(client);
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // Map common IMAP error shapes to user-readable hints.
@@ -151,10 +154,12 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
   const result: SyncResult = { fetched: 0, inserted: 0, classified: 0, errors: 0 };
 
   const client = createImapClient({
+    provider: args.provider,
     host: args.host,
     email: args.email,
     password: args.password,
     socketTimeout: 30_000,
+    accountId: args.linkedInboxAccountId,
   });
 
   try {
@@ -263,7 +268,6 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
     } finally {
       lock.release();
     }
-    await client.logout();
   } catch (err) {
     result.errors += 1;
     // console first — captureError is silent without a Sentry DSN (self-host/dev).
@@ -276,6 +280,11 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
       extra: { userId: args.userId },
     });
     throw err;
+  } finally {
+    // Every exit path closes the session: the empty-mailbox early return, a
+    // failed connect or fetch, and success. Without this a failed poll left
+    // its socket to imapflow's 5-minute inactivity timeout.
+    await endImapSession(client);
   }
 
   return result;

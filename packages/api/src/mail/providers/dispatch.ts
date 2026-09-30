@@ -15,6 +15,7 @@
 
 import { imapActionsEnabled } from "../../config.js";
 import { prisma } from "../../db.js";
+import { enabledImapProviderKeys } from "../imap-providers.js";
 import type { InboxProviderName } from "../inbox-credentials.js";
 import { googleMailActions } from "./google.js";
 import { imapMailActions } from "./imap.js";
@@ -42,11 +43,20 @@ const IMAP_FLAG_ACTIONS_BY_PROVIDER: Readonly<
   ICLOUD: imapMailActions("ICLOUD"),
 };
 
+function imapFlagActionsFor(provider: InboxProviderName): MailProviderActions | undefined {
+  if (!imapActionsEnabled()) return undefined;
+  // ICLOUD stays dark until ICLOUD_INBOX_ENABLED (the CASA surface freeze): its
+  // poll never selects ICLOUD rows and its routes 404 while that flag is off,
+  // and IMAP_ACTIONS_ENABLED must not open a door the freeze keeps shut.
+  const enabledProviders: readonly string[] = enabledImapProviderKeys();
+  if (!enabledProviders.includes(provider)) return undefined;
+  return IMAP_FLAG_ACTIONS_BY_PROVIDER[provider];
+}
+
 export function mailActionsForProvider(provider: InboxProviderName): MailProviderActions {
-  // The flag is read per call (request time), so flipping it needs no restart;
-  // with it off this returns the same unsupported object as before B1.
-  const imapActions = imapActionsEnabled() ? IMAP_FLAG_ACTIONS_BY_PROVIDER[provider] : undefined;
-  return imapActions ?? ACTIONS_BY_PROVIDER[provider];
+  // Both flags are read per call (request time), so flipping either needs no
+  // restart; with them off this returns the same unsupported object as before B1.
+  return imapFlagActionsFor(provider) ?? ACTIONS_BY_PROVIDER[provider];
 }
 
 export async function mailActionsFor(

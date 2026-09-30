@@ -15,6 +15,7 @@ import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import type { EmailPriorityValue } from "../mail/email-label-feedback.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
+import { logProviderSoftFailure } from "../mail/providers/log-soft-failure.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -67,10 +68,19 @@ async function applyBulkReadAction(
   await Promise.all(
     emails.map((email) =>
       mailActionsFor(userId, email.linkedInboxAccountId)
-        .then((actions) =>
-          actions.toggleRead(userId, email.gmailId, isRead, email.linkedInboxAccountId),
-        )
-        .catch(() => null),
+        .then(async (actions) => {
+          const result = await actions.toggleRead(
+            userId,
+            email.gmailId,
+            isRead,
+            email.linkedInboxAccountId,
+          );
+          logProviderSoftFailure("EMAIL-BULK", email.id, result);
+        })
+        .catch((err) => {
+          // Local write below still happens (accepted divergence) — but never silently.
+          console.warn(`[EMAIL-BULK] toggleRead threw for ${email.id}:`, err);
+        }),
     ),
   );
   await prisma.emailMessage.updateMany({
