@@ -12,6 +12,7 @@
  * Notifications are persisted to PostgreSQL (Notification model).
  */
 
+import { HIDDEN_CLAIM_TYPE, REPLY_CLAIM_ROWS } from "./agentcore/auto-reply-ledger-keys.js";
 import { prisma } from "./db.js";
 import { getUpcomingMeetings } from "./pim/meeting.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
@@ -77,7 +78,12 @@ export async function getNotifications(
   userId: string,
   options?: { unreadOnly?: boolean; limit?: number },
 ): Promise<NotificationDTO[]> {
-  const where: { userId: string; isRead?: boolean } = { userId };
+  // Hidden claims (in-flight or cleared unattended-reply locks) are not bell
+  // entries.
+  const where: { userId: string; type: { not: string }; isRead?: boolean } = {
+    userId,
+    type: { not: HIDDEN_CLAIM_TYPE },
+  };
   if (options?.unreadOnly) where.isRead = false;
 
   const rows = await (
@@ -132,7 +138,19 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
 }
 
 export async function clearNotifications(userId: string): Promise<void> {
-  await prisma.notification.deleteMany({ where: { userId } });
+  // Unattended-reply claims (`auto-reply:` / legacy `auto-mode-reply:`) are
+  // at-most-once LOCKS: deleting one lets a still-OPEN failed item be
+  // re-drafted and re-sent. Delete everything else; hide the claims instead
+  // (read + hidden type), so the bell is visually cleared and the lock stays.
+  // The explicit `dedupeKey: null` branch matters: SQL `NOT (col LIKE ..)` is
+  // NULL, not true, for a NULL column, so ordinary rows would otherwise survive.
+  await prisma.notification.deleteMany({
+    where: { userId, OR: [{ dedupeKey: null }, { NOT: REPLY_CLAIM_ROWS.OR }] },
+  });
+  await prisma.notification.updateMany({
+    where: { userId, ...REPLY_CLAIM_ROWS, type: { not: HIDDEN_CLAIM_TYPE } },
+    data: { type: HIDDEN_CLAIM_TYPE, isRead: true },
+  });
   // Drop the mirrored queue entries — without this, the queue keeps showing
   // FOLLOWUP rows pointing at notifications that no longer exist.
   await prisma.attentionItem.deleteMany({ where: { userId, source: "NOTIFICATION" } });
