@@ -18,6 +18,20 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
 const asComparable = (v: unknown): number | string =>
   v instanceof Date ? v.getTime() : (v as number | string);
 
+const OPERATOR_KEYS = new Set([
+  "not",
+  "in",
+  "startsWith",
+  "contains",
+  "mode",
+  "gte",
+  "gt",
+  "lte",
+  "lt",
+]);
+const hasOperatorKey = (cond: Record<string, unknown>): boolean =>
+  Object.keys(cond).some((k) => OPERATOR_KEYS.has(k));
+
 function matchesOperator(actual: unknown, op: Record<string, unknown>): boolean {
   return Object.entries(op).every(([key, expected]) => {
     switch (key) {
@@ -55,6 +69,11 @@ export function matches(row: Row, where: Where | undefined): boolean {
     if (cond === undefined) return true;
     if (field === "OR") return (cond as Where[]).some((w) => matches(row, w));
     if (field === "AND") return (cond as Where[]).every((w) => matches(row, w));
+    // A compound unique key (`userId_source_sourceId: { userId, ... }`) is the
+    // conjunction of its parts.
+    if (isObject(cond) && field.includes("_") && !(field in row) && !hasOperatorKey(cond)) {
+      return matches(row, cond);
+    }
     const actual = row[field];
     if (isObject(cond)) return matchesOperator(actual, cond);
     return cond === null ? actual == null : actual === cond;
@@ -165,7 +184,11 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
       },
       async create(args) {
         log(name, { op: "create", data: args.data });
-        const created = { id: `fake-${name}-${rowsOf(name).length + 1}`, ...args.data };
+        const created = {
+          id: `fake-${name}-${rowsOf(name).length + 1}`,
+          createdAt: new Date(),
+          ...args.data,
+        };
         tables[name] = [...rowsOf(name), created];
         return project(created, args.select);
       },

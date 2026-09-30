@@ -344,17 +344,32 @@ change to `attention-override.ts` and `attention-mirror.ts`.
     `agent-tier-learning-exclusion.test.ts`, each with a human control.
   - **Who rewrites an EMAIL item's tier.** New-mail ingest judges only new rows
     (an existing row is never re-judged by `persistGmailEmail`) and the backfill
-    sweep only emails with no item, so neither can reach an agent-set item.
-    `healStaleAttentionItem` (`routes/firewall.ts`, stale `inputHash`) skips an
-    agent-set item and refreshes only the hash: the UNREAD flip that the agent's
-    own `mark_read` causes is one of the four hashed fields, so without this the
-    next board read re-judged and undid the change. `fallback-rejudge` skips
-    agent-set items in both its read and its guarded write. The update branch of
-    `upsertAttentionForEmailJudgement` replaces the tier and clears the stamp; it
-    is reached by the heal (judge-tiered items only) and by
-    `scripts/rejudge-open-email-items.ts`, an explicit operator re-judge of every
-    OPEN item that replaces human and agent tiers alike. **An agent change is
-    therefore replaced only by a human action or that operator script.**
+    sweep only emails with no item, so neither reaches an agent-set or
+    human-overridden item; both keep the plain upsert.
+    - **Stale-hash heal (`routes/firewall.ts`).** UNREAD is one of the four hashed
+      fields, so a read-state flip (the agent's own `mark_read`, or the user
+      reading the mail) makes the next board read re-judge the item. On main that
+      reset `isManualOverride` and overwrote a human's lane, so this was a live
+      bug for every user, flag off included. Of the hashed inputs only the labels
+      change after delivery, so the heal now refreshes only `inputHash` for an
+      item that is agent-set or human-overridden (one guarded `updateMany` on
+      `status: OPEN` and the stamp or flag) and re-judges only when that matched
+      zero rows. The refresh bumps `@updatedAt`, which extends a human
+      override's recency in `judge-context` (override priors age out at 60 days
+      by `updatedAt`); accepted. Landed as its own commit so it can be reverted
+      alone.
+    - **Re-judge write.** A re-judge of an existing item (heal, operator script)
+      now writes through a guarded `updateMany` requiring `isManualOverride:
+      false` and no agent stamp, mirroring `fallback-rejudge`, and creates
+      nothing. Zero rows returns `preserved`; `judgeAndMirrorEmail` then skips
+      the ledger refresh, the wake-up, the push and the Gmail label, so a human
+      override or an agent lane that lands while the judge call runs is no
+      longer overwritten. `scripts/rejudge-open-email-items.ts` uses the same
+      path and counts the items it kept.
+    - **`fallback-rejudge`** skips agent-set items in both its read and its
+      guarded write.
+    - **The plain upsert** (new items only) still replaces the tier, resets the
+      flag and clears the stamp.
   - **Human after agent.** `overrideAttentionTier` clears the stamp. A
     `confirmAttentionTier` on an agent-set item answers ok but does not stamp the
     ledger: a `CONFIRM:` of the agent's lane against the judge's shown tier is a

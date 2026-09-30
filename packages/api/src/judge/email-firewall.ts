@@ -364,6 +364,8 @@ export async function judgeAndMirrorEmail(
   email: JudgeableEmailRow,
   credentials?: ProviderCredentials,
   language?: string | null,
+  /** `rejudge`: the item already exists (the stale-hash heal). See EmailUpsertOptions. */
+  options: { rejudge?: boolean } = {},
 ): Promise<PocTier> {
   // BYOK: route this user's classify call to their own provider key when they
   // have set one (billing.ts), so per-user load never lands on the shared env
@@ -403,11 +405,16 @@ export async function judgeAndMirrorEmail(
   // keyword fallback that caps PUSH recall ~46%). Prod path only — the eval
   // harness calls judgeEmail directly and must not pollute the window.
   recordJudgeSource(judgement.source);
-  await upsertAttentionForEmailJudgement(
+  const outcome = await upsertAttentionForEmailJudgement(
     { userId, ...email },
     judgement,
     engagementKindOf(judgeContext.senderFacts),
+    { rejudge: options.rejudge },
   );
+  // A human override or an agent lane landed while the judge ran, so the write
+  // was refused and their decision stands. Nothing below may run: no wake-up, no
+  // push and no Gmail label for a tier that is not the one the item carries.
+  if (outcome === "preserved") return judgement.tier;
   // The email just became visible on the firewall surfaces — they read
   // AttentionItem, which is written only here, post-judge. Wake every open
   // client so it refetches NOW: without this, only PUSH-tier mail produced

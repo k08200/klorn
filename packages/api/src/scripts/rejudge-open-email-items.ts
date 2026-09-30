@@ -8,9 +8,10 @@
  * stored tier — WITHOUT firing notifications (a re-judge must never re-push,
  * or a cleanup would spam the user with dozens of alerts).
  *
- * It preserves the user's terminal decisions: upsertAttentionForEmailJudgement
- * takes the `update` branch for existing rows and never resurrects a
- * DISMISSED/RESOLVED item.
+ * It preserves the user's terminal decisions: the re-judge write never
+ * resurrects a DISMISSED/RESOLVED item, and (human always wins) it never
+ * overwrites a human override or an MCP agent's lane — those items are counted
+ * and left as they are.
  *
  * Usage:
  *   DRY-RUN (default):  pnpm tsx src/scripts/rejudge-open-email-items.ts <userId | email>
@@ -98,6 +99,7 @@ async function main() {
 
   let changed = 0;
   let missing = 0;
+  let kept = 0; // human override / agent lane: the re-judge write matched nothing
   const transitions = new Map<string, number>(); // "PUSH→QUEUE" → count
 
   for (const item of items) {
@@ -138,16 +140,18 @@ async function main() {
       // NO push: re-judge refreshes the tier via the upsert `update` branch and
       // must never re-notify. (judgeAndMirrorEmail's push path is intentionally
       // NOT called here.)
-      await upsertAttentionForEmailJudgement(
+      const outcome = await upsertAttentionForEmailJudgement(
         { userId, ...email },
         judgement,
         engagementKindOf(ctx.senderFacts),
+        { rejudge: true },
       );
+      if (outcome === "preserved") kept++;
     }
   }
 
   console.log(
-    `\nSummary: ${changed} tier change(s)${missing ? `, ${missing} item(s) with no EmailMessage (skipped)` : ""}.`,
+    `\nSummary: ${changed} tier change(s)${missing ? `, ${missing} item(s) with no EmailMessage (skipped)` : ""}${kept ? `, ${kept} item(s) kept (human override or agent lane)` : ""}.`,
   );
   for (const [key, count] of [...transitions.entries()].sort((a, b) => b[1] - a[1])) {
     console.log(`  ${key}: ${count}`);

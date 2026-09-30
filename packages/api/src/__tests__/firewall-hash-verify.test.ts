@@ -50,6 +50,7 @@ const attentionRow = {
   surfacedAt: new Date("2026-06-02T00:00:00Z"),
   inputHash: correctHash, // overwritten per test below
   agentTierSetAt: null as Date | null, // set per test to model an MCP agent's lane change
+  isManualOverride: false, // set per test to model a human's override
 };
 
 const emailRow = {
@@ -148,9 +149,11 @@ describe("GET /api/inbox/firewall — hash verify integration", () => {
   beforeEach(async () => {
     captureErrorMock.mockClear();
     judgeAndMirrorMock.mockClear();
-    attentionUpdateMany.mockClear();
+    attentionUpdateMany.mockReset();
+    attentionUpdateMany.mockResolvedValue({ count: 1 });
     attentionRow.inputHash = correctHash;
     attentionRow.agentTierSetAt = null;
+    attentionRow.isManualOverride = false;
     const { _resetHashMismatchDedupeForTests } = await import("../routes/firewall.js");
     _resetHashMismatchDedupeForTests();
   });
@@ -230,43 +233,100 @@ describe("GET /api/inbox/firewall — hash verify integration", () => {
     await app.close();
   });
 
-  describe("an item whose lane an MCP agent set (step A2b)", () => {
-    it("is NOT re-judged on a stale hash (a read-state flip must not silently undo the agent) — only the hash is refreshed", async () => {
+  describe("a stale hash on an item whose lane must not be re-judged", () => {
+    const AGENT_STAMP = new Date("2026-09-30T09:00:00Z");
+    const CASES: Array<[string, { agentTierSetAt: Date | null; isManualOverride: boolean }]> = [
+      ["an MCP agent set the lane", { agentTierSetAt: AGENT_STAMP, isManualOverride: false }],
+      ["a human overrode the lane", { agentTierSetAt: null, isManualOverride: true }],
+    ];
+
+    /** Model the database applying the refresh, so the next board read sees the new hash. */
+    function applyRefreshToRow() {
+      attentionUpdateMany.mockImplementation(async (...args: unknown[]) => {
+        const { data } = args[0] as { data: { inputHash: string } };
+        attentionRow.inputHash = data.inputHash;
+        return { count: 1 };
+      });
+    }
+
+    for (const [label, flags] of CASES) {
+      it(`${label}: only the hash is refreshed — never re-judged (a read-state flip must not undo it)`, async () => {
+        attentionRow.inputHash = staleStoredHash;
+        Object.assign(attentionRow, flags);
+        const app = await buildApp();
+
+        const res = await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
+        expect(res.statusCode).toBe(200);
+        expect(findItem(res.json() as FirewallResponseWire, "att-1")?.hashStale).toBe(true);
+
+        await vi.waitFor(() => expect(attentionUpdateMany).toHaveBeenCalledTimes(1));
+        expect(judgeAndMirrorMock).not.toHaveBeenCalled();
+        const arg = attentionUpdateMany.mock.calls[0]?.[0] as {
+          where: Record<string, unknown>;
+          data: Record<string, unknown>;
+        };
+        // Only the hash columns move: never the tier, its reason, or either flag.
+        expect(Object.keys(arg.data).sort()).toEqual(["inputHash", "inputHashAt"]);
+        expect(arg.data.inputHash).toBe(correctHash);
+        // Guarded on the row still being open AND still carrying the stamp or the flag,
+        // so a flag cleared in the meantime makes the refresh match nothing.
+        expect(arg.where).toEqual({
+          userId: "user-1",
+          source: "EMAIL",
+          sourceId: "email-1",
+          status: "OPEN",
+          OR: [{ agentTierSetAt: { not: null } }, { isManualOverride: true }],
+        });
+        await app.close();
+      });
+    }
+
+    it("after a refresh the next board read is no longer stale and heals nothing more", async () => {
       attentionRow.inputHash = staleStoredHash;
-      attentionRow.agentTierSetAt = new Date("2026-09-30T09:00:00Z");
+      attentionRow.isManualOverride = true;
+      applyRefreshToRow();
       const app = await buildApp();
 
-      const res = await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
-      expect(res.statusCode).toBe(200);
-      expect(findItem(res.json() as FirewallResponseWire, "att-1")?.hashStale).toBe(true);
-
+      await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
       await vi.waitFor(() => expect(attentionUpdateMany).toHaveBeenCalledTimes(1));
+      captureErrorMock.mockClear();
+
+      const second = await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
+      expect(findItem(second.json() as FirewallResponseWire, "att-1")?.hashStale).toBeUndefined();
+      expect(captureErrorMock).not.toHaveBeenCalled();
+      expect(attentionUpdateMany).toHaveBeenCalledTimes(1);
       expect(judgeAndMirrorMock).not.toHaveBeenCalled();
-      const arg = attentionUpdateMany.mock.calls[0]?.[0] as {
-        where: Record<string, unknown>;
-        data: Record<string, unknown>;
-      };
-      // Only the hash columns move: never the tier, its reason, or the provenance.
-      expect(Object.keys(arg.data).sort()).toEqual(["inputHash", "inputHashAt"]);
-      expect(arg.data.inputHash).toBe(correctHash);
-      // Guarded on the agent stamp still being there, so a human override that
-      // lands first (which clears the stamp) is left to the normal path.
-      expect(arg.where).toMatchObject({
-        userId: "user-1",
-        source: "EMAIL",
-        sourceId: "email-1",
-        agentTierSetAt: { not: null },
-      });
       await app.close();
     });
 
-    it("control: the same stale hash on a judge-tiered item IS re-judged, with no direct hash write", async () => {
+    it("falls through to a re-judge when the flag or stamp was cleared before the refresh ran (zero rows)", async () => {
       attentionRow.inputHash = staleStoredHash;
-      attentionRow.agentTierSetAt = null;
+      attentionRow.isManualOverride = true;
+      attentionUpdateMany.mockResolvedValue({ count: 0 });
+      const app = await buildApp();
+
+      await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
+      await vi.waitFor(() => expect(judgeAndMirrorMock).toHaveBeenCalledTimes(1));
+      expect(attentionUpdateMany).toHaveBeenCalledTimes(1);
+      await app.close();
+    });
+
+    it("control: a stale hash on a judge-tiered item IS re-judged, with no direct hash write", async () => {
+      attentionRow.inputHash = staleStoredHash;
       const app = await buildApp();
       await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
       await vi.waitFor(() => expect(judgeAndMirrorMock).toHaveBeenCalledTimes(1));
       expect(attentionUpdateMany).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it("every re-judge the heal starts is marked as a re-judge of an EXISTING item, so the write is guarded", async () => {
+      attentionRow.inputHash = staleStoredHash;
+      const app = await buildApp();
+      await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
+      await vi.waitFor(() => expect(judgeAndMirrorMock).toHaveBeenCalledTimes(1));
+      const call = judgeAndMirrorMock.mock.calls[0] as unknown[];
+      expect(call[4]).toEqual({ rejudge: true });
       await app.close();
     });
   });

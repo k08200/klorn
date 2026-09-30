@@ -27,6 +27,8 @@ import { requireAppAccess } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
 import { dismissAttentionItem } from "../judge/attention-dismiss.js";
 import {
+  type AttentionHashInput,
+  attentionHashInputOf,
   checkAttentionInputHash,
   computeAttentionInputHash,
   registerHashMismatch,
@@ -109,35 +111,38 @@ export function _resetHashMismatchDedupeForTests(): void {
   hashMismatchesSeen.clear();
 }
 
-interface HashableEmailRow {
-  id: string;
-  from: string;
-  subject: string;
-  snippet: string | null;
-  labels: string[];
-}
-
 /**
- * Stale-hash heal for an item whose lane an MCP agent set (step A2b). A stale
- * hash here is usually a read-state flip (UNREAD is one of the four hashed
- * fields, and the agent's own mark_read causes it) — not a reason to re-judge
- * and silently undo the agent. Refresh only the hash so the mismatch stops; the
- * lane, its reason and the stamp are untouched. Guarded on the stamp, so a human
- * override that lands first (which clears it) falls through to the normal path.
+ * Stale-hash heal for an item whose lane must survive: one an MCP agent set
+ * (step A2b) or a human overrode. A stale hash is almost always a read-state
+ * flip (UNREAD is one of the four hashed fields), and of the hashed inputs only
+ * the labels change after delivery — from, subject and snippet are never
+ * rewritten on an existing row — so nothing here invalidates the decision.
+ * Re-judging would replace the tier and reset the flag (a live bug for human
+ * overrides); refreshing just the hash stops the mismatch and leaves the tier,
+ * its reason, the flag and the stamp alone.
+ *
+ * Guarded in its WHERE on the item still being open and still carrying the stamp
+ * or the flag. Returns the rows it matched: 0 means the stamp or flag was cleared
+ * in the meantime (or the item closed), and the caller then re-judges.
  */
-async function refreshHashKeepingAgentLane(userId: string, row: HashableEmailRow): Promise<void> {
-  await prisma.attentionItem.updateMany({
-    where: { userId, source: "EMAIL", sourceId: row.id, agentTierSetAt: { not: null } },
+async function refreshHashKeepingLane(
+  userId: string,
+  row: AttentionHashInput & { id: string },
+): Promise<number> {
+  const { count } = await prisma.attentionItem.updateMany({
+    where: {
+      userId,
+      source: "EMAIL",
+      sourceId: row.id,
+      status: "OPEN",
+      OR: [{ agentTierSetAt: { not: null } }, { isManualOverride: true }],
+    },
     data: {
-      inputHash: computeAttentionInputHash({
-        from: row.from,
-        subject: row.subject,
-        snippet: row.snippet,
-        labels: row.labels,
-      }),
+      inputHash: computeAttentionInputHash(attentionHashInputOf(row)),
       inputHashAt: new Date(),
     },
   });
+  return count;
 }
 
 /**
@@ -147,7 +152,11 @@ async function refreshHashKeepingAgentLane(userId: string, row: HashableEmailRow
  * not a repeated alert (checkAttentionInputHash's own doc says to pair it
  * with a background re-classify). Fire-and-forget; failures are captured.
  */
-function healStaleAttentionItem(userId: string, emailDbId: string, agentSet = false): void {
+function healStaleAttentionItem(
+  userId: string,
+  emailDbId: string,
+  options: { keepLane: boolean },
+): void {
   void (async () => {
     try {
       const row = await prisma.emailMessage.findFirst({
@@ -167,8 +176,8 @@ function healStaleAttentionItem(userId: string, emailDbId: string, agentSet = fa
         },
       });
       if (!row) return;
-      // An MCP agent set this item's lane (step A2b): refresh the hash, never re-judge.
-      if (agentSet) return await refreshHashKeepingAgentLane(userId, row);
+      // An agent lane or a human override must survive: refresh the hash only.
+      if (options.keepLane && (await refreshHashKeepingLane(userId, row)) > 0) return;
       // Lazy import: the judge pulls a heavy transitive graph (providers,
       // gmail) that the hot read path — and its tests — must not load.
       // toJudgeableEmailRow derives the bulk-mail signal from the stored
@@ -176,7 +185,11 @@ function healStaleAttentionItem(userId: string, emailDbId: string, agentSet = fa
       const { judgeAndMirrorEmail, toJudgeableEmailRow } = await import(
         "../judge/email-firewall.js"
       );
-      await judgeAndMirrorEmail(userId, toJudgeableEmailRow(row));
+      // rejudge: the item exists, so the write is guarded against a decision
+      // made while the judge runs (attention-mirror EmailUpsertOptions).
+      await judgeAndMirrorEmail(userId, toJudgeableEmailRow(row), undefined, undefined, {
+        rejudge: true,
+      });
     } catch (err) {
       captureError(err, { tags: { scope: "firewall.hashRejudge" }, extra: { emailDbId } });
     }
@@ -431,6 +444,7 @@ export async function firewallRoutes(app: FastifyInstance) {
               surfacedAt: Date;
               inputHash: string | null;
               agentTierSetAt: Date | null;
+              isManualOverride: boolean;
             }>
           >;
         }
@@ -448,6 +462,7 @@ export async function firewallRoutes(app: FastifyInstance) {
           surfacedAt: true,
           inputHash: true,
           agentTierSetAt: true,
+          isManualOverride: true,
         },
         // Window by RECENCY, rank by priority below. Windowing by priority was
         // the board-freeze bug: email items are never auto-resolved, so once
@@ -708,12 +723,7 @@ export async function firewallRoutes(app: FastifyInstance) {
             // input after classification — the cached tier is stale. Soft mode
             // (checkAttentionInputHash, not verify) so the page still renders,
             // and clients see hashStale=true to either re-classify or warn.
-            const hashCheck = checkAttentionInputHash(row.inputHash, {
-              from: email.from,
-              subject: email.subject,
-              snippet: email.snippet,
-              labels: email.labels,
-            });
+            const hashCheck = checkAttentionInputHash(row.inputHash, attentionHashInputOf(email));
             if (!hashCheck.ok) {
               item.hashStale = true;
               // Alert + heal exactly ONCE per (row, storedHash). Repeats stay
@@ -736,7 +746,9 @@ export async function firewallRoutes(app: FastifyInstance) {
                     },
                   },
                 );
-                healStaleAttentionItem(userId, email.id, row.agentTierSetAt != null);
+                healStaleAttentionItem(userId, email.id, {
+                  keepLane: row.agentTierSetAt != null || row.isManualOverride,
+                });
               }
             }
 
