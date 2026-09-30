@@ -13,7 +13,7 @@ company edition design stays in `../design/team-mode-v3.md`.
 | | Mail | Calendar | Drive |
 |---|---|---|---|
 | Google | complete | primary calendar synced to rows; linked accounts used for conflict checks only | none |
-| Microsoft | merged, flag OFF, Azure registration pending; replies and drafts are unthreaded by design (`getReplyHeaders` returns `{}`; native reply is B0b) | none (Graph scopes are `Mail.*` only) | none |
+| Microsoft | merged, flag OFF, Azure registration pending; replies and reply drafts thread natively through Graph `createReply` (B0b, landed 2026-09-30, not yet run against a real tenant); `getReplyHeaders` still returns `{}` | none (Graph scopes are `Mail.*` only) | none |
 | Naver | read-only IMAP; every action returns 501 | none | none |
 | iCloud | read-only IMAP, flag OFF | none | none |
 | Generic IMAP (company/personal hosts) | not built (Phase 4, gated on SSRF review) | none | none |
@@ -468,8 +468,9 @@ Landed 2026-09-30, OFF by default (the flag is unchanged):
 **A4 — `create_draft`, reply-only.** Depends on: A2, B0. `email_id` is
 required. The recipient is pinned to the original sender. The account is
 resolved from the row. It never sends. Providers without draft support return
-an explicit unsupported result. Outlook returns unsupported until B0b lands,
-because a draft made through Graph `POST /me/messages` does not thread.
+an explicit unsupported result. Outlook returned unsupported until B0b, because a
+draft made through Graph `POST /me/messages` does not thread. B0b landed, so Outlook
+now drafts natively (see B0b).
 - The tool never accepts header strings from the caller. It takes an email id,
   and the server resolves the reply headers through `getReplyHeaders`.
 - Rule: if any send path ever carries agent-supplied reply context, the
@@ -504,8 +505,8 @@ because a draft made through Graph `POST /me/messages` does not thread.
     `userId` + `OR:[{id},{gmailId}]` lookup for all three). The row's
     `linkedInboxAccountId` goes to `mailActionsFor`, `getReplyHeaders` and
     `createDraft` (`null` only for a primary-inbox row), and the provider comes
-    from the dispatcher. OUTLOOK answers `{unsupported: true}` before any provider
-    call. The reply headers are `getReplyHeaders` of the original: In-Reply-To is
+    from the dispatcher. (Until B0b, OUTLOOK answered `{unsupported: true}` before any
+    provider call; B0b removed that refusal.) The reply headers are `getReplyHeaders` of the original: In-Reply-To is
     its Message-ID, References is its chain plus that id (the `/reply` route's
     shape), and with `{}` the draft carries no `reply` and threads by thread id
     alone.
@@ -674,12 +675,102 @@ nothing.
 - Follow-up: wiring the existing `gmail-draft` route to pass reply headers is
   a separate fix, verified against a real Gmail account.
 
-**B0b — Microsoft native reply** (*outline*). Depends on: B0. Outlook replies
-use Graph `/messages/{id}/reply` and reply drafts use `/messages/{id}/createReply`,
-because `sendMail` cannot set In-Reply-To. `getReplyHeaders` stays `{}`, so the
-reply route never reports `threaded: true` for an Outlook send. The flag stays
-OFF. The seam needs a way to name the message being answered; the PR that
-starts this step designs it and expands this brief.
+**B0b — Microsoft native reply.** Depends on: B0. Landed 2026-09-30 (branch
+`feat/graph-native-reply`, not yet merged), flag OFF: Outlook is behind
+`OUTLOOK_INBOX_ENABLED` and Azure is not registered, so nothing here is reachable in
+production.
+- Context: Graph `sendMail` cannot set In-Reply-To, so Outlook replies and reply
+  drafts are made from the original message and Graph threads them itself.
+- Landed:
+  - **Graph calls** (all four scopes were already requested: `Mail.Read`,
+    `Mail.ReadWrite`, `Mail.Send`). Reply or reply draft: `POST
+    /me/messages/{id}/createReply` (`Mail.ReadWrite`, 201 plus the draft:
+    <https://learn.microsoft.com/en-us/graph/api/message-createreply?view=graph-rest-1.0>),
+    then `PATCH /me/messages/{draft}` for subject, body and recipients (updatable
+    only while `isDraft` is true:
+    <https://learn.microsoft.com/en-us/graph/api/message-update?view=graph-rest-1.0>),
+    then `POST /me/messages/{draft}/attachments` per file, under 3 MB each
+    (<https://learn.microsoft.com/en-us/graph/api/message-post-attachments?view=graph-rest-1.0>).
+    A reply also does `POST /me/messages/{draft}/send` (`Mail.Send`, 202:
+    <https://learn.microsoft.com/en-us/graph/api/message-send?view=graph-rest-1.0>).
+    A draft stops after the PATCH and never sends. Every call carries the existing
+    `Prefer: IdType="ImmutableId"`.
+  - **Why not `POST /me/messages/{id}/reply`**
+    (<https://learn.microsoft.com/en-us/graph/api/message-reply?view=graph-rest-1.0>).
+    Its JSON form takes `comment` or `message.body`, and the service wraps it in an
+    HTML reply with the quoted original, so the bytes sent are not the approved
+    bytes. The page says the reply goes to the original's `replyTo` instead of its
+    `from`, and calls `message.toRecipients` an update to the reply without saying
+    whether it replaces that default. createReply plus PATCH sets body and
+    recipients exactly, at the price of three calls instead of one. A reply sent
+    this way has no quoted original, as Gmail's does not.
+  - **Seam** (additive; Gmail and IMAP receive exactly what they did). The type
+    `ReplyTarget` (`replyToProviderMessageId?: string`) is added to `SendMailOptions`
+    and `CreateDraftInput`; `MailProviderActions` gains the optional capability
+    `nativeReply` (only OUTLOOK sets it); `SendMailResult` success gains optional
+    `threaded`, set true only by the native path. One helper,
+    `replyTargetFor(actions, providerMessageId)` (`mail/providers/reply-target.ts`),
+    returns `{}` for a provider without the capability, so no caller adds a key for
+    Google or IMAP. The id is the original's `EmailMessage.gmailId`
+    (`outlook:<email>:<graphId>`) from the row the route or tool resolved by `userId`
+    and linked account, never the URL id, a request body or an agent argument; an id
+    of another mailbox throws before any Graph call. Three callers use it: the reply
+    route, the `gmail-draft` route and `create_draft`.
+  - **Recipient pinning: explicit, and verified before anything is sent.** The
+    recipient is the `to` the caller passed (the reply route's parsed From; the
+    pinned From for `create_draft`). The PATCH sets `toRecipients`, `ccRecipients`
+    and `bccRecipients` explicitly, which replaces the Reply-To default createReply
+    chose. The PATCH answer is then checked: unless the draft is addressed to that
+    one address and no Cc or Bcc, the draft is deleted and the call throws, with
+    nothing sent. A missing To list counts as a mismatch (fail closed); a missing Cc
+    or Bcc list counts as empty. A refusal was not chosen, because the human
+    `gmail-draft` route lets the user pick the recipient; naming it explicitly keeps
+    that and stays a single rule for every caller.
+  - **Failure handling.** Any failure before the send deletes the half-made draft
+    (best effort, logged), so no stray draft addressed to a Reply-To remains. A send
+    whose outcome is unknown (5xx, network) throws and leaves the draft, which may
+    be the sent copy. A 401 or 403 is the existing soft `{error}` and flags
+    reconnect. A gone original (404) throws and is never resent unthreaded, which
+    could double-send. `sendEmail` still returns `messageId: null`, so the reply
+    route still records no `SentMessage` for Outlook ("waiting on" is unchanged).
+  - **Reply route.** `threaded` is true for Outlook only when the provider reports
+    it threaded natively; `getReplyHeaders` stays `{}` and the header path is
+    Gmail and SMTP only.
+  - **A4.** `create_draft` no longer refuses Outlook and its tool description no
+    longer says so. The recipient is still the original From (never Reply-To); the
+    agent still supplies no header, thread, account or reply-target argument, and
+    every such argument is refused. The reply target is the row's `gmailId`.
+  - **Floor unchanged.** The agent `send_email` path is deliberately NOT threaded:
+    `in_reply_to_email_id` still only picks the account and an Outlook send from the
+    agent is a plain `sendMail`. The receipt hash still covers `{to, subject, body}`
+    under `RECEIPT_SCHEMA_VERSION` "v1", and it does not cover the thread. Threading
+    that path is agent-supplied reply context, which the A4 rule above answers with
+    the resolved ids in the hash and a version bump. That is a separate decision.
+    `outlook-reply-floor.test.ts` pins this.
+- Verify result. Tests were written first and run red. `outlook-native-reply.test.ts`
+  fakes Graph with a stateful draft and asserts every request (URL, verb, body,
+  headers, order). Route tests run the real dispatch and Outlook provider over a
+  fetch double. The implementer (not CI) ran mutations on 2026-09-30 and each failed
+  at least one test before it was restored: the reply path falling back to `sendMail`;
+  the original id taken from the URL (reply route), from the URL (draft route) and
+  from the agent's `email_id` (`create_draft`); the PATCH without `toRecipients`;
+  the recipient check removed; the capability check removed so every provider gets a
+  target; no cleanup of a half-made draft; an unknown-outcome send also deleting the
+  draft; `threaded` reported without the header rule; the agent path threading from
+  `in_reply_to_email_id`.
+- Not verified: no Microsoft 365 tenant was reached; Graph is a test double built
+  from the documentation. In particular unconfirmed: that the PATCH answer includes
+  `toRecipients` (the check refuses a send otherwise), that a body PATCHed to plain
+  text replaces the quoted original, and that the draft id survives the send.
+- Before the flip (OUTLOOK_INBOX_ENABLED, after Azure registration), on one personal
+  and one work or school mailbox: a reply through `POST /api/email/:id/reply`; a
+  reply draft through `gmail-draft` and through MCP `create_draft`; then open both
+  in Outlook on the web and check that each sits in the original's conversation,
+  that the quoted text is absent, that the recipient is the original sender even
+  when the original carries a Reply-To, and that the attachment path works under
+  and over 3 MB. Also check
+  that no draft is left behind after a forced PATCH failure.
+- Rollback: revert the PR. No schema, no flag.
 
 **B1 — IMAP flag actions for Naver and iCloud.** Depends on: nothing. Landed
 2026-09-30, flag OFF.

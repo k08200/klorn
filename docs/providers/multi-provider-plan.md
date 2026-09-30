@@ -152,6 +152,8 @@ false-success + resurrection on the next delta sync. Reply threading
 deferred: Graph sendMail cannot set In-Reply-To, so `getReplyHeaders`
 answers `{}` (best-effort per contract) to keep `/reply` from claiming
 `threaded: true`; real threading needs the /messages/{id}/reply endpoint.
+Superseded by step B0b (docs/providers/unified-platform-plan.md): replies and
+reply drafts are now made with `createReply` from the original message id.
 
 3B (ingestion) landed: `mail/outlook-{sync,accounts,scheduler}.ts` mirror the
 IMAP trio — Graph delta query against the inbox folder, every message through

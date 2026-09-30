@@ -1,5 +1,6 @@
 /**
- * Phase 3C: the OUTLOOK MailProviderActions implementation. fetch is mocked;
+ * Phase 3C: the OUTLOOK MailProviderActions implementation. (Native replies and
+ * reply drafts, step B0b, are in outlook-native-reply.test.ts.) fetch is mocked;
  * these pin the Graph endpoints/verbs/bodies per action, the immutable-id
  * Prefer header, extraction of the Graph id from the synthesized
  * `outlook:<email>:<id>` key, the result contract (401/403 → reconnect +
@@ -210,9 +211,10 @@ describe("sendEmail / createDraft / getReplyHeaders", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("https://graph.microsoft.com/v1.0/me/messages");
   });
 
-  it("createDraft accepts the B0 reply context and still creates an unthreaded draft", async () => {
-    // Graph cannot set In-Reply-To through POST /me/messages. Native reply
-    // drafts (/createReply) are step B0b, so the payload must stay exactly the
+  it("createDraft with only the B0 header context (no reply target) still creates an unthreaded draft", async () => {
+    // Graph cannot set In-Reply-To through POST /me/messages, and header text is not
+    // how Outlook threads. Native reply drafts need `replyToProviderMessageId` (step
+    // B0b, outlook-native-reply.test.ts), so without it the payload stays exactly the
     // no-reply payload: no internetMessageHeaders, no conversation fields.
     fetchMock.mockResolvedValue(graphResponse({ id: "draft-2" }, 201));
     const result = await outlookMailActions.createDraft("u1", {
@@ -248,10 +250,10 @@ describe("sendEmail / createDraft / getReplyHeaders", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("getReplyHeaders answers {} unconditionally — sendEmail cannot thread yet", async () => {
-    // Returning internetMessageId would make /api/email/:id/reply claim
-    // threaded:true while the actual Graph sendMail carries no In-Reply-To.
-    // {} is the honest best-effort answer until /messages/{id}/reply is wired.
+  it("getReplyHeaders answers {} unconditionally — Outlook threads by id, not by headers", async () => {
+    // Returning internetMessageId would make /api/email/:id/reply claim a header
+    // thread this provider never writes. Native replies (step B0b) go through
+    // `replyToProviderMessageId`, so {} stays the honest best-effort answer.
     expect(await outlookMailActions.getReplyHeaders("u1", MSG("A"), ROW)).toEqual({});
     expect(fetchMock).not.toHaveBeenCalled();
   });

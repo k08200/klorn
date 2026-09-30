@@ -170,6 +170,10 @@ describe("the tool definition", () => {
     expect(CREATE_DRAFT_TOOL.function.description).toMatch(/never sent/i);
     expect(CREATE_DRAFT_TOOL.function.description).toMatch(/original sender/i);
   });
+
+  it("no longer tells the agent that Outlook is unavailable", () => {
+    expect(CREATE_DRAFT_TOOL.function.description).not.toMatch(/outlook/i);
+  });
 });
 
 describe("a Gmail draft — the success path", () => {
@@ -279,17 +283,92 @@ describe("resolution: the row decides, scoped to the caller", () => {
   });
 });
 
-describe("providers that cannot hold a draft", () => {
-  it("Outlook is an explicit unsupported result: no threading is possible until B0b, so nothing is created and nothing is fetched", async () => {
-    const actions = useProvider("OUTLOOK");
-    const out = await run(valid({ email_id: "gm-2" }));
-    expect(out).toMatchObject({ unsupported: true });
-    expect(typeof out.error).toBe("string");
-    expect(out).not.toHaveProperty("success");
-    expect(actions.createDraft).not.toHaveBeenCalled();
-    expect(actions.getReplyHeaders).not.toHaveBeenCalled();
+describe("Outlook drafts natively (step B0b)", () => {
+  const outlook = (overrides: ActionOverrides = {}) =>
+    useProvider("OUTLOOK", {
+      nativeReply: true,
+      // The Graph path threads by the original's id; it has no header text to give.
+      getReplyHeaders: vi.fn(async () => ({})),
+      ...overrides,
+    });
+
+  it("creates the draft: the original sender as recipient, the row's provider id as the reply target, no header context", async () => {
+    const actions = outlook();
+    expect(await run(valid({ email_id: "gm-2" }))).toEqual({
+      success: true,
+      draft_id: "draft-1",
+      provider: "OUTLOOK",
+      to: "bob@example.org",
+    });
+    expect(actions.createDraft).toHaveBeenCalledTimes(1);
+    expect(actions.createDraft.mock.calls[0]?.[1]).toEqual({
+      to: "bob@example.org",
+      subject: "Re: Lunch",
+      body: BODY,
+      threadId: "thread-2",
+      linkedInboxAccountId: "acct-2",
+      replyToProviderMessageId: "gm-2",
+    });
   });
 
+  it("takes the reply target from the stored row, never from the id the agent typed", async () => {
+    const actions = outlook();
+    await run(valid({ email_id: "email-db-2" }));
+    const draft = actions.createDraft.mock.calls[0]?.[1] as { replyToProviderMessageId?: string };
+    expect(draft.replyToProviderMessageId).toBe("gm-2");
+    expect(draft.replyToProviderMessageId).not.toBe("email-db-2");
+  });
+
+  it("never lets the agent name the reply target or the recipient: every such argument is refused", async () => {
+    const actions = outlook();
+    const attempts: Array<Record<string, unknown>> = [
+      { replyToProviderMessageId: "gm-1" },
+      { reply_to_message_id: "gm-1" },
+      { in_reply_to_email_id: "gm-1" },
+      { provider_message_id: "gm-1" },
+      { to: "attacker@evil.test" },
+    ];
+    for (const extra of attempts) {
+      expect(await run(valid({ email_id: "gm-2", ...extra })), JSON.stringify(extra)).toMatchObject(
+        {
+          code: "INVALID_ARGUMENT",
+        },
+      );
+    }
+    expect(actions.createDraft).not.toHaveBeenCalled();
+  });
+
+  it("stays pinned to the original From however the original addresses replies", async () => {
+    // Graph's createReply would address the original's Reply-To. The recipient handed
+    // to the provider is the parsed From, and the provider sets it explicitly.
+    const actions = outlook();
+    await run(valid({ email_id: "gm-2" }));
+    expect((actions.createDraft.mock.calls[0]?.[1] as { to: string }).to).toBe("bob@example.org");
+  });
+
+  it("answers a soft Outlook failure (mailbox not connected) unchanged and remembers nothing", async () => {
+    const before = recentDraftCount();
+    const failure = { error: "Outlook account is not connected" };
+    outlook({ createDraft: vi.fn(async () => failure) });
+    expect(await executeCreateDraft(ctx, valid({ email_id: "gm-2" }))).toBe(
+      JSON.stringify(failure),
+    );
+    expect(recentDraftCount()).toBe(before);
+  });
+
+  it("a hard Graph failure is answered generically, without the provider's text", async () => {
+    outlook({
+      createDraft: vi.fn(async () => {
+        throw new Error("Graph POST /me/messages/SECRET/createReply failed: http 500");
+      }),
+    });
+    const text = await executeCreateDraft(ctx, valid({ email_id: "gm-2" }));
+    expect(JSON.parse(text)).toMatchObject({ code: "UNAVAILABLE" });
+    expect(text).not.toContain("SECRET");
+  });
+});
+
+describe("providers that cannot hold a draft", () => {
   it("a provider whose createDraft is unsupported has its result returned unchanged", async () => {
     const refusal = {
       unsupported: true,
@@ -660,7 +739,7 @@ describe("it never sends", () => {
     await run(valid());
     await run(valid({ to: "x@y.co" }));
     await run(valid({ email_id: "no-such-mail" }));
-    useProvider("OUTLOOK");
+    useProvider("OUTLOOK", { nativeReply: true });
     await run(valid({ email_id: "gm-2" }));
     // The afterEach above re-checks every double this test made.
     expect(actions.sendEmail).not.toHaveBeenCalled();
@@ -791,7 +870,9 @@ describe("duplicate drafts: a retry of the same draft returns the first one", ()
 
   it("remembers only what was really created: a refusal or an unsupported mailbox leaves nothing behind", async () => {
     const before = recentDraftCount();
-    useProvider("OUTLOOK");
+    useProvider("NAVER", {
+      createDraft: vi.fn(async () => ({ unsupported: true, error: "No drafts here." })),
+    });
     await run(sameCall({ email_id: "gm-2" }));
     await run(sameCall({ to: "x@y.co" }));
     await run(sameCall({ email_id: "no-such-mail" }));

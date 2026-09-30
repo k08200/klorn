@@ -22,7 +22,17 @@ export type MailActionFailure = { error: string };
 export type SimpleMailActionResult = { success: true } | MailActionFailure | MailActionUnsupported;
 
 export type SendMailResult =
-  | { success: true; messageId?: string | null; threadId?: string | null }
+  | {
+      success: true;
+      messageId?: string | null;
+      threadId?: string | null;
+      /**
+       * True only when the provider itself threaded the message to its original
+       * (OUTLOOK's native reply, step B0b). Absent otherwise: a header-path provider
+       * reports threading through the headers it was given, not through this field.
+       */
+      threaded?: boolean;
+    }
   | MailActionFailure
   | MailActionUnsupported;
 
@@ -51,13 +61,26 @@ export interface ReplyThreadingHeaders {
   references?: string;
 }
 
-export interface SendMailOptions extends ReplyThreadingHeaders {
+/**
+ * Names the message being answered, for a provider that threads a reply by the
+ * original's own id instead of by header text (OUTLOOK, step B0b). The value is the
+ * original's `EmailMessage.gmailId`, taken from a row the SERVER resolved for the
+ * caller and their linked account: never from an agent, a request body or a URL.
+ * Callers add it with `replyTargetFor` (reply-target.ts), which adds nothing for a
+ * provider without `nativeReply`, so the options a Gmail or IMAP provider receives
+ * are unchanged.
+ */
+export interface ReplyTarget {
+  replyToProviderMessageId?: string;
+}
+
+export interface SendMailOptions extends ReplyThreadingHeaders, ReplyTarget {
   threadId?: string | null;
   linkedInboxAccountId?: string | null;
 }
 
 /** Everything `createDraft` needs besides the acting user. */
-export interface CreateDraftInput {
+export interface CreateDraftInput extends ReplyTarget {
   to: string;
   subject: string;
   body: string;
@@ -76,6 +99,13 @@ export interface CreateDraftInput {
  */
 export interface MailProviderActions {
   readonly provider: InboxProviderName;
+  /**
+   * True when `sendEmail` and `createDraft` thread a reply natively from
+   * `replyToProviderMessageId` (OUTLOOK). Such a provider answers `{}` from
+   * `getReplyHeaders`: its threading does not go through headers. Absent for every
+   * other provider.
+   */
+  readonly nativeReply?: boolean;
   sendEmail(
     userId: string,
     to: string,

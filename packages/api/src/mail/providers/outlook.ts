@@ -18,15 +18,48 @@
  * so a soft answer to a transient 429 would be a false success that the next
  * delta sync resurrects (the exact bug Phase 0b fixed).
  *
- * Reply threading is deliberately not wired yet: Graph's sendMail cannot set
- * In-Reply-To (internetMessageHeaders only accepts x-* custom headers) — a
- * real reply needs the /messages/{id}/reply endpoint. sendEmail therefore
- * sends a NEW message, and getReplyHeaders answers {} (best-effort per
- * contract) so /api/email/:id/reply never claims `threaded: true` for a
- * send that carries no threading headers. createDraft accepts the seam's
- * reply context (step B0) and ignores it for the same reason. Native Outlook
- * replies and reply drafts (/reply, /createReply) are step B0b in
- * docs/providers/unified-platform-plan.md; getReplyHeaders stays {} there too.
+ * Replies (step B0b of docs/providers/unified-platform-plan.md). Graph's sendMail
+ * cannot set In-Reply-To (internetMessageHeaders only accepts x-* custom headers),
+ * so a reply is made FROM the original message and Graph threads it itself
+ * (conversationId and In-Reply-To are set by the service):
+ *   POST /me/messages/{id}/createReply  - Mail.ReadWrite, 201 + the reply draft
+ *     https://learn.microsoft.com/en-us/graph/api/message-createreply?view=graph-rest-1.0
+ *   PATCH /me/messages/{draft}          - Mail.ReadWrite; subject, body and the
+ *     recipient lists are updatable only while isDraft = true
+ *     https://learn.microsoft.com/en-us/graph/api/message-update?view=graph-rest-1.0
+ *   POST /me/messages/{draft}/attachments - under 3 MB per file
+ *     https://learn.microsoft.com/en-us/graph/api/message-post-attachments?view=graph-rest-1.0
+ *   POST /me/messages/{draft}/send      - Mail.Send, 202, the draft moves to Sent Items
+ *     https://learn.microsoft.com/en-us/graph/api/message-send?view=graph-rest-1.0
+ * All four scopes are already requested at connect time (Mail.Read/ReadWrite/Send).
+ *
+ * Why not POST /me/messages/{id}/reply
+ * (https://learn.microsoft.com/en-us/graph/api/message-reply?view=graph-rest-1.0):
+ * its JSON form takes `comment` OR `message.body`, and the service builds an HTML
+ * reply around it with the quoted original, so the bytes sent are not the bytes the
+ * caller (and, on an agent path, the ActionReceipt) approved. The docs also say the
+ * reply goes to the original's `replyTo` instead of its `from`, and describe
+ * `message.toRecipients` as an update to the reply without saying whether it replaces
+ * that default. createReply + PATCH is the documented way to set body and recipients
+ * exactly, and it needs no quoted text to match Gmail's behaviour here.
+ *
+ * Recipient pinning. The recipient is whatever the caller passed as `to`. The PATCH
+ * sets To, Cc and Bcc explicitly, which replaces the Reply-To default createReply
+ * chose, and the PATCH answer is checked: unless the draft is addressed to exactly
+ * `to` and nobody else, the draft is discarded and the call throws, before anything
+ * is sent. A reply is addressed only by an original whose id is of THIS mailbox
+ * (`outlook:<email>:<id>`); any other id throws before any Graph call.
+ *
+ * Failure handling. Any failure before the send discards the half-made draft (best
+ * effort, logged), so no stray draft addressed to a Reply-To is left behind. A send
+ * whose outcome is unknown (5xx, network) throws and leaves the draft alone: it may
+ * already be sent, and deleting it would delete the sent copy. There is no fallback to
+ * sendMail: an unthreaded resend could double-send. sendEmail returns messageId null,
+ * as it always has for Outlook, because the draft's id is not known to survive the send.
+ *
+ * `getReplyHeaders` still answers {} (best-effort per contract): the header path is
+ * Gmail and SMTP only. Without a `replyToProviderMessageId`, sendEmail is still a NEW
+ * message through sendMail and createDraft a plain draft, exactly as before B0b.
  */
 
 import { markLinkedInboxForReconnect } from "../gmail.js";
@@ -89,7 +122,7 @@ type GraphCallResult = { ok: true; body: unknown } | MailActionFailure;
 
 async function graphCall(
   ctx: OutlookCtx,
-  method: "GET" | "POST" | "PATCH",
+  method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   jsonBody?: unknown,
 ): Promise<GraphCallResult> {
@@ -139,6 +172,15 @@ async function messageAction(
   return "error" in out ? out : { success: true };
 }
 
+function fileAttachmentJson(attachment: MailAttachment): Record<string, unknown> {
+  return {
+    "@odata.type": "#microsoft.graph.fileAttachment",
+    name: attachment.filename,
+    contentType: attachment.mimeType,
+    contentBytes: attachment.content.toString("base64"),
+  };
+}
+
 function buildGraphMessage(
   to: string,
   subject: string,
@@ -149,21 +191,149 @@ function buildGraphMessage(
     subject,
     body: { contentType: "Text", content: body },
     toRecipients: [{ emailAddress: { address: to } }],
-    ...(attachments.length
-      ? {
-          attachments: attachments.map((a) => ({
-            "@odata.type": "#microsoft.graph.fileAttachment",
-            name: a.filename,
-            contentType: a.mimeType,
-            contentBytes: a.content.toString("base64"),
-          })),
-        }
-      : {}),
+    ...(attachments.length ? { attachments: attachments.map(fileAttachmentJson) } : {}),
   };
+}
+
+// ─── Native replies (step B0b) ───────────────────────────────────────────────
+
+interface ReplyContent {
+  to: string;
+  subject: string;
+  body: string;
+  attachments: MailAttachment[];
+}
+
+interface ReplyDraft {
+  id: string;
+  /** Graph path of the draft, id already URL-encoded. */
+  path: string;
+  webLink: string | null;
+}
+
+const asAddress = (address: string) => ({ emailAddress: { address } });
+
+function addressesOf(list: unknown): string[] | null {
+  if (!Array.isArray(list)) return null;
+  return list.map((item) => {
+    const address = (item as { emailAddress?: { address?: unknown } } | null)?.emailAddress
+      ?.address;
+    return typeof address === "string" ? address : "";
+  });
+}
+
+/**
+ * Fail closed: the reply draft may be sent only if Graph says it is addressed to
+ * `to` alone. A missing To list is a refusal; a missing Cc or Bcc list is "nobody".
+ */
+function assertAddressedOnlyTo(message: unknown, to: string): void {
+  const draft = (message ?? {}) as Record<string, unknown>;
+  const toList = addressesOf(draft.toRecipients);
+  const others = [
+    ...(addressesOf(draft.ccRecipients) ?? []),
+    ...(addressesOf(draft.bccRecipients) ?? []),
+  ];
+  const pinned =
+    toList?.length === 1 && toList[0]?.trim().toLowerCase() === to.trim().toLowerCase();
+  if (!pinned || others.length > 0) {
+    throw new Error("Graph reply draft is not addressed to exactly the requested recipient");
+  }
+}
+
+/** Best effort: a leftover draft is untidy, never worth hiding the failure that caused it. */
+async function discardDraft(ctx: OutlookCtx, draft: ReplyDraft): Promise<void> {
+  try {
+    await graphCall(ctx, "DELETE", draft.path);
+  } catch (err) {
+    console.warn(`[outlook-actions] could not discard reply draft for row ${ctx.rowId}:`, err);
+  }
+}
+
+/** Set the draft's content and recipients, then check who it is addressed to. */
+async function fillReplyDraft(
+  ctx: OutlookCtx,
+  draft: ReplyDraft,
+  content: ReplyContent,
+): Promise<MailActionFailure | null> {
+  const patched = await graphCall(ctx, "PATCH", draft.path, {
+    subject: content.subject,
+    body: { contentType: "Text", content: content.body },
+    toRecipients: [asAddress(content.to)],
+    ccRecipients: [],
+    bccRecipients: [],
+  });
+  if ("error" in patched) return patched;
+  assertAddressedOnlyTo(patched.body, content.to);
+  for (const attachment of content.attachments) {
+    const added = await graphCall(
+      ctx,
+      "POST",
+      `${draft.path}/attachments`,
+      fileAttachmentJson(attachment),
+    );
+    if ("error" in added) return added;
+  }
+  return null;
+}
+
+/**
+ * createReply from the original, then fill the draft. Returns the ready draft, or the
+ * soft failure; throws on a hard one. Nothing is left behind on either.
+ */
+async function prepareReplyDraft(
+  ctx: OutlookCtx,
+  originalMessageId: string,
+  content: ReplyContent,
+): Promise<ReplyDraft | MailActionFailure> {
+  const originalGraphId = graphIdFrom(originalMessageId, ctx.email);
+  if (!originalGraphId) throw new Error("Not a message id of this Outlook mailbox");
+  const created = await graphCall(
+    ctx,
+    "POST",
+    `/me/messages/${encodeURIComponent(originalGraphId)}/createReply`,
+  );
+  if ("error" in created) return created;
+  const made = created.body as { id?: unknown; webLink?: unknown } | null;
+  if (typeof made?.id !== "string" || made.id === "") {
+    throw new Error("Graph createReply returned no draft id");
+  }
+  const draft: ReplyDraft = {
+    id: made.id,
+    path: `/me/messages/${encodeURIComponent(made.id)}`,
+    webLink: typeof made.webLink === "string" ? made.webLink : null,
+  };
+  try {
+    const failure = await fillReplyDraft(ctx, draft, content);
+    if (failure) {
+      await discardDraft(ctx, draft);
+      return failure;
+    }
+  } catch (err) {
+    await discardDraft(ctx, draft);
+    throw err;
+  }
+  return draft;
+}
+
+async function sendNativeReply(
+  ctx: OutlookCtx,
+  originalMessageId: string,
+  content: ReplyContent,
+): Promise<SendMailResult> {
+  const draft = await prepareReplyDraft(ctx, originalMessageId, content);
+  if ("error" in draft) return draft;
+  const sent = await graphCall(ctx, "POST", `${draft.path}/send`);
+  if ("error" in sent) {
+    // An authorization refusal means the draft was not sent, so it can go.
+    await discardDraft(ctx, draft);
+    return sent;
+  }
+  return { success: true, messageId: null, threaded: true };
 }
 
 export const outlookMailActions: MailProviderActions = {
   provider: "OUTLOOK",
+  nativeReply: true,
 
   sendEmail: async (
     userId,
@@ -175,6 +345,14 @@ export const outlookMailActions: MailProviderActions = {
   ): Promise<SendMailResult> => {
     const ctx = await ctxFor(userId, options?.linkedInboxAccountId);
     if ("error" in ctx) return ctx;
+    if (options?.replyToProviderMessageId) {
+      return sendNativeReply(ctx, options.replyToProviderMessageId, {
+        to,
+        subject,
+        body,
+        attachments,
+      });
+    }
     const out = await graphCall(ctx, "POST", "/me/sendMail", {
       message: buildGraphMessage(to, subject, body, attachments),
       saveToSentItems: true,
@@ -186,12 +364,27 @@ export const outlookMailActions: MailProviderActions = {
   },
 
   createDraft: async (userId, draft): Promise<CreateDraftResult> => {
-    // threadId and reply are accepted for seam parity and ignored until B0b:
-    // POST /me/messages cannot carry In-Reply-To, and a native reply draft
-    // needs /messages/{id}/createReply.
+    // `threadId` and the header-shaped `reply` are accepted for seam parity and
+    // ignored: POST /me/messages cannot carry In-Reply-To. A reply draft is made from
+    // the original's id instead (step B0b).
     const { to, subject, body, attachments = [], linkedInboxAccountId } = draft;
     const ctx = await ctxFor(userId, linkedInboxAccountId);
     if ("error" in ctx) return ctx;
+    if (draft.replyToProviderMessageId) {
+      const reply = await prepareReplyDraft(ctx, draft.replyToProviderMessageId, {
+        to,
+        subject,
+        body,
+        attachments,
+      });
+      if ("error" in reply) return reply;
+      return {
+        success: true,
+        draftId: reply.id,
+        messageId: reply.id,
+        url: reply.webLink ?? OUTLOOK_DRAFTS_URL,
+      };
+    }
     const out = await graphCall(
       ctx,
       "POST",
@@ -209,10 +402,10 @@ export const outlookMailActions: MailProviderActions = {
   },
 
   getReplyHeaders: async (): Promise<ReplyHeadersResult> => {
-    // {} unconditionally (best-effort per contract): returning the real
-    // internetMessageId would make /api/email/:id/reply report
-    // `threaded: true` while our sendEmail cannot set In-Reply-To on Graph.
-    // Wire the /messages/{id}/reply endpoint before answering headers here.
+    // {} unconditionally (best-effort per contract): Outlook threads by the
+    // original's id (`replyToProviderMessageId`), not by headers. Returning the
+    // internetMessageId here would make the reply route claim a header thread that
+    // this provider never writes.
     return {};
   },
 
