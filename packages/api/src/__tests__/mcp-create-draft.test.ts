@@ -29,6 +29,7 @@ vi.mock("../db.js", async () => {
 vi.mock("../sentry.js", () => ({ captureError }));
 vi.mock("../mail/providers/dispatch.js", () => ({ mailActionsFor }));
 
+import { MAX_SUBJECT_LENGTH } from "../mail/reply-subject.js";
 import {
   CREATE_DRAFT_TOOL,
   CREATE_DRAFT_TOOL_NAME,
@@ -36,11 +37,22 @@ import {
   executeCreateDraft,
   MAX_DRAFT_BODY_LENGTH,
 } from "../mcp/create-draft.js";
-import { MAX_SUBJECT_LENGTH } from "../mcp/reply-target.js";
+import { DRAFT_DEDUPE_WINDOW_MS, recentDraftCount } from "../mcp/draft-dedupe.js";
 
-const USER = "user-1";
-const ctx = { userId: USER };
 const BODY = "Thanks, Thursday works for me.\n\nBest,\nYongrean";
+const cp = (...codes: number[]) => String.fromCodePoint(...codes);
+const LS = cp(0x2028);
+const RLO = cp(0x202e);
+const ZWSP = cp(0x200b);
+const EMOJI = cp(0x1f4c5);
+
+/** A fresh user per test: the duplicate-draft memory lives in module state by design. */
+let seq = 0;
+let USER: string;
+let ctx: { userId: string };
+let bodySeq = 0;
+/** A body no earlier call in this file used, for tests that draft more than once. */
+const freshBody = () => `${BODY} (${++bodySeq})`;
 
 let db: FakeDb;
 /** Every provider double made in a test, so the no-send check covers them all. */
@@ -86,6 +98,9 @@ const valid = (extra: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   made = [];
+  seq += 1;
+  USER = `draft-user-${seq}`;
+  ctx = { userId: USER };
   captureError.mockReset();
   mailActionsFor.mockReset();
   db = createFakeDb({
@@ -432,48 +447,46 @@ describe("the recipient is pinned", () => {
     expect(actions.createDraft.mock.calls[0]?.[1]).toMatchObject({ to: "alice@example.com" });
   });
 
-  it("uses a single valid Reply-To from the resolved headers over From", async () => {
-    const actions = useProvider("GOOGLE", {
-      getReplyHeaders: vi.fn(async () => ({
-        messageId: "<m@x>",
-        replyTo: "Support Desk <support@example.org>",
-      })),
-    });
-    expect(await run(valid())).toMatchObject({ to: "support@example.org" });
-    expect(actions.createDraft.mock.calls[0]?.[1]).toMatchObject({ to: "support@example.org" });
-  });
-
-  it("falls back to From when Reply-To holds several addresses or is invalid", async () => {
+  it("ignores a Reply-To header even when a provider supplies one: the sender controls it, so it never picks the recipient", async () => {
     for (const replyTo of [
+      "Support Desk <support@example.org>",
       "a@x.com, b@y.com",
-      "a@x.com; b@y.com",
-      "not an address",
-      "x@localhost",
-      "help@example.org\r\nBcc: evil@y.com",
+      "attacker@evil.test",
     ]) {
       const actions = useProvider("GOOGLE", {
         getReplyHeaders: vi.fn(async () => ({ messageId: "<m@x>", replyTo })),
       });
-      await run(valid());
+      expect(await run(valid({ body: freshBody() })), replyTo).toMatchObject({
+        to: "alice@example.com",
+      });
       expect(actions.createDraft.mock.calls[0]?.[1], replyTo).toMatchObject({
         to: "alice@example.com",
       });
     }
   });
 
-  it("an unusable From with no Reply-To is refused, not guessed at", async () => {
+  it("an unusable From is refused before ANY provider call, not guessed at", async () => {
     const actions = useProvider();
-    Object.assign(db.tables.emailMessage[0], { from: "a@x.com, b@y.com" });
-    expect(await run(valid())).toMatchObject({ code: "NO_REPLY_ADDRESS" });
-    Object.assign(db.tables.emailMessage[0], { from: "" });
-    expect(await run(valid())).toMatchObject({ code: "NO_REPLY_ADDRESS" });
+    for (const from of ["a@x.com, b@y.com", "", "undisclosed-recipients:;", "no at sign"]) {
+      Object.assign(db.tables.emailMessage[0], { from });
+      expect(await run(valid()), from).toMatchObject({ code: "NO_REPLY_ADDRESS" });
+    }
+    expect(mailActionsFor).not.toHaveBeenCalled();
+    expect(actions.getReplyHeaders).not.toHaveBeenCalled();
     expect(actions.createDraft).not.toHaveBeenCalled();
+  });
+
+  it("takes a From with a comment in the display name", async () => {
+    const actions = useProvider();
+    Object.assign(db.tables.emailMessage[0], { from: "Jane Doe (Acme) <jane@acme.com>" });
+    expect(await run(valid())).toMatchObject({ to: "jane@acme.com" });
+    expect(actions.createDraft.mock.calls[0]?.[1]).toMatchObject({ to: "jane@acme.com" });
   });
 });
 
 describe("subject", () => {
   const subjectSent = async (args: Record<string, unknown>, actions = useProvider()) => {
-    await run(valid(args));
+    await run(valid({ body: freshBody(), ...args }));
     return (actions.createDraft.mock.calls[0]?.[1] as { subject: string }).subject;
   };
 
@@ -508,7 +521,8 @@ describe("subject", () => {
     ["a trailing CRLF (it must not be trimmed away)", "Hi\r\n"],
     ["a leading LF", "\nHi"],
     ["a NUL byte", "Hi\u0000there"],
-    ["a unicode line separator", "Hi there"],
+    ["a unicode line separator", `Hi${LS}there`],
+    ["only invisible characters", `${ZWSP}${RLO}`],
     ["a tab", "Hi\tthere"],
     ["a subject one over the cap", "x".repeat(MAX_SUBJECT_LENGTH + 1)],
     ["an empty string", ""],
@@ -524,6 +538,22 @@ describe("subject", () => {
       expect(actions.createDraft).not.toHaveBeenCalled();
     });
   }
+
+  it("strips bidi and zero-width controls from a supplied subject and from the derived one", async () => {
+    expect(await subjectSent({ subject: `Invoice ${RLO}fdp.exe` })).toBe("Invoice fdp.exe");
+    Object.assign(db.tables.emailMessage[0], { subject: `pay${ZWSP}pal` });
+    expect(await subjectSent({})).toBe("Re: paypal");
+  });
+
+  it("measures the subject cap in code points: a cap's worth of emoji is accepted", async () => {
+    const subject = EMOJI.repeat(MAX_SUBJECT_LENGTH);
+    expect(await subjectSent({ subject })).toBe(subject);
+    const actions = useProvider();
+    expect(
+      await run(valid({ body: freshBody(), subject: EMOJI.repeat(MAX_SUBJECT_LENGTH + 1) })),
+    ).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(actions.createDraft).not.toHaveBeenCalled();
+  });
 
   it("flattens control characters in the ORIGINAL subject when it derives the reply subject", async () => {
     Object.assign(db.tables.emailMessage[0], { subject: "Hello\r\nBcc: attacker@evil.test" });
@@ -545,6 +575,15 @@ describe("body", () => {
 
   it("accepts exactly the cap", async () => {
     expect(await bodySent("x".repeat(MAX_DRAFT_BODY_LENGTH))).toHaveLength(MAX_DRAFT_BODY_LENGTH);
+  });
+
+  it("measures the cap in code points, like the schema's maxLength: a cap's worth of emoji is accepted, one more is not", async () => {
+    const atCap = EMOJI.repeat(MAX_DRAFT_BODY_LENGTH);
+    expect(await bodySent(atCap)).toBe(atCap);
+    const actions = useProvider();
+    const out = await run({ email_id: "gm-1", body: EMOJI.repeat(MAX_DRAFT_BODY_LENGTH + 1) });
+    expect(out).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(actions.createDraft).not.toHaveBeenCalled();
   });
 
   it("does not interpret markup: HTML-looking text is handed over as the plain text it is", async () => {
@@ -628,8 +667,16 @@ describe("it never sends", () => {
   });
 
   it("has no send path in the module: no sendEmail / send_email / executeToolCall / gmail import", () => {
-    for (const file of ["create-draft.ts", "reply-target.ts"]) {
-      const source = readFileSync(new URL(`../mcp/${file}`, import.meta.url), "utf8");
+    const modules = [
+      "mcp/create-draft.ts",
+      "mcp/draft-dedupe.ts",
+      "mail/single-address.ts",
+      "mail/reply-subject.ts",
+      "mail/header-text.ts",
+      "mail/email-lookup.ts",
+    ];
+    for (const file of modules) {
+      const source = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
       expect(source, file).not.toMatch(/sendEmail|send_email|executeToolCall|sendMessage/);
       expect(source, file).not.toMatch(/from "\.\.\/mail\/gmail\.js"/);
       expect(source, file).not.toMatch(/from "\.\.\/agentcore\//);
@@ -658,5 +705,96 @@ describe("hygiene", () => {
     const out = await run({ email_id: "gm-1", body: BODY, to: "attacker@evil.test" });
     expect(JSON.stringify(out)).not.toContain("attacker@evil.test");
     expect(out).toEqual({ error: expect.any(String), code: "INVALID_ARGUMENT" });
+  });
+});
+
+describe("duplicate drafts: a retry of the same draft returns the first one", () => {
+  const sameCall = (extra: Record<string, unknown> = {}) => valid({ body: "Same text.", ...extra });
+
+  it("a second identical call within the window returns the FIRST draft id and creates nothing", async () => {
+    const actions = useProvider();
+    const first = await run(sameCall());
+    const second = await run(sameCall());
+    expect(first).toEqual({
+      success: true,
+      draft_id: "draft-1",
+      provider: "GOOGLE",
+      to: "alice@example.com",
+    });
+    expect(second).toEqual({ ...first, deduplicated: true });
+    expect(actions.createDraft).toHaveBeenCalledTimes(1);
+    expect(mailActionsFor).toHaveBeenCalledTimes(1);
+    expect(actions.getReplyHeaders).toHaveBeenCalledTimes(1);
+  });
+
+  it("the same draft addressed by the other id form (Klorn id vs provider id) is still the same draft", async () => {
+    const actions = useProvider();
+    await run(sameCall({ email_id: "gm-1" }));
+    expect(await run(sameCall({ email_id: "email-db-1" }))).toMatchObject({ deduplicated: true });
+    expect(actions.createDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("a different body, subject or email is a different draft", async () => {
+    const actions = useProvider();
+    await run(sameCall());
+    expect(await run(sameCall({ body: "Other text." }))).not.toHaveProperty("deduplicated");
+    expect(await run(sameCall({ subject: "A new subject" }))).not.toHaveProperty("deduplicated");
+    expect(await run(sameCall({ email_id: "gm-2" }))).not.toHaveProperty("deduplicated");
+    expect(actions.createDraft).toHaveBeenCalledTimes(4);
+  });
+
+  it("another user's identical call is its own draft (memory is per user)", async () => {
+    const actions = useProvider();
+    await run(sameCall());
+    const other = `${USER}-other`;
+    db.tables.emailMessage.push({ ...db.tables.emailMessage[0], id: "row-other", userId: other });
+    const result = JSON.parse(await executeCreateDraft({ userId: other }, sameCall()));
+    expect(result).toMatchObject({ success: true });
+    expect(result).not.toHaveProperty("deduplicated");
+    expect(actions.createDraft).toHaveBeenCalledTimes(2);
+  });
+
+  it("forgets after the window, so a deliberate later draft is created", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-30T10:00:00.000Z"));
+      const actions = useProvider();
+      await run(sameCall());
+      vi.advanceTimersByTime(DRAFT_DEDUPE_WINDOW_MS - 1);
+      expect(await run(sameCall())).toMatchObject({ deduplicated: true });
+      vi.advanceTimersByTime(1);
+      expect(await run(sameCall())).not.toHaveProperty("deduplicated");
+      expect(actions.createDraft).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not remember a failed attempt: the retry creates the draft", async () => {
+    const createDraft = vi
+      .fn()
+      .mockResolvedValueOnce({ error: "Gmail not connected." })
+      .mockResolvedValueOnce({ success: true, draftId: "draft-2", url: "u" });
+    useProvider("GOOGLE", { createDraft });
+    expect(await run(sameCall())).toEqual({ error: "Gmail not connected." });
+    expect(await run(sameCall())).toMatchObject({ success: true, draft_id: "draft-2" });
+    expect(createDraft).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not remember a draft that came back with no id (there is nothing to return later)", async () => {
+    const createDraft = vi.fn(async () => ({ success: true, url: "u" }));
+    useProvider("GOOGLE", { createDraft });
+    await run(sameCall());
+    await run(sameCall());
+    expect(createDraft).toHaveBeenCalledTimes(2);
+  });
+
+  it("remembers only what was really created: a refusal or an unsupported mailbox leaves nothing behind", async () => {
+    const before = recentDraftCount();
+    useProvider("OUTLOOK");
+    await run(sameCall({ email_id: "gm-2" }));
+    await run(sameCall({ to: "x@y.co" }));
+    await run(sameCall({ email_id: "no-such-mail" }));
+    expect(recentDraftCount()).toBe(before);
   });
 });

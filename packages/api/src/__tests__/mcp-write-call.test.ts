@@ -5,6 +5,7 @@
  * instance, like the team_availability precedent in tool-executor.ts).
  */
 
+import crypto from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const create = vi.hoisted(() => vi.fn());
@@ -32,11 +33,14 @@ vi.mock("../mcp/create-draft.js", async (importOriginal) => ({
 import {
   consumeMcpWriteBudget,
   isWriteSuccess,
+  MCP_CREATE_DRAFT_CAP_PER_WINDOW,
   MCP_WRITE_CAP_PER_WINDOW,
   MCP_WRITE_WINDOW_MS,
   runMcpWriteCall,
   trackedWriteBudgetUsers,
 } from "../mcp/write-call.js";
+
+const sha256 = (text: string) => crypto.createHash("sha256").update(text).digest("hex");
 
 let seq = 0;
 /** A fresh user per test: the window lives in module state by design. */
@@ -406,7 +410,7 @@ describe("runMcpWriteCall — create_draft", () => {
     expect(executeSetTier).not.toHaveBeenCalled();
   });
 
-  it("audits as attempted before the draft is made, then settles ok on a success result with no lanes", async () => {
+  it("audits as attempted before the draft is made, then settles ok with the draft id and the recipient hash (and no lanes)", async () => {
     const order: string[] = [];
     create.mockImplementationOnce(async () => {
       order.push("insert");
@@ -429,8 +433,67 @@ describe("runMcpWriteCall — create_draft", () => {
     });
     expect(update).toHaveBeenCalledWith({
       where: { id: "audit-5" },
-      data: { outcome: "ok", reason: null },
+      data: {
+        outcome: "ok",
+        reason: null,
+        draftId: "d-1",
+        recipientHash: sha256("a@b.co"),
+      },
     });
+  });
+
+  it("inserts the SHA-256 of the body with the attempted row, so a long draft is identified by its content, never stored", async () => {
+    const body = "Thursday works. ".repeat(1000); // 16,000 characters: over the 4 KB args-hash limit
+    expect(body.length).toBeGreaterThan(15_000);
+    await runMcpWriteCall({ ...draftCall(freshUser()), args: { email_id: "g-1", body } });
+    const data = create.mock.calls[0]?.[0].data;
+    expect(data.bodyHash).toBe(sha256(body));
+    expect(JSON.stringify(data)).not.toContain("Thursday works.");
+  });
+
+  it("two different long bodies differ in bodyHash even though the args hash only marks them oversize", async () => {
+    const a = "a".repeat(15_000);
+    const b = "b".repeat(15_000);
+    await runMcpWriteCall({ ...draftCall(freshUser()), args: { email_id: "g-1", body: a } });
+    await runMcpWriteCall({ ...draftCall(freshUser()), args: { email_id: "g-1", body: b } });
+    const [first, second] = create.mock.calls.map((c) => c[0].data);
+    expect(first.bodyHash).not.toBe(second.bodyHash);
+  });
+
+  it("records the recipient hash over the LOWERCASED address, so it can be recomputed from the sender", async () => {
+    executeCreateDraft.mockResolvedValueOnce(
+      JSON.stringify({
+        success: true,
+        draft_id: "d-2",
+        provider: "GOOGLE",
+        to: "Alice@Example.COM",
+      }),
+    );
+    await runMcpWriteCall(draftCall(freshUser()));
+    expect(update.mock.calls.at(-1)?.[0].data.recipientHash).toBe(sha256("alice@example.com"));
+  });
+
+  it("records no draft id when the provider's id is not id-shaped, and none at all for a non-success", async () => {
+    executeCreateDraft.mockResolvedValueOnce(
+      JSON.stringify({ success: true, draft_id: "bad id\n", provider: "GOOGLE", to: "a@b.co" }),
+    );
+    await runMcpWriteCall(draftCall(freshUser()));
+    expect(update.mock.calls.at(-1)?.[0].data).toMatchObject({ draftId: null });
+    executeCreateDraft.mockResolvedValueOnce(JSON.stringify({ unsupported: true, error: "no" }));
+    await runMcpWriteCall(draftCall(freshUser()));
+    expect(update.mock.calls.at(-1)?.[0].data).toEqual({ outcome: "error", reason: "tool_error" });
+  });
+
+  it("other write tools carry no body hash on their audit row", async () => {
+    await runMcpWriteCall(callFor(freshUser()));
+    await runMcpWriteCall({
+      ...callFor(freshUser()),
+      name: "set_tier",
+      args: { email_id: "g-1", tier: "PUSH" },
+    });
+    for (const call of create.mock.calls) {
+      expect(Object.keys(call[0].data)).not.toContain("bodyHash");
+    }
   });
 
   it("settles error/tool_error for an unsupported provider and passes that result through unchanged", async () => {
@@ -480,5 +543,101 @@ describe("runMcpWriteCall — create_draft", () => {
     const result = await runMcpWriteCall(draftCall(freshUser()));
     expect(result.isError).toBe(true);
     expect(executeCreateDraft).not.toHaveBeenCalled();
+  });
+});
+
+describe("create_draft has its own, lower cap on top of the shared write cap", () => {
+  const draftCall = (userId: string, apiKeyId = `k-${userId}`) => ({
+    userId,
+    apiKeyId,
+    name: "create_draft",
+    args: { email_id: "g-1", body: "Thursday works." },
+  });
+
+  it("proposes 10 drafts per minute, below the shared 30", () => {
+    expect(MCP_CREATE_DRAFT_CAP_PER_WINDOW).toBe(10);
+    expect(MCP_CREATE_DRAFT_CAP_PER_WINDOW).toBeLessThan(MCP_WRITE_CAP_PER_WINDOW);
+  });
+
+  it("allows exactly the draft cap, then refuses with RATE_LIMITED and audits why, without running the tool", async () => {
+    const userId = freshUser();
+    for (let i = 0; i < MCP_CREATE_DRAFT_CAP_PER_WINDOW; i++) {
+      const ok = await runMcpWriteCall(draftCall(userId));
+      expect(ok.isError, `draft ${i + 1}`).toBeUndefined();
+    }
+    executeCreateDraft.mockClear();
+    create.mockClear();
+    const over = await runMcpWriteCall(draftCall(userId));
+    expect(over.isError).toBe(true);
+    expect(JSON.parse(over.content[0]?.text ?? "{}")).toMatchObject({ code: "RATE_LIMITED" });
+    expect(executeCreateDraft).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(create.mock.calls[0]?.[0].data).toMatchObject({
+      tool: "create_draft",
+      outcome: "refused",
+      reason: "rate_limited",
+    });
+  });
+
+  it("is per user and shared across keys", async () => {
+    const a = freshUser();
+    const b = freshUser();
+    for (let i = 0; i < MCP_CREATE_DRAFT_CAP_PER_WINDOW; i++) {
+      await runMcpWriteCall(draftCall(a, i % 2 ? "key-x" : "key-y"));
+    }
+    const over = await runMcpWriteCall(draftCall(a, "key-z"));
+    expect(JSON.parse(over.content[0]?.text ?? "{}")).toMatchObject({ code: "RATE_LIMITED" });
+    const other = await runMcpWriteCall(draftCall(b));
+    expect(other.isError).toBeUndefined();
+  });
+
+  it("does not limit the other write tools: mark_read and set_tier still run after the draft cap is hit", async () => {
+    const userId = freshUser();
+    for (let i = 0; i < MCP_CREATE_DRAFT_CAP_PER_WINDOW + 1; i++) {
+      await runMcpWriteCall(draftCall(userId));
+    }
+    const read = await runMcpWriteCall(callFor(userId));
+    expect(read.isError).toBeUndefined();
+    expect(executeToolCall).toHaveBeenCalledTimes(1);
+  });
+
+  it("a draft refused by its own cap does not spend the shared budget", async () => {
+    const userId = freshUser();
+    for (let i = 0; i < MCP_CREATE_DRAFT_CAP_PER_WINDOW; i++)
+      await runMcpWriteCall(draftCall(userId));
+    for (let i = 0; i < 50; i++) await runMcpWriteCall(draftCall(userId));
+    // 10 drafts spent 10 of the shared 30; the 50 refusals spent nothing, so 20 writes remain.
+    for (let i = 0; i < MCP_WRITE_CAP_PER_WINDOW - MCP_CREATE_DRAFT_CAP_PER_WINDOW; i++) {
+      const r = await runMcpWriteCall(callFor(userId));
+      expect(r.isError, `write ${i + 1}`).toBeUndefined();
+    }
+    const over = await runMcpWriteCall(callFor(userId));
+    expect(JSON.parse(over.content[0]?.text ?? "{}")).toMatchObject({ code: "RATE_LIMITED" });
+  });
+
+  it("the shared cap still bites a draft: 30 other writes leave no room for one", async () => {
+    const userId = freshUser();
+    for (let i = 0; i < MCP_WRITE_CAP_PER_WINDOW; i++) await runMcpWriteCall(callFor(userId));
+    executeCreateDraft.mockClear();
+    const over = await runMcpWriteCall(draftCall(userId));
+    expect(JSON.parse(over.content[0]?.text ?? "{}")).toMatchObject({ code: "RATE_LIMITED" });
+    expect(executeCreateDraft).not.toHaveBeenCalled();
+  });
+
+  it("the draft window slides: a minute later drafts are allowed again", async () => {
+    const userId = freshUser();
+    for (let i = 0; i < MCP_CREATE_DRAFT_CAP_PER_WINDOW; i++)
+      await runMcpWriteCall(draftCall(userId));
+    expect(consumeMcpWriteBudget(userId, Date.now(), "create_draft")).toBe(false);
+    vi.advanceTimersByTime(MCP_WRITE_WINDOW_MS);
+    expect(consumeMcpWriteBudget(userId, Date.now(), "create_draft")).toBe(true);
+  });
+
+  it("a tool with no own cap is governed by the shared cap alone", () => {
+    const userId = freshUser();
+    for (let i = 0; i < MCP_WRITE_CAP_PER_WINDOW; i++) {
+      expect(consumeMcpWriteBudget(userId, Date.now(), "mark_read"), `call ${i + 1}`).toBe(true);
+    }
+    expect(consumeMcpWriteBudget(userId, Date.now(), "mark_read")).toBe(false);
   });
 });

@@ -7,6 +7,7 @@
  * only the provider seam is a spy.
  */
 
+import crypto from "node:crypto";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -50,10 +51,12 @@ vi.mock("../agentcore/tool-executor.js", async () => {
 });
 
 import { buildMcpServer } from "../mcp/server.js";
-import { MCP_WRITE_CAP_PER_WINDOW } from "../mcp/write-call.js";
+import { hashToolArgs } from "../mcp/write-audit.js";
+import { MCP_CREATE_DRAFT_CAP_PER_WINDOW, MCP_WRITE_CAP_PER_WINDOW } from "../mcp/write-call.js";
 
 const LIST_RAW = JSON.stringify([{ id: "18c3f0a1b2c3d4e5", from: "a@b.co", subject: "Hi" }]);
 const EMAIL_ID = "18c3f0a1b2c3d4e5";
+const sha256 = (text: string) => crypto.createHash("sha256").update(text).digest("hex");
 const BODY = "Thursday works. See you then.";
 
 let db: FakeDb;
@@ -280,32 +283,108 @@ describe("a read_write key with the flag on", () => {
     expect(createDraft).not.toHaveBeenCalled();
   });
 
-  it("counts against the per-user write cap, shared with the other write tools, and the audit row is written before each run", async () => {
+  it("the audit row identifies a 15,000-character draft by hashes and ids, and stores none of its text", async () => {
+    const body = "Thursday works for me. ".repeat(700); // 16,100 characters: over the 4 KB args-hash limit
+    expect(body.length).toBeGreaterThan(15_000);
     const client = await connect("read_write");
-    for (let i = 0; i < MCP_WRITE_CAP_PER_WINDOW; i++) {
-      const result = await draftCall(client);
-      expect(result.isError, `call ${i + 1}`).toBeUndefined();
+    const result = await draftCall(client, { body });
+    expect(JSON.parse(textOf(result))).toMatchObject({ success: true, draft_id: "draft-7" });
+    const [row] = db.tables.mcpWriteAudit;
+    expect(row).toMatchObject({
+      tool: "create_draft",
+      outcome: "ok",
+      targetId: EMAIL_ID,
+      // The content identity: SHA-256 of the body as it was handed to the provider.
+      bodyHash: sha256(body),
+      // The destination identity: SHA-256 of the lowercased resolved recipient.
+      recipientHash: sha256("alice@example.com"),
+      draftId: "draft-7",
+    });
+    // The 4 KB args limit still applies, so the args hash alone cannot tell two long drafts apart.
+    expect(row.argsHash).toBe(hashToolArgs({ email_id: EMAIL_ID, body }));
+    expect(row.argsHash).toBe(hashToolArgs({ email_id: EMAIL_ID, body: "z".repeat(body.length) }));
+    const stored = JSON.stringify(row);
+    expect(stored).not.toContain("Thursday works");
+    expect(stored).not.toContain("alice@example.com");
+  });
+
+  it("two different long drafts to the same email leave different body hashes", async () => {
+    const client = await connect("read_write");
+    await draftCall(client, { body: "a".repeat(15_000) });
+    await draftCall(client, { body: "b".repeat(15_000) });
+    const [first, second] = db.tables.mcpWriteAudit;
+    expect(first.bodyHash).not.toBe(second.bodyHash);
+  });
+
+  it("a refused call (bad subject) still records the body hash of what it tried, with no draft id or recipient", async () => {
+    const client = await connect("read_write");
+    await draftCall(client, { subject: "Hi\r\nBcc: x@y.co" });
+    expect(db.tables.mcpWriteAudit[0]).toMatchObject({
+      outcome: "error",
+      bodyHash: sha256(BODY),
+      draftId: null,
+      recipientHash: null,
+    });
+  });
+
+  it("an identical retry returns the first draft, creates nothing, and is audited as its own ok row with the same draft id", async () => {
+    const client = await connect("read_write");
+    const first = JSON.parse(textOf(await draftCall(client)));
+    const again = JSON.parse(textOf(await draftCall(client)));
+    expect(first).not.toHaveProperty("deduplicated");
+    expect(again).toEqual({ ...first, deduplicated: true });
+    expect(createDraft).toHaveBeenCalledTimes(1);
+    expect(db.tables.mcpWriteAudit).toHaveLength(2);
+    for (const row of db.tables.mcpWriteAudit) {
+      expect(row).toMatchObject({ outcome: "ok", draftId: "draft-7", bodyHash: sha256(BODY) });
     }
-    expect(createDraft).toHaveBeenCalledTimes(MCP_WRITE_CAP_PER_WINDOW);
-    const over = await draftCall(client);
+  });
+
+  const distinctDraft = (client: Client, i: number) => draftCall(client, { body: `${BODY} #${i}` });
+
+  it("has its own cap of 10 drafts a minute, well under the shared write cap", async () => {
+    const client = await connect("read_write");
+    for (let i = 0; i < MCP_CREATE_DRAFT_CAP_PER_WINDOW; i++) {
+      const result = await distinctDraft(client, i);
+      expect(result.isError, `draft ${i + 1}`).toBeUndefined();
+    }
+    expect(createDraft).toHaveBeenCalledTimes(MCP_CREATE_DRAFT_CAP_PER_WINDOW);
+    const over = await distinctDraft(client, 99);
     expect(over.isError).toBe(true);
     expect(JSON.parse(textOf(over))).toMatchObject({ code: "RATE_LIMITED" });
-    expect(createDraft).toHaveBeenCalledTimes(MCP_WRITE_CAP_PER_WINDOW);
+    expect(createDraft).toHaveBeenCalledTimes(MCP_CREATE_DRAFT_CAP_PER_WINDOW);
     await vi.waitFor(() =>
-      expect(db.tables.mcpWriteAudit).toHaveLength(MCP_WRITE_CAP_PER_WINDOW + 1),
+      expect(db.tables.mcpWriteAudit).toHaveLength(MCP_CREATE_DRAFT_CAP_PER_WINDOW + 1),
     );
     expect(db.tables.mcpWriteAudit.at(-1)).toMatchObject({
+      tool: "create_draft",
       outcome: "refused",
       reason: "rate_limited",
     });
   });
 
-  it("the cap is per user: a second key of the same user shares the budget with create_draft", async () => {
+  it("the draft cap is per user, shared across that user's keys", async () => {
     const first = await connect("read_write", "PRO", `${key}-a`);
     const second = await connect("read_write", "PRO", `${key}-b`);
-    for (let i = 0; i < MCP_WRITE_CAP_PER_WINDOW; i++) await draftCall(i % 2 ? first : second);
-    const over = await draftCall(first);
+    for (let i = 0; i < MCP_CREATE_DRAFT_CAP_PER_WINDOW; i++) {
+      await distinctDraft(i % 2 ? first : second, i);
+    }
+    const over = await distinctDraft(first, 99);
     expect(JSON.parse(textOf(over))).toMatchObject({ code: "RATE_LIMITED" });
+  });
+
+  it("counts against the shared write cap: 20 mark_reads plus 10 drafts use it up, and then every write is refused", async () => {
+    const client = await connect("read_write");
+    for (let i = 0; i < MCP_WRITE_CAP_PER_WINDOW - MCP_CREATE_DRAFT_CAP_PER_WINDOW; i++) {
+      await client.callTool({ name: "mark_read", arguments: { email_id: EMAIL_ID } });
+    }
+    for (let i = 0; i < MCP_CREATE_DRAFT_CAP_PER_WINDOW; i++) await distinctDraft(client, i);
+    expect(createDraft).toHaveBeenCalledTimes(MCP_CREATE_DRAFT_CAP_PER_WINDOW);
+    const read = await client.callTool({ name: "mark_read", arguments: { email_id: EMAIL_ID } });
+    expect(JSON.parse(textOf(read))).toMatchObject({ code: "RATE_LIMITED" });
+    const overDraft = await distinctDraft(client, 99);
+    expect(JSON.parse(textOf(overDraft))).toMatchObject({ code: "RATE_LIMITED" });
+    expect(createDraft).toHaveBeenCalledTimes(MCP_CREATE_DRAFT_CAP_PER_WINDOW);
   });
 
   it("a failed audit insert refuses the call and no draft is created", async () => {
