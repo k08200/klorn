@@ -14,6 +14,22 @@ import { icloudInboxEnabled } from "../config.js";
 
 export type ImapProviderKey = "NAVER" | "ICLOUD";
 
+/**
+ * Where a provider accepts mail for submission. Taken from the provider's own
+ * help pages and fixed here: an SMTP connection is only ever opened to this
+ * host, never to anything stored on, or derived from, an account row (step B3).
+ *
+ * `starttls` connects in clear and upgrades before any credential is sent; the
+ * transport REQUIRES the upgrade, so a server that does not offer it fails the
+ * send instead of falling back to plaintext. `implicit-tls` is TLS from the
+ * first byte (port 465).
+ */
+export interface SmtpEndpoint {
+  host: string;
+  port: number;
+  security: "starttls" | "implicit-tls";
+}
+
 export interface ImapProviderConfig {
   provider: ImapProviderKey;
   /** User-facing name for error copy ("Naver", "iCloud"). */
@@ -29,6 +45,10 @@ export interface ImapProviderConfig {
   /** Same ceiling rationale as routes/auth.ts MAX_LINKED_INBOXES: one user
    * must not turn the serial IMAP poll into a multi-minute tick. */
   maxAccounts: number;
+  /** Outgoing mail server (step B3). The only SMTP host this provider uses. */
+  smtp: SmtpEndpoint;
+  /** Public webmail entry, handed back as the link for a saved draft. */
+  webmailUrl: string;
 }
 
 export const IMAP_PROVIDERS: Record<ImapProviderKey, ImapProviderConfig> = {
@@ -41,6 +61,14 @@ export const IMAP_PROVIDERS: Record<ImapProviderKey, ImapProviderConfig> = {
     authFailureHint:
       "Naver IMAP login failed. Generate a separate '외부 메일 비밀번호' in Naver security settings and paste that — not your account password.",
     maxAccounts: 10,
+    // Naver help center, "IMAP/SMTP 설정 및 해제 방법"
+    // (https://help.naver.com/service/30029/bookmark/21344), read 2026-09-30:
+    // "SMTP 서버명 : smtp.naver.com", "SMTP 포트 : 587, 보안 연결(TLS) 필요
+    // (TLS가 없는 경우 SSL로 연결)". Port 587 with TLS is the primary setting; the
+    // stated fallback is implicit SSL (465), a one-line change here if 587
+    // refuses our connections.
+    smtp: { host: "smtp.naver.com", port: 587, security: "starttls" },
+    webmailUrl: "https://mail.naver.com/",
   },
   ICLOUD: {
     provider: "ICLOUD",
@@ -51,6 +79,13 @@ export const IMAP_PROVIDERS: Record<ImapProviderKey, ImapProviderConfig> = {
     authFailureHint:
       "iCloud IMAP login failed. Generate an app-specific password at account.apple.com (requires two-factor authentication on your Apple ID) and paste that — not your Apple ID password.",
     maxAccounts: 10,
+    // Apple Support, "iCloud Mail server settings for other email client apps"
+    // (https://support.apple.com/en-us/102525, published 2026-02-03, read
+    // 2026-09-30): "Server name: smtp.mail.me.com", "Port: 587", "SSL Required:
+    // Yes ... try TLS or STARTTLS", "SMTP Authentication Required: Yes",
+    // username = the full iCloud Mail address, password = an app-specific one.
+    smtp: { host: "smtp.mail.me.com", port: 587, security: "starttls" },
+    webmailUrl: "https://www.icloud.com/mail/",
   },
 };
 

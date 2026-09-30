@@ -103,12 +103,17 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function isAuthFailure(err: unknown): boolean {
+export function isAuthFailure(err: unknown): boolean {
   const e = err as { authenticationFailed?: unknown; serverResponseCode?: unknown } | null;
   return e?.authenticationFailed === true || e?.serverResponseCode === "AUTHENTICATIONFAILED";
 }
 
-function cooldownFailure(
+/**
+ * The answer for an account whose credential was rejected recently, or null.
+ * Exported for step B3: sends, drafts and reply-header reads share this cooldown
+ * with the flag actions, so a revoked app password stops every path at once.
+ */
+export function cooldownFailure(
   provider: ImapProviderConfig,
   account: SessionAccount,
 ): MailActionFailure | null {
@@ -155,16 +160,29 @@ function captureSafely(err: unknown, context: Parameters<typeof captureError>[1]
   }
 }
 
-/** One failure for the whole session: log (and capture) once, not per caller. */
-function sessionFailure(
+/**
+ * The server rejected this credential: start the shared cooldown and answer the
+ * reconnect error. Exported for step B3 (SMTP authentication uses it too).
+ */
+export function rejectLogin(
+  provider: ImapProviderConfig,
+  account: SessionAccount,
+): MailActionFailure {
+  startCooldown(provider, account);
+  return authFailure(provider.label);
+}
+
+/**
+ * A session failure that is not a rejected login: log once, report to Sentry at
+ * most once per account per interval, answer the generic transport error. `err`
+ * is logged and reported as given, so callers that may hold server text with an
+ * address in it pass a sanitized error (step B3 does).
+ */
+export function softFailure(
   err: unknown,
   provider: ImapProviderConfig,
   account: SessionAccount,
 ): MailActionFailure {
-  if (isAuthFailure(err)) {
-    startCooldown(provider, account);
-    return authFailure(provider.label);
-  }
   console.warn(
     `[${provider.logScope}] action session failed for row ${account.rowId}: ${errorMessage(err)}`,
   );
@@ -175,6 +193,15 @@ function sessionFailure(
     });
   }
   return fail(`Could not reach ${provider.label}. Try again shortly.`);
+}
+
+/** One failure for the whole session: log (and capture) once, not per caller. */
+function sessionFailure(
+  err: unknown,
+  provider: ImapProviderConfig,
+  account: SessionAccount,
+): MailActionFailure {
+  return isAuthFailure(err) ? rejectLogin(provider, account) : softFailure(err, provider, account);
 }
 
 async function withInbox<T>(
@@ -300,6 +327,21 @@ async function drain(provider: ImapProviderConfig, rowId: string): Promise<void>
     captureSafely(err, { tags: { scope: `${provider.logScope}.action-worker` } });
   } finally {
     queues.delete(rowId);
+  }
+}
+
+/**
+ * Run `work` while holding one of the global action-session slots. Step B3's
+ * SMTP and one-shot IMAP work counts against the same cap as the flag actions:
+ * both are logins to the same providers from the same egress IP.
+ */
+export async function withSessionSlot<T>(work: () => Promise<T>): Promise<T> {
+  const slots = sessionSlots;
+  await slots.acquire();
+  try {
+    return await work();
+  } finally {
+    slots.release();
   }
 }
 
