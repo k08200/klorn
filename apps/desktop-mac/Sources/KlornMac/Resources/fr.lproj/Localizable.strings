@@ -599,3 +599,8 @@
 "waiting.empty" = "Rien n'attend de réponse.";
 "waiting.days" = "%d jours";
 "waiting.row.a11y" = "%@ — %@, en attente depuis %d jours";
+
+/* Proactive reply drafts */
+"chip.draftReady" = "Brouillon prêt";
+"reading.openDraft" = "Ouvrir le brouillon";
+"reading.preparedDraft" = "Klorn a préparé ce brouillon à l'avance — relisez-le avant d'envoyer.";

@@ -599,3 +599,8 @@
 "waiting.empty" = "返信を待っているメールはありません。";
 "waiting.days" = "%d日目";
 "waiting.row.a11y" = "%@ — %@、%d日目返信待ち";
+
+/* Proactive reply drafts */
+"chip.draftReady" = "下書きあり";
+"reading.openDraft" = "下書きを開く";
+"reading.preparedDraft" = "Klornが事前に用意した下書きです — 送信前に確認してください。";

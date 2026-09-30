@@ -599,3 +599,8 @@
 "waiting.empty" = "Nothing is waiting on a reply.";
 "waiting.days" = "%d days";
 "waiting.row.a11y" = "%@ — %@, waiting %d days";
+
+/* Proactive reply drafts */
+"chip.draftReady" = "Draft ready";
+"reading.openDraft" = "Open draft";
+"reading.preparedDraft" = "Klorn drafted this ahead of time — review it before sending.";

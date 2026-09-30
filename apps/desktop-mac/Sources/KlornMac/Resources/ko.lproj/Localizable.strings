@@ -599,3 +599,8 @@
 "waiting.empty" = "답장을 기다리는 메일이 없습니다.";
 "waiting.days" = "%d일째";
 "waiting.row.a11y" = "%@ — %@, %d일째 회신 대기";
+
+/* Proactive reply drafts */
+"chip.draftReady" = "초안 준비됨";
+"reading.openDraft" = "초안 열기";
+"reading.preparedDraft" = "Klorn이 미리 써 둔 초안입니다 — 보내기 전에 확인하세요.";
