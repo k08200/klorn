@@ -511,3 +511,77 @@ describe("transport-failure reporting", () => {
     expect(h.captureError).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("a refused coalesced STORE does not fail the valid UIDs", () => {
+  it("serves 99 of 100 concurrent callers when the server NOs any set containing one bad UID", async () => {
+    const uids = range(1, 100);
+    const BAD = 42;
+    armServer(uids);
+    const realAdd = h.messageFlagsAdd.getMockImplementation();
+    h.messageFlagsAdd.mockImplementation(async (r: string, f: string[]) =>
+      uidsOf(r).includes(BAD) ? false : realAdd?.(r, f),
+    );
+
+    const results = await Promise.all(
+      uids.map((uid) => actions.markAsRead("u1", msg("a", uid), "a")),
+    );
+
+    results.forEach((result, i) => {
+      if (uids[i] === BAD) expect(result).toMatchObject({ error: expect.any(String) });
+      else expect(result).toEqual({ success: true });
+    });
+    expect(results.filter((r) => "success" in r)).toHaveLength(99);
+    expect(h.connect).toHaveBeenCalledTimes(1);
+    expect(h.logout).toHaveBeenCalledTimes(1);
+    expect(h.updateMany).toHaveBeenCalledTimes(99);
+    expect(h.messageFlagsAdd.mock.calls.length).toBeLessThanOrEqual(20);
+  });
+});
+
+describe("a throwing failure handler never leaves callers hanging", () => {
+  it("settles a failed burst even when captureError itself throws, and the worker recovers", async () => {
+    armServer([1, 2, 3]);
+    h.connect.mockRejectedValueOnce(new Error("connect ETIMEDOUT"));
+    h.captureError.mockImplementation(() => {
+      throw new Error("sentry transport down");
+    });
+
+    const results = await Promise.all(
+      [1, 2, 3].map((uid) => actions.markAsRead("u1", msg("a", uid), "a")),
+    );
+
+    for (const result of results) expect(result).toMatchObject({ error: expect.any(String) });
+    expect(h.captureError).toHaveBeenCalledTimes(1);
+
+    // The queue is not stuck: the next call opens a fresh session and works.
+    expect(await actions.markAsRead("u1", msg("a", 1), "a")).toEqual({ success: true });
+    expect(h.connect).toHaveBeenCalledTimes(2);
+  });
+
+  it("settles callers when something else inside the failure handler throws, without an unhandled rejection", async () => {
+    armServer([1, 2]);
+    h.connect.mockRejectedValueOnce(new Error("connect ETIMEDOUT"));
+    const realWarn = console.warn as unknown as {
+      mockImplementation: (f: (...a: unknown[]) => void) => void;
+    };
+    realWarn.mockImplementation((...args: unknown[]) => {
+      if (String(args[0]).includes("action session failed")) throw new Error("log sink exploded");
+    });
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+
+    try {
+      const results = await Promise.all(
+        [1, 2].map((uid) => actions.markAsRead("u1", msg("a", uid), "a")),
+      );
+      await tick();
+      for (const result of results) expect(result).toMatchObject({ error: expect.any(String) });
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+
+    expect(await actions.markAsRead("u1", msg("a", 1), "a")).toEqual({ success: true });
+  });
+});

@@ -437,7 +437,9 @@ starts this step designs it and expands this brief.
     drains everything queued (including what arrives while it logs in), and
     logs out, at most 200 operations per session. Consecutive operations that
     want the same change become one STORE and one read-back, in queue order.
-    Every caller gets its own result. At most 3 action sessions run at once
+    If the server refuses a coalesced STORE, the set is split in halves and
+    retried down to single UIDs (at most 40 STOREs per run), so one vanished or
+    rejected UID does not fail the others. Every caller gets its own result. At most 3 action sessions run at once
     across all accounts; the poller is unaffected. After a rejected login,
     actions for that credential answer `{error}` without connecting for 15
     minutes (a reconnect stores a new cipher and ends it early), logged once
@@ -485,7 +487,10 @@ starts this step designs it and expands this brief.
 - Before the flip: run read and star against one real Naver account and one
   real iCloud account (iCloud also needs `ICLOUD_INBOX_ENABLED`), including a
   bulk mark-read of several messages and a promo auto-read, and confirm one
-  login per burst in the provider's logs or the API log. The promo path
+  login per burst in the provider's logs or the API log. Also test a 200-UID
+  coalesced STORE against real Naver and iCloud and confirm how each server
+  answers a UID set containing a missing UID: a tagged OK, which the read-back
+  then reports as missing, or a NO, which the split retry handles. The promo path
   (`markPromotionalEmailRead` in `judge/email-firewall.ts`) reaches IMAP
   mailboxes while the flag is on; the queue bounds it, but only a real
   mailbox shows how Naver and iCloud react.

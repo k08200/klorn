@@ -377,6 +377,68 @@ describe("a database failure never throws", () => {
   });
 });
 
+describe("database errors are logged without their raw text", () => {
+  // Prisma error text can embed the query arguments, and for an IMAP row that
+  // includes the gmailId, which contains the mailbox address.
+  const rawPrismaError = () =>
+    Object.assign(
+      new Error(
+        "Invalid `prisma.emailMessage.updateMany()` invocation: where: { gmailId: 'naver-imap:me@naver.com:101' }",
+      ),
+      { name: "PrismaClientKnownRequestError", code: "P2034" },
+    );
+
+  function expectSanitized() {
+    const text = loggedText();
+    expect(text).not.toContain("me@naver.com");
+    expect(text).not.toContain("naver-imap:");
+    expect(text).not.toContain("invocation");
+    expect(text).toContain("row-1");
+    expect(text).toContain("PrismaClientKnownRequestError");
+    const captured = JSON.stringify(
+      h.captureError.mock.calls.map(([e, ctx]) => [String(e), (e as Error)?.message, ctx]),
+    );
+    expect(captured).not.toContain("me@naver.com");
+    expect(captured).not.toContain("naver-imap:");
+    expect(captured).not.toContain("invocation");
+    expect(h.captureError).toHaveBeenCalledTimes(1);
+    expect(h.captureError.mock.calls[0][1]).toMatchObject({
+      extra: { userId: "u1", linkedInboxAccountId: "row-1" },
+    });
+  }
+
+  it("for a failed account lookup", async () => {
+    armAccount();
+    h.findFirst.mockRejectedValue(rawPrismaError());
+    const result = await imapMailActions("NAVER").markAsRead("u1", NAVER_MSG, "row-1");
+    expect(result).toMatchObject({ error: expect.any(String) });
+    expectSanitized();
+  });
+
+  it("for a failed local update after a confirmed change", async () => {
+    armAccount();
+    armServer([101]);
+    h.updateMany.mockRejectedValue(rawPrismaError());
+    const result = await imapMailActions("NAVER").markAsRead("u1", NAVER_MSG, "row-1");
+    expect(result).toMatchObject({ error: expect.stringMatching(/local copy/i) });
+    expectSanitized();
+  });
+
+  it("keeps the error code, when there is one, and survives a non-Error throw", async () => {
+    armAccount();
+    h.findFirst.mockRejectedValue(rawPrismaError());
+    await imapMailActions("NAVER").markAsRead("u1", NAVER_MSG, "row-1");
+    expect(loggedText()).toContain("P2034");
+
+    vi.clearAllMocks();
+    armAccount();
+    h.findFirst.mockRejectedValue("a bare string mentioning me@naver.com");
+    const result = await imapMailActions("NAVER").markAsRead("u1", NAVER_MSG, "row-1");
+    expect(result).toMatchObject({ error: expect.any(String) });
+    expect(loggedText()).not.toContain("me@naver.com");
+  });
+});
+
 describe("failure contract", () => {
   const actions = () => imapMailActions("NAVER");
 

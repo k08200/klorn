@@ -72,15 +72,30 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** A database failure: log, report once, and answer softly — actions never throw. */
+/**
+ * A database failure: log and report once, answer softly — actions never throw.
+ *
+ * Only the error's name and code are used, never its text: Prisma messages can
+ * embed the query arguments, and for an IMAP row those include the gmailId,
+ * which contains the mailbox address. The reported error is a fresh one built
+ * from a fixed message, so the raw text cannot reach Sentry either.
+ */
 function databaseFailure(
   err: unknown,
   provider: ImapProviderConfig,
-  userId: string,
+  ids: { userId: string; rowId: string },
   what: string,
 ): void {
-  console.warn(`[${provider.logScope}] ${what}: ${errorMessage(err)}`);
-  captureError(err, { tags: { scope: `${provider.logScope}.action-db` }, extra: { userId } });
+  const e = err as { name?: unknown; code?: unknown } | null;
+  const name = typeof e?.name === "string" ? e.name : "NonError";
+  const code = typeof e?.code === "string" ? ` ${e.code}` : "";
+  console.warn(`[${provider.logScope}] ${what} for row ${ids.rowId} (${name}${code})`);
+  const safe = new Error(`${provider.logScope} ${what} (${name}${code})`);
+  safe.name = name;
+  captureError(safe, {
+    tags: { scope: `${provider.logScope}.action-db` },
+    extra: { userId: ids.userId, linkedInboxAccountId: ids.rowId },
+  });
 }
 
 function decryptPassword(
@@ -117,7 +132,12 @@ async function resolveTarget(
       select: { id: true, email: true, imapHost: true, imapPasswordCipher: true },
     });
   } catch (err) {
-    databaseFailure(err, provider, userId, "account lookup failed");
+    databaseFailure(
+      err,
+      provider,
+      { userId, rowId: linkedInboxAccountId },
+      "account lookup failed",
+    );
     return fail(`Could not look up your ${provider.label} mailbox. Try again shortly.`);
   }
   if (!row) return fail(`${provider.label} mailbox is not connected.`);
@@ -164,17 +184,18 @@ function outcomeError(
 /** Mirror the Gmail path: local state follows only a confirmed server change. */
 async function mirrorLocally(
   provider: ImapProviderConfig,
-  userId: string,
+  ids: { userId: string; rowId: string },
   messageId: string,
   change: FlagChange,
 ): Promise<SimpleMailActionResult> {
+  const { userId } = ids;
   try {
     await prisma.emailMessage.updateMany({
       where: { userId, gmailId: messageId },
       data: change.local,
     });
   } catch (err) {
-    databaseFailure(err, provider, userId, "local update failed after a confirmed change");
+    databaseFailure(err, provider, ids, "local update failed after a confirmed change");
     return fail(
       `Changed on ${provider.label}, but the local copy could not be updated. The next sync will catch up.`,
     );
@@ -200,7 +221,7 @@ async function changeFlag(
   const result = await submitFlagOp(provider, target.session, { uid: target.uid, change });
   if (typeof result !== "string") return result;
   if (result !== "confirmed") return outcomeError(result, provider.label);
-  return mirrorLocally(provider, userId, messageId, change);
+  return mirrorLocally(provider, { userId, rowId: target.session.rowId }, messageId, change);
 }
 
 export function imapMailActions(providerKey: ImapProviderKey): MailProviderActions {

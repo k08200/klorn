@@ -143,6 +143,18 @@ function shouldCapture(rowId: string): boolean {
   return true;
 }
 
+/**
+ * Telemetry is best-effort: a capture that throws (transport down, bad DSN)
+ * must never decide whether a caller gets its result.
+ */
+function captureSafely(err: unknown, context: Parameters<typeof captureError>[1]): void {
+  try {
+    captureError(err, context);
+  } catch (captureFailure) {
+    console.warn(`[imap-session] error capture failed: ${errorMessage(captureFailure)}`);
+  }
+}
+
 /** One failure for the whole session: log (and capture) once, not per caller. */
 function sessionFailure(
   err: unknown,
@@ -157,7 +169,7 @@ function sessionFailure(
     `[${provider.logScope}] action session failed for row ${account.rowId}: ${errorMessage(err)}`,
   );
   if (shouldCapture(account.rowId)) {
-    captureError(err, {
+    captureSafely(err, {
       tags: { scope: `${provider.logScope}.action` },
       extra: { userId: account.userId, linkedInboxAccountId: account.rowId },
     });
@@ -254,7 +266,15 @@ async function runSession(provider: ImapProviderConfig, rowId: string): Promise<
       }
     });
   } catch (err) {
-    failAll(rowId, inFlight, sessionFailure(err, provider, account));
+    // The failure is decided first, but callers are settled in a finally: if
+    // building it throws (a log sink, anything), they still get an answer
+    // instead of waiting forever. The throw then reaches drain()'s handler.
+    let failure = fail(`Could not reach ${provider.label}. Try again shortly.`);
+    try {
+      failure = sessionFailure(err, provider, account);
+    } finally {
+      failAll(rowId, inFlight, failure);
+    }
   }
 }
 
@@ -271,12 +291,13 @@ async function drain(provider: ImapProviderConfig, rowId: string): Promise<void>
       }
     }
   } catch (err) {
-    // Not reachable in normal operation; a caller must never be left waiting.
+    // Not reachable in normal operation; a caller must never be left waiting,
+    // so everyone is settled BEFORE anything is reported.
+    failAll(rowId, [], fail(`Could not reach ${provider.label}. Try again shortly.`));
     console.warn(
       `[${provider.logScope}] action worker crashed for row ${rowId}: ${errorMessage(err)}`,
     );
-    captureError(err, { tags: { scope: `${provider.logScope}.action-worker` } });
-    failAll(rowId, [], fail(`Could not reach ${provider.label}. Try again shortly.`));
+    captureSafely(err, { tags: { scope: `${provider.logScope}.action-worker` } });
   } finally {
     queues.delete(rowId);
   }
@@ -302,6 +323,12 @@ export function submitFlagOp(
       account,
       pending: [...(existing?.pending ?? []), { op, settle }],
     });
-    if (!existing) void drain(provider, account.rowId);
+    if (!existing) {
+      // drain() handles its own failures; this is the last net, so a detached
+      // worker can never become an unhandled rejection.
+      drain(provider, account.rowId).catch((err) => {
+        console.warn(`[${provider.logScope}] action worker failed: ${errorMessage(err)}`);
+      });
+    }
   });
 }
