@@ -52,6 +52,10 @@ import { hashApiKey, mintApiKey } from "../mcp/api-keys.js";
 
 const MINTED = mintApiKey();
 
+/** `MAX_BATCH_SIZE` in @modelcontextprotocol/sdk server/requestBody (1.30.1+). */
+const SDK_MAX_BATCH_SIZE = 100;
+const JSONRPC_INVALID_REQUEST = -32600;
+
 function liveKeyRow() {
   return { id: "k1", userId: "u1", revokedAt: null, lastUsedAt: new Date() };
 }
@@ -159,6 +163,24 @@ describe("POST /api/mcp", () => {
     );
     expect(res.statusCode).toBe(200);
     expect(res.json().result.isError).toBe(true);
+    expect(executeToolCallMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("rejects a JSON-RPC batch over the transport cap before any tool runs", async () => {
+    // One POST counts once against the per-key rate limit, so an unbounded
+    // batch would multiply tool calls per request. The SDK caps batches from
+    // 1.30.1 on; this pins that the cap still reaches our pre-parsed body.
+    const app = await buildApp();
+    const batch = Array.from({ length: SDK_MAX_BATCH_SIZE + 1 }, (_, i) => ({
+      jsonrpc: "2.0",
+      id: i,
+      method: "tools/call",
+      params: { name: "list_emails", arguments: {} },
+    }));
+    const res = await app.inject({ ...rpc({}), payload: batch });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe(JSONRPC_INVALID_REQUEST);
     expect(executeToolCallMock).not.toHaveBeenCalled();
     await app.close();
   });
