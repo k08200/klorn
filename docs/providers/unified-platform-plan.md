@@ -804,9 +804,19 @@ flag OFF.
     acknowledged before the deadline cannot be acknowledged, or delivered, after
     it, and an orphaned send that wakes up late (even one still importing
     nodemailer) checks the abort signal, sends nothing, logs into IMAP for no
-    copy and releases nothing it does not own. Cost: a caller-provided socket gets
-    one resolved address, without nodemailer's fallback to the provider's other A
-    records. SMTP cannot tell a connection that died before the message was handed
+    copy and releases nothing it does not own. An abort before nodemailer has
+    connected is not undone either: nodemailer resolves the hostname first (up to
+    the task deadline on a DNS stall) and then calls `socket.connect()`, which on a
+    destroyed Node socket reconnects it, so an aborted session makes its socket's
+    `connect()` throw (nodemailer reports that as a connection error) and destroys
+    a connect that was already in flight. Cost of the caller-provided socket: the
+    connect is to the hostname, so Node does its own `dns.lookup` and nodemailer's
+    fallback to the provider's other A records is not used. Neither that path nor
+    nodemailer's own resolution filters private addresses; what keeps a connection
+    on the provider is that the host comes only from the registry, and what stops a
+    wrong server from receiving the credential or the message is TLS: certificate
+    verification on, the server name pinned to the registry host, and STARTTLS
+    required. SMTP cannot tell a connection that died before the message was handed
     over from one that died after, and nodemailer reports a stall after DATA as
     `ETIMEDOUT command=CONN`, exactly like a connect timeout, so the error's
     `command` proves nothing. What the sender knows is whether the TCP connection
@@ -814,7 +824,10 @@ flag OFF.
     rejected login keeps the reconnect wording and cooldown; a server's own
     refusal (sender, recipient, message) keeps its specific wording; a failure
     that provably came before any MAIL FROM (connection never established, DNS,
-    TLS or STARTTLS, any other login failure) says "Could not reach X. The message
+    TLS or STARTTLS, any other login failure, and a certificate, hostname or
+    handshake failure after STARTTLS, which nodemailer reports as ESOCKET on CONN
+    and which is recognised by Node's own message; an ESOCKET with any other
+    message stays "unconfirmed") says "Could not reach X. The message
     was not sent; try again shortly."; ANY other error on an established
     connection, and the 60 s deadline, says "X did not confirm delivery. The
     message may or may not have been sent; check your Sent folder before trying
@@ -824,7 +837,10 @@ flag OFF.
     nodemailer over real TLS (a throwaway certificate made with openssl at test
     time, trusted through `tls.connect`'s `ca`; verification stays on): a server
     that stalls after DATA sees its socket closed when the deadline fires, the
-    caller gets the unconfirmed wording and no Sent copy is filed.
+    caller gets the unconfirmed wording and no Sent copy is filed. It runs over
+    implicit TLS and over STARTTLS (production uses STARTTLS on 587, where
+    nodemailer wraps the caller's socket in a TLS socket), and covers an abort that
+    lands during a DNS stall.
   - Floor: unchanged. `imap-send-floor.test.ts` drives `executeToolCall` for a
     message on a Naver inbox: no receipt, a null receipt and a receipt for other
     bytes are refused before any SMTP or IMAP object is built, exactly as for

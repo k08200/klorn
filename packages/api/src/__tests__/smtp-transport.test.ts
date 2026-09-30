@@ -216,6 +216,36 @@ describe("openSmtpSession — a socket the caller can destroy", () => {
     expect(() => session.abort()).not.toThrow();
   });
 
+  it("after abort() the socket refuses to connect, so a late DNS answer cannot bring it back", async () => {
+    transportFor();
+    const session = await openSmtpSession(IMAP_PROVIDERS.NAVER, CREDS);
+    const socket = socketOf();
+    session.abort();
+    // what nodemailer does once the hostname resolves: Node would reconnect a destroyed socket
+    expect(() => socket.connect(587, "127.0.0.1")).toThrow(/aborted/);
+    expect(socket.connecting).toBe(false);
+  });
+
+  it("before abort() the socket connects normally", async () => {
+    transportFor();
+    await openSmtpSession(IMAP_PROVIDERS.NAVER, CREDS);
+    const socket = socketOf();
+    socket.on("error", () => {}); // nothing listens on this port
+    expect(() => socket.connect(1, "127.0.0.1")).not.toThrow();
+    socket.destroy();
+  });
+
+  it("a connect that was already in flight when the abort came is destroyed", async () => {
+    transportFor();
+    const session = await openSmtpSession(IMAP_PROVIDERS.NAVER, CREDS);
+    const socket = socketOf();
+    const destroy = vi.spyOn(socket, "destroy");
+    session.abort();
+    expect(destroy).toHaveBeenCalledTimes(1);
+    socket.emit("connect");
+    expect(destroy).toHaveBeenCalledTimes(2);
+  });
+
   it("close() ends the transport without touching the socket", async () => {
     const { close } = transportFor();
     const session = await openSmtpSession(IMAP_PROVIDERS.NAVER, CREDS);
@@ -287,6 +317,57 @@ describe("classifySmtpFailure — what a failure proves about delivery", () => {
     ["a value that is not an error", "boom"],
   ])("unconfirmed: %s, once the connection was established", (_name, error) => {
     expect(classifySmtpFailure(error, true)).toBe("unconfirmed");
+  });
+
+  // A TLS failure after the TCP connection is up surfaces as ESOCKET on CONN, with
+  // Node's own message. The handshake precedes AUTH and MAIL FROM, so these prove
+  // nothing was sent. An ESOCKET with any other message proves nothing.
+  it.each([
+    ["an untrusted certificate", "self-signed certificate"],
+    ["an untrusted chain", "unable to verify the first certificate"],
+    ["an unknown issuer", "unable to get local issuer certificate"],
+    ["a self-signed certificate in the chain", "self-signed certificate in certificate chain"],
+    ["an expired certificate", "certificate has expired"],
+    ["a certificate not yet valid", "certificate is not yet valid"],
+    [
+      "a hostname mismatch",
+      "Hostname/IP does not match certificate's altnames: Host: 127.0.0.1. is not in the cert's altnames: DNS:other.example",
+    ],
+    [
+      "a hang-up during the handshake",
+      "Client network socket disconnected before secure TLS connection was established",
+    ],
+    ["a protocol mismatch", "error:0A00010B:SSL routines::wrong version number"],
+    ["an unsupported protocol", "error:0A000102:SSL routines::unsupported protocol"],
+    ["a handshake failure alert", "error:0A000410:SSL routines::sslv3 alert handshake failure"],
+  ])("not-sent: %s (ESOCKET, TLS message), on an established connection", (_name, message) => {
+    const error = Object.assign(new Error(message), { code: "ESOCKET", command: "CONN" });
+    expect(classifySmtpFailure(error, true)).toBe("not-sent");
+  });
+
+  it.each([
+    ["a reset", "read ECONNRESET"],
+    ["a broken pipe", "write EPIPE"],
+    ["a hang-up", "socket hang up"],
+    ["an alert after the handshake", "error:0A000438:SSL routines::tlsv1 alert internal error"],
+    ["server text that mentions certificates", "550 rejected, see certificate policy"],
+    ["an empty message", ""],
+  ])("unconfirmed: %s (ESOCKET, not a handshake failure)", (_name, message) => {
+    const error = Object.assign(new Error(message), { code: "ESOCKET", command: "CONN" });
+    expect(classifySmtpFailure(error, true)).toBe("unconfirmed");
+  });
+
+  it("only an ESOCKET or ETLS can be a handshake failure: other codes keep their class", () => {
+    const text = "self-signed certificate";
+    expect(classifySmtpFailure(Object.assign(new Error(text), { code: "ECONNECTION" }), true)).toBe(
+      "unconfirmed",
+    );
+    expect(classifySmtpFailure(Object.assign(new Error(text), { code: "ETIMEDOUT" }), true)).toBe(
+      "unconfirmed",
+    );
+    expect(classifySmtpFailure(Object.assign(new Error(text), { code: "EPROTOCOL" }), true)).toBe(
+      "unconfirmed",
+    );
   });
 
   it("the same stall is 'not-sent' only when no connection was ever established", () => {

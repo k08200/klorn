@@ -153,9 +153,23 @@ export async function openSmtpSession(
   credentials: SmtpCredentials,
 ): Promise<SmtpSession> {
   const socket = new net.Socket();
+  let aborted = false;
   let connected = false;
+  // nodemailer resolves the hostname FIRST and only then calls socket.connect().
+  // destroy() on a socket that has not connected yet is undone by that connect()
+  // (Node reconnects a destroyed socket), so an abort during the DNS lookup, which
+  // can last up to the task deadline, would still deliver the message. Once
+  // aborted the socket refuses to connect; nodemailer wraps the call in a
+  // try/catch and reports the throw as a connection error.
+  const connect = socket.connect.bind(socket) as (...args: unknown[]) => net.Socket;
+  socket.connect = ((...args: unknown[]) => {
+    if (aborted) throw new Error("SMTP session aborted before it connected");
+    return connect(...args);
+  }) as typeof socket.connect;
   socket.once("connect", () => {
     connected = true;
+    // belt and braces: a connect that was already in flight when the abort came
+    if (aborted) socket.destroy();
   });
   let transport: Transporter<SMTPSentMessageInfo>;
   try {
@@ -170,6 +184,7 @@ export async function openSmtpSession(
       return connected;
     },
     abort() {
+      aborted = true;
       socket.destroy();
       transport.close();
     },
@@ -193,13 +208,32 @@ const PRE_ENVELOPE_CODES: readonly string[] = [
 ];
 
 /**
+ * Node's own messages for a TLS handshake that failed or never finished. nodemailer
+ * reports them as `ESOCKET` on `CONN` (it overwrites the original error code), so
+ * the message is all that is left of the cause. They come from OpenSSL and the
+ * socket, not from the server, and can only be produced by the handshake. A
+ * message that matches none of them (a reset, a broken pipe, a timeout, an alert
+ * after the handshake) proves nothing and stays "unconfirmed": the list errs
+ * toward not claiming "not sent".
+ */
+const TLS_HANDSHAKE_FAILURE =
+  /self[- ]signed certificate|unable to (?:verify the first|get local issuer) certificate|certificate (?:has expired|is not yet valid|verify failed|revoked)|does not match certificate's altnames|before secure TLS connection was established|wrong version number|unsupported protocol|no protocols available|alert handshake failure/i;
+
+function isTlsHandshakeFailure(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const { code, message } = err as { code?: unknown; message?: unknown };
+  return code === "ESOCKET" && typeof message === "string" && TLS_HANDSHAKE_FAILURE.test(message);
+}
+
+/**
  * What a failed submission proves about delivery.
  *   - "auth": the server rejected the login (530, 534, 535). Nothing was sent.
  *   - "refused": the server answered no to the sender, a recipient or the message
  *     (a definite answer; the message was not accepted).
  *   - "not-sent": provably before any MAIL FROM: the connection was never
  *     established (refused, timed out, reset while connecting), DNS, TLS or
- *     STARTTLS, any other login failure.
+ *     STARTTLS (including a certificate or hostname failure, whose handshake
+ *     precedes AUTH), any other login failure.
  *   - "unconfirmed": anything else on an established connection. SMTP cannot say
  *     whether a message whose connection died was accepted, and nodemailer reports
  *     a stall after DATA exactly like a connect timeout (`ETIMEDOUT`, command
@@ -210,7 +244,7 @@ export function classifySmtpFailure(err: unknown, connected: boolean): SmtpFailu
   const code =
     typeof err === "object" && err !== null ? (err as { code?: unknown }).code : undefined;
   if (code === "EENVELOPE" || code === "EMESSAGE") return "refused";
-  if (!connected) return "not-sent";
+  if (!connected || isTlsHandshakeFailure(err)) return "not-sent";
   return typeof code === "string" && PRE_ENVELOPE_CODES.includes(code) ? "not-sent" : "unconfirmed";
 }
 

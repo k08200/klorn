@@ -60,8 +60,8 @@ const NOT_SENT = "Could not reach Naver. The message was not sent; try again sho
 const UNCONFIRMED =
   "Naver did not confirm delivery. The message may or may not have been sent; check your Sent folder before trying again.";
 
-const err = (code: string, extra: Record<string, unknown> = {}) =>
-  Object.assign(new Error(`${code} ${PASSWORD} bob@example.com`), { code, ...extra });
+const err = (code: string, extra: Record<string, unknown> = {}, message?: string) =>
+  Object.assign(new Error(message ?? `${code} ${PASSWORD} bob@example.com`), { code, ...extra });
 
 beforeEach(() => {
   resetHarness();
@@ -91,6 +91,21 @@ describe("provably before any MAIL FROM: 'not sent'", () => {
     expect(await send()).toEqual({ error: NOT_SENT });
   });
 
+  it.each([
+    ["an untrusted certificate", "self-signed certificate"],
+    [
+      "a hostname mismatch",
+      "Hostname/IP does not match certificate's altnames: Host: smtp.naver.com. is not in the cert's altnames: DNS:other.example",
+    ],
+    [
+      "a hang-up during the TLS handshake",
+      "Client network socket disconnected before secure TLS connection was established",
+    ],
+  ])("%s after STARTTLS (ESOCKET on CONN): no AUTH or MAIL FROM was possible", async (_name, message) => {
+    failAfterConnect(err("ESOCKET", { command: "CONN" }, message));
+    expect(await send()).toEqual({ error: NOT_SENT });
+  });
+
   it("a rejected login keeps its reconnect wording and starts the shared cooldown", async () => {
     failAfterConnect(authRejected());
     expect(await send()).toEqual({
@@ -109,6 +124,10 @@ describe("after the connection was established: 'delivery not confirmed'", () =>
     ["a socket error on an open connection", err("ESOCKET", { command: "CONN" })],
     ["an invalid server response", err("EPROTOCOL", { command: "DATA" })],
     ["a stream failure", err("ESTREAM", { command: "API" })],
+    [
+      "a reset on an established TLS connection",
+      err("ESOCKET", { command: "CONN" }, "read ECONNRESET"),
+    ],
     ["an error with no code", new Error("who knows")],
   ])("%s", async (_name, error) => {
     failAfterConnect(error);
