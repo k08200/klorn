@@ -26,15 +26,19 @@
  * Asking again for the same draft (same email, body and subject) inside a short
  * window returns the first draft instead of creating another (mcp/draft-dedupe.ts).
  *
- * Outlook answers unsupported until B0b: a draft made through Graph's plain
- * message endpoint cannot carry In-Reply-To, so it would not thread. A provider
- * with no draft support answers its own unsupported result, unchanged.
+ * Outlook drafts natively (step B0b), only while OUTLOOK_INBOX_ENABLED is on: the provider
+ * is handed the original row's own provider id and makes the draft with Graph's
+ * createReply, which threads it, then sets the recipient to the pinned From explicitly
+ * (createReply alone would address the original's Reply-To). With the flag off an
+ * Outlook row answers unsupported, as before B0b. A provider with no draft support
+ * answers its own unsupported result, unchanged.
  */
 
+import { outlookInboxEnabled } from "../config.js";
 import { findUserEmail, MAX_EMAIL_ID_LENGTH, parseEmailIdArg } from "../mail/email-lookup.js";
 import { exceedsCodePoints } from "../mail/header-text.js";
-import type { InboxProviderName } from "../mail/inbox-credentials.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
+import { replyTargetFor } from "../mail/providers/reply-target.js";
 import type { ReplyHeadersResult, ReplyThreadingHeaders } from "../mail/providers/types.js";
 import { checkedSubject, MAX_SUBJECT_LENGTH, replySubject } from "../mail/reply-subject.js";
 import { parseSingleAddress } from "../mail/single-address.js";
@@ -50,9 +54,6 @@ export const MAX_DRAFT_BODY_LENGTH = 20_000;
 /** The only arguments the tool takes. Anything else is refused, so nothing can ride along. */
 const ALLOWED_ARGUMENTS: ReadonlySet<string> = new Set(["email_id", "body", "subject"]);
 
-/** Providers whose drafts cannot thread yet, so an agent draft there would not be a reply. */
-const UNTHREADED_DRAFT_PROVIDERS: ReadonlySet<InboxProviderName> = new Set(["OUTLOOK"]);
-
 export const CREATE_DRAFT_TOOL = {
   type: "function" as const,
   function: {
@@ -62,7 +63,7 @@ export const CREATE_DRAFT_TOOL = {
       "sent: the user reviews and sends it. It always goes to the original sender and is threaded " +
       "to the original message by the server, so neither the recipient nor the reply headers can " +
       "be chosen. Plain text only, no attachments. Asking again for the same draft returns the " +
-      "first one. Not available for Outlook mailboxes yet.",
+      "first one.",
     parameters: {
       type: "object",
       properties: {
@@ -205,8 +206,8 @@ const answer = (
 
 /**
  * Write the draft on the row's own account, through the provider. The provider
- * decides whether it can: Outlook is refused here until B0b, and any other
- * `{unsupported}` or `{error}` comes back exactly as the provider said it.
+ * decides whether it can: any `{unsupported}` or `{error}` comes back exactly as the
+ * provider said it. Outlook is refused here while its flag is off.
  */
 async function writeDraft(
   userId: string,
@@ -217,7 +218,9 @@ async function writeDraft(
   // The account is the row's: a linked inbox stays linked at every step below.
   const accountId = original.linkedInboxAccountId;
   const actions = await mailActionsFor(userId, accountId);
-  if (UNTHREADED_DRAFT_PROVIDERS.has(actions.provider)) {
+  // Dispatch is not flag-gated, so an OUTLOOK row that exists answers here even with
+  // Outlook off. Off, it is unsupported exactly as before B0b, before any provider call.
+  if (actions.provider === "OUTLOOK" && !outlookInboxEnabled()) {
     return JSON.stringify({ unsupported: true, error: UNSUPPORTED_THREADING_ERROR });
   }
 
@@ -228,6 +231,9 @@ async function writeDraft(
     threadId: original.threadId,
     linkedInboxAccountId: accountId,
     ...(reply ? { reply } : {}),
+    // The row's own provider id, for a provider that threads by the original (OUTLOOK);
+    // nothing is added for any other provider. Never the id the agent typed.
+    ...replyTargetFor(actions, original.gmailId),
   });
   // `{ unsupported }` and `{ error }` both carry an error string: hand either back as the provider said it.
   if ("error" in result) return JSON.stringify(result);
