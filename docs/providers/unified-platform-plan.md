@@ -399,7 +399,8 @@ reply route never reports `threaded: true` for an Outlook send. The flag stays
 OFF. The seam needs a way to name the message being answered; the PR that
 starts this step designs it and expands this brief.
 
-**B1 — IMAP flag actions for Naver and iCloud.** Depends on: nothing.
+**B1 — IMAP flag actions for Naver and iCloud.** Depends on: nothing. Landed
+2026-09-30, flag OFF.
 - Context: `providers/dispatch.ts` maps NAVER, ICLOUD and IMAP to
   `unsupportedMailActions`. `imapflow` is already a dependency.
 - Tasks: read, unread and star over IMAP flags, behind a new OFF flag.
@@ -408,6 +409,59 @@ starts this step designs it and expands this brief.
 - Verify: tests first against a mocked IMAP client, including the Phase 0b
   regression: an action reports success and the message reappears on the
   next poll.
+- Landed:
+  - `IMAP_ACTIONS_ENABLED` (`imapActionsEnabled()` in `config.ts`, lenient
+    parse, read at request time). `dispatch.ts` routes NAVER and ICLOUD to
+    `mail/providers/imap.ts` only while it is on. Off, `mailActionsForProvider`
+    returns the same unsupported object as before; generic IMAP is
+    unsupported either way.
+  - `markAsRead` and `toggleRead` set or clear `\Seen`, `toggleStar` sets or
+    clears `\Flagged`. INBOX only, by UID, through `messageFlagsAdd` or
+    `messageFlagsRemove` with `{uid: true}`. Every other action is spread from
+    `unsupportedMailActions` and still answers 501. Archive and trash are B2.
+  - Message id: `mail/imap-message-id.ts` accepts exactly
+    `<idPrefix>:<email>:<uid>`. The email comes from the account row, never
+    from the id. The uid is canonical decimal, 1 to 4294967295. Anything else
+    (other prefix, other mailbox, ranges, signs, padding) is refused before a
+    connection opens. `imap-sync.ts` writes ids through the same module.
+  - Account and connection: the row is found by (id, userId, provider). The
+    credential, SSRF allowlist and host-pin guards (`rejectImapRow`) and the
+    client construction (`createImapClient`) moved to `mail/imap-connection.ts`
+    and are shared with the poller. Timeouts are named constants (connect 10 s,
+    greeting 10 s, socket 15 s). An `error` listener is attached, and the
+    session always ends with LOGOUT and a hard close.
+  - Success means the server holds the flag. imapflow resolves `true` for a
+    STORE on a UID that no longer exists, so every change is read back with a
+    UID FETCH of FLAGS. Message gone, flag not applied and STORE refused all
+    answer `{error}`.
+  - Result contract: `{error}` for id, account, auth and transport failures
+    and for an unconfirmed change; these actions never throw and never answer
+    `unsupported`. That is safe for read and star because every caller writes
+    the local row regardless of the result. It is not safe for trash and
+    archive, whose callers delete locally on `{error}`: B2 must revisit it
+    (see `providers/outlook.ts`).
+  - Local state: after a confirmed change the row is updated with
+    `updateMany({userId, gmailId})`, as the Gmail path does.
+  - Poll interaction: the poll rewrites `isRead`, `isStarred` and `labels` from
+    server flags for the last 50 messages every cycle, so a confirmed change and
+    the next poll agree and no row is re-created. One window remains: a poll
+    that read flags before the action landed persists the old value, and the
+    next poll converges. `imap-actions-poll-regression.test.ts` runs the real
+    poll and persist path against a stateful fake server for both cases.
+  - Auth failure is logged and returned as `{error}`. It does not set
+    `needsReconnect`, because the poller does not either: Phase 0b deferred
+    that flagging and the Naver and iCloud reconnect copy as one change.
+- Not verified: no real Naver or iCloud server has been reached; behaviour
+  rests on a mocked imapflow. UIDVALIDITY is not stored, so a mailbox whose
+  UIDVALIDITY changed would make a stored UID address a different message (the
+  dedup key already ignores it; writes make it matter). B2's schema change is
+  the place to store it.
+- Before the flip: `markPromotionalEmailRead` (`judge/email-firewall.ts`) calls
+  `markAsRead` for new SILENT marketing mail. While the flag is on that reaches
+  Naver and iCloud: each such mail opens its own IMAP connection, concurrent
+  with the poll, so a first poll after connect can open dozens of logins to one
+  provider. Decide whether to serialise per account or skip IMAP in that path,
+  then test on a real account of each provider.
 
 **B2 — IMAP move actions.** Depends on: B1. Archive, trash and their
 inverses. A MOVE assigns a new UID, so the row must store where the message
@@ -526,6 +580,7 @@ time, whatever the graph says. The later step rebases, reruns
 | `packages/api/prisma/schema.prisma` | A1, A2a, A2b, B2, C1, D2, E1, F |
 | `packages/api/src/mcp/tool-gate.ts`, `mcp/server.ts` | A2a, A2b, A4 |
 | `mail/providers/types.ts`, `dispatch.ts` | A4, B0, B0b, B1, B2, B3, E2 |
+| `mail/imap-connection.ts`, `mail/imap-sync.ts`, `mail/providers/imap.ts` | B1, B2, B3 |
 | `mail/providers/outlook.ts`, `routes/email-replies.ts` | B0b, the `gmail-draft` follow-up under B0 |
 | `mail/reply-headers.ts` | B0, B3 |
 | web locale files | every step with UI copy |

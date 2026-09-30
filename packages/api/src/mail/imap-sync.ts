@@ -22,11 +22,12 @@
  * badly with the cron-based scheduler. Each sync opens, fetches, closes.
  */
 
-import { ImapFlow } from "imapflow";
 import sanitizeHtml from "sanitize-html";
 
 import { persistGmailEmail } from "../judge/email-firewall.js";
 import { captureError } from "../sentry.js";
+import { createImapClient } from "./imap-connection.js";
+import { formatImapMessageId } from "./imap-message-id.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
 
 interface VerifyArgs {
@@ -41,20 +42,11 @@ interface VerifyResult {
   message?: string;
 }
 
-function parseHost(host: string): { host: string; port: number } {
-  const [h, p] = host.split(":");
-  const port = Number(p) || 993;
-  return { host: h, port };
-}
-
 export async function verifyImapCredentials(args: VerifyArgs): Promise<VerifyResult> {
-  const { host, port } = parseHost(args.host);
-  const client = new ImapFlow({
-    host,
-    port,
-    secure: true,
-    auth: { user: args.email, pass: args.password },
-    logger: false,
+  const client = createImapClient({
+    host: args.host,
+    email: args.email,
+    password: args.password,
     // Connection should fail fast — the settings UI is waiting on this.
     socketTimeout: 12_000,
   });
@@ -155,16 +147,13 @@ function snippetFromBody(buf: Buffer | undefined, max = 200): string | null {
 export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
   const limit = args.limit ?? 50;
   const scope = args.provider.logScope;
-  const { host, port } = parseHost(args.host);
 
   const result: SyncResult = { fetched: 0, inserted: 0, classified: 0, errors: 0 };
 
-  const client = new ImapFlow({
-    host,
-    port,
-    secure: true,
-    auth: { user: args.email, pass: args.password },
-    logger: false,
+  const client = createImapClient({
+    host: args.host,
+    email: args.email,
+    password: args.password,
     socketTimeout: 30_000,
   });
 
@@ -207,7 +196,7 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
         // Stable id-per-mailbox: the provider's idPrefix (`naver-imap:`,
         // `icloud-imap:`) keeps it from colliding with Gmail message ids —
         // or another provider's UIDs — in the same EmailMessage table.
-        const stableId = `${args.provider.idPrefix}:${args.email}:${msg.uid}`;
+        const stableId = formatImapMessageId(args.provider.idPrefix, args.email, msg.uid);
 
         // Flags → Gmail-ish labels so existing classifier paths work.
         const flags = Array.isArray(msg.flags) ? msg.flags : [...(msg.flags ?? new Set<string>())];

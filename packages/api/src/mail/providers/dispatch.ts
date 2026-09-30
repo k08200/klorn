@@ -13,9 +13,11 @@
  * lookup with `mailActionsForProvider`.
  */
 
+import { imapActionsEnabled } from "../../config.js";
 import { prisma } from "../../db.js";
 import type { InboxProviderName } from "../inbox-credentials.js";
 import { googleMailActions } from "./google.js";
+import { imapMailActions } from "./imap.js";
 import { outlookMailActions } from "./outlook.js";
 import type { MailProviderActions } from "./types.js";
 import { unsupportedMailActions } from "./unsupported.js";
@@ -30,8 +32,21 @@ const ACTIONS_BY_PROVIDER: Readonly<Record<InboxProviderName, MailProviderAction
   IMAP: unsupportedMailActions("IMAP"),
 };
 
+// Step B1: read/unread/star over IMAP flags for NAVER and ICLOUD, reachable only
+// while IMAP_ACTIONS_ENABLED is on. Generic IMAP has no entry on purpose — it
+// stays unsupported until its SSRF design (Phase 4 / B4) passes review.
+const IMAP_FLAG_ACTIONS_BY_PROVIDER: Readonly<
+  Partial<Record<InboxProviderName, MailProviderActions>>
+> = {
+  NAVER: imapMailActions("NAVER"),
+  ICLOUD: imapMailActions("ICLOUD"),
+};
+
 export function mailActionsForProvider(provider: InboxProviderName): MailProviderActions {
-  return ACTIONS_BY_PROVIDER[provider];
+  // The flag is read per call (request time), so flipping it needs no restart;
+  // with it off this returns the same unsupported object as before B1.
+  const imapActions = imapActionsEnabled() ? IMAP_FLAG_ACTIONS_BY_PROVIDER[provider] : undefined;
+  return imapActions ?? ACTIONS_BY_PROVIDER[provider];
 }
 
 export async function mailActionsFor(
