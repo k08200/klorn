@@ -644,4 +644,16 @@ describe("upsertAttentionForEmailJudgement — status preservation", () => {
     const call = upsertSpy.mock.calls[0]?.[0] as { update: { isManualOverride?: boolean } };
     expect(call.update.isManualOverride).toBe(false);
   });
+
+  it("a re-judge that replaces the tier also clears an MCP agent's stamp (step A2b): a judge-authored tier is never left marked as the agent's", async () => {
+    await upsertAttentionForEmailJudgement(email, judgement);
+    const call = upsertSpy.mock.calls[0]?.[0] as {
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    };
+    expect(call.update.agentTierSetAt).toBeNull();
+    expect(call.update.agentTierKeyId).toBeNull();
+    // A new row carries no stamp either (the column defaults to null).
+    expect(call.create.agentTierSetAt ?? null).toBeNull();
+  });
 });

@@ -53,9 +53,16 @@ export async function reconcileLabelCorrection(
 
     const item = await prisma.attentionItem.findFirst({
       where: { userId, source: "EMAIL", sourceId: emailDbId, status: "OPEN" },
-      select: { id: true, tier: true },
+      select: { id: true, tier: true, agentTierSetAt: true },
     });
     if (!item) return "skipped";
+
+    // An MCP agent moved this item (step A2b). set_tier writes no Gmail label, so
+    // the label Klorn stamped earlier now disagrees with the tier — by the agent's
+    // doing, not a human's drag. Recording it through the override path would undo
+    // the agent's change and mint a false HUMAN correction. A human who disagrees
+    // with the agent still wins in the app, which clears the stamp.
+    if (item.agentTierSetAt) return "skipped";
 
     // Gmail agrees with us — which is the normal case, because we are usually
     // the one who put that label there.

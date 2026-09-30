@@ -10,6 +10,7 @@
  */
 
 import { prisma } from "../db.js";
+import { CLEAR_AGENT_TIER } from "./agent-tier.js";
 import type { AttentionSourceName } from "./decision-label.js";
 import { manualOverrideReason, normalizeTier, type Tier } from "./tiers.js";
 
@@ -61,7 +62,14 @@ export async function overrideAttentionTier(
       // judge-context.ts mines from ever drifting. isManualOverride is the
       // actual trust boundary (GHSA-cxc5-fmqv-pxv6) — this is the only call
       // site in the codebase allowed to set it true.
-      data: { tier, tierReason: manualOverrideReason(tier), isManualOverride: true },
+      // CLEAR_AGENT_TIER: the tier is now human-authored, so an MCP agent's stamp
+      // (step A2b) must not survive on it.
+      data: {
+        tier,
+        tierReason: manualOverrideReason(tier),
+        isManualOverride: true,
+        ...CLEAR_AGENT_TIER,
+      },
     }),
     prisma.decisionLabel.updateMany({
       // userId scopes the stamp to the acting user's own row; outcome:null makes
@@ -101,11 +109,12 @@ export async function confirmAttentionTier(
         source: string;
         sourceId: string;
         tier: string | null;
+        agentTierSetAt: Date | null;
       } | null>;
     }
   ).findFirst({
     where: { id: itemId, userId },
-    select: { id: true, source: true, sourceId: true, tier: true },
+    select: { id: true, source: true, sourceId: true, tier: true, agentTierSetAt: true },
   });
 
   if (!existing) return { ok: false, reason: "not_found" };
@@ -114,6 +123,11 @@ export async function confirmAttentionTier(
   // row into PUSH (its real delivery behaviour) so the label never records a
   // retired tier.
   const tier = normalizeTier(existing.tier);
+  // The tier was set by an MCP agent (step A2b), not shown by the judge: agreeing
+  // with it is not judge agreement. A CONFIRM:<agent's lane> against the judge's
+  // shownTier would be a contradictory label, and first-stamp-wins would then
+  // block the user's real later override from reaching the ledger.
+  if (existing.agentTierSetAt) return { ok: true, tier };
   // No AttentionItem write: a confirmation leaves the shown tier as-is and must
   // not trip isManualOverride. Only the ground-truth ledger is stamped, guarded
   // by outcome:null so the first explicit action (confirm OR override) wins.

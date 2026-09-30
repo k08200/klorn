@@ -212,6 +212,12 @@ model McpWriteAudit {
   outcome  McpAuditOutcome
   reason   String? // short code: permission_denied | rate_limited | tool_error | exception
 
+  // set_tier only (step A2b): the lane the call changed from and to, recorded when
+  // the lane actually changed. Lets the activity log show the change and a later
+  // step revert it. Null for every other tool, refusal and no-op.
+  tierFrom String?
+  tierTo   String?
+
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
@@ -1251,6 +1257,18 @@ model AttentionItem {
   // (attention-mirror.ts) always reset this to false, so LLM-authored tierReason
   // text can never be mistaken for ground truth (GHSA-cxc5-fmqv-pxv6).
   isManualOverride Boolean @default(false)
+
+  // MCP agent provenance (step A2b of docs/providers/unified-platform-plan.md).
+  // Non-null means the CURRENT tier was set by an agent through the MCP set_tier
+  // tool — not by the judge and not by a human. It is deliberately NOT
+  // isManualOverride: that flag is the human ground-truth boundary and only
+  // overrideAttentionTier sets it. Every learning reader (sender priors, tier
+  // history, correction examples, calibration) skips a row with this stamp, and
+  // anything that replaces the tier with a judge or human decision clears it.
+  // agentTierKeyId is the ApiKey id, deliberately not a foreign key so the
+  // history outlives the key (same as McpWriteAudit.apiKeyId).
+  agentTierSetAt DateTime?
+  agentTierKeyId String?
 
   // Content-addressed classification. Hash of the decision-relevant input
   // bytes (from, subject, snippet, labels) at the moment tier was decided.

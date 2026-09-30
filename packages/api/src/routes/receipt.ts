@@ -59,6 +59,7 @@ export async function receiptRoutes(app: FastifyInstance) {
             tier: string | null;
             tierReason: string | null;
             surfacedAt: Date;
+            agentTierSetAt: Date | null;
           }>
         >;
       }
@@ -75,6 +76,7 @@ export async function receiptRoutes(app: FastifyInstance) {
         tier: true,
         tierReason: true,
         surfacedAt: true,
+        agentTierSetAt: true,
       },
       orderBy: { surfacedAt: "asc" },
     });
@@ -127,7 +129,7 @@ export async function receiptRoutes(app: FastifyInstance) {
       const tier = item.tier === "CALL" ? "PUSH" : item.tier || "QUEUE";
       if (tier === "SILENT") {
         silenced.push(base);
-      } else if (tier === "PUSH") {
+      } else if (tier === "PUSH" && item.agentTierSetAt == null) {
         // Find matching push log
         const push = pushLogs.find((p) => pushByNotifId.has(p.notificationId ?? ""));
         pushed.push({
@@ -136,6 +138,8 @@ export async function receiptRoutes(app: FastifyInstance) {
           pushClickedAt: push?.clickedAt?.toISOString() ?? null,
         });
       } else {
+        // Includes a PUSH lane an MCP agent set (step A2b): moving an item to PUSH
+        // sends nothing, so it is not a push and not an interruption.
         queued.push(base);
       }
     }
