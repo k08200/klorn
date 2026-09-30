@@ -85,7 +85,7 @@ async function readBackFlags(client: ImapFlow, range: string): Promise<Map<numbe
 }
 
 /** A UID is a non-zero 32-bit unsigned integer (RFC 3501). */
-function isValidUid(uid: number): boolean {
+export function isValidUid(uid: number): boolean {
   return Number.isInteger(uid) && uid >= 1 && uid <= MAX_IMAP_UID;
 }
 

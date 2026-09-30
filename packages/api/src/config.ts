@@ -210,6 +210,20 @@ export function linkedCalendarSyncEnabled(): boolean {
     (process.env.LINKED_CALENDAR_SYNC_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Archive, trash and their inverses for Naver and iCloud over IMAP MOVE — step B2
+// of docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and
+// independent of IMAP_ACTIONS_ENABLED and IMAP_SEND_ENABLED. While OFF,
+// mail/providers/dispatch.ts leaves NAVER and ICLOUD `trash`, `untrash`,
+// `archive` and `unarchive` as the unsupported stubs, exactly as before (501 at
+// the routes). ICLOUD additionally needs ICLOUD_INBOX_ENABLED (the CASA surface
+// freeze). Generic IMAP stays unsupported either way. Read at request time
+// (PROVIDER_INBOX_SELECTOR_ENABLED precedent) with the same lenient truthy parse,
+// so a flip needs no redeploy.
+export function imapMoveActionsEnabled(): boolean {
+  return ["true", "1", "yes", "on"].includes(
+    (process.env.IMAP_MOVE_ACTIONS_ENABLED ?? "").trim().toLowerCase(),
+  );
+}
 // MCP write tools — API key permission level and the MCP write set (steps A1
 // and A2a of docs/providers/unified-platform-plan.md). OFF by default (repo
 // doctrine). It gates minting a read-write API key, using one, the MCP-only

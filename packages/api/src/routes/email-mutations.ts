@@ -8,20 +8,20 @@
  */
 
 import multipart from "@fastify/multipart";
-import type { EmailUndoActionResponse } from "@klorn/contract";
 import type { FastifyInstance } from "fastify";
 import { recordEvent } from "../analytics.js";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
 import { recordContactEngagement } from "../learning/contact-engagement.js";
-import { syncEmailByGmailId } from "../mail/email-sync.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
+import { isImapFamily } from "../mail/providers/error-semantics.js";
 import { logProviderSoftFailure } from "../mail/providers/log-soft-failure.js";
 import type { MailAttachment, SendMailResult } from "../mail/providers/types.js";
 import { recordSentMessage } from "../mail/sent-messages.js";
 import { captureError } from "../sentry.js";
 import { safeAttachmentFilename } from "./email.js";
+import { completeUndo, findParkedInbox } from "./email-undo.js";
 
 // Gmail caps a single message (body + all attachments, base64-encoded) at 25 MB.
 // We enforce the raw-byte total below that so the encoded payload stays under
@@ -393,6 +393,10 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         return reply.code(501).send({ error: result.error });
       }
       if (result && "error" in result) {
+        // An IMAP provider answers { error } for every failure (refused or
+        // unconfirmed MOVE, renumbered mailbox): the message is still in the
+        // mailbox, so the row stays. Only "not connected" may remove it locally.
+        if (isImapFamily(actions.provider)) return reply.code(502).send({ error: result.error });
         // Gmail not connected — just remove from DB
         await prisma.emailMessage.deleteMany({ where: { id: email.id } });
         return { success: true, warning: "Gmail not connected, removed locally only" };
@@ -412,7 +416,8 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
     const gmailId = resolveUndoGmailId(id, request.body);
-    const linkedInboxAccountId = resolveUndoLinkedInbox(request.body);
+    const linkedInboxAccountId =
+      resolveUndoLinkedInbox(request.body) ?? (await findParkedInbox(uid, gmailId, "TRASH"));
 
     try {
       const actions = await mailActionsFor(uid, linkedInboxAccountId);
@@ -423,9 +428,9 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       if (result && "error" in result) {
         return reply.code(409).send({ error: result.error });
       }
-      const synced = await syncEmailByGmailId(uid, gmailId, linkedInboxAccountId);
-      const payload: EmailUndoActionResponse = { success: true, gmailId, emailId: synced.emailId };
-      return payload;
+      const done = await completeUndo(uid, actions, gmailId, linkedInboxAccountId, result);
+      if ("failure" in done) return reply.code(502).send({ error: done.failure });
+      return done.payload;
     } catch (err) {
       const gErr = err as { message?: string };
       return reply.code(502).send({ error: `Gmail undo failed: ${gErr.message || "unknown"}` });
@@ -452,6 +457,9 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         return reply.code(501).send({ error: result.error });
       }
       if (result && "error" in result) {
+        // Same rule as DELETE above: an IMAP { error } is a failed move, not a
+        // missing account, and the row stays.
+        if (isImapFamily(actions.provider)) return reply.code(502).send({ error: result.error });
         await prisma.emailMessage.deleteMany({ where: { id: email.id } });
         void recordEvent(uid, "queue_action", { action: "archive" });
         return { success: true, warning: "Gmail not connected, removed locally only" };
@@ -472,7 +480,8 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
     const gmailId = resolveUndoGmailId(id, request.body);
-    const linkedInboxAccountId = resolveUndoLinkedInbox(request.body);
+    const linkedInboxAccountId =
+      resolveUndoLinkedInbox(request.body) ?? (await findParkedInbox(uid, gmailId, "ARCHIVE"));
 
     try {
       const actions = await mailActionsFor(uid, linkedInboxAccountId);
@@ -483,9 +492,9 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       if (result && "error" in result) {
         return reply.code(409).send({ error: result.error });
       }
-      const synced = await syncEmailByGmailId(uid, gmailId, linkedInboxAccountId);
-      const payload: EmailUndoActionResponse = { success: true, gmailId, emailId: synced.emailId };
-      return payload;
+      const done = await completeUndo(uid, actions, gmailId, linkedInboxAccountId, result);
+      if ("failure" in done) return reply.code(502).send({ error: done.failure });
+      return done.payload;
     } catch (err) {
       const gErr = err as { message?: string };
       return reply.code(502).send({ error: `Gmail undo failed: ${gErr.message || "unknown"}` });

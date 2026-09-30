@@ -42,6 +42,8 @@ export class FakeImapFlow {
   constructor(opts: Record<string, unknown>) {
     h.imapCtorOpts.push(opts);
   }
+  /** What `client.mailbox` reports once INBOX is selected (B1 flag actions compare its UIDVALIDITY). */
+  mailbox = { path: "INBOX", uidValidity: 7n };
   connect = h.connect;
   list = h.list;
   getMailboxLock = h.getMailboxLock;
@@ -58,17 +60,21 @@ export class FakeImapFlow {
 
 export const PASSWORD = "sup3r-secret-app-pw";
 export const CIPHER = "v2:k:iv:ct:tag";
+/** The INBOX UIDVALIDITY these rows were baselined with (step B2); FakeImapFlow reports the same. */
+export const INBOX_UID_VALIDITY = "7";
 export const NAVER_ROW = {
   id: "row-1",
   email: "me@naver.com",
   imapHost: "imap.naver.com:993",
   imapPasswordCipher: CIPHER,
+  inboxUidValidity: INBOX_UID_VALIDITY,
 };
 export const ICLOUD_ROW = {
   id: "row-2",
   email: "me@icloud.com",
   imapHost: "imap.mail.me.com:993",
   imapPasswordCipher: CIPHER,
+  inboxUidValidity: INBOX_UID_VALIDITY,
 };
 export const NAVER_MSG = "naver-imap:me@naver.com:101";
 export const ORIGINAL_ID = "<orig-1@mail.example.com>";

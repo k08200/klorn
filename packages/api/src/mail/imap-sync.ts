@@ -27,8 +27,11 @@ import sanitizeHtml from "sanitize-html";
 import { persistGmailEmail } from "../judge/email-firewall.js";
 import { captureError } from "../sentry.js";
 import { createImapClient, endImapSession } from "./imap-connection.js";
+import { envelopeSubject } from "./imap-envelope.js";
 import { formatImapMessageId } from "./imap-message-id.js";
+import { reconcileInboxValidity, removeRecentlyMovedRows } from "./imap-poll-guards.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
+import { liveUidValidity } from "./imap-uidvalidity.js";
 
 interface VerifyArgs {
   provider: ImapProviderConfig;
@@ -85,6 +88,9 @@ interface SyncArgs {
   // every EmailMessage so IMAP mail carries real provenance instead of being
   // indistinguishable from primary-account mail.
   linkedInboxAccountId?: string;
+  // The INBOX UIDVALIDITY stored on that row (step B2), so the poll can tell a
+  // renumbered mailbox from an unchanged one. Null/absent = none recorded yet.
+  inboxUidValidity?: string | null;
   limit?: number; // defaults to 50
 }
 
@@ -141,6 +147,69 @@ function snippetFromBody(buf: Buffer | undefined, max = 200): string | null {
   return text.slice(0, max) || null;
 }
 
+type PersistCall = [
+  email: Parameters<typeof persistGmailEmail>[1],
+  options: NonNullable<Parameters<typeof persistGmailEmail>[2]>,
+];
+
+/**
+ * Turn one fetched message into the arguments of the shared persist call. Used by
+ * the poll and by the targeted re-sync after an undo, so both write a row the same
+ * way. Pure: the poll runs it outside its per-message error handling, as it always
+ * has.
+ */
+function toPersistCall(args: SyncArgs, msg: ImapFetchMessage): PersistCall {
+  const env = msg.envelope ?? {};
+  const from = formatAddress(env.from?.[0] ?? undefined);
+  const to = formatAddress(env.to?.[0] ?? undefined);
+  const cc = (env.cc ?? []).map(formatAddress).filter(Boolean).join(", ") || null;
+  const subject = envelopeSubject(env.subject);
+  const receivedAt = env.date ?? new Date();
+  const bodyBuf = msg.bodyParts?.get("text") ?? msg.bodyParts?.get("TEXT");
+  const snippet = snippetFromBody(bodyBuf);
+  const stableId = formatImapMessageId(args.provider.idPrefix, args.email, msg.uid);
+
+  // Flags → Gmail-ish labels so existing classifier paths work.
+  const flags = Array.isArray(msg.flags) ? msg.flags : [...(msg.flags ?? new Set<string>())];
+  const labels: string[] = ["INBOX"];
+  if (!flags.includes("\\Seen")) labels.push("UNREAD");
+  if (flags.includes("\\Flagged")) labels.push("IMPORTANT");
+  const isRead = flags.includes("\\Seen");
+  const isStarred = flags.includes("\\Flagged");
+
+  // Shared persist path (Phase 1): the same fetch→normalize→persist→judge pipeline
+  // Gmail ingestion uses. We still co-opt gmailId as the canonical "external mail
+  // provider id" (the idPrefix keeps the namespaces from colliding), and
+  // persistGmailEmail owns dedup, fromAddress normalization, commitment mining, and
+  // the fire-and-forget judge + attention mirror — including PUSH interrupts and
+  // judge-health recording the old inline judge lacked.
+  return [
+    {
+      gmailId: stableId,
+      threadId: null,
+      from,
+      to,
+      cc: cc ?? "",
+      subject,
+      snippet: snippet ?? "",
+      body: bodyBuf ? bodyBuf.toString("utf8").slice(0, 50_000) : "",
+      htmlBody: "",
+      labels,
+      isRead,
+      isStarred,
+      receivedAt,
+      attachments: [],
+    },
+    {
+      linkedInboxAccountId: args.linkedInboxAccountId ?? null,
+      // Self-sent detection and commitment senderIsUser must compare against THIS
+      // mailbox's address, not the primary Google account (same as email-sync's
+      // linked fan-out passing linked.email).
+      userEmail: args.email,
+    },
+  ];
+}
+
 /**
  * Sync the most-recent `limit` messages from the mailbox's INBOX.
  * Upsert each into EmailMessage (keyed on (userId, gmailId) — for IMAP
@@ -166,6 +235,18 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
     await client.connect();
     const lock = await client.getMailboxLock("INBOX");
     try {
+      if (args.linkedInboxAccountId) {
+        // Before anything is persisted: a renumbered mailbox must not have its
+        // new mail deduped against the old numbering (step B2, imap-poll-guards.ts).
+        await reconcileInboxValidity({
+          provider: args.provider,
+          userId: args.userId,
+          email: args.email,
+          linkedInboxAccountId: args.linkedInboxAccountId,
+          stored: args.inboxUidValidity,
+          live: liveUidValidity(client.mailbox),
+        });
+      }
       const status = await client.status("INBOX", { messages: true });
       const totalMessages = status.messages ?? 0;
       if (totalMessages === 0) {
@@ -188,63 +269,15 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
       )) {
         const msg = raw as ImapFetchMessage;
         result.fetched += 1;
-
-        const env = msg.envelope ?? {};
-        const from = formatAddress(env.from?.[0] ?? undefined);
-        const to = formatAddress(env.to?.[0] ?? undefined);
-        const cc = (env.cc ?? []).map(formatAddress).filter(Boolean).join(", ") || null;
-        const subject = env.subject?.trim() || "(no subject)";
-        const receivedAt = env.date ?? new Date();
-        const bodyBuf = msg.bodyParts?.get("text") ?? msg.bodyParts?.get("TEXT");
-        const snippet = snippetFromBody(bodyBuf);
-
         // Stable id-per-mailbox: the provider's idPrefix (`naver-imap:`,
         // `icloud-imap:`) keeps it from colliding with Gmail message ids —
         // or another provider's UIDs — in the same EmailMessage table.
         const stableId = formatImapMessageId(args.provider.idPrefix, args.email, msg.uid);
 
-        // Flags → Gmail-ish labels so existing classifier paths work.
-        const flags = Array.isArray(msg.flags) ? msg.flags : [...(msg.flags ?? new Set<string>())];
-        const labels: string[] = ["INBOX"];
-        if (!flags.includes("\\Seen")) labels.push("UNREAD");
-        if (flags.includes("\\Flagged")) labels.push("IMPORTANT");
-        const isRead = flags.includes("\\Seen");
-        const isStarred = flags.includes("\\Flagged");
+        const persistCall = toPersistCall(args, msg);
 
         try {
-          // Shared persist path (Phase 1): the same fetch→normalize→persist→
-          // judge pipeline Gmail ingestion uses. We still co-opt gmailId as the
-          // canonical "external mail provider id" (the idPrefix keeps the
-          // namespaces from colliding), and persistGmailEmail owns dedup,
-          // fromAddress normalization, commitment mining, and the
-          // fire-and-forget judge + attention mirror — including PUSH
-          // interrupts and judge-health recording the old inline judge lacked.
-          const persisted = await persistGmailEmail(
-            args.userId,
-            {
-              gmailId: stableId,
-              threadId: null,
-              from,
-              to,
-              cc: cc ?? "",
-              subject,
-              snippet: snippet ?? "",
-              body: bodyBuf ? bodyBuf.toString("utf8").slice(0, 50_000) : "",
-              htmlBody: "",
-              labels,
-              isRead,
-              isStarred,
-              receivedAt,
-              attachments: [],
-            },
-            {
-              linkedInboxAccountId: args.linkedInboxAccountId ?? null,
-              // Self-sent detection and commitment senderIsUser must compare
-              // against THIS mailbox's address, not the primary Google account
-              // (same as email-sync's linked fan-out passing linked.email).
-              userEmail: args.email,
-            },
-          );
+          const persisted = await persistGmailEmail(args.userId, ...persistCall);
           // `isNew` from the persist result replaces the old "created in the
           // last 60s" heuristic — a slow tick can no longer double-judge, and
           // re-touched rows (the poll re-fetches its window every cycle) are
@@ -264,6 +297,15 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
             extra: { userId: args.userId, stableId },
           });
         }
+      }
+      if (args.linkedInboxAccountId) {
+        // A message Klorn moved out while this window was being persisted must not
+        // stay behind as a row (step B2).
+        await removeRecentlyMovedRows({
+          userId: args.userId,
+          linkedInboxAccountId: args.linkedInboxAccountId,
+          provider: args.provider,
+        });
       }
     } finally {
       lock.release();
@@ -288,4 +330,51 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
   }
 
   return result;
+}
+
+interface SyncMessageArgs {
+  provider: ImapProviderConfig;
+  userId: string;
+  email: string;
+  password: string; // plaintext (decrypted by caller)
+  host: string;
+  linkedInboxAccountId: string;
+  uid: number;
+}
+
+/**
+ * Ingest ONE message of the INBOX by UID, through the same persist path as the
+ * poll. Used after an undo (step B2): the restored message has a NEW UID, so the
+ * route needs its row immediately, under the id the next poll will also use.
+ * Resolves with the row id, or null when the UID is not in INBOX. Errors propagate.
+ */
+export async function syncImapMessage(args: SyncMessageArgs): Promise<{ emailId: string } | null> {
+  const client = createImapClient({
+    provider: args.provider,
+    host: args.host,
+    email: args.email,
+    password: args.password,
+    socketTimeout: 30_000,
+    accountId: args.linkedInboxAccountId,
+  });
+  try {
+    await client.connect();
+    const lock = await client.getMailboxLock("INBOX");
+    try {
+      for await (const raw of client.fetch(
+        String(args.uid),
+        { envelope: true, flags: true, bodyParts: ["TEXT"] },
+        { uid: true },
+      )) {
+        const persistCall = toPersistCall(args, raw as ImapFetchMessage);
+        const persisted = await persistGmailEmail(args.userId, ...persistCall);
+        return { emailId: persisted.emailId };
+      }
+      return null;
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await endImapSession(client);
+  }
 }

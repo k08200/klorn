@@ -19,7 +19,16 @@ import type { InboxProviderName } from "../inbox-credentials.js";
 export type MailActionUnsupported = { unsupported: true; error: string };
 export type MailActionFailure = { error: string };
 
-export type SimpleMailActionResult = { success: true } | MailActionFailure | MailActionUnsupported;
+/**
+ * `restoredMessageId` is set only by the IMAP untrash and unarchive (step B2): a
+ * MOVE back into INBOX gives the message a NEW UID, so it returns under a new
+ * provider message id, which the route needs to re-sync its local row. Gmail keeps
+ * a message's id, so its results never carry one.
+ */
+export type SimpleMailActionResult =
+  | { success: true; restoredMessageId?: string }
+  | MailActionFailure
+  | MailActionUnsupported;
 
 export type SendMailResult =
   | { success: true; messageId?: string | null; threadId?: string | null }

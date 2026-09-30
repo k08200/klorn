@@ -296,6 +296,7 @@ export interface FakeModel {
   create(args: { data: Row; select?: Select }): Promise<Row>;
   update(args: { where: Where; data: Row; select?: Select }): Promise<Row>;
   updateMany(args: { where?: Where; data: Row }): Promise<{ count: number }>;
+  deleteMany(args?: { where?: Where }): Promise<{ count: number }>;
   upsert(args: { where: Where; create: Row; update: Row; select?: Select }): Promise<Row>;
 }
 
@@ -433,6 +434,13 @@ export function createFakeDb(seed: Record<string, Row[]>, hooks: FakeDbHooks = {
         const targets = find(args.where);
         for (const r of targets) apply(r, args.data);
         return { count: targets.length };
+      },
+      async deleteMany(args = {}) {
+        assertArgs(name, "deleteMany", args, ["where"]);
+        log(name, { op: "deleteMany", where: args.where });
+        const doomed = new Set(find(args.where));
+        tables[name] = rowsOf().filter((r) => !doomed.has(r));
+        return { count: doomed.size };
       },
       async upsert(args) {
         assertArgs(name, "upsert", args, ["where", "create", "update", "select"]);

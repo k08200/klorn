@@ -15,7 +15,7 @@ model User {
   // Purpose of the PRIMARY inbox (the account the user signed in with) —
   // same vocabulary as LinkedInboxAccount.purpose. Null = never asked.
   primaryInboxPurpose       String?
-  companyDomains            String[]  @default([])
+  companyDomains            String[]                   @default([])
   triagePriorities          String?
   passwordHash              String?
   name                      String?
@@ -149,6 +149,7 @@ model User {
   learnedRules              LearnedRule[]
   apiKeys                   ApiKey[]
   mcpWriteAudits            McpWriteAudit[]
+  imapMovedMessages         ImapMovedMessage[]
 }
 
 enum UserRole {
@@ -449,10 +450,10 @@ enum InboxProvider {
 // (the multi_account feature). watch/history/sync fields are for the later
 // real-time + incremental-sync phases and are unused until then.
 model LinkedInboxAccount {
-  id                  String        @id @default(uuid())
+  id                  String             @id @default(uuid())
   userId              String
-  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider            InboxProvider @default(GOOGLE)
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider            InboxProvider      @default(GOOGLE)
   email               String // the linked account address — label + dedup key
   // What this mailbox is FOR — "work" | "personal" | "mixed" | null (unset).
   // Feeds the analysis prompts: a personal inbox must not be scored as a
@@ -467,6 +468,15 @@ model LinkedInboxAccount {
   // route) + AES-256-GCM password cipher, same crypto-tokens helper as OAuth.
   imapHost            String?
   imapPasswordCipher  String?
+  // IMAP providers (NAVER, ICLOUD): the INBOX UIDVALIDITY the poller last saw, as
+  // a canonical decimal string (step B2). A UID in EmailMessage.gmailId names a
+  // message only under this value, so every IMAP action compares the live value
+  // with it before touching a UID; a poll that sees a different one re-baselines
+  // and retires the mailbox's stale rows. A String, not an Int or BigInt: the
+  // value is an unsigned 32-bit integer (over a signed Int), is only compared for
+  // equality, and BigInt would make any route that returns the whole row throw in
+  // JSON.stringify. NULL until the first poll after this column exists.
+  inboxUidValidity    String?
   gmailWatchExpiresAt DateTime?
   // Provider-generic incremental-sync watermark: Gmail historyId for GOOGLE
   // rows, Graph delta/next link (a full URL) for OUTLOOK rows (Phase 3B —
@@ -477,9 +487,10 @@ model LinkedInboxAccount {
   // UI can prompt a re-link instead of the inbox silently rotting; cleared on a
   // successful token refresh or re-link. Durable so a revoked inbox stays flagged
   // across restarts (at scale, revoked linked tokens are the norm, not the edge).
-  needsReconnect      Boolean       @default(false)
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  needsReconnect      Boolean            @default(false)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  imapMovedMessages   ImapMovedMessage[]
 
   // provider participates so the same address can exist on two services (a
   // user forwarding their iCloud into Gmail links both) without colliding.
@@ -493,6 +504,53 @@ model LinkedInboxAccount {
   // (userId, provider, email) unique above is userId-leading and can't serve
   // that lookup, so without this it seq-scans every linked inbox on each push.
   @@index([email])
+}
+
+// Why a message Klorn moved out of an IMAP INBOX is tracked here (step B2 of
+// docs/providers/unified-platform-plan.md).
+enum ImapMoveRole {
+  TRASH
+  ARCHIVE
+}
+
+// Where a message went when Klorn moved it out of a Naver or iCloud INBOX with
+// trash or archive, so undo can move it back. An IMAP MOVE gives the message a
+// NEW UID in the destination folder, and trash/archive delete the local
+// EmailMessage row (as the Gmail path does), so this has to be its own table:
+// columns on EmailMessage would vanish with the row they belong to.
+//
+// One row per message currently parked by a move, keyed by the INBOX id it had
+// (`sourceId`, the EmailMessage.gmailId). Undo consumes it; rows older than the
+// retention window are swept on the next move for the same account. The
+// destination's own UIDVALIDITY is stored with the UID, because a UID in another
+// folder is only meaningful under that folder's value.
+model ImapMovedMessage {
+  id                   String             @id @default(uuid())
+  userId               String
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  linkedInboxAccountId String
+  linkedInboxAccount   LinkedInboxAccount @relation(fields: [linkedInboxAccountId], references: [id], onDelete: Cascade)
+  // EmailMessage.gmailId the message had in INBOX: `<idPrefix>:<email>:<uid>`.
+  sourceId             String
+  role                 ImapMoveRole
+  // Where it is now. folderUid is a BigInt because a UID is an unsigned 32-bit
+  // integer (over a signed Int); read it back with Number().
+  folderPath           String
+  folderUid            BigInt
+  folderUidValidity    String
+  // What the message looked like when it moved, so undo can refuse if the UID
+  // now names something else. messageIdHeader is the RFC 5322 Message-ID when
+  // the message has one; sentAt is NULL when it has no Date header.
+  messageIdHeader      String?
+  subject              String
+  sentAt               DateTime?
+  createdAt            DateTime           @default(now())
+
+  @@unique([linkedInboxAccountId, sourceId])
+  // The retention sweep: delete by account and age.
+  @@index([linkedInboxAccountId, createdAt])
+  // The cascade from User, and the per-user lookup.
+  @@index([userId])
 }
 
 model Task {
