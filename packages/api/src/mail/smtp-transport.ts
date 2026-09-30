@@ -18,15 +18,15 @@
  *     nodemailer's defaults (2 min connection, 10 min socket) are far too long;
  *   - nothing is logged: SMTP traffic carries the password and the message;
  *   - content cannot pull in local files or URLs (`disableFileAccess`,
- *     `disableUrlAccess`); the sender hands over finished MIME bytes anyway.
+ *     `disableUrlAccess`); the sender hands over finished MIME bytes anyway;
+ *   - EHLO carries a fixed name (`klorn.ai`), not the machine's hostname, which
+ *     would otherwise be sent to the provider with every message.
+ *
+ * nodemailer is imported when the first transport is built, not at boot: while
+ * IMAP_SEND_ENABLED is off the package never loads.
  */
 
-import {
-  createTransport,
-  type SMTPSentMessageInfo,
-  type SMTPTransportOptions,
-  type Transporter,
-} from "nodemailer";
+import type { SMTPSentMessageInfo, SMTPTransportOptions, Transporter } from "nodemailer";
 
 import type { ImapProviderConfig } from "./imap-providers.js";
 
@@ -37,6 +37,9 @@ export const SMTP_SOCKET_TIMEOUT_MS = 30_000;
 export const SMTP_DNS_TIMEOUT_MS = 10_000;
 
 const MIN_TLS_VERSION = "TLSv1.2";
+
+/** What the client says in EHLO. A fixed string: nodemailer's default is os.hostname(). */
+export const SMTP_EHLO_NAME = "klorn.ai";
 
 /** Reply codes that mean the server refused the LOGIN itself (RFC 4954). */
 const AUTH_REJECTION_REPLY_CODES: readonly number[] = [530, 534, 535];
@@ -56,6 +59,7 @@ export function smtpTransportOptions(
     port,
     secure: security === "implicit-tls",
     requireTLS: security === "starttls",
+    name: SMTP_EHLO_NAME,
     auth: { user: credentials.email, pass: credentials.password },
     tls: { rejectUnauthorized: true, servername: host, minVersion: MIN_TLS_VERSION },
     connectionTimeout: SMTP_CONNECTION_TIMEOUT_MS,
@@ -69,11 +73,42 @@ export function smtpTransportOptions(
   };
 }
 
-export function createSmtpTransport(
+type NodemailerModule = typeof import("nodemailer");
+
+let nodemailerLoad: Promise<NodemailerModule> | undefined;
+
+/**
+ * The nodemailer module, imported on first use. Concurrent first callers share
+ * one import; a failed import is forgotten so the next send can retry it.
+ */
+function loadNodemailer(): Promise<NodemailerModule> {
+  nodemailerLoad ??= import("nodemailer").catch((err: unknown) => {
+    nodemailerLoad = undefined;
+    throw err;
+  });
+  return nodemailerLoad;
+}
+
+export async function createSmtpTransport(
   provider: ImapProviderConfig,
   credentials: SmtpCredentials,
-): Transporter<SMTPSentMessageInfo> {
+): Promise<Transporter<SMTPSentMessageInfo>> {
+  const { createTransport } = await loadNodemailer();
   return createTransport(smtpTransportOptions(provider, credentials));
+}
+
+/**
+ * Submit finished MIME bytes with an explicit envelope. `raw` goes out as given
+ * (dot-stuffed, nothing added); the envelope is never derived from the message.
+ */
+export function sendRaw(
+  transport: Transporter<SMTPSentMessageInfo>,
+  message: { from: string; to: string; raw: Buffer },
+): Promise<SMTPSentMessageInfo> {
+  return transport.sendMail({
+    envelope: { from: message.from, to: [message.to] },
+    raw: message.raw,
+  });
 }
 
 /**

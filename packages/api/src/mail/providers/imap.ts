@@ -44,7 +44,8 @@ import {
   type ImapProviderConfig,
   type ImapProviderKey,
 } from "../imap-providers.js";
-import { databaseFailure, fail, findCheckedAccount, sessionAccountFor } from "./imap-account.js";
+import { fail } from "./action-failure.js";
+import { databaseFailure, findCheckedAccount, sessionAccountFor } from "./imap-account.js";
 import { type FlagChange, readChange, type ServerOutcome, starChange } from "./imap-flags.js";
 import { type SessionAccount, submitFlagOp } from "./imap-session.js";
 import type { MailActionFailure, MailProviderActions, SimpleMailActionResult } from "./types.js";

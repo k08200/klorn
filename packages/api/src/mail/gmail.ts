@@ -13,6 +13,7 @@ import { wrapUntrusted } from "../untrusted.js";
 import {
   buildPlainTextRawEmail,
   checkSendRecipient,
+  invalidAddressMessage,
   isNoReplyAddress,
   looksLikeEmailAddress,
 } from "./outbound-message.js";
@@ -1009,11 +1010,7 @@ export async function sendEmail(
 
 export async function createEmailDraft(userId: string, draft: CreateDraftInput) {
   const { to, subject, body, threadId, attachments = [], linkedInboxAccountId, reply } = draft;
-  if (!looksLikeEmailAddress(to)) {
-    return {
-      error: `Invalid email address: "${to}". Use a full address like local@domain, not a domain such as accounts.google.com.`,
-    };
-  }
+  if (!looksLikeEmailAddress(to)) return { error: invalidAddressMessage(to) };
   if (isNoReplyAddress(to)) {
     return {
       error: `This address (${to}) is a no-reply system sender. Klorn will not create a Gmail draft.`,

@@ -9,9 +9,11 @@
  * whitespace, NUL, DEL, CR, LF and every other C0 control, and it excludes
  * U+2028, U+2029 and U+0085 because they are not ASCII.
  *
- * One producer for every send and draft path: `buildPlainTextRawEmail` in
- * `gmail.ts` calls `replyHeaderLines`, and the reply route calls
- * `pickInReplyTo` so its `threaded` flag matches what was emitted.
+ * One producer for every send and draft path: `buildPlainTextMime` in
+ * `outbound-message.ts` (Gmail's `buildPlainTextRawEmail` wraps it, and the IMAP
+ * SMTP and APPEND paths call it directly) calls `replyHeaderLines`, and the reply
+ * route calls `pickInReplyTo` so its `threaded` flag matches what was emitted.
+ * The IMAP `getReplyHeaders` returns only ids parsed here.
  */
 
 /** Longest allowed text between the angle brackets of one message id. */

@@ -12,8 +12,12 @@
  * Gmail adds From, Date and Message-ID itself, and accepts 8-bit bodies over
  * HTTP. A message that leaves through SMTP or is stored by APPEND must carry its
  * own, and a server need not advertise 8BITMIME, so that flavour (the
- * `standalone` argument) also base64-encodes the text part. Without `standalone`
- * the output is byte-for-byte what `gmail.ts` produced before B3.
+ * `standalone` argument) also base64-encodes the text part, folds Subject into
+ * encoded-words of at most 75 characters and long attachment names into RFC 2231
+ * continuations, so no physical line exceeds 998 octets (RFC 5322 2.1.1) and the
+ * ones it controls stay within 78. Without `standalone` the output is
+ * byte-for-byte what `gmail.ts` produced before B3 (pinned against main's own
+ * output in outbound-message.test.ts).
  */
 
 import { randomUUID } from "node:crypto";
@@ -92,6 +96,10 @@ export function isNoReplyAddress(raw: string): boolean {
   }
   return false;
 }
+
+/** What the IMAP providers answer for an address that is valid but not a plain ASCII one. */
+export const PLAIN_ADDRESS_ONLY_MESSAGE =
+  "Klorn can only use a plain address (letters, digits and . _ + - before the @).";
 
 /** What every provider answers for a recipient that is not an address. */
 export function invalidAddressMessage(to: string): string {
@@ -234,6 +242,97 @@ export interface StandaloneHeaders {
   date: Date;
 }
 
+// Standalone folding limits. An encoded-word is at most 75 characters (RFC 2047
+// 2); 42 bytes of text become a 68-character word, so "Subject: " plus one word
+// is 77 characters, inside the 78-character line target.
+const MAX_SUBJECT_WORD_BYTES = 42;
+const MAX_ASCII_NAME_LENGTH = 40;
+const MAX_NAME_EXTENSION_LENGTH = 10;
+/** Percent-encoded characters per RFC 2231 continuation segment. */
+const MAX_ENCODED_NAME_SEGMENT = 60;
+const MAX_LINE_LENGTH = 78;
+
+/** The subject as encoded-words, cut on code-point boundaries so none splits a character. */
+function subjectWords(subject: string): string[] {
+  const words: string[] = [];
+  let current = "";
+  let bytes = 0;
+  for (const ch of safeHeaderValue(subject)) {
+    const size = Buffer.byteLength(ch);
+    if (bytes + size > MAX_SUBJECT_WORD_BYTES) {
+      words.push(current);
+      current = "";
+      bytes = 0;
+    }
+    current += ch;
+    bytes += size;
+  }
+  if (current !== "") words.push(current);
+  return words.map((word) => `=?UTF-8?B?${Buffer.from(word).toString("base64")}?=`);
+}
+
+/** The ASCII `filename=` fallback, capped, keeping a short extension. */
+function asciiFallbackName(ascii: string): string {
+  if (ascii.length <= MAX_ASCII_NAME_LENGTH) return ascii;
+  const dot = ascii.lastIndexOf(".");
+  const extension =
+    dot > 0 && ascii.length - dot <= MAX_NAME_EXTENSION_LENGTH ? ascii.slice(dot) : "";
+  return ascii.slice(0, MAX_ASCII_NAME_LENGTH - extension.length) + extension;
+}
+
+/** encodeURIComponent, plus the four characters RFC 5987 attr-char excludes but it leaves bare. */
+function encodeParameterValue(value: string): string {
+  return encodeURIComponent(value).replace(
+    /['()*]/g,
+    (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+/** Split percent-encoded text into segments of at most `size`, never inside a %XX. */
+function segmentsOf(encoded: string, size: number): string[] {
+  const segments: string[] = [];
+  let start = 0;
+  while (start < encoded.length) {
+    let end = Math.min(start + size, encoded.length);
+    if (end < encoded.length) {
+      if (encoded[end - 1] === "%") end -= 1;
+      else if (encoded[end - 2] === "%") end -= 2;
+    }
+    segments.push(encoded.slice(start, end));
+    start = end;
+  }
+  return segments;
+}
+
+/** A header as one line when it fits, else folded after the first parameter separator. */
+function foldParameters(head: string, parameters: readonly string[]): string[] {
+  const single = `${head} ${parameters.join("; ")}`;
+  if (single.length <= MAX_LINE_LENGTH) return [single];
+  return [
+    `${head}`,
+    ...parameters.map((parameter, i) => ` ${parameter}${i < parameters.length - 1 ? ";" : ""}`),
+  ];
+}
+
+function standaloneAttachmentHeaders(mimeType: string, filename: string): string[] {
+  const ascii = asciiFallbackName(safeAsciiFilename(filename));
+  const encoded = encodeParameterValue(filename);
+  const nameParameters =
+    encoded.length <= MAX_ENCODED_NAME_SEGMENT
+      ? [`filename*=UTF-8''${encoded}`]
+      : segmentsOf(encoded, MAX_ENCODED_NAME_SEGMENT).map((segment, i) =>
+          i === 0 ? `filename*0*=UTF-8''${segment}` : `filename*${i}*=${segment}`,
+        );
+  return [
+    ...foldParameters(`Content-Type: ${safeMimeType(mimeType)};`, [`name="${ascii}"`]),
+    "Content-Transfer-Encoding: base64",
+    ...foldParameters("Content-Disposition: attachment;", [
+      `filename="${ascii}"`,
+      ...nameParameters,
+    ]),
+  ];
+}
+
 /** RFC 5322 date-time in UTC, with a numeric zone (`+0000`, not the obsolete `GMT`). */
 function formatDateHeader(date: Date): string {
   return date.toUTCString().replace("GMT", "+0000");
@@ -256,18 +355,22 @@ function textPartLines(body: string, standalone: StandaloneHeaders | undefined):
   ];
 }
 
-function attachmentLines(attachments: readonly MailAttachment[], boundary: string): string[] {
+function attachmentLines(
+  attachments: readonly MailAttachment[],
+  boundary: string,
+  standalone: boolean,
+): string[] {
   return attachments.flatMap((attachment) => {
     const filename = safeHeaderValue(attachment.filename || "attachment");
     const asciiFilename = safeAsciiFilename(filename);
-    return [
-      `--${boundary}`,
-      `Content-Type: ${safeMimeType(attachment.mimeType)}; name="${asciiFilename}"`,
-      "Content-Transfer-Encoding: base64",
-      `Content-Disposition: attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-      "",
-      wrapBase64(attachment.content.toString("base64")),
-    ];
+    const headers = standalone
+      ? standaloneAttachmentHeaders(attachment.mimeType, filename)
+      : [
+          `Content-Type: ${safeMimeType(attachment.mimeType)}; name="${asciiFilename}"`,
+          "Content-Transfer-Encoding: base64",
+          `Content-Disposition: attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        ];
+    return [`--${boundary}`, ...headers, "", wrapBase64(attachment.content.toString("base64"))];
   });
 }
 
@@ -281,7 +384,9 @@ function addressingLines(
   return [
     ...(standalone ? [`From: ${safeHeaderValue(standalone.from)}`] : []),
     `To: ${safeHeaderValue(to)}`,
-    `Subject: ${encodeSubject(subject)}`,
+    standalone
+      ? `Subject: ${subjectWords(subject).join("\r\n ")}`
+      : `Subject: ${encodeSubject(subject)}`,
     ...(standalone
       ? [
           `Date: ${formatDateHeader(standalone.date)}`,
@@ -321,7 +426,7 @@ export function buildPlainTextMime(
     "",
     `--${boundary}`,
     ...textPartLines(body, standalone),
-    ...attachmentLines(attachments, boundary),
+    ...attachmentLines(attachments, boundary, standalone !== undefined),
     `--${boundary}--`,
     "",
   ].join("\r\n");

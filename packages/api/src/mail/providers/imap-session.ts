@@ -24,6 +24,22 @@
  *   4. Reporting. Transport failures reach Sentry at most once per account per
  *      IMAP_TRANSPORT_CAPTURE_INTERVAL_MS; otherwise they are a warn log.
  *
+ * One queue per account, for everything (step B3): the flag actions above and the
+ * one-shot tasks below (SMTP sends, draft and Sent-copy APPENDs, reply-header
+ * reads) for the same linked account run through the SAME per-row chain, one at a
+ * time, in either order. The poller is separate and unaffected. A task also
+ * takes one of the same global session slots for its whole duration, shares the
+ * auth cooldown (an SMTP login rejection stops the flag actions and the reverse),
+ * and is bounded in time, because a user waits on it and its effect is a mail:
+ *
+ *   - TASK_QUEUE_WAIT_MS: waiting for its turn. Past it the caller gets `{ error }`
+ *     saying the mailbox was busy and nothing was sent or saved, and the task is
+ *     never started afterwards, so a "busy" answer can never become a late send.
+ *   - MAX_OUTSTANDING_TASKS_PER_USER: tasks a user may have queued or running.
+ *   - TASK_TOTAL_TIMEOUT_MS: a running task's whole duration. Past it the
+ *     connection is closed (the task's AbortSignal) and the caller is told the
+ *     outcome is unconfirmed.
+ *
  * State is per process (in-memory) on purpose: Render runs one instance, and a
  * second instance only doubles the caps, it does not break them.
  */
@@ -33,6 +49,8 @@ import { Semaphore } from "../../semaphore.js";
 import { captureError } from "../../sentry.js";
 import { createImapClient, endImapSession } from "../imap-connection.js";
 import type { ImapProviderConfig } from "../imap-providers.js";
+import { isSmtpAuthRejection } from "../smtp-transport.js";
+import { errorMessage, fail, sanitizedError } from "./action-failure.js";
 import { applyFlagRun, type FlagChange, type ServerOutcome, sameChange } from "./imap-flags.js";
 import type { MailActionFailure } from "./types.js";
 
@@ -46,6 +64,12 @@ export const MAX_CONCURRENT_IMAP_ACTION_SESSIONS = 3;
 export const MAX_OPS_PER_IMAP_SESSION = 200;
 export const IMAP_AUTH_COOLDOWN_MS = 15 * 60_000;
 export const IMAP_TRANSPORT_CAPTURE_INTERVAL_MS = 10 * 60_000;
+
+// One-shot tasks (step B3). Worst case for a caller: TASK_QUEUE_WAIT_MS waiting
+// plus TASK_TOTAL_TIMEOUT_MS running, under a typical 100 s request limit.
+export const TASK_QUEUE_WAIT_MS = 20_000;
+export const TASK_TOTAL_TIMEOUT_MS = 60_000;
+export const MAX_OUTSTANDING_TASKS_PER_USER = 10;
 
 const INBOX = "INBOX";
 
@@ -84,36 +108,53 @@ const queues = new Map<string, AccountQueue>();
 const authCooldownUntil = new Map<string, number>();
 /** rowId -> epoch ms of the last transport failure sent to Sentry. */
 const lastTransportCapture = new Map<string, number>();
+/** rowId -> the tail of that account's chain. Never rejects. Present while work is queued. */
+const rowChains = new Map<string, Promise<void>>();
+/** userId -> tasks queued or running (B3 one-shot tasks only). */
+const outstandingTasks = new Map<string, number>();
 let sessionSlots = new Semaphore(MAX_CONCURRENT_IMAP_ACTION_SESSIONS);
 
-/** Test hook: forget every queue, cooldown and throttle. */
+/** Test hook: forget every queue, chain, cooldown and throttle. */
 export function resetImapSessionState(): void {
   queues.clear();
+  rowChains.clear();
+  outstandingTasks.clear();
   authCooldownUntil.clear();
   lastTransportCapture.clear();
   sessionSlots = new Semaphore(MAX_CONCURRENT_IMAP_ACTION_SESSIONS);
 }
 
-const fail = (error: string): MailActionFailure => ({ error });
+/**
+ * Run `work` as the next piece of work on this account, after everything queued
+ * for it before, whichever kind. One chain per linked account row.
+ */
+function serially<T>(rowId: string, work: () => Promise<T>): Promise<T> {
+  const previous = rowChains.get(rowId) ?? Promise.resolve();
+  const run = previous.then(work);
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  rowChains.set(rowId, tail);
+  tail.then(() => {
+    if (rowChains.get(rowId) === tail) rowChains.delete(rowId);
+  });
+  return run;
+}
 
 const authFailure = (label: string): MailActionFailure =>
   fail(`${label} rejected the saved app password. Reconnect your ${label} mailbox in Settings.`);
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
-export function isAuthFailure(err: unknown): boolean {
+function isAuthFailure(err: unknown): boolean {
   const e = err as { authenticationFailed?: unknown; serverResponseCode?: unknown } | null;
   return e?.authenticationFailed === true || e?.serverResponseCode === "AUTHENTICATIONFAILED";
 }
 
 /**
  * The answer for an account whose credential was rejected recently, or null.
- * Exported for step B3: sends, drafts and reply-header reads share this cooldown
- * with the flag actions, so a revoked app password stops every path at once.
+ * Flag actions and B3 tasks share it, so a revoked app password stops every path.
  */
-export function cooldownFailure(
+function cooldownFailure(
   provider: ImapProviderConfig,
   account: SessionAccount,
 ): MailActionFailure | null {
@@ -160,14 +201,8 @@ function captureSafely(err: unknown, context: Parameters<typeof captureError>[1]
   }
 }
 
-/**
- * The server rejected this credential: start the shared cooldown and answer the
- * reconnect error. Exported for step B3 (SMTP authentication uses it too).
- */
-export function rejectLogin(
-  provider: ImapProviderConfig,
-  account: SessionAccount,
-): MailActionFailure {
+/** The server rejected this credential: start the shared cooldown, answer the reconnect error. */
+function rejectLogin(provider: ImapProviderConfig, account: SessionAccount): MailActionFailure {
   startCooldown(provider, account);
   return authFailure(provider.label);
 }
@@ -175,10 +210,10 @@ export function rejectLogin(
 /**
  * A session failure that is not a rejected login: log once, report to Sentry at
  * most once per account per interval, answer the generic transport error. `err`
- * is logged and reported as given, so callers that may hold server text with an
- * address in it pass a sanitized error (step B3 does).
+ * is logged and reported as given, so B3 tasks, whose errors may quote a
+ * recipient, pass a sanitized one.
  */
-export function softFailure(
+function softFailure(
   err: unknown,
   provider: ImapProviderConfig,
   account: SessionAccount,
@@ -204,11 +239,19 @@ function sessionFailure(
   return isAuthFailure(err) ? rejectLogin(provider, account) : softFailure(err, provider, account);
 }
 
-async function withInbox<T>(
+/**
+ * An authenticated IMAP session with the action timeouts, ended whatever happens
+ * (LOGOUT, then a hard close). No mailbox is selected: callers that need one lock
+ * it themselves. Aborting `signal` hard-closes the connection, which makes any
+ * pending command fail at once.
+ */
+export async function withImapClient<T>(
   provider: ImapProviderConfig,
   account: SessionAccount,
   run: (client: ImapFlow) => Promise<T>,
+  signal?: AbortSignal,
 ): Promise<T> {
+  if (signal?.aborted) throw new Error("aborted before the session started");
   const client = createImapClient({
     provider,
     host: account.host,
@@ -219,17 +262,31 @@ async function withInbox<T>(
     greetingTimeout: IMAP_ACTION_GREETING_TIMEOUT_MS,
     accountId: account.rowId,
   });
+  const abort = () => client.close();
+  signal?.addEventListener("abort", abort, { once: true });
   try {
     await client.connect();
+    return await run(client);
+  } finally {
+    signal?.removeEventListener("abort", abort);
+    await endImapSession(client);
+  }
+}
+
+/** A session with INBOX selected for the whole run; the flag actions' shape. */
+function withInbox<T>(
+  provider: ImapProviderConfig,
+  account: SessionAccount,
+  run: (client: ImapFlow) => Promise<T>,
+): Promise<T> {
+  return withImapClient(provider, account, async (client) => {
     const lock = await client.getMailboxLock(INBOX);
     try {
       return await run(client);
     } finally {
       lock.release();
     }
-  } finally {
-    await endImapSession(client);
-  }
+  });
 }
 
 function takeBatch(rowId: string, max: number): readonly Queued[] {
@@ -330,12 +387,8 @@ async function drain(provider: ImapProviderConfig, rowId: string): Promise<void>
   }
 }
 
-/**
- * Run `work` while holding one of the global action-session slots. Step B3's
- * SMTP and one-shot IMAP work counts against the same cap as the flag actions:
- * both are logins to the same providers from the same egress IP.
- */
-export async function withSessionSlot<T>(work: () => Promise<T>): Promise<T> {
+/** Run `work` while holding one of the global action-session slots. */
+async function withSessionSlot<T>(work: () => Promise<T>): Promise<T> {
   const slots = sessionSlots;
   await slots.acquire();
   try {
@@ -368,9 +421,140 @@ export function submitFlagOp(
     if (!existing) {
       // drain() handles its own failures; this is the last net, so a detached
       // worker can never become an unhandled rejection.
-      drain(provider, account.rowId).catch((err) => {
+      serially(account.rowId, () => drain(provider, account.rowId)).catch((err) => {
         console.warn(`[${provider.logScope}] action worker failed: ${errorMessage(err)}`);
       });
     }
+  });
+}
+
+// --- one-shot tasks (step B3) -------------------------------------------------
+
+const busyFailure = (provider: ImapProviderConfig): MailActionFailure =>
+  fail(
+    `${provider.label} is busy with your other requests. Nothing was sent or saved; try again shortly.`,
+  );
+
+const timeoutFailure = (provider: ImapProviderConfig): MailActionFailure =>
+  fail(
+    `${provider.label} did not answer in time. The action may or may not have completed; check your mailbox before trying again.`,
+  );
+
+/** The answer for an error a task threw: a rejected login (IMAP or SMTP), or a soft failure. */
+function failureFor(
+  err: unknown,
+  provider: ImapProviderConfig,
+  account: SessionAccount,
+): MailActionFailure {
+  return isAuthFailure(err) || isSmtpAuthRejection(err)
+    ? rejectLogin(provider, account)
+    : softFailure(sanitizedError(err), provider, account);
+}
+
+/**
+ * Record a failure that must not change the caller's result (the Sent copy of a
+ * message that already went out): a rejected login still starts the shared
+ * cooldown, anything else is logged and reported like any session failure.
+ */
+export function noteSideFailure(
+  err: unknown,
+  provider: ImapProviderConfig,
+  account: SessionAccount,
+): void {
+  failureFor(err, provider, account);
+}
+
+function adjustOutstanding(userId: string, delta: number): void {
+  const next = (outstandingTasks.get(userId) ?? 0) + delta;
+  if (next <= 0) outstandingTasks.delete(userId);
+  else outstandingTasks.set(userId, next);
+}
+
+/**
+ * Run the task under TASK_TOTAL_TIMEOUT_MS. At the deadline the task's signal is
+ * aborted (it closes its connection) and the caller gets the unconfirmed-outcome
+ * answer; the task's own late failure is not reported again.
+ */
+async function runBounded<T>(
+  provider: ImapProviderConfig,
+  account: SessionAccount,
+  task: (signal: AbortSignal) => Promise<T>,
+): Promise<T | MailActionFailure> {
+  const controller = new AbortController();
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<MailActionFailure>((resolve) => {
+    deadline = setTimeout(() => {
+      controller.abort();
+      resolve(timeoutFailure(provider));
+    }, TASK_TOTAL_TIMEOUT_MS);
+  });
+  const finished = Promise.resolve()
+    .then(() => task(controller.signal))
+    .catch(
+      (err: unknown): MailActionFailure =>
+        controller.signal.aborted ? timeoutFailure(provider) : failureFor(err, provider, account),
+    );
+  try {
+    return await Promise.race([finished, timedOut]);
+  } finally {
+    clearTimeout(deadline);
+  }
+}
+
+/**
+ * Run `task` as the next piece of work on `account`, through the account's one
+ * queue and holding a global session slot. Resolves with the task's result, or
+ * with `{ error }` when the account is cooling down, the user has too many tasks
+ * outstanding, the mailbox stayed busy past TASK_QUEUE_WAIT_MS (the task is then
+ * never run), the task threw, or it exceeded TASK_TOTAL_TIMEOUT_MS. Never rejects.
+ */
+export function runAccountTask<T>(
+  provider: ImapProviderConfig,
+  account: SessionAccount,
+  task: (signal: AbortSignal) => Promise<T>,
+): Promise<T | MailActionFailure> {
+  const cooling = cooldownFailure(provider, account);
+  if (cooling) return Promise.resolve(cooling);
+  if ((outstandingTasks.get(account.userId) ?? 0) >= MAX_OUTSTANDING_TASKS_PER_USER) {
+    return Promise.resolve(busyFailure(provider));
+  }
+  adjustOutstanding(account.userId, 1);
+
+  return new Promise<T | MailActionFailure>((resolve) => {
+    let turn: "queued" | "running" | "expired" = "queued";
+    let finished = false;
+    let waitTimer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (result: T | MailActionFailure) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(waitTimer);
+      adjustOutstanding(account.userId, -1);
+      resolve(result);
+    };
+    waitTimer = setTimeout(() => {
+      if (turn !== "queued") return;
+      turn = "expired";
+      finish(busyFailure(provider));
+    }, TASK_QUEUE_WAIT_MS);
+
+    const takeTurn = async (): Promise<void> => {
+      if (turn === "expired") return;
+      // Checked again on our turn: the task ahead of us may have been rejected.
+      const coolingNow = cooldownFailure(provider, account);
+      if (coolingNow) {
+        turn = "expired";
+        finish(coolingNow);
+        return;
+      }
+      await withSessionSlot(async () => {
+        if (turn === "expired") return;
+        turn = "running";
+        clearTimeout(waitTimer);
+        finish(await runBounded(provider, account, task));
+      });
+    };
+    serially(account.rowId, takeTurn).catch((err: unknown) => {
+      finish(softFailure(sanitizedError(err), provider, account));
+    });
   });
 }

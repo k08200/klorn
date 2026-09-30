@@ -12,20 +12,28 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const h = vi.hoisted(() => ({ createTransport: vi.fn() }));
+const h = vi.hoisted(() => ({ createTransport: vi.fn(), loads: 0 }));
 
-vi.mock("nodemailer", () => ({ createTransport: h.createTransport }));
+// Counts how often the package is first imported: it must not load at boot.
+vi.mock("nodemailer", () => {
+  h.loads += 1;
+  return { createTransport: h.createTransport };
+});
 
+const loadsBeforeImport = h.loads;
 const { IMAP_PROVIDERS } = await import("../mail/imap-providers.js");
 const {
   SMTP_CONNECTION_TIMEOUT_MS,
   SMTP_DNS_TIMEOUT_MS,
   SMTP_GREETING_TIMEOUT_MS,
   SMTP_SOCKET_TIMEOUT_MS,
+  SMTP_EHLO_NAME,
   createSmtpTransport,
   isSmtpAuthRejection,
+  sendRaw,
   smtpTransportOptions,
 } = await import("../mail/smtp-transport.js");
+const loadsAfterModuleImport = h.loads;
 
 const CREDS = { email: "me@naver.com", password: "app-pw" };
 
@@ -116,6 +124,12 @@ describe("smtpTransportOptions", () => {
     }
   });
 
+  it("introduces itself with a fixed EHLO name, never the machine's hostname", () => {
+    const opts = smtpTransportOptions(IMAP_PROVIDERS.NAVER, CREDS);
+    expect(SMTP_EHLO_NAME).toBe("klorn.ai");
+    expect(opts.name).toBe("klorn.ai");
+  });
+
   it("does not log SMTP traffic and does not open file or URL access for content", () => {
     const opts = smtpTransportOptions(IMAP_PROVIDERS.NAVER, CREDS);
     expect(opts.logger).toBe(false);
@@ -140,13 +154,32 @@ describe("smtpTransportOptions", () => {
 });
 
 describe("createSmtpTransport", () => {
-  it("hands exactly those options to nodemailer and returns its transport", () => {
-    const transport = createSmtpTransport(IMAP_PROVIDERS.NAVER, CREDS);
+  it("does not import nodemailer until a transport is built (nothing loads at boot)", async () => {
+    expect(loadsBeforeImport).toBe(0);
+    expect(loadsAfterModuleImport).toBe(0);
+    await createSmtpTransport(IMAP_PROVIDERS.NAVER, CREDS);
+    expect(h.loads).toBe(1);
+  });
+
+  it("hands exactly those options to nodemailer and returns its transport", async () => {
+    const transport = await createSmtpTransport(IMAP_PROVIDERS.NAVER, CREDS);
     expect(h.createTransport).toHaveBeenCalledTimes(1);
     expect(h.createTransport.mock.calls[0][0]).toEqual(
       smtpTransportOptions(IMAP_PROVIDERS.NAVER, CREDS),
     );
     expect(transport).toBe(h.createTransport.mock.results[0].value);
+  });
+});
+
+describe("sendRaw", () => {
+  it("submits the exact bytes with an explicit envelope and nothing else", async () => {
+    const sendMail = vi.fn(async () => ({ accepted: ["bob@example.com"] }));
+    const raw = Buffer.from("From: me@naver.com\r\n\r\nhi\r\n");
+    await sendRaw({ sendMail } as never, { from: "me@naver.com", to: "bob@example.com", raw });
+    expect(sendMail).toHaveBeenCalledWith({
+      envelope: { from: "me@naver.com", to: ["bob@example.com"] },
+      raw,
+    });
   });
 });
 

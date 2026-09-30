@@ -16,6 +16,8 @@ const h = vi.hoisted(() => ({
   findFirst: vi.fn(),
   createTransport: vi.fn(),
   imapCtor: vi.fn(),
+  /** Times the nodemailer package was first imported. */
+  nodemailerLoads: 0,
 }));
 
 vi.mock("../db.js", () => {
@@ -34,7 +36,10 @@ vi.mock("../mail/gmail.js", () => ({
   archiveEmail: vi.fn(),
   unarchiveEmail: vi.fn(),
 }));
-vi.mock("nodemailer", () => ({ createTransport: h.createTransport }));
+vi.mock("nodemailer", () => {
+  h.nodemailerLoads += 1;
+  return { createTransport: h.createTransport };
+});
 vi.mock("imapflow", () => ({
   ImapFlow: class {
     constructor(opts: unknown) {
@@ -125,6 +130,14 @@ describe("flag OFF — byte-identical to main", () => {
     expect(mailActionsForProvider("NAVER")).toBe(first);
     expect(h.createTransport).not.toHaveBeenCalled();
     expect(h.imapCtor).not.toHaveBeenCalled();
+  });
+
+  it("does not even load nodemailer: the package stays out of the process while the flag is off", async () => {
+    setFlags({ ICLOUD_INBOX_ENABLED: "true", IMAP_ACTIONS_ENABLED: "true" });
+    await sendSurface("NAVER");
+    await sendSurface("ICLOUD");
+    mailActionsForProvider("NAVER");
+    expect(h.nodemailerLoads).toBe(0);
   });
 
   it("IMAP_ACTIONS_ENABLED alone does not open the send side", async () => {

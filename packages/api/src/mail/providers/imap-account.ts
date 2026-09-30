@@ -17,6 +17,7 @@ import { prisma } from "../../db.js";
 import { captureError } from "../../sentry.js";
 import { checkImapRow } from "../imap-connection.js";
 import type { ImapProviderConfig } from "../imap-providers.js";
+import { errorMessage, fail } from "./action-failure.js";
 import type { SessionAccount } from "./imap-session.js";
 import type { MailActionFailure } from "./types.js";
 
@@ -36,12 +37,7 @@ export interface CheckedAccount {
   passwordCipher: string;
 }
 
-export const fail = (error: string): MailActionFailure => ({ error });
 export const reconnectHint = (label: string) => `Reconnect your ${label} mailbox in Settings.`;
-
-export function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
 
 /**
  * A database failure: log and report once, answer softly — actions never throw.
