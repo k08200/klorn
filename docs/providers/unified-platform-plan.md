@@ -435,6 +435,36 @@ lists write calls per key and offers the read-write choice, both shown only
 when the server reports the flag on. WCAG 2.2 AA. `mcpWriteToolsEnabled` is
 not flipped before this step merges (L30).
 
+Landed 2026-09-30, OFF by default (the flag is unchanged):
+- `GET /api/keys/:id/activity` (session auth, own keys only): the 50 newest
+  `McpWriteAudit` rows of one key, newest first, as `tool`, `outcome`,
+  `reason`, `targetId`, `createdAt` and nothing else (the `select` and the
+  mapping are both allow-lists, so `argsHash` cannot leave). A foreign id and an
+  unknown id are the same 404 (`{ error: "API key not found" }`), and so is an
+  id that is not `[A-Za-z0-9-]{1,64}`, checked before any query (`DELETE /:id`
+  checks the same shape and keeps answering a malformed id like an unknown one:
+  `{ revoked: true }`, no query). It is 30 a minute per client address. While the flag is off it is an unregistered route, byte
+  for byte (`darkRouteGate`, in `onRequest`, before auth and any query). Query
+  in `mcp/key-activity.ts`.
+- `GET /api/keys` adds `writeToolsAvailable: true` only while the flag is on;
+  while off the body is exactly `{ keys }` as before. Both shapes are in
+  `@klorn/contract`.
+- Web, `components/api-keys-section.tsx`: while `writeToolsAvailable` is
+  true the create form offers Read only (default) or Read and write with one
+  sentence on what read-write allows, each key shows its permission, and each
+  read-write key (revoked ones too) expands Agent activity (time, action,
+  outcome, reason). Without the field the section renders the pre-A3 markup and
+  posts `{ name }` only. Copy is in all seven web locales. The two new nouns
+  are in `../product-vocabulary.md`.
+- Known gaps: the UI shows activity for read-write keys only, although a read
+  key also collects `refused` rows when an agent tries a write tool. The
+  Read and write sentence promises "change lanes", which is true only once A2b
+  lands; the flag must not flip before then. A 401 from a revoked key is still
+  not audited (A2a gap). The web app has no unit-test runner: its checks are
+  the Playwright spec `packages/web/e2e/api-keys-permission.spec.ts` (run by
+  hand, not in CI) and the i18n parity guard, which in CI also fails a new A3
+  string that is a copy of the English text.
+
 **A4 — `create_draft`, reply-only.** Depends on: A2, B0. `email_id` is
 required. The recipient is pinned to the original sender. The account is
 resolved from the row. It never sends. Providers without draft support return

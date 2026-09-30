@@ -344,6 +344,28 @@ describe("POST /api/keys — body handling", () => {
   });
 });
 
+describe("DELETE /api/keys/:id — id shape", () => {
+  it.each([
+    ["a NUL byte", "%00"],
+    ["a space", "k%201"],
+    ["a SQL-shaped id", "%27%20OR%201%3D1--"],
+    ["an id one past the 64-character cap", "a".repeat(65)],
+  ])("treats %s like an unknown id: the same no-op answer, no database work", async (_l, id) => {
+    const app = await buildApp();
+    const unknown = await app.inject({
+      method: "DELETE",
+      url: "/api/keys/11111111-2222-4333-8444-555555555555",
+      headers: auth(),
+    });
+    const res = await app.inject({ method: "DELETE", url: `/api/keys/${id}`, headers: auth() });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toBe(unknown.body);
+    expect(res.body).toBe('{"revoked":true}');
+    expect(keyUpdateMany).toHaveBeenCalledTimes(1); // only the well-formed unknown id above
+    await app.close();
+  });
+});
+
 describe("DELETE /api/keys/:id", () => {
   it("revokes scoped to the caller's user id", async () => {
     const app = await buildApp();

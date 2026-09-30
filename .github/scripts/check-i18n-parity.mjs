@@ -94,6 +94,7 @@ function tableKeys(body, locale) {
 }
 
 const tables = new Map();
+const bodies = new Map();
 let files;
 try {
   files = readdirSync(DIR)
@@ -112,6 +113,7 @@ for (const file of files) {
   const body = readObjectBody(source, openIndex);
   if (body === null) fail(`could not parse the table in ${file}`);
   tables.set(locale, tableKeys(body, locale));
+  bodies.set(locale, body);
 }
 
 if (tables.size < 2) {
@@ -160,6 +162,72 @@ if (problems > 0) {
   process.exit(1);
 }
 
+/**
+ * Copy guard for the keys a step adds. Key parity cannot see a translation that
+ * was never done: copying the English string into every locale passes it, and a
+ * localized surface then ships English text. For the prefixes below (scoped to
+ * what steps have added, so older strings are not newly flagged) each non-English
+ * value must differ from English, be non-empty, and carry the same {placeholders}.
+ * To cover a later step's keys, add its prefix here.
+ */
+const COPY_GUARD_PREFIXES = ["settings.apiKeys.permission.", "settings.apiKeys.activity."];
+
+/** Words that are genuinely the same in another language: key -> locales. Keep this tiny. */
+const SAME_AS_ENGLISH = {
+  "settings.apiKeys.activity.outcome.error": ["es"],
+};
+
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** The string value of a flat-table entry, or null when it is not a plain string literal. */
+function tableValue(body, key) {
+  const literal = new RegExp(
+    `(?:^|\\n)\\s*["']${escapeRegExp(key)}["']\\s*:\\s*("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*')`,
+  ).exec(body);
+  if (!literal) return null;
+  const text = literal[1];
+  if (text[0] === '"') return JSON.parse(text);
+  return JSON.parse(`"${text.slice(1, -1).replace(/\\'/g, "'").replace(/"/g, '\\"')}"`);
+}
+
+const placeholdersOf = (text) => [...new Set(text.match(/\{\w+\}/g) ?? [])].sort().join(" ");
+
+const guardedKeys = baseKeys.filter((key) => COPY_GUARD_PREFIXES.some((p) => key.startsWith(p)));
+for (const key of Object.keys(SAME_AS_ENGLISH)) {
+  if (!guardedKeys.includes(key)) fail(`SAME_AS_ENGLISH names ${key}, which is not a guarded key`);
+}
+
+let copyProblems = 0;
+for (const key of guardedKeys) {
+  const english = tableValue(bodies.get(baseLocale), key);
+  if (english === null) fail(`could not read the value of ${key} in ${baseLocale}.ts`);
+  for (const locale of tables.keys()) {
+    if (locale === baseLocale) continue;
+    const text = tableValue(bodies.get(locale), key);
+    if (text === null) fail(`could not read the value of ${key} in ${locale}.ts`);
+    const allowedSame = (SAME_AS_ENGLISH[key] ?? []).includes(locale);
+    if (text.trim() === "") {
+      console.error(`✗ ${locale} ${key} is empty`);
+      copyProblems++;
+    } else if (text === english && !allowedSame) {
+      console.error(`✗ ${locale} ${key} is still the English text`);
+      copyProblems++;
+    }
+    if (placeholdersOf(text) !== placeholdersOf(english)) {
+      console.error(`✗ ${locale} ${key} has different {placeholders} than ${baseLocale}`);
+      copyProblems++;
+    }
+  }
+}
+
+if (copyProblems > 0) {
+  console.error("\nTranslate the string (or, if the word really is the same, list it in");
+  console.error("SAME_AS_ENGLISH): a localized surface must not ship English text.");
+  process.exit(1);
+}
+
 console.log(
-  `✓ i18n parity: ${tables.size} locales × ${baseKeys.length} keys (${[...tables.keys()].join(", ")})`,
+  `✓ i18n parity: ${tables.size} locales × ${baseKeys.length} keys (${[...tables.keys()].join(", ")}); copy guard: ${guardedKeys.length} keys`,
 );
