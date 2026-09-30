@@ -10,6 +10,7 @@ import {
 import { spamIntakeEnabled } from "../ops/feature-flags.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
+import type { ReplyThreadingHeaders } from "./providers/types.js";
 
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
@@ -1054,17 +1055,21 @@ export function safeMimeType(raw: string): string {
     : "application/octet-stream";
 }
 
-interface ThreadingHeaders {
-  inReplyTo?: string;
-  references?: string;
+/** One header line, or nothing when the sanitised value is empty. */
+function optionalHeaderLine(name: string, value: string | undefined): string[] {
+  const safe = value ? safeHeaderValue(value) : "";
+  return safe ? [`${name}: ${safe}`] : [];
 }
 
-/** RFC822 threading headers, CR/LF-stripped so a fetched value can't inject. */
-function threadingHeaderLines(headers?: ThreadingHeaders): string[] {
-  const lines: string[] = [];
-  if (headers?.inReplyTo) lines.push(`In-Reply-To: ${safeHeaderValue(headers.inReplyTo)}`);
-  if (headers?.references) lines.push(`References: ${safeHeaderValue(headers.references)}`);
-  return lines;
+/**
+ * RFC822 threading headers, CR/LF-stripped so a fetched or caller-supplied
+ * value can't inject a header. Shared by the send and draft paths.
+ */
+function threadingHeaderLines(headers?: ReplyThreadingHeaders): string[] {
+  return [
+    ...optionalHeaderLine("In-Reply-To", headers?.inReplyTo),
+    ...optionalHeaderLine("References", headers?.references),
+  ];
 }
 
 function buildPlainTextRawEmail(
@@ -1072,7 +1077,7 @@ function buildPlainTextRawEmail(
   subject: string,
   body: string,
   attachments: GmailDraftAttachment[] = [],
-  threading?: ThreadingHeaders,
+  threading?: ReplyThreadingHeaders,
 ): string {
   const threadLines = threadingHeaderLines(threading);
   if (attachments.length === 0) {
@@ -1193,6 +1198,7 @@ export async function createEmailDraft(
   threadId?: string | null,
   attachments: GmailDraftAttachment[] = [],
   linkedInboxAccountId?: string | null,
+  reply?: ReplyThreadingHeaders,
 ) {
   if (!looksLikeEmailAddress(to)) {
     return {
@@ -1211,7 +1217,7 @@ export async function createEmailDraft(
   if (!auth) return { error: "Gmail not connected." };
 
   const gmail = google.gmail({ version: "v1", auth });
-  const raw = buildPlainTextRawEmail(to, subject, body, attachments);
+  const raw = buildPlainTextRawEmail(to, subject, body, attachments, reply);
   let res: { data: { id?: string | null; message?: { id?: string | null } | null } };
   try {
     res = await gmail.users.drafts.create({

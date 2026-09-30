@@ -40,10 +40,19 @@ export interface MailAttachment {
   content: Buffer;
 }
 
-export interface SendMailOptions {
-  threadId?: string | null;
+/**
+ * RFC 5322 threading headers of a reply. Values are opaque `Message-ID`
+ * strings; each implementation must neutralise CR/LF before writing them into
+ * a header. Absent means "not a reply": the message is built exactly as it was
+ * before reply context existed.
+ */
+export interface ReplyThreadingHeaders {
   inReplyTo?: string;
   references?: string;
+}
+
+export interface SendMailOptions extends ReplyThreadingHeaders {
+  threadId?: string | null;
   linkedInboxAccountId?: string | null;
 }
 
@@ -72,6 +81,7 @@ export interface MailProviderActions {
     threadId?: string | null,
     attachments?: MailAttachment[],
     linkedInboxAccountId?: string | null,
+    reply?: ReplyThreadingHeaders,
   ): Promise<CreateDraftResult>;
   getReplyHeaders(
     userId: string,

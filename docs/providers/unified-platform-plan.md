@@ -13,7 +13,7 @@ company edition design stays in `../design/team-mode-v3.md`.
 | | Mail | Calendar | Drive |
 |---|---|---|---|
 | Google | complete | primary calendar synced to rows; linked accounts used for conflict checks only | none |
-| Microsoft | merged, flag OFF, Azure registration pending; reply threading headers missing (`getReplyHeaders` returns `{}`) | none (Graph scopes are `Mail.*` only) | none |
+| Microsoft | merged, flag OFF, Azure registration pending; replies and drafts are unthreaded by design (`getReplyHeaders` returns `{}`; native reply is B0b) | none (Graph scopes are `Mail.*` only) | none |
 | Naver | read-only IMAP; every action returns 501 | none | none |
 | iCloud | read-only IMAP, flag OFF | none | none |
 | Generic IMAP (company/personal hosts) | not built (Phase 4, gated on SSRF review) | none | none |
@@ -36,8 +36,9 @@ company edition design stays in `../design/team-mode-v3.md`.
 - **Write paths that exist.** `mark_read` has an executor case. Tier changes
   from every surface go through `overrideAttentionTier`
   (`judge/attention-override.ts`). `MailProviderActions.createDraft` exists but
-  is reached only from `POST /api/email/:id/gmail-draft`, and its signature
-  carries no reply headers. `archive_email` and `delete_email` are names in
+  is reached only from `POST /api/email/:id/gmail-draft`. Before B0 its
+  signature carried no reply headers; after B0 it accepts them, and that route
+  still does not pass them. `archive_email` and `delete_email` are names in
   the risk table with no executor case.
 - **Calendar.** `LinkedCalendarAccount` has no provider column.
   `CalendarEvent` is keyed on `googleId`. Sync pulls the primary Google
@@ -264,9 +265,38 @@ founder approval per listing; outward-facing.
 
 ### Workstream B — finish mail
 
-**B0 — reply threading in the provider seam.** Depends on: nothing.
-`createDraft` and send accept reply headers. The Gmail draft builder includes
-them. Graph `getReplyHeaders` returns real headers instead of `{}`.
+**B0 — reply headers on provider drafts (seam and Gmail builder).** Depends on:
+nothing.
+- Context: `sendEmail` already takes In-Reply-To and References through
+  `SendMailOptions`. `createDraft` had no way to carry them, and the Gmail
+  draft builder never emitted them. Gmail's threading rule needs `threadId`,
+  matching References and In-Reply-To, and a matching Subject
+  (https://developers.google.com/workspace/gmail/api/guides/threads).
+- Tasks: `createDraft` gains one trailing optional parameter,
+  `reply?: ReplyThreadingHeaders`, after `linkedInboxAccountId`. Every
+  existing call stays valid. `SendMailOptions` reuses the same two fields. The
+  Google provider passes it to `createEmailDraft`, which hands it to the MIME
+  builder that `sendEmail` already uses. Header values go through the same
+  CR/LF guard on both paths, and a header whose sanitised value is empty is
+  dropped. `unsupportedMailActions` and the Outlook provider accept the new
+  parameter and ignore it. Outlook behaviour does not change.
+- Verify: MIME tests first for draft and send: headers present when given,
+  the no-reply MIME byte-identical to before, CR/LF injection neutralised,
+  linked account id still selects the account. Provider tests pin Google
+  forwarding, the unsupported result and unchanged Outlook payloads. A route
+  test pins that `gmail-draft` passes the same arguments as before. Full gate.
+- Exit: no user-visible change. No route passes reply headers to `createDraft`
+  yet.
+- Rollback: revert the PR. No schema, no flag.
+- Follow-up: wiring the existing `gmail-draft` route to pass reply headers is
+  a separate fix, verified against a real Gmail account.
+
+**B0b — Microsoft native reply** (*outline*). Depends on: B0. Outlook replies
+use Graph `/messages/{id}/reply` and reply drafts use `/messages/{id}/createReply`,
+because `sendMail` cannot set In-Reply-To. `getReplyHeaders` stays `{}`, so the
+reply route never reports `threaded: true` for an Outlook send. The flag stays
+OFF. The seam needs a way to name the message being answered; the PR that
+starts this step designs it and expands this brief.
 
 **B1 — IMAP flag actions for Naver and iCloud.** Depends on: nothing.
 - Context: `providers/dispatch.ts` maps NAVER, ICLOUD and IMAP to
@@ -373,7 +403,8 @@ availability reads each member's own synced calendars.
 ```
 A1 → A2 → A3            A2 + B0 → A4            A2 + A4 + A5 → A8
 A5 (read-only part), A6 independent
-B0 → B3                 B1 → B2                 B4 after security design
+B0 → B3                 B0 → B0b                B1 → B2
+B4 after security design
 F0 → B5
 C1 → C2 → C7            C2 → {C3 | C4 | C5 | C6}            C2 → F (PR-B)
 D1 + D2 → D3 → D7       D1 + D2 → D4            D2 → {D5 | D6}
@@ -390,7 +421,8 @@ time, whatever the graph says. The later step rebases, reruns
 | File | Steps |
 |---|---|
 | `packages/api/prisma/schema.prisma` | A1, A2, B2, C1, D2, E1, F |
-| `mail/providers/types.ts`, `dispatch.ts` | A4, B0, B1, B2, B3, E2 |
+| `mail/providers/types.ts`, `dispatch.ts` | A4, B0, B0b, B1, B2, B3, E2 |
+| `mail/providers/outlook.ts`, `routes/email-replies.ts` | B0b, the `gmail-draft` follow-up under B0 |
 | web locale files | every step with UI copy |
 
 ## Founder actions

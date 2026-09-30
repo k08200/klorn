@@ -7,6 +7,7 @@ import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createEmailDraft = vi.hoisted(() => vi.fn());
+const getReplyHeaders = vi.hoisted(() => vi.fn());
 const emailFindFirst = vi.hoisted(() => vi.fn());
 const updateCandidateIntake = vi.hoisted(() => vi.fn(async () => {}));
 
@@ -38,7 +39,7 @@ vi.mock("../mail/email-candidate-intake.js", () => ({ updateCandidateIntake }));
 vi.mock("../mail/gmail.js", () => ({
   createEmailDraft,
   sendEmail: vi.fn(),
-  getReplyHeaders: vi.fn(),
+  getReplyHeaders,
   resolveMailClient: vi.fn(),
   GMAIL_TOOLS: [],
 }));
@@ -64,6 +65,7 @@ async function buildApp() {
 
 beforeEach(() => {
   createEmailDraft.mockReset();
+  getReplyHeaders.mockReset();
   emailFindFirst.mockReset();
   updateCandidateIntake.mockClear();
   emailFindFirst.mockResolvedValue(EMAIL);
@@ -97,6 +99,33 @@ describe("POST /api/email/:id/gmail-draft", () => {
     expect(res.statusCode).toBe(200);
     const call = createEmailDraft.mock.calls[0];
     expect(call[6]).toBe("linked-acct-1"); // linkedInboxAccountId
+    await app.close();
+  });
+
+  it("passes exactly the pre-B0 arguments and no reply headers (B0 leaves this route unchanged)", async () => {
+    // Wiring reply headers into this route is a separate fix that needs a real
+    // Gmail account to verify. Until then the route must not fetch or pass them.
+    emailFindFirst.mockResolvedValue({ ...EMAIL, linkedInboxAccountId: "linked-acct-1" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/gmail-draft",
+      payload: { to: "boss@corp.com", subject: "Re: hi", body: "sounds good" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(createEmailDraft).toHaveBeenCalledTimes(1);
+    const args = createEmailDraft.mock.calls[0];
+    expect(args.slice(0, 7)).toEqual([
+      "user-1",
+      "boss@corp.com",
+      "Re: hi",
+      "sounds good",
+      "t1",
+      [],
+      "linked-acct-1",
+    ]);
+    expect(args[7]).toBeUndefined();
+    expect(getReplyHeaders).not.toHaveBeenCalled();
     await app.close();
   });
 
