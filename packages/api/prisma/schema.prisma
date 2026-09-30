@@ -160,17 +160,30 @@ enum UserRole {
 // not the account. keyHash is the Device.tokenHash standard (SHA-256 of the
 // raw key; the raw key is shown once at creation and never stored).
 model ApiKey {
-  id         String    @id @default(uuid())
+  id         String           @id @default(uuid())
   userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   name       String
-  keyHash    String    @unique
+  keyHash    String           @unique
   prefix     String // display stub: "klorn_sk_ab12cd"
-  createdAt  DateTime  @default(now())
+  // What the key may do over MCP. Defaults to read, so every key that existed
+  // before this column stays read-only. read_write is only granted, and only
+  // honoured, while MCP_WRITE_TOOLS_ENABLED is on: with the flag off a
+  // read_write key acts as read (authenticateApiKey).
+  permission ApiKeyPermission @default(read)
+  createdAt  DateTime         @default(now())
   lastUsedAt DateTime?
   revokedAt  DateTime?
 
   @@index([userId])
+}
+
+// Lowercase like SenderTraitKind and SenderTraitStatus: these exact strings are
+// also the wire values of @klorn/contract's ApiKeyWire.permission, so the DB,
+// the API and every client share one spelling and no mapping layer exists.
+enum ApiKeyPermission {
+  read
+  read_write
 }
 
 model Device {
