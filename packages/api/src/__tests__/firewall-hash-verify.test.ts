@@ -240,10 +240,16 @@ describe("GET /api/inbox/firewall — hash verify integration", () => {
       ["a human overrode the lane", { agentTierSetAt: null, isManualOverride: true }],
     ];
 
-    /** Model the database applying the refresh, so the next board read sees the new hash. */
+    /**
+     * Model the database applying the refresh: it matches only a row that still
+     * carries the human flag or the agent stamp (the WHERE's OR), and then the next
+     * board read sees the new hash.
+     */
     function applyRefreshToRow() {
       attentionUpdateMany.mockImplementation(async (...args: unknown[]) => {
         const { data } = args[0] as { data: { inputHash: string } };
+        const carriesFlag = attentionRow.agentTierSetAt != null || attentionRow.isManualOverride;
+        if (!carriesFlag) return { count: 0 };
         attentionRow.inputHash = data.inputHash;
         return { count: 1 };
       });
@@ -306,17 +312,53 @@ describe("GET /api/inbox/firewall — hash verify integration", () => {
       const app = await buildApp();
 
       await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
-      await vi.waitFor(() => expect(judgeAndMirrorMock).toHaveBeenCalledTimes(1));
-      expect(attentionUpdateMany).toHaveBeenCalledTimes(1);
+      // Two refresh attempts: the keep-lane one that matched nothing, then the one
+      // after the re-judge (also matching nothing here: neither flag is set).
+      await vi.waitFor(() => expect(attentionUpdateMany).toHaveBeenCalledTimes(2));
+      expect(judgeAndMirrorMock).toHaveBeenCalledTimes(1);
       await app.close();
     });
 
-    it("control: a stale hash on a judge-tiered item IS re-judged, with no direct hash write", async () => {
+    it("control: a stale hash on a judge-tiered item IS re-judged; the refresh after it can only match a flagged row", async () => {
       attentionRow.inputHash = staleStoredHash;
+      applyRefreshToRow();
       const app = await buildApp();
       await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
-      await vi.waitFor(() => expect(judgeAndMirrorMock).toHaveBeenCalledTimes(1));
-      expect(attentionUpdateMany).not.toHaveBeenCalled();
+      await vi.waitFor(() => expect(attentionUpdateMany).toHaveBeenCalledTimes(1));
+      expect(judgeAndMirrorMock).toHaveBeenCalledTimes(1);
+      // After the re-judge, never before it.
+      expect(judgeAndMirrorMock.mock.invocationCallOrder[0]).toBeLessThan(
+        attentionUpdateMany.mock.invocationCallOrder[0],
+      );
+      const arg = attentionUpdateMany.mock.calls[0]?.[0] as { where: Record<string, unknown> };
+      expect(arg.where.OR).toEqual([{ agentTierSetAt: { not: null } }, { isManualOverride: true }]);
+      // This row carries neither flag, so the refresh changed nothing.
+      expect(attentionRow.inputHash).toBe(staleStoredHash);
+      await app.close();
+    });
+
+    it("a human override that lands DURING the re-judge (write refused) still gets its hash refreshed, so the row does not stay stale", async () => {
+      attentionRow.inputHash = staleStoredHash;
+      applyRefreshToRow();
+      // The heal started with no flag set; the override lands while the judge runs, so
+      // the guarded write is refused ("preserved") and never refreshes the hash itself.
+      judgeAndMirrorMock.mockImplementationOnce(async () => {
+        attentionRow.isManualOverride = true;
+        return "QUEUE";
+      });
+      const app = await buildApp();
+      await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
+
+      await vi.waitFor(() => expect(attentionUpdateMany).toHaveBeenCalledTimes(1));
+      expect(judgeAndMirrorMock).toHaveBeenCalledTimes(1);
+      expect(attentionRow.inputHash).toBe(correctHash);
+
+      // The hash-mismatch dedupe is per process, so a row left stale would stay
+      // hashStale until a restart. It is not stale now.
+      captureErrorMock.mockClear();
+      const second = await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
+      expect(findItem(second.json() as FirewallResponseWire, "att-1")?.hashStale).toBeUndefined();
+      expect(captureErrorMock).not.toHaveBeenCalled();
       await app.close();
     });
 

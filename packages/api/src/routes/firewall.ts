@@ -190,6 +190,12 @@ function healStaleAttentionItem(
       await judgeAndMirrorEmail(userId, toJudgeableEmailRow(row), undefined, undefined, {
         rejudge: true,
       });
+      // A human override or an agent lane may have landed while the judge ran: the
+      // guarded write then refused ("preserved") and never refreshed the hash, and the
+      // per-process mismatch dedupe would leave the row hashStale until a restart.
+      // This matches only a row carrying the flag or the stamp, so after a normal
+      // re-judge it is a no-op.
+      await refreshHashKeepingLane(userId, row);
     } catch (err) {
       captureError(err, { tags: { scope: "firewall.hashRejudge" }, extra: { emailDbId } });
     }
