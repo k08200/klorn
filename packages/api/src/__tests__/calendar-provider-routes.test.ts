@@ -40,6 +40,7 @@ const eventUpsert = vi.hoisted(() => vi.fn(async () => ({})));
 const eventFindMany = vi.hoisted(() => vi.fn(async () => []));
 const eventFindUnique = vi.hoisted(() => vi.fn());
 const eventUpdate = vi.hoisted(() => vi.fn());
+const linkedAccountFindMany = vi.hoisted(() => vi.fn(async () => [] as unknown[]));
 
 vi.mock("../db.js", () => {
   const prisma = {
@@ -50,6 +51,7 @@ vi.mock("../db.js", () => {
       update: eventUpdate,
       upsert: eventUpsert,
     },
+    linkedCalendarAccount: { findMany: linkedAccountFindMany },
     user: { findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })) },
     device: {
       findUnique: vi.fn(async () => ({ id: "d1" })),
@@ -651,6 +653,86 @@ describe("wire: linked rows say readOnly (C2)", () => {
     const body = res.json();
     expect(body.upcoming[0].readOnly).toBe(true);
     expect(body.nextEvent.readOnly).toBe(true);
+    await app.close();
+  });
+});
+
+describe("wire: linked rows say which account they come from (C7)", () => {
+  const start = new Date("2026-10-01T10:00:00.000Z");
+  const row = (id: string, sourceAccountId: string | null) => ({
+    id,
+    userId: "user-1",
+    title: `event ${id}`,
+    startTime: start,
+    endTime: new Date(start.getTime() + 3_600_000),
+    allDay: false,
+    googleId: sourceAccountId ? null : `g-${id}`,
+    provider: "GOOGLE",
+    externalId: `g-${id}`,
+    sourceAccountId,
+    sourceKey: sourceAccountId ?? "primary",
+  });
+
+  beforeEach(() => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    linkedAccountFindMany.mockResolvedValue([{ id: "acct-1", email: "work@company.com" }]);
+  });
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  it("GET / adds sourceLabel to a linked row only", async () => {
+    eventFindMany.mockResolvedValueOnce([row("linked", "acct-1"), row("primary", null)]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar", headers });
+    const byId = Object.fromEntries(
+      (res.json().events as Array<Record<string, unknown>>).map((e) => [e.id as string, e]),
+    );
+    expect(byId.linked?.sourceLabel).toBe("work@company.com");
+    expect(byId.linked?.readOnly).toBe(true);
+    expect("sourceLabel" in (byId.primary ?? {})).toBe(false);
+    await app.close();
+  });
+
+  it("GET /:id adds sourceLabel to a linked row", async () => {
+    eventFindUnique.mockResolvedValue(row("linked", "acct-1"));
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar/linked", headers });
+    expect(res.json().sourceLabel).toBe("work@company.com");
+    await app.close();
+  });
+
+  it("GET /today/summary adds sourceLabel wherever a linked row appears", async () => {
+    const soon = {
+      ...row("linked-only", "acct-1"),
+      startTime: new Date(Date.now() + 60_000),
+      endTime: new Date(Date.now() + 3_600_000),
+    };
+    eventFindMany.mockResolvedValueOnce([soon]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar/today/summary", headers });
+    const body = res.json();
+    expect(body.upcoming[0].sourceLabel).toBe("work@company.com");
+    expect(body.nextEvent.sourceLabel).toBe("work@company.com");
+    await app.close();
+  });
+
+  it("makes no account lookup when no row is linked: the JSON is byte-identical to the row", async () => {
+    const primary = row("primary", null);
+    eventFindMany.mockResolvedValueOnce([primary]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar", headers });
+    expect(linkedAccountFindMany).not.toHaveBeenCalled();
+    expect(res.body).toBe(JSON.stringify({ events: [primary] }));
+    await app.close();
+  });
+
+  it("a linked row never reaches the list while the flag is off, so nothing is looked up", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    eventFindMany.mockResolvedValueOnce([]);
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/api/calendar", headers });
+    expect(linkedAccountFindMany).not.toHaveBeenCalled();
     await app.close();
   });
 });

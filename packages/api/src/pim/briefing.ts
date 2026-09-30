@@ -19,11 +19,13 @@ import { stripUntrusted } from "../untrusted.js";
 import { pushNotification } from "../websocket.js";
 import { type BriefingSignals, buildBriefingSignals } from "./briefing-signals.js";
 import { getBriefingStatus } from "./briefing-status.js";
-import { calendarSourceScope } from "./calendar-scope.js";
+import { readCalendarRows } from "./calendar-read.js";
 import { listNotes } from "./notes.js";
 import { listTasks } from "./tasks.js";
 
 const BRIEFING_CALENDAR_WINDOW_DAYS = 14;
+/** Events the rule-based briefing reads; the cap applies after the dedupe. */
+const BRIEFING_EVENT_LIMIT = 20;
 // The briefing is the founder's first read of the day. Five emails was too
 // thin once real volume kicked in — anyone with 50+ emails overnight saw a
 // brief that named nothing they actually got. Thirty is a reasonable upper
@@ -74,18 +76,12 @@ export async function listLocalBriefingEvents(
   now: Date,
 ): Promise<{ events: unknown[] }> {
   const windowEnd = new Date(now.getTime() + BRIEFING_CALENDAR_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  const rows = await prisma.calendarEvent.findMany({
-    where: { userId, startTime: { gte: now, lte: windowEnd }, ...calendarSourceScope() },
-    orderBy: { startTime: "asc" },
-    take: 20,
-    select: {
-      id: true,
-      title: true,
-      description: true,
-      location: true,
-      startTime: true,
-      endTime: true,
-    },
+  // Through the one read path: the scope, and an invite in the primary and a
+  // linked calendar (two rows, C2) shown once, with the cap applied after that.
+  const rows = await readCalendarRows({
+    userId,
+    when: { startTime: { gte: now, lte: windowEnd } },
+    limit: BRIEFING_EVENT_LIMIT,
   });
 
   // Defense in depth: an older version of calendar sync wrote

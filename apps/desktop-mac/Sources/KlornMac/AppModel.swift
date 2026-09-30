@@ -1246,6 +1246,7 @@ final class AppModel {
     }
 
     func beginEditingEvent(_ event: CalendarEventWire) {
+        guard calendarEventIsEditable(event) else { return }  // linked calendar: read-only
         editingEvent = event
         eventEditorError = nil
         showEventEditor = true
@@ -1298,6 +1299,7 @@ final class AppModel {
     /// DELETE — Google copy too, server-side. False = refused / failed; the
     /// caller shows it next to the button.
     func deleteEvent(_ event: CalendarEventWire) async -> Bool {
+        guard calendarEventIsEditable(event) else { return false }  // linked calendar: read-only
         do {
             try await api.delete("/api/calendar/\(event.id)")
             await refreshCalendarRange()

@@ -578,6 +578,8 @@
 "cal.editor.start" = "시작";
 "cal.editor.end" = "종료";
 "cal.editor.location" = "장소";
+"cal.source.linked" = "연결됨";
+"cal.source.a11y" = "읽기 전용, 출처: %@";
 "cal.save" = "저장";
 "cal.save.failed" = "저장 실패 — 다시 시도하세요.";
 

@@ -6,7 +6,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const m = vi.hoisted(() => ({ countWheres: [] as Array<Record<string, unknown>> }));
+const m = vi.hoisted(() => ({
+  countWheres: [] as Array<Record<string, unknown>>,
+  methods: [] as string[],
+  rows: [] as unknown[],
+}));
 
 vi.mock("../db.js", () => {
   const model = (name: string) =>
@@ -15,8 +19,12 @@ vi.mock("../db.js", () => {
       {
         get: (_t, method: string) =>
           vi.fn(async (args?: { where?: Record<string, unknown> }) => {
-            if (name === "calendarEvent" && method === "count")
+            // The meeting count is a count(), or a row read once copies can exist (C7).
+            if (name === "calendarEvent" && (method === "count" || method === "findMany")) {
               m.countWheres.push(args?.where ?? {});
+              m.methods.push(method);
+              if (method === "findMany") return m.rows;
+            }
             return method === "findMany" ? [] : method === "count" ? 0 : null;
           }),
       },
@@ -30,6 +38,8 @@ import { buildInteractionGraph } from "../learning/interaction-graph.js";
 
 beforeEach(() => {
   m.countWheres = [];
+  m.methods = [];
+  m.rows = [];
 });
 afterEach(() => {
   delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
@@ -47,5 +57,16 @@ describe("buildInteractionGraph — kill switch", () => {
     process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
     await buildInteractionGraph("u1");
     expect(m.countWheres[0]).not.toHaveProperty("sourceAccountId");
+  });
+
+  it("counts in the database while no linked row can be visible, and reads rows to merge copies once it is on (C7)", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    await buildInteractionGraph("u1");
+    expect(m.methods).toEqual(["count"]);
+
+    m.methods = [];
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    await buildInteractionGraph("u1");
+    expect(m.methods).toEqual(["findMany"]);
   });
 });

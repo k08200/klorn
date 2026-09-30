@@ -578,6 +578,8 @@
 "cal.editor.start" = "Inicio";
 "cal.editor.end" = "Fin";
 "cal.editor.location" = "Lugar";
+"cal.source.linked" = "Vinculado";
+"cal.source.a11y" = "Solo lectura, de %@";
 "cal.save" = "Guardar";
 "cal.save.failed" = "No se pudo guardar — inténtalo de nuevo.";
 

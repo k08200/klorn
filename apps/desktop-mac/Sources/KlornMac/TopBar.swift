@@ -1173,6 +1173,10 @@ private struct UpcomingEventRow: View {
                     if let location = event.location, !location.isEmpty {
                         Text(location).font(.caption2).foregroundStyle(Theme.textDim).lineLimit(1)
                     }
+                    if let source = calendarEventSourceLabel(event) {
+                        Text(source).font(.caption2).foregroundStyle(Theme.textDim)
+                            .lineLimit(1).truncationMode(.middle)
+                    }
                 }
                 Spacer(minLength: 0)
                 if event.meetingLink != nil {
@@ -1267,6 +1271,15 @@ private struct EventDetailPopover: View {
                 }
                 .foregroundStyle(Theme.textDim)
             }
+            if let source = calendarEventSourceLabel(event) {
+                HStack(spacing: 5) {
+                    Image(systemName: "link").font(.caption2).accessibilityHidden(true)
+                    Text(source).font(.caption).lineLimit(1).truncationMode(.middle)
+                }
+                .foregroundStyle(Theme.textDim)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(L("cal.source.a11y", source))
+            }
             HStack(spacing: 8) {
                 if let link = event.meetingLink, let url = URL(string: link) {
                     Button(L("calendar.join")) { NSWorkspace.shared.open(url) }
@@ -1277,18 +1290,21 @@ private struct EventDetailPopover: View {
                 .buttonStyle(.bordered).controlSize(.small)
             }
             .padding(.top, 4)
-            // Edit / delete (2026-09-11) — the server pushes both to Google.
-            HStack(spacing: 8) {
-                Button(L("cal.edit")) { model.beginEditingEvent(event) }
-                    .buttonStyle(.bordered).controlSize(.small)
-                if confirmDelete {
-                    Button(L("cal.delete.confirm")) {
-                        Task { deleteFailed = !(await model.deleteEvent(event)) }
-                    }
-                    .buttonStyle(.bordered).controlSize(.small).tint(Theme.tint(.push))
-                } else {
-                    Button(L("cal.delete")) { confirmDelete = true }
+            // Edit / delete (2026-09-11) — the server pushes both to Google. A linked
+            // calendar's event is a read-only mirror (step C7): neither is offered.
+            if calendarEventIsEditable(event) {
+                HStack(spacing: 8) {
+                    Button(L("cal.edit")) { model.beginEditingEvent(event) }
                         .buttonStyle(.bordered).controlSize(.small)
+                    if confirmDelete {
+                        Button(L("cal.delete.confirm")) {
+                            Task { deleteFailed = !(await model.deleteEvent(event)) }
+                        }
+                        .buttonStyle(.bordered).controlSize(.small).tint(Theme.tint(.push))
+                    } else {
+                        Button(L("cal.delete")) { confirmDelete = true }
+                            .buttonStyle(.bordered).controlSize(.small)
+                    }
                 }
             }
             if deleteFailed {

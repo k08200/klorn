@@ -63,3 +63,46 @@ describe("listLocalBriefingEvents — kill switch", () => {
     expect(events).toHaveLength(1);
   });
 });
+
+describe("listLocalBriefingEvents — the cap applies after the dedupe (C7)", () => {
+  const BRIEFING_CAP = 20;
+
+  function distinct(i: number, sourceAccountId: string | null) {
+    return {
+      ...row(`${sourceAccountId ?? "p"}-${i}`, sourceAccountId),
+      title: `Meeting ${String(i).padStart(2, "0")}`,
+      externalId: `g-${i}`,
+      startTime: new Date(NOW.getTime() + (i + 1) * 3_600_000),
+      endTime: new Date(NOW.getTime() + (i + 1) * 3_600_000 + 1_800_000),
+    };
+  }
+
+  it("spends the cap on 20 distinct events, not on linked copies of the first 10", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    m.rows = Array.from({ length: 30 }, (_, i) => [
+      distinct(i, null),
+      distinct(i, "acct-1"),
+    ]).flat();
+
+    const { events } = (await listLocalBriefingEvents("u1", NOW)) as {
+      events: Array<{ summary: string }>;
+    };
+
+    expect(events).toHaveLength(BRIEFING_CAP);
+    expect(events.map((e) => e.summary)).toEqual(
+      Array.from({ length: BRIEFING_CAP }, (_, i) => `Meeting ${String(i).padStart(2, "0")}`),
+    );
+    const arg = m.findMany.mock.calls[0]?.[0] as { take?: number };
+    expect(arg.take).toBeUndefined();
+  });
+
+  it("still caps the query itself while no linked row can be visible (flag off, identical to main)", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    m.rows = Array.from({ length: 5 }, (_, i) => distinct(i, null));
+
+    const { events } = await listLocalBriefingEvents("u1", NOW);
+
+    expect((m.findMany.mock.calls[0]?.[0] as { take?: number }).take).toBe(BRIEFING_CAP);
+    expect(events).toHaveLength(5);
+  });
+});

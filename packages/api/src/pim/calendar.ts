@@ -1,9 +1,12 @@
+import { unifiedCalendarReadEnabled } from "../config.js";
 import { prisma } from "../db.js";
 import { type BusyConflict, toAbsoluteInstant } from "../google-calendar-time.js";
 import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
 import { normalizeTimeZone } from "../time-zone.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { connectLinkedCalendars, connectPrimaryCalendar } from "./calendar-providers/dispatch.js";
+import { readOverlappingTimedEvents, readUpcomingEvents } from "./calendar-read.js";
+import { mergeConflicts, toRowConflict, toToolEvent } from "./calendar-read-format.js";
 import { handleLinkedCalendarFailure } from "./linked-calendar-failure.js";
 
 // Tests and the web layer import this from here; the implementation moved behind
@@ -24,10 +27,36 @@ async function getUserTimeZone(userId: string): Promise<string> {
   return normalizeTimeZone(config?.timezone);
 }
 
+const LIST_NOT_CONNECTED =
+  "Google Calendar not connected. Please connect your Google account first.";
+
+/**
+ * `list_events` with UNIFIED_CALENDAR_READ_ENABLED on (step C7): the synced rows
+ * through the one read path, so linked calendars show once, marked read-only, and
+ * no Google call is made. An empty answer keeps main's not-connected message for
+ * a user with no Google connection, instead of reporting an empty calendar.
+ */
+async function listEventsFromRows(userId: string, maxResults: number) {
+  try {
+    const [rows, timeZone] = await Promise.all([
+      readUpcomingEvents(userId, maxResults, new Date()),
+      getUserTimeZone(userId),
+    ]);
+    if (rows.length === 0 && !(await connectPrimaryCalendar(userId))) {
+      return { error: LIST_NOT_CONNECTED };
+    }
+    return { events: rows.map((row) => toToolEvent(row, timeZone)) };
+  } catch (err) {
+    console.error("[CALENDAR] listEvents (rows) failed:", err);
+    return { error: "Could not read the synced calendar right now." };
+  }
+}
+
 export async function listEvents(userId: string, maxResults = 10) {
+  if (unifiedCalendarReadEnabled()) return listEventsFromRows(userId, maxResults);
+
   const session = await connectPrimaryCalendar(userId);
-  if (!session)
-    return { error: "Google Calendar not connected. Please connect your Google account first." };
+  if (!session) return { error: LIST_NOT_CONNECTED };
 
   try {
     const listed = await session.listEvents({ timeMin: new Date().toISOString(), maxResults });
@@ -372,18 +401,62 @@ export async function checkConflicts(userId: string, startTime: string, endTime:
     timeMax,
   );
 
-  return conflictResult([...primaryConflicts, ...linkedConflicts], {
-    scope,
-    linkedAccountsChecked: accountsChecked,
-  });
+  const live = [...primaryConflicts, ...linkedConflicts];
+  const conflicts = unifiedCalendarReadEnabled()
+    ? await withRowConflicts(userId, { timeMin, timeMax, userZone }, live)
+    : live;
+
+  return conflictResult(conflicts, { scope, linkedAccountsChecked: accountsChecked });
 }
+
+/**
+ * Step C7 (UNIFIED_CALENDAR_READ_ENABLED on): add the synced rows that overlap
+ * the window to the live free/busy answer, through the one read path (scope,
+ * dedupe, provider and readOnly per event). Free/busy stays in: it sees calendars
+ * the sync does not mirror and changes newer than the last sync. A row read that
+ * fails throws, like any other unexpected failure here: never answer "free" on
+ * half the evidence.
+ */
+async function withRowConflicts(
+  userId: string,
+  window: { timeMin: string; timeMax: string; userZone: string },
+  live: readonly unknown[],
+): Promise<unknown[]> {
+  const rows = await readOverlappingTimedEvents(userId, {
+    start: new Date(window.timeMin),
+    end: new Date(window.timeMax),
+  });
+  const rowConflicts = rows.map((row) => toRowConflict(row, window.userZone));
+  return mergeConflicts(rowConflicts, rows, live);
+}
+
+const LIST_EVENTS_DESCRIPTION = "List upcoming events from the user's Google Calendar";
+const CHECK_CONFLICTS_DESCRIPTION =
+  "Check if a time range has any conflicting events. Use before creating events to avoid double-booking.";
+
+// Step C7. The freshness trade-off is stated to the model: rows are a synced copy.
+const LIST_EVENTS_UNIFIED_DESCRIPTION =
+  "List upcoming events from the user's calendars, read from Klorn's synced copy " +
+  "(refreshed about every 15 minutes, covering the next 30 days), not live from Google: an " +
+  "event created, moved or deleted in the last 15 minutes may not show yet. Each event says " +
+  "its provider and whether it is readOnly (a linked calendar's event cannot be edited or deleted).";
+const CHECK_CONFLICTS_UNIFIED_DESCRIPTION =
+  "Check if a time range has any conflicting events. Use before creating events to avoid " +
+  "double-booking. Timed events come from Klorn's synced copy of the calendars (refreshed about " +
+  "every 15 minutes), combined with a live Google free/busy check, so a change made in the " +
+  "last 15 minutes is seen only through free/busy. All-day events are not counted.";
 
 export const CALENDAR_TOOLS = [
   {
     type: "function" as const,
     function: {
       name: "list_events",
-      description: "List upcoming events from the user's Google Calendar",
+      // Request time: the text changes only while the flag is on (step C7).
+      get description() {
+        return unifiedCalendarReadEnabled()
+          ? LIST_EVENTS_UNIFIED_DESCRIPTION
+          : LIST_EVENTS_DESCRIPTION;
+      },
       parameters: {
         type: "object",
         properties: {
@@ -436,8 +509,11 @@ export const CALENDAR_TOOLS = [
     type: "function" as const,
     function: {
       name: "check_calendar_conflicts",
-      description:
-        "Check if a time range has any conflicting events. Use before creating events to avoid double-booking.",
+      get description() {
+        return unifiedCalendarReadEnabled()
+          ? CHECK_CONFLICTS_UNIFIED_DESCRIPTION
+          : CHECK_CONFLICTS_DESCRIPTION;
+      },
       parameters: {
         type: "object",
         properties: {

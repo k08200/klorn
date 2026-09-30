@@ -22,6 +22,11 @@ export function isCalendarRowVisible(row: { sourceAccountId?: string | null }): 
   return linkedCalendarSyncEnabled() || (row.sourceAccountId ?? null) === null;
 }
 
+/** True for a linked calendar's row: a read-only mirror, whatever reads it. */
+export function isReadOnlyCalendarRow(row: { sourceAccountId?: string | null }): boolean {
+  return (row.sourceAccountId ?? null) !== null;
+}
+
 /**
  * The row as the wire carries it: a linked row gains `readOnly: true`, every
  * other row is returned untouched so the primary calendar's JSON stays
@@ -31,5 +36,5 @@ export function isCalendarRowVisible(row: { sourceAccountId?: string | null }): 
 export function withReadOnlyFlag<T extends { sourceAccountId?: string | null }>(
   row: T,
 ): T | (T & { readOnly: true }) {
-  return (row.sourceAccountId ?? null) === null ? row : { ...row, readOnly: true };
+  return isReadOnlyCalendarRow(row) ? { ...row, readOnly: true } : row;
 }

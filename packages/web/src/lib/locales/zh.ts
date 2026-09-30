@@ -525,6 +525,8 @@ const zh: Record<string, string> = {
   "calendar.newEvent": "新建日程",
   "calendar.needPrep": "需要准备的会议",
   "calendar.voiceParsing": "正在理解你的日程…",
+  "calendar.linkedSource": "已关联",
+  "calendar.readOnlyHint": "只读：此日程来自已关联的日历",
   "inbox.decisions": "决定",
   "inbox.tracking": "跟踪中",
   "inbox.allClear": "已处理完",

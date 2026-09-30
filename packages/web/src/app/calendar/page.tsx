@@ -24,6 +24,10 @@ interface CalendarEvent {
   location: string | null;
   meetingLink: string | null;
   allDay: boolean;
+  /** Present (true) on a linked calendar's event: a read-only mirror (step C7). */
+  readOnly?: boolean;
+  /** The linked account's email, on a linked event only. */
+  sourceLabel?: string;
 }
 
 export default function CalendarPage() {
@@ -473,6 +477,7 @@ function AgendaList({
   todayKey: string;
   timeZone: string;
 }) {
+  const { t } = useT();
   // Group upcoming events (today onward) by local day, ascending. Past days are
   // dropped — an agenda is forward-looking, unlike the month grid.
   const byDay = new Map<string, CalendarEvent[]>();
@@ -539,6 +544,14 @@ function AgendaList({
                       {ev.location && (
                         <span className="mt-0.5 block truncate text-[11px] text-ink-dim">
                           {ev.location}
+                        </span>
+                      )}
+                      {ev.readOnly && (
+                        <span
+                          className="mt-0.5 block truncate text-[11px] text-ink-dim"
+                          title={t("calendar.readOnlyHint")}
+                        >
+                          {ev.sourceLabel ?? t("calendar.linkedSource")}
                         </span>
                       )}
                     </span>

@@ -581,6 +581,46 @@ func runSelfChecks() async -> Bool {
     } else {
         check("TodaySummary decodes", false)
     }
+    // Linked calendar rows (step C7): a linked calendar's event is a read-only mirror
+    // with a small source label; a row from an older server, without either field, still
+    // decodes and stays editable.
+    do {
+        func wire(_ extra: String) -> CalendarEventWire? {
+            let json = """
+            {"id":"e","title":"Offsite","startTime":"2026-07-16T00:30:00.000Z",
+            "endTime":"2026-07-16T01:00:00.000Z","location":null,"meetingLink":null,
+            "allDay":false\(extra)}
+            """
+            return try? JSONDecoder().decode(CalendarEventWire.self, from: Data(json.utf8))
+        }
+        let plain = wire("")
+        check("calendar wire — a row without readOnly/sourceLabel still decodes and is editable",
+              plain?.title == "Offsite" && plain?.readOnly == nil && plain?.sourceLabel == nil
+              && plain.map(calendarEventIsEditable) == true
+              && plain.flatMap(calendarEventSourceLabel) == nil)
+        let linked = wire(#","readOnly":true,"sourceLabel":"work@company.com""#)
+        check("calendar wire — a linked row is read-only and labelled with the account email",
+              linked?.readOnly == true && linked.map(calendarEventIsEditable) == false
+              && linked.flatMap(calendarEventSourceLabel) == "work@company.com")
+        check("calendar wire — a linked row with no (or a blank) email is labelled Linked",
+              wire(#","readOnly":true"#).flatMap(calendarEventSourceLabel) == L("cal.source.linked")
+              && wire(#","readOnly":true,"sourceLabel":"  ""#).flatMap(calendarEventSourceLabel)
+                  == L("cal.source.linked"))
+        check("calendar wire — readOnly false is editable and has no source label",
+              wire(#","readOnly":false,"sourceLabel":"x@y.z""#).map(calendarEventIsEditable) == true
+              && wire(#","readOnly":false,"sourceLabel":"x@y.z""#).flatMap(calendarEventSourceLabel) == nil)
+        let summary = try? JSONDecoder().decode(
+            TodaySummary.self,
+            from: Data(#"{"total":1,"current":null,"upcoming":[{"id":"l","title":"Offsite","startTime":"2026-07-16T05:00:00.000Z","endTime":"2026-07-16T06:00:00.000Z","location":null,"meetingLink":null,"allDay":false,"readOnly":true,"sourceLabel":"work@company.com"}],"nextEvent":null}"#.utf8))
+        check("calendar wire — the today summary carries the linked row's fields",
+              summary?.upcoming.first?.readOnly == true
+              && summary?.upcoming.first?.sourceLabel == "work@company.com")
+        check("calendar wire — the source label exists in every shipped language",
+              L10n.shipped.allSatisfy { code in
+                  let keys = L10n.keys(forLanguage: code)
+                  return keys.contains("cal.source.linked") && keys.contains("cal.source.a11y")
+              })
+    }
     var utc = Calendar(identifier: .gregorian)
     utc.timeZone = TimeZone(identifier: "UTC")!
     check("event time label — range",

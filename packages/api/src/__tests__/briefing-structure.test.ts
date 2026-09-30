@@ -177,3 +177,40 @@ describe("buildBriefingStructure — kill switch (C2)", () => {
     expect(eventQueryWhere()).not.toHaveProperty("sourceAccountId");
   });
 });
+
+describe("buildBriefingStructure — the cap applies after the dedupe (C7)", () => {
+  const DAY_SHAPE_CAP = 50;
+  const queryArg = () => {
+    const call = vi.mocked(prisma.calendarEvent.findMany).mock.calls.at(-1);
+    return call?.[0] as { take?: number };
+  };
+
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  it("does not cap the query while copies can exist, so copies never spend the cap", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    await buildBriefingStructure("u1", NOW);
+    expect(queryArg().take).toBeUndefined();
+  });
+
+  it("still lets the database cap the query while no linked row is visible (identical to main)", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    await buildBriefingStructure("u1", NOW);
+    expect(queryArg().take).toBe(DAY_SHAPE_CAP);
+  });
+
+  it("reads at most 50 distinct meetings even when more rows come back", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    state.language = "en";
+    state.events = Array.from({ length: 60 }, (_, i) => ({
+      ...kstEvent(`Meeting ${i}`, 10, 11),
+      provider: "GOOGLE",
+      externalId: `g-${i}`,
+      sourceAccountId: null,
+    }));
+    const s = await buildBriefingStructure("u1", NOW);
+    expect(s.headline).toContain("50 meetings");
+  });
+});
