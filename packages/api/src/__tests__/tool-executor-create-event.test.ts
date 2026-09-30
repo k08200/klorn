@@ -140,6 +140,29 @@ describe("create_event — conflict enforcement (#743)", () => {
     expect(createEventMock).toHaveBeenCalled();
   });
 
+  it("C1 dual-write: a booked Google event is stored as GOOGLE with externalId = its Google id", async () => {
+    await executeToolCall(userId, "create_event", args);
+    const data = (calendarEventCreate.mock.calls[0]?.[0] as { data: Record<string, unknown> }).data;
+    expect(data).toMatchObject({
+      googleId: "g-event-1",
+      provider: "GOOGLE",
+      externalId: "g-event-1",
+      sourceAccountId: null,
+    });
+  });
+
+  it("C1 dual-write: a success result with no event id is stored as LOCAL with no externalId", async () => {
+    createEventMock.mockResolvedValue({ success: true });
+    await executeToolCall(userId, "create_event", args);
+    const data = (calendarEventCreate.mock.calls[0]?.[0] as { data: Record<string, unknown> }).data;
+    expect(data).toMatchObject({
+      googleId: null,
+      provider: "LOCAL",
+      externalId: null,
+      sourceAccountId: null,
+    });
+  });
+
   it("still checks the ±30min local dedup before the conflict check, and skips the Google round-trip on a dup", async () => {
     calendarEventFindFirst.mockResolvedValue({
       id: "dup-1",

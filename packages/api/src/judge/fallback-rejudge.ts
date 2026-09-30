@@ -28,6 +28,7 @@
 import { FALLBACK_REJUDGE_LOOKBACK_DAYS, FALLBACK_REJUDGE_SWEEP } from "../config.js";
 import { prisma } from "../db.js";
 import { captureError } from "../sentry.js";
+import { NOT_AGENT_SET } from "./agent-tier.js";
 import { recordEmailDecision } from "./decision-label.js";
 import { buildJudgeContext } from "./judge-context.js";
 import { judgeEmail } from "./poc-judge.js";
@@ -102,6 +103,8 @@ export async function rejudgeFallbackItems(
       sourceId: { in: fallbackRows.map((r) => r.sourceId) },
       status: "OPEN",
       isManualOverride: false,
+      // An MCP agent's lane survives a re-judge like a human's does (step A2b).
+      ...NOT_AGENT_SET,
     },
     select: { id: true, sourceId: true, tier: true },
   })) as Array<{ id: string; sourceId: string; tier: string | null }>;
@@ -156,7 +159,7 @@ export async function rejudgeFallbackItems(
         // Guards re-checked in the WHERE — the first human action wins even
         // if it landed between the read above and this write.
         await prisma.attentionItem.updateMany({
-          where: { id: item.id, status: "OPEN", isManualOverride: false },
+          where: { id: item.id, status: "OPEN", isManualOverride: false, ...NOT_AGENT_SET },
           data: { tier: judgement.tier, tierReason: judgement.reason },
         });
         if (judgement.features) {

@@ -5,6 +5,7 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 import { getEffectivePlan } from "./billing/stripe.js";
 import { db, prisma } from "./db.js";
 import { isDevOrTestEnv } from "./env.js";
+import { localEventSource } from "./pim/calendar-rows.js";
 
 /**
  * The signing secret for every JWT. Falls back to a hardcoded string that is
@@ -519,6 +520,7 @@ async function seedDemoData() {
   meetingStart.setHours(14, 0, 0, 0);
   const meetingEnd = new Date(tomorrow);
   meetingEnd.setHours(15, 0, 0, 0);
+  // Sample events have no Google id, so they are LOCAL (C1) — never GOOGLE.
   await prisma.calendarEvent.createMany({
     data: [
       {
@@ -528,6 +530,7 @@ async function seedDemoData() {
         endTime: meetingEnd,
         location: "WeWork Gangnam, 3F",
         color: "#d8a45d",
+        ...localEventSource(),
       },
       {
         userId: uid,
@@ -536,6 +539,7 @@ async function seedDemoData() {
         endTime: new Date(nextWeek.setHours(11, 0, 0, 0)),
         meetingLink: "https://meet.google.com/abc-defg-hij",
         color: "#14b8a6",
+        ...localEventSource(),
       },
     ],
   });

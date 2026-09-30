@@ -11,6 +11,7 @@ const create = vi.hoisted(() => vi.fn());
 const update = vi.hoisted(() => vi.fn());
 const captureError = vi.hoisted(() => vi.fn());
 const executeToolCall = vi.hoisted(() => vi.fn());
+const executeSetTier = vi.hoisted(() => vi.fn());
 
 vi.mock("../db.js", () => {
   const prisma = { mcpWriteAudit: { create, update } };
@@ -18,6 +19,10 @@ vi.mock("../db.js", () => {
 });
 vi.mock("../sentry.js", () => ({ captureError }));
 vi.mock("../agentcore/tool-executor.js", () => ({ executeToolCall }));
+vi.mock("../mcp/set-tier.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../mcp/set-tier.js")>()),
+  executeSetTier,
+}));
 
 import {
   consumeMcpWriteBudget,
@@ -43,9 +48,11 @@ beforeEach(() => {
   update.mockReset();
   captureError.mockReset();
   executeToolCall.mockReset();
+  executeSetTier.mockReset();
   create.mockResolvedValue({ id: "audit-1" });
   update.mockResolvedValue({});
   executeToolCall.mockResolvedValue(JSON.stringify({ success: true }));
+  executeSetTier.mockResolvedValue(JSON.stringify({ success: true, tier: "PUSH" }));
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-09-30T10:00:00.000Z"));
   vi.stubEnv("MCP_WRITE_TOOLS_ENABLED", "true");
@@ -234,5 +241,121 @@ describe("runMcpWriteCall", () => {
     expect(over.isError).toBe(true);
     expect(JSON.parse(over.content[0]?.text ?? "{}")).toMatchObject({ code: "RATE_LIMITED" });
     expect(executeToolCall).not.toHaveBeenCalled();
+  });
+});
+
+describe("runMcpWriteCall — set_tier", () => {
+  const tierCall = (userId: string, apiKeyId = `k-${userId}`) => ({
+    userId,
+    apiKeyId,
+    name: "set_tier",
+    args: { email_id: "g-1", tier: "PUSH" },
+  });
+
+  it("runs set_tier through its own executor with the caller and key, never the shared tool executor", async () => {
+    const call = tierCall(freshUser());
+    await runMcpWriteCall(call);
+    expect(executeSetTier).toHaveBeenCalledWith(
+      { userId: call.userId, apiKeyId: call.apiKeyId },
+      call.args,
+    );
+    expect(executeToolCall).not.toHaveBeenCalled();
+  });
+
+  it("audits as attempted before the change, then settles ok on a success result", async () => {
+    const order: string[] = [];
+    create.mockImplementationOnce(async () => {
+      order.push("insert");
+      return { id: "audit-9" };
+    });
+    executeSetTier.mockImplementationOnce(async () => {
+      order.push("execute");
+      return JSON.stringify({ success: true, tier: "PUSH" });
+    });
+    update.mockImplementationOnce(async () => {
+      order.push("settle");
+      return {};
+    });
+    await runMcpWriteCall(tierCall(freshUser()));
+    expect(order).toEqual(["insert", "execute", "settle"]);
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "audit-9" },
+      data: { outcome: "ok", reason: null },
+    });
+    expect(create.mock.calls[0]?.[0].data).toMatchObject({ tool: "set_tier", targetId: "g-1" });
+  });
+
+  it("records the previous and the new lane on the audit row when the lane changed, so a revert is possible later", async () => {
+    executeSetTier.mockResolvedValueOnce(
+      JSON.stringify({
+        success: true,
+        email_id: "g-1",
+        previous_tier: "QUEUE",
+        tier: "PUSH",
+        changed: true,
+      }),
+    );
+    await runMcpWriteCall(tierCall(freshUser()));
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "audit-1" },
+      data: { outcome: "ok", reason: null, tierFrom: "QUEUE", tierTo: "PUSH" },
+    });
+  });
+
+  it("records no lanes for a no-op, a refusal or any other write tool", async () => {
+    executeSetTier.mockResolvedValueOnce(
+      JSON.stringify({ success: true, previous_tier: "PUSH", tier: "PUSH", changed: false }),
+    );
+    await runMcpWriteCall(tierCall(freshUser()));
+    expect(update).toHaveBeenLastCalledWith({
+      where: { id: "audit-1" },
+      data: { outcome: "ok", reason: null },
+    });
+    executeSetTier.mockResolvedValueOnce(JSON.stringify({ error: "x", code: "NOT_FOUND" }));
+    await runMcpWriteCall(tierCall(freshUser()));
+    expect(update.mock.lastCall?.[0].data).not.toHaveProperty("tierFrom");
+    executeToolCall.mockResolvedValueOnce(
+      JSON.stringify({ success: true, previous_tier: "QUEUE", tier: "PUSH", changed: true }),
+    );
+    await runMcpWriteCall(callFor(freshUser()));
+    expect(update.mock.lastCall?.[0].data).not.toHaveProperty("tierFrom");
+  });
+
+  it("settles error/tool_error for a refusal, and passes the explicit result through", async () => {
+    const refusal = JSON.stringify({ error: "moved by hand", code: "MANUAL_OVERRIDE" });
+    executeSetTier.mockResolvedValueOnce(refusal);
+    const result = await runMcpWriteCall(tierCall(freshUser()));
+    expect(result).toEqual({ content: [{ type: "text", text: refusal }] });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "audit-1" },
+      data: { outcome: "error", reason: "tool_error" },
+    });
+  });
+
+  it("settles error/exception when the executor throws", async () => {
+    executeSetTier.mockRejectedValueOnce(new Error("boom"));
+    const result = await runMcpWriteCall(tierCall(freshUser()));
+    expect(result.isError).toBe(true);
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "audit-1" },
+      data: { outcome: "error", reason: "exception" },
+    });
+  });
+
+  it("shares the per-user cap with mark_read: the 31st write of either kind is refused", async () => {
+    const userId = freshUser();
+    for (let i = 0; i < MCP_WRITE_CAP_PER_WINDOW - 1; i++) await runMcpWriteCall(callFor(userId));
+    await runMcpWriteCall(tierCall(userId));
+    executeSetTier.mockClear();
+    const over = await runMcpWriteCall(tierCall(userId, "another-key"));
+    expect(JSON.parse(over.content[0]?.text ?? "{}")).toMatchObject({ code: "RATE_LIMITED" });
+    expect(executeSetTier).not.toHaveBeenCalled();
+  });
+
+  it("does not run, and leaves no change, when the audit insert fails", async () => {
+    create.mockRejectedValueOnce(new Error("db down"));
+    const result = await runMcpWriteCall(tierCall(freshUser()));
+    expect(result.isError).toBe(true);
+    expect(executeSetTier).not.toHaveBeenCalled();
   });
 });

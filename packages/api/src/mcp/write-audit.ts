@@ -45,9 +45,11 @@ export const REFUSED_AUDIT_WINDOW_MS = 60_000;
  * key, flag off, or plan). */
 export type McpAuditReason = "permission_denied" | "rate_limited" | "tool_error" | "exception";
 
-/** How an allowed call ended. Anything but ok carries the reason. */
+/** How an allowed call ended. Anything but ok carries the reason. `tiers` is set_tier's
+ * lane change (only when the lane actually changed), so the log can show it and a
+ * later step can revert it. */
 export type McpSettleVerdict =
-  | { outcome: "ok" }
+  | { outcome: "ok"; tiers?: { from: string; to: string } }
   | { outcome: "error"; reason: "tool_error" | "exception" };
 
 export interface McpWriteAuditInput {
@@ -139,6 +141,9 @@ export async function settleWriteAudit(
       data: {
         outcome: verdict.outcome,
         reason: verdict.outcome === "error" ? verdict.reason : null,
+        ...(verdict.outcome === "ok" && verdict.tiers
+          ? { tierFrom: verdict.tiers.from, tierTo: verdict.tiers.to }
+          : {}),
       },
     });
   } catch (err) {

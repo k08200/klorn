@@ -18,6 +18,7 @@ import {
   deleteEvent as googleDeleteEvent,
   updateEvent as googleUpdateEvent,
 } from "../pim/calendar.js";
+import { eventSourceForGoogleId, upsertGoogleEventRow } from "../pim/calendar-rows.js";
 import { buildMeetingPrepPack } from "../pim/meeting-prep-pack.js";
 import { captureError } from "../sentry.js";
 import { normalizeTimeZone } from "../time-zone.js";
@@ -220,6 +221,9 @@ export async function calendarRoutes(app: FastifyInstance) {
         color: color || null,
         allDay: allDay || false,
         googleId,
+        // C1 dual-write: a Google id makes the row GOOGLE, none makes it LOCAL.
+        // Never taken from the request body.
+        ...eventSourceForGoogleId(googleId),
       },
     });
     await upsertAttentionForCalendarEvent(event);
@@ -390,8 +394,9 @@ export async function calendarRoutes(app: FastifyInstance) {
         if (!meetingLink && item.hangoutLink) meetingLink = item.hangoutLink;
 
         const isTimed = Boolean(item.start?.dateTime);
-        const data = {
-          userId: uid,
+        // Upsert by (userId, googleId) — the same Google event can live in two
+        // users' calendars, so the match must be scoped to this user.
+        await upsertGoogleEventRow(uid, googleId, {
           title: item.summary || "Untitled",
           description: item.description || null,
           startTime: isTimed
@@ -403,23 +408,6 @@ export async function calendarRoutes(app: FastifyInstance) {
           location: item.location || null,
           meetingLink,
           allDay: !isTimed,
-          googleId,
-        };
-
-        // Upsert by (userId, googleId) — the same Google event can live in two
-        // users' calendars, so the match must be scoped to this user.
-        await prisma.calendarEvent.upsert({
-          where: { userId_googleId: { userId: uid, googleId } },
-          create: data,
-          update: {
-            title: data.title,
-            description: data.description,
-            startTime: data.startTime,
-            endTime: data.endTime,
-            location: data.location,
-            meetingLink: data.meetingLink,
-            allDay: data.allDay,
-          },
         });
         synced++;
       }

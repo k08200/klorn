@@ -25,6 +25,7 @@
  */
 
 import { prisma } from "../db.js";
+import { NOT_AGENT_SET } from "../judge/agent-tier.js";
 import { buildJudgeContext } from "../judge/judge-context.js";
 import { judgeEmail } from "../judge/poc-judge.js";
 import { isTier, TIERS, type Tier } from "../judge/tiers.js";
@@ -139,6 +140,7 @@ export async function runCorrectionEval(
       userId,
       source: "EMAIL",
       isManualOverride: true,
+      ...NOT_AGENT_SET, // defence in depth: an agent move is never a gold label (step A2b)
       tier: { not: null },
     },
     orderBy: { updatedAt: "desc" },

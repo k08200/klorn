@@ -57,6 +57,7 @@ import { sendSms } from "./notify/sms.js";
 import { buildUrgentDedupMessage, parseNotifiedGmailIds } from "./notify/urgent-dedup.js";
 import { autoModeSendEnabled, tierV2Enabled } from "./ops/feature-flags.js";
 import { createDailyBriefingDelivery } from "./pim/briefing.js";
+import { upsertGoogleEventRow } from "./pim/calendar-rows.js";
 import { sendFocusWindowDigests } from "./pim/focus-digest.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
@@ -1058,28 +1059,14 @@ async function runUserCycle(
           const parsedEnd = isTimed
             ? parseGoogleDateTime(endTime, item.end?.timeZone ?? null, userTimezone)
             : new Date(endTime);
-          await prisma.calendarEvent.upsert({
-            where: { userId_googleId: { userId: config.userId, googleId } },
-            create: {
-              userId: config.userId,
-              title: item.summary || "Untitled",
-              description: item.description || null,
-              startTime: parsedStart,
-              endTime: parsedEnd,
-              location: item.location || null,
-              meetingLink,
-              allDay: !isTimed,
-              googleId,
-            },
-            update: {
-              title: item.summary || "Untitled",
-              description: item.description || null,
-              startTime: parsedStart,
-              endTime: parsedEnd,
-              location: item.location || null,
-              meetingLink,
-              allDay: !isTimed,
-            },
+          await upsertGoogleEventRow(config.userId, googleId, {
+            title: item.summary || "Untitled",
+            description: item.description || null,
+            startTime: parsedStart,
+            endTime: parsedEnd,
+            location: item.location || null,
+            meetingLink,
+            allDay: !isTimed,
           });
         }
       }

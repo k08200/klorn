@@ -29,6 +29,7 @@ import {
   deleteEvent,
   listEvents,
 } from "../pim/calendar.js";
+import { eventSourceForGoogleId } from "../pim/calendar-rows.js";
 import {
   getUpcomingMeetings,
   joinMeeting,
@@ -482,6 +483,8 @@ async function executeToolCallInternal(
             endTime: new Date(canonicalEnd),
             location: (args.location as string) || null,
             googleId: evGoogleId,
+            // C1 dual-write: a Google id makes the row GOOGLE, none makes it LOCAL.
+            ...eventSourceForGoogleId(evGoogleId),
           },
         });
         await upsertAttentionForCalendarEvent(localEvent);
