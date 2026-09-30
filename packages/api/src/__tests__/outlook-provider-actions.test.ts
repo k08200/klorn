@@ -193,7 +193,14 @@ describe("sendEmail / createDraft / getReplyHeaders", () => {
     fetchMock.mockResolvedValue(
       graphResponse({ id: "draft-1", webLink: "https://outlook.live.com/mail/x" }, 201),
     );
-    const result = await outlookMailActions.createDraft("u1", "to@x.com", "S", "B", null, [], ROW);
+    const result = await outlookMailActions.createDraft("u1", {
+      to: "to@x.com",
+      subject: "S",
+      body: "B",
+      threadId: null,
+      attachments: [],
+      linkedInboxAccountId: ROW,
+    });
     expect(result).toEqual({
       success: true,
       draftId: "draft-1",
@@ -208,19 +215,15 @@ describe("sendEmail / createDraft / getReplyHeaders", () => {
     // drafts (/createReply) are step B0b, so the payload must stay exactly the
     // no-reply payload: no internetMessageHeaders, no conversation fields.
     fetchMock.mockResolvedValue(graphResponse({ id: "draft-2" }, 201));
-    const result = await outlookMailActions.createDraft(
-      "u1",
-      "to@x.com",
-      "S",
-      "B",
-      "conv-1",
-      [],
-      ROW,
-      {
-        inReplyTo: "<m@x>",
-        references: "<r@x> <m@x>",
-      },
-    );
+    const result = await outlookMailActions.createDraft("u1", {
+      to: "to@x.com",
+      subject: "S",
+      body: "B",
+      threadId: "conv-1",
+      attachments: [],
+      linkedInboxAccountId: ROW,
+      reply: { inReplyTo: "<m@x>", references: "<r@x> <m@x>" },
+    });
     expect(result).toMatchObject({ success: true, draftId: "draft-2" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
@@ -234,18 +237,13 @@ describe("sendEmail / createDraft / getReplyHeaders", () => {
   });
 
   it("createDraft still needs a linked inbox id when a reply context is given", async () => {
-    const result = await outlookMailActions.createDraft(
-      "u1",
-      "to@x.com",
-      "S",
-      "B",
-      null,
-      [],
-      null,
-      {
-        inReplyTo: "<m@x>",
-      },
-    );
+    const result = await outlookMailActions.createDraft("u1", {
+      to: "to@x.com",
+      subject: "S",
+      body: "B",
+      linkedInboxAccountId: null,
+      reply: { inReplyTo: "<m@x>" },
+    });
     expect(result).toMatchObject({ error: expect.stringContaining("linked inbox") });
     expect(fetchMock).not.toHaveBeenCalled();
   });

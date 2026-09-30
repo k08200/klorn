@@ -22,17 +22,7 @@ export const googleMailActions: MailProviderActions = {
   provider: "GOOGLE",
   sendEmail: (userId, to, subject, body, attachments = [], options) =>
     sendEmail(userId, to, subject, body, attachments, options),
-  createDraft: (
-    userId,
-    to,
-    subject,
-    body,
-    threadId,
-    attachments = [],
-    linkedInboxAccountId,
-    reply,
-  ) =>
-    createEmailDraft(userId, to, subject, body, threadId, attachments, linkedInboxAccountId, reply),
+  createDraft: (userId, draft) => createEmailDraft(userId, draft),
   getReplyHeaders: (userId, messageId, linkedInboxAccountId) =>
     getReplyHeaders(userId, messageId, linkedInboxAccountId),
   markAsRead: (userId, messageId, linkedInboxAccountId) =>

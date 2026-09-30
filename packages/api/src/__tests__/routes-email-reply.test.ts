@@ -153,6 +153,37 @@ describe("POST /api/email/:id/reply", () => {
     await app.close();
   });
 
+  it.each([
+    ["free text with no message id", { messageId: "not a message id" }],
+    ["an empty id", { messageId: "<>" }],
+    ["a non-string id", { messageId: 12345 }],
+    ["an id with whitespace inside", { messageId: "<a b@corp.com>" }],
+  ])("reports threaded=false when getReplyHeaders returns %s (no In-Reply-To can be emitted)", async (_name, headers) => {
+    getReplyHeaders.mockResolvedValue({ ...headers, references: "<a@corp.com>" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/reply",
+      payload: { body: "hi" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().threaded).toBe(false);
+    await app.close();
+  });
+
+  it("reports threaded=true when a valid message id is present among other text", async () => {
+    getReplyHeaders.mockResolvedValue({ messageId: "Message-ID: <orig@corp.com> (via relay)" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/reply",
+      payload: { body: "hi" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().threaded).toBe(true);
+    await app.close();
+  });
+
   it("reports threaded=false when no RFC Message-ID is found (threadId-only)", async () => {
     getReplyHeaders.mockResolvedValue({});
     const app = await buildApp();

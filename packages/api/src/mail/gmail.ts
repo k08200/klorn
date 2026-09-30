@@ -10,7 +10,12 @@ import {
 import { spamIntakeEnabled } from "../ops/feature-flags.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
-import type { ReplyThreadingHeaders } from "./providers/types.js";
+import type {
+  CreateDraftInput,
+  ReplyThreadingHeaders,
+  SendMailOptions,
+} from "./providers/types.js";
+import { replyHeaderLines } from "./reply-headers.js";
 
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
@@ -1055,23 +1060,6 @@ export function safeMimeType(raw: string): string {
     : "application/octet-stream";
 }
 
-/** One header line, or nothing when the sanitised value is empty. */
-function optionalHeaderLine(name: string, value: string | undefined): string[] {
-  const safe = value ? safeHeaderValue(value) : "";
-  return safe ? [`${name}: ${safe}`] : [];
-}
-
-/**
- * RFC822 threading headers, CR/LF-stripped so a fetched or caller-supplied
- * value can't inject a header. Shared by the send and draft paths.
- */
-function threadingHeaderLines(headers?: ReplyThreadingHeaders): string[] {
-  return [
-    ...optionalHeaderLine("In-Reply-To", headers?.inReplyTo),
-    ...optionalHeaderLine("References", headers?.references),
-  ];
-}
-
 function buildPlainTextRawEmail(
   to: string,
   subject: string,
@@ -1079,7 +1067,7 @@ function buildPlainTextRawEmail(
   attachments: GmailDraftAttachment[] = [],
   threading?: ReplyThreadingHeaders,
 ): string {
-  const threadLines = threadingHeaderLines(threading);
+  const threadLines = replyHeaderLines(threading);
   if (attachments.length === 0) {
     return Buffer.from(
       [
@@ -1133,12 +1121,7 @@ export async function sendEmail(
   subject: string,
   body: string,
   attachments: GmailDraftAttachment[] = [],
-  options?: {
-    threadId?: string | null;
-    inReplyTo?: string;
-    references?: string;
-    linkedInboxAccountId?: string | null;
-  },
+  options?: SendMailOptions,
 ) {
   // Single recipient only. A comma or semicolon means multiple addresses —
   // reject it so the angle-bracket display-name trick
@@ -1190,16 +1173,8 @@ export async function sendEmail(
   return { success: true as const, messageId: res.data.id, threadId: res.data.threadId ?? null };
 }
 
-export async function createEmailDraft(
-  userId: string,
-  to: string,
-  subject: string,
-  body: string,
-  threadId?: string | null,
-  attachments: GmailDraftAttachment[] = [],
-  linkedInboxAccountId?: string | null,
-  reply?: ReplyThreadingHeaders,
-) {
+export async function createEmailDraft(userId: string, draft: CreateDraftInput) {
+  const { to, subject, body, threadId, attachments = [], linkedInboxAccountId, reply } = draft;
   if (!looksLikeEmailAddress(to)) {
     return {
       error: `Invalid email address: "${to}". Use a full address like local@domain, not a domain such as accounts.google.com.`,

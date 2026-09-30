@@ -41,10 +41,10 @@ export interface MailAttachment {
 }
 
 /**
- * RFC 5322 threading headers of a reply. Values are opaque `Message-ID`
- * strings; each implementation must neutralise CR/LF before writing them into
- * a header. Absent means "not a reply": the message is built exactly as it was
- * before reply context existed.
+ * RFC 5322 threading headers of a reply. Values are untrusted `Message-ID`
+ * text. An implementation that writes them into a header must go through
+ * `mail/reply-headers.ts`, which parses message ids and drops everything else.
+ * Absent means "not a reply": the message carries no threading headers.
  */
 export interface ReplyThreadingHeaders {
   inReplyTo?: string;
@@ -54,6 +54,17 @@ export interface ReplyThreadingHeaders {
 export interface SendMailOptions extends ReplyThreadingHeaders {
   threadId?: string | null;
   linkedInboxAccountId?: string | null;
+}
+
+/** Everything `createDraft` needs besides the acting user. */
+export interface CreateDraftInput {
+  to: string;
+  subject: string;
+  body: string;
+  threadId?: string | null;
+  attachments?: MailAttachment[];
+  linkedInboxAccountId?: string | null;
+  reply?: ReplyThreadingHeaders;
 }
 
 /**
@@ -73,16 +84,7 @@ export interface MailProviderActions {
     attachments?: MailAttachment[],
     options?: SendMailOptions,
   ): Promise<SendMailResult>;
-  createDraft(
-    userId: string,
-    to: string,
-    subject: string,
-    body: string,
-    threadId?: string | null,
-    attachments?: MailAttachment[],
-    linkedInboxAccountId?: string | null,
-    reply?: ReplyThreadingHeaders,
-  ): Promise<CreateDraftResult>;
+  createDraft(userId: string, draft: CreateDraftInput): Promise<CreateDraftResult>;
   getReplyHeaders(
     userId: string,
     messageId: string,

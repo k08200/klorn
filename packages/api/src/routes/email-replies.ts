@@ -27,6 +27,7 @@ import { updateCandidateIntake } from "../mail/email-candidate-intake.js";
 import { type GmailDraftAttachment, resolveMailClient } from "../mail/gmail.js";
 import { formatCalendarFacts, getMeetingContext } from "../mail/meeting-context.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
+import { pickInReplyTo } from "../mail/reply-headers.js";
 import { buildReplySystemPrompt } from "../mail/reply-prompt.js";
 import { markEmailReplied } from "../mail/reply-state.js";
 import { senderDossierFacts } from "../mail/sender-dossier.js";
@@ -533,15 +534,14 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
       }
 
       const actions = await mailActionsFor(uid, dbEmail.linkedInboxAccountId);
-      const result = await actions.createDraft(
-        uid,
+      const result = await actions.createDraft(uid, {
         to,
         subject,
         body,
-        dbEmail.threadId,
+        threadId: dbEmail.threadId,
         attachments,
-        dbEmail.linkedInboxAccountId,
-      );
+        linkedInboxAccountId: dbEmail.linkedInboxAccountId,
+      });
       if ("unsupported" in result) return reply.code(501).send({ error: result.error });
       if ("error" in result) return reply.code(409).send(result);
       await updateCandidateIntake({
@@ -635,9 +635,12 @@ export async function registerEmailRepliesRoutes(app: FastifyInstance) {
         });
       }
 
-      // threaded=false means we sent by threadId only (no RFC Message-ID found);
-      // surfaced so a client can tell strict-threaded from best-effort.
-      return { ...result, to, threaded: Boolean(messageId) };
+      // threaded=false means no In-Reply-To was emitted: either no RFC
+      // Message-ID was found or none of it parsed as a message id, so the
+      // message went by threadId only. Same parser the MIME builder uses, so
+      // the flag matches the sent headers. Lets a client tell strict-threaded
+      // from best-effort.
+      return { ...result, to, threaded: pickInReplyTo(messageId) !== undefined };
     },
   );
 }

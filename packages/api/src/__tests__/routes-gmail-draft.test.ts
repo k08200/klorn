@@ -81,10 +81,10 @@ describe("POST /api/email/:id/gmail-draft", () => {
       payload: { to: "boss@corp.com", subject: "Re: hi", body: "sounds good" },
     });
     expect(res.statusCode).toBe(200);
-    const call = createEmailDraft.mock.calls[0];
-    expect(call[0]).toBe("user-1");
-    expect(call[4]).toBe("t1"); // threadId
-    expect(call[6]).toBeUndefined(); // linkedInboxAccountId
+    const [uid, draft] = createEmailDraft.mock.calls[0];
+    expect(uid).toBe("user-1");
+    expect(draft.threadId).toBe("t1");
+    expect(draft.linkedInboxAccountId).toBeUndefined();
     await app.close();
   });
 
@@ -97,12 +97,12 @@ describe("POST /api/email/:id/gmail-draft", () => {
       payload: { to: "boss@corp.com", subject: "Re: hi", body: "sounds good" },
     });
     expect(res.statusCode).toBe(200);
-    const call = createEmailDraft.mock.calls[0];
-    expect(call[6]).toBe("linked-acct-1"); // linkedInboxAccountId
+    const [, draft] = createEmailDraft.mock.calls[0];
+    expect(draft.linkedInboxAccountId).toBe("linked-acct-1");
     await app.close();
   });
 
-  it("passes exactly the pre-B0 arguments and no reply headers (B0 leaves this route unchanged)", async () => {
+  it("passes exactly the values it passed on main and no reply headers", async () => {
     // Wiring reply headers into this route is a separate fix that needs a real
     // Gmail account to verify. Until then the route must not fetch or pass them.
     emailFindFirst.mockResolvedValue({ ...EMAIL, linkedInboxAccountId: "linked-acct-1" });
@@ -114,17 +114,17 @@ describe("POST /api/email/:id/gmail-draft", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(createEmailDraft).toHaveBeenCalledTimes(1);
-    const args = createEmailDraft.mock.calls[0];
-    expect(args.slice(0, 7)).toEqual([
-      "user-1",
-      "boss@corp.com",
-      "Re: hi",
-      "sounds good",
-      "t1",
-      [],
-      "linked-acct-1",
-    ]);
-    expect(args[7]).toBeUndefined();
+    const [uid, draft] = createEmailDraft.mock.calls[0];
+    expect(uid).toBe("user-1");
+    expect(draft).toStrictEqual({
+      to: "boss@corp.com",
+      subject: "Re: hi",
+      body: "sounds good",
+      threadId: "t1",
+      attachments: [],
+      linkedInboxAccountId: "linked-acct-1",
+    });
+    expect(draft).not.toHaveProperty("reply");
     expect(getReplyHeaders).not.toHaveBeenCalled();
     await app.close();
   });

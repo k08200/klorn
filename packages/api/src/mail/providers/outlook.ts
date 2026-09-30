@@ -185,18 +185,11 @@ export const outlookMailActions: MailProviderActions = {
     return { success: true, messageId: null };
   },
 
-  createDraft: async (
-    userId,
-    to,
-    subject,
-    body,
-    _threadId,
-    attachments = [],
-    linkedInboxAccountId,
-    // Accepted for seam parity, ignored until B0b: POST /me/messages cannot
-    // carry In-Reply-To, and a native reply draft needs /messages/{id}/createReply.
-    _reply,
-  ): Promise<CreateDraftResult> => {
+  createDraft: async (userId, draft): Promise<CreateDraftResult> => {
+    // threadId and reply are accepted for seam parity and ignored until B0b:
+    // POST /me/messages cannot carry In-Reply-To, and a native reply draft
+    // needs /messages/{id}/createReply.
+    const { to, subject, body, attachments = [], linkedInboxAccountId } = draft;
     const ctx = await ctxFor(userId, linkedInboxAccountId);
     if ("error" in ctx) return ctx;
     const out = await graphCall(
