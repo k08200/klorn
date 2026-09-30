@@ -37,7 +37,7 @@
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.1",
     "bcryptjs": "^3.0.3",
-    "fastify": "^5.12.0",
+    "fastify": "^5.12.1",
     "firebase-admin": "^14.2.0",
     "googleapis": "^171.4.0",
     "imapflow": "^1.7.0",
