@@ -834,7 +834,7 @@ flag OFF.
     newer, SNI pinned to the registry host, `requireTLS` for STARTTLS (a server
     that does not offer the upgrade fails the send, no AUTH is sent), connection
     10 s, greeting 10 s, socket 30 s, DNS 10 s as named constants, no logging of
-    SMTP traffic, no file or URL access, no proxy or custom socket, and a fixed
+    SMTP traffic, no file or URL access, no proxy, sendmail or pool, and a fixed
     EHLO name (`klorn.ai`) instead of the machine's hostname. `smtp-wire.test.ts`
     runs the REAL nodemailer against a local TCP socket: a refused STARTTLS fails
     with ETLS, a peer that hangs up or answers the handshake in plaintext fails
@@ -872,8 +872,12 @@ flag OFF.
     the Sent folder by role (`list()`), searches it for the message's own
     Message-ID, and APPENDs with `\Seen` only if it is absent. A server that
     saves its own copy gets none from us; one that does not gets exactly one. The
-    copy has a hard deadline of 5 s (`SENT_COPY_DEADLINE_MS`: the IMAP client is
-    closed, a warning logged) and a failure here never changes the send's result.
+    copy starts once the caller HAS its success (the 250), still holding the
+    account's turn and a session slot, and has its own hard deadline of 5 s
+    (`SENT_COPY_DEADLINE_MS`: the IMAP client is closed, a warning logged). It is
+    outside the task's total timeout, so it can neither delay the result nor turn
+    a delivered send into "unconfirmed", and a failure in it never changes the
+    result.
     Folder trust: imapflow 1.7.0 folds its looser name-guess tier into
     `specialUseSource: "name"`, so that source alone proves nothing. A role from a
     server SPECIAL-USE flag (`extension`) is trusted; one from the name only when
@@ -906,15 +910,61 @@ flag OFF.
     the mailbox was busy and nothing was sent or saved, and is never started
     afterwards, so "busy" can never become a late send; a user may have at most 10
     tasks queued or running (`MAX_OUTSTANDING_TASKS_PER_USER`); a running task is
-    bounded at 60 s (`TASK_TOTAL_TIMEOUT_MS`), at which point its connection is
-    closed and the caller is told the outcome is unconfirmed. Worst case for a
-    caller is about 80 s. `withImapClient` (one session helper, also under the B1
+    bounded at 60 s (`TASK_TOTAL_TIMEOUT_MS`), at which point its SMTP socket is
+    destroyed and the caller is told delivery is not confirmed (see the next
+    bullet for why destroying matters). Worst case for a caller is about 80 s. `withImapClient` (one session helper, also under the B1
     `withInbox`) ends every session, LOGOUT then a hard close, and the tests pin
     that the session ends and every mailbox lock is released on every path. Transport failures reach Sentry at
     most once per account per 10 minutes. Logs and Sentry get only the error's
     class, code, reply code and failing command, never its text (a server reply
     can quote the recipient). Results follow B1: `{error}` for every failure,
     never `unsupported`, never a throw.
+  - Abort and delivery wording (follow-up to the focused re-review). nodemailer's
+    `transport.close()` does not close an in-flight connection (for the non-pooled
+    transport it only emits an event), and the connection's own `close()` only
+    half-closes the socket, which a stalled server never answers. So the sender
+    creates the socket itself, hands it to nodemailer (its documented `socket`
+    option) and destroys it on abort and when the send returns: a message not
+    acknowledged before the deadline cannot be acknowledged, or delivered, after
+    it, and an orphaned send that wakes up late (even one still importing
+    nodemailer) checks the abort signal, sends nothing, logs into IMAP for no
+    copy and releases nothing it does not own. An abort before nodemailer has
+    connected is not undone either: nodemailer resolves the hostname first (up to
+    the task deadline on a DNS stall) and then calls `socket.connect()`, which on a
+    destroyed Node socket reconnects it, so an aborted session makes its socket's
+    `connect()` throw (nodemailer reports that as a connection error) and destroys
+    a connect that was already in flight. Cost of the caller-provided socket: the
+    connect is to the hostname, so Node does its own `dns.lookup` and nodemailer's
+    fallback to the provider's other A records is not used. Neither that path nor
+    nodemailer's own resolution filters private addresses; what keeps a connection
+    on the provider is that the host comes only from the registry, and what stops a
+    wrong server from receiving the credential or the message is TLS: certificate
+    verification on, the server name pinned to the registry host, and STARTTLS
+    required. SMTP cannot tell a connection that died before the message was handed
+    over from one that died after, and nodemailer reports a stall after DATA as
+    `ETIMEDOUT command=CONN`, exactly like a connect timeout, so the error's
+    `command` proves nothing. What the sender knows is whether the TCP connection
+    was ever established. Failures are answered by `classifySmtpFailure`: a
+    rejected login keeps the reconnect wording and cooldown; a server's own
+    refusal (sender, recipient, message) keeps its specific wording; a failure
+    that provably came before any MAIL FROM (connection never established, DNS,
+    TLS or STARTTLS, any other login failure, and a certificate, hostname or
+    handshake failure after STARTTLS, which nodemailer reports as ESOCKET on CONN
+    and which is recognised by Node's own message; an ESOCKET with any other
+    message stays "unconfirmed") says "Could not reach X. The message
+    was not sent; try again shortly."; ANY other error on an established
+    connection, and the 60 s deadline, says "X did not confirm delivery. The
+    message may or may not have been sent; check your Sent folder before trying
+    again." and never "try again shortly". A nodemailer that cannot be imported
+    says sending is unavailable and nothing was sent, not that the mailbox could
+    not be reached. `imap-send-wire.test.ts` runs all of this with the real
+    nodemailer over real TLS (a throwaway certificate made with openssl at test
+    time, trusted through `tls.connect`'s `ca`; verification stays on): a server
+    that stalls after DATA sees its socket closed when the deadline fires, the
+    caller gets the unconfirmed wording and no Sent copy is filed. It runs over
+    implicit TLS and over STARTTLS (production uses STARTTLS on 587, where
+    nodemailer wraps the caller's socket in a TLS socket), and covers an abort that
+    lands during a DNS stall.
   - Floor: unchanged. `imap-send-floor.test.ts` drives `executeToolCall` for a
     message on a Naver inbox: no receipt, a null receipt and a receipt for other
     bytes are refused before any SMTP or IMAP object is built, exactly as for
@@ -930,14 +980,24 @@ flag OFF.
     it still works.
 - Not verified: no real Naver or iCloud server has been reached. Behaviour rests
   on a mocked nodemailer transport and imapflow client, plus the real nodemailer
-  against a local fake SMTP socket (`smtp-wire.test.ts`); no TLS certificate path
-  is exercised, because the transport correctly refuses an untrusted one.
-- Known limits: a connection lost after the body was sent reports `{error}` for a
-  message that may have been delivered; UIDVALIDITY is not stored (B1's blocker
+  against a local fake SMTP socket (`smtp-wire.test.ts`) and, over real TLS with
+  verification on, against a local server that stalls, drops or acknowledges
+  (`imap-send-wire.test.ts`).
+- Known limits: a connection lost after the body was sent is reported as "delivery
+  not confirmed" (it may have been delivered; SMTP cannot say); UIDVALIDITY is not stored (B1's blocker
   for B2), so `getReplyHeaders` reads whichever message now holds the UID; mail
   is always From the account's own address (aliases such as iCloud Hide My Email
   are not supported); SMTP 535 because the provider's own IMAP/SMTP toggle is off
   looks like a rejected password and pauses read and star for that mailbox too.
+- Flip blockers from the focused re-review, both done: (1) the 60 s abort now
+  destroys the SMTP socket, so a send that was not acknowledged by the deadline
+  cannot be delivered afterwards, and nothing acts on an orphaned send (no Sent
+  copy, no IMAP login); (2) every SMTP error on an established connection, a stall
+  after DATA included, is reported as "delivery not confirmed, check your Sent
+  folder", and only failures provably before MAIL FROM say "not sent". Also done:
+  the success is returned as soon as the 250 arrives, the Sent copy cannot turn it
+  into "unconfirmed", and a nodemailer import failure no longer reads "could not
+  reach".
 - Before the flip: on one real Naver and one real iCloud account (iCloud also
   needs `ICLOUD_INBOX_ENABLED`) run a plain send, a reply through
   `POST /api/email/:id/reply` and a draft through `gmail-draft`. Check that the

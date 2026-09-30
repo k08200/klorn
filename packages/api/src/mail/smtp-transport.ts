@@ -17,6 +17,9 @@
  *   - every timeout is explicit: a user is waiting on the route, and
  *     nodemailer's defaults (2 min connection, 10 min socket) are far too long;
  *   - nothing is logged: SMTP traffic carries the password and the message;
+ *   - the socket is the caller's (an unconnected net.Socket nodemailer connects to
+ *     the registry host), so an abort can really destroy the connection; see
+ *     `openSmtpSession`;
  *   - content cannot pull in local files or URLs (`disableFileAccess`,
  *     `disableUrlAccess`); the sender hands over finished MIME bytes anyway;
  *   - EHLO carries a fixed name (`klorn.ai`), not the machine's hostname, which
@@ -25,6 +28,8 @@
  * nodemailer is imported when the first transport is built, not at boot: while
  * IMAP_SEND_ENABLED is off the package never loads.
  */
+
+import net from "node:net";
 
 import type { SMTPSentMessageInfo, SMTPTransportOptions, Transporter } from "nodemailer";
 
@@ -89,12 +94,21 @@ function loadNodemailer(): Promise<NodemailerModule> {
   return nodemailerLoad;
 }
 
+/**
+ * A transport for one send. `socket`, when given, is the unconnected socket
+ * nodemailer will connect and use (its documented `socket` option), so the caller
+ * holds the one handle that can really close the connection.
+ */
 export async function createSmtpTransport(
   provider: ImapProviderConfig,
   credentials: SmtpCredentials,
+  socket?: net.Socket,
 ): Promise<Transporter<SMTPSentMessageInfo>> {
   const { createTransport } = await loadNodemailer();
-  return createTransport(smtpTransportOptions(provider, credentials));
+  return createTransport({
+    ...smtpTransportOptions(provider, credentials),
+    ...(socket ? { socket } : {}),
+  });
 }
 
 /**
@@ -109,6 +123,129 @@ export function sendRaw(
     envelope: { from: message.from, to: [message.to] },
     raw: message.raw,
   });
+}
+
+/**
+ * One SMTP submission that the caller can really stop.
+ *
+ * nodemailer's `transport.close()` does not close a connection that is in flight
+ * (for the non-pooled transport it only emits an event), and even the connection's
+ * own close() only half-closes the socket, which a stalled server never answers.
+ * So the session creates the socket itself, hands it to nodemailer, and `abort()`
+ * DESTROYS it: a message that was not acknowledged before an abort cannot be
+ * acknowledged, or delivered, after it.
+ *
+ * `connected` says whether the TCP connection was ever established. That is the
+ * one thing the sender knows that nodemailer's error does not say: a stall after
+ * DATA and a connect timeout both surface as `ETIMEDOUT command=CONN`.
+ */
+export interface SmtpSession {
+  send(message: { from: string; to: string; raw: Buffer }): Promise<SMTPSentMessageInfo>;
+  readonly connected: boolean;
+  /** Destroy the socket and close the transport. Safe to call more than once. */
+  abort(): void;
+  /** End the transport after a finished send. Leaves the socket to nodemailer. */
+  close(): void;
+}
+
+export async function openSmtpSession(
+  provider: ImapProviderConfig,
+  credentials: SmtpCredentials,
+): Promise<SmtpSession> {
+  const socket = new net.Socket();
+  let aborted = false;
+  let connected = false;
+  // nodemailer resolves the hostname FIRST and only then calls socket.connect().
+  // destroy() on a socket that has not connected yet is undone by that connect()
+  // (Node reconnects a destroyed socket), so an abort during the DNS lookup, which
+  // can last up to the task deadline, would still deliver the message. Once
+  // aborted the socket refuses to connect; nodemailer wraps the call in a
+  // try/catch and reports the throw as a connection error.
+  const connect = socket.connect.bind(socket) as (...args: unknown[]) => net.Socket;
+  socket.connect = ((...args: unknown[]) => {
+    if (aborted) throw new Error("SMTP session aborted before it connected");
+    return connect(...args);
+  }) as typeof socket.connect;
+  socket.once("connect", () => {
+    connected = true;
+    // belt and braces: a connect that was already in flight when the abort came
+    if (aborted) socket.destroy();
+  });
+  let transport: Transporter<SMTPSentMessageInfo>;
+  try {
+    transport = await createSmtpTransport(provider, credentials, socket);
+  } catch (err) {
+    socket.destroy();
+    throw err;
+  }
+  return {
+    send: (message) => sendRaw(transport, message),
+    get connected() {
+      return connected;
+    },
+    abort() {
+      aborted = true;
+      socket.destroy();
+      transport.close();
+    },
+    close() {
+      transport.close();
+    },
+  };
+}
+
+export type SmtpFailureClass = "auth" | "refused" | "not-sent" | "unconfirmed";
+
+/** nodemailer error codes that can only happen before any MAIL FROM was sent. */
+const PRE_ENVELOPE_CODES: readonly string[] = [
+  "EDNS",
+  "ETLS",
+  "EAUTH",
+  "ENOAUTH",
+  "ECONFIG",
+  "EREQUIRETLS",
+  "EPROXY",
+];
+
+/**
+ * Node's own messages for a TLS handshake that failed or never finished. nodemailer
+ * reports them as `ESOCKET` on `CONN` (it overwrites the original error code), so
+ * the message is all that is left of the cause. They come from OpenSSL and the
+ * socket, not from the server, and can only be produced by the handshake. A
+ * message that matches none of them (a reset, a broken pipe, a timeout, an alert
+ * after the handshake) proves nothing and stays "unconfirmed": the list errs
+ * toward not claiming "not sent".
+ */
+const TLS_HANDSHAKE_FAILURE =
+  /self[- ]signed certificate|unable to (?:verify the first|get local issuer) certificate|certificate (?:has expired|is not yet valid|verify failed|revoked)|does not match certificate's altnames|before secure TLS connection was established|wrong version number|unsupported protocol|no protocols available|alert handshake failure/i;
+
+function isTlsHandshakeFailure(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const { code, message } = err as { code?: unknown; message?: unknown };
+  return code === "ESOCKET" && typeof message === "string" && TLS_HANDSHAKE_FAILURE.test(message);
+}
+
+/**
+ * What a failed submission proves about delivery.
+ *   - "auth": the server rejected the login (530, 534, 535). Nothing was sent.
+ *   - "refused": the server answered no to the sender, a recipient or the message
+ *     (a definite answer; the message was not accepted).
+ *   - "not-sent": provably before any MAIL FROM: the connection was never
+ *     established (refused, timed out, reset while connecting), DNS, TLS or
+ *     STARTTLS (including a certificate or hostname failure, whose handshake
+ *     precedes AUTH), any other login failure.
+ *   - "unconfirmed": anything else on an established connection. SMTP cannot say
+ *     whether a message whose connection died was accepted, and nodemailer reports
+ *     a stall after DATA exactly like a connect timeout (`ETIMEDOUT`, command
+ *     `CONN`), so the error's `command` is not evidence of anything.
+ */
+export function classifySmtpFailure(err: unknown, connected: boolean): SmtpFailureClass {
+  if (isSmtpAuthRejection(err)) return "auth";
+  const code =
+    typeof err === "object" && err !== null ? (err as { code?: unknown }).code : undefined;
+  if (code === "EENVELOPE" || code === "EMESSAGE") return "refused";
+  if (!connected || isTlsHandshakeFailure(err)) return "not-sent";
+  return typeof code === "string" && PRE_ENVELOPE_CODES.includes(code) ? "not-sent" : "unconfirmed";
 }
 
 /**
