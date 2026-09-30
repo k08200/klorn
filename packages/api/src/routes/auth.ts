@@ -38,6 +38,7 @@ import {
 } from "../mail/gmail.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
+import { upsertGoogleEventRow } from "../pim/calendar-rows.js";
 import {
   clearLoginAttempts,
   loginThrottleRemainingMs,
@@ -1140,7 +1141,13 @@ export function authRoutes(app: FastifyInstance) {
           }
           const expiresAt = tokens.expiry_date ? new Date(tokens.expiry_date) : null;
           await prisma.linkedCalendarAccount.upsert({
-            where: { userId_email: { userId: statePayload.userId, email: linkedEmail } },
+            where: {
+              userId_provider_email: {
+                userId: statePayload.userId,
+                provider: "GOOGLE",
+                email: linkedEmail,
+              },
+            },
             update: {
               accessToken: encryptToken(tokens.access_token),
               refreshToken: encryptOptional(tokens.refresh_token),
@@ -1150,6 +1157,7 @@ export function authRoutes(app: FastifyInstance) {
             },
             create: {
               userId: statePayload.userId,
+              provider: "GOOGLE",
               email: linkedEmail,
               accessToken: encryptToken(tokens.access_token),
               refreshToken: encryptOptional(tokens.refresh_token),
@@ -1926,28 +1934,14 @@ export function authRoutes(app: FastifyInstance) {
         }
         if (!meetingLink && item.hangoutLink) meetingLink = item.hangoutLink;
 
-        await prisma.calendarEvent.upsert({
-          where: { userId_googleId: { userId, googleId } },
-          create: {
-            userId,
-            title: item.summary || "Untitled",
-            description: item.description || null,
-            startTime,
-            endTime,
-            location: item.location || null,
-            meetingLink,
-            allDay,
-            googleId,
-          },
-          update: {
-            title: item.summary || "Untitled",
-            description: item.description || null,
-            startTime,
-            endTime,
-            location: item.location || null,
-            meetingLink,
-            allDay,
-          },
+        await upsertGoogleEventRow(userId, googleId, {
+          title: item.summary || "Untitled",
+          description: item.description || null,
+          startTime,
+          endTime,
+          location: item.location || null,
+          meetingLink,
+          allDay,
         });
         results.calendar++;
       }

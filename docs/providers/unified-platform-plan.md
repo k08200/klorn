@@ -536,6 +536,56 @@ needs FA-9 and the admin guidance from F0.
   or sample events and get a local provider value, not GOOGLE.
 - Verify: `prisma migrate diff`, the CI Migrations job, and a backfill test
   for both kinds of row.
+- Landed 2026-09-30 (expand phase only; branch `feat/calendar-provider-schema`,
+  PR not yet opened). Migration `20260930010000_calendar_provider`:
+  - New enum `CalendarProvider`: GOOGLE, OUTLOOK, ICLOUD, NAVER, DEVICE, LOCAL,
+    only the sources C2-C6 name. LOCAL appears only on `CalendarEvent`.
+  - `LinkedCalendarAccount`: `provider` (default GOOGLE), nullable `caldavUrl`
+    and `caldavPasswordCipher`, nullable `accessToken`, unique key
+    (userId, provider, email). `CalendarEvent`: `provider`, `externalId`,
+    `sourceAccountId` (plain tag with no foreign key, like
+    `EmailMessage.linkedInboxAccountId`), unique (userId, provider, externalId).
+    `googleId` and its unique are untouched.
+  - Backfill is one idempotent UPDATE: a `googleId` makes the row GOOGLE with
+    `externalId = googleId`; none makes it LOCAL. Sample and demo rows have no
+    `googleId`, so they are LOCAL. Applied to a scratch Postgres 16 holding
+    both kinds of row (2026-09-30); the CI drift check reports no difference.
+  - Both `provider` columns keep `DEFAULT 'GOOGLE'` so the previous release,
+    which inserts without it, keeps working during the deploy overlap. A row it
+    writes in that window is GOOGLE with a NULL `externalId`. The Google sync
+    upsert re-stamps both on update. The contract migration must re-run the
+    backfill UPDATE before it drops the defaults.
+  - Dual-write goes through `pim/calendar-rows.ts`, the single place that
+    decides provider, `externalId` and `sourceAccountId`. The three Google sync
+    sites (`POST /api/calendar/sync`, the scheduler tick, login init-sync)
+    upsert through it. Manual create and the agent `create_event` write GOOGLE
+    when Google returned an id and LOCAL when it did not. The demo seed writes
+    LOCAL. The link-calendar callback keys on (userId, provider, email) and
+    writes GOOGLE. `sourceAccountId` is NULL in every writer today: linked
+    calendars are not synced into rows until C2. A client cannot set any of the
+    three fields. `calendar-provider-writers-guard.test.ts` fails if a new
+    writer omits the provider or a reader starts using the new columns.
+  - Reads are unchanged, still by `googleId` and row id. The one wire change is
+    additive: the row JSON returned by `/api/calendar` (list, get, create,
+    update) now carries `provider`, `externalId` and `sourceAccountId`.
+  - The key-rotation sweep (`scripts/reencrypt-tokens.ts`) covers
+    `caldavPasswordCipher` from day one. `purgeUserData` is unchanged: it
+    deletes both tables by `userId`.
+  - Deploy overlap, verified with the previous release's generated client: its
+    Google sync upsert keeps working, but its link-calendar upsert (`ON CONFLICT
+    ("userId","email")`) fails with Postgres 42P10 once the old unique index is
+    gone, so attaching a second Google calendar errors until the new release
+    serves. Phase 0a made the same trade for `LinkedInboxAccount`.
+- For later steps: C2 must delete a linked account's rows by `sourceAccountId`
+  in the unlink route (`DELETE /google/linked-calendars/:id`), because there is
+  no foreign key, and add an index when it first queries that tag. The contract
+  phase flips reads to (provider, externalId), re-runs the backfill UPDATE,
+  then drops `googleId` and the defaults.
+- Exit: no user-visible change and no flag. The two index changes and the
+  backfill are the only non-metadata steps.
+- Rollback: revert the PR. The columns are additive and ignorable. Before
+  redeploying the old code, recreate `LinkedCalendarAccount_userId_email_key`
+  (SQL in the migration header); it is valid while every row is GOOGLE.
 
 **C2 — calendar provider seam and linked-account sync** (*outline*). Mirrors
 `mail/providers/`. Linked Google calendars are synced into rows, not only
