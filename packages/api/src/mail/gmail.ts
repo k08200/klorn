@@ -491,7 +491,11 @@ async function persistRefreshedGoogleToken(
 export async function getLinkedCalendarClients(
   userId: string,
 ): Promise<Array<{ client: InstanceType<typeof google.auth.OAuth2>; id: string; email: string }>> {
-  const rows = await prisma.linkedCalendarAccount.findMany({ where: { userId } });
+  // GOOGLE only: a CalDAV row has no OAuth token (it would be flagged for
+  // reconnect on every conflict check) and an OUTLOOK row is not a Google client.
+  const rows = await prisma.linkedCalendarAccount.findMany({
+    where: { userId, provider: "GOOGLE" },
+  });
   const clients: Array<{
     client: InstanceType<typeof google.auth.OAuth2>;
     id: string;

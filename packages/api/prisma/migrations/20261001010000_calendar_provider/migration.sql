@@ -24,10 +24,11 @@
 --   caldavPasswordCipher  cipher of an app-specific password (the same
 --                         crypto-tokens helper as the OAuth ciphers). Unused
 --                         until C3; already in the key-rotation sweep.
---   unique key            (userId, email) becomes (userId, provider, email) so
---                         one address can exist on two services. No row is
---                         lost: every existing row is GOOGLE, so the new key
---                         holds exactly when the old one did.
+--   unique key            the new (userId, provider, email) unique is ADDED
+--                         alongside the old (userId, email) one, which stays
+--                         in this expand phase (see "Deploy overlap" below).
+--                         Every existing row is GOOGLE, so the new key holds
+--                         exactly when the old one does.
 --
 -- CalendarEvent:
 --   provider, externalId  the provider-aware identity. googleId and its
@@ -44,35 +45,56 @@
 -- sample event and becomes LOCAL with externalId NULL — never GOOGLE. The
 -- statement is idempotent. The new unique index is created after it, so the
 -- index validates the backfilled data; Postgres treats NULLs as distinct, so
--- LOCAL rows never collide.
+-- LOCAL rows never collide. This UPDATE is only correct now, while every
+-- CalendarEvent row is either a Google event or a local one. Once OUTLOOK,
+-- ICLOUD, NAVER or DEVICE rows exist (googleId NULL, a real externalId) it would
+-- flip them to LOCAL and wipe their externalId, so it must not be re-run
+-- verbatim. Later steps use the scoped statements under "Contract phase".
 --
 -- provider keeps DEFAULT 'GOOGLE' on both tables on purpose: migrations run at
 -- container start while the previous release is still serving, and its inserts
 -- know nothing about provider. A row that release writes in that window is
 -- GOOGLE (right for Google syncs, wrong for a local event) and may lack
 -- externalId. The new code's sync upsert re-stamps provider/externalId on
--- update, and the contract-phase migration must re-run the UPDATE below before
--- it drops the defaults.
+-- update, and the contract phase repairs any that remain (scoped statements
+-- under "Contract phase").
 --
 -- Deploy overlap and rollback, checked 2026-09-30 against a scratch Postgres 16
--- with the previous release's generated client: its Google sync upsert keeps
+-- with the previous release's generated client. Its Google sync upsert keeps
 -- working (ON CONFLICT on the untouched (userId, googleId) key). Its
--- link-calendar upsert does NOT — it compiles to ON CONFLICT ("userId","email")
--- and fails with 42P10 once that index is dropped. So attaching a second
--- Google calendar errors until the new release is serving (a rare action; the
--- user retries) — the same trade Phase 0a made for LinkedInboxAccount. Rolling
--- the CODE back after this is applied has the same effect; restore the old key
--- first (valid while every row is GOOGLE, i.e. before C3 ships):
---   CREATE UNIQUE INDEX "LinkedCalendarAccount_userId_email_key"
---     ON "LinkedCalendarAccount"("userId", "email");
+-- link-calendar upsert compiles to ON CONFLICT ("userId","email"), which needs
+-- the old unique index; dropping that index made it fail with 42P10. So the old
+-- index STAYS here: the previous release keeps working through the deploy
+-- overlap, and the code can be rolled back with no schema step.
+--
+-- Contract phase (a later migration, not this one):
+--   * The contract phase drops "LinkedCalendarAccount_userId_email_key" when a
+--     second provider for the same address actually lands (C3/C4: an iCloud or
+--     Outlook account sharing an email with a Google link). Until then the two
+--     keys are equivalent, because every row is GOOGLE.
+--   * Before it drops the CalendarEvent.provider default, the contract phase
+--     repairs rows the previous release wrote during the overlap, with
+--     statements scoped to GOOGLE rows so no other provider's row is touched:
+--       UPDATE "CalendarEvent" SET "externalId" = "googleId" WHERE "provider" = 'GOOGLE' AND "externalId" IS NULL;
+--       UPDATE "CalendarEvent" SET "provider" = 'LOCAL' WHERE "provider" = 'GOOGLE' AND "googleId" IS NULL;
+--     Run them in that order: a GOOGLE row with no googleId is a local event.
+--   * It then adds
+--       ALTER TABLE "CalendarEvent" ADD CONSTRAINT "CalendarEvent_local_iff_no_externalId" CHECK (("provider" = 'LOCAL') = ("externalId" IS NULL));
+--     The CHECK cannot ship now: the previous release inserts GOOGLE rows with
+--     no externalId, which it would reject.
 --
 -- Cost. The column adds and the NOT NULL drop are metadata-only (constant
 -- defaults, Postgres 11+). The UPDATE rewrites CalendarEvent rows once. The two
 -- index builds take a brief write lock because Prisma migrations run in a
 -- transaction, where CONCURRENTLY is illegal — acceptable on these small
--- tables (the same call Phase 0a made). Nothing is dropped except the one
--- superseded LinkedCalendarAccount index. Never applied anywhere before this
--- revision.
+-- tables (the same call Phase 0a made). Nothing is dropped. Never applied
+-- anywhere before this revision.
+
+-- Fail fast instead of queueing behind a long transaction: the index builds and
+-- the UPDATE below need brief table locks, and a waiting ACCESS EXCLUSIVE
+-- request would block every reader behind it. SET LOCAL lasts only for this
+-- migration's transaction.
+SET LOCAL lock_timeout = '5s';
 
 -- CreateEnum
 CREATE TYPE "CalendarProvider" AS ENUM ('GOOGLE', 'OUTLOOK', 'ICLOUD', 'NAVER', 'DEVICE', 'LOCAL');
@@ -84,8 +106,7 @@ ALTER TABLE "LinkedCalendarAccount"
   ADD COLUMN "caldavPasswordCipher" TEXT,
   ALTER COLUMN "accessToken" DROP NOT NULL;
 
--- Unique key swap: (userId, email) -> (userId, provider, email)
-DROP INDEX "LinkedCalendarAccount_userId_email_key";
+-- New unique key, added next to the old (userId, email) one, which is kept.
 CREATE UNIQUE INDEX "LinkedCalendarAccount_userId_provider_email_key" ON "LinkedCalendarAccount"("userId", "provider", "email");
 
 -- CalendarEvent: provider-aware identity

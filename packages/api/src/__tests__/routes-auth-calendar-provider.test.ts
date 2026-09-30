@@ -50,11 +50,12 @@ vi.mock("googleapis", () => ({
 }));
 
 const linkedUpsert = vi.hoisted(() => vi.fn(async () => ({})));
+const linkedFindMany = vi.hoisted(() => vi.fn(async () => []));
 const eventUpsert = vi.hoisted(() => vi.fn(async () => ({})));
 
 vi.mock("../db.js", () => {
   const prisma = {
-    linkedCalendarAccount: { upsert: linkedUpsert },
+    linkedCalendarAccount: { upsert: linkedUpsert, findMany: linkedFindMany },
     calendarEvent: { upsert: eventUpsert },
     automationConfig: { upsert: vi.fn(async () => ({})) },
     user: {
@@ -161,6 +162,22 @@ describe("POST /api/auth/init-sync — primary calendar upsert", () => {
       title: "Kickoff",
     });
     expect(arg.update).toMatchObject({ provider: "GOOGLE", externalId: "g-login-1" });
+    await app.close();
+  });
+});
+
+describe("GET /api/auth/google/linked-calendars", () => {
+  it("lists only GOOGLE accounts — this is the Google linked-calendars surface", async () => {
+    const token = signToken({ userId: "u1", email: "owner@example.com" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/auth/google/linked-calendars",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const arg = linkedFindMany.mock.calls[0]?.[0] as { where: Record<string, unknown> };
+    expect(arg.where).toEqual({ userId: "u1", provider: "GOOGLE" });
     await app.close();
   });
 });

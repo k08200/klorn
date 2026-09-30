@@ -381,7 +381,9 @@ model LinkedCalendarAccount {
   expiresAt            DateTime?
   // CalDAV providers (ICLOUD, NAVER): server URL + AES-256-GCM password cipher
   // (an app-specific password), same crypto-tokens helper as the OAuth ciphers.
-  // Unused until C3; covered by the key-rotation sweep from day one.
+  // Unused until C3; covered by the key-rotation sweep from day one. caldavUrl is
+  // user-supplied and fetched server-side, so C3 must validate it against SSRF
+  // (resolve-then-pin, reject private ranges) before the first request.
   caldavUrl            String?
   caldavPasswordCipher String?
   // Set true when this linked calendar's token is found revoked/undecryptable so
@@ -396,6 +398,12 @@ model LinkedCalendarAccount {
   // iCloud address linked into Google) without colliding. Mirrors
   // LinkedInboxAccount.
   @@unique([userId, provider, email])
+  // The old key, kept through the expand phase: the previous release's upsert is
+  // ON CONFLICT ("userId","email"), so dropping it breaks that release during the
+  // deploy overlap and on rollback. Redundant while every row is GOOGLE. The
+  // contract phase drops it once a second provider for the same address lands
+  // (C3/C4).
+  @@unique([userId, email])
 }
 
 // Which mail service a LinkedInboxAccount row belongs to. GOOGLE/OUTLOOK are

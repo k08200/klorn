@@ -95,6 +95,31 @@ describe("every LinkedCalendarAccount writer states its provider", () => {
   });
 });
 
+describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
+  const READ = /\.linkedCalendarAccount\.(findMany|findFirst|findUnique|count)\(/g;
+  // The key-rotation sweep reads every provider on purpose: it re-encrypts all
+  // secrets, whatever the provider.
+  const ALL_PROVIDER_READERS = ["scripts/reencrypt-tokens.ts"];
+
+  it("finds the known readers (so this guard cannot pass by scanning nothing)", () => {
+    const readers = files.filter((f) => callWindows(f.text, READ).length > 0);
+    expect(readers.map((f) => f.path).sort()).toEqual([
+      "mail/gmail.ts",
+      "routes/auth.ts",
+      "scripts/reencrypt-tokens.ts",
+    ]);
+  });
+
+  it("every other reader names a provider, so a CalDAV or Outlook row never reaches Google code", () => {
+    const offenders = files
+      .filter((f) => !ALL_PROVIDER_READERS.includes(f.path))
+      .flatMap((f) => callWindows(f.text, READ).map((window) => ({ path: f.path, window })))
+      .filter(({ window }) => !/provider:/.test(window.slice(0, 300)))
+      .map(({ path }) => path);
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe("expand phase: nothing reads the new columns yet", () => {
   it("externalId and sourceAccountId appear only in the rows module", () => {
     const readers = files

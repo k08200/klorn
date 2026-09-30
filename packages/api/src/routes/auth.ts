@@ -1570,7 +1570,8 @@ export function authRoutes(app: FastifyInstance) {
     async (request) => {
       const userId = getUserId(request);
       const accounts = await prisma.linkedCalendarAccount.findMany({
-        where: { userId },
+        // GOOGLE only: this is the Google linked-calendars surface.
+        where: { userId, provider: "GOOGLE" },
         select: { id: true, email: true, createdAt: true, needsReconnect: true },
         orderBy: { createdAt: "asc" },
       });

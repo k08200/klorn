@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const prismaDir = join(here, "..", "..", "prisma");
-const MIGRATION = "20260930010000_calendar_provider";
+const MIGRATION = "20261001010000_calendar_provider";
 
 const sql = readFileSync(join(prismaDir, "migrations", MIGRATION, "migration.sql"), "utf8");
 // Statements only — the header comment is allowed to talk about what it avoids.
@@ -26,6 +26,13 @@ const schema = readFileSync(join(prismaDir, "schema.prisma"), "utf8");
 /** Collapse whitespace so assertions do not depend on formatting. */
 const flat = (text: string) => text.replace(/\s+/g, " ").trim();
 const code = flat(statements);
+const header = flat(
+  sql
+    .split("\n")
+    .filter((line) => line.trim().startsWith("--"))
+    .map((line) => line.replace(/^\s*--\s?/, ""))
+    .join(" "),
+);
 
 describe("calendar provider migration — enum", () => {
   it("creates CalendarProvider with exactly the sources the plan's C steps name", () => {
@@ -51,12 +58,19 @@ describe("calendar provider migration — LinkedCalendarAccount", () => {
     );
   });
 
-  it("swaps the unique key from (userId, email) to (userId, provider, email) without touching rows", () => {
-    expect(code).toContain(`DROP INDEX "LinkedCalendarAccount_userId_email_key";`);
+  it("adds the (userId, provider, email) unique alongside the old key and keeps the old index", () => {
     expect(code).toContain(
       `CREATE UNIQUE INDEX "LinkedCalendarAccount_userId_provider_email_key" ON "LinkedCalendarAccount"("userId", "provider", "email");`,
     );
+    // The previous release's upsert compiles to ON CONFLICT ("userId","email"),
+    // which needs this index for the whole deploy overlap and for any rollback.
+    expect(code).not.toContain(`LinkedCalendarAccount_userId_email_key`);
     expect(code).not.toMatch(/DELETE FROM "LinkedCalendarAccount"|UPDATE "LinkedCalendarAccount"/);
+  });
+
+  it("the header records that the contract phase drops the old index once a second provider lands", () => {
+    expect(header).toMatch(/contract phase drops .*LinkedCalendarAccount_userId_email_key/);
+    expect(header).toMatch(/second provider for the same address/);
   });
 });
 
@@ -98,10 +112,41 @@ describe("calendar provider migration — CalendarEvent", () => {
   });
 });
 
+describe("calendar provider migration — deploy safety", () => {
+  it("fails fast when a lock is held: lock_timeout is the first statement", () => {
+    expect(code.startsWith(`SET LOCAL lock_timeout = '5s';`)).toBe(true);
+  });
+});
+
+describe("calendar provider migration — contract-phase instructions are scoped", () => {
+  it("says this migration's own UPDATE is only correct now and must not be re-run verbatim", () => {
+    expect(header).toMatch(/only correct now/);
+    expect(header).toMatch(/not .*re-run .*verbatim/i);
+  });
+
+  it("sets externalId from googleId only for GOOGLE rows that lack one", () => {
+    expect(header).toContain(
+      `UPDATE "CalendarEvent" SET "externalId" = "googleId" WHERE "provider" = 'GOOGLE' AND "externalId" IS NULL;`,
+    );
+  });
+
+  it("flips a row to LOCAL only when it is GOOGLE with no googleId, never an OUTLOOK/ICLOUD/NAVER/DEVICE row", () => {
+    expect(header).toContain(
+      `UPDATE "CalendarEvent" SET "provider" = 'LOCAL' WHERE "provider" = 'GOOGLE' AND "googleId" IS NULL;`,
+    );
+  });
+
+  it("ends the contract phase with the LOCAL-iff-no-externalId CHECK, not before (the default would violate it)", () => {
+    const check = `CHECK (("provider" = 'LOCAL') = ("externalId" IS NULL))`;
+    expect(header).toContain(check);
+    expect(code).not.toContain("CHECK");
+  });
+});
+
 describe("calendar provider migration — additive only", () => {
-  it("drops nothing except the one superseded LinkedCalendarAccount index", () => {
+  it("drops nothing at all", () => {
     const drops = code.match(/DROP (TABLE|COLUMN|TYPE|INDEX|CONSTRAINT)[^;]*;/g) ?? [];
-    expect(drops).toEqual([`DROP INDEX "LinkedCalendarAccount_userId_email_key";`]);
+    expect(drops).toEqual([]);
     expect(code).not.toMatch(/TRUNCATE|DELETE FROM/);
   });
 
@@ -112,7 +157,8 @@ describe("calendar provider migration — additive only", () => {
     expect(account).toMatch(/caldavUrl\s+String\?/);
     expect(account).toMatch(/caldavPasswordCipher\s+String\?/);
     expect(account).toContain("@@unique([userId, provider, email])");
-    expect(account).not.toContain("@@unique([userId, email])");
+    // The old key stays until the contract phase (see the migration header).
+    expect(account).toContain("@@unique([userId, email])");
 
     const event = schema.match(/model CalendarEvent \{[\s\S]*?\n\}/)?.[0] ?? "";
     expect(event).toMatch(/provider\s+CalendarProvider\s+@default\(GOOGLE\)/);
