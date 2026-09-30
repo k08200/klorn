@@ -16,7 +16,7 @@ import type {
 import {
   type CalendarEventFields,
   upsertGoogleEventRow,
-  upsertLinkedGoogleEventRow,
+  upsertLinkedEventRow,
 } from "./calendar-rows.js";
 import { handleLinkedCalendarFailure } from "./linked-calendar-failure.js";
 
@@ -94,7 +94,10 @@ export async function syncPrimaryCalendarWindow(
   return rows.length;
 }
 
-/** Sync one LINKED calendar's window into rows tagged with that account. */
+/**
+ * Sync one LINKED calendar's window into rows tagged with that account and with
+ * the provider of the session that listed them (GOOGLE, or OUTLOOK in C4).
+ */
 export async function syncLinkedCalendarWindow(
   session: CalendarSession,
   userId: string,
@@ -104,7 +107,13 @@ export async function syncLinkedCalendarWindow(
 ): Promise<number> {
   const rows = await listSyncRows(session, userTimezone, now);
   for (const row of rows) {
-    await upsertLinkedGoogleEventRow(userId, linkedAccountId, row.externalId, row.fields);
+    await upsertLinkedEventRow(
+      session.provider,
+      userId,
+      linkedAccountId,
+      row.externalId,
+      row.fields,
+    );
   }
   return rows.length;
 }
@@ -121,7 +130,8 @@ function isForeignKeyViolation(err: unknown): boolean {
 
 /**
  * Sync every linked calendar account of a user into rows. Accounts come from the
- * provider seam, so a provider with no implementation yet is skipped, and so is
+ * provider seam, so a provider with no implementation yet (or, for OUTLOOK, with
+ * its flags off) is skipped, and so is
  * an account flagged needsReconnect: a revoked token is not retried every cycle
  * until the user re-links it. Best-effort per account: one failing never skips
  * the others (see linked-calendar-failure.ts for the policy). Called only behind

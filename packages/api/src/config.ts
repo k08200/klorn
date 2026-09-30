@@ -173,6 +173,25 @@ export function outlookInboxEnabled(): boolean {
     (process.env.OUTLOOK_INBOX_ENABLED ?? "").trim().toLowerCase(),
   );
 }
+// Outlook (Microsoft Graph) calendar, read-only — step C4 of
+// docs/providers/unified-platform-plan.md. OFF by default (repo doctrine) and it
+// ALSO needs OUTLOOK_INBOX_ENABLED, exactly as the Outlook mail path does: the
+// calendar link rides the Outlook OAuth routes and app registration, so the inbox
+// flag's CASA surface freeze must stay the outer gate. While either is off, every
+// /api/auth/outlook/link-calendar and /linked-calendars route answers Fastify's
+// default 404 and the calendar provider dispatcher answers the same unsupported
+// result it did before C4 (no Graph call, no row). Syncing the linked account's
+// events additionally needs LINKED_CALENDAR_SYNC_ENABLED, like Google's.
+// Read at request time (PROVIDER_INBOX_SELECTOR_ENABLED precedent) with the same
+// lenient truthy parse, so a flip needs no redeploy.
+export function outlookCalendarEnabled(): boolean {
+  return (
+    outlookInboxEnabled() &&
+    ["true", "1", "yes", "on"].includes(
+      (process.env.OUTLOOK_CALENDAR_ENABLED ?? "").trim().toLowerCase(),
+    )
+  );
+}
 // IMAP flag actions (read, unread, star) for Naver and iCloud — step B1 of
 // docs/providers/unified-platform-plan.md. OFF by default (repo doctrine). While
 // OFF, mail/providers/dispatch.ts routes NAVER and ICLOUD to the unsupported

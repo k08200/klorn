@@ -163,6 +163,11 @@ describe("isRevokedGoogleGrantError — precise, not a message substring", () =>
       { response: { status: 400, data: { error: "unauthorized_client" } } },
     ],
     ["unauthorized_client in the message", { message: "unauthorized_client: Unauthorized" }],
+    // Microsoft Graph (C4): the HTTP status sits on the error itself, and a token
+    // refresh that needs the user (MFA, conditional access) answers interaction_required.
+    ["a Graph 401 carried as a top-level status", { status: 401 }],
+    ["a Microsoft interaction_required code", { code: "interaction_required" }],
+    ["a Microsoft interaction_required message", { message: "interaction_required: MFA needed" }],
   ])("recognises %s", (_name, err) => {
     expect(isRevokedGoogleGrantError(err)).toBe(true);
   });
@@ -174,6 +179,8 @@ describe("isRevokedGoogleGrantError — precise, not a message substring", () =>
     ["a message containing 'revoked'", new Error("certificate revoked by issuer")],
     ["an 'invalid token' message that is not a grant", new Error("invalid token in request body")],
     ["HTTP 403", { response: { status: 403 } }],
+    ["a Graph 403 carried as a top-level status", { status: 403 }],
+    ["a Graph 500 carried as a top-level status", { status: 500 }],
     [
       "HTTP 500 with an 'expired' body",
       { response: { status: 500, data: { error: { message: "cache expired" } } } },

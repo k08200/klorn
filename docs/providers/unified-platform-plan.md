@@ -1618,8 +1618,147 @@ needs FA-9 and the admin guidance from F0.
 `caldavUrl` is user-supplied and fetched server-side, so SSRF validation
 (resolve the host, pin the address, reject private ranges) is required before
 the first request, and the password is stored with `encryptToken`.
-**C4 — Microsoft Graph calendar** (*outline*). Needs calendar permissions
-added to the Azure app (FA-9); existing users re-consent.
+**C4 — Microsoft Graph calendar, read-only.** Depends on: C2. Needs FA-9
+(`Calendars.Read` on the Azure app) before the flip, not before the merge.
+- Tasks: link an Outlook account for its calendar over the existing Outlook OAuth
+  app; an OUTLOOK implementation of the C2 provider seam (events, free/busy);
+  the C2 linked-sync loop syncs it into rows; unlink.
+- Landed 2026-09-30 (branch `feat/graph-calendar`, PR not yet opened). No
+  migration: `CalendarProvider.OUTLOOK` and the per-source row key came with C1
+  and C2.
+  - Flag `OUTLOOK_CALENDAR_ENABLED` (OFF, lenient parse, read per call). It
+    also needs `OUTLOOK_INBOX_ENABLED`, like the Outlook mail path:
+    `outlookCalendarEnabled()` in `config.ts` is the AND of the two. Off (either
+    one): the three calendar routes answer Fastify's default 404 (`darkRouteGate`,
+    byte-identical to an unregistered route) and `calendarActionsForProvider(
+    "OUTLOOK")` answers the same unsupported result it did before C4, so no
+    Graph call, no token read and no row can follow (tested with a mutation that
+    removes each check). Syncing events additionally needs
+    `LINKED_CALENDAR_SYNC_ENABLED` and the user's entitlement, which are the C2
+    loop's own gates; nothing there changed.
+  - Link. `POST /api/auth/outlook/link-calendar` (Pro-gated, rate limited, 503
+    without the Azure credentials) returns the authorize URL; the callback is the
+    inbox link's, `/api/auth/outlook/callback`, so Azure needs no new redirect
+    URI. A distinct signed-state marker, `__link_outlook_calendar__` (10 minute
+    JWT), sends it to `routes/outlook-calendar-link.ts`, which upserts a
+    `LinkedCalendarAccount` keyed (userId, OUTLOOK, email) with encrypted tokens
+    and lands on `/calendar?linked=success|failed|limit` (the markers the Google
+    flow uses). Re-checks entitlement at the callback (TOCTOU), caps NEW links at
+    10 per user and always allows a re-link, and a calendar state that arrives
+    after the flag went off exchanges nothing and writes nothing. An inbox state
+    still writes only an inbox row. `GET /linked-calendars` (never tokens) and
+    `DELETE /linked-calendars/:id` sit beside it.
+  - Scopes. `Calendars.Read` is requested ONLY for a calendar link, and for
+    refreshing a calendar account's token. `getOutlookAuthUrl`,
+    `exchangeOutlookCode` and `refreshOutlookTokens` take a scope set that
+    defaults to `inbox`, which is byte-for-byte the list that shipped (tested
+    against a literal copy, with a mutation that adds the calendar scope to it),
+    so no existing inbox link asks for anything new. The calendar set is
+    `openid email offline_access User.Read Calendars.Read`: read-only and no
+    `Mail.*`, so a calendar link never asks an org admin for mail access.
+    `User.Read` is asked for explicitly so Graph `/me` can name the account; the
+    inbox set has never listed it and relies on Microsoft adding it, which the
+    tenant test below also checks. A user with an Outlook inbox linked who adds
+    the calendar sees one consent screen for the new scope and gets a separate
+    `LinkedCalendarAccount` row with its own tokens.
+  - Provider (`pim/calendar-providers/outlook*.ts`; docs checked 2026-09-30).
+    Events: `GET /v1.0/me/calendarView?startDateTime&endDateTime&$top&$orderby=
+    start/dateTime&$select`, https://learn.microsoft.com/graph/api/calendar-list-calendarview
+    (the window values are read with their own offset; `$top` 1 to 1000;
+    recurring series come back as occurrences). Paging follows `@odata.nextLink`
+    (https://learn.microsoft.com/graph/paging), at most 10 pages, only to an https
+    link on graph.microsoft.com (the token rides every request), and stops at
+    `maxResults`. Cancelled events (`isCancelled`) are left out and do not count
+    toward the cap. Header `Prefer: outlook.timezone="<user zone>", IdType=
+    "ImmutableId"`: the zone Graph renders times in (UTC without it), and
+    immutable ids (https://learn.microsoft.com/graph/outlook-immutable-id) so an
+    event moved between folders keeps its `externalId` instead of syncing as a
+    new one. Graph answers naive wall-clock times plus a zone name: read in that
+    zone when Intl knows it, else in the zone the query asked for. An all-day
+    event is its date, taken off the wall-clock value without shifting it through
+    an instant, stored like a Google all-day row (midnight UTC). Free/busy:
+    `POST /v1.0/me/calendar/getSchedule` for the account's own address over the
+    window (https://learn.microsoft.com/graph/api/calendar-getschedule), where
+    `busy`, `tentative`, `oof` and `unknown` block and `free` and
+    `workingElsewhere` do not. That page lists delegated personal Microsoft
+    accounts as not supported, so a 4xx that is not 401, 408 or 429, or a
+    per-schedule error, falls back to the calendar view's `showAs`; a 401, a
+    timeout, throttling or a 5xx rejects and is never hidden behind the fallback.
+    `peopleFreeBusy` is the same call for other addresses, unreadable ones
+    `blocks: null` (unknown, never free). `createEvent`, `updateEvent` and
+    `deleteEvent` reject with `CalendarReadOnlyError`; nothing calls them on a
+    linked session today.
+  - Tokens (`outlook-token.ts`). Decrypt, refresh when under 5 minutes are left,
+    persist Microsoft's rotated refresh token (an access-only refresh never
+    overwrites a newer token), clear `needsReconnect` on a good refresh. It
+    mirrors `mail/outlook-token.ts` over the calendar table and is a sibling, not
+    a parameterisation, because that module is tied to `LinkedInboxAccount`;
+    unifying them is a follow-up. The refresh is lazy (`connect` only decrypts)
+    so a revoked grant rejects inside the caller's try/catch instead of escaping
+    the dispatcher's loop and skipping every other account.
+  - Revoked grant. The shared failure policy now also reads a Graph 401 (the
+    `status` on the error) and a Microsoft `interaction_required` refresh answer
+    as a revoked grant: the account is flagged `needsReconnect`, warned about once
+    per hour, never sent to Sentry. Anything else (403, 429, 5xx, `server_error`,
+    `invalid_client`) is warned and captured with the domain only, and the account
+    is left alone. The sync skips a flagged account; conflict checks still try it.
+  - Sync. No change to the loop or the scheduler. `syncLinkedCalendarWindow` now
+    writes the row's provider from the session that listed it, so OUTLOOK rows
+    are `provider OUTLOOK`, `externalId` the Graph event id, `sourceAccountId` and
+    `sourceKey` the account id, over the same 30 days and 100 events, with the
+    same entitlement and `needsReconnect` handling. `calendar-rows.ts` has one
+    `upsertLinkedEventRow(provider, ...)` for every linked provider in place of
+    the Google-only one. The writers guard test lists the new writer of
+    `LinkedCalendarAccount`.
+  - Two providers are never merged. The dedupe key is (provider, externalId), so
+    the same invite in Google and in Outlook stays two rows and two entries
+    (tested at the dedupe, the row key and the sync, with mutations at each).
+    Future key for C7: Graph's `iCalUId`, which is per occurrence in a series
+    (https://learn.microsoft.com/graph/api/resources/event). It needs a column and
+    a decision together with the Google `iCalUID`, and is not started here.
+  - Unlink. `unlinkCalendarAccount(userId, id, provider)` takes the provider of
+    the calling surface (GOOGLE by default, so the Google route is unchanged); the
+    Outlook route passes OUTLOOK. Events and their AttentionItems go first, then
+    the account, in one transaction, and neither route can remove the other's
+    account by id.
+  - Known gaps, deliberate. (1) Kill switch: readers hide linked rows through
+    `calendarSourceScope()`, which keys on `LINKED_CALENDAR_SYNC_ENABLED` only, so
+    turning `OUTLOOK_CALENDAR_ENABLED` off stops linking, syncing and conflict
+    checks but leaves already-synced OUTLOOK rows visible. `calendar-scope.ts` is
+    a reader file in C7's area and was left alone; C7 should extend the scope
+    with `provider: { not: "OUTLOOK" }` while the flag is off. Until then, hide
+    them by turning `LINKED_CALENDAR_SYNC_ENABLED` off too, or delete them (see
+    Rollback). (2) The legacy (userId, email) unique on `LinkedCalendarAccount`
+    still exists, so an address that is already a linked calendar of another
+    provider cannot also be linked as an Outlook calendar (an `outlook.com` or
+    `gmail.com` address is unlikely, not impossible): the callback answers
+    `linked=failed`, not an error. The contract phase drops
+    `LinkedCalendarAccount_userId_email_key` (see C1); C4 does not. (3) The
+    Outlook UI for linking belongs to C7's web and desktop work; the routes exist
+    and are dark.
+  - Rollback. If the flags were never on, revert the PR. If they were: set
+    `OUTLOOK_CALENDAR_ENABLED` OFF, then `DELETE FROM "AttentionItem" WHERE
+    "source" = 'CALENDAR_EVENT' AND "sourceId" IN (SELECT "id" FROM
+    "CalendarEvent" WHERE "provider" = 'OUTLOOK')`, then `DELETE FROM
+    "CalendarEvent" WHERE "provider" = 'OUTLOOK'`, then revert the code. The
+    accounts can stay: nothing reads them while the flag is off.
+  - Before the flip (real Microsoft 365 tenant; the code was only ever run
+    against mocked Graph). Do it once with a work account and once with a
+    personal outlook.com account. FA-9 first: add delegated `Calendars.Read` to
+    the Azure app. (a) The consent screen lists Calendars.Read and no Mail.*; an
+    org that blocks user consent ends in `linked=failed`. (b) `/me` names the
+    account with the calendar set (`User.Read`). (c) One sync writes the expected
+    rows; a cancelled occurrence of a recurring meeting is absent; an all-day
+    event keeps its date in a zone west of UTC and east of it, the case the code
+    assumes Graph keeps at midnight. (d) `Prefer: outlook.timezone` accepts an
+    IANA name and echoes it; a moved event keeps its id. (e) getSchedule on the
+    work account returns the account's own busy time; record the exact status a
+    personal account answers, because the fallback rule (any 4xx except 401, 408
+    or 429) is a guess about it. (f) A refresh rotates the refresh token and the
+    new cipher is stored. (g) Revoke the app at the account's consent page: the
+    next sync flags `needsReconnect`, warns once, and Sentry stays quiet. (h)
+    Unlink removes the rows and their attention items.
+- Exit: flags OFF, no user-visible change. Nothing is flipped.
 **C5 — mobile device bridge** (*outline*). Blocked on FA-8. Upload policy per
 P4.
 **C6 — desktop device bridge** (*outline*). EventKit in KlornMac. Upload
@@ -1881,7 +2020,7 @@ time, whatever the graph says. The later step rebases, reruns
 | FA-6 | Confirm whether hosting mail requires a value-added telecommunications filing in Korea. Unverified | E3 |
 | FA-7 | Create the object storage account | D1 |
 | FA-8 | Run the Samsung calendar probe on a Galaxy device and record the result here | C5 |
-| FA-9 | Azure app registration (existing action B). That action lists `Mail.*` permissions only; calendar and file permissions must be added for C4 and D6 | B5, C4, D6 |
+| FA-9 | Azure app registration (existing action B). That action lists `Mail.*` permissions only; calendar and file permissions must be added for C4 and D6. For C4: add delegated `Calendars.Read` (and `User.Read` if it is not already listed); the calendar link requests exactly `openid email offline_access User.Read Calendars.Read`, reuses the existing redirect URI, and asks for no `Mail.*`. Existing inbox links keep their consent unchanged | B5, C4, D6 |
 
 ## Cross-cutting rules
 

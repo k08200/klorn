@@ -75,7 +75,7 @@ describe("every CalendarEvent writer states its provider", () => {
   });
 
   it("the linked-calendar upsert exists in exactly one place too", () => {
-    const linkedWriters = files.filter((f) => /upsertLinkedGoogleEventRow\(/.test(f.text));
+    const linkedWriters = files.filter((f) => /upsertLinkedEventRow\(/.test(f.text));
     expect(linkedWriters.map((f) => f.path).sort()).toEqual([ROWS_MODULE, "pim/calendar-sync.ts"]);
   });
 
@@ -91,7 +91,7 @@ describe("every CalendarEvent writer states its provider", () => {
   it("the shared sync module is what reaches the row upserts", () => {
     const sync = files.find((f) => f.path === "pim/calendar-sync.ts");
     expect(sync?.text).toContain("upsertGoogleEventRow(");
-    expect(sync?.text).toContain("upsertLinkedGoogleEventRow(");
+    expect(sync?.text).toContain("upsertLinkedEventRow(");
   });
 
   it("no code outside the rows module builds a linked row's identity by hand", () => {
@@ -112,9 +112,20 @@ describe("every LinkedCalendarAccount writer states its provider", () => {
     expect(windows[0]).toMatch(/create:\s*\{[^}]*provider:\s*"GOOGLE"/);
   });
 
+  it("routes/outlook-calendar-link.ts link-calendar upsert names provider OUTLOOK in both the key and the create (C4)", () => {
+    const outlook = files.find((f) => f.path === "routes/outlook-calendar-link.ts");
+    const windows = callWindows(outlook?.text ?? "", ACCOUNT_WRITE);
+    expect(windows).toHaveLength(1);
+    expect(windows[0]).toMatch(/userId_provider_email:\s*\{[^}]*provider:\s*"OUTLOOK"/);
+    expect(windows[0]).toMatch(/create:\s*\{[^}]*provider:\s*"OUTLOOK"/);
+  });
+
   it("no other module creates a LinkedCalendarAccount", () => {
     const writers = files.filter((f) => callWindows(f.text, ACCOUNT_WRITE).length > 0);
-    expect(writers.map((f) => f.path)).toEqual(["routes/auth.ts"]);
+    expect(writers.map((f) => f.path).sort()).toEqual([
+      "routes/auth.ts",
+      "routes/outlook-calendar-link.ts",
+    ]);
   });
 });
 
@@ -138,6 +149,7 @@ describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
       "pim/calendar-source-label.ts",
       "pim/linked-calendar-unlink.ts",
       "routes/auth.ts",
+      "routes/outlook-calendar-link.ts",
       "scripts/reencrypt-tokens.ts",
     ]);
   });
