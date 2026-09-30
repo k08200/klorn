@@ -34,10 +34,9 @@ import {
   AGENT_SETTABLE_TIERS,
   type AgentSettableTier,
   agentTierReason,
-  agentVisibleLane,
   isAgentSettableTier,
 } from "../judge/agent-tier.js";
-import { normalizeTier } from "../judge/tiers.js";
+import { normalizeTier, type Tier } from "../judge/tiers.js";
 import { captureError } from "../sentry.js";
 import { MAX_TARGET_ID_LENGTH } from "./write-audit.js";
 
@@ -89,11 +88,28 @@ const fail = (code: SetTierErrorCode, error: string): string => JSON.stringify({
 
 const done = (
   emailId: string,
-  previousTier: AgentSettableTier,
+  previousTier: Tier,
   tier: AgentSettableTier,
   changed: boolean,
 ): string =>
   JSON.stringify({ success: true, email_id: emailId, previous_tier: previousTier, tier, changed });
+
+/**
+ * The lanes a set_tier result says it moved an item between, or null when the
+ * lane did not change (a no-op, a refusal, an error, anything that is not a
+ * success). The audit row records them; this file owns the result shape.
+ */
+export function changedLanes(resultText: string): { from: string; to: string } | null {
+  try {
+    const parsed: unknown = JSON.parse(resultText);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const { success, changed, previous_tier: from, tier: to } = parsed as Record<string, unknown>;
+    if (success !== true || changed !== true) return null;
+    return typeof from === "string" && typeof to === "string" ? { from, to } : null;
+  } catch {
+    return null;
+  }
+}
 
 type ParsedArgs =
   | { ok: true; emailId: string; tier: AgentSettableTier }
@@ -146,10 +162,14 @@ async function changeLane(
   if (!item) return fail("NOT_FOUND", NOT_FOUND_ERROR);
   if (item.isManualOverride) return fail("MANUAL_OVERRIDE", MANUAL_OVERRIDE_ERROR);
 
-  const previous = agentVisibleLane(item.tier);
+  // The lane as stored, with only the equivalences that hold: CALL is delivered as
+  // PUSH and an unclassified row reads as the default QUEUE. A retired AUTO row is
+  // reported as AUTO (it is its own bucket on the board), so a request for QUEUE is
+  // a real change rather than a no-op that hides it.
+  const previous = normalizeTier(item.tier);
   // Already there: nothing to write, and no provenance minted for a lane the
   // agent did not choose. Also what lets an agent read a lane without a side effect.
-  if (normalizeTier(item.tier) === tier) return done(emailId, previous, tier, false);
+  if (previous === tier) return done(emailId, previous, tier, false);
 
   const { count } = await prisma.attentionItem.updateMany({
     // isManualOverride is re-checked in the WHERE: a human override that landed

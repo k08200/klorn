@@ -8,43 +8,19 @@
  * as a notification or a Gmail label, and never over a human's own move.
  */
 
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeDb, type FakeDb, type Row } from "./helpers/fake-db.js";
 
 const dbHolder = vi.hoisted(() => ({ current: null as unknown }));
-const forbidden = vi.hoisted(() => ({
-  sendPushNotification: vi.fn(),
-  pushNotification: vi.fn(),
-  applyLaneLabel: vi.fn(),
-  mailActionsFor: vi.fn(),
-  overrideAttentionTier: vi.fn(),
-  confirmAttentionTier: vi.fn(),
-  notifyConversationsUpdated: vi.fn(),
-  captureError: vi.fn(),
-}));
+const captureError = vi.hoisted(() => vi.fn());
 
-vi.mock("../db.js", () => {
-  const prisma = new Proxy(
-    {},
-    { get: (_t, name) => (dbHolder.current as FakeDb).model(String(name)) },
-  );
+vi.mock("../db.js", async () => {
+  const { fakePrismaClient } = await import("./helpers/fake-db.js");
+  const prisma = fakePrismaClient(() => dbHolder.current as FakeDb);
   return { prisma, db: prisma };
 });
-vi.mock("../sentry.js", () => ({ captureError: forbidden.captureError }));
-vi.mock("../notify/push.js", () => ({ sendPushNotification: forbidden.sendPushNotification }));
-vi.mock("../websocket.js", () => ({ pushNotification: forbidden.pushNotification }));
-vi.mock("../mail/gmail-labels.js", () => ({
-  applyLaneLabel: forbidden.applyLaneLabel,
-  isLabelModeEnabled: () => true,
-}));
-vi.mock("../mail/providers/dispatch.js", () => ({ mailActionsFor: forbidden.mailActionsFor }));
-vi.mock("../notify/conversations-updated.js", () => ({
-  notifyConversationsUpdated: forbidden.notifyConversationsUpdated,
-}));
-vi.mock("../judge/attention-override.js", () => ({
-  overrideAttentionTier: forbidden.overrideAttentionTier,
-  confirmAttentionTier: forbidden.confirmAttentionTier,
-}));
+vi.mock("../sentry.js", () => ({ captureError }));
 
 import { MANUAL_OVERRIDE_PREFIX } from "../judge/tiers.js";
 import { executeSetTier } from "../mcp/set-tier.js";
@@ -103,7 +79,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
   vi.unstubAllEnvs();
-  for (const fn of Object.values(forbidden)) fn.mockReset();
+  captureError.mockReset();
   seed({});
 });
 
@@ -306,12 +282,6 @@ describe("agent provenance — never a human signal", () => {
     expect(db.tables.decisionLabel[0].outcome).toBeNull();
   });
 
-  it("does not go through the human override path", async () => {
-    await run({ email_id: "email-db-1", tier: "PUSH" });
-    expect(forbidden.overrideAttentionTier).not.toHaveBeenCalled();
-    expect(forbidden.confirmAttentionTier).not.toHaveBeenCalled();
-  });
-
   it("a second agent change replaces the stamp and reports the agent's previous lane", async () => {
     await run({ email_id: "email-db-1", tier: "PUSH" });
     vi.setSystemTime(new Date("2026-09-30T11:00:00.000Z"));
@@ -341,13 +311,26 @@ describe("agent provenance — never a human signal", () => {
   });
 
   it.each([
-    ["null (unclassified)", null, "QUEUE"],
-    ["CALL (retired, folds to PUSH)", "CALL", "PUSH"],
-    ["AUTO (retired, folds to QUEUE)", "AUTO", "QUEUE"],
-  ])("reports previous_tier for a legacy stored tier %s as a live lane", async (_l, stored, shown) => {
+    ["null (unclassified) reads as the default lane", null, "QUEUE"],
+    ["CALL (retired) is delivered as PUSH", "CALL", "PUSH"],
+    ["AUTO (retired) is reported as stored, not disguised as a live lane", "AUTO", "AUTO"],
+  ])("reports previous_tier for a legacy stored tier: %s", async (_l, stored, shown) => {
     seed({ items: [item({ tier: stored })] });
     const out = await run({ email_id: "email-db-1", tier: "SILENT" });
     expect(out.previous_tier).toBe(shown);
+  });
+
+  it("a stored AUTO row asked for QUEUE is a real change: it is written and reported AUTO to QUEUE", async () => {
+    seed({ items: [item({ tier: "AUTO" })] });
+    const out = await run({ email_id: "email-db-1", tier: "QUEUE" });
+    expect(out).toMatchObject({
+      success: true,
+      changed: true,
+      previous_tier: "AUTO",
+      tier: "QUEUE",
+    });
+    expect(db.tables.attentionItem[0]).toMatchObject({ tier: "QUEUE", agentTierKeyId: KEY });
+    expect(db.writes.attentionItem).toHaveLength(1);
   });
 
   it("the success predicate accepts the success result and rejects every refusal", async () => {
@@ -362,30 +345,30 @@ describe("agent provenance — never a human signal", () => {
 });
 
 describe("side effects an injected agent must not trigger", () => {
-  it("moving to PUSH fires no push, banner, Telegram message, bell row or client wake-up", async () => {
+  it("moving to PUSH or MEETING writes only the attention item: no bell row, no ledger row", async () => {
     await run({ email_id: "email-db-1", tier: "PUSH" });
-    expect(forbidden.sendPushNotification).not.toHaveBeenCalled();
-    expect(forbidden.pushNotification).not.toHaveBeenCalled();
-    expect(forbidden.notifyConversationsUpdated).not.toHaveBeenCalled();
-    expect(db.writes.notification).toBeUndefined();
-  });
-
-  it("moving to MEETING (which notifies when the judge picks it) fires nothing either", async () => {
     await run({ email_id: "email-db-1", tier: "MEETING" });
-    expect(forbidden.sendPushNotification).not.toHaveBeenCalled();
-    expect(db.writes.notification).toBeUndefined();
+    expect(Object.keys(db.writes)).toEqual(["attentionItem"]);
+    expect(db.tables.notification ?? []).toEqual([]);
   });
 
-  it("writes no Gmail label and opens no mail client, even with label mode on", async () => {
+  it("is unaffected by Gmail label mode: same single write, no other table", async () => {
     vi.stubEnv("GMAIL_LABEL_MODE_ENABLED", "true");
     await run({ email_id: "email-db-1", tier: "PUSH" });
-    expect(forbidden.applyLaneLabel).not.toHaveBeenCalled();
-    expect(forbidden.mailActionsFor).not.toHaveBeenCalled();
+    expect(Object.keys(db.writes)).toEqual(["attentionItem"]);
   });
 
-  it("writes only to the attention item table", async () => {
-    await run({ email_id: "email-db-1", tier: "PUSH" });
-    expect(Object.keys(db.writes)).toEqual(["attentionItem"]);
+  it("cannot reach a notifier, a mail provider or the human override path: set-tier.ts imports none of them", () => {
+    // Structural pin. Every push, banner, Telegram message, client wake-up and Gmail
+    // label lives behind one of these modules; set_tier must stay unable to call them.
+    const source = readFileSync(new URL("../mcp/set-tier.ts", import.meta.url), "utf8");
+    const imported = [...source.matchAll(/from "([^"]+)"/g)].map((m) => m[1]);
+    const forbidden =
+      /push|websocket|telegram|notify|gmail|providers|attention-override|attention-mirror|decision-label|label-correction/;
+    expect(imported.filter((spec) => forbidden.test(spec))).toEqual([]);
+    expect(imported).toEqual(
+      expect.arrayContaining(["../db.js", "../judge/agent-tier.js", "../sentry.js"]),
+    );
   });
 });
 
@@ -401,6 +384,6 @@ describe("failure", () => {
     const out = await run({ email_id: "email-db-1", tier: "PUSH" });
     expect(out.code).toBe("UNAVAILABLE");
     expect(JSON.stringify(out)).not.toMatch(/postgres|secret|refused/);
-    expect(forbidden.captureError).toHaveBeenCalledTimes(1);
+    expect(captureError).toHaveBeenCalledTimes(1);
   });
 });

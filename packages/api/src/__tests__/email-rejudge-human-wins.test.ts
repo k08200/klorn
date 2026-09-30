@@ -25,11 +25,9 @@ const pushNotification = vi.hoisted(() => vi.fn());
 const notifyConversationsUpdated = vi.hoisted(() => vi.fn());
 const applyLaneLabel = vi.hoisted(() => vi.fn(async () => "applied"));
 
-vi.mock("../db.js", () => {
-  const prisma = new Proxy(
-    {},
-    { get: (_t, name) => (dbHolder.current as FakeDb).model(String(name)) },
-  );
+vi.mock("../db.js", async () => {
+  const { fakePrismaClient } = await import("./helpers/fake-db.js");
+  const prisma = fakePrismaClient(() => dbHolder.current as FakeDb);
   return { prisma, db: prisma };
 });
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));

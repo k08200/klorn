@@ -15,9 +15,14 @@
 
 import { executeToolCall } from "../agentcore/tool-executor.js";
 import { captureError } from "../sentry.js";
-import { executeSetTier, SET_TIER_TOOL_NAME } from "./set-tier.js";
+import { changedLanes, executeSetTier, SET_TIER_TOOL_NAME } from "./set-tier.js";
 import { errorResult, type McpToolResult, textResult } from "./tool-result.js";
-import { recordAllowedWrite, recordRefusedWrite, settleWriteAudit } from "./write-audit.js";
+import {
+  type McpSettleVerdict,
+  recordAllowedWrite,
+  recordRefusedWrite,
+  settleWriteAudit,
+} from "./write-audit.js";
 
 const RATE_LIMITED_MESSAGE = "Too many write actions — try again in a minute.";
 const AUDIT_UNAVAILABLE_MESSAGE =
@@ -66,17 +71,17 @@ export function consumeMcpWriteBudget(userId: string, now: number = Date.now()):
   return true;
 }
 
-/**
- * Per-tool "did it work" predicate over the parsed tool result. A new write tool
- * must add its own (mcp-tool-gate.test.ts pins that every member has one); a tool
- * without one never settles to ok.
- */
 const hasSuccessTrue = (parsed: unknown): boolean =>
   typeof parsed === "object" &&
   parsed !== null &&
   !Array.isArray(parsed) &&
   (parsed as { success?: unknown }).success === true;
 
+/**
+ * Per-tool "did it work" predicate over the parsed tool result. A new write tool
+ * must add its own (mcp-tool-gate.test.ts pins that every member has one); a tool
+ * without one never settles to ok.
+ */
 export const WRITE_TOOL_SUCCESS: Readonly<Record<string, (parsed: unknown) => boolean>> = {
   mark_read: hasSuccessTrue,
   [SET_TIER_TOOL_NAME]: hasSuccessTrue,
@@ -108,6 +113,13 @@ function executeWriteTool(call: McpWriteCall): Promise<string> {
   return executeToolCall(userId, name, args);
 }
 
+/** How a finished call settles: ok only when the tool's own predicate holds; set_tier adds its lane change. */
+function verdictFor(name: string, result: string): McpSettleVerdict {
+  if (!isWriteSuccess(name, result)) return { outcome: "error", reason: "tool_error" };
+  const tiers = name === SET_TIER_TOOL_NAME ? changedLanes(result) : null;
+  return tiers ? { outcome: "ok", tiers } : { outcome: "ok" };
+}
+
 export async function runMcpWriteCall(call: McpWriteCall): Promise<McpToolResult> {
   const { userId, apiKeyId, name, args } = call;
   const audit = { userId, apiKeyId, tool: name, args };
@@ -130,11 +142,7 @@ export async function runMcpWriteCall(call: McpWriteCall): Promise<McpToolResult
 
   try {
     const result = await executeWriteTool(call);
-    await settleWriteAudit(
-      audit,
-      auditId,
-      isWriteSuccess(name, result) ? { outcome: "ok" } : { outcome: "error", reason: "tool_error" },
-    );
+    await settleWriteAudit(audit, auditId, verdictFor(name, result));
     return textResult(result);
   } catch (err) {
     await settleWriteAudit(audit, auditId, { outcome: "error", reason: "exception" });

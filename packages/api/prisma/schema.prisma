@@ -212,6 +212,12 @@ model McpWriteAudit {
   outcome  McpAuditOutcome
   reason   String? // short code: permission_denied | rate_limited | tool_error | exception
 
+  // set_tier only (step A2b): the lane the call changed from and to, recorded when
+  // the lane actually changed. Lets the activity log show the change and a later
+  // step revert it. Null for every other tool, refusal and no-op.
+  tierFrom String?
+  tierTo   String?
+
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])

@@ -285,6 +285,42 @@ describe("runMcpWriteCall — set_tier", () => {
     expect(create.mock.calls[0]?.[0].data).toMatchObject({ tool: "set_tier", targetId: "g-1" });
   });
 
+  it("records the previous and the new lane on the audit row when the lane changed, so a revert is possible later", async () => {
+    executeSetTier.mockResolvedValueOnce(
+      JSON.stringify({
+        success: true,
+        email_id: "g-1",
+        previous_tier: "QUEUE",
+        tier: "PUSH",
+        changed: true,
+      }),
+    );
+    await runMcpWriteCall(tierCall(freshUser()));
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "audit-1" },
+      data: { outcome: "ok", reason: null, tierFrom: "QUEUE", tierTo: "PUSH" },
+    });
+  });
+
+  it("records no lanes for a no-op, a refusal or any other write tool", async () => {
+    executeSetTier.mockResolvedValueOnce(
+      JSON.stringify({ success: true, previous_tier: "PUSH", tier: "PUSH", changed: false }),
+    );
+    await runMcpWriteCall(tierCall(freshUser()));
+    expect(update).toHaveBeenLastCalledWith({
+      where: { id: "audit-1" },
+      data: { outcome: "ok", reason: null },
+    });
+    executeSetTier.mockResolvedValueOnce(JSON.stringify({ error: "x", code: "NOT_FOUND" }));
+    await runMcpWriteCall(tierCall(freshUser()));
+    expect(update.mock.lastCall?.[0].data).not.toHaveProperty("tierFrom");
+    executeToolCall.mockResolvedValueOnce(
+      JSON.stringify({ success: true, previous_tier: "QUEUE", tier: "PUSH", changed: true }),
+    );
+    await runMcpWriteCall(callFor(freshUser()));
+    expect(update.mock.lastCall?.[0].data).not.toHaveProperty("tierFrom");
+  });
+
   it("settles error/tool_error for a refusal, and passes the explicit result through", async () => {
     const refusal = JSON.stringify({ error: "moved by hand", code: "MANUAL_OVERRIDE" });
     executeSetTier.mockResolvedValueOnce(refusal);

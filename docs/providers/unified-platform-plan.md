@@ -264,9 +264,15 @@ A2b, because L26 lists `set_tier` among the v1 write tools.
   and reason per minute.
 - Rollback: flag off. The table is additive and ignorable.
 
-**A2b — `set_tier`, current lane in read results, learning exclusion.**
+**A2b — `set_tier`, lane in the result, learning exclusion.**
 Depends on: A2a. Needs its own code review and security review, including every
 change to `attention-override.ts` and `attention-mirror.ts`.
+**Scope change, 2026-09-30, for the founder to confirm.** The original scope
+(L26 and this block) had the read tools return the current lane. What landed
+returns the previous and the new lane from `set_tier` and leaves `list_emails`
+and `read_email` untouched, so an agent sees a lane only when it writes. The
+reasons are under "Read visibility" below. Say so if A8 or the founder wants the
+read tools enriched instead.
 - Context, audited 2026-09-29 (03de6426). These facts constrain the design:
   - `attention-mirror.ts` resets `isManualOverride: false` on every producer
     write for the non-email sources (`upsertAttentionFor*` for pending action,
@@ -309,7 +315,10 @@ change to `attention-override.ts` and `attention-mirror.ts`.
 - Exit: with the flag off, the tool list and every tool result are
   byte-identical to today. `MCP_WRITE_TOOLS_ENABLED` does not flip before A2b
   and A3 have both merged.
-- Rollback: flag off. The two columns are additive and ignorable.
+- Rollback: flag off. The columns are additive and ignorable. The heal and
+  re-judge fix (human overrides survive a stale-hash re-judge, guarded re-judge
+  write) is its own commit: it is live with the flag off, so revert it alone if
+  it misbehaves.
 - **Landed 2026-09-30** (branch `feat/mcp-set-tier`, not yet merged):
   - **Provenance.** Two nullable `AttentionItem` columns, `agentTierSetAt` and
     `agentTierKeyId` (the API key id, not a foreign key). Non-null means the
@@ -324,8 +333,11 @@ change to `attention-override.ts` and `attention-mirror.ts`.
     `TOOL_FEATURE_MAP` exactly like `mark_read`. Resolves the id like `mark_read`
     (userId-scoped), then the OPEN email item. Results: `{success, email_id,
     previous_tier, tier, changed}` or `{error, code}` with `INVALID_ARGUMENT`,
-    `NOT_FOUND`, `MANUAL_OVERRIDE`, `UNAVAILABLE`. AUTO and CALL are rejected. The
-    requested lane already held is a no-op (no write, no stamp). The write is
+    `NOT_FOUND`, `MANUAL_OVERRIDE`, `UNAVAILABLE`. AUTO and CALL are rejected.
+    `previous_tier` is the stored lane (CALL reads as PUSH, null as QUEUE); a
+    retired AUTO row is reported as `AUTO`, so a request for QUEUE is a real
+    change and is written. The requested lane already held is a no-op (no write,
+    no stamp). The write is
     guarded in its WHERE on `status: OPEN` and `isManualOverride: false`, so a
     human override that lands after the read still wins.
   - **Read visibility.** Previous and new lane in the `set_tier` result, not
@@ -369,7 +381,11 @@ change to `attention-override.ts` and `attention-mirror.ts`.
     - **`fallback-rejudge`** skips agent-set items in both its read and its
       guarded write.
     - **The plain upsert** (new items only) still replaces the tier, resets the
-      flag and clears the stamp.
+      flag and clears the stamp. Accepted residual: it is unguarded, so it can
+      overwrite an agent lane only if two judges of the same brand-new email race
+      each other and an agent acts in between. The heal's keep-lane choice is made
+      from the board row read at request time; a flag or stamp set after that is
+      caught by the guarded write, not by the choice.
   - **Human after agent.** `overrideAttentionTier` clears the stamp. A
     `confirmAttentionTier` on an agent-set item answers ok but does not stamp the
     ledger: a `CONFIRM:` of the agent's lane against the judge's shown tier is a
@@ -390,10 +406,29 @@ change to `attention-override.ts` and `attention-mirror.ts`.
     label either, so with label mode on the same reconcile can read the stale
     label against a human's in-app move (source reading only, not reproduced; the
     flag is off by default).
-  - **Verify result.** `prisma migrate diff` from origin/main: two `ADD COLUMN`
-    statements, nothing else. Mutation checks: writing `isManualOverride` from
-    `set_tier`, and dropping the sender-items and calibration filters, each fail
-    the new tests.
+  - **Other surfaces that read an agent lane.** The aging sweep exempts agent-set
+    rows from SILENT and QUEUE age-out, so an injected agent cannot demote an old
+    mail to SILENT and have it resolved (acted-elsewhere resolution still applies).
+    Board items carry `agentSet: true` only when the stamp is set (the key is
+    absent otherwise, so responses without agent lanes are byte-identical); the
+    contract type is additive and optional, and no client renders it yet. A3 or a
+    later UI step renders it and adds the vocabulary row for the noun. The daily
+    receipt lists an agent-set PUSH as queued, not pushed, and does not count it
+    as an interruption. `scripts/calibration.ts` applies the same exclusion as the
+    daily snapshot.
+  - **Audit trail.** `McpWriteAudit` gains nullable `tierFrom` and `tierTo`
+    (separate migration `20260930020000`, the A2a migration is untouched),
+    filled when a `set_tier` call actually changed a lane, so A3 can show the
+    change and a later step can revert it. Recorded on settle, so a failed settle
+    leaves the row `attempted` with no lanes.
+  - **Verify result.** `prisma migrate diff` from origin/main: four nullable
+    `ADD COLUMN` statements (two migrations), nothing else. The implementer
+    (not CI) ran mutation checks on 2026-09-30: writing `isManualOverride` from
+    `set_tier`; dropping the sender-items and calibration filters; dropping the
+    corrections and correction-eval defence-in-depth filters; dropping the
+    re-judge guard's `isManualOverride: false`; dropping the agent handling in
+    `fallback-rejudge`, aging and the receipt. Each made the new tests fail and
+    was restored.
 
 **A3 — activity log and key permission UI.** Depends on: A2. Web settings
 lists write calls per key and offers the read-write choice, both shown only

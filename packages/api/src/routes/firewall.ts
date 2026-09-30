@@ -668,6 +668,8 @@ export async function firewallRoutes(app: FastifyInstance) {
           tierReason: resolveTierReason(row.tierReason, reasonLanguage),
           priority: row.priority,
           surfacedAt: row.surfacedAt.toISOString(),
+          // Only when an MCP agent set the lane; the key is absent otherwise.
+          ...(row.agentTierSetAt ? { agentSet: true as const } : {}),
         };
 
         // Enrich PENDING_ACTION items with tool context + maybe email

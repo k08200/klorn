@@ -16,8 +16,6 @@
  *    someone else decided it.
  */
 
-import { normalizeTier } from "./tiers.js";
-
 /** The five live lanes. An agent may name only these: never AUTO or CALL (retired v1 values). */
 export const AGENT_SETTABLE_TIERS = ["PUSH", "MEETING", "QUEUE", "INFO", "SILENT"] as const;
 
@@ -45,13 +43,3 @@ export const NOT_AGENT_SET = { agentTierSetAt: null } as const;
 
 /** `data` fragment: drop agent provenance. Spread into any write that replaces the tier. */
 export const CLEAR_AGENT_TIER = { agentTierSetAt: null, agentTierKeyId: null } as const;
-
-/**
- * The lane an agent is shown for a stored tier. Retired values fold onto live
- * lanes (CALL is delivered as PUSH; AUTO rows are QUEUE plus an eligibility
- * flag), and an unclassified row reads as the default lane, QUEUE.
- */
-export function agentVisibleLane(stored: string | null | undefined): AgentSettableTier {
-  const tier = normalizeTier(stored);
-  return tier === "AUTO" ? "QUEUE" : tier;
-}

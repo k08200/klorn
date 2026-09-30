@@ -330,4 +330,32 @@ describe("GET /api/inbox/firewall — hash verify integration", () => {
       await app.close();
     });
   });
+
+  describe("agentSet on the wire (additive, only when an MCP agent set the lane)", () => {
+    const itemJson = async () => {
+      const app = await buildApp();
+      const res = await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
+      await app.close();
+      return findItem(res.json() as FirewallResponseWire, "att-1") as Record<string, unknown>;
+    };
+
+    it("is true for an agent-set item", async () => {
+      attentionRow.agentTierSetAt = new Date("2026-09-30T09:00:00Z");
+      expect((await itemJson()).agentSet).toBe(true);
+    });
+
+    it("is ABSENT, not false, otherwise — so a response with the flag off is byte-identical to main", async () => {
+      const item = await itemJson();
+      expect("agentSet" in item).toBe(false);
+      attentionRow.isManualOverride = true;
+      expect("agentSet" in (await itemJson())).toBe(false);
+    });
+
+    it("never leaks the stamp's time or the key id", async () => {
+      attentionRow.agentTierSetAt = new Date("2026-09-30T09:00:00Z");
+      const item = await itemJson();
+      expect(Object.keys(item)).not.toContain("agentTierSetAt");
+      expect(Object.keys(item)).not.toContain("agentTierKeyId");
+    });
+  });
 });

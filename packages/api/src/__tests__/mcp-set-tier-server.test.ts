@@ -18,11 +18,9 @@ import { createFakeDb, type FakeDb } from "./helpers/fake-db.js";
 const dbHolder = vi.hoisted(() => ({ current: null as unknown }));
 const executeToolCall = vi.hoisted(() => vi.fn());
 
-vi.mock("../db.js", () => {
-  const prisma = new Proxy(
-    {},
-    { get: (_t, name) => (dbHolder.current as FakeDb).model(String(name)) },
-  );
+vi.mock("../db.js", async () => {
+  const { fakePrismaClient } = await import("./helpers/fake-db.js");
+  const prisma = fakePrismaClient(() => dbHolder.current as FakeDb);
   return { prisma, db: prisma };
 });
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
@@ -168,6 +166,9 @@ describe("a read_write key with the flag on", () => {
       apiKeyId: "key-1",
       targetId: "18c3f0a1b2c3d4e5",
       outcome: "ok",
+      // The change itself, so the activity log can show it and a revert is possible.
+      tierFrom: "QUEUE",
+      tierTo: "PUSH",
     });
     expect(executeToolCall).not.toHaveBeenCalled();
   });
@@ -182,7 +183,12 @@ describe("a read_write key with the flag on", () => {
       code: "INVALID_ARGUMENT",
     });
     expect(db.tables.attentionItem[0].tier).toBe("QUEUE");
-    expect(db.tables.mcpWriteAudit[0]).toMatchObject({ outcome: "error", reason: "tool_error" });
+    expect(db.tables.mcpWriteAudit[0]).toMatchObject({
+      outcome: "error",
+      reason: "tool_error",
+      tierFrom: null,
+      tierTo: null,
+    });
   });
 
   it("a human-overridden item is refused with an explicit result and left exactly as it was", async () => {

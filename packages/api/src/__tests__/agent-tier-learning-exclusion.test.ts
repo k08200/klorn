@@ -19,11 +19,9 @@ import { createFakeDb, type FakeDb, type Row } from "./helpers/fake-db.js";
 const dbHolder = vi.hoisted(() => ({ current: null as unknown }));
 const judgeEmailMock = vi.hoisted(() => vi.fn());
 
-vi.mock("../db.js", () => {
-  const prisma = new Proxy(
-    {},
-    { get: (_t, name) => (dbHolder.current as FakeDb).model(String(name)) },
-  );
+vi.mock("../db.js", async () => {
+  const { fakePrismaClient } = await import("./helpers/fake-db.js");
+  const prisma = fakePrismaClient(() => dbHolder.current as FakeDb);
   return { prisma, db: prisma };
 });
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
@@ -40,6 +38,7 @@ vi.mock("../judge/poc-judge.js", async (importOriginal) => ({
   judgeEmail: judgeEmailMock,
 }));
 
+import { overrideAttentionTier } from "../judge/attention-override.js";
 import { snapshotUserCalibration } from "../judge/calibration-snapshot.js";
 import { getDecisionMetrics } from "../judge/decision-metrics.js";
 import { buildJudgeContext } from "../judge/judge-context.js";
@@ -189,6 +188,20 @@ describe("judge-context: sender priors, tier history and correction examples", (
     expect(ctx.senderFacts?.manualOverrides ?? 0).toBe(0);
   });
 
+  it("defence in depth: a row carrying BOTH the human flag and an agent stamp is still not a correction example", async () => {
+    // Unreachable through the code (a human override clears the stamp, set_tier
+    // refuses a flagged item), so it guards the day a new writer breaks that.
+    const db = world(una(["QUEUE", "QUEUE"]));
+    Object.assign(db.tables.attentionItem[0], {
+      tier: "PUSH",
+      isManualOverride: true,
+      agentTierSetAt: NOW,
+      agentTierKeyId: KEY,
+    });
+    const ctx = await ctxFor(UNA);
+    expect(ctx.corrections).toEqual([]);
+  });
+
   it("an agent move on top of a human-labelled neighbour leaves the human signal intact and adds nothing", async () => {
     world([...una(["QUEUE", "QUEUE", "QUEUE"])], { humanOverridden: ["u1"] });
     await agentMoves(["u2", "u3"], "SILENT");
@@ -241,6 +254,18 @@ describe("correction-eval", () => {
     expect(judgeEmailMock).not.toHaveBeenCalled();
   });
 
+  it("defence in depth: a row carrying BOTH the human flag and an agent stamp is not evaluated", async () => {
+    const db = world(una(["QUEUE"]));
+    Object.assign(db.tables.attentionItem[0], {
+      tier: "PUSH",
+      isManualOverride: true,
+      agentTierSetAt: NOW,
+      agentTierKeyId: KEY,
+    });
+    expect(await runCorrectionEval(USER, NOW, { delayMs: 0 })).toBeNull();
+    expect(judgeEmailMock).not.toHaveBeenCalled();
+  });
+
   it("control: a human override is evaluated", async () => {
     world(una(["QUEUE", "QUEUE"]), { humanOverridden: ["u1"] });
     const payload = await runCorrectionEval(USER, NOW, { delayMs: 0 });
@@ -261,11 +286,11 @@ describe("decision ledger readers: metrics, weekly report, ontology proposals", 
   }
 
   it("agent moves leave the ledger untouched and every reader's output identical", async () => {
-    const baseline = world(mails);
+    world(mails);
     const before = await readers();
-    const ledgerBefore = structuredClone(baseline.tables.decisionLabel);
 
     const moved = world(mails);
+    const ledgerBefore = structuredClone(moved.tables.decisionLabel);
     await agentMoves(["u1", "u2", "u3", "t1"], "PUSH");
     const after = await readers();
 
@@ -284,13 +309,33 @@ describe("decision ledger readers: metrics, weekly report, ontology proposals", 
     expect(after.weekly.corrections).toBe(2);
   });
 
-  it("an agent move followed by a human override still counts the human's correction", async () => {
-    // First-stamp-wins: had the agent stamped the ledger, the human's stamp would be lost.
+  it("an agent move followed by a human override (the real path) clears the stamp, stamps the ledger and counts as a correction", async () => {
     const db = world(mails);
     await agentMoves(["u1"], "SILENT");
-    const row = db.tables.decisionLabel.find((r: Row) => r.sourceId === "u1") as Row;
-    expect(row.outcome).toBeNull();
-    Object.assign(row, { outcome: "OVERRIDE:PUSH", outcomeAt: NOW });
+    const stamped = db.tables.attentionItem.find((r: Row) => r.sourceId === "u1") as Row;
+    expect(stamped.agentTierSetAt).not.toBeNull();
+    // The agent did not stamp the ledger, so the human's stamp is not blocked.
+    expect(
+      (db.tables.decisionLabel.find((r: Row) => r.sourceId === "u1") as Row).outcome,
+    ).toBeNull();
+
+    expect(await overrideAttentionTier(USER, "item-u1", "PUSH")).toEqual({
+      ok: true,
+      tier: "PUSH",
+    });
+
+    expect(stamped).toMatchObject({
+      tier: "PUSH",
+      isManualOverride: true,
+      agentTierSetAt: null,
+      agentTierKeyId: null,
+    });
+    expect((db.tables.decisionLabel.find((r: Row) => r.sourceId === "u1") as Row).outcome).toBe(
+      "OVERRIDE:PUSH",
+    );
     expect((await collectWeeklyStats(USER, NOW)).corrections).toBe(1);
+    // And now the readers DO treat it as the human's correction.
+    const ctx = await buildJudgeContext(USER, { from: UNA, subject: "Next" });
+    expect(ctx.corrections).toEqual([{ from: UNA, subject: "Subject u1", tier: "PUSH" }]);
   });
 });
