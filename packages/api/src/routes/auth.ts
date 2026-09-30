@@ -20,7 +20,6 @@ import { appleLoginEnabled, INIT_SYNC_EMAIL_COUNT, naverLoginEnabled } from "../
 import { encryptOptional, encryptToken } from "../crypto-tokens.js";
 import { prisma } from "../db.js";
 import { withDbRetry } from "../db-retry.js";
-import { mapGoogleEventTimes } from "../google-calendar-time.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../mail/email.js";
 import { syncLinkedInboxesForUser } from "../mail/email-sync.js";
 import {
@@ -38,7 +37,9 @@ import {
 } from "../mail/gmail.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
 import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
-import { upsertGoogleEventRow } from "../pim/calendar-rows.js";
+import { googleSessionFromClient } from "../pim/calendar-providers/google.js";
+import { readSyncTimezone, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
+import { unlinkCalendarAccount } from "../pim/linked-calendar-unlink.js";
 import {
   clearLoginAttempts,
   loginThrottleRemainingMs,
@@ -1581,15 +1582,17 @@ export function authRoutes(app: FastifyInstance) {
 
   // DELETE /api/auth/google/linked-calendars/:id — unlink one secondary calendar.
   // Scoped by userId so a token can only remove its OWN linked accounts. Auth-only
-  // (not Pro-gated) so a downgraded user can always disconnect.
+  // (not Pro-gated) so a downgraded user can always disconnect. The events synced
+  // from the account are deleted in the same transaction (C2): /api/calendar has
+  // no source filter, so they would otherwise keep showing.
   app.delete(
     "/google/linked-calendars/:id",
     { preHandler: requireAuth },
     async (request, reply) => {
       const userId = getUserId(request);
       const { id } = request.params as { id: string };
-      const result = await prisma.linkedCalendarAccount.deleteMany({ where: { id, userId } });
-      if (result.count === 0) {
+      const removed = await unlinkCalendarAccount(userId, id);
+      if (!removed) {
         return reply.code(404).send({ error: "Linked calendar not found" });
       }
       return { success: true };
@@ -1895,57 +1898,15 @@ export function authRoutes(app: FastifyInstance) {
 
     // 1. Sync Google Calendar events (next 30 days)
     try {
-      const { google } = await import("googleapis");
-      const calendar = google.calendar({ version: "v3", auth });
-      const now = new Date();
-      const later = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
       // Parse event times against the user's timezone, exactly as the 60s
       // scheduler does — otherwise first-login writes land at a different UTC
       // instant than every subsequent scheduler write (off by the UTC offset).
-      const userRow = (await prisma.user.findUnique({ where: { id: userId } })) as {
-        timezone?: string | null;
-      } | null;
-      const userTimezone = normalizeTimeZone(userRow?.timezone);
-
-      const response = await calendar.events.list({
-        calendarId: "primary",
-        timeMin: now.toISOString(),
-        timeMax: later.toISOString(),
-        singleEvents: true,
-        orderBy: "startTime",
-        maxResults: 100,
-        // Ask Google to canonicalize against the user's zone; mapGoogleEventTimes
-        // below still defends against any stray naive strings.
-        timeZone: userTimezone,
-      });
-
-      for (const item of response.data.items || []) {
-        const googleId = item.id || "";
-        if (!googleId) continue;
-
-        const times = mapGoogleEventTimes(item, userTimezone);
-        if (!times) continue;
-        const { startTime, endTime, allDay } = times;
-
-        let meetingLink: string | null = null;
-        if (item.conferenceData?.entryPoints) {
-          const video = item.conferenceData.entryPoints.find((e) => e.entryPointType === "video");
-          if (video) meetingLink = video.uri || null;
-        }
-        if (!meetingLink && item.hangoutLink) meetingLink = item.hangoutLink;
-
-        await upsertGoogleEventRow(userId, googleId, {
-          title: item.summary || "Untitled",
-          description: item.description || null,
-          startTime,
-          endTime,
-          location: item.location || null,
-          meetingLink,
-          allDay,
-        });
-        results.calendar++;
-      }
+      const userTimezone = await readSyncTimezone(userId);
+      results.calendar = await syncPrimaryCalendarWindow(
+        googleSessionFromClient(auth),
+        userId,
+        userTimezone,
+      );
     } catch (err) {
       if (isGoogleAuthError(err)) await markGoogleTokenForReconnect(userId);
       console.warn("[AUTH] init-sync calendar sync failed (non-auth):", err);

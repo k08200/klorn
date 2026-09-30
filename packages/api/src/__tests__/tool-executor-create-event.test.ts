@@ -10,7 +10,7 @@
  * instead of silently going through.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const createEventMock = vi.fn();
 const checkConflictsMock = vi.fn();
@@ -173,6 +173,77 @@ describe("create_event — conflict enforcement (#743)", () => {
     expect(result.skipped).toBe(true);
     expect(result.existingEventId).toBe("dup-1");
     expect(checkConflictsMock).not.toHaveBeenCalled();
+    expect(createEventMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("create_event — the ±30 min duplicate check and linked calendars (C2)", () => {
+  const dupWhere = () =>
+    (calendarEventFindFirst.mock.calls.at(-1)?.[0] as { where: Record<string, unknown> }).where;
+
+  /** A database holding one linked-calendar event in the slot, honouring the query's source filter. */
+  function slotHoldsOnly(row: { id: string; title: string; sourceAccountId: string | null }) {
+    calendarEventFindFirst.mockImplementation(
+      async ({ where }: { where: Record<string, unknown> }) =>
+        where.sourceAccountId !== null || row.sourceAccountId === null
+          ? { ...row, startTime: new Date("2026-08-01T10:10:00+09:00") }
+          : null,
+    );
+  }
+
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  it.each([
+    ["off", undefined],
+    ["on", "true"],
+  ])("looks at primary and LOCAL rows only, flag %s: a linked row is read-only, so it is no duplicate to point at", async (_label, flag) => {
+    if (flag === undefined) delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    else process.env.LINKED_CALENDAR_SYNC_ENABLED = flag;
+
+    await executeToolCall(userId, "create_event", args);
+
+    expect(dupWhere().sourceAccountId).toBeNull();
+  });
+
+  it("does not return a linked calendar's event id as the existing duplicate (flag on)", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    slotHoldsOnly({ id: "linked-ev", title: "Work standup", sourceAccountId: "acct-1" });
+
+    const result = JSON.parse(await executeToolCall(userId, "create_event", args));
+
+    expect(result.existingEventId).toBeUndefined();
+    expect(result.skipped).not.toBe(true);
+    // The real double-book check still runs, and it covers linked calendars.
+    expect(checkConflictsMock).toHaveBeenCalled();
+    expect(createEventMock).toHaveBeenCalled();
+  });
+
+  it("still refuses a duplicate that is a primary event, pointing at it (flag on)", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    slotHoldsOnly({ id: "primary-ev", title: "Piano lesson", sourceAccountId: null });
+
+    const result = JSON.parse(await executeToolCall(userId, "create_event", args));
+
+    expect(result.skipped).toBe(true);
+    expect(result.existingEventId).toBe("primary-ev");
+    expect(createEventMock).not.toHaveBeenCalled();
+  });
+
+  it("a linked calendar's conflict still refuses the booking through the conflict check, not the duplicate check", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    checkConflictsMock.mockResolvedValue({
+      hasConflicts: true,
+      conflicts: [{ start: args.start_time, end: args.end_time, calendar: "primary" }],
+      scope: "all_calendars",
+      linkedAccountsChecked: 1,
+      message: "Found 1 conflicting event(s) in this time range.",
+    });
+
+    const result = JSON.parse(await executeToolCall(userId, "create_event", args));
+
+    expect(result.skipped).toBe(true);
     expect(createEventMock).not.toHaveBeenCalled();
   });
 });

@@ -6,8 +6,9 @@
  */
 
 import Fastify from "fastify";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
+import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
 
 const eventsList = vi.hoisted(() => vi.fn());
 
@@ -163,6 +164,85 @@ describe("POST /api/auth/init-sync — primary calendar upsert", () => {
     });
     expect(arg.update).toMatchObject({ provider: "GOOGLE", externalId: "g-login-1" });
     await app.close();
+  });
+});
+
+describe("POST /api/auth/init-sync — Google request (characterisation, C2)", () => {
+  const INIT_NOW = new Date("2026-09-30T05:00:00.000Z");
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(INIT_NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function initSync() {
+    const token = signToken({ userId: "u1", email: "owner@example.com" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/init-sync",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    await app.close();
+    return res;
+  }
+
+  it("asks Google for the next 30 days of the primary calendar, capped at 100, in the user's zone", async () => {
+    eventsList.mockResolvedValue({ data: { items: [] } });
+    await initSync();
+    expect(eventsList).toHaveBeenCalledTimes(1);
+    expect(eventsList).toHaveBeenCalledWith({
+      calendarId: "primary",
+      timeMin: "2026-09-30T05:00:00.000Z",
+      timeMax: "2026-10-30T05:00:00.000Z",
+      singleEvents: true,
+      orderBy: "startTime",
+      maxResults: 100,
+      timeZone: "Asia/Seoul",
+    });
+  });
+
+  it("a failing calendar list flags an auth failure for reconnect and still answers 200", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.mocked(isGoogleAuthError).mockReturnValueOnce(true);
+    eventsList.mockRejectedValue({ response: { status: 401 } });
+    const res = await initSync();
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ synced: true, calendar: 0 });
+    expect(markGoogleTokenForReconnect).toHaveBeenCalledWith("u1");
+    warn.mockRestore();
+  });
+
+  it("maps a timed event with a meeting link the same way the scheduler does", async () => {
+    eventsList.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "g-x",
+            summary: "Timed",
+            location: "L",
+            start: { dateTime: "2026-10-02T09:00:00" },
+            end: { dateTime: "2026-10-02T10:00:00" },
+            hangoutLink: "https://hangouts/z",
+          },
+        ],
+      },
+    });
+    await initSync();
+    const create = (eventUpsert.mock.calls[0]?.[0] as { create: Record<string, unknown> }).create;
+    expect(create).toMatchObject({
+      googleId: "g-x",
+      title: "Timed",
+      description: null,
+      location: "L",
+      meetingLink: "https://hangouts/z",
+      allDay: false,
+      startTime: new Date("2026-10-02T00:00:00.000Z"),
+      endTime: new Date("2026-10-02T01:00:00.000Z"),
+    });
   });
 });
 

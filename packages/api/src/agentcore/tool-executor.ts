@@ -401,6 +401,10 @@ async function executeToolCallInternal(
         const dupCheck = await prisma.calendarEvent.findFirst({
           where: {
             userId,
+            // Primary and LOCAL rows only, flag on or off: a linked calendar's
+            // event is a read-only mirror, so it is no duplicate to point the model
+            // at. The conflict check below still covers linked calendars.
+            sourceAccountId: null,
             startTime: {
               gte: new Date(evStartDate.getTime() - 30 * 60_000),
               lte: new Date(evStartDate.getTime() + 30 * 60_000),

@@ -166,6 +166,9 @@ describe("calendar provider migration — additive only", () => {
     expect(event).toMatch(/sourceAccountId\s+String\?/);
     expect(event).toMatch(/googleId\s+String\?/);
     expect(event).toContain("@@unique([userId, googleId])");
-    expect(event).toContain("@@unique([userId, provider, externalId])");
+    // C1's (userId, provider, externalId) unique was replaced by C2's per-source
+    // key; calendar-linked-source-migration.test.ts pins that change.
+    expect(event).not.toContain("@@unique([userId, provider, externalId])");
+    expect(event).toContain("@@unique([userId, provider, sourceKey, externalId])");
   });
 });

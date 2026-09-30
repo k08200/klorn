@@ -7,21 +7,27 @@ import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess, requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
-import { parseGoogleDateTime } from "../google-calendar-time.js";
 import {
   deleteAttentionForCalendarEvents,
   upsertAttentionForCalendarEvent,
 } from "../judge/attention-mirror.js";
-import { getAuthedClient, isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
+import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
 import {
   createEvent as googleCreateEvent,
   deleteEvent as googleDeleteEvent,
   updateEvent as googleUpdateEvent,
 } from "../pim/calendar.js";
-import { eventSourceForGoogleId, upsertGoogleEventRow } from "../pim/calendar-rows.js";
+import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
+import { connectPrimaryCalendar } from "../pim/calendar-providers/dispatch.js";
+import { eventSourceForGoogleId } from "../pim/calendar-rows.js";
+import {
+  calendarSourceScope,
+  isCalendarRowVisible,
+  withReadOnlyFlag,
+} from "../pim/calendar-scope.js";
+import { readSyncTimezone, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
 import { buildMeetingPrepPack } from "../pim/meeting-prep-pack.js";
 import { captureError } from "../sentry.js";
-import { normalizeTimeZone } from "../time-zone.js";
 
 const listEventsQuerySchema = {
   type: "object",
@@ -34,6 +40,17 @@ const listEventsQuerySchema = {
 } as const;
 
 const TITLE_MAX = 300;
+
+/**
+ * Events synced from a linked calendar are read-only mirrors (C2): Klorn holds
+ * only calendar.readonly there, and the next sync would silently revert an edit
+ * or bring a deleted event back.
+ */
+const LINKED_READ_ONLY = "This event comes from a linked calendar and is read-only in Klorn.";
+
+function isLinkedCalendarRow(event: { sourceAccountId?: string | null }): boolean {
+  return (event.sourceAccountId ?? null) !== null;
+}
 
 /**
  * The one validation the write routes share: a title that is a non-empty
@@ -90,15 +107,17 @@ export async function calendarRoutes(app: FastifyInstance) {
       rangeEnd = new Date(rangeStart.getTime() + daysAhead * 24 * 60 * 60 * 1000);
     }
 
-    const events = await prisma.calendarEvent.findMany({
+    const rows = await prisma.calendarEvent.findMany({
       where: {
         userId: uid,
         startTime: { gte: rangeStart, lte: rangeEnd },
+        ...calendarSourceScope(),
       },
       orderBy: { startTime: "asc" },
     });
 
-    return { events };
+    // An invite in both the primary and a linked calendar is two rows (C2).
+    return { events: dedupeCalendarEvents(rows).map(withReadOnlyFlag) };
   });
 
   // Get deterministic prep pack for a meeting/event
@@ -115,9 +134,11 @@ export async function calendarRoutes(app: FastifyInstance) {
     const uid = getUserId(request);
     const { id } = request.params as { id: string };
     const event = await prisma.calendarEvent.findUnique({ where: { id } });
-    if (!event) return reply.code(404).send({ error: "Event not found" });
+    if (!event || !isCalendarRowVisible(event)) {
+      return reply.code(404).send({ error: "Event not found" });
+    }
     if (event.userId !== uid) return reply.code(403).send({ error: "Forbidden" });
-    return event;
+    return withReadOnlyFlag(event);
   });
 
   // Parse free text (voice transcript) into an event draft — read-side, free
@@ -236,8 +257,11 @@ export async function calendarRoutes(app: FastifyInstance) {
     const uid = getUserId(request);
     const { id } = request.params as { id: string };
     const existing = await prisma.calendarEvent.findUnique({ where: { id } });
-    if (!existing) return reply.code(404).send({ error: "Event not found" });
+    if (!existing || !isCalendarRowVisible(existing)) {
+      return reply.code(404).send({ error: "Event not found" });
+    }
     if (existing.userId !== uid) return reply.code(403).send({ error: "Forbidden" });
+    if (isLinkedCalendarRow(existing)) return reply.code(409).send({ error: LINKED_READ_ONLY });
 
     const body = request.body as Record<string, unknown>;
     // The model's title field is `title`; `summary` stays accepted as an
@@ -314,8 +338,11 @@ export async function calendarRoutes(app: FastifyInstance) {
     const userId = getUserId(request);
     const { id } = request.params as { id: string };
     const event = await prisma.calendarEvent.findUnique({ where: { id } });
-    if (!event) return reply.code(404).send({ error: "Event not found" });
+    if (!event || !isCalendarRowVisible(event)) {
+      return reply.code(404).send({ error: "Event not found" });
+    }
     if (event.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
+    if (isLinkedCalendarRow(event)) return reply.code(409).send({ error: LINKED_READ_ONLY });
 
     // Delete from Google Calendar if synced
     if (event.googleId) {
@@ -342,76 +369,19 @@ export async function calendarRoutes(app: FastifyInstance) {
   app.post("/sync", async (request) => {
     const uid = getUserId(request);
 
-    // Use getAuthedClient which includes CLIENT_ID/SECRET for automatic token refresh
-    const auth = await getAuthedClient(uid);
-    if (!auth) {
+    // The session resolves CLIENT_ID/SECRET-backed credentials (automatic token refresh).
+    const session = await connectPrimaryCalendar(uid);
+    if (!session) {
       return { error: "Google not connected", synced: 0 };
     }
 
     try {
-      const { google } = await import("googleapis");
-
-      const calendar = google.calendar({ version: "v3", auth });
-      const now = new Date();
-      const later = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // next 30 days
-
-      // Fetch the user's stored timezone so we can pass it both to Google
-      // (canonicalize the response) AND to our naive-string fallback parser.
-      const userRow = (await prisma.user.findUnique({ where: { id: uid } })) as {
-        timezone?: string | null;
-      } | null;
-      const userTimezone = normalizeTimeZone(userRow?.timezone);
-
-      const response = await calendar.events.list({
-        calendarId: "primary",
-        timeMin: now.toISOString(),
-        timeMax: later.toISOString(),
-        singleEvents: true,
-        orderBy: "startTime",
-        maxResults: 100,
-        // Tell Google to render dateTimes in the user's zone. Combined with
-        // the defensive parser below, this eliminates the "naive dateTime
-        // gets parsed as server-local UTC" failure mode that caused the
-        // 2026-06-04 ±N-hour shift.
-        timeZone: userTimezone,
-      });
-
-      let synced = 0;
-      for (const item of response.data.items || []) {
-        const googleId = item.id || "";
-        if (!googleId) continue;
-
-        const startTime = item.start?.dateTime || item.start?.date || "";
-        const endTime = item.end?.dateTime || item.end?.date || "";
-        if (!startTime || !endTime) continue;
-
-        // Extract meeting link
-        let meetingLink: string | null = null;
-        if (item.conferenceData?.entryPoints) {
-          const video = item.conferenceData.entryPoints.find((e) => e.entryPointType === "video");
-          if (video) meetingLink = video.uri || null;
-        }
-        if (!meetingLink && item.hangoutLink) meetingLink = item.hangoutLink;
-
-        const isTimed = Boolean(item.start?.dateTime);
-        // Upsert by (userId, googleId) — the same Google event can live in two
-        // users' calendars, so the match must be scoped to this user.
-        await upsertGoogleEventRow(uid, googleId, {
-          title: item.summary || "Untitled",
-          description: item.description || null,
-          startTime: isTimed
-            ? parseGoogleDateTime(startTime, item.start?.timeZone ?? null, userTimezone)
-            : new Date(startTime),
-          endTime: isTimed
-            ? parseGoogleDateTime(endTime, item.end?.timeZone ?? null, userTimezone)
-            : new Date(endTime),
-          location: item.location || null,
-          meetingLink,
-          allDay: !isTimed,
-        });
-        synced++;
-      }
-
+      // The user's stored timezone is passed both to Google (canonicalize the
+      // response) AND to the defensive parser for naive strings, which together
+      // remove the "naive dateTime gets parsed as server-local UTC" failure mode
+      // that caused the 2026-06-04 ±N-hour shift.
+      const userTimezone = await readSyncTimezone(uid);
+      const synced = await syncPrimaryCalendarWindow(session, uid, userTimezone);
       return { success: true, synced };
     } catch (err) {
       if (isGoogleAuthError(err)) {
@@ -444,13 +414,16 @@ export async function calendarRoutes(app: FastifyInstance) {
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
-    const events = await prisma.calendarEvent.findMany({
-      where: {
-        userId: uid,
-        startTime: { gte: todayStart, lte: todayEnd },
-      },
-      orderBy: { startTime: "asc" },
-    });
+    const events = dedupeCalendarEvents(
+      await prisma.calendarEvent.findMany({
+        where: {
+          userId: uid,
+          startTime: { gte: todayStart, lte: todayEnd },
+          ...calendarSourceScope(),
+        },
+        orderBy: { startTime: "asc" },
+      }),
+    );
 
     const now = new Date();
     const upcoming = events.filter((e: { startTime: Date }) => e.startTime > now);
@@ -458,11 +431,12 @@ export async function calendarRoutes(app: FastifyInstance) {
       (e: { startTime: Date; endTime: Date }) => e.startTime <= now && e.endTime > now,
     );
 
+    const marked = upcoming.map(withReadOnlyFlag);
     return {
       total: events.length,
-      current: current || null,
-      upcoming,
-      nextEvent: upcoming[0] || null,
+      current: current ? withReadOnlyFlag(current) : null,
+      upcoming: marked,
+      nextEvent: marked[0] || null,
     };
   });
 }

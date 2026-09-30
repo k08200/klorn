@@ -19,6 +19,7 @@ import { stripUntrusted } from "../untrusted.js";
 import { pushNotification } from "../websocket.js";
 import { type BriefingSignals, buildBriefingSignals } from "./briefing-signals.js";
 import { getBriefingStatus } from "./briefing-status.js";
+import { calendarSourceScope } from "./calendar-scope.js";
 import { listNotes } from "./notes.js";
 import { listTasks } from "./tasks.js";
 
@@ -68,10 +69,13 @@ const BRIEFING_CHOICE_BY_SIGNAL = {
  * so the briefing claimed eight birthday events while Calendar said "0
  * events in the next 14 days." Sharing the same source removes that lie.
  */
-async function listLocalBriefingEvents(userId: string, now: Date): Promise<{ events: unknown[] }> {
+export async function listLocalBriefingEvents(
+  userId: string,
+  now: Date,
+): Promise<{ events: unknown[] }> {
   const windowEnd = new Date(now.getTime() + BRIEFING_CALENDAR_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const rows = await prisma.calendarEvent.findMany({
-    where: { userId, startTime: { gte: now, lte: windowEnd } },
+    where: { userId, startTime: { gte: now, lte: windowEnd }, ...calendarSourceScope() },
     orderBy: { startTime: "asc" },
     take: 20,
     select: {

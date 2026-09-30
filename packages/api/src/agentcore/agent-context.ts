@@ -32,6 +32,8 @@
 import { AGENT_MAX_CONTEXT_ITEMS } from "../config.js";
 import { db, prisma } from "../db.js";
 import { isNoReplyAddress } from "../mail/gmail.js";
+import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
+import { calendarSourceScope } from "../pim/calendar-scope.js";
 import { captureError } from "../sentry.js";
 import { offsetStringFor } from "../time-zone.js";
 import { wrapUntrusted } from "../untrusted.js";
@@ -114,7 +116,7 @@ export async function gatherUserContext(userId: string): Promise<string> {
 
   const [
     tasks,
-    calendar,
+    calendarRows,
     reminders,
     notes,
     unreadNotifs,
@@ -141,7 +143,8 @@ export async function gatherUserContext(userId: string): Promise<string> {
       }),
     prisma.calendarEvent
       .findMany({
-        where: { userId, startTime: { gte: now, lte: in7d } },
+        // Linked-calendar rows reach the model only while the linked sync is on (C2).
+        where: { userId, startTime: { gte: now, lte: in7d }, ...calendarSourceScope() },
         orderBy: { startTime: "asc" },
         take: MAX_CONTEXT_ITEMS * 2,
       })
@@ -284,6 +287,9 @@ export async function gatherUserContext(userId: string): Promise<string> {
     recentProposalSuppressions,
   );
   const visibleTasks = suppressedTasks.visible.slice(0, MAX_CONTEXT_ITEMS);
+  // An invite in both the primary and a linked calendar is two rows (C2); the
+  // model must see it once.
+  const calendar = dedupeCalendarEvents(calendarRows);
   const suppressedCalendar = filterSuppressedContextItems(
     calendar,
     (e: {

@@ -5,8 +5,9 @@
  */
 
 import Fastify from "fastify";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
+import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
 
 const googleCreateEvent = vi.hoisted(() => vi.fn());
 const getAuthedClient = vi.hoisted(() => vi.fn());
@@ -200,7 +201,10 @@ describe("GET /api/calendar — reads are unchanged", () => {
       headers,
     });
     const arg = eventFindMany.mock.calls[0]?.[0] as { where: Record<string, unknown> };
-    expect(Object.keys(arg.where).sort()).toEqual(["startTime", "userId"]);
+    // No provider/externalId filter; the only addition is the C2 kill switch
+    // (linked rows are excluded while LINKED_CALENDAR_SYNC_ENABLED is off).
+    expect(Object.keys(arg.where).sort()).toEqual(["sourceAccountId", "startTime", "userId"]);
+    expect(arg.where.sourceAccountId).toBeNull();
     await app.close();
   });
 });
@@ -251,6 +255,402 @@ describe("POST /api/calendar/sync — Google sync upsert", () => {
     const res = await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
     expect(res.json()).toMatchObject({ success: true, synced: 0 });
     expect(eventUpsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe("POST /api/calendar/sync — Google request and failure handling (characterisation, C2)", () => {
+  const SYNC_NOW = new Date("2026-09-30T05:00:00.000Z");
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(SYNC_NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("asks Google for the next 30 days of the primary calendar, capped at 100, in the user's zone", async () => {
+    eventsList.mockResolvedValue({ data: { items: [] } });
+    const app = await buildApp();
+    await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
+    expect(eventsList).toHaveBeenCalledTimes(1);
+    expect(eventsList).toHaveBeenCalledWith({
+      calendarId: "primary",
+      timeMin: "2026-09-30T05:00:00.000Z",
+      timeMax: "2026-10-30T05:00:00.000Z",
+      singleEvents: true,
+      orderBy: "startTime",
+      maxResults: 100,
+      timeZone: "Asia/Seoul",
+    });
+    await app.close();
+  });
+
+  it("answers not-connected without a user lookup or a Google call", async () => {
+    getAuthedClient.mockResolvedValue(null);
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
+    expect(res.json()).toEqual({ error: "Google not connected", synced: 0 });
+    expect(eventsList).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("flags the token for reconnect on an auth failure", async () => {
+    vi.mocked(isGoogleAuthError).mockReturnValueOnce(true);
+    eventsList.mockRejectedValue({ response: { status: 401 } });
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
+    expect(res.json()).toEqual({
+      error: "Google not connected. Please reconnect your Google account.",
+      synced: 0,
+    });
+    expect(markGoogleTokenForReconnect).toHaveBeenCalledWith("user-1");
+    await app.close();
+  });
+
+  it("reports any other failure with its status and message", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    eventsList.mockRejectedValue({
+      response: { status: 500, data: { error: { message: "backend down" } } },
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
+    expect(res.json()).toEqual({ error: "Sync failed (500): backend down", synced: 0 });
+    errSpy.mockRestore();
+    await app.close();
+  });
+
+  it("maps meeting links, all-day events and naive times exactly as the scheduler does", async () => {
+    eventsList.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "g-a",
+            summary: "Timed",
+            description: "d",
+            location: "L",
+            start: { dateTime: "2026-10-02T09:00:00" },
+            end: { dateTime: "2026-10-02T10:00:00" },
+            conferenceData: { entryPoints: [{ entryPointType: "video", uri: "https://meet/x" }] },
+          },
+          {
+            id: "g-b",
+            start: { date: "2026-10-03" },
+            end: { date: "2026-10-04" },
+            hangoutLink: "https://hangouts/y",
+          },
+        ],
+      },
+    });
+    const app = await buildApp();
+    await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
+    const creates = eventUpsert.mock.calls.map(
+      (c) => (c[0] as { create: Record<string, unknown> }).create,
+    );
+    expect(creates[0]).toMatchObject({
+      googleId: "g-a",
+      title: "Timed",
+      description: "d",
+      location: "L",
+      meetingLink: "https://meet/x",
+      allDay: false,
+      startTime: new Date("2026-10-02T00:00:00.000Z"),
+      endTime: new Date("2026-10-02T01:00:00.000Z"),
+    });
+    expect(creates[1]).toMatchObject({
+      googleId: "g-b",
+      title: "Untitled",
+      description: null,
+      location: null,
+      meetingLink: "https://hangouts/y",
+      allDay: true,
+      startTime: new Date("2026-10-03"),
+      endTime: new Date("2026-10-04"),
+    });
+    await app.close();
+  });
+});
+
+describe("linked calendar rows on the read routes (C2, flag on)", () => {
+  beforeEach(() => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+  });
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  const start = new Date("2026-10-01T10:00:00.000Z");
+  const row = (id: string, externalId: string | null, sourceAccountId: string | null) => ({
+    id,
+    userId: "user-1",
+    title: `event ${id}`,
+    startTime: start,
+    endTime: new Date(start.getTime() + 3_600_000),
+    allDay: false,
+    provider: externalId === null ? "LOCAL" : "GOOGLE",
+    externalId,
+    sourceAccountId,
+    sourceKey: sourceAccountId ?? "primary",
+  });
+
+  it("GET / shows an invite that is in the primary and a linked calendar once, as the primary row", async () => {
+    eventFindMany.mockResolvedValueOnce([
+      row("linked", "g-inv", "acct-1"),
+      row("primary", "g-inv", null),
+    ]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/calendar?start=2026-10-01T00:00:00.000Z&end=2026-10-08T00:00:00.000Z",
+      headers,
+    });
+    const events = res.json().events as Array<{ id: string }>;
+    expect(events.map((e) => e.id)).toEqual(["primary"]);
+    await app.close();
+  });
+
+  it("GET / still shows a linked-only event and every LOCAL event", async () => {
+    eventFindMany.mockResolvedValueOnce([
+      row("linked-only", "g-work", "acct-1"),
+      row("local-a", null, null),
+      row("local-b", null, null),
+    ]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar", headers });
+    const events = res.json().events as Array<{ id: string }>;
+    expect(events.map((e) => e.id)).toEqual(["linked-only", "local-a", "local-b"]);
+    await app.close();
+  });
+
+  it("GET /today/summary counts the duplicated invite once", async () => {
+    const future = (id: string, externalId: string, sourceAccountId: string | null) => ({
+      ...row(id, externalId, sourceAccountId),
+      startTime: new Date(Date.now() + 60_000),
+      endTime: new Date(Date.now() + 3_600_000),
+    });
+    eventFindMany.mockResolvedValueOnce([
+      future("p", "g-inv", null),
+      future("l", "g-inv", "acct-1"),
+    ]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar/today/summary", headers });
+    expect(res.json().total).toBe(1);
+    expect(res.json().nextEvent.id).toBe("p");
+    await app.close();
+  });
+});
+
+describe("linked calendar rows are read-only mirrors (C2)", () => {
+  beforeEach(() => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+  });
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  const linkedRow = {
+    id: "ev-linked",
+    userId: "user-1",
+    title: "Work standup",
+    startTime: new Date("2026-10-01T10:00:00.000Z"),
+    endTime: new Date("2026-10-01T11:00:00.000Z"),
+    allDay: false,
+    googleId: null,
+    provider: "GOOGLE",
+    externalId: "g-work-1",
+    sourceAccountId: "acct-1",
+    sourceKey: "acct-1",
+  };
+  const READ_ONLY = {
+    error: "This event comes from a linked calendar and is read-only in Klorn.",
+  };
+
+  it("PATCH refuses with 409: the next sync would silently revert the edit", async () => {
+    eventFindUnique.mockResolvedValue(linkedRow);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/calendar/ev-linked",
+      headers,
+      payload: { title: "Renamed" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual(READ_ONLY);
+    expect(eventUpdate).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("DELETE refuses with 409: the next sync would bring the event back", async () => {
+    eventFindUnique.mockResolvedValue(linkedRow);
+    const eventDelete = vi.fn();
+    const { prisma } = await import("../db.js");
+    (prisma.calendarEvent as unknown as { delete: unknown }).delete = eventDelete;
+    const app = await buildApp();
+    const res = await app.inject({ method: "DELETE", url: "/api/calendar/ev-linked", headers });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual(READ_ONLY);
+    expect(eventDelete).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("a primary row is still editable (no regression)", async () => {
+    const primaryRow = {
+      ...linkedRow,
+      id: "ev-primary",
+      sourceAccountId: null,
+      sourceKey: "primary",
+    };
+    eventFindUnique.mockResolvedValue(primaryRow);
+    eventUpdate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...primaryRow,
+      ...data,
+    }));
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/calendar/ev-primary",
+      headers,
+      payload: { title: "Renamed" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(eventUpdate).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+});
+
+describe("kill switch: flag off hides linked rows on every calendar route (C2)", () => {
+  const linkedRow = {
+    id: "ev-linked",
+    userId: "user-1",
+    title: "Work standup",
+    startTime: new Date("2026-10-01T10:00:00.000Z"),
+    endTime: new Date("2026-10-01T11:00:00.000Z"),
+    allDay: false,
+    googleId: null,
+    provider: "GOOGLE",
+    externalId: "g-work-1",
+    sourceAccountId: "acct-1",
+    sourceKey: "acct-1",
+  };
+  const whereOf = (call: unknown[] | undefined) =>
+    (call?.[0] as { where: Record<string, unknown> }).where;
+
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  it("GET / and GET /today/summary query primary and LOCAL rows only", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/api/calendar", headers });
+    await app.inject({ method: "GET", url: "/api/calendar/today/summary", headers });
+    expect(eventFindMany.mock.calls).toHaveLength(2);
+    for (const call of eventFindMany.mock.calls) expect(whereOf(call).sourceAccountId).toBeNull();
+    await app.close();
+  });
+
+  it("with the flag on the queries are not narrowed", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/api/calendar", headers });
+    await app.inject({ method: "GET", url: "/api/calendar/today/summary", headers });
+    for (const call of eventFindMany.mock.calls)
+      expect(whereOf(call)).not.toHaveProperty("sourceAccountId");
+    await app.close();
+  });
+
+  it("GET /:id, PATCH and DELETE answer 404 for a linked row while the flag is off", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    eventFindUnique.mockResolvedValue(linkedRow);
+    const app = await buildApp();
+    const get = await app.inject({ method: "GET", url: "/api/calendar/ev-linked", headers });
+    const patch = await app.inject({
+      method: "PATCH",
+      url: "/api/calendar/ev-linked",
+      headers,
+      payload: { title: "x" },
+    });
+    const del = await app.inject({ method: "DELETE", url: "/api/calendar/ev-linked", headers });
+    expect([get.statusCode, patch.statusCode, del.statusCode]).toEqual([404, 404, 404]);
+    expect(eventUpdate).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("GET /:id returns the linked row once the flag is on", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    eventFindUnique.mockResolvedValue(linkedRow);
+    const app = await buildApp();
+    const get = await app.inject({ method: "GET", url: "/api/calendar/ev-linked", headers });
+    expect(get.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe("wire: linked rows say readOnly (C2)", () => {
+  const start = new Date("2026-10-01T10:00:00.000Z");
+  const row = (id: string, sourceAccountId: string | null) => ({
+    id,
+    userId: "user-1",
+    title: `event ${id}`,
+    startTime: start,
+    endTime: new Date(start.getTime() + 3_600_000),
+    allDay: false,
+    googleId: sourceAccountId ? null : `g-${id}`,
+    provider: "GOOGLE",
+    externalId: `g-${id}`,
+    sourceAccountId,
+    sourceKey: sourceAccountId ?? "primary",
+  });
+
+  beforeEach(() => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+  });
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  it("GET / marks a linked row readOnly: true and leaves the field off primary and LOCAL rows", async () => {
+    eventFindMany.mockResolvedValueOnce([row("linked", "acct-1"), row("primary", null)]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar", headers });
+    const events = res.json().events as Array<Record<string, unknown>>;
+    const byId = Object.fromEntries(events.map((e) => [e.id as string, e]));
+    expect(byId.linked?.readOnly).toBe(true);
+    expect("readOnly" in (byId.primary ?? {})).toBe(false);
+    await app.close();
+  });
+
+  it("flag off: the primary rows' JSON is byte-identical to the row itself (no new field)", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    const primary = row("primary", null);
+    eventFindMany.mockResolvedValueOnce([primary]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar", headers });
+    expect(res.body).toBe(JSON.stringify({ events: [primary] }));
+    await app.close();
+  });
+
+  it("GET /:id marks a linked row readOnly: true", async () => {
+    eventFindUnique.mockResolvedValue(row("linked", "acct-1"));
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar/linked", headers });
+    expect(res.json().readOnly).toBe(true);
+    await app.close();
+  });
+
+  it("GET /today/summary marks linked rows wherever they appear", async () => {
+    const soon = (id: string, sourceAccountId: string | null) => ({
+      ...row(id, sourceAccountId),
+      startTime: new Date(Date.now() + 60_000),
+      endTime: new Date(Date.now() + 3_600_000),
+    });
+    eventFindMany.mockResolvedValueOnce([soon("linked-only", "acct-1")]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar/today/summary", headers });
+    const body = res.json();
+    expect(body.upcoming[0].readOnly).toBe(true);
+    expect(body.nextEvent.readOnly).toBe(true);
     await app.close();
   });
 });

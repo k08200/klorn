@@ -21,6 +21,7 @@
  */
 
 import { prisma } from "../db.js";
+import { calendarSourceScope } from "../pim/calendar-scope.js";
 import { captureError } from "../sentry.js";
 import { remember } from "./memory.js";
 
@@ -318,7 +319,7 @@ async function buildAndCacheGraph(userId: string): Promise<InteractionGraph> {
     }),
     // Count upcoming meetings (used for bonus, not per-contact)
     prisma.calendarEvent.count({
-      where: { userId, startTime: { gte: now, lte: calendarUntil } },
+      where: { userId, startTime: { gte: now, lte: calendarUntil }, ...calendarSourceScope() },
     }),
     // Known contacts for name resolution
     prisma.contact.findMany({

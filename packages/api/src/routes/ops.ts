@@ -3,6 +3,7 @@ import { getUserId, requireAuth } from "../auth.js";
 import { prisma } from "../db.js";
 import { snapshotUserProviderCooldowns } from "../llm/model-fallback.js";
 import { getBriefingStatus } from "../pim/briefing-status.js";
+import { calendarSourceScope } from "../pim/calendar-scope.js";
 
 type CheckStatus = "ok" | "warning" | "error";
 
@@ -111,7 +112,9 @@ async function collectReadinessData(userId: string, now: Date): Promise<Readines
       take: 5,
     }),
     prisma.emailMessage.count({ where: { userId } }),
-    prisma.calendarEvent.count({ where: { userId, startTime: { gte: startOfDay(now) } } }),
+    prisma.calendarEvent.count({
+      where: { userId, startTime: { gte: startOfDay(now) }, ...calendarSourceScope() },
+    }),
     getBriefingStatus(userId, { now }),
   ]);
 
