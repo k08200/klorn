@@ -23,7 +23,10 @@
  * real reply needs the /messages/{id}/reply endpoint. sendEmail therefore
  * sends a NEW message, and getReplyHeaders answers {} (best-effort per
  * contract) so /api/email/:id/reply never claims `threaded: true` for a
- * send that carries no threading headers.
+ * send that carries no threading headers. createDraft accepts the seam's
+ * reply context (step B0) and ignores it for the same reason. Native Outlook
+ * replies and reply drafts (/reply, /createReply) are step B0b in
+ * docs/providers/unified-platform-plan.md; getReplyHeaders stays {} there too.
  */
 
 import { markLinkedInboxForReconnect } from "../gmail.js";
@@ -182,15 +185,11 @@ export const outlookMailActions: MailProviderActions = {
     return { success: true, messageId: null };
   },
 
-  createDraft: async (
-    userId,
-    to,
-    subject,
-    body,
-    _threadId,
-    attachments = [],
-    linkedInboxAccountId,
-  ): Promise<CreateDraftResult> => {
+  createDraft: async (userId, draft): Promise<CreateDraftResult> => {
+    // threadId and reply are accepted for seam parity and ignored until B0b:
+    // POST /me/messages cannot carry In-Reply-To, and a native reply draft
+    // needs /messages/{id}/createReply.
+    const { to, subject, body, attachments = [], linkedInboxAccountId } = draft;
     const ctx = await ctxFor(userId, linkedInboxAccountId);
     if ("error" in ctx) return ctx;
     const out = await graphCall(

@@ -7,6 +7,7 @@ import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createEmailDraft = vi.hoisted(() => vi.fn());
+const getReplyHeaders = vi.hoisted(() => vi.fn());
 const emailFindFirst = vi.hoisted(() => vi.fn());
 const updateCandidateIntake = vi.hoisted(() => vi.fn(async () => {}));
 
@@ -38,7 +39,7 @@ vi.mock("../mail/email-candidate-intake.js", () => ({ updateCandidateIntake }));
 vi.mock("../mail/gmail.js", () => ({
   createEmailDraft,
   sendEmail: vi.fn(),
-  getReplyHeaders: vi.fn(),
+  getReplyHeaders,
   resolveMailClient: vi.fn(),
   GMAIL_TOOLS: [],
 }));
@@ -64,6 +65,7 @@ async function buildApp() {
 
 beforeEach(() => {
   createEmailDraft.mockReset();
+  getReplyHeaders.mockReset();
   emailFindFirst.mockReset();
   updateCandidateIntake.mockClear();
   emailFindFirst.mockResolvedValue(EMAIL);
@@ -79,10 +81,10 @@ describe("POST /api/email/:id/gmail-draft", () => {
       payload: { to: "boss@corp.com", subject: "Re: hi", body: "sounds good" },
     });
     expect(res.statusCode).toBe(200);
-    const call = createEmailDraft.mock.calls[0];
-    expect(call[0]).toBe("user-1");
-    expect(call[4]).toBe("t1"); // threadId
-    expect(call[6]).toBeUndefined(); // linkedInboxAccountId
+    const [uid, draft] = createEmailDraft.mock.calls[0];
+    expect(uid).toBe("user-1");
+    expect(draft.threadId).toBe("t1");
+    expect(draft.linkedInboxAccountId).toBeUndefined();
     await app.close();
   });
 
@@ -95,8 +97,35 @@ describe("POST /api/email/:id/gmail-draft", () => {
       payload: { to: "boss@corp.com", subject: "Re: hi", body: "sounds good" },
     });
     expect(res.statusCode).toBe(200);
-    const call = createEmailDraft.mock.calls[0];
-    expect(call[6]).toBe("linked-acct-1"); // linkedInboxAccountId
+    const [, draft] = createEmailDraft.mock.calls[0];
+    expect(draft.linkedInboxAccountId).toBe("linked-acct-1");
+    await app.close();
+  });
+
+  it("passes exactly the values it passed on main and no reply headers", async () => {
+    // Wiring reply headers into this route is a separate fix that needs a real
+    // Gmail account to verify. Until then the route must not fetch or pass them.
+    emailFindFirst.mockResolvedValue({ ...EMAIL, linkedInboxAccountId: "linked-acct-1" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/gmail-draft",
+      payload: { to: "boss@corp.com", subject: "Re: hi", body: "sounds good" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(createEmailDraft).toHaveBeenCalledTimes(1);
+    const [uid, draft] = createEmailDraft.mock.calls[0];
+    expect(uid).toBe("user-1");
+    expect(draft).toStrictEqual({
+      to: "boss@corp.com",
+      subject: "Re: hi",
+      body: "sounds good",
+      threadId: "t1",
+      attachments: [],
+      linkedInboxAccountId: "linked-acct-1",
+    });
+    expect(draft).not.toHaveProperty("reply");
+    expect(getReplyHeaders).not.toHaveBeenCalled();
     await app.close();
   });
 

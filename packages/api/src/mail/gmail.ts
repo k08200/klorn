@@ -10,6 +10,12 @@ import {
 import { spamIntakeEnabled } from "../ops/feature-flags.js";
 import { captureError } from "../sentry.js";
 import { wrapUntrusted } from "../untrusted.js";
+import type {
+  CreateDraftInput,
+  ReplyThreadingHeaders,
+  SendMailOptions,
+} from "./providers/types.js";
+import { replyHeaderLines } from "./reply-headers.js";
 
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
@@ -1054,27 +1060,14 @@ export function safeMimeType(raw: string): string {
     : "application/octet-stream";
 }
 
-interface ThreadingHeaders {
-  inReplyTo?: string;
-  references?: string;
-}
-
-/** RFC822 threading headers, CR/LF-stripped so a fetched value can't inject. */
-function threadingHeaderLines(headers?: ThreadingHeaders): string[] {
-  const lines: string[] = [];
-  if (headers?.inReplyTo) lines.push(`In-Reply-To: ${safeHeaderValue(headers.inReplyTo)}`);
-  if (headers?.references) lines.push(`References: ${safeHeaderValue(headers.references)}`);
-  return lines;
-}
-
 function buildPlainTextRawEmail(
   to: string,
   subject: string,
   body: string,
   attachments: GmailDraftAttachment[] = [],
-  threading?: ThreadingHeaders,
+  threading?: ReplyThreadingHeaders,
 ): string {
-  const threadLines = threadingHeaderLines(threading);
+  const threadLines = replyHeaderLines(threading);
   if (attachments.length === 0) {
     return Buffer.from(
       [
@@ -1128,12 +1121,7 @@ export async function sendEmail(
   subject: string,
   body: string,
   attachments: GmailDraftAttachment[] = [],
-  options?: {
-    threadId?: string | null;
-    inReplyTo?: string;
-    references?: string;
-    linkedInboxAccountId?: string | null;
-  },
+  options?: SendMailOptions,
 ) {
   // Single recipient only. A comma or semicolon means multiple addresses —
   // reject it so the angle-bracket display-name trick
@@ -1185,15 +1173,8 @@ export async function sendEmail(
   return { success: true as const, messageId: res.data.id, threadId: res.data.threadId ?? null };
 }
 
-export async function createEmailDraft(
-  userId: string,
-  to: string,
-  subject: string,
-  body: string,
-  threadId?: string | null,
-  attachments: GmailDraftAttachment[] = [],
-  linkedInboxAccountId?: string | null,
-) {
+export async function createEmailDraft(userId: string, draft: CreateDraftInput) {
+  const { to, subject, body, threadId, attachments = [], linkedInboxAccountId, reply } = draft;
   if (!looksLikeEmailAddress(to)) {
     return {
       error: `Invalid email address: "${to}". Use a full address like local@domain, not a domain such as accounts.google.com.`,
@@ -1211,7 +1192,7 @@ export async function createEmailDraft(
   if (!auth) return { error: "Gmail not connected." };
 
   const gmail = google.gmail({ version: "v1", auth });
-  const raw = buildPlainTextRawEmail(to, subject, body, attachments);
+  const raw = buildPlainTextRawEmail(to, subject, body, attachments, reply);
   let res: { data: { id?: string | null; message?: { id?: string | null } | null } };
   try {
     res = await gmail.users.drafts.create({

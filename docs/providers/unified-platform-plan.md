@@ -13,7 +13,7 @@ company edition design stays in `../design/team-mode-v3.md`.
 | | Mail | Calendar | Drive |
 |---|---|---|---|
 | Google | complete | primary calendar synced to rows; linked accounts used for conflict checks only | none |
-| Microsoft | merged, flag OFF, Azure registration pending; reply threading headers missing (`getReplyHeaders` returns `{}`) | none (Graph scopes are `Mail.*` only) | none |
+| Microsoft | merged, flag OFF, Azure registration pending; replies and drafts are unthreaded by design (`getReplyHeaders` returns `{}`; native reply is B0b) | none (Graph scopes are `Mail.*` only) | none |
 | Naver | read-only IMAP; every action returns 501 | none | none |
 | iCloud | read-only IMAP, flag OFF | none | none |
 | Generic IMAP (company/personal hosts) | not built (Phase 4, gated on SSRF review) | none | none |
@@ -35,10 +35,11 @@ company edition design stays in `../design/team-mode-v3.md`.
   (`learning/sender-policy.ts`).
 - **Write paths that exist.** `mark_read` has an executor case. Tier changes
   from every surface go through `overrideAttentionTier`
-  (`judge/attention-override.ts`). `MailProviderActions.createDraft` exists but
-  is reached only from `POST /api/email/:id/gmail-draft`, and its signature
-  carries no reply headers. `archive_email` and `delete_email` are names in
-  the risk table with no executor case.
+  (`judge/attention-override.ts`). `MailProviderActions.createDraft(userId,
+  {to, subject, body, threadId?, attachments?, linkedInboxAccountId?, reply?})`
+  exists and is reached only from `POST /api/email/:id/gmail-draft`. That route
+  does not pass `reply`. `archive_email` and `delete_email` are names in the
+  risk table with no executor case.
 - **Calendar.** `LinkedCalendarAccount` has no provider column.
   `CalendarEvent` is keyed on `googleId`. Sync pulls the primary Google
   calendar only (30 days, 100 events, every 15 minutes). `list_events` calls
@@ -230,7 +231,13 @@ not flipped before this step merges (L30).
 **A4 — `create_draft`, reply-only.** Depends on: A2, B0. `email_id` is
 required. The recipient is pinned to the original sender. The account is
 resolved from the row. It never sends. Providers without draft support return
-an explicit unsupported result.
+an explicit unsupported result. Outlook returns unsupported until B0b lands,
+because a draft made through Graph `POST /me/messages` does not thread.
+- The tool never accepts header strings from the caller. It takes an email id,
+  and the server resolves the reply headers through `getReplyHeaders`.
+- Rule: if any send path ever carries agent-supplied reply context, the
+  resolved in-reply-to email id and the thread id join the receipt payload
+  hash, and `RECEIPT_SCHEMA_VERSION` (`judge/attention-floor.ts`) is bumped.
 
 **A5 — client setup docs.** Read-only part depends on nothing; the write part
 follows A2 and A4. One page with snippets for Claude Code, Codex, Cursor,
@@ -264,9 +271,49 @@ founder approval per listing; outward-facing.
 
 ### Workstream B — finish mail
 
-**B0 — reply threading in the provider seam.** Depends on: nothing.
-`createDraft` and send accept reply headers. The Gmail draft builder includes
-them. Graph `getReplyHeaders` returns real headers instead of `{}`.
+**B0 — reply headers on provider drafts (seam and Gmail builder).** Depends on:
+nothing.
+- Context: Gmail threads a draft or message only when it carries the
+  `threadId`, matching References and In-Reply-To headers, and a matching
+  Subject (https://developers.google.com/workspace/gmail/api/guides/threads).
+  `sendEmail` takes In-Reply-To and References through `SendMailOptions`. One
+  MIME builder in `mail/gmail.ts` produces the headers for send and draft.
+- Tasks: `createDraft(userId, draft)` takes an options object,
+  `{to, subject, body, threadId?, attachments?, linkedInboxAccountId?, reply?}`,
+  where `reply` is `{inReplyTo?, references?}`. `SendMailOptions` shares the
+  two reply fields. `mail/reply-headers.ts` parses message ids out of
+  untrusted values and discards all other text. A message id is `<` plus 1 to
+  255 printable ASCII characters other than `<` and `>`, plus `>`.
+  In-Reply-To carries the last valid id. References carries the first id plus
+  the last 20, deduplicated, folded at 78 characters. A header with no valid
+  id is omitted, and a non-string value counts as absent. The builder uses it
+  on both paths. The Google provider passes the draft to `createEmailDraft`.
+  The Outlook provider accepts the object and ignores `threadId` and `reply`.
+  `unsupportedMailActions` needs no change, because its `createDraft` ignores
+  its arguments. The reply route sets `threaded` from whether an In-Reply-To id
+  was emitted, using the same parser.
+- Verify: parser tests first, then MIME tests for draft and send: headers
+  present when given, header order fixed, the no-reply MIME byte-identical for
+  the plain and the multipart branch, injection input never reaching a header,
+  identical headers on both paths, linked account id still selecting the
+  account. Provider tests pin Google forwarding, the unsupported result and
+  unchanged Outlook payloads. A route test pins that `gmail-draft` passes the
+  same values as before and no `reply`. Full gate.
+- Exit: `gmail-draft` passes the same values as before. The send path does
+  change. Reply headers are now parsed into message ids, so free text in a
+  header value is dropped and a header with no valid id is omitted. A reply
+  whose Message-ID cannot be parsed goes by `threadId` only and reports
+  `threaded: false`.
+- Rollback: revert the PR. No schema, no flag.
+- Follow-up: wiring the existing `gmail-draft` route to pass reply headers is
+  a separate fix, verified against a real Gmail account.
+
+**B0b — Microsoft native reply** (*outline*). Depends on: B0. Outlook replies
+use Graph `/messages/{id}/reply` and reply drafts use `/messages/{id}/createReply`,
+because `sendMail` cannot set In-Reply-To. `getReplyHeaders` stays `{}`, so the
+reply route never reports `threaded: true` for an Outlook send. The flag stays
+OFF. The seam needs a way to name the message being answered; the PR that
+starts this step designs it and expands this brief.
 
 **B1 — IMAP flag actions for Naver and iCloud.** Depends on: nothing.
 - Context: `providers/dispatch.ts` maps NAVER, ICLOUD and IMAP to
@@ -287,6 +334,7 @@ floor.
 **B3 — SMTP send for IMAP providers.** Depends on: B0. SMTP client, a
 per-provider SMTP host pinned like `hostMatchesProvider`, draft support. The
 send path stays behind the deterministic floor. Security review is mandatory.
+Reply headers reuse `mail/reply-headers.ts`.
 
 **B4 — generic IMAP** (*outline*). Unchanged from Phase 4: the SSRF design
 passes security review first.
@@ -373,7 +421,8 @@ availability reads each member's own synced calendars.
 ```
 A1 → A2 → A3            A2 + B0 → A4            A2 + A4 + A5 → A8
 A5 (read-only part), A6 independent
-B0 → B3                 B1 → B2                 B4 after security design
+B0 → B3                 B0 → B0b                B1 → B2
+B4 after security design
 F0 → B5
 C1 → C2 → C7            C2 → {C3 | C4 | C5 | C6}            C2 → F (PR-B)
 D1 + D2 → D3 → D7       D1 + D2 → D4            D2 → {D5 | D6}
@@ -390,7 +439,9 @@ time, whatever the graph says. The later step rebases, reruns
 | File | Steps |
 |---|---|
 | `packages/api/prisma/schema.prisma` | A1, A2, B2, C1, D2, E1, F |
-| `mail/providers/types.ts`, `dispatch.ts` | A4, B0, B1, B2, B3, E2 |
+| `mail/providers/types.ts`, `dispatch.ts` | A4, B0, B0b, B1, B2, B3, E2 |
+| `mail/providers/outlook.ts`, `routes/email-replies.ts` | B0b, the `gmail-draft` follow-up under B0 |
+| `mail/reply-headers.ts` | B0, B3 |
 | web locale files | every step with UI copy |
 
 ## Founder actions

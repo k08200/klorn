@@ -80,7 +80,17 @@ describe("mailActionsForProvider", () => {
 
     const results = [
       await actions.sendEmail("u1", "a@b.c", "s", "b"),
-      await actions.createDraft("u1", "a@b.c", "s", "b"),
+      await actions.createDraft("u1", { to: "a@b.c", subject: "s", body: "b" }),
+      // B0: the reply-context shape is accepted and refused like any draft.
+      await actions.createDraft("u1", {
+        to: "a@b.c",
+        subject: "s",
+        body: "b",
+        threadId: "t1",
+        attachments: [],
+        linkedInboxAccountId: "acc-1",
+        reply: { inReplyTo: "<m@x>", references: "<r@x> <m@x>" },
+      }),
       await actions.markAsRead("u1", "m1"),
       await actions.toggleRead("u1", "m1", true),
       await actions.toggleStar("u1", "m1", true),
@@ -132,17 +142,23 @@ describe("GOOGLE actions delegate to the Gmail module", () => {
       linkedInboxAccountId: "acc-1",
     };
 
+    const draft = {
+      to: "a@b.c",
+      subject: "s",
+      body: "b",
+      threadId: "t1",
+      attachments: [attachment],
+      linkedInboxAccountId: "acc-1",
+      reply: { inReplyTo: options.inReplyTo, references: options.references },
+    };
+
     const table: Array<[keyof typeof gmail, () => Promise<unknown>, unknown[]]> = [
       [
         "sendEmail",
         () => actions.sendEmail("u1", "a@b.c", "s", "b", [attachment], options),
         ["u1", "a@b.c", "s", "b", [attachment], options],
       ],
-      [
-        "createEmailDraft",
-        () => actions.createDraft("u1", "a@b.c", "s", "b", "t1", [attachment], "acc-1"),
-        ["u1", "a@b.c", "s", "b", "t1", [attachment], "acc-1"],
-      ],
+      ["createEmailDraft", () => actions.createDraft("u1", draft), ["u1", draft]],
       [
         "getReplyHeaders",
         () => actions.getReplyHeaders("u1", "m1", "acc-1"),
@@ -171,5 +187,18 @@ describe("GOOGLE actions delegate to the Gmail module", () => {
       expect(await call()).toBe(sentinel);
       expect(gmail[fnName]).toHaveBeenCalledWith(...expectedArgs);
     }
+  });
+
+  it("adds no reply context of its own when the caller gave none", async () => {
+    const { mailActionsForProvider } = await loadDispatch();
+    const actions = mailActionsForProvider("GOOGLE");
+    const draft = { to: "a@b.c", subject: "s", body: "b", threadId: "t1" };
+    gmail.createEmailDraft.mockResolvedValue({ success: true });
+
+    await actions.createDraft("u1", draft);
+
+    const passed = gmail.createEmailDraft.mock.calls[0][1];
+    expect(passed).toStrictEqual(draft);
+    expect(passed).not.toHaveProperty("reply");
   });
 });
