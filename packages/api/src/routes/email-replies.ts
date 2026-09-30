@@ -275,7 +275,10 @@ async function replyDraftContextFor(uid: string, dbEmail: EmailMessage) {
  * the user's own row by id, drafted at background priority. Null when the
  * row is gone.
  */
-export async function draftReplyForEmailId(userId: string, emailId: string): Promise<string | null> {
+export async function draftReplyForEmailId(
+  userId: string,
+  emailId: string,
+): Promise<string | null> {
   const dbEmail = await prisma.emailMessage.findFirst({ where: { id: emailId, userId } });
   if (!dbEmail) return null;
   const draftContext = await replyDraftContextFor(userId, dbEmail);

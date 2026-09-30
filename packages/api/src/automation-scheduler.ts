@@ -50,7 +50,6 @@ import {
 import { getAuthedClient, getLinkedInboxClients, renewExpiringGmailWatches } from "./mail/gmail.js";
 import { runProactiveDrafts } from "./mail/proactive-drafts.js";
 import { syncSentMessages } from "./mail/sent-messages.js";
-import { draftReplyForEmailId } from "./routes/email-replies.js";
 import { notifyConversationsUpdated } from "./notify/conversations-updated.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
@@ -60,6 +59,7 @@ import { buildUrgentDedupMessage, parseNotifiedGmailIds } from "./notify/urgent-
 import { autoModeSendEnabled, tierV2Enabled } from "./ops/feature-flags.js";
 import { createDailyBriefingDelivery } from "./pim/briefing.js";
 import { sendFocusWindowDigests } from "./pim/focus-digest.js";
+import { draftReplyForEmailId } from "./routes/email-replies.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { captureError } from "./sentry.js";
 import {
