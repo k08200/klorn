@@ -7,9 +7,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { _resetCancelledScanStateForTests } from "../pim/calendar-cancellation.js";
 
 const m = vi.hoisted(() => ({
   eventsList: vi.fn(),
+  cancelledList: vi.fn(),
   googleCalendar: vi.fn(),
   getAuthedClient: vi.fn(),
   buildLinkedCalendarClient: vi.fn(),
@@ -21,7 +23,16 @@ const m = vi.hoisted(() => ({
 
 vi.mock("googleapis", () => ({
   google: {
-    calendar: m.googleCalendar.mockImplementation(() => ({ events: { list: m.eventsList } })),
+    calendar: m.googleCalendar.mockImplementation(() => ({
+      // The cancellation scan (C2b) is a second events.list; it gets its own mock so
+      // every assertion on `eventsList` below stays about the sync's own listing.
+      events: {
+        list: (args: { showDeleted?: boolean }) =>
+          args.showDeleted
+            ? (m.cancelledList(args) ?? { data: { items: [] } })
+            : m.eventsList(args),
+      },
+    })),
   },
 }));
 
@@ -189,6 +200,7 @@ let upsertArgs: unknown[] = [];
 
 beforeEach(() => {
   vi.clearAllMocks();
+  _resetCancelledScanStateForTests();
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(NOW);
@@ -238,11 +250,49 @@ describe("scheduler calendar step — primary calendar", () => {
       timeMin: NOW.toISOString(),
       timeMax: new Date(NOW.getTime() + THIRTY_DAYS_MS).toISOString(),
       singleEvents: true,
-      showDeleted: true,
       orderBy: "startTime",
       maxResults: 100,
       timeZone: "Asia/Seoul",
     });
+  });
+
+  it("also asks Google, in a second call, what was cancelled in that window in the last 7 days (C2b)", async () => {
+    await runOneTick();
+
+    expect(m.cancelledList).toHaveBeenCalledTimes(1);
+    expect(m.cancelledList).toHaveBeenCalledWith({
+      calendarId: "primary",
+      timeMin: NOW.toISOString(),
+      timeMax: new Date(NOW.getTime() + THIRTY_DAYS_MS).toISOString(),
+      updatedMin: new Date(NOW.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+      singleEvents: true,
+      showDeleted: true,
+      maxResults: 250,
+      fields: "nextPageToken,items(id,status)",
+    });
+  });
+
+  it("a failing cancellation call never fails the tick: the events are still upserted, no disconnect alert (C2b)", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    m.eventsList.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "g-1",
+            summary: "Kickoff",
+            start: { dateTime: "2026-10-02T09:00:00+09:00" },
+            end: { dateTime: "2026-10-02T10:00:00+09:00" },
+          },
+        ],
+      },
+    });
+    m.cancelledList.mockRejectedValue(new Error("quota"));
+
+    await runOneTick();
+
+    expect(eventUpserts()).toHaveLength(1);
+    expect(callsTo("notification.create")).toBe(0);
+    expect(m.captureError).not.toHaveBeenCalled();
   });
 
   it("upserts each event by (userId, googleId) with the mapped fields", async () => {
@@ -424,7 +474,8 @@ describe("scheduler calendar step — linked calendars (LINKED_CALENDAR_SYNC_ENA
       expect(callsTo("linkedCalendarAccount.findMany")).toBe(0);
       expect(callsTo("linkedCalendarAccount.findFirst")).toBe(0);
       expect(m.getAuthedClient).toHaveBeenCalledTimes(1);
-      expect(m.googleCalendar).toHaveBeenCalledTimes(1);
+      // One API object for the listing, one for the cancellation scan (C2b).
+      expect(m.googleCalendar).toHaveBeenCalledTimes(2);
       expect(m.googleCalendar).toHaveBeenCalledWith({ version: "v3", auth: AUTH });
       expect(m.eventsList).toHaveBeenCalledTimes(1);
       expect(callsTo("user.findUnique")).toBe(1);
@@ -447,8 +498,11 @@ describe("scheduler calendar step — linked calendars (LINKED_CALENDAR_SYNC_ENA
 
       await runOneTick();
 
+      // Each account builds one API object for its listing and one for its cancellation scan.
       expect(m.googleCalendar.mock.calls.map((c) => (c[0] as { auth: unknown }).auth)).toEqual([
         AUTH,
+        AUTH,
+        WORK.client,
         WORK.client,
       ]);
       const rows = eventUpserts();

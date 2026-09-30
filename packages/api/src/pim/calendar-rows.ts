@@ -147,10 +147,12 @@ export async function upsertLinkedGoogleEventRow(
  * cap can truncate the window. The match is the row's whole identity: this user,
  * GOOGLE, the source calendar (`linkedAccountId` null is the primary calendar)
  * and the event id, so another account's row with the same id, another user's,
- * and LOCAL rows (no externalId) are never reached. Items the user already
- * dismissed keep their outcome; AttentionItem has no foreign key to an event, so
- * they are resolved by (source, sourceId) like every other mirror. Returns the
- * number of rows removed.
+ * and LOCAL rows (no externalId) are never reached. A PRIMARY row the previous
+ * release wrote during the C1 deploy overlap has no externalId yet (the next
+ * upsert would stamp it), so it is matched by its googleId; a linked row never has
+ * a googleId. Items the user already dismissed keep their outcome; AttentionItem
+ * has no foreign key to an event, so they are resolved by (source, sourceId) like
+ * every other mirror. Returns the number of rows removed.
  */
 export async function removeCancelledGoogleEventRows(
   userId: string,
@@ -165,7 +167,14 @@ export async function removeCancelledGoogleEventRows(
         userId,
         provider: "GOOGLE",
         sourceKey: sourceKeyFor(linkedAccountId),
-        externalId: { in: [...externalIds] },
+        ...(linkedAccountId === null
+          ? {
+              OR: [
+                { externalId: { in: [...externalIds] } },
+                { externalId: null, googleId: { in: [...externalIds] } },
+              ],
+            }
+          : { externalId: { in: [...externalIds] } }),
       },
       select: { id: true },
     });

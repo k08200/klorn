@@ -8,10 +8,12 @@ import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
+import { _resetCancelledScanStateForTests } from "../pim/calendar-cancellation.js";
 
 const googleCreateEvent = vi.hoisted(() => vi.fn());
 const getAuthedClient = vi.hoisted(() => vi.fn());
 const eventsList = vi.hoisted(() => vi.fn());
+const cancelledList = vi.hoisted(() => vi.fn());
 
 vi.mock("../mail/email.js", () => ({
   sendVerificationEmail: vi.fn(),
@@ -32,7 +34,16 @@ vi.mock("../judge/attention-mirror.js", () => ({
   deleteAttentionForCalendarEvents: vi.fn(async () => {}),
 }));
 vi.mock("googleapis", () => ({
-  google: { calendar: () => ({ events: { list: eventsList } }) },
+  google: {
+    calendar: () => ({
+      events: {
+        // The cancellation scan (C2b) is a second events.list; it gets its own mock so
+        // every assertion on `eventsList` stays about the sync's own listing.
+        list: (args: { showDeleted?: boolean }) =>
+          args.showDeleted ? (cancelledList(args) ?? { data: { items: [] } }) : eventsList(args),
+      },
+    }),
+  },
 }));
 
 const eventCreate = vi.hoisted(() => vi.fn());
@@ -85,6 +96,7 @@ function lastCreateData(): Record<string, unknown> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  _resetCancelledScanStateForTests();
   eventCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
     id: "ev-1",
     ...data,
@@ -282,11 +294,49 @@ describe("POST /api/calendar/sync — Google request and failure handling (chara
       timeMin: "2026-09-30T05:00:00.000Z",
       timeMax: "2026-10-30T05:00:00.000Z",
       singleEvents: true,
-      showDeleted: true,
       orderBy: "startTime",
       maxResults: 100,
       timeZone: "Asia/Seoul",
     });
+    await app.close();
+  });
+
+  it("also asks Google, in a second call, what was cancelled in that window in the last 7 days (C2b)", async () => {
+    eventsList.mockResolvedValue({ data: { items: [] } });
+    const app = await buildApp();
+    await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
+    expect(cancelledList).toHaveBeenCalledTimes(1);
+    expect(cancelledList).toHaveBeenCalledWith({
+      calendarId: "primary",
+      timeMin: "2026-09-30T05:00:00.000Z",
+      timeMax: "2026-10-30T05:00:00.000Z",
+      updatedMin: "2026-09-23T05:00:00.000Z",
+      singleEvents: true,
+      showDeleted: true,
+      maxResults: 250,
+      fields: "nextPageToken,items(id,status)",
+    });
+    await app.close();
+  });
+
+  it("still answers the sync normally when the cancellation call fails (C2b)", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    eventsList.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "g-1",
+            summary: "Kickoff",
+            start: { dateTime: "2026-10-02T09:00:00+09:00" },
+            end: { dateTime: "2026-10-02T10:00:00+09:00" },
+          },
+        ],
+      },
+    });
+    cancelledList.mockRejectedValue(new Error("quota"));
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/api/calendar/sync", headers });
+    expect(res.json()).toMatchObject({ success: true, synced: 1 });
     await app.close();
   });
 

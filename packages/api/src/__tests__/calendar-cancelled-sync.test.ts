@@ -1,10 +1,12 @@
 /**
  * C2b: an event deleted or cancelled in Google is removed from Klorn on the next
- * sync. Google only reports a deletion when asked (showDeleted), as an event with
- * status "cancelled" that may carry nothing but its id, so the sync reads that
- * flag and removes the matching row of THAT account (and resolves the attention
- * items mirrored from it) in one transaction. A row that is merely absent from
- * the listing is kept: the 100-event cap can truncate the window.
+ * sync. The sync's own listing stays exactly as it was; cancellations come from a
+ * SEPARATE call (session.listCancelledEvents), because cancelled events listed
+ * alongside live ones would spend the 100-event cap and push live events out of
+ * the window. A row that is merely absent from the listing is kept, since the cap
+ * can truncate the window. Removal is the row's whole identity (user, GOOGLE,
+ * source, id) plus its attention items, in one transaction; a failing
+ * cancellation call never fails the sync.
  *
  * The prisma double below filters on the `where` it is given, so scoping mistakes
  * (user, provider, source) change what survives instead of hiding in a call log.
@@ -19,6 +21,7 @@ const h = vi.hoisted(() => {
   const state = { events: [] as Rec[], attention: [] as Rec[] };
   const matches = (row: Rec, where: Rec): boolean =>
     Object.entries(where).every(([key, want]) => {
+      if (key === "OR") return (want as Rec[]).some((clause) => matches(row, clause));
       if (want && typeof want === "object" && "in" in want) {
         return (want as { in: unknown[] }).in.includes(row[key]);
       }
@@ -51,7 +54,7 @@ const h = vi.hoisted(() => {
     calendarEvent: { upsert: vi.fn(async () => ({})) },
     $transaction: vi.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)),
   };
-  return { state, tx, prisma };
+  return { state, tx, prisma, captureError: vi.fn() };
 });
 
 vi.mock("../db.js", () => ({
@@ -65,17 +68,21 @@ vi.mock("../mail/gmail.js", () => ({
   isGoogleAuthError: vi.fn(() => false),
   markLinkedCalendarForReconnect: vi.fn(async () => {}),
 }));
-vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+vi.mock("../sentry.js", () => ({ captureError: h.captureError }));
 
-import type { CalendarSession, ProviderCalendarEvent } from "../pim/calendar-providers/types.js";
-import {
-  syncLinkedCalendarWindow,
-  syncPrimaryCalendarWindow,
-  syncQuery,
-} from "../pim/calendar-sync.js";
+import { _resetCancelledScanStateForTests } from "../pim/calendar-cancellation.js";
+import type {
+  CalendarSession,
+  CancelledEventsResult,
+  ProviderCalendarEvent,
+} from "../pim/calendar-providers/types.js";
+import { syncLinkedCalendarWindow, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
 
 const NOW = new Date("2026-09-30T05:00:00.000Z");
 const ZONE = "Asia/Seoul";
+const MIN = 60 * 1000;
+const DAY = 24 * 60 * MIN;
+const later = (ms: number) => new Date(NOW.getTime() + ms);
 
 function live(
   externalId: string,
@@ -96,33 +103,37 @@ function live(
   };
 }
 
-/** What Google sends for a deleted event: status cancelled and, guaranteed, only the id. */
-function cancelled(externalId: string): ProviderCalendarEvent {
-  return {
-    externalId,
-    summary: null,
-    description: null,
-    location: null,
-    meetingLink: null,
-    start: "",
-    end: "",
-    allDay: true,
-    startTime: null,
-    endTime: null,
-    cancelled: true,
-  };
+interface SessionOptions {
+  live?: ProviderCalendarEvent[];
+  /** What the cancellation call answers, an error it throws, or null for a provider without one. */
+  cancelled?: string[] | CancelledEventsResult | Error | null;
 }
 
-function sessionListing(events: ProviderCalendarEvent[]) {
-  const listEvents = vi.fn(async () => events);
-  const session = { provider: "GOOGLE", listEvents } as unknown as CalendarSession;
-  return { session, listEvents };
+function makeSession(options: SessionOptions = {}) {
+  const { live: liveEvents = [], cancelled = [] } = options;
+  const listEvents = vi.fn(async (..._args: unknown[]) => liveEvents);
+  const listCancelledEvents = vi.fn(async (..._args: unknown[]) => {
+    if (cancelled instanceof Error) throw cancelled;
+    if (Array.isArray(cancelled)) return { externalIds: cancelled, truncated: false };
+    return cancelled ?? { externalIds: [], truncated: false };
+  });
+  const session = {
+    provider: "GOOGLE",
+    listEvents,
+    ...(cancelled === null ? {} : { listCancelledEvents }),
+  } as unknown as CalendarSession;
+  return { session, listEvents, listCancelledEvents };
 }
 
 let nextId = 0;
 function eventRow(
   externalId: string | null,
-  over: { userId?: string; provider?: string; sourceKey?: string } = {},
+  over: {
+    userId?: string;
+    provider?: string;
+    sourceKey?: string;
+    googleId?: string | null;
+  } = {},
 ) {
   nextId += 1;
   const row = {
@@ -131,6 +142,7 @@ function eventRow(
     provider: externalId === null ? "LOCAL" : "GOOGLE",
     sourceKey: "primary",
     externalId,
+    googleId: null as string | null,
     ...over,
   };
   h.state.events.push(row);
@@ -157,23 +169,60 @@ function attentionFor(
 
 const eventIds = () => h.state.events.map((row) => row.id);
 const attentionById = (id: string) => h.state.attention.find((row) => row.id === id);
+const scanArgs = (scan: { mock: { calls: unknown[][] } }, call = 0) =>
+  scan.mock.calls[call]?.[0] as { timeMin: string; timeMax: string; updatedMin: string };
+
+let warn: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
   h.state.events = [];
   h.state.attention = [];
   nextId = 0;
+  _resetCancelledScanStateForTests();
+  warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
-describe("syncQuery", () => {
-  it("asks the provider for cancelled events too, so a deletion can be seen", () => {
-    expect(syncQuery(NOW, ZONE)).toEqual({
+describe("the sync's own listing", () => {
+  it("is unchanged: next 30 days, 100 events, the user's zone, nothing about cancelled events", async () => {
+    const { session, listEvents } = makeSession();
+
+    await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+
+    expect(listEvents).toHaveBeenCalledTimes(1);
+    expect(listEvents.mock.calls[0]?.[0]).toStrictEqual({
       timeMin: "2026-09-30T05:00:00.000Z",
       timeMax: "2026-10-30T05:00:00.000Z",
       maxResults: 100,
       timeZone: ZONE,
-      includeCancelled: true,
     });
+  });
+
+  it("is not affected by more than 100 cancellations: live events are written as before", async () => {
+    const manyCancelled = Array.from({ length: 150 }, (_, i) => `gone-${i}`);
+    const { session, listEvents } = makeSession({
+      live: [live("g-1"), live("g-2")],
+      cancelled: manyCancelled,
+    });
+
+    const written = await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+
+    expect(written).toBe(2);
+    expect(listEvents).toHaveBeenCalledTimes(1);
+    expect(listEvents.mock.calls[0]?.[0]).toMatchObject({ maxResults: 100 });
+    expect(h.prisma.calendarEvent.upsert).toHaveBeenCalledTimes(2);
+  });
+
+  it("writes live events exactly as before (by googleId), counting only them", async () => {
+    const { session } = makeSession({ live: [live("g-1"), live("g-3")], cancelled: ["g-2"] });
+
+    const written = await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+
+    expect(written).toBe(2);
+    const keys = h.prisma.calendarEvent.upsert.mock.calls.map(
+      (c) => (c as unknown as [{ where: { userId_googleId: { googleId: string } } }])[0].where,
+    );
+    expect(keys.map((k) => k.userId_googleId.googleId)).toEqual(["g-1", "g-3"]);
   });
 });
 
@@ -183,7 +232,7 @@ describe("primary sync: events cancelled in Google", () => {
     const kept = eventRow("g-kept");
     const goneItem = attentionFor(gone.id);
     const keptItem = attentionFor(kept.id);
-    const { session } = sessionListing([live("g-kept"), cancelled("g-gone")]);
+    const { session } = makeSession({ live: [live("g-kept")], cancelled: ["g-gone"] });
 
     await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
 
@@ -192,23 +241,10 @@ describe("primary sync: events cancelled in Google", () => {
     expect(attentionById(keptItem.id)).toMatchObject({ status: "OPEN", resolvedAt: null });
   });
 
-  it("does not upsert a cancelled event even when Google still sends its details", async () => {
-    // The organizer's own calendar keeps summary/start/end on a cancelled event.
-    const gone = eventRow("g-gone");
-    const detailed = { ...live("g-gone"), cancelled: true } as ProviderCalendarEvent;
-    const { session } = sessionListing([detailed]);
-
-    const written = await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
-
-    expect(h.prisma.calendarEvent.upsert).not.toHaveBeenCalled();
-    expect(written).toBe(0);
-    expect(eventIds()).not.toContain(gone.id);
-  });
-
   it("keeps an event that is merely absent from the listing (the 100-event cap can truncate)", async () => {
     const absent = eventRow("g-absent");
     const absentItem = attentionFor(absent.id);
-    const { session } = sessionListing([live("g-other")]);
+    const { session } = makeSession({ live: [live("g-other")], cancelled: [] });
 
     await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
 
@@ -217,25 +253,12 @@ describe("primary sync: events cancelled in Google", () => {
     expect(h.prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it("keeps the upsert path as it was: live events are written, cancelled ones are not counted", async () => {
-    const { session } = sessionListing([live("g-1"), cancelled("g-2"), live("g-3")]);
-
-    const written = await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
-
-    expect(written).toBe(2);
-    expect(h.prisma.calendarEvent.upsert).toHaveBeenCalledTimes(2);
-    const keys = h.prisma.calendarEvent.upsert.mock.calls.map(
-      (c) => (c as unknown as [{ where: { userId_googleId: { googleId: string } } }])[0].where,
-    );
-    expect(keys.map((k) => k.userId_googleId.googleId)).toEqual(["g-1", "g-3"]);
-  });
-
   it("never touches a LOCAL row, nor a row Google did not name", async () => {
     const local = eventRow(null);
     const localItem = attentionFor(local.id);
     const outside = eventRow("g-outside-window");
-    // A cancelled event that arrives with no id at all must not match the NULL ids of LOCAL rows.
-    const { session } = sessionListing([cancelled(""), cancelled("g-not-ours")]);
+    // An empty id must not match the NULL ids of LOCAL rows.
+    const { session } = makeSession({ cancelled: ["", "g-not-ours"] });
 
     await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
 
@@ -247,7 +270,7 @@ describe("primary sync: events cancelled in Google", () => {
     const mine = eventRow("shared-invite");
     const theirs = eventRow("shared-invite", { userId: "u2" });
     const theirsItem = attentionFor(theirs.id, { userId: "u2" });
-    const { session } = sessionListing([cancelled("shared-invite")]);
+    const { session } = makeSession({ cancelled: ["shared-invite"] });
 
     await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
 
@@ -258,7 +281,7 @@ describe("primary sync: events cancelled in Google", () => {
 
   it("never touches another provider's row that happens to share the source and id", async () => {
     const other = eventRow("g-gone", { provider: "OUTLOOK" });
-    const { session } = sessionListing([cancelled("g-gone")]);
+    const { session } = makeSession({ cancelled: ["g-gone"] });
 
     await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
 
@@ -268,10 +291,10 @@ describe("primary sync: events cancelled in Google", () => {
   it("removes only the cancelled instance of a recurring event", async () => {
     const monday = eventRow("standup_20261005T000000Z");
     const tuesday = eventRow("standup_20261006T000000Z");
-    const { session } = sessionListing([
-      cancelled("standup_20261005T000000Z"),
-      live("standup_20261006T000000Z"),
-    ]);
+    const { session } = makeSession({
+      live: [live("standup_20261006T000000Z")],
+      cancelled: ["standup_20261005T000000Z"],
+    });
 
     await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
 
@@ -283,7 +306,7 @@ describe("primary sync: events cancelled in Google", () => {
     const gone = eventRow("g-gone");
     const dismissed = attentionFor(gone.id, { status: "DISMISSED" });
     const snoozed = attentionFor(gone.id, { status: "SNOOZED" });
-    const { session } = sessionListing([cancelled("g-gone")]);
+    const { session } = makeSession({ cancelled: ["g-gone"] });
 
     await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
 
@@ -294,7 +317,7 @@ describe("primary sync: events cancelled in Google", () => {
   it("only resolves CALENDAR_EVENT items, even when another source reuses the id", async () => {
     const gone = eventRow("g-gone");
     const foreign = attentionFor(gone.id, { source: "TASK" });
-    const { session } = sessionListing([cancelled("g-gone")]);
+    const { session } = makeSession({ cancelled: ["g-gone"] });
 
     await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
 
@@ -305,7 +328,7 @@ describe("primary sync: events cancelled in Google", () => {
     eventRow("g-1");
     eventRow("g-2");
     eventRow("g-3");
-    const { session } = sessionListing([cancelled("g-1"), cancelled("g-2"), live("g-3")]);
+    const { session } = makeSession({ live: [live("g-3")], cancelled: ["g-1", "g-2"] });
 
     await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
 
@@ -315,21 +338,61 @@ describe("primary sync: events cancelled in Google", () => {
   });
 
   it("is a no-op when the cancelled event has no local row (a repeat sync)", async () => {
-    const { session } = sessionListing([cancelled("g-already-gone")]);
+    const { session } = makeSession({ cancelled: ["g-already-gone"] });
 
     await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
 
     expect(h.tx.attentionItem.updateMany).not.toHaveBeenCalled();
     expect(h.tx.calendarEvent.deleteMany).not.toHaveBeenCalled();
   });
+});
 
-  it("asks the session for cancelled events in the standard sync window", async () => {
-    const { session, listEvents } = sessionListing([]);
+describe("primary rows written by the previous release (externalId NULL)", () => {
+  it("are matched by googleId, and their attention items resolved", async () => {
+    const legacy = eventRow(null, { provider: "GOOGLE", googleId: "g-legacy" });
+    const legacyItem = attentionFor(legacy.id);
+    const { session } = makeSession({ cancelled: ["g-legacy"] });
 
     await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
 
-    expect(listEvents).toHaveBeenCalledWith(syncQuery(NOW, ZONE));
-    expect(listEvents).toHaveBeenCalledWith(expect.objectContaining({ includeCancelled: true }));
+    expect(eventIds()).toEqual([]);
+    expect(attentionById(legacyItem.id)).toMatchObject({ status: "RESOLVED", resolvedAt: NOW });
+  });
+
+  it("are matched by googleId only when externalId is NULL", async () => {
+    const restamped = eventRow("g-other", { googleId: "g-x" });
+    const { session } = makeSession({ cancelled: ["g-x"] });
+
+    await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+
+    expect(eventIds()).toEqual([restamped.id]);
+  });
+
+  it("are another user's own, never removed by my cancellation", async () => {
+    const theirs = eventRow(null, { provider: "GOOGLE", googleId: "g-legacy", userId: "u2" });
+    const { session } = makeSession({ cancelled: ["g-legacy"] });
+
+    await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+
+    expect(eventIds()).toEqual([theirs.id]);
+  });
+
+  it("are the primary's alone: a linked row is never matched by googleId", async () => {
+    const odd = eventRow(null, { provider: "GOOGLE", sourceKey: "acct-work", googleId: "g-x" });
+    const { session } = makeSession({ cancelled: ["g-x"] });
+
+    await syncLinkedCalendarWindow(session, "u1", "acct-work", ZONE, NOW);
+
+    expect(eventIds()).toEqual([odd.id]);
+  });
+
+  it("are never matched by a linked account's cancellation", async () => {
+    const legacy = eventRow(null, { provider: "GOOGLE", googleId: "g-legacy" });
+    const { session } = makeSession({ cancelled: ["g-legacy"] });
+
+    await syncLinkedCalendarWindow(session, "u1", "acct-work", ZONE, NOW);
+
+    expect(eventIds()).toEqual([legacy.id]);
   });
 });
 
@@ -341,7 +404,7 @@ describe("linked sync: events cancelled in a linked Google calendar", () => {
     const workItem = attentionFor(work.id);
     const schoolItem = attentionFor(school.id);
     const primaryItem = attentionFor(primary.id);
-    const { session } = sessionListing([cancelled("g-shared")]);
+    const { session } = makeSession({ cancelled: ["g-shared"] });
 
     await syncLinkedCalendarWindow(session, "u1", "acct-work", ZONE, NOW);
 
@@ -354,7 +417,7 @@ describe("linked sync: events cancelled in a linked Google calendar", () => {
   it("a primary sync never removes a linked account's row", async () => {
     const linked = eventRow("g-shared", { sourceKey: "acct-work" });
     const primary = eventRow("g-shared", { sourceKey: "primary" });
-    const { session } = sessionListing([cancelled("g-shared")]);
+    const { session } = makeSession({ cancelled: ["g-shared"] });
 
     await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
 
@@ -362,14 +425,151 @@ describe("linked sync: events cancelled in a linked Google calendar", () => {
     expect(eventIds()).not.toContain(primary.id);
   });
 
-  it("does not upsert a cancelled event and keeps an absent one", async () => {
+  it("writes live events as before and keeps an absent one", async () => {
     const absent = eventRow("g-absent", { sourceKey: "acct-work" });
-    const { session } = sessionListing([cancelled("g-gone"), live("g-live")]);
+    const { session } = makeSession({ live: [live("g-live")], cancelled: ["g-gone"] });
 
     const written = await syncLinkedCalendarWindow(session, "u1", "acct-work", ZONE, NOW);
 
     expect(written).toBe(1);
     expect(h.prisma.calendarEvent.upsert).toHaveBeenCalledTimes(1);
     expect(eventIds()).toEqual([absent.id]);
+  });
+});
+
+describe("the cancellation call's window", () => {
+  it("covers the sync window and, on a first scan, reaches back 7 days", async () => {
+    const { session, listCancelledEvents } = makeSession();
+
+    await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+
+    expect(listCancelledEvents).toHaveBeenCalledTimes(1);
+    expect(scanArgs(listCancelledEvents)).toStrictEqual({
+      timeMin: "2026-09-30T05:00:00.000Z",
+      timeMax: "2026-10-30T05:00:00.000Z",
+      updatedMin: new Date(NOW.getTime() - 7 * DAY).toISOString(),
+    });
+  });
+
+  it("after a successful scan, reaches back only to that scan minus a 30 minute margin", async () => {
+    const { session, listCancelledEvents } = makeSession();
+
+    await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+    await syncPrimaryCalendarWindow(session, "u1", ZONE, later(15 * MIN));
+
+    expect(scanArgs(listCancelledEvents, 1).updatedMin).toBe(
+      new Date(NOW.getTime() - 30 * MIN).toISOString(),
+    );
+  });
+
+  it("never reaches back further than 7 days, however long ago the last scan was", async () => {
+    const { session, listCancelledEvents } = makeSession();
+
+    await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+    const afterGap = later(10 * DAY);
+    await syncPrimaryCalendarWindow(session, "u1", ZONE, afterGap);
+
+    expect(scanArgs(listCancelledEvents, 1).updatedMin).toBe(
+      new Date(afterGap.getTime() - 7 * DAY).toISOString(),
+    );
+  });
+
+  it("does not move the last-scan time when the scan fails", async () => {
+    const ok = makeSession();
+    const broken = makeSession({ cancelled: new Error("quota") });
+
+    await syncPrimaryCalendarWindow(ok.session, "u1", ZONE, NOW);
+    await syncPrimaryCalendarWindow(broken.session, "u1", ZONE, later(15 * MIN));
+    await syncPrimaryCalendarWindow(ok.session, "u1", ZONE, later(30 * MIN));
+
+    expect(scanArgs(ok.listCancelledEvents, 1).updatedMin).toBe(
+      new Date(NOW.getTime() - 30 * MIN).toISOString(),
+    );
+  });
+
+  it("does not move the last-scan time when the scan was truncated", async () => {
+    const cut = makeSession({ cancelled: { externalIds: ["a"], truncated: true } });
+    const ok = makeSession();
+
+    await syncPrimaryCalendarWindow(cut.session, "u1", ZONE, NOW);
+    await syncPrimaryCalendarWindow(ok.session, "u1", ZONE, later(15 * MIN));
+
+    expect(scanArgs(ok.listCancelledEvents).updatedMin).toBe(
+      new Date(later(15 * MIN).getTime() - 7 * DAY).toISOString(),
+    );
+  });
+
+  it("keeps each account's last scan apart", async () => {
+    const primary = makeSession();
+    const work = makeSession();
+
+    await syncPrimaryCalendarWindow(primary.session, "u1", ZONE, NOW);
+    await syncLinkedCalendarWindow(work.session, "u1", "acct-work", ZONE, later(15 * MIN));
+
+    expect(scanArgs(work.listCancelledEvents).updatedMin).toBe(
+      new Date(later(15 * MIN).getTime() - 7 * DAY).toISOString(),
+    );
+  });
+});
+
+describe("a failing cancellation step never fails the sync", () => {
+  it("still upserts and answers when the cancellation call throws, logging once and never to Sentry", async () => {
+    const { session } = makeSession({ live: [live("g-1")], cancelled: new Error("quota") });
+
+    const written = await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+    const writtenAgain = await syncPrimaryCalendarWindow(session, "u1", ZONE, later(15 * MIN));
+
+    expect([written, writtenAgain]).toEqual([1, 1]);
+    expect(h.prisma.calendarEvent.upsert).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain("quota");
+    expect(h.captureError).not.toHaveBeenCalled();
+  });
+
+  it("logs again after a scan succeeded and a later one fails", async () => {
+    const broken = makeSession({ cancelled: new Error("quota") });
+    const ok = makeSession();
+
+    await syncPrimaryCalendarWindow(broken.session, "u1", ZONE, NOW);
+    await syncPrimaryCalendarWindow(ok.session, "u1", ZONE, later(15 * MIN));
+    await syncPrimaryCalendarWindow(broken.session, "u1", ZONE, later(30 * MIN));
+
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
+  it("still answers when the removal transaction fails", async () => {
+    eventRow("g-gone");
+    h.prisma.$transaction.mockRejectedValueOnce(new Error("db down"));
+    const { session } = makeSession({ live: [live("g-1")], cancelled: ["g-gone"] });
+
+    const written = await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+
+    expect(written).toBe(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(h.captureError).not.toHaveBeenCalled();
+  });
+
+  it("syncs a provider that has no cancellation call exactly as before", async () => {
+    const { session } = makeSession({ live: [live("g-1")], cancelled: null });
+
+    const written = await syncPrimaryCalendarWindow(session, "u1", ZONE, NOW);
+
+    expect(written).toBe(1);
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe("a truncated cancellation scan", () => {
+  it("warns once, and still removes the rows it did find", async () => {
+    const gone = eventRow("g-gone");
+    const cut = makeSession({ cancelled: { externalIds: ["g-gone"], truncated: true } });
+
+    await syncPrimaryCalendarWindow(cut.session, "u1", ZONE, NOW);
+    await syncPrimaryCalendarWindow(cut.session, "u1", ZONE, later(15 * MIN));
+
+    expect(eventIds()).not.toContain(gone.id);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain("truncated");
+    expect(h.captureError).not.toHaveBeenCalled();
   });
 });

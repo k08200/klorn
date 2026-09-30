@@ -9,8 +9,10 @@ import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
+import { _resetCancelledScanStateForTests } from "../pim/calendar-cancellation.js";
 
 const eventsList = vi.hoisted(() => vi.fn());
+const cancelledList = vi.hoisted(() => vi.fn());
 
 vi.mock("../mail/gmail.js", () => ({
   getAuthUrl: vi.fn(() => "https://example.com/oauth"),
@@ -45,7 +47,14 @@ vi.mock("../crypto-tokens.js", () => ({
 }));
 vi.mock("googleapis", () => ({
   google: {
-    calendar: () => ({ events: { list: eventsList } }),
+    calendar: () => ({
+      events: {
+        // The cancellation scan (C2b) is a second events.list; it gets its own mock so
+        // every assertion on `eventsList` stays about the sync's own listing.
+        list: (args: { showDeleted?: boolean }) =>
+          args.showDeleted ? (cancelledList(args) ?? { data: { items: [] } }) : eventsList(args),
+      },
+    }),
     gmail: () => ({ users: { messages: { list: vi.fn(async () => ({ data: {} })) } } }),
   },
 }));
@@ -88,6 +97,7 @@ async function buildApp() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  _resetCancelledScanStateForTests();
 });
 
 describe("GET /api/auth/google/callback — __link_calendar__", () => {
@@ -199,10 +209,25 @@ describe("POST /api/auth/init-sync — Google request (characterisation, C2)", (
       timeMin: "2026-09-30T05:00:00.000Z",
       timeMax: "2026-10-30T05:00:00.000Z",
       singleEvents: true,
-      showDeleted: true,
       orderBy: "startTime",
       maxResults: 100,
       timeZone: "Asia/Seoul",
+    });
+  });
+
+  it("also asks Google, in a second call, what was cancelled in that window in the last 7 days (C2b)", async () => {
+    eventsList.mockResolvedValue({ data: { items: [] } });
+    await initSync();
+    expect(cancelledList).toHaveBeenCalledTimes(1);
+    expect(cancelledList).toHaveBeenCalledWith({
+      calendarId: "primary",
+      timeMin: "2026-09-30T05:00:00.000Z",
+      timeMax: "2026-10-30T05:00:00.000Z",
+      updatedMin: "2026-09-23T05:00:00.000Z",
+      singleEvents: true,
+      showDeleted: true,
+      maxResults: 250,
+      fields: "nextPageToken,items(id,status)",
     });
   });
 

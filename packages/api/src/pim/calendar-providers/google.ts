@@ -29,6 +29,8 @@ import type {
   CalendarProviderActions,
   CalendarSession,
   CalendarWindow,
+  CancelledEventsQuery,
+  CancelledEventsResult,
   PersonFreeBusy,
   ProviderCalendarEvent,
 } from "./types.js";
@@ -38,6 +40,10 @@ type GoogleAuth = InstanceType<typeof google.auth.OAuth2>;
 const PRIMARY_CALENDAR_ID = "primary";
 /** One `calendarList.list` page is enough: a user writes to far fewer than 250 calendars. */
 const CALENDAR_LIST_PAGE_SIZE = 250;
+/** Cancellation scan: events per page (Google's own default) ... */
+export const CANCELLED_SCAN_PAGE_SIZE = 250;
+/** ... and pages per scan, so at most 1000 events are read per account per sync. */
+export const CANCELLED_SCAN_MAX_PAGES = 4;
 
 /**
  * The start/end Google wants for an event. Timed events carry the user's
@@ -91,8 +97,6 @@ function toProviderEvent(
     allDay: !item.start?.dateTime,
     startTime: times?.startTime ?? null,
     endTime: times?.endTime ?? null,
-    // Conditional, so a reader's events keep exactly the shape they always had.
-    ...(item.status === "cancelled" ? { cancelled: true } : {}),
   };
 }
 
@@ -151,16 +155,6 @@ function toPersonFreeBusy(
   return { email, blocks, anyBusy: (cal.busy?.length ?? 0) > 0 };
 }
 
-/**
- * events.list, optionally with cancelled events (C2b). Google semantics
- * (developers.google.com/workspace/calendar/api/v3/reference/events/list and
- * .../reference/events, "status"): a deleted event is returned only when
- * `showDeleted` is true, with status "cancelled"; with `showDeleted` and
- * `singleEvents` both true, cancelled INSTANCES of a recurring series come back
- * as single events (id `<seriesId>_<start>`, the same id their synced row holds)
- * but never the recurring master. A cancelled event is only guaranteed to carry
- * its id, so `toProviderEvent` flags it and the sync acts on the flag, not the times.
- */
 async function listEventsVia(
   api: calendar_v3.Calendar,
   query: CalendarListQuery,
@@ -170,12 +164,56 @@ async function listEventsVia(
     timeMin: query.timeMin,
     ...(query.timeMax ? { timeMax: query.timeMax } : {}),
     singleEvents: true,
-    ...(query.includeCancelled ? { showDeleted: true } : {}),
     orderBy: "startTime",
     maxResults: query.maxResults,
     ...(query.timeZone ? { timeZone: query.timeZone } : {}),
   });
   return (res.data.items || []).map((item) => toProviderEvent(item, query.timeZone));
+}
+
+/**
+ * The ids of events deleted or cancelled since `query.updatedMin` (C2b). This is
+ * its own events.list, never the sync listing with showDeleted added: cancelled
+ * events count toward that call's maxResults and would push live events out of
+ * the window. Google semantics
+ * (developers.google.com/workspace/calendar/api/v3/reference/events/list):
+ *   - `showDeleted: true` includes deleted events (status "cancelled"); with
+ *     `singleEvents` also true a cancelled INSTANCE of a recurring series comes
+ *     back as its own event (id `<seriesId>_<start>`, the id its synced row holds),
+ *     never the recurring master.
+ *   - `updatedMin` bounds the listing to events modified since then, and "entries
+ *     deleted since this time will always be included regardless of showDeleted".
+ * The events resource says a cancelled event is only guaranteed to carry its id,
+ * so only `id` and `status` are read, and nothing else is required of an item.
+ * The window (timeMin/timeMax) keeps an unbounded recurring series from being
+ * expanded forever. Paged up to CANCELLED_SCAN_MAX_PAGES; more than that is
+ * reported as truncated, not followed.
+ */
+async function listCancelledVia(
+  api: calendar_v3.Calendar,
+  query: CancelledEventsQuery,
+): Promise<CancelledEventsResult> {
+  const externalIds: string[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < CANCELLED_SCAN_MAX_PAGES; page += 1) {
+    const res = await api.events.list({
+      calendarId: PRIMARY_CALENDAR_ID,
+      timeMin: query.timeMin,
+      timeMax: query.timeMax,
+      updatedMin: query.updatedMin,
+      singleEvents: true,
+      showDeleted: true,
+      maxResults: CANCELLED_SCAN_PAGE_SIZE,
+      fields: "nextPageToken,items(id,status)",
+      ...(pageToken ? { pageToken } : {}),
+    });
+    for (const item of res.data.items ?? []) {
+      if (item.status === "cancelled" && item.id) externalIds.push(item.id);
+    }
+    pageToken = res.data.nextPageToken ?? undefined;
+    if (!pageToken) return { externalIds, truncated: false };
+  }
+  return { externalIds, truncated: true };
 }
 
 async function createEventVia(
@@ -268,6 +306,7 @@ export function googleSessionFromClient(auth: GoogleAuth): CalendarSession {
   return {
     provider: "GOOGLE",
     listEvents: (query) => listEventsVia(api(), query),
+    listCancelledEvents: (query) => listCancelledVia(api(), query),
     createEvent: (input) => createEventVia(api(), input),
     updateEvent: (eventId, patch) => updateEventVia(api(), eventId, patch),
     deleteEvent: async (eventId) => {

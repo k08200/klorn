@@ -58,12 +58,23 @@ export interface CalendarListQuery {
    * do not need a zone.
    */
   readonly timeZone?: string;
-  /**
-   * Also return events the provider reports as deleted or cancelled, flagged
-   * `cancelled`. Only the row sync asks (C2b), to remove what was deleted
-   * upstream; every reader leaves it unset and never sees a cancelled event.
-   */
-  readonly includeCancelled?: boolean;
+}
+
+/**
+ * What the cancellation scan asks (C2b): events deleted or cancelled since
+ * `updatedMin`, inside the sync window. It is a call of its own so that cancelled
+ * events never spend the sync listing's `maxResults` and push live events out.
+ */
+export interface CancelledEventsQuery extends CalendarWindow {
+  /** RFC 3339 instant: only events changed at or after it are considered. */
+  readonly updatedMin: string;
+}
+
+export interface CancelledEventsResult {
+  /** The ids (in the source calendar) of the events the provider reports cancelled. */
+  readonly externalIds: readonly string[];
+  /** True when the provider had more pages than the scan's cap: some cancellations were not seen. */
+  readonly truncated: boolean;
 }
 
 /** One event of a provider calendar, as the provider reported it. */
@@ -81,12 +92,6 @@ export interface ProviderCalendarEvent {
   /** Instants; null unless the query named a `timeZone`, or when start/end is missing. */
   readonly startTime: Date | null;
   readonly endTime: Date | null;
-  /**
-   * True when the provider marks the event deleted or cancelled. Such an event
-   * may carry nothing but its id (Google guarantees no more), so read this flag
-   * before the times. Only ever set on a query with `includeCancelled`.
-   */
-  readonly cancelled?: boolean;
 }
 
 export interface CalendarCreateInput {
@@ -136,6 +141,13 @@ export interface PersonFreeBusy {
 export interface CalendarSession {
   readonly provider: CalendarProviderName;
   listEvents(query: CalendarListQuery): Promise<ProviderCalendarEvent[]>;
+  /**
+   * The ids of events deleted or cancelled since `query.updatedMin` (C2b), for the
+   * row sync to remove. Optional: a provider without it simply never removes rows
+   * upstream, as before. THROWS on a hard failure like every other method; the
+   * sync treats that as "no cancellations this time", never as a failed sync.
+   */
+  listCancelledEvents?(query: CancelledEventsQuery): Promise<CancelledEventsResult>;
   createEvent(input: CalendarCreateInput): Promise<CalendarEventWritten>;
   updateEvent(eventId: string, patch: CalendarEventPatch): Promise<CalendarEventWritten>;
   deleteEvent(eventId: string): Promise<void>;

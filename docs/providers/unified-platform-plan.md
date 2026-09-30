@@ -1577,22 +1577,31 @@ needs FA-9 and the admin guidance from F0.
     the iCalUID is the reliable key and needs a column. Events deleted or
     cancelled in Google are removed on the next sync (C2b, next bullet); the
     Outlook and CalDAV connectors must do the same.
-  - Cancelled events (C2b). Both Google syncs, the primary and every linked
-    account, list with `showDeleted` and act on Google's `status: "cancelled"`:
-    the row matching (user, GOOGLE, `sourceKey`, `externalId`) is deleted and its
-    open or snoozed attention items are resolved, in one transaction per sync
-    (`removeCancelledGoogleEventRows`). A row merely missing from the listing is
-    kept, because the 100-event cap can truncate the window. With `showDeleted`
-    and `singleEvents` both true Google returns cancelled instances of a
-    recurring event, never the master, so one cancelled instance removes only its
-    own row. A cancelled event is only guaranteed to carry its id, so the sync
-    reads the flag before the times. Only the sync asks (`includeCancelled` on the
-    list query), so `list_events` never sees a cancelled event, and the readers
-    of rows (the briefing, conflict checks) stop seeing them once the row is
-    gone. Known cost: cancelled events count against `maxResults`, so a
-    window with many of them can push live events past the cap of 100. Source:
+  - Cancelled events (C2b). After the upsert, both Google syncs (the primary and
+    every linked account) ask Google which events were cancelled, in a SEPARATE
+    `events.list` (`CalendarSession.listCancelledEvents`): the sync's own listing
+    is unchanged, because with `showDeleted` on it cancelled events would count
+    toward `maxResults: 100` and push live events out of the window. The scan
+    sends `showDeleted: true`, `singleEvents: true`, the sync window and
+    `updatedMin` = the later of (now - 7 days) and (this account's last complete
+    scan - 30 minutes); the last scan time is per process, so a restart only
+    widens the first scan back to 7 days. `updatedMin` bounds the listing to
+    events changed since then and "entries deleted since this time will always be
+    included regardless of showDeleted". It pages up to 4 pages of 250 and warns
+    once on truncation (the scan time then does not advance). Only items with
+    `status: "cancelled"` count and nothing but their `id` is needed, which is all
+    Google guarantees for a deleted event; with `singleEvents` a cancelled
+    instance of a recurring event comes back as its own id, never the master, so
+    it removes only its own row. The row matching (user, GOOGLE, `sourceKey`,
+    `externalId`) is deleted and its open or snoozed attention items are resolved
+    in one transaction per scan (`removeCancelledGoogleEventRows`); a primary row
+    the previous release wrote with no `externalId` is matched by `googleId`. A
+    row merely missing from a listing is never removed. A failing scan never fails
+    the sync: one `console.warn` per account until it recovers, nothing to Sentry.
+    Known limit: a cancellation older than the lookback that a scan never saw
+    (the account was not syncing for over 7 days) is not removed. Source:
     developers.google.com/workspace/calendar/api/v3/reference/events/list
-    (`showDeleted`) and .../reference/events (`status`).
+    (`showDeleted`, `updatedMin`) and .../reference/events (`status`).
   - Migration locks, measured size and runbook. `ALTER TABLE "CalendarEvent" ADD
     COLUMN` takes ACCESS EXCLUSIVE on the table and, because Prisma wraps the
     migration in one transaction, holds it until commit: reads of CalendarEvent
@@ -1725,7 +1734,8 @@ does not wait for them.
     before the flip, inherited from the sync, not new: (1) a row is not removed
     when its event is deleted or cancelled upstream, except for Google, where C2b
     (C2, above) removes it on the next sync; the Outlook and CalDAV connectors must
-    do the same. Until then, and for a connector without it, `list_events` can
+    do the same (`listCancelledEvents`, a call separate from the sync listing, so
+    deletions never spend its cap). Until then, and for a connector without it, `list_events` can
     still list such an event until it ends, and a booking that overlaps it is
     refused by the conflict check (free/busy cannot override a row conflict); the
     Calendar page and the desktop app already show those rows today. (2) A row
