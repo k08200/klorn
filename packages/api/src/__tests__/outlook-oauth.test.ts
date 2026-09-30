@@ -133,6 +133,17 @@ describe("refreshOutlookTokens", () => {
 });
 
 describe("fetchOutlookAccountEmail", () => {
+  it("never follows a redirect: the bearer token goes only where it was sent", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ mail: "me@contoso.com" }), { status: 200 }),
+    );
+
+    await mod.fetchOutlookAccountEmail("at");
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.redirect).toBe("error");
+  });
+
   it("prefers mail, falls back to userPrincipalName (personal accounts)", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,

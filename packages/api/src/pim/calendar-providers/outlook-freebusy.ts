@@ -12,7 +12,12 @@
  *
  * A schedule item counts as busy unless Graph says `free` or `workingElsewhere`
  * (the two values its own availabilityView maps to 0), so `busy`, `tentative`,
- * `oof` and an `unknown` all block the slot: a check errs toward a conflict.
+ * `oof` and an `unknown` all block the slot: a check errs toward a conflict. So
+ * does a busy item whose times cannot be read: it blocks the whole window, because
+ * dropping it would answer "free" for time that may be taken.
+ *
+ * Only the account's DEFAULT calendar is read (`/me/calendarView` and
+ * `/me/calendar/getSchedule`); secondary and shared calendars are not.
  */
 
 import type { BusyConflict, ConflictSummary } from "../../google-calendar-time.js";
@@ -31,6 +36,29 @@ const BUSY_WINDOW_MAX_EVENTS = 250;
 const NOT_BUSY_STATUSES: ReadonlySet<string> = new Set(["free", "workingElsewhere"]);
 /** 4xx answers that are about the request or the account type, not about the credentials or load. */
 const NOT_FALLBACK_STATUSES: ReadonlySet<number> = new Set([401, 408, 429]);
+const MAX_LOGGED_CODE_LENGTH = 64;
+
+/** Fallback reasons already logged: one line per distinct answer per process, not one per check. */
+const loggedFallbackReasons = new Set<string>();
+
+export function _resetScheduleFallbackLogForTests(): void {
+  loggedFallbackReasons.clear();
+}
+
+/** Says why getSchedule was not used, by status and Graph's short code only (never a body or an address). */
+function logScheduleFallback(reason: string): void {
+  if (loggedFallbackReasons.has(reason)) return;
+  loggedFallbackReasons.add(reason);
+  console.warn(`[OUTLOOK-CAL] getSchedule unavailable (${reason}); using the calendar view`);
+}
+
+function scheduleErrorReason(info: GraphScheduleInformation | undefined): string {
+  if (!info) return "no schedule returned";
+  const code = (info.error as { responseCode?: unknown } | undefined)?.responseCode;
+  return typeof code === "string" && code.length <= MAX_LOGGED_CODE_LENGTH
+    ? `schedule error ${code}`
+    : "schedule error";
+}
 
 interface GraphScheduleItem {
   readonly status?: string | null;
@@ -75,14 +103,36 @@ async function getSchedule(
   return body.value ?? [];
 }
 
-function busyBlocksOf(info: GraphScheduleInformation): BusyConflict[] {
-  return (info.scheduleItems ?? []).flatMap((item) => {
-    const start = isoOf(item.start);
-    const end = isoOf(item.end);
-    return isBusy(item.status) && start && end
-      ? [{ start, end, calendar: PRIMARY_CALENDAR_LABEL }]
-      : [];
-  });
+/** An item of either source reduced to what a busy check needs. */
+interface TimedItem {
+  readonly busy: boolean;
+  readonly start: string | null;
+  readonly end: string | null;
+}
+
+/**
+ * Busy blocks from items: the readable ones as they are, and, when any busy item
+ * has times that cannot be read, one block over the whole window (a conflict is
+ * safer than a false "free").
+ */
+function busyBlocksFrom(items: readonly TimedItem[], window: CalendarWindow): BusyConflict[] {
+  const busy = items.filter((item) => item.busy);
+  const readable = busy.flatMap((item) =>
+    item.start && item.end
+      ? [{ start: item.start, end: item.end, calendar: PRIMARY_CALENDAR_LABEL }]
+      : [],
+  );
+  const hasUnreadable = busy.some((item) => !item.start || !item.end);
+  return hasUnreadable
+    ? [
+        ...readable,
+        { start: window.timeMin, end: window.timeMax, calendar: PRIMARY_CALENDAR_LABEL },
+      ]
+    : readable;
+}
+
+function scheduleItem(item: GraphScheduleItem): TimedItem {
+  return { busy: isBusy(item.status), start: isoOf(item.start), end: isoOf(item.end) };
 }
 
 function windowEvents(token: string, window: CalendarWindow): Promise<GraphEvent[]> {
@@ -99,13 +149,15 @@ async function busyBlocksFromCalendarView(
   token: string,
   window: CalendarWindow,
 ): Promise<BusyConflict[]> {
-  return (await windowEvents(token, window)).flatMap((event) => {
-    const start = isoOf(event.start);
-    const end = isoOf(event.end);
-    return isBusy(event.showAs) && start && end
-      ? [{ start, end, calendar: PRIMARY_CALENDAR_LABEL }]
-      : [];
-  });
+  const events = await windowEvents(token, window);
+  return busyBlocksFrom(
+    events.map((event) => ({
+      busy: isBusy(event.showAs),
+      start: isoOf(event.start),
+      end: isoOf(event.end),
+    })),
+    window,
+  );
 }
 
 function isScheduleUnsupported(err: unknown): boolean {
@@ -130,9 +182,13 @@ export async function busyBlocksVia(
 ): Promise<BusyConflict[]> {
   try {
     const [own] = await getSchedule(token, [accountEmail], window);
-    if (own && !own.error) return busyBlocksOf(own);
+    if (own && !own.error)
+      return busyBlocksFrom((own.scheduleItems ?? []).map(scheduleItem), window);
+    logScheduleFallback(scheduleErrorReason(own));
   } catch (err) {
     if (!isScheduleUnsupported(err)) throw err;
+    const { status, graphCode } = err as GraphRequestError;
+    logScheduleFallback(`http ${status}${graphCode ? ` ${graphCode}` : ""}`);
   }
   return busyBlocksFromCalendarView(token, window);
 }
@@ -143,10 +199,19 @@ export async function primaryBusyVia(
   window: CalendarWindow,
 ): Promise<ConflictSummary[]> {
   return (await windowEvents(token, window)).flatMap((event) => {
+    if (event.isAllDay === true || !isBusy(event.showAs)) return [];
     const start = isoOf(event.start);
     const end = isoOf(event.end);
-    if (event.isAllDay === true || !isBusy(event.showAs) || !start || !end) return [];
-    return [{ id: event.id, summary: event.subject || "(No title)", start, end }];
+    // Times that cannot be read still block: the whole window, never a false "free".
+    const readable = start !== null && end !== null;
+    return [
+      {
+        id: event.id,
+        summary: event.subject || "(No title)",
+        start: readable ? start : window.timeMin,
+        end: readable ? end : window.timeMax,
+      },
+    ];
   });
 }
 

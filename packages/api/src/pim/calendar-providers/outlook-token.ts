@@ -1,12 +1,14 @@
 /**
- * Token lifecycle of an OUTLOOK LinkedCalendarAccount (step C4): decrypt, refresh
- * when the access token is about to lapse, persist Microsoft's ROTATED refresh
- * token, and report a dead grant in the shape the shared failure policy
- * (pim/linked-calendar-failure.ts) recognises.
+ * Token lifecycle of an OUTLOOK LinkedCalendarAccount (step C4 of
+ * docs/providers/unified-platform-plan.md): decrypt, refresh when the access token
+ * is about to lapse, persist Microsoft's ROTATED refresh token, and report a dead
+ * grant in the shape the shared failure policy (pim/linked-calendar-failure.ts)
+ * recognises.
  *
  * It mirrors mail/outlook-token.ts over the calendar table. That module is tied
- * to LinkedInboxAccount (its writes and its reconnect flag), so this is a sibling
- * rather than a parameterisation of it; unifying the two is a follow-up.
+ * to LinkedInboxAccount (its reconnect flag), so this is a sibling; the one rule
+ * that is identical, what a refreshed token pair is saved as, is shared
+ * (mail/outlook-token-update.ts).
  *
  * The refresh is LAZY. `connect` only decrypts, and the refresh happens on the
  * first request, so a revoked grant rejects inside the caller's own try/catch and
@@ -16,15 +18,11 @@
  */
 
 import type { LinkedCalendarAccount } from "@prisma/client";
-import {
-  decryptOptional,
-  decryptToken,
-  encryptOptional,
-  encryptToken,
-} from "../../crypto-tokens.js";
+import { decryptOptional, decryptToken } from "../../crypto-tokens.js";
 import { prisma } from "../../db.js";
 import { markLinkedCalendarForReconnect } from "../../mail/gmail.js";
 import { type OutlookTokens, refreshOutlookTokens } from "../../mail/outlook-oauth.js";
+import { refreshedTokenUpdate } from "../../mail/outlook-token-update.js";
 import { captureError } from "../../sentry.js";
 
 /**
@@ -36,6 +34,15 @@ const EXPIRY_SLACK_MS = 5 * 60_000;
 export interface OutlookCalendarTokenSource {
   /** A usable bearer token, refreshed at most once per source. Rejects when the account needs a re-link. */
   accessToken(): Promise<string>;
+  /**
+   * Graph answered 401 to `failedToken`. A token that still looked fresh can be
+   * dead (revoked, or issued before a password change), so the account is given
+   * ONE forced refresh before it is declared revoked: answers the token to retry
+   * with, or null when a refresh cannot help (the token in use already came from
+   * one, so the 401 is real). Rejects in the revoked-grant shape when the refresh
+   * is refused or there is nothing to refresh with.
+   */
+  renewAfterUnauthorized(failedToken: string): Promise<string | null>;
 }
 
 interface StoredTokens {
@@ -43,7 +50,7 @@ interface StoredTokens {
   readonly refreshToken: string | null;
 }
 
-/** An OAuth error in the shape isRevokedGoogleGrantError matches (code and message prefix). */
+/** An OAuth error in the shape isRevokedGrantError matches (code and message prefix). */
 function oauthError(code: string, detail: string): Error {
   return Object.assign(new Error(`${code}: ${detail}`), { code });
 }
@@ -58,18 +65,31 @@ function flagForReconnect(userId: string, linkedAccountId: string): void {
   });
 }
 
-/** The stored ciphers in the clear, or null (and flagged for reconnect) when they are unusable. */
+/**
+ * The stored ciphers in the clear, or null (and flagged for reconnect) when they
+ * are unusable. Like the mail path, a rotten REFRESH cipher alone does not discard
+ * a still-valid access token: the sync goes on with it, and the refresh that is
+ * then needed surfaces as a revoked grant once the access token runs out.
+ */
 function readStoredTokens(userId: string, row: LinkedCalendarAccount): StoredTokens | null {
+  let accessToken = "";
   try {
-    const accessToken = row.accessToken ? decryptToken(row.accessToken) : "";
-    const refreshToken = decryptOptional(row.refreshToken);
-    if (accessToken || refreshToken) return { accessToken, refreshToken };
-    console.warn(
-      `[OUTLOOK-CAL] Linked calendar ${row.id} has empty tokens — flagging for reconnect`,
-    );
+    accessToken = row.accessToken ? decryptToken(row.accessToken) : "";
   } catch {
     console.warn(`[OUTLOOK-CAL] Skipping linked calendar ${row.id} — token decrypt failed`);
+    flagForReconnect(userId, row.id);
+    return null;
   }
+  let refreshToken: string | null = null;
+  try {
+    refreshToken = decryptOptional(row.refreshToken);
+  } catch {
+    console.warn(`[OUTLOOK-CAL] Linked calendar ${row.id} has an undecryptable refresh token`);
+  }
+  if (accessToken || refreshToken) return { accessToken, refreshToken };
+  console.warn(
+    `[OUTLOOK-CAL] Linked calendar ${row.id} has no usable tokens — flagging for reconnect`,
+  );
   flagForReconnect(userId, row.id);
   return null;
 }
@@ -79,34 +99,20 @@ function hasTimeLeft(expiresAt: Date | null): boolean {
 }
 
 /**
- * Save a refreshed token pair. Microsoft rotates the refresh token, so a rotation
- * is written unconditionally (the previous one is already dead at Microsoft); an
- * access-only refresh only replaces an older token, never a newer one a
- * concurrent tick stored. A failed save must not lose the tick: the new token is
- * valid in memory, so the failure is reported and the sync goes on.
+ * Save a refreshed token pair (the write rule is shared with the mail path, see
+ * mail/outlook-token-update.ts). A failed save must not lose the tick: the new
+ * token is valid in memory, so the failure is reported and the sync goes on.
  */
 async function persistRefreshed(
   userId: string,
   linkedAccountId: string,
   refreshed: OutlookTokens,
 ): Promise<void> {
-  const rotated = Boolean(refreshed.refreshToken);
   try {
+    const update = refreshedTokenUpdate(refreshed);
     await prisma.linkedCalendarAccount.updateMany({
-      where: {
-        id: linkedAccountId,
-        userId,
-        ...(rotated || !refreshed.expiresAt
-          ? {}
-          : { OR: [{ expiresAt: null }, { expiresAt: { lt: refreshed.expiresAt } }] }),
-      },
-      data: {
-        accessToken: encryptToken(refreshed.accessToken),
-        ...(rotated ? { refreshToken: encryptOptional(refreshed.refreshToken) } : {}),
-        expiresAt: refreshed.expiresAt,
-        // A token that refreshed is healthy again; clear a stale reconnect prompt.
-        needsReconnect: false,
-      },
+      where: { id: linkedAccountId, userId, ...update.where },
+      data: update.data,
     });
   } catch (err) {
     console.warn(
@@ -120,14 +126,14 @@ async function persistRefreshed(
   }
 }
 
-async function resolveAccessToken(
+/** One refresh with the stored refresh token, saved; rejects in the revoked-grant shape on a refusal. */
+async function refreshAccessToken(
   userId: string,
   row: LinkedCalendarAccount,
   stored: StoredTokens,
 ): Promise<string> {
-  if (stored.accessToken && hasTimeLeft(row.expiresAt)) return stored.accessToken;
   if (!stored.refreshToken) {
-    // Expired with nothing to refresh it: only the user can fix it.
+    // Nothing to refresh with: only the user can fix it.
     throw oauthError("invalid_grant", "no refresh token is stored for this account");
   }
   // The CALENDAR scope set: a refresh asked for the inbox scopes would mint a
@@ -148,13 +154,35 @@ export function createOutlookCalendarTokenSource(
 ): OutlookCalendarTokenSource | null {
   const stored = readStoredTokens(userId, row);
   if (!stored) return null;
-  let pending: Promise<string> | null = null;
+  // True once the token in use came from a refresh (the initial one, or a forced
+  // one): a 401 on it is then real, and a further refresh cannot help.
+  let refreshed = false;
+  let current: Promise<string> | null = null;
+
+  const initial = (): Promise<string> => {
+    if (stored.accessToken && hasTimeLeft(row.expiresAt)) {
+      return Promise.resolve(stored.accessToken);
+    }
+    refreshed = true;
+    return refreshAccessToken(userId, row, stored);
+  };
+
   return {
     // One resolution per source: every call of one session shares it, and a
     // revoked grant is not retried against Microsoft within the same sync.
     accessToken: () => {
-      pending ??= resolveAccessToken(userId, row, stored);
-      return pending;
+      current ??= initial();
+      return current;
+    },
+    async renewAfterUnauthorized(failedToken) {
+      current ??= initial();
+      const inUse = await current;
+      // Already renewed since `failedToken` was used: retry with what is in use now.
+      if (inUse !== failedToken) return inUse;
+      if (refreshed) return null;
+      refreshed = true;
+      current = refreshAccessToken(userId, row, stored);
+      return current;
     },
   };
 }

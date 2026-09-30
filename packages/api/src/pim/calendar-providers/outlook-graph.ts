@@ -104,6 +104,9 @@ export async function graphRequest<T>(
       ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+    // Never follow a redirect: fetch would resend the bearer token to wherever it
+    // points, and Graph does not redirect an API call.
+    redirect: "error",
     // Fail fast: a hung call would stall the whole sync cycle for every account.
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });

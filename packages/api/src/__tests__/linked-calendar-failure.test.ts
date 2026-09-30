@@ -24,7 +24,7 @@ import {
   _linkedCalendarFailureLogSizeForTests,
   _resetLinkedCalendarFailureLogForTests,
   handleLinkedCalendarFailure,
-  isRevokedGoogleGrantError,
+  isRevokedGrantError,
   LINKED_AUTH_WARN_WINDOW_MS,
 } from "../pim/linked-calendar-failure.js";
 
@@ -138,7 +138,7 @@ describe("handleLinkedCalendarFailure — any other error", () => {
   });
 });
 
-describe("isRevokedGoogleGrantError — precise, not a message substring", () => {
+describe("isRevokedGrantError — precise, not a message substring", () => {
   it.each([
     ["HTTP 401", { response: { status: 401 } }],
     ["a numeric 401 code", { code: 401 }],
@@ -169,7 +169,7 @@ describe("isRevokedGoogleGrantError — precise, not a message substring", () =>
     ["a Microsoft interaction_required code", { code: "interaction_required" }],
     ["a Microsoft interaction_required message", { message: "interaction_required: MFA needed" }],
   ])("recognises %s", (_name, err) => {
-    expect(isRevokedGoogleGrantError(err)).toBe(true);
+    expect(isRevokedGrantError(err)).toBe(true);
   });
 
   it.each([
@@ -190,7 +190,7 @@ describe("isRevokedGoogleGrantError — precise, not a message substring", () =>
     ["null", null],
     ["undefined", undefined],
   ])("does not mistake %s for a revoked grant", (_name, err) => {
-    expect(isRevokedGoogleGrantError(err)).toBe(false);
+    expect(isRevokedGrantError(err)).toBe(false);
   });
 });
 

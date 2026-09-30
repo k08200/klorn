@@ -130,8 +130,7 @@ function isForeignKeyViolation(err: unknown): boolean {
 
 /**
  * Sync every linked calendar account of a user into rows. Accounts come from the
- * provider seam, so a provider with no implementation yet (or, for OUTLOOK, with
- * its flags off) is skipped, and so is
+ * provider seam, so a provider with no implementation yet is skipped, and so is
  * an account flagged needsReconnect: a revoked token is not retried every cycle
  * until the user re-links it. Best-effort per account: one failing never skips
  * the others (see linked-calendar-failure.ts for the policy). Called only behind

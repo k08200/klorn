@@ -3,9 +3,8 @@
  * checks (pim/calendar.ts) and the linked sync (pim/calendar-sync.ts), so the
  * two cannot drift.
  *
- * A revoked grant (Google or Microsoft) is a condition of the account (the user
- * revoked access or the token died), not a bug: it flags the account for
- * reconnect, is warned
+ * A revoked Google grant is a condition of the account (the user revoked access
+ * or the token died), not a bug: it flags the account for reconnect, is warned
  * about once per account per window, and is never sent to Sentry, where it would
  * page on every cycle for something only the user can fix. Any other failure is
  * warned about and captured, with the domain only and never the full address
@@ -54,7 +53,7 @@ const HTTP_UNAUTHORIZED = 401;
  * refresh). Nothing else: a message that merely mentions "expired" is not a
  * revoked grant.
  */
-export function isRevokedGoogleGrantError(err: unknown): boolean {
+export function isRevokedGrantError(err: unknown): boolean {
   if (typeof err !== "object" || err === null) return false;
   const e = err as {
     response?: { status?: unknown; data?: { error?: unknown } };
@@ -116,7 +115,7 @@ function describeError(err: unknown): string {
 export async function handleLinkedCalendarFailure(failure: LinkedCalendarFailure): Promise<void> {
   const { userId, linkedAccountId, email, err, scope, action } = failure;
 
-  if (isRevokedGoogleGrantError(err)) {
+  if (isRevokedGrantError(err)) {
     await flagForReconnect(userId, linkedAccountId);
     if (shouldWarnAuthFailure(linkedAccountId, Date.now())) {
       console.warn(

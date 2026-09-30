@@ -217,6 +217,33 @@ describe("syncing an OUTLOOK account", () => {
     });
   });
 
+  it("stores a KST all-day event read in America/Los_Angeles on its KST date, like a Google all-day row", async () => {
+    m.userFindUnique.mockResolvedValue({ id: "u1", timezone: "America/Los_Angeles" });
+    // 2026-10-05 00:00 KST = 2026-10-04 08:00 PDT: Graph converted it to the asked-for zone.
+    m.fetch.mockResolvedValue(
+      page([
+        graphEvent("holiday", {
+          isAllDay: true,
+          subject: "Holiday",
+          start: { dateTime: "2026-10-04T08:00:00.0000000", timeZone: "America/Los_Angeles" },
+          end: { dateTime: "2026-10-05T08:00:00.0000000", timeZone: "America/Los_Angeles" },
+          originalStartTimeZone: "Korea Standard Time",
+          originalEndTimeZone: "Korea Standard Time",
+        }),
+      ]),
+    );
+
+    await syncLinkedCalendars("u1", NOW);
+
+    expect(upserts()[0]?.create).toMatchObject({
+      allDay: true,
+      startTime: new Date("2026-10-05"),
+      endTime: new Date("2026-10-06"),
+    });
+    const init = m.fetch.mock.calls[0]?.[1] as { headers: Record<string, string> };
+    expect(init.headers.Prefer).toContain('outlook.timezone="America/Los_Angeles"');
+  });
+
   it("skips an event with no id or no usable times, like the Google sync", async () => {
     m.fetch.mockResolvedValue(page([{ subject: "no id" }, graphEvent("ok")]));
 
@@ -278,9 +305,14 @@ describe("two providers are never merged", () => {
 });
 
 describe("failures", () => {
-  it("a 401 flags the account for reconnect, warns once per window, and never reaches Sentry", async () => {
+  it("a 401 that survives one forced refresh and retry flags the account, warns once per window, and never reaches Sentry", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     m.fetch.mockImplementation(async () => new Response("{}", { status: 401 }));
+    m.refreshOutlookTokens.mockResolvedValue({
+      accessToken: "at-2",
+      refreshToken: "rt-2",
+      expiresAt: new Date(Date.now() + 60 * 60_000),
+    });
 
     const first = await syncLinkedCalendars("u1", NOW);
     await syncLinkedCalendars("u1", NOW);
@@ -288,9 +320,29 @@ describe("failures", () => {
 
     expect(first.failedAccounts).toBe(1);
     expect(m.markLinkedCalendarForReconnect).toHaveBeenCalledWith("u1", "acct-out");
+    // One refresh and one retry per sync, then the account is given up on.
+    expect(m.refreshOutlookTokens).toHaveBeenCalledTimes(3);
+    expect(m.fetch).toHaveBeenCalledTimes(6);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(m.captureError).not.toHaveBeenCalled();
     expect(m.eventUpsert).not.toHaveBeenCalled();
+  });
+
+  it("a 401 that a forced refresh cures syncs normally and does not flag the account", async () => {
+    m.fetch
+      .mockResolvedValueOnce(new Response("{}", { status: 401 }))
+      .mockResolvedValueOnce(page([graphEvent("AAMk-1")]));
+    m.refreshOutlookTokens.mockResolvedValue({
+      accessToken: "at-2",
+      refreshToken: "rt-2",
+      expiresAt: new Date(Date.now() + 60 * 60_000),
+    });
+
+    const result = await syncLinkedCalendars("u1", NOW);
+
+    expect(result).toEqual({ accounts: 1, events: 1, failedAccounts: 0 });
+    expect(m.markLinkedCalendarForReconnect).not.toHaveBeenCalled();
+    expect(m.captureError).not.toHaveBeenCalled();
   });
 
   it("a revoked refresh grant (invalid_grant) is handled the same way: flagged, throttled warn, no Sentry", async () => {

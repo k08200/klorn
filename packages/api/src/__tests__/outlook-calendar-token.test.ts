@@ -18,6 +18,7 @@ const m = vi.hoisted(() => ({
   markLinkedCalendarForReconnect: vi.fn(async () => {}),
   captureError: vi.fn(),
   decryptFails: false,
+  refreshDecryptFails: false,
 }));
 
 vi.mock("../crypto-tokens.js", () => ({
@@ -26,7 +27,7 @@ vi.mock("../crypto-tokens.js", () => ({
     return t.replace(/^enc:/, "");
   },
   decryptOptional: (t: string | null | undefined) => {
-    if (m.decryptFails) throw new Error("bad cipher");
+    if (m.decryptFails || m.refreshDecryptFails) throw new Error("bad cipher");
     return t ? t.replace(/^enc:/, "") : null;
   },
   encryptToken: (t: string) => `enc:${t}`,
@@ -43,7 +44,7 @@ vi.mock("../mail/gmail.js", () => ({
 vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
 
 import { createOutlookCalendarTokenSource } from "../pim/calendar-providers/outlook-token.js";
-import { isRevokedGoogleGrantError } from "../pim/linked-calendar-failure.js";
+import { isRevokedGrantError } from "../pim/linked-calendar-failure.js";
 
 const HOUR = 60 * 60_000;
 
@@ -68,6 +69,7 @@ function source(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   m.decryptFails = false;
+  m.refreshDecryptFails = false;
   vi.spyOn(console, "warn").mockImplementation(() => {});
   m.refreshOutlookTokens.mockResolvedValue({
     accessToken: "access-2",
@@ -179,7 +181,7 @@ describe("a dead grant", () => {
       ?.accessToken()
       .catch((e: unknown) => e);
 
-    expect(isRevokedGoogleGrantError(err)).toBe(true);
+    expect(isRevokedGrantError(err)).toBe(true);
     expect((err as Error).message).toContain(code);
     expect(m.updateMany).not.toHaveBeenCalled();
   });
@@ -189,7 +191,7 @@ describe("a dead grant", () => {
       ?.accessToken()
       .catch((e: unknown) => e);
 
-    expect(isRevokedGoogleGrantError(err)).toBe(true);
+    expect(isRevokedGrantError(err)).toBe(true);
     expect(m.refreshOutlookTokens).not.toHaveBeenCalled();
   });
 
@@ -206,7 +208,7 @@ describe("a dead grant", () => {
       .catch((e: unknown) => e);
 
     expect(err).toBeInstanceOf(Error);
-    expect(isRevokedGoogleGrantError(err)).toBe(false);
+    expect(isRevokedGrantError(err)).toBe(false);
   });
 
   it("a failed refresh is retried by the next source, not remembered forever", async () => {
@@ -247,5 +249,93 @@ describe("an unusable row", () => {
   it("refreshes from the refresh token alone when there is no access token yet", async () => {
     expect(await source({ accessToken: null })?.accessToken()).toBe("access-2");
     expect(m.refreshOutlookTokens).toHaveBeenCalledWith("refresh-1", "calendar");
+  });
+});
+
+describe("a rotten refresh cipher", () => {
+  it("does not flag the account while the access token still works: the mail path's rule", async () => {
+    m.refreshDecryptFails = true;
+
+    const src = source();
+
+    expect(src).not.toBeNull();
+    expect(await src?.accessToken()).toBe("access-1");
+    expect(m.markLinkedCalendarForReconnect).not.toHaveBeenCalled();
+    expect(m.refreshOutlookTokens).not.toHaveBeenCalled();
+  });
+
+  it("surfaces as a revoked grant once the access token runs out, which is when the policy flags it", async () => {
+    m.refreshDecryptFails = true;
+
+    const err = await source({ expiresAt: new Date(Date.now() - 1000) })
+      ?.accessToken()
+      .catch((e: unknown) => e);
+
+    expect(isRevokedGrantError(err)).toBe(true);
+    expect(m.refreshOutlookTokens).not.toHaveBeenCalled();
+  });
+
+  it("an undecryptable ACCESS token still flags at once", () => {
+    m.decryptFails = true;
+
+    expect(source()).toBeNull();
+    expect(m.markLinkedCalendarForReconnect).toHaveBeenCalledWith("u1", "acct-out");
+  });
+});
+
+describe("renewAfterUnauthorized(failedToken)", () => {
+  it("forces a refresh even though the stored token looked fresh, and answers the new token", async () => {
+    const src = source();
+    const failed = await src?.accessToken();
+
+    expect(await src?.renewAfterUnauthorized(failed ?? "")).toBe("access-2");
+
+    expect(m.refreshOutlookTokens).toHaveBeenCalledWith("refresh-1", "calendar");
+    expect(m.updateMany).toHaveBeenCalledTimes(1);
+    expect(await src?.accessToken()).toBe("access-2");
+  });
+
+  it("answers null when the token in use already came from a refresh: the 401 is real", async () => {
+    const src = source({ expiresAt: null });
+    const failed = await src?.accessToken();
+
+    expect(await src?.renewAfterUnauthorized(failed ?? "")).toBeNull();
+    expect(m.refreshOutlookTokens).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes at most once per source, even across repeated 401s", async () => {
+    const src = source();
+    const first = await src?.accessToken();
+    await src?.renewAfterUnauthorized(first ?? "");
+
+    expect(await src?.renewAfterUnauthorized("access-2")).toBeNull();
+    expect(m.refreshOutlookTokens).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands back the newer token when the failed one is already stale, without a second refresh", async () => {
+    const src = source();
+    const first = await src?.accessToken();
+    await src?.renewAfterUnauthorized(first ?? "");
+
+    expect(await src?.renewAfterUnauthorized(first ?? "")).toBe("access-2");
+    expect(m.refreshOutlookTokens).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects in the revoked-grant shape when the refresh is refused", async () => {
+    m.refreshOutlookTokens.mockResolvedValue({ error: "invalid_grant" });
+    const src = source();
+
+    const err = await src?.renewAfterUnauthorized("access-1").catch((e: unknown) => e);
+
+    expect(isRevokedGrantError(err)).toBe(true);
+  });
+
+  it("rejects the same way when there is no refresh token to force", async () => {
+    const src = source({ refreshToken: null });
+
+    const err = await src?.renewAfterUnauthorized("access-1").catch((e: unknown) => e);
+
+    expect(isRevokedGrantError(err)).toBe(true);
+    expect(m.refreshOutlookTokens).not.toHaveBeenCalled();
   });
 });

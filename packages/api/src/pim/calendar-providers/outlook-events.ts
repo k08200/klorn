@@ -10,12 +10,14 @@
  */
 
 import { hasExplicitOffset, naiveLocalToUtc } from "../../google-calendar-time.js";
+import { localDateKey } from "../../time-zone.js";
 import { GRAPH_BASE_URL, graphRequest, nextLinkOf } from "./outlook-graph.js";
+import { ianaZoneOf, isKnownZone } from "./outlook-time-zones.js";
 import type { CalendarListQuery, ProviderCalendarEvent } from "./types.js";
 
 const CALENDAR_VIEW_URL = `${GRAPH_BASE_URL}/me/calendarView`;
 const CALENDAR_VIEW_SELECT =
-  "id,subject,bodyPreview,isAllDay,isCancelled,showAs,start,end,location,onlineMeeting,onlineMeetingUrl";
+  "id,subject,bodyPreview,isAllDay,isCancelled,showAs,start,end,originalStartTimeZone,originalEndTimeZone,location,onlineMeeting,onlineMeetingUrl";
 /** calendarView's `$top` ceiling (minimum 1, maximum 1000). */
 const MAX_PAGE_SIZE = 1000;
 /** Pages read for one listing: a server that never ends must not loop the sync forever. */
@@ -24,6 +26,8 @@ const MAX_PAGES = 10;
 const OPEN_ENDED_WINDOW_DAYS = 365;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}/;
+/** The wall-clock time an all-day event starts at, in the zone it was created in. */
+const MIDNIGHT = /T00:00(?::00(?:\.0+)?)?$/;
 
 /** Graph's dateTimeTimeZone: a naive wall-clock time plus the zone it is in. */
 export interface GraphDateTimeZone {
@@ -41,6 +45,9 @@ export interface GraphEvent {
   readonly showAs?: string | null;
   readonly start?: GraphDateTimeZone | null;
   readonly end?: GraphDateTimeZone | null;
+  /** The zone the event was created in, as a Windows zone name (see outlook-time-zones.ts). */
+  readonly originalStartTimeZone?: string | null;
+  readonly originalEndTimeZone?: string | null;
   readonly location?: { readonly displayName?: string | null } | null;
   readonly onlineMeeting?: { readonly joinUrl?: string | null } | null;
   readonly onlineMeetingUrl?: string | null;
@@ -88,16 +95,11 @@ export async function listCalendarView(
     }
     url = nextLinkOf(body);
   }
-  return events;
-}
-
-function isKnownZone(zone: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: zone });
-    return true;
-  } catch {
-    return false;
+  // A page cap, not the end of the data: say so, so a truncated sync is visible.
+  if (url !== null) {
+    console.warn(`[OUTLOOK-CAL] calendarView truncated after ${MAX_PAGES} pages`);
   }
+  return events;
 }
 
 /**
@@ -121,14 +123,31 @@ export function instantOf(
   return naiveLocalToUtc(dateTime, zone);
 }
 
-/**
- * An all-day event's date. Graph documents an all-day event as midnight to
- * midnight in one zone, so the date is read off the wall-clock value as it is
- * and never shifted through an instant: a date must stay the date the user sees.
- */
 function dateOf(value: GraphDateTimeZone | null | undefined): string {
   const match = value?.dateTime?.match(ISO_DATE);
   return match ? match[0] : "";
+}
+
+/**
+ * An all-day event's date. Graph documents an all-day event as midnight to
+ * midnight in one zone (the zone it was created in), so a value that is still
+ * midnight is read as it is. Asked for another zone, Graph may convert it, and
+ * the value is then no longer midnight: the date is the one the same instant has
+ * in the ORIGINAL zone (`originalStartTimeZone`, a Windows name), never the one
+ * in the asked-for zone, or a Seoul holiday read in Los Angeles would land on the
+ * day before. A zone that cannot be named keeps the date Graph returned, rather
+ * than guess.
+ */
+function allDayDate(
+  value: GraphDateTimeZone | null | undefined,
+  originalZone: string | null | undefined,
+  queryZone: string | undefined,
+): string {
+  const returned = dateOf(value);
+  if (!returned || MIDNIGHT.test(value?.dateTime ?? "")) return returned;
+  const zone = ianaZoneOf(originalZone);
+  const instant = instantOf(value, queryZone);
+  return zone && instant ? localDateKey(instant, zone) : returned;
 }
 
 function timedTimes(item: GraphEvent, queryZone: string | undefined) {
@@ -143,8 +162,12 @@ function timedTimes(item: GraphEvent, queryZone: string | undefined) {
 }
 
 function allDayTimes(item: GraphEvent, queryZone: string | undefined) {
-  const start = dateOf(item.start);
-  const end = dateOf(item.end);
+  const start = allDayDate(item.start, item.originalStartTimeZone, queryZone);
+  const end = allDayDate(
+    item.end,
+    item.originalEndTimeZone ?? item.originalStartTimeZone,
+    queryZone,
+  );
   // Like a Google all-day row: the date read as midnight UTC.
   return {
     start,
@@ -152,6 +175,23 @@ function allDayTimes(item: GraphEvent, queryZone: string | undefined) {
     startTime: queryZone && start ? new Date(start) : null,
     endTime: queryZone && end ? new Date(end) : null,
   };
+}
+
+/**
+ * A meeting link that is safe to hand on: it reaches a web `<a href>`, the Mac
+ * app's NSWorkspace.open and the model's prompt, so only an https URL without
+ * embedded credentials passes. Anything else (javascript:, file:, http:, a custom
+ * scheme, a relative or malformed value) is dropped. Returned normalised.
+ */
+function httpsLinkOf(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username !== "" || url.password !== "") return null;
+    return url.href;
+  } catch {
+    return null;
+  }
 }
 
 /** One Graph event in the provider-neutral shape the sync maps into a row. */
@@ -165,7 +205,7 @@ export function toProviderEvent(
     summary: item.subject || null,
     description: item.bodyPreview || null,
     location: item.location?.displayName || null,
-    meetingLink: item.onlineMeeting?.joinUrl || item.onlineMeetingUrl || null,
+    meetingLink: httpsLinkOf(item.onlineMeeting?.joinUrl) ?? httpsLinkOf(item.onlineMeetingUrl),
     allDay,
     ...(allDay ? allDayTimes(item, queryZone) : timedTimes(item, queryZone)),
   };

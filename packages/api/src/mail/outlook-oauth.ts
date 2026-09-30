@@ -212,6 +212,8 @@ export async function refreshOutlookTokens(
 export async function fetchOutlookAccountEmail(accessToken: string): Promise<string | null> {
   const res = await fetch("https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName", {
     headers: { authorization: `Bearer ${accessToken}` },
+    // Never follow a redirect: fetch would resend the bearer token to wherever it points.
+    redirect: "error",
     signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) {

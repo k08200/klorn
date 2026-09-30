@@ -1675,8 +1675,22 @@ the first request, and the password is stored with `encryptToken`.
     event moved between folders keeps its `externalId` instead of syncing as a
     new one. Graph answers naive wall-clock times plus a zone name: read in that
     zone when Intl knows it, else in the zone the query asked for. An all-day
-    event is its date, taken off the wall-clock value without shifting it through
-    an instant, stored like a Google all-day row (midnight UTC). Free/busy:
+    event is midnight in the zone it was created in; when Graph returns it
+    converted to the asked-for zone (the start is no longer `T00:00:00`), its date
+    is the one the same instant has in `originalStartTimeZone` /
+    `originalEndTimeZone` (both in `$select`; Windows zone names, mapped to IANA by
+    the table in `outlook-time-zones.ts`, the CLDR primary mapping). A zone that
+    is not in the table, or `tzone://Microsoft/Custom`, keeps the date Graph
+    returned rather than guess. The row is midnight UTC of that date, like a
+    Google all-day row. `meetingLink` (`onlineMeeting.joinUrl`, else
+    `onlineMeetingUrl`) is kept only when it is an https URL without embedded
+    credentials, and is normalised: it reaches the web `<a href>`, the Mac app's
+    `NSWorkspace.open` and the model's prompt, so `javascript:`, `file:`, `http:`,
+    custom schemes and malformed values become null. Only the account's default
+    calendar is read (`/me/calendarView`, and getSchedule for the same mailbox);
+    secondary and shared calendars are not. Every Graph fetch refuses redirects
+    (`redirect: "error"`) so the bearer token cannot be forwarded. A listing that
+    hits the page cap logs `truncated after 10 pages`. Free/busy:
     `POST /v1.0/me/calendar/getSchedule` for the account's own address over the
     window (https://learn.microsoft.com/graph/api/calendar-getschedule), where
     `busy`, `tentative`, `oof` and `unknown` block and `free` and
@@ -1684,24 +1698,38 @@ the first request, and the password is stored with `encryptToken`.
     accounts as not supported, so a 4xx that is not 401, 408 or 429, or a
     per-schedule error, falls back to the calendar view's `showAs`; a 401, a
     timeout, throttling or a 5xx rejects and is never hidden behind the fallback.
+    The first time each distinct fallback answer is seen per process it is logged
+    with the status and Graph's short code only (no body, no address). A busy
+    item whose times cannot be read is treated as busy, never free: it blocks the
+    whole window (a readable block beside it stays).
     `peopleFreeBusy` is the same call for other addresses, unreadable ones
     `blocks: null` (unknown, never free). `createEvent`, `updateEvent` and
     `deleteEvent` reject with `CalendarReadOnlyError`; nothing calls them on a
     linked session today.
   - Tokens (`outlook-token.ts`). Decrypt, refresh when under 5 minutes are left,
     persist Microsoft's rotated refresh token (an access-only refresh never
-    overwrites a newer token), clear `needsReconnect` on a good refresh. It
-    mirrors `mail/outlook-token.ts` over the calendar table and is a sibling, not
-    a parameterisation, because that module is tied to `LinkedInboxAccount`;
-    unifying them is a follow-up. The refresh is lazy (`connect` only decrypts)
-    so a revoked grant rejects inside the caller's try/catch instead of escaping
-    the dispatcher's loop and skipping every other account.
-  - Revoked grant. The shared failure policy now also reads a Graph 401 (the
-    `status` on the error) and a Microsoft `interaction_required` refresh answer
-    as a revoked grant: the account is flagged `needsReconnect`, warned about once
-    per hour, never sent to Sentry. Anything else (403, 429, 5xx, `server_error`,
-    `invalid_client`) is warned and captured with the domain only, and the account
-    is left alone. The sync skips a flagged account; conflict checks still try it.
+    overwrites a newer token), clear `needsReconnect` on a good refresh. What a
+    refreshed pair is saved as is one pure function, `refreshedTokenUpdate`
+    (`mail/outlook-token-update.ts`), used by both `mail/outlook-token.ts` and
+    this module, so only the table and the reconnect marker differ; the rest of
+    the lifecycle is a sibling of the mail one because that module is tied to
+    `LinkedInboxAccount`. A rotten refresh cipher with a still-valid access token
+    does not flag the account (the mail path's rule); it surfaces as a revoked
+    grant once the access token runs out. The refresh is lazy (`connect` only
+    decrypts) so a revoked grant rejects inside the caller's try/catch instead of
+    escaping the dispatcher's loop and skipping every other account. A Graph 401
+    gets one forced refresh and one retry with the new token before it reaches
+    the failure policy (a token that looks fresh can be dead without the grant
+    being revoked); a second 401, or a token that was itself just refreshed,
+    propagates.
+  - Revoked grant. The shared failure policy (`isRevokedGrantError`, renamed from
+    `isRevokedGoogleGrantError` now that it serves both providers) also reads a
+    Graph 401 (the `status` on the error) and a Microsoft `interaction_required`
+    refresh answer as a revoked grant: the account is flagged `needsReconnect`,
+    warned about once per hour, never sent to Sentry. Anything else (403, 429,
+    5xx, `server_error`, `invalid_client`) is warned and captured with the domain
+    only, and the account is left alone. The sync skips a flagged account;
+    conflict checks still try it.
   - Sync. No change to the loop or the scheduler. `syncLinkedCalendarWindow` now
     writes the row's provider from the session that listed it, so OUTLOOK rows
     are `provider OUTLOOK`, `externalId` the Graph event id, `sourceAccountId` and
@@ -1749,8 +1777,13 @@ the first request, and the password is stored with `encryptToken`.
     org that blocks user consent ends in `linked=failed`. (b) `/me` names the
     account with the calendar set (`User.Read`). (c) One sync writes the expected
     rows; a cancelled occurrence of a recurring meeting is absent; an all-day
-    event keeps its date in a zone west of UTC and east of it, the case the code
-    assumes Graph keeps at midnight. (d) `Prefer: outlook.timezone` accepts an
+    event keeps its date when read in a zone west of UTC and in one east of it,
+    from an account whose own zone is on the other side, and record whether Graph
+    returns it at midnight or converted (the code handles both; the converted case
+    needs `originalStartTimeZone` to be a name in the table). An event cancelled
+    AFTER its first sync stays as a row: removal of upstream-cancelled events
+    (C2b, in flight, Google only) must be extended to Outlook before the flip,
+    or the calendar shows meetings that were cancelled. (d) `Prefer: outlook.timezone` accepts an
     IANA name and echoes it; a moved event keeps its id. (e) getSchedule on the
     work account returns the account's own busy time; record the exact status a
     personal account answers, because the fallback rule (any 4xx except 401, 408

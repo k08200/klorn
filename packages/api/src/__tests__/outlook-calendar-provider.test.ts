@@ -14,6 +14,7 @@ const m = vi.hoisted(() => ({
   fetch: vi.fn(),
   updateMany: vi.fn(async () => ({ count: 1 })),
   markLinkedCalendarForReconnect: vi.fn(async () => {}),
+  refreshOutlookTokens: vi.fn(),
   captureError: vi.fn(),
 }));
 
@@ -30,15 +31,17 @@ vi.mock("../db.js", () => {
 vi.mock("../mail/gmail.js", () => ({
   markLinkedCalendarForReconnect: m.markLinkedCalendarForReconnect,
 }));
+vi.mock("../mail/outlook-oauth.js", () => ({ refreshOutlookTokens: m.refreshOutlookTokens }));
 vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
 
 import { outlookCalendarActions } from "../pim/calendar-providers/outlook.js";
+import { _resetScheduleFallbackLogForTests } from "../pim/calendar-providers/outlook-freebusy.js";
 import {
   CalendarReadOnlyError,
   type CalendarSession,
   isCalendarUnsupported,
 } from "../pim/calendar-providers/types.js";
-import { isRevokedGoogleGrantError } from "../pim/linked-calendar-failure.js";
+import { isRevokedGrantError } from "../pim/linked-calendar-failure.js";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 const TOKEN = "graph-access-token";
@@ -111,6 +114,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("fetch", m.fetch);
   m.fetch.mockReset();
+  _resetScheduleFallbackLogForTests();
+  m.refreshOutlookTokens.mockReset();
+  m.refreshOutlookTokens.mockResolvedValue({
+    accessToken: "access-2",
+    refreshToken: "refresh-2",
+    expiresAt: new Date("2026-10-01T10:00:00.000Z"),
+  });
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
@@ -143,12 +153,14 @@ describe("listEvents - GET /me/calendarView", () => {
     expect(p.get("$top")).toBe("100");
     expect(p.get("$orderby")).toBe("start/dateTime");
     expect(p.get("$select")).toBe(
-      "id,subject,bodyPreview,isAllDay,isCancelled,showAs,start,end,location,onlineMeeting,onlineMeetingUrl",
+      "id,subject,bodyPreview,isAllDay,isCancelled,showAs,start,end,originalStartTimeZone,originalEndTimeZone,location,onlineMeeting,onlineMeetingUrl",
     );
     expect(init.method).toBe("GET");
     expect(init.headers.Authorization).toBe(`Bearer ${TOKEN}`);
     expect(init.headers.Prefer).toBe('outlook.timezone="Asia/Seoul", IdType="ImmutableId"');
     expect(init.signal).toBeInstanceOf(AbortSignal);
+    // A redirect would carry the bearer token to wherever it points.
+    expect(init.redirect).toBe("error");
   });
 
   it("asks for UTC when no zone was named, and leaves the instants null", async () => {
@@ -264,6 +276,15 @@ describe("listEvents - GET /me/calendarView", () => {
 
     expect(events).toEqual([]);
     expect(calls().length).toBe(10);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("truncated after 10 pages"));
+  });
+
+  it("does not warn when the listing ended on its own", async () => {
+    m.fetch.mockResolvedValueOnce(json({ value: [timed("e1")] }));
+
+    await (await session()).listEvents(LIST_QUERY);
+
+    expect(console.warn).not.toHaveBeenCalled();
   });
 
   it("refuses a nextLink that points outside Graph, and never sends the token there", async () => {
@@ -379,8 +400,8 @@ describe("listEvents - the neutral event shape", () => {
 });
 
 describe("Graph failures", () => {
-  it("a 401 rejects with its status, which the shared failure policy reads as a revoked grant", async () => {
-    m.fetch.mockResolvedValueOnce(
+  it("a 401 that survives the forced refresh rejects with its status, which the shared failure policy reads as a revoked grant", async () => {
+    m.fetch.mockImplementation(async () =>
       json(
         { error: { code: "InvalidAuthenticationToken", message: "token for x@y.z expired" } },
         401,
@@ -390,7 +411,7 @@ describe("Graph failures", () => {
     const err = await (await session()).listEvents(LIST_QUERY).catch((e: unknown) => e);
 
     expect(err).toMatchObject({ status: 401 });
-    expect(isRevokedGoogleGrantError(err)).toBe(true);
+    expect(isRevokedGrantError(err)).toBe(true);
   });
 
   it.each([
@@ -403,7 +424,7 @@ describe("Graph failures", () => {
     const err = await (await session()).listEvents(LIST_QUERY).catch((e: unknown) => e);
 
     expect(err).toMatchObject({ status });
-    expect(isRevokedGoogleGrantError(err)).toBe(false);
+    expect(isRevokedGrantError(err)).toBe(false);
   });
 
   it("puts only the status and Graph's short code in the message, never the body", async () => {
@@ -453,6 +474,7 @@ describe("busyBlocks - POST /me/calendar/getSchedule", () => {
     const { url, init } = calls()[0] as FetchCall;
     expect(url).toBe(`${GRAPH}/me/calendar/getSchedule`);
     expect(init.method).toBe("POST");
+    expect(init.redirect).toBe("error");
     expect(init.headers.Authorization).toBe(`Bearer ${TOKEN}`);
     expect(init.headers["Content-Type"]).toBe("application/json");
     expect(init.headers.Prefer).toContain('outlook.timezone="UTC"');
@@ -556,7 +578,7 @@ describe("busyBlocks - POST /me/calendar/getSchedule", () => {
   });
 
   it.each([
-    401, 408, 429, 500, 503,
+    408, 429, 500, 503,
   ])("a %i is a real failure: it rejects, with no fallback that could hide it", async (status) => {
     m.fetch.mockResolvedValueOnce(json({ error: { code: "x" } }, status));
 
@@ -719,5 +741,433 @@ describe("read-only v1", () => {
 
   it("names the provider in the refusal", async () => {
     await expect((await session()).deleteEvent("e1")).rejects.toThrow(/OUTLOOK/);
+  });
+});
+
+async function listOne(item: unknown, query: Record<string, unknown> = LIST_QUERY) {
+  m.fetch.mockResolvedValueOnce(json({ value: [item] }));
+  const [event] = await (await session()).listEvents(query as typeof LIST_QUERY);
+  if (!event) throw new Error("expected an event");
+  return event;
+}
+
+describe("meetingLink reaches an <a href>, NSWorkspace.open and the model: https only", () => {
+  it.each([
+    [
+      "an https joinUrl",
+      "https://teams.microsoft.com/l/meetup-join/abc",
+      "https://teams.microsoft.com/l/meetup-join/abc",
+    ],
+    [
+      "an uppercase scheme, normalised",
+      "HTTPS://Teams.Microsoft.com/x",
+      "https://teams.microsoft.com/x",
+    ],
+    [
+      "surrounding whitespace, trimmed",
+      "  https://meet.example.com/a  ",
+      "https://meet.example.com/a",
+    ],
+  ])("keeps %s", async (_label, joinUrl, expected) => {
+    const event = await listOne(timed("e1", { onlineMeeting: { joinUrl } }));
+    expect(event.meetingLink).toBe(expected);
+  });
+
+  it.each([
+    ["javascript:", "javascript:alert(document.cookie)"],
+    ["file:", "file:///etc/passwd"],
+    ["http:", "http://meet.example.com/a"],
+    ["data:", "data:text/html,<script>alert(1)</script>"],
+    ["a custom app scheme", "msteams://l/meetup-join/abc"],
+    ["a scheme-relative link", "//evil.example.com/x"],
+    ["a relative path", "/l/meetup-join/abc"],
+    ["embedded credentials", "https://user:secret@evil.example.com/x"],
+    ["a malformed URL", "https://"],
+    ["plain text", "join my meeting"],
+    ["an empty string", ""],
+  ])("drops %s", async (_label, joinUrl) => {
+    const event = await listOne(timed("e1", { onlineMeeting: { joinUrl } }));
+    expect(event.meetingLink).toBeNull();
+  });
+
+  it("checks the legacy onlineMeetingUrl the same way, and prefers a valid link over an invalid one", async () => {
+    expect(
+      (await listOne(timed("e1", { onlineMeetingUrl: "javascript:alert(1)" }))).meetingLink,
+    ).toBeNull();
+    expect(
+      (
+        await listOne(
+          timed("e2", {
+            onlineMeeting: { joinUrl: "javascript:alert(1)" },
+            onlineMeetingUrl: "https://join.example.com/ok",
+          }),
+        )
+      ).meetingLink,
+    ).toBe("https://join.example.com/ok");
+  });
+});
+
+describe("all-day events read across zones", () => {
+  // An all-day event is midnight in the zone it was created in. Asked for another
+  // zone, Graph may convert it, so the start is no longer T00:00:00 and the date
+  // has to be derived in the original zone (originalStartTimeZone, a Windows name).
+  const allDay = (
+    start: string,
+    end: string,
+    zone: string,
+    original: Record<string, string | undefined>,
+  ) =>
+    timed("ad", {
+      isAllDay: true,
+      subject: "Holiday",
+      start: { dateTime: start, timeZone: zone },
+      end: { dateTime: end, timeZone: zone },
+      originalStartTimeZone: original.start,
+      originalEndTimeZone: original.end,
+    });
+
+  it("a KST all-day event read in America/Los_Angeles keeps its KST date", async () => {
+    // 2026-10-05 00:00 KST = 2026-10-04 15:00Z = 2026-10-04 08:00 PDT.
+    const event = await listOne(
+      allDay("2026-10-04T08:00:00.0000000", "2026-10-05T08:00:00.0000000", "America/Los_Angeles", {
+        start: "Korea Standard Time",
+        end: "Korea Standard Time",
+      }),
+      { ...LIST_QUERY, timeZone: "America/Los_Angeles" },
+    );
+
+    expect(event).toMatchObject({
+      allDay: true,
+      start: "2026-10-05",
+      end: "2026-10-06",
+      startTime: new Date("2026-10-05"),
+      endTime: new Date("2026-10-06"),
+    });
+  });
+
+  it("a Pacific all-day event read in Asia/Seoul keeps its Pacific date", async () => {
+    // 2026-10-05 00:00 PDT = 2026-10-05 07:00Z = 2026-10-05 16:00 KST.
+    const event = await listOne(
+      allDay("2026-10-05T16:00:00.0000000", "2026-10-06T16:00:00.0000000", "Asia/Seoul", {
+        start: "Pacific Standard Time",
+        end: "Pacific Standard Time",
+      }),
+    );
+
+    expect(event).toMatchObject({
+      start: "2026-10-05",
+      end: "2026-10-06",
+      startTime: new Date("2026-10-05"),
+      endTime: new Date("2026-10-06"),
+    });
+  });
+
+  it("reads the date in the original zone with no zone asked for (Graph answers UTC)", async () => {
+    // 2026-10-05 00:00 KST = 2026-10-04 15:00Z.
+    const event = await listOne(
+      allDay("2026-10-04T15:00:00.0000000", "2026-10-05T15:00:00.0000000", "UTC", {
+        start: "Korea Standard Time",
+      }),
+      { timeMin: LIST_QUERY.timeMin, timeMax: LIST_QUERY.timeMax, maxResults: 10 },
+    );
+
+    expect(event).toMatchObject({ start: "2026-10-05", end: "2026-10-06", startTime: null });
+  });
+
+  it("takes the end date from originalEndTimeZone, and from the start zone when it is missing", async () => {
+    const own = await listOne(
+      allDay("2026-10-04T15:00:00.0000000", "2026-10-06T07:00:00.0000000", "UTC", {
+        start: "Korea Standard Time",
+        end: "Pacific Standard Time",
+      }),
+    );
+    expect(own).toMatchObject({ start: "2026-10-05", end: "2026-10-06" });
+
+    const fallback = await listOne(
+      allDay("2026-10-04T15:00:00.0000000", "2026-10-05T15:00:00.0000000", "UTC", {
+        start: "Korea Standard Time",
+      }),
+    );
+    expect(fallback).toMatchObject({ end: "2026-10-06" });
+  });
+
+  it("leaves a value that is already midnight alone, whatever the original zone says", async () => {
+    const event = await listOne(
+      allDay("2026-10-05T00:00:00.0000000", "2026-10-06T00:00:00.0000000", "Asia/Seoul", {
+        start: "Pacific Standard Time",
+        end: "Pacific Standard Time",
+      }),
+    );
+
+    expect(event).toMatchObject({ start: "2026-10-05", end: "2026-10-06" });
+  });
+
+  it("accepts an IANA original zone too", async () => {
+    const event = await listOne(
+      allDay("2026-10-04T15:00:00.0000000", "2026-10-05T15:00:00.0000000", "UTC", {
+        start: "Asia/Seoul",
+        end: "Asia/Seoul",
+      }),
+    );
+
+    expect(event).toMatchObject({ start: "2026-10-05", end: "2026-10-06" });
+  });
+
+  it.each([
+    ["an unknown zone", "Mars Standard Time"],
+    ["a legacy custom zone", "tzone://Microsoft/Custom"],
+    ["no zone at all", undefined],
+  ])("with %s it keeps the date Graph returned, rather than guess", async (_label, original) => {
+    const event = await listOne(
+      allDay("2026-10-04T15:00:00.0000000", "2026-10-05T15:00:00.0000000", "UTC", {
+        start: original,
+        end: original,
+      }),
+    );
+
+    expect(event).toMatchObject({ start: "2026-10-04", end: "2026-10-05" });
+  });
+
+  it("a timed event is not touched by any of this", async () => {
+    const event = await listOne(timed("t1", { originalStartTimeZone: "Pacific Standard Time" }));
+
+    expect(event.start).toBe("2026-10-02T00:00:00.000Z");
+  });
+});
+
+describe("a 401 forces one refresh and one retry before the account is flagged", () => {
+  const renewed = {
+    accessToken: "access-2",
+    refreshToken: "refresh-2",
+    expiresAt: new Date("2026-10-01T10:00:00.000Z"),
+  };
+
+  beforeEach(() => {
+    m.refreshOutlookTokens.mockResolvedValue(renewed);
+  });
+
+  it("retries with the refreshed token and answers the retry's result", async () => {
+    m.fetch
+      .mockResolvedValueOnce(json({ error: { code: "InvalidAuthenticationToken" } }, 401))
+      .mockResolvedValueOnce(json({ value: [timed("e1")] }));
+
+    const events = await (await session()).listEvents(LIST_QUERY);
+
+    expect(events.map((e) => e.externalId)).toEqual(["e1"]);
+    expect(m.refreshOutlookTokens).toHaveBeenCalledTimes(1);
+    expect(m.refreshOutlookTokens).toHaveBeenCalledWith("refresh-token", "calendar");
+    expect((calls()[0] as FetchCall).init.headers.Authorization).toBe(`Bearer ${TOKEN}`);
+    expect((calls()[1] as FetchCall).init.headers.Authorization).toBe("Bearer access-2");
+    expect(m.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("a second 401 is real: it rejects, with no further refresh or request", async () => {
+    m.fetch.mockImplementation(async () => json({}, 401));
+
+    const err = await (await session()).listEvents(LIST_QUERY).catch((e: unknown) => e);
+
+    expect(err).toMatchObject({ status: 401 });
+    expect(isRevokedGrantError(err)).toBe(true);
+    expect(calls()).toHaveLength(2);
+    expect(m.refreshOutlookTokens).toHaveBeenCalledTimes(1);
+  });
+
+  it("a 401 on a token that was itself just refreshed is not refreshed again", async () => {
+    const s = await outlookCalendarActions.connect({
+      userId: "u1",
+      linkedAccountId: "acct-out",
+      linked: linkedRow({ expiresAt: new Date(Date.now() - 1000) }) as never,
+    });
+    if (!s || isCalendarUnsupported(s)) throw new Error("expected a session");
+    m.fetch.mockImplementation(async () => json({}, 401));
+
+    await expect(s.listEvents(LIST_QUERY)).rejects.toMatchObject({ status: 401 });
+
+    expect(m.refreshOutlookTokens).toHaveBeenCalledTimes(1);
+    expect(calls()).toHaveLength(1);
+  });
+
+  it("a refresh that answers invalid_grant rejects in the revoked-grant shape, after one request", async () => {
+    m.refreshOutlookTokens.mockResolvedValue({ error: "invalid_grant" });
+    m.fetch.mockImplementation(async () => json({}, 401));
+
+    const err = await (await session()).listEvents(LIST_QUERY).catch((e: unknown) => e);
+
+    expect(isRevokedGrantError(err)).toBe(true);
+    expect(calls()).toHaveLength(1);
+  });
+
+  it("a getSchedule 401 that survives the retry rejects, and never falls back to the calendar view", async () => {
+    m.fetch.mockImplementation(async () => json({}, 401));
+
+    const err = await (await session())
+      .busyBlocks({ timeMin: "2026-10-02T00:00:00.000Z", timeMax: "2026-10-02T12:00:00.000Z" })
+      .catch((e: unknown) => e);
+
+    expect(isRevokedGrantError(err)).toBe(true);
+    expect(calls().map((c) => c.url)).toEqual([
+      `${GRAPH}/me/calendar/getSchedule`,
+      `${GRAPH}/me/calendar/getSchedule`,
+    ]);
+  });
+
+  it.each([403, 429, 500])("a %i is never retried or refreshed", async (status) => {
+    m.fetch.mockImplementation(async () => json({}, status));
+
+    await expect((await session()).listEvents(LIST_QUERY)).rejects.toMatchObject({ status });
+
+    expect(m.refreshOutlookTokens).not.toHaveBeenCalled();
+    expect(calls()).toHaveLength(1);
+  });
+
+  it("covers free/busy too, and the refreshed token serves the session's next call without another refresh", async () => {
+    m.fetch
+      .mockResolvedValueOnce(json({}, 401))
+      .mockResolvedValueOnce(json({ value: [{ scheduleId: ACCOUNT_EMAIL, scheduleItems: [] }] }))
+      .mockResolvedValueOnce(json({ value: [] }));
+    const s = await session();
+
+    expect(
+      await s.busyBlocks({
+        timeMin: "2026-10-02T00:00:00.000Z",
+        timeMax: "2026-10-02T12:00:00.000Z",
+      }),
+    ).toEqual([]);
+    await s.listEvents(LIST_QUERY);
+
+    expect(m.refreshOutlookTokens).toHaveBeenCalledTimes(1);
+    expect((calls()[1] as FetchCall).init.headers.Authorization).toBe("Bearer access-2");
+    expect((calls()[2] as FetchCall).init.headers.Authorization).toBe("Bearer access-2");
+  });
+});
+
+describe("the getSchedule fallback says so, once, without personal data", () => {
+  const WINDOW = { timeMin: "2026-10-02T00:00:00.000Z", timeMax: "2026-10-02T12:00:00.000Z" };
+
+  it("logs the status and Graph's code once per distinct answer, never the address", async () => {
+    m.fetch.mockImplementation(async (url: string) =>
+      String(url).endsWith("getSchedule")
+        ? json(
+            { error: { code: "ErrorAccessDenied", message: `no access for ${ACCOUNT_EMAIL}` } },
+            403,
+          )
+        : json({ value: [] }),
+    );
+    const s = await session();
+
+    await s.busyBlocks(WINDOW);
+    await s.busyBlocks(WINDOW);
+
+    const warnings = (console.warn as unknown as { mock: { calls: string[][] } }).mock.calls.map(
+      (c) => String(c[0]),
+    );
+    const fallbackWarnings = warnings.filter((w) => w.includes("getSchedule"));
+    expect(fallbackWarnings).toHaveLength(1);
+    expect(fallbackWarnings[0]).toContain("403");
+    expect(fallbackWarnings[0]).toContain("ErrorAccessDenied");
+    expect(fallbackWarnings[0]).not.toContain(ACCOUNT_EMAIL);
+    expect(fallbackWarnings[0]).not.toContain("contoso");
+  });
+
+  it("logs again when the answer is a different one", async () => {
+    m.fetch.mockImplementation(async (url: string) =>
+      String(url).endsWith("getSchedule")
+        ? json({ error: { code: "X" } }, 400)
+        : json({ value: [] }),
+    );
+    const s = await session();
+    await s.busyBlocks(WINDOW);
+    m.fetch.mockImplementation(async (url: string) =>
+      String(url).endsWith("getSchedule")
+        ? json({ error: { code: "X" } }, 404)
+        : json({ value: [] }),
+    );
+    await s.busyBlocks(WINDOW);
+
+    const fallbackWarnings = (console.warn as unknown as { mock: { calls: string[][] } }).mock.calls
+      .map((c) => String(c[0]))
+      .filter((w) => w.includes("getSchedule"));
+    expect(fallbackWarnings).toHaveLength(2);
+  });
+
+  it("logs a per-schedule error the same way", async () => {
+    m.fetch
+      .mockResolvedValueOnce(
+        json({
+          value: [{ scheduleId: ACCOUNT_EMAIL, error: { responseCode: "ErrorInvalidUser" } }],
+        }),
+      )
+      .mockResolvedValueOnce(json({ value: [] }));
+
+    await (await session()).busyBlocks(WINDOW);
+
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("ErrorInvalidUser"));
+  });
+});
+
+describe("a busy item with times that cannot be read is busy, never free", () => {
+  const WINDOW = { timeMin: "2026-10-02T00:00:00.000Z", timeMax: "2026-10-02T12:00:00.000Z" };
+  const WHOLE_WINDOW = { start: WINDOW.timeMin, end: WINDOW.timeMax, calendar: "primary" };
+
+  it("getSchedule: blocks the whole window, once, beside the readable blocks", async () => {
+    m.fetch.mockResolvedValueOnce(
+      json({
+        value: [
+          {
+            scheduleId: ACCOUNT_EMAIL,
+            scheduleItems: [
+              {
+                status: "busy",
+                start: { dateTime: "garbage" },
+                end: { dateTime: "2026-10-02T02:00:00.0000000" },
+              },
+              { status: "oof" },
+              {
+                status: "busy",
+                start: { dateTime: "2026-10-02T01:00:00.0000000", timeZone: "UTC" },
+                end: { dateTime: "2026-10-02T02:00:00.0000000", timeZone: "UTC" },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const blocks = await (await session()).busyBlocks(WINDOW);
+
+    expect(blocks).toEqual([
+      { start: "2026-10-02T01:00:00.000Z", end: "2026-10-02T02:00:00.000Z", calendar: "primary" },
+      WHOLE_WINDOW,
+    ]);
+  });
+
+  it("a free item with unreadable times does not block anything", async () => {
+    m.fetch.mockResolvedValueOnce(
+      json({ value: [{ scheduleId: ACCOUNT_EMAIL, scheduleItems: [{ status: "free" }] }] }),
+    );
+
+    expect(await (await session()).busyBlocks(WINDOW)).toEqual([]);
+  });
+
+  it("calendar-view fallback: the same rule", async () => {
+    m.fetch
+      .mockResolvedValueOnce(json({}, 400))
+      .mockResolvedValueOnce(
+        json({ value: [timed("bad", { start: { dateTime: "garbage", timeZone: "UTC" } })] }),
+      );
+
+    expect(await (await session()).busyBlocks(WINDOW)).toEqual([WHOLE_WINDOW]);
+  });
+
+  it("degraded primary check: the window, tagged with the event", async () => {
+    m.fetch.mockResolvedValueOnce(
+      json({
+        value: [timed("bad", { subject: "Board", end: { dateTime: "garbage", timeZone: "UTC" } })],
+      }),
+    );
+
+    expect(await (await session()).primaryBusyBlocks(WINDOW)).toEqual([
+      { id: "bad", summary: "Board", start: WINDOW.timeMin, end: WINDOW.timeMax },
+    ]);
   });
 });

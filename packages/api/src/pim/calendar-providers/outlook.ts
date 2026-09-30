@@ -15,6 +15,7 @@
 
 import { listCalendarView, toProviderEvent } from "./outlook-events.js";
 import { busyBlocksVia, peopleFreeBusyVia, primaryBusyVia } from "./outlook-freebusy.js";
+import { GraphRequestError } from "./outlook-graph.js";
 import {
   createOutlookCalendarTokenSource,
   type OutlookCalendarTokenSource,
@@ -29,25 +30,49 @@ function refuseWrite(): Promise<never> {
   return Promise.reject(new CalendarReadOnlyError("OUTLOOK"));
 }
 
+const HTTP_UNAUTHORIZED = 401;
+
+/**
+ * Run one Graph operation with the account's token. A 401 gets ONE forced refresh
+ * and ONE retry with the new token before it is allowed to reach the failure
+ * policy, which flags the account for reconnect: a token that still looked fresh
+ * can be dead without the grant being revoked. A second 401, or a refresh that is
+ * refused, propagates. The operations are reads, so repeating one is harmless.
+ */
+async function withToken<T>(
+  tokens: OutlookCalendarTokenSource,
+  run: (token: string) => Promise<T>,
+): Promise<T> {
+  const token = await tokens.accessToken();
+  try {
+    return await run(token);
+  } catch (err) {
+    if (!(err instanceof GraphRequestError) || err.status !== HTTP_UNAUTHORIZED) throw err;
+    const renewed = await tokens.renewAfterUnauthorized(token);
+    if (renewed === null) throw err;
+    return run(renewed);
+  }
+}
+
 function outlookSession(tokens: OutlookCalendarTokenSource, accountEmail: string): CalendarSession {
   return {
     provider: "OUTLOOK",
     async listEvents(query) {
       if (query.maxResults < 1) return [];
-      const events = await listCalendarView(await tokens.accessToken(), query);
+      const events = await withToken(tokens, (token) => listCalendarView(token, query));
       return events.map((event) => toProviderEvent(event, query.timeZone));
     },
     createEvent: refuseWrite,
     updateEvent: refuseWrite,
     deleteEvent: refuseWrite,
     async busyBlocks(window) {
-      return busyBlocksVia(await tokens.accessToken(), accountEmail, window);
+      return withToken(tokens, (token) => busyBlocksVia(token, accountEmail, window));
     },
     async primaryBusyBlocks(window) {
-      return primaryBusyVia(await tokens.accessToken(), window);
+      return withToken(tokens, (token) => primaryBusyVia(token, window));
     },
     async peopleFreeBusy(emails, window) {
-      return peopleFreeBusyVia(await tokens.accessToken(), emails, window);
+      return withToken(tokens, (token) => peopleFreeBusyVia(token, emails, window));
     },
   };
 }
