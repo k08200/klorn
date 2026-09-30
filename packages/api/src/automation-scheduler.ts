@@ -10,6 +10,7 @@
  */
 
 import { drainActionOutbox } from "./agentcore/action-outbox.js";
+import { findAutoModeCandidates } from "./agentcore/auto-mode-candidates.js";
 import { runAutoModeSweep } from "./agentcore/auto-mode-sweep.js";
 import { isSingleRecipient, sendAutoReplyViaFloor } from "./agentcore/auto-reply-send.js";
 import { runProactiveActions } from "./agentcore/proactive-actions.js";
@@ -523,6 +524,32 @@ export async function ensureAutoReplyNotification(
     createdAt: notification.createdAt.toISOString(),
   });
   return notification;
+}
+
+/**
+ * Send an AUTO_REPLY rule's reply, then record the "Auto-reply sent" alert.
+ *
+ * The send goes through the deterministic floor (mint receipt → executeToolCall
+ * re-verifies the payloadHash) instead of calling gmail.sendEmail directly, so
+ * every send stays on the single gated, audited path (W1). Per-account routing:
+ * the executor resolves `email.id`'s account server-side; a primary row
+ * resolves to the primary client.
+ *
+ * sendAutoReplyViaFloor rejects unless the provider accepted the send, so the
+ * alert below is written ONLY for a reply that actually left — a refused or
+ * unsupported send propagates to the caller's catch (logged + captured)
+ * instead of being announced as "Auto-reply sent".
+ */
+export async function deliverRuleAutoReply(
+  userId: string,
+  email: { id: string; gmailId: string; from: string; subject: string },
+  replyBody: string,
+  ruleName: string,
+): Promise<void> {
+  const emailMatch = email.from.match(/<([^>]+)>/) || [null, email.from];
+  const toAddr = emailMatch[1] || email.from;
+  await sendAutoReplyViaFloor(userId, toAddr, `Re: ${email.subject}`, replyBody, email.id);
+  await ensureAutoReplyNotification(userId, email.gmailId, toAddr, ruleName);
 }
 
 /**
@@ -1306,33 +1333,7 @@ async function runUserCycle(
                     );
                     continue;
                   }
-                  const emailMatch = email.from.match(/<([^>]+)>/) || [null, email.from];
-                  const toAddr = emailMatch[1] || email.from;
-                  // Route the autonomous send through the deterministic
-                  // floor (mint receipt → executeToolCall re-verifies the
-                  // payloadHash) instead of calling gmail.sendEmail
-                  // directly, so every send stays on the single gated,
-                  // audited path (W1).
-                  await sendAutoReplyViaFloor(
-                    config.userId,
-                    toAddr,
-                    `Re: ${email.subject}`,
-                    replyBody,
-                    // Per-account routing: the executor resolves this row's
-                    // account server-side; a primary row resolves to the
-                    // primary client, unchanged.
-                    email.id,
-                  );
-                  // Atomic + winner-only alert (dedupeKey = "auto-reply:<gmailId>"):
-                  // the findFirst pre-filter above is a cheap best-effort skip, but
-                  // the create is the real gate — a concurrent tick loses on P2002
-                  // and neither re-creates the alert nor re-pushes.
-                  await ensureAutoReplyNotification(
-                    config.userId,
-                    email.gmailId,
-                    toAddr,
-                    matched.ruleName,
-                  );
+                  await deliverRuleAutoReply(config.userId, email, replyBody, matched.ruleName);
                 }
               }
             } catch (err) {
@@ -1368,21 +1369,8 @@ async function runUserCycle(
           // failure-ledger rewrite, draft-retry cap) live in
           // agentcore/auto-mode-sweep.ts and are pinned by its tests.
           await runAutoModeSweep(config.userId, guideline, {
-            findCandidates: (userId, since, take) =>
-              prisma.attentionItem.findMany({
-                where: {
-                  userId,
-                  source: "EMAIL",
-                  status: "OPEN",
-                  autoEligible: true,
-                  tier: { in: ["QUEUE", "MEETING"] },
-                  isManualOverride: false,
-                  createdAt: { gte: since },
-                },
-                orderBy: { createdAt: "desc" },
-                take,
-                select: { id: true, sourceId: true },
-              }),
+            // Primary + linked-GOOGLE mail only (auto-mode-candidates.ts).
+            findCandidates: findAutoModeCandidates,
             findEmail: (userId, emailRowId) =>
               prisma.emailMessage.findFirst({
                 where: { id: emailRowId, userId },

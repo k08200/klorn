@@ -640,6 +640,10 @@ floor.
 per-provider SMTP host pinned like `hostMatchesProvider`, draft support. The
 send path stays behind the deterministic floor. Security review is mandatory.
 Reply headers reuse `mail/reply-headers.ts`.
+- Before the flip: unattended auto-mode replies from IMAP accounts (NAVER,
+  ICLOUD, IMAP) stay excluded, even once SMTP send works, until a founder
+  decision enables them. The exclusion is `canAutoSendFromMailbox` in
+  `agentcore/auto-mode-candidates.ts`; widening it is that decision's change.
 
 **B4 — generic IMAP** (*outline*). Unchanged from Phase 4: the SSRF design
 passes security review first.
