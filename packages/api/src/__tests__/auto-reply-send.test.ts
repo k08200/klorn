@@ -72,7 +72,7 @@ describe("sendAutoReplyViaFloor — autonomous AUTO_REPLY routes through the flo
   it("refuses a multi-recipient / crafted address and never sends", async () => {
     await expect(
       sendAutoReplyViaFloor("user-1", "victim@real.com, attacker@evil.com", "Re: x", "hi"),
-    ).rejects.toThrow(/single valid address/);
+    ).rejects.toThrow(/^(?!.*(?:evil\.com|victim@)).*single valid address/s);
     expect(executeToolCall).not.toHaveBeenCalled();
   });
 });

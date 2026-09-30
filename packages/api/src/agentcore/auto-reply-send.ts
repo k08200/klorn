@@ -96,7 +96,7 @@ export async function sendAutoReplyViaFloor(
     // Refuse rather than send: a non-single-address recipient means the From
     // header it was derived from is malformed or crafted (multi-recipient
     // smuggling). The caller's try/catch logs the skip.
-    throw new Error(`auto-reply recipient is not a single valid address: ${to}`);
+    throw new Error("auto-reply recipient is not a single valid address");
   }
   const receipt = mintReceipt({
     action: "send_email",

@@ -25,6 +25,7 @@ import type { AutoModeSweepDeps } from "../agentcore/auto-mode-sweep.js";
 function makeDeps() {
   const calls: string[] = [];
   const reported: unknown[] = [];
+  const failures: unknown[] = [];
   const deps: AutoModeSweepDeps = {
     findCandidates: async () => [{ id: "item-1", sourceId: "row-1" }],
     findEmail: async () => ({
@@ -47,8 +48,9 @@ function makeDeps() {
       calls.push("send");
       return sendAutoReplyViaFloor(userId, toAddr, subject, body, inReplyToEmailId);
     },
-    markLedgerFailed: async (ledgerId) => {
+    markLedgerFailed: async (ledgerId, _to, _gmailId, sendErr) => {
       calls.push(`markLedgerFailed:${ledgerId}`);
+      failures.push(sendErr);
     },
     resolveItem: async (itemId) => {
       calls.push(`resolveItem:${itemId}`);
@@ -59,7 +61,7 @@ function makeDeps() {
     },
     now: () => 1_755_500_000_000,
   };
-  return { deps, calls, reported };
+  return { deps, calls, reported, failures };
 }
 
 beforeEach(() => {
@@ -78,6 +80,17 @@ describe("auto-mode sweep with the real floor send", () => {
     expect(calls.some((c) => c.startsWith("resolveItem"))).toBe(false);
     expect(reported).toHaveLength(1);
     expect(reported[0]).toBeInstanceOf(AutoReplyNotSentError);
+  });
+
+  it("the send error is handed to markLedgerFailed, so the record can say whether delivery is unknown", async () => {
+    executeToolCall.mockResolvedValueOnce(JSON.stringify({ error: "socket hang up" }));
+    const { deps, failures } = makeDeps();
+
+    await runAutoModeSweep("u1", "guideline", deps);
+
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toBeInstanceOf(AutoReplyNotSentError);
+    expect((failures[0] as { reason: string }).reason).toBe("error");
   });
 
   it("executor returns { unsupported: true, error } -> same: failed ledger, item OPEN, error reported", async () => {

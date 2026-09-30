@@ -11,13 +11,17 @@
 
 import { drainActionOutbox } from "./agentcore/action-outbox.js";
 import { findAutoModeCandidates } from "./agentcore/auto-mode-candidates.js";
-import { runAutoModeSweep } from "./agentcore/auto-mode-sweep.js";
+import { recipientFromHeader, runAutoModeSweep } from "./agentcore/auto-mode-sweep.js";
 import {
-  autoModeLedgerKey,
+  HIDDEN_CLAIM_TYPE,
+  replyLedgerKey,
   replyLedgerKeys,
-  ruleReplyLedgerKey,
 } from "./agentcore/auto-reply-ledger-keys.js";
-import { isSingleRecipient, sendAutoReplyViaFloor } from "./agentcore/auto-reply-send.js";
+import {
+  AutoReplyNotSentError,
+  isSingleRecipient,
+  sendAutoReplyViaFloor,
+} from "./agentcore/auto-reply-send.js";
 import { runProactiveActions } from "./agentcore/proactive-actions.js";
 import { isEntitled, planHasFeature } from "./billing/stripe.js";
 import {
@@ -492,33 +496,41 @@ export async function ensureCalendarDisconnectNotification(
 }
 
 /**
- * True when an unattended reply already claimed this mail: a rule reply
- * (`auto-reply:<gmailId>`) or an auto-mode reply (`auto-mode-reply:<gmailId>`),
- * whatever became of that send — a failed send keeps its claim so nothing
- * retries it (Gmail can accept a send while the client sees an error). The
- * title clause recognises legacy "Auto-reply sent" rows from before the
- * dedupeKey. Both sweeps use this one lookup.
+ * True when an unattended reply already claimed this mail: a rule or auto-mode
+ * claim (`auto-reply:<gmailId>`), a claim an older version wrote under
+ * `auto-mode-reply:`, or a legacy "Auto-reply sent" row from before the
+ * dedupeKey. A failed send keeps its claim so nothing retries it (Gmail can
+ * accept a send while the client sees an error). Both sweeps use this lookup
+ * as a cheap pre-filter; the unique claim below is the real lock.
  */
 export async function hasAutoReplyClaim(userId: string, gmailId: string): Promise<boolean> {
-  const row = await prisma.notification.findFirst({
+  // Index hit on (userId, dedupeKey) first — the common case for any real claim.
+  const claim = await prisma.notification.findFirst({
+    where: { userId, dedupeKey: { in: replyLedgerKeys(gmailId) } },
+    select: { id: true },
+  });
+  if (claim) return true;
+  // Legacy rows carry the id only inside the message, as " [<gmailId>]".
+  const legacy = await prisma.notification.findFirst({
     where: {
       userId,
-      OR: [
-        { dedupeKey: { in: replyLedgerKeys(gmailId) } },
-        { type: "email", title: "Auto-reply sent", message: { contains: gmailId } },
-      ],
+      type: "email",
+      title: "Auto-reply sent",
+      message: { contains: `[${gmailId}]` },
     },
     select: { id: true },
   });
-  return row !== null;
+  return legacy !== null;
 }
 
 /**
- * Claim the AUTO_REPLY rule ledger for one mail — WINNER-ONLY and atomic,
+ * Claim the unattended-reply lock for one mail — WINNER-ONLY and atomic,
  * written BEFORE the send. The `(userId, dedupeKey)` unique
- * (dedupeKey = "auto-reply:<gmailId>") is the cross-tick at-most-once lock: a
- * P2002 loser (null) must never send. The row is titled "pending" until the
- * provider accepts the send, so it never claims success it has not had.
+ * (dedupeKey = "auto-reply:<gmailId>", shared with auto-mode) is the
+ * cross-tick, cross-path at-most-once lock: a P2002 loser (null) must never
+ * send. The row stays hidden from the bell (type "claim", read) until the send
+ * settles, so it never claims a success it has not had and no bell client can
+ * hold a stale "pending" entry.
  */
 export async function claimAutoReplyLedger(
   userId: string,
@@ -530,15 +542,16 @@ export async function claimAutoReplyLedger(
     return await prisma.notification.create({
       data: {
         userId,
-        type: "email",
-        dedupeKey: ruleReplyLedgerKey(gmailId),
+        type: HIDDEN_CLAIM_TYPE,
+        isRead: true,
+        dedupeKey: replyLedgerKey(gmailId),
         title: "Auto-reply pending",
         message: `Auto-reply to ${toAddr} (rule: "${ruleName}") is being sent [${gmailId}]`,
       },
       select: { id: true },
     });
   } catch (err) {
-    if (isUniqueViolation(err)) return null; // another tick already claimed this email
+    if (isUniqueViolation(err)) return null; // another tick or path already claimed this email
     throw err;
   }
 }
@@ -550,7 +563,7 @@ export async function claimAutoReplyLedger(
  */
 async function rewriteLedgerAsFailed(
   ledgerId: string,
-  data: { title: string; message: string },
+  data: { title: string; message: string; type?: string; isRead?: boolean },
   scope: string,
 ): Promise<void> {
   try {
@@ -561,18 +574,35 @@ async function rewriteLedgerAsFailed(
   }
 }
 
-/** Auto-mode send failed after the ledger committed — rewrite it as a failure record. */
+/**
+ * Only `unsupported` proves nothing was sent. Any other failure — a provider
+ * `{ error }` (Gmail can accept a send and still surface an error), an
+ * unrecognised result — leaves delivery UNKNOWN, and the record must say so
+ * rather than tell the user the reply "failed" and invite a second one.
+ */
+function deliveryUnknown(sendErr: unknown): boolean {
+  return !(sendErr instanceof AutoReplyNotSentError && sendErr.reason === "unsupported");
+}
+
+/** Auto-mode send did not go through — rewrite the ledger as a failure record. */
 export async function markAutoModeLedgerFailed(
   ledgerId: string,
   toAddr: string,
   gmailId: string,
+  sendErr?: unknown,
 ): Promise<void> {
+  const unknown = deliveryUnknown(sendErr);
   await rewriteLedgerAsFailed(
     ledgerId,
-    {
-      title: "Auto-mode reply failed",
-      message: `Auto-mode reply to ${toAddr} failed — the mail is still in your queue [${gmailId}]`,
-    },
+    unknown
+      ? {
+          title: "Auto-mode reply not confirmed",
+          message: `Auto-mode reply to ${toAddr} could not be confirmed — check your Sent folder before replying; the mail is still in your queue [${gmailId}]`,
+        }
+      : {
+          title: "Auto-mode reply failed",
+          message: `Auto-mode reply to ${toAddr} failed — the mail is still in your queue [${gmailId}]`,
+        },
     "automation.auto-mode-ledger-failed",
   );
 }
@@ -585,7 +615,7 @@ export async function markAutoModeLedgerFailed(
  *      executor resolves `email.id`'s account server-side for per-account
  *      routing,
  *   3. only after the provider ACCEPTED the send, flip the row to
- *      "Auto-reply sent" and push.
+ *      "Auto-reply sent", make it visible to the bell, and push.
  * A send that did not provably succeed rewrites the row as a failure record
  * with its dedupeKey kept, then rethrows to the caller's catch (logged +
  * captured). Nothing retries it: Gmail can accept a send while the client sees
@@ -597,11 +627,10 @@ export async function deliverRuleAutoReply(
   replyBody: string,
   ruleName: string,
 ): Promise<void> {
-  const emailMatch = email.from.match(/<([^>]+)>/) || [null, email.from];
-  const toAddr = emailMatch[1] || email.from;
-  // Refuse a malformed/crafted From before any claim, as auto-mode does.
+  const toAddr = recipientFromHeader(email.from);
+  // Defence in depth — runRuleAutoReply already refused this before the LLM.
   if (!isSingleRecipient(toAddr)) {
-    throw new Error(`auto-reply recipient is not a single valid address: ${toAddr}`);
+    throw new Error("auto-reply recipient is not a single valid address");
   }
   const ledger = await claimAutoReplyLedger(userId, email.gmailId, toAddr, ruleName);
   if (!ledger) return;
@@ -610,10 +639,19 @@ export async function deliverRuleAutoReply(
   } catch (sendErr) {
     await rewriteLedgerAsFailed(
       ledger.id,
-      {
-        title: "Auto-reply failed",
-        message: `Auto-reply to ${toAddr} (rule: "${ruleName}") failed — the mail is still in your inbox [${email.gmailId}]`,
-      },
+      deliveryUnknown(sendErr)
+        ? {
+            title: "Auto-reply not confirmed",
+            message: `Auto-reply to ${toAddr} (rule: "${ruleName}") could not be confirmed — check your Sent folder before replying [${email.gmailId}]`,
+            type: "email",
+            isRead: false,
+          }
+        : {
+            title: "Auto-reply failed",
+            message: `Auto-reply to ${toAddr} (rule: "${ruleName}") was not sent — the mail is still in your inbox [${email.gmailId}]`,
+            type: "email",
+            isRead: false,
+          },
       "automation.auto-reply-ledger-failed",
     );
     throw sendErr;
@@ -623,6 +661,8 @@ export async function deliverRuleAutoReply(
   const settled = await prisma.notification.update({
     where: { id: ledger.id },
     data: {
+      type: "email",
+      isRead: false,
       title: "Auto-reply sent",
       message: `Auto-replied to ${toAddr} (rule: "${ruleName}") [${email.gmailId}]`,
     },
@@ -638,11 +678,47 @@ export async function deliverRuleAutoReply(
 }
 
 /**
+ * One AUTO_REPLY rule match, in the order that spends nothing until it must:
+ * recipient check (no LLM spend on a crafted From) → draft → source-row
+ * re-check → claim + send (deliverRuleAutoReply).
+ *
+ * The draft took real seconds, so the source row is re-checked before sending.
+ * A row deleted mid-window (user trashed it, reconcile pruned it) would make
+ * the executor's account resolution silently fall back to the PRIMARY client —
+ * for a linked-inbox email that leaks the primary address to a sender who only
+ * knows the linked one (and auto-replying to deleted mail is wrong regardless).
+ */
+export async function runRuleAutoReply(
+  userId: string,
+  email: { id: string; gmailId: string; from: string; subject: string },
+  rule: { ruleName: string },
+  deps: {
+    draftReply: () => Promise<string>;
+    emailStillExists: (emailRowId: string) => Promise<boolean>;
+  },
+): Promise<void> {
+  if (!isSingleRecipient(recipientFromHeader(email.from))) {
+    console.warn(
+      `[AUTOMATION] auto-reply skipped — non-single recipient on ${email.gmailId} (user ${userId})`,
+    );
+    return;
+  }
+  const replyBody = await deps.draftReply();
+  if (!(await deps.emailStillExists(email.id))) {
+    console.log(
+      `[AUTOMATION] auto-reply skipped — source email ${email.gmailId} was deleted mid-draft (user ${userId})`,
+    );
+    return;
+  }
+  await deliverRuleAutoReply(userId, email, replyBody, rule.ruleName);
+}
+
+/**
  * Auto-MODE reply ledger entry (ontology v2 — guideline-driven unattended
- * replies, not EmailRule ones). Same winner-only atomic claim as
- * claimAutoReplyLedger with its own dedupeKey namespace; both sweeps check
- * hasAutoReplyClaim (both namespaces) first, so the two SEND paths are mutually
- * exclusive per email.
+ * replies, not EmailRule ones). The SAME winner-only atomic claim key as
+ * claimAutoReplyLedger (`auto-reply:<gmailId>`): whichever path claims first
+ * wins via the unique, so the two SEND paths are mutually exclusive per email
+ * even when cycles overlap. hasAutoReplyClaim is only the cheap pre-filter.
  * Notification-free by design beyond the in-app bell: the founder contract
  * says auto mode only interrupts for PUSH/MEETING, and an auto-handled reply
  * is exactly the thing that shouldn't interrupt.
@@ -657,7 +733,7 @@ export async function ensureAutoModeReplyNotification(
       data: {
         userId,
         type: "email",
-        dedupeKey: autoModeLedgerKey(gmailId),
+        dedupeKey: replyLedgerKey(gmailId),
         title: "Klorn replied for you",
         message: `Auto-mode replied to ${toAddr} [${gmailId}]`,
       },
@@ -1383,42 +1459,34 @@ async function runUserCycle(
                 matched &&
                 (matched.actionType === "AUTO_REPLY" || matched.actionType === "DRAFT_REPLY")
               ) {
-                const replyBody = await generateSmartReply(
-                  matched.actionValue,
-                  {
-                    from: email.from,
-                    subject: email.subject,
-                    body: email.body || "",
-                  },
-                  config.userId,
-                );
+                const draftReply = () =>
+                  generateSmartReply(
+                    matched.actionValue,
+                    {
+                      from: email.from,
+                      subject: email.subject,
+                      body: email.body || "",
+                    },
+                    config.userId,
+                  );
                 if (matched.actionType === "AUTO_REPLY") {
-                  // The LLM draft above took real seconds — re-check the source
-                  // row still exists before sending. A row deleted mid-window
-                  // (user trashed it, reconcile pruned it) would make the
-                  // executor's account resolution silently fall back to the
-                  // PRIMARY client — for a linked-inbox email that leaks the
-                  // primary address to a sender who only knows the linked one
-                  // (and auto-replying to deleted mail is wrong regardless).
-                  // Narrows the race from LLM-seconds to milliseconds.
-                  const sourceStillExists = await prisma.emailMessage.findFirst({
-                    where: { id: email.id, userId: config.userId },
-                    select: { id: true },
+                  await runRuleAutoReply(config.userId, email, matched, {
+                    draftReply,
+                    emailStillExists: async (emailRowId) =>
+                      (await prisma.emailMessage.findFirst({
+                        where: { id: emailRowId, userId: config.userId },
+                        select: { id: true },
+                      })) !== null,
                   });
-                  if (!sourceStillExists) {
-                    console.log(
-                      `[AUTOMATION] auto-reply skipped — source email ${email.gmailId} was deleted mid-draft (user ${config.userId})`,
-                    );
-                    continue;
-                  }
-                  await deliverRuleAutoReply(config.userId, email, replyBody, matched.ruleName);
+                } else {
+                  await draftReply();
                 }
               }
             } catch (err) {
               // Auto-reply touches an outbound send — a silent failure
-              // here means a configured rule fired nothing with no trace,
-              // and the next tick silently retries. console first:
-              // captureError is a no-op without a Sentry DSN.
+              // here means a configured rule fired nothing with no trace.
+              // The claim row keeps the mail from being retried. console
+              // first: captureError is a no-op without a Sentry DSN.
               console.warn(
                 `[AUTOMATION] auto-reply failed for ${email.gmailId} (user ${config.userId})`,
                 err,

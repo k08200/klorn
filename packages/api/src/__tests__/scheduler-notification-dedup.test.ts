@@ -85,7 +85,7 @@ describe("ensureCalendarDisconnectNotification — winner-only atomic push", () 
 });
 
 describe("claimAutoReplyLedger — winner-only atomic claim BEFORE the send", () => {
-  it("winner: creates the auto-reply:<gmailId> claim, in-flight (not 'Auto-reply sent'), and does NOT push", async () => {
+  it("winner: creates the auto-reply:<gmailId> claim, in-flight, hidden from the bell (type 'claim'), and does NOT push", async () => {
     const { prisma } = await import("../db.js");
     const result = await claimAutoReplyLedger(USER, GMAIL_ID, "to@example.com", "My Rule");
     expect(result).not.toBeNull();
@@ -94,7 +94,8 @@ describe("claimAutoReplyLedger — winner-only atomic claim BEFORE the send", ()
       expect.objectContaining({
         data: expect.objectContaining({
           dedupeKey: `auto-reply:${GMAIL_ID}`,
-          type: "email",
+          type: "claim",
+          isRead: true,
           title: "Auto-reply pending",
         }),
       }),
