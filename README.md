@@ -159,19 +159,14 @@ docs/           doctrine, screenshots, operational notes
 
 ## MCP
 
-Klorn's inbox is an MCP server. Create a key in **Settings → MCP API keys**, then point any Streamable HTTP MCP client (Claude Desktop/Code, Cursor, …) at it:
+Klorn's inbox is an MCP server. Create a key in **Settings → MCP API keys**, put it in `KLORN_API_KEY`, then add the server. Claude Code:
 
-```json
-{
-  "mcpServers": {
-    "klorn": {
-      "type": "http",
-      "url": "https://<your-klorn-api>/api/mcp",
-      "headers": { "Authorization": "Bearer klorn_sk_…" }
-    }
-  }
-}
+```bash
+claude mcp add --transport http klorn --scope user https://api.klorn.ai/api/mcp \
+  --header "Authorization: Bearer $KLORN_API_KEY"
 ```
+
+Self-hosted: use your API origin plus `/api/mcp`. Setup for Codex CLI, Cursor, Gemini CLI and the xAI API, plus limits and what is not supported yet: [docs/mcp/connect-clients.md](docs/mcp/connect-clients.md).
 
 The toolset is the assistant chat's locked-down set — list/read/classify/briefing and other read-or-low-risk tools (generate_briefing may trigger the day's briefing notification, deduped to one per day). Nothing reachable over MCP can send, delete, or archive mail, and the API key works **only** on this endpoint: it is never accepted by the rest of the API. One caution: tool results contain your actual mail — to the agent you connect, inbound email becomes live context, so treat message content as untrusted data in that agent's own rules.
 

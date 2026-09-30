@@ -323,10 +323,15 @@ because a draft made through Graph `POST /me/messages` does not thread.
   resolved in-reply-to email id and the thread id join the receipt payload
   hash, and `RECEIPT_SCHEMA_VERSION` (`judge/attention-floor.ts`) is bumped.
 
-**A5 — client setup docs.** Read-only part depends on nothing; the write part
+**A5 — client setup docs.** Read-only part done 2026-10-01
+(`docs/mcp/connect-clients.md`). Read-only part depends on nothing; the write part
 follows A2 and A4. One page with snippets for Claude Code, Codex, Cursor,
 Gemini CLI and the xAI API. Each snippet is checked against the vendor's
 current documentation on the day it is written, and the date is recorded.
+- 2026-10-01: all five vendor pages document a static `Authorization` header.
+  Open point: xAI's remote MCP page does not say whether `authorization` gets a
+  `Bearer ` prefix added. The snippet passes the full `Bearer klorn_sk_...`
+  value, following xAI's Speech to Speech example. Not tested end to end.
 
 **A6 — specification drift check.** Done 2026-09-29.
 - The installed SDK speaks protocol revisions up to 2025-11-25. The latest
