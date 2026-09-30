@@ -37,8 +37,8 @@ import {
   isAgentSettableTier,
 } from "../judge/agent-tier.js";
 import { normalizeTier, type Tier } from "../judge/tiers.js";
+import { findUserEmail, MAX_EMAIL_ID_LENGTH, parseEmailIdArg } from "../mail/email-lookup.js";
 import { captureError } from "../sentry.js";
-import { MAX_TARGET_ID_LENGTH } from "./write-audit.js";
 
 export const SET_TIER_TOOL_NAME = "set_tier";
 
@@ -78,7 +78,7 @@ export interface SetTierContext {
 type SetTierErrorCode = "INVALID_ARGUMENT" | "NOT_FOUND" | "MANUAL_OVERRIDE" | "UNAVAILABLE";
 
 const TIER_ERROR = `tier must be one of ${AGENT_SETTABLE_TIERS.join(", ")}.`;
-const EMAIL_ID_ERROR = `email_id must be a non-empty string of at most ${MAX_TARGET_ID_LENGTH} characters.`;
+const EMAIL_ID_ERROR = `email_id must be a non-empty string of at most ${MAX_EMAIL_ID_LENGTH} characters.`;
 const NOT_FOUND_ERROR = "No open email with this id in your inbox.";
 const MANUAL_OVERRIDE_ERROR =
   "This email's lane was moved by the user by hand, so it was left as it is.";
@@ -116,11 +116,10 @@ type ParsedArgs =
   | { ok: false; error: string };
 
 function parseArgs(args: Record<string, unknown>): ParsedArgs {
-  const raw = typeof args.email_id === "string" ? args.email_id.trim() : "";
-  if (raw.length === 0 || raw.length > MAX_TARGET_ID_LENGTH)
-    return { ok: false, error: EMAIL_ID_ERROR };
+  const emailId = parseEmailIdArg(args.email_id);
+  if (emailId === null) return { ok: false, error: EMAIL_ID_ERROR };
   if (!isAgentSettableTier(args.tier)) return { ok: false, error: TIER_ERROR };
-  return { ok: true, emailId: raw, tier: args.tier };
+  return { ok: true, emailId, tier: args.tier };
 }
 
 interface OpenItem {
@@ -129,12 +128,9 @@ interface OpenItem {
   isManualOverride: boolean;
 }
 
-/** The caller's OPEN email attention item for a DB id or provider id, same lookup shape as mark_read. */
+/** The caller's OPEN email attention item for a DB id or provider id (mail/email-lookup.ts, shared with mark_read). */
 async function findOpenItem(userId: string, emailId: string): Promise<OpenItem | null> {
-  const email = await prisma.emailMessage.findFirst({
-    where: { userId, OR: [{ id: emailId }, { gmailId: emailId }] },
-    select: { id: true },
-  });
+  const email = await findUserEmail(userId, emailId, { id: true });
   if (!email) return null;
   return prisma.attentionItem.findFirst({
     where: { userId, source: "EMAIL", sourceId: email.id, status: "OPEN" },

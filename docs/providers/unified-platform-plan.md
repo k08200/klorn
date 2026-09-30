@@ -475,6 +475,130 @@ because a draft made through Graph `POST /me/messages` does not thread.
 - Rule: if any send path ever carries agent-supplied reply context, the
   resolved in-reply-to email id and the thread id join the receipt payload
   hash, and `RECEIPT_SCHEMA_VERSION` (`judge/attention-floor.ts`) is bumped.
+- **Landed 2026-09-30** (branch `feat/mcp-create-draft`, not yet merged):
+  - **`create_draft(email_id, body, subject?)`** (`mcp/create-draft.ts`).
+    MCP-only: not in `ALL_TOOLS`, `CHAT_TOOL_NAMES` or the risk table. It is the
+    third member of the write set (`mark_read`, `set_tier`, `create_draft`), so
+    the A2a gate, audit row and shared per-user cap apply unchanged; its success
+    predicate is `success === true`, and the audit `targetId` is the email id.
+    Result: `{success: true, draft_id, provider, to}`; a provider's own
+    `{unsupported}` or `{error}` is returned unchanged; Klorn's refusals are
+    `{error, code}` with `INVALID_ARGUMENT`, `NOT_FOUND`, `NO_REPLY_ADDRESS` or
+    `UNAVAILABLE`. A hard failure is captured and answered generically, and does
+    not claim that no draft exists.
+  - **Plan gate: `email_write`** (`TOOL_FEATURE_MAP` in `billing/stripe.ts`), the
+    same map entry `send_email` uses, and the map the chat's write tools follow.
+    MCP follows the tool feature map, so **pre-launch FREE keys cannot draft
+    while the human draft route (`POST /api/email/:id/gmail-draft`, behind
+    `requireEntitled`) admits FREE with the paywall off.** That is within L29
+    ("plan gate unchanged"): the gate is the existing one, applied to a new tool.
+    FREE keys see `mark_read` and `set_tier` but not `create_draft`. Say so if
+    FREE should draft.
+  - **The arguments are closed.** Anything outside `email_id`, `body`, `subject`
+    is refused with `INVALID_ARGUMENT` (no echo of the input): `to`, `cc`,
+    `bcc`, `in_reply_to`, `references`, `thread_id`, `html`, `attachments`. The
+    schema says `additionalProperties: false` for clients that read it.
+  - **Resolution.** `email_id` (Klorn id or provider id) resolves the caller's
+    own row through one shared helper (`mail/email-lookup.ts`, also used by
+    `mark_read` and `set_tier`: same id parse for the two MCP tools, same
+    `userId` + `OR:[{id},{gmailId}]` lookup for all three). The row's
+    `linkedInboxAccountId` goes to `mailActionsFor`, `getReplyHeaders` and
+    `createDraft` (`null` only for a primary-inbox row), and the provider comes
+    from the dispatcher. OUTLOOK answers `{unsupported: true}` before any provider
+    call. The reply headers are `getReplyHeaders` of the original: In-Reply-To is
+    its Message-ID, References is its chain plus that id (the `/reply` route's
+    shape), and with `{}` the draft carries no `reply` and threads by thread id
+    alone.
+  - **Recipient: the original `From`, always.** One bare address
+    (`mail/single-address.ts`, in `mail/` beside `email-address.ts` and
+    `reply-headers.ts`), parsed in one linear pass with no backtracking regex on
+    the raw header. The display name is dropped, quoted names may hold commas, a
+    parenthesised comment is allowed in the display name when exactly one angle
+    group exists (`Jane Doe (Acme) <jane@acme.com>`), and a second address, a
+    group, a comment anywhere else, a control character, a non-ASCII address or a
+    header over 998 characters is refused. It is validated BEFORE any provider is
+    touched, so a refusal makes no provider call. This is the human reply route's
+    rule (`email-replies.ts` uses From only).
+    **Reply-To is ignored on purpose.** It is sender-controlled, so honouring it
+    could route an agent's draft to a third party, and a test pins that a Reply-To
+    header is never used. Honouring it later is a **founder decision**, not a
+    two-line enablement: it needs a product call on where a reply should go, then
+    a seam change (`replyTo?` on `ReplyHeadersResult`, `"Reply-To"` in the Gmail
+    `metadataHeaders`, the same for IMAP) after B3 has merged.
+    `createEmailDraft` still refuses a no-reply sender, and that error passes
+    through.
+  - **Subject and body.** Limits count code points, the unit the schema's
+    `maxLength` counts. Subject (`mail/reply-subject.ts`): the agent's, checked
+    (1 to 300, no control character or line break, tested before trimming so a
+    trailing newline is an error; bidi and zero-width controls U+200B,
+    U+200E-200F, U+202A-202E and U+2066-2069 are stripped; the zero-width
+    joiner and non-joiner are kept for Persian and Indic spelling and emoji), else `Re: <original>` flattened to one line, stripped
+    the same way, capped, trimmed after the cut, with no second `Re:` in any
+    case. Body: plain text, 1 to 20,000, no NUL, sent as `text/plain` and never
+    interpreted (there is no html argument). Both limits are proposed values. A
+    localised reply prefix in the original (for example `AW:`) is not recognised,
+    so it gets a `Re:` in front.
+  - **Audit identity.** `argsHash` only marks an argument object over 4 KB as
+    oversize, so two different long drafts to one email left identical rows.
+    `McpWriteAudit` gains three nullable columns (migration
+    `20261001020000_mcp_write_audit_draft`, additive, no index): `bodyHash`
+    (SHA-256 of the body, written with the `attempted` row, so a crashed call
+    still identifies its content), `recipientHash` (SHA-256 of the lowercased
+    recipient, recomputable from the original's From) and `draftId` (the
+    provider's id, id-shaped values only), the last two written when the draft
+    was created. Hashes, not plain text, because the table's rule is that no mail
+    content is stored and a recipient address is that; A3's read path selects an
+    allow-list of columns, so none of these reaches a response. Tested with a
+    15,000-character body.
+  - **Its own cap, and a retry guard.** `create_draft` is also held to 10 per
+    user per minute (`MCP_CREATE_DRAFT_CAP_PER_WINDOW`, a proposed value) on top of
+    the shared 30; a draft refused by its own cap spends none of the shared
+    budget. An identical request (same user, same email, same body, same subject)
+    within 10 minutes (`DRAFT_DEDUPE_WINDOW_MS`) returns the first draft's id with
+    `deduplicated: true` and creates nothing (`mcp/draft-dedupe.ts`). The subject
+    is part of the key, so a body kept and a subject changed is a new draft. It is
+    in-process like the cap, so per instance: a retry that lands on another
+    instance can still create a second draft. Bounded by a sweep on every insert
+    and a ceiling of 2,000 entries. A draft the user deleted inside the window
+    still answers a retry with its old id.
+  - **Never sends.** No send call exists in the module or its helpers (a test
+    reads the sources), and every test in the file asserts a `sendEmail` spy stayed
+    uncalled. No local state is written: no reply chip, no `repliedAt`, no
+    candidate-intake status, because nothing was sent.
+  - **Verify result.** Flag x permission x plan for list and call; foreign id;
+    Outlook; unsupported and soft-error passthrough; the row's account at every
+    step; headers from the provider and never from input; From-only recipient with
+    Reply-To ignored and no provider call on an unusable From; subject and body
+    limits in code points; audit row identity, both caps and a failed insert; the
+    retry guard; flag off byte-identical to `legacyMcpToolDefs`. The implementer
+    (not CI) ran mutations on 2026-09-30, and each failed at least one test before
+    it was restored. First round: `to` flowing from the validated input at the
+    call site, `to` accepted from the arguments, From preferred over Reply-To,
+    the row's account replaced by the primary, Outlook no longer refused, reply
+    headers taken from the arguments, a send call added, the plan entry removed,
+    the line-break check moved after trimming, the `userId` scope dropped from the
+    lookup. Second round: Reply-To honoured again, From validated after a provider
+    call, no body hash recorded, the recipient hashed without lowercasing, no
+    per-tool cap, a capped draft spending the shared budget, the retry key without
+    the user, a retry memory that never expires, nothing remembered, bidi controls
+    not stripped, the body cap counted in UTF-16 units, the `userId` scope dropped
+    from the shared lookup, no trim after the cut. (One more mutation, a comment
+    accepted after the angle group, was survived: the later checks refuse the
+    same inputs, so the guard was redundant and was removed.)
+  - **Not covered.** No live Gmail call: the provider seam is a spy, so the MIME
+    that `createEmailDraft` builds from `to`, `subject` and `reply` is checked
+    only by its own existing tests. A5's write-tool page is still to do.
+- **Before the flip (A4).** `MCP_WRITE_TOOLS_ENABLED` does not flip with
+  `create_draft` live until both of these are settled:
+  - **A visible marker on agent-created drafts.** Today an agent's draft is
+    indistinguishable from the user's own in the Drafts folder, and the user may
+    send it without reading it. A label or a one-line body prefix is needed. This
+    is a **product decision**, not an engineering one: a prefix is visible in the
+    sent mail if the user forgets to remove it, a label is invisible in some
+    clients. Nothing in A4 adds one.
+  - **A5's write-tool page must warn** that the draft goes to the original
+    sender (never Reply-To, never an address the agent chooses) and that it must
+    be read before it is sent.
 
 **A5 — client setup docs.** Read-only part done 2026-10-01
 (`docs/mcp/connect-clients.md`). Read-only part depends on nothing; the write part
@@ -895,6 +1019,10 @@ flag OFF.
   password and confirm one rejected login pauses both send and read/star, and
   that reconnecting clears it. Check rate behaviour with a burst of replies from
   one account.
+- Unattended auto-mode replies from IMAP accounts (NAVER, ICLOUD, IMAP) stay
+  excluded even once SMTP send works, until a founder decision enables them. The
+  exclusion is `canAutoSendFromMailbox` in `agentcore/auto-mode-candidates.ts`;
+  widening it is that decision's change.
 
 **B4 — generic IMAP** (*outline*). Unchanged from Phase 4: the SSRF design
 passes security review first.

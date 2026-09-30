@@ -17,6 +17,7 @@ import {
 } from "../judge/attention-floor.js";
 import { upsertAttentionForCalendarEvent } from "../judge/attention-mirror.js";
 import { forget, MEMORY_TOOLS, recall, remember } from "../learning/memory.js";
+import { findUserEmail } from "../mail/email-lookup.js";
 import { classifyEmails, GMAIL_TOOLS, listEmails, readEmail } from "../mail/gmail.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { markEmailReplied } from "../mail/reply-state.js";
@@ -333,9 +334,9 @@ async function executeToolCallInternal(
         // Resolve the row so we mark-read on the RIGHT account: a message synced
         // from a linked secondary inbox must be acted on via that inbox's client.
         const emailId = requireString(args.email_id, "email_id");
-        const row = await prisma.emailMessage.findFirst({
-          where: { userId, OR: [{ id: emailId }, { gmailId: emailId }] },
-          select: { gmailId: true, linkedInboxAccountId: true },
+        const row = await findUserEmail(userId, emailId, {
+          gmailId: true,
+          linkedInboxAccountId: true,
         });
         const actions = await mailActionsFor(userId, row?.linkedInboxAccountId ?? null);
         return JSON.stringify(

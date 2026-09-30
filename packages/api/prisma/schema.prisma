@@ -218,6 +218,18 @@ model McpWriteAudit {
   tierFrom String?
   tierTo   String?
 
+  // create_draft only (step A4): what identifies the draft without storing any of
+  // it. bodyHash is the SHA-256 hex of the body text as handed to the provider,
+  // written with the `attempted` row (argsHash only marks a body over 4 KB as
+  // oversize, so it cannot tell two long drafts apart). recipientHash is the
+  // SHA-256 hex of the lowercased recipient address and draftId the provider's
+  // draft id, both written when the draft was created. No body, address or
+  // subject is stored. Null for every other tool, for refusals, and for a draft
+  // that was not created.
+  bodyHash      String?
+  recipientHash String?
+  draftId       String?
+
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])

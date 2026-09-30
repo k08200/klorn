@@ -3,15 +3,22 @@ import { sendEmailPayloadHash } from "../judge/attention-floor.js";
 
 // Capture executeToolCall calls; the helper must route the send through it
 // (the single gated floor path) instead of calling gmail.sendEmail directly.
-const executeToolCall = vi.fn(async () => JSON.stringify({ ok: true }));
+// Default = the send_email SUCCESS arm of the provider result union.
+const SENT = JSON.stringify({ success: true, messageId: "m-1", threadId: "t-1" });
+const executeToolCall = vi.fn(async (..._args: unknown[]) => SENT);
 vi.mock("../agentcore/tool-executor.js", () => ({
   executeToolCall: (...args: unknown[]) => executeToolCall(...args),
 }));
 
-const { sendAutoReplyViaFloor } = await import("../agentcore/auto-reply-send.js");
+const { AutoReplyNotSentError, sendAutoReplyViaFloor } = await import(
+  "../agentcore/auto-reply-send.js"
+);
 
 describe("sendAutoReplyViaFloor — autonomous AUTO_REPLY routes through the floor (W1)", () => {
-  beforeEach(() => executeToolCall.mockClear());
+  beforeEach(() => {
+    executeToolCall.mockReset();
+    executeToolCall.mockImplementation(async () => SENT);
+  });
 
   it("sends via executeToolCall(send_email) with a receipt that binds the exact bytes", async () => {
     const to = "Bob@Example.com ";
@@ -65,7 +72,97 @@ describe("sendAutoReplyViaFloor — autonomous AUTO_REPLY routes through the flo
   it("refuses a multi-recipient / crafted address and never sends", async () => {
     await expect(
       sendAutoReplyViaFloor("user-1", "victim@real.com, attacker@evil.com", "Re: x", "hi"),
-    ).rejects.toThrow(/single valid address/);
+    ).rejects.toThrow(/^(?!.*(?:evil\.com|victim@)).*single valid address/s);
     expect(executeToolCall).not.toHaveBeenCalled();
+  });
+});
+
+// executeToolCall's send_email case does NOT throw on a provider failure: it
+// resolves with JSON.stringify(result) where result is the SendMailResult
+// union — { success: true, … } | { error } | { unsupported: true, error }
+// (a thrown provider error is also folded into { error } by the executor's
+// catch). The helper must turn every non-success into a rejection so a caller
+// can never record a reply that did not leave.
+describe("sendAutoReplyViaFloor — only a proven send resolves", () => {
+  beforeEach(() => {
+    executeToolCall.mockReset();
+  });
+
+  async function sendWithResult(raw: string) {
+    executeToolCall.mockResolvedValueOnce(raw);
+    return sendAutoReplyViaFloor("user-1", "bob@example.com", "Re: x", "hi", "email-42");
+  }
+
+  it("resolves when the executor reports { success: true }", async () => {
+    await expect(sendWithResult(SENT)).resolves.toBeUndefined();
+  });
+
+  it("rejects with AutoReplyNotSentError when the executor returns { error }", async () => {
+    const err = await sendWithResult(JSON.stringify({ error: "Gmail not connected." })).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(AutoReplyNotSentError);
+    expect((err as InstanceType<typeof AutoReplyNotSentError>).reason).toBe("error");
+  });
+
+  it("rejects with reason 'unsupported' for { unsupported: true, error } (NAVER/iCloud row)", async () => {
+    const err = await sendWithResult(
+      JSON.stringify({
+        unsupported: true,
+        error: "This mailbox's provider does not support sending mail from Klorn yet.",
+      }),
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AutoReplyNotSentError);
+    expect((err as InstanceType<typeof AutoReplyNotSentError>).reason).toBe("unsupported");
+  });
+
+  it("carries the reason code only: provider detail (it can contain the recipient) never reaches the message", async () => {
+    const err = await sendWithResult(
+      JSON.stringify({
+        error: 'Invalid email address: "bob@example.com" at smtp.internal.example',
+      }),
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AutoReplyNotSentError);
+    const message = (err as Error).message;
+    expect(message).toContain("error");
+    expect(message).not.toContain("@");
+    expect(message).not.toContain("bob");
+    expect(message).not.toContain("smtp.internal");
+  });
+
+  it("treats unsupported as a failure even if it is (wrongly) paired with success: true", async () => {
+    await expect(
+      sendWithResult(JSON.stringify({ success: true, unsupported: true, error: "x" })),
+    ).rejects.toBeInstanceOf(AutoReplyNotSentError);
+  });
+
+  it("treats error as a failure even if it is (wrongly) paired with success: true", async () => {
+    await expect(
+      sendWithResult(JSON.stringify({ success: true, error: "partial" })),
+    ).rejects.toBeInstanceOf(AutoReplyNotSentError);
+  });
+
+  it.each([
+    ["non-JSON text", "not json at all"],
+    ["an empty string", ""],
+    ["a JSON array", "[]"],
+    ["JSON null", "null"],
+    ["a JSON string", JSON.stringify("sent")],
+    ["an object without success", JSON.stringify({ ok: true })],
+    ["success: false", JSON.stringify({ success: false })],
+    ["success as a truthy string", JSON.stringify({ success: "true" })],
+    ["the truncation wrapper", JSON.stringify({ truncated: true, content: "{" })],
+  ])("fails closed on %s — an unproven send is never a sent reply", async (_label, raw) => {
+    const err = await sendWithResult(raw).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AutoReplyNotSentError);
+    expect((err as InstanceType<typeof AutoReplyNotSentError>).reason).toBe("unrecognized");
+  });
+
+  it("lets a floor refusal thrown by the executor propagate unchanged", async () => {
+    const floor = new Error("floor refused");
+    executeToolCall.mockRejectedValueOnce(floor);
+    await expect(sendAutoReplyViaFloor("user-1", "bob@example.com", "Re: x", "hi")).rejects.toBe(
+      floor,
+    );
   });
 });
