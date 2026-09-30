@@ -15,6 +15,7 @@
 
 import { executeToolCall } from "../agentcore/tool-executor.js";
 import { captureError } from "../sentry.js";
+import { executeSetTier, SET_TIER_TOOL_NAME } from "./set-tier.js";
 import { errorResult, type McpToolResult, textResult } from "./tool-result.js";
 import { recordAllowedWrite, recordRefusedWrite, settleWriteAudit } from "./write-audit.js";
 
@@ -70,12 +71,15 @@ export function consumeMcpWriteBudget(userId: string, now: number = Date.now()):
  * must add its own (mcp-tool-gate.test.ts pins that every member has one); a tool
  * without one never settles to ok.
  */
+const hasSuccessTrue = (parsed: unknown): boolean =>
+  typeof parsed === "object" &&
+  parsed !== null &&
+  !Array.isArray(parsed) &&
+  (parsed as { success?: unknown }).success === true;
+
 export const WRITE_TOOL_SUCCESS: Readonly<Record<string, (parsed: unknown) => boolean>> = {
-  mark_read: (parsed) =>
-    typeof parsed === "object" &&
-    parsed !== null &&
-    !Array.isArray(parsed) &&
-    (parsed as { success?: unknown }).success === true,
+  mark_read: hasSuccessTrue,
+  [SET_TIER_TOOL_NAME]: hasSuccessTrue,
 };
 
 /** Whether `resultText` is a success for `tool`. Non-JSON, arrays, in-band
@@ -95,6 +99,13 @@ export interface McpWriteCall {
   apiKeyId: string;
   name: string;
   args: Record<string, unknown>;
+}
+
+/** set_tier is MCP-only and has its own executor; everything else shares the chat/agent one. */
+function executeWriteTool(call: McpWriteCall): Promise<string> {
+  const { userId, apiKeyId, name, args } = call;
+  if (name === SET_TIER_TOOL_NAME) return executeSetTier({ userId, apiKeyId }, args);
+  return executeToolCall(userId, name, args);
 }
 
 export async function runMcpWriteCall(call: McpWriteCall): Promise<McpToolResult> {
@@ -118,7 +129,7 @@ export async function runMcpWriteCall(call: McpWriteCall): Promise<McpToolResult
   }
 
   try {
-    const result = await executeToolCall(userId, name, args);
+    const result = await executeWriteTool(call);
     await settleWriteAudit(
       audit,
       auditId,

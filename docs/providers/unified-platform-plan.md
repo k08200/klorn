@@ -271,7 +271,10 @@ change to `attention-override.ts` and `attention-mirror.ts`.
   - `attention-mirror.ts` resets `isManualOverride: false` on every producer
     write for the non-email sources (`upsertAttentionFor*` for pending action,
     task, calendar event, notification and commitment; the pending-action write is
-    at `:227` and `:249`). Only `upsertAttentionForEmailJudgement` leaves it.
+    at `:227` and `:249`). **Corrected 2026-09-30:** `upsertAttentionForEmailJudgement`
+    does not leave it either. Its update branch also writes `isManualOverride:
+    false` (pinned by `attention-mirror.test.ts`), so any re-judge through it
+    replaces a human override as well as an agent change.
   - `fallback-rejudge.ts` rewrites only items with `isManualOverride: false`
     (`:159`). An agent change stored with `isManualOverride: false` can be
     silently overwritten by a re-judge. A2b must decide how an agent's lane
@@ -295,7 +298,8 @@ change to `attention-override.ts` and `attention-mirror.ts`.
     other than `DecisionLabel`. It never sets `isManualOverride`. It is
     excluded from judge context, sender priors and accuracy metrics. A human
     override always wins over an agent's.
-  - Read tools return the current lane so an agent can see what it changes.
+  - The agent sees the lane it changes: the `set_tier` result carries the
+    previous and the new lane (chosen 2026-09-30, see "Landed").
 - Verify: tests first for rejected tier values, the audit row, and the learning
   exclusion (an agent tier change must not appear in correction examples,
   sender priors, calibration, decision metrics, the weekly report or ontology
@@ -305,7 +309,76 @@ change to `attention-override.ts` and `attention-mirror.ts`.
 - Exit: with the flag off, the tool list and every tool result are
   byte-identical to today. `MCP_WRITE_TOOLS_ENABLED` does not flip before A2b
   and A3 have both merged.
-- Rollback: flag off.
+- Rollback: flag off. The two columns are additive and ignorable.
+- **Landed 2026-09-30** (branch `feat/mcp-set-tier`, not yet merged):
+  - **Provenance.** Two nullable `AttentionItem` columns, `agentTierSetAt` and
+    `agentTierKeyId` (the API key id, not a foreign key). Non-null means the
+    current tier is the agent's. `isManualOverride` is never set, `DecisionLabel`
+    is never touched, and the `tierReason` is `Agent change — moved to <TIER> by
+    a connected agent`, which cannot match `MANUAL_OVERRIDE_PREFIX`. Shared
+    vocabulary in `judge/agent-tier.ts` (`NOT_AGENT_SET` for reads,
+    `CLEAR_AGENT_TIER` for writes). A separate column rather than a tierReason
+    marker because tierReason is free text that the judge also writes.
+  - **`set_tier(email_id, tier)`** (`mcp/set-tier.ts`). Definition is MCP-only
+    (not in `ALL_TOOLS`, `CHAT_TOOL_NAMES` or the risk table); plan-gated through
+    `TOOL_FEATURE_MAP` exactly like `mark_read`. Resolves the id like `mark_read`
+    (userId-scoped), then the OPEN email item. Results: `{success, email_id,
+    previous_tier, tier, changed}` or `{error, code}` with `INVALID_ARGUMENT`,
+    `NOT_FOUND`, `MANUAL_OVERRIDE`, `UNAVAILABLE`. AUTO and CALL are rejected. The
+    requested lane already held is a no-op (no write, no stamp). The write is
+    guarded in its WHERE on `status: OPEN` and `isManualOverride: false`, so a
+    human override that lands after the read still wins.
+  - **Read visibility.** Previous and new lane in the `set_tier` result, not
+    enrichment of `list_emails` / `read_email`. Smaller: no parse and re-serialise
+    of capped tool output, no extra queries on the hot read path, and the
+    byte-identity of every read result is structural instead of conditional. The
+    cost is that an agent learns the current lane only when it writes. Revisit
+    for A8 if it needs to filter by lane before acting.
+  - **Learning readers.** `judge-context` (sender items: history prior, tier
+    history, override count; corrections), `calibration-snapshot` and
+    `correction-eval` skip agent-set rows via `NOT_AGENT_SET`. Without the
+    sender-items filter an injected agent could build the unanimous-history prior
+    (QUEUE, three emails) that skips the LLM for that sender. `decision-metrics`,
+    `weekly-report` and `ontology-proposals-store` read only the ledger, which
+    `set_tier` never writes. All proved against the real readers in
+    `agent-tier-learning-exclusion.test.ts`, each with a human control.
+  - **Who rewrites an EMAIL item's tier.** New-mail ingest judges only new rows
+    (an existing row is never re-judged by `persistGmailEmail`) and the backfill
+    sweep only emails with no item, so neither can reach an agent-set item.
+    `healStaleAttentionItem` (`routes/firewall.ts`, stale `inputHash`) skips an
+    agent-set item and refreshes only the hash: the UNREAD flip that the agent's
+    own `mark_read` causes is one of the four hashed fields, so without this the
+    next board read re-judged and undid the change. `fallback-rejudge` skips
+    agent-set items in both its read and its guarded write. The update branch of
+    `upsertAttentionForEmailJudgement` replaces the tier and clears the stamp; it
+    is reached by the heal (judge-tiered items only) and by
+    `scripts/rejudge-open-email-items.ts`, an explicit operator re-judge of every
+    OPEN item that replaces human and agent tiers alike. **An agent change is
+    therefore replaced only by a human action or that operator script.**
+  - **Human after agent.** `overrideAttentionTier` clears the stamp. A
+    `confirmAttentionTier` on an agent-set item answers ok but does not stamp the
+    ledger: a `CONFIRM:` of the agent's lane against the judge's shown tier is a
+    contradictory label, and first-stamp-wins would block the user's real
+    override.
+  - **Side effects.** `set_tier` fires no push, banner, Telegram message, bell row
+    or client wake-up (those fire only inside `judgeAndMirrorEmail`). The next
+    generated briefing may list an item the agent moved to PUSH, as it lists any
+    open PUSH item. `autoEligible` is untouched, so an agent cannot add an item to
+    the auto-send sweep (it only ever selects judge-computed `autoEligible` on
+    QUEUE or MEETING); it can only move one out.
+  - **Gmail labels.** `set_tier` writes none. With `GMAIL_LABEL_MODE_ENABLED` the
+    stale label would be read by `reconcileLabelCorrection` as a human drag, undo
+    the change and mint a false human correction, so it now skips agent-set items.
+    Known limits: a human who drags the Gmail label on an agent-set item is not
+    recorded until they act in the app, and the Gmail label keeps the judge's
+    lane. Separately, and not changed here: the in-app override route writes no
+    label either, so with label mode on the same reconcile can read the stale
+    label against a human's in-app move (source reading only, not reproduced; the
+    flag is off by default).
+  - **Verify result.** `prisma migrate diff` from origin/main: two `ADD COLUMN`
+    statements, nothing else. Mutation checks: writing `isManualOverride` from
+    `set_tier`, and dropping the sender-items and calibration filters, each fail
+    the new tests.
 
 **A3 — activity log and key permission UI.** Depends on: A2. Web settings
 lists write calls per key and offers the read-write choice, both shown only
@@ -622,7 +695,7 @@ time, whatever the graph says. The later step rebases, reruns
 | File | Steps |
 |---|---|
 | `packages/api/prisma/schema.prisma` | A1, A2a, A2b, B2, C1, D2, E1, F |
-| `packages/api/src/mcp/tool-gate.ts`, `mcp/server.ts` | A2a, A2b, A4 |
+| `packages/api/src/mcp/tool-gate.ts`, `mcp/write-call.ts`, `mcp/server.ts` | A2a, A2b, A4 |
 | `mail/providers/types.ts`, `dispatch.ts` | A4, B0, B0b, B1, B2, B3, E2 |
 | `mail/imap-connection.ts`, `mail/imap-sync.ts`, `mail/providers/imap.ts` | B1, B2, B3 |
 | `mail/providers/outlook.ts`, `routes/email-replies.ts` | B0b, the `gmail-draft` follow-up under B0 |

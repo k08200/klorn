@@ -23,6 +23,7 @@ import { prisma } from "../db.js";
 import { getSuppressionSet, isSuppressed } from "../learning/feedback-adaptor.js";
 import type { EngagementKind } from "../learning/sender-policy.js";
 import { captureError } from "../sentry.js";
+import { CLEAR_AGENT_TIER } from "./agent-tier.js";
 import { computeAttentionInputHash } from "./attention-input-hash.js";
 import { recordDecision, recordEmailDecision } from "./decision-label.js";
 import type { PocJudgement } from "./poc-judge.js";
@@ -934,6 +935,8 @@ export async function upsertAttentionForEmailJudgement(
         // Reset on every re-judge: a prior genuine override must not survive
         // as "true" over fresh judge-authored tierReason text.
         isManualOverride: false,
+        // Same for an MCP agent's stamp (step A2b): the tier is judge-authored again.
+        ...CLEAR_AGENT_TIER,
         inputHash,
         inputHashAt,
       },

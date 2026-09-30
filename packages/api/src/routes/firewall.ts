@@ -26,7 +26,11 @@ import { getUserId, requireAuth } from "../auth.js";
 import { requireAppAccess } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
 import { dismissAttentionItem } from "../judge/attention-dismiss.js";
-import { checkAttentionInputHash, registerHashMismatch } from "../judge/attention-input-hash.js";
+import {
+  checkAttentionInputHash,
+  computeAttentionInputHash,
+  registerHashMismatch,
+} from "../judge/attention-input-hash.js";
 import { confirmAttentionTier, overrideAttentionTier } from "../judge/attention-override.js";
 import { snoozeAttentionItem } from "../judge/attention-snooze.js";
 import { getDecisionMetrics } from "../judge/decision-metrics.js";
@@ -105,6 +109,37 @@ export function _resetHashMismatchDedupeForTests(): void {
   hashMismatchesSeen.clear();
 }
 
+interface HashableEmailRow {
+  id: string;
+  from: string;
+  subject: string;
+  snippet: string | null;
+  labels: string[];
+}
+
+/**
+ * Stale-hash heal for an item whose lane an MCP agent set (step A2b). A stale
+ * hash here is usually a read-state flip (UNREAD is one of the four hashed
+ * fields, and the agent's own mark_read causes it) — not a reason to re-judge
+ * and silently undo the agent. Refresh only the hash so the mismatch stops; the
+ * lane, its reason and the stamp are untouched. Guarded on the stamp, so a human
+ * override that lands first (which clears it) falls through to the normal path.
+ */
+async function refreshHashKeepingAgentLane(userId: string, row: HashableEmailRow): Promise<void> {
+  await prisma.attentionItem.updateMany({
+    where: { userId, source: "EMAIL", sourceId: row.id, agentTierSetAt: { not: null } },
+    data: {
+      inputHash: computeAttentionInputHash({
+        from: row.from,
+        subject: row.subject,
+        snippet: row.snippet,
+        labels: row.labels,
+      }),
+      inputHashAt: new Date(),
+    },
+  });
+}
+
 /**
  * Self-heal a stale decision: re-fetch the full row and re-judge it, which
  * rewrites inputHash over the CURRENT bytes (attention-mirror upsert). The
@@ -112,7 +147,7 @@ export function _resetHashMismatchDedupeForTests(): void {
  * not a repeated alert (checkAttentionInputHash's own doc says to pair it
  * with a background re-classify). Fire-and-forget; failures are captured.
  */
-function healStaleAttentionItem(userId: string, emailDbId: string): void {
+function healStaleAttentionItem(userId: string, emailDbId: string, agentSet = false): void {
   void (async () => {
     try {
       const row = await prisma.emailMessage.findFirst({
@@ -132,6 +167,8 @@ function healStaleAttentionItem(userId: string, emailDbId: string): void {
         },
       });
       if (!row) return;
+      // An MCP agent set this item's lane (step A2b): refresh the hash, never re-judge.
+      if (agentSet) return await refreshHashKeepingAgentLane(userId, row);
       // Lazy import: the judge pulls a heavy transitive graph (providers,
       // gmail) that the hot read path — and its tests — must not load.
       // toJudgeableEmailRow derives the bulk-mail signal from the stored
@@ -393,6 +430,7 @@ export async function firewallRoutes(app: FastifyInstance) {
               priority: number;
               surfacedAt: Date;
               inputHash: string | null;
+              agentTierSetAt: Date | null;
             }>
           >;
         }
@@ -409,6 +447,7 @@ export async function firewallRoutes(app: FastifyInstance) {
           priority: true,
           surfacedAt: true,
           inputHash: true,
+          agentTierSetAt: true,
         },
         // Window by RECENCY, rank by priority below. Windowing by priority was
         // the board-freeze bug: email items are never auto-resolved, so once
@@ -697,7 +736,7 @@ export async function firewallRoutes(app: FastifyInstance) {
                     },
                   },
                 );
-                healStaleAttentionItem(userId, email.id);
+                healStaleAttentionItem(userId, email.id, row.agentTierSetAt != null);
               }
             }
 

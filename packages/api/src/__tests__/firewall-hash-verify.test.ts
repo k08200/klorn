@@ -13,6 +13,8 @@
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const attentionUpdateMany = vi.hoisted(() => vi.fn(async (..._args: unknown[]) => ({ count: 1 })));
+
 vi.mock("../mail/activity-sync.js", () => ({
   ensureRecentMailSync: vi.fn(async () => {}),
 }));
@@ -47,6 +49,7 @@ const attentionRow = {
   priority: 50,
   surfacedAt: new Date("2026-06-02T00:00:00Z"),
   inputHash: correctHash, // overwritten per test below
+  agentTierSetAt: null as Date | null, // set per test to model an MCP agent's lane change
 };
 
 const emailRow = {
@@ -74,6 +77,7 @@ vi.mock("../db.js", () => ({
   prisma: {
     attentionItem: {
       findMany: vi.fn(async () => [attentionRow]),
+      updateMany: attentionUpdateMany,
     },
     pendingAction: { findMany: vi.fn(async () => []) },
     emailMessage: {
@@ -144,7 +148,9 @@ describe("GET /api/inbox/firewall — hash verify integration", () => {
   beforeEach(async () => {
     captureErrorMock.mockClear();
     judgeAndMirrorMock.mockClear();
+    attentionUpdateMany.mockClear();
     attentionRow.inputHash = correctHash;
+    attentionRow.agentTierSetAt = null;
     const { _resetHashMismatchDedupeForTests } = await import("../routes/firewall.js");
     _resetHashMismatchDedupeForTests();
   });
@@ -222,5 +228,46 @@ describe("GET /api/inbox/firewall — hash verify integration", () => {
     expect(item?.hashStale).toBeUndefined();
     expect(captureErrorMock).not.toHaveBeenCalled();
     await app.close();
+  });
+
+  describe("an item whose lane an MCP agent set (step A2b)", () => {
+    it("is NOT re-judged on a stale hash (a read-state flip must not silently undo the agent) — only the hash is refreshed", async () => {
+      attentionRow.inputHash = staleStoredHash;
+      attentionRow.agentTierSetAt = new Date("2026-09-30T09:00:00Z");
+      const app = await buildApp();
+
+      const res = await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
+      expect(res.statusCode).toBe(200);
+      expect(findItem(res.json() as FirewallResponseWire, "att-1")?.hashStale).toBe(true);
+
+      await vi.waitFor(() => expect(attentionUpdateMany).toHaveBeenCalledTimes(1));
+      expect(judgeAndMirrorMock).not.toHaveBeenCalled();
+      const arg = attentionUpdateMany.mock.calls[0]?.[0] as {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      };
+      // Only the hash columns move: never the tier, its reason, or the provenance.
+      expect(Object.keys(arg.data).sort()).toEqual(["inputHash", "inputHashAt"]);
+      expect(arg.data.inputHash).toBe(correctHash);
+      // Guarded on the agent stamp still being there, so a human override that
+      // lands first (which clears the stamp) is left to the normal path.
+      expect(arg.where).toMatchObject({
+        userId: "user-1",
+        source: "EMAIL",
+        sourceId: "email-1",
+        agentTierSetAt: { not: null },
+      });
+      await app.close();
+    });
+
+    it("control: the same stale hash on a judge-tiered item IS re-judged, with no direct hash write", async () => {
+      attentionRow.inputHash = staleStoredHash;
+      attentionRow.agentTierSetAt = null;
+      const app = await buildApp();
+      await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
+      await vi.waitFor(() => expect(judgeAndMirrorMock).toHaveBeenCalledTimes(1));
+      expect(attentionUpdateMany).not.toHaveBeenCalled();
+      await app.close();
+    });
   });
 });
