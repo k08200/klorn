@@ -5,6 +5,9 @@ managed in one firewall across web/mobile/desktop. This file is the sequenced
 plan; each phase is a separate PR train and each later phase depends on the
 earlier ones.
 
+Sequencing after Phase 3, and calendar, drive, agent and company-edition work,
+is in `unified-platform-plan.md` (2026-09-28). Phase 4 stays defined here.
+
 ## Where the code actually is (audited 2026-08-05)
 
 - No provider interface. The sync/action pipeline is hard-wired to Gmail

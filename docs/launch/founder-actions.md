@@ -152,3 +152,7 @@ npx remotion render src/index.ts PromoKO out/promo-ko.mp4
 Until then README says plainly that the videos predate the flip. The landing
 embeds no video, so klorn.ai is unaffected.
 
+## F. Unified platform (2026-09-28)
+
+FA-1 to FA-9 are listed in `../providers/unified-platform-plan.md` under
+"Founder actions". That file is canonical; do not copy the list here.
