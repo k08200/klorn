@@ -8,10 +8,13 @@
  *   2. how many tasks one user may have outstanding is capped, so a burst cannot
  *      queue unbounded work behind a slow mailbox;
  *   3. once a task runs, the whole of it is bounded by TASK_TOTAL_TIMEOUT_MS;
- *      past it the connection is closed and the caller is told the outcome is
- *      unconfirmed (the message may have gone out);
- *   4. the Sent copy, which happens after the message is gone, gets a hard
- *      SENT_COPY_DEADLINE_MS: the send's result never waits for it beyond that.
+ *      past it the SMTP SOCKET IS DESTROYED (nodemailer's transport.close() does
+ *      not close an in-flight connection) and the caller is told delivery is not
+ *      confirmed. Nothing the orphaned send does afterwards may act: no Sent copy,
+ *      no IMAP login;
+ *   4. the Sent copy, which happens after the message is gone, starts once the
+ *      caller HAS the success and gets its own hard SENT_COPY_DEADLINE_MS. It can
+ *      neither delay the result nor turn a delivered send into "unconfirmed".
  * All of it under fake timers; no timer is left behind afterwards.
  */
 
@@ -20,6 +23,7 @@ import {
   arm,
   h,
   header,
+  lastSmtpSocket,
   loggedText,
   NAVER_ROW,
   resetHarness,
@@ -176,17 +180,19 @@ describe("the per-user cap", () => {
   });
 });
 
+const UNCONFIRMED =
+  "Naver did not confirm delivery. The message may or may not have been sent; check your Sent folder before trying again.";
+
 describe("the total task timeout", () => {
-  it("closes the connection and reports an unconfirmed send after TASK_TOTAL_TIMEOUT_MS", async () => {
+  it("destroys the SMTP socket and reports delivery as unconfirmed after TASK_TOTAL_TIMEOUT_MS", async () => {
     h.sendMail.mockImplementationOnce(() => new Promise(() => {}));
     const result = send();
     await vi.advanceTimersByTimeAsync(TASK_TOTAL_TIMEOUT_MS - 1);
-    expect(h.transportClose).not.toHaveBeenCalled();
+    expect(lastSmtpSocket().destroyed).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
-    expect(await result).toEqual({
-      error:
-        "Naver did not answer in time. The action may or may not have completed; check your mailbox before trying again.",
-    });
+    expect(await result).toEqual({ error: UNCONFIRMED });
+    // transport.close() alone leaves an in-flight connection open; the socket is destroyed
+    expect(lastSmtpSocket().destroyed).toBe(true);
     expect(h.transportClose).toHaveBeenCalled();
   });
 
@@ -206,22 +212,47 @@ describe("the total task timeout", () => {
     await stuck;
     expect(h.captureError).not.toHaveBeenCalled();
   });
+
+  it("an orphaned send that 'succeeds' after the deadline acts on nothing: no IMAP login, no APPEND", async () => {
+    const late = gate<{ accepted: string[] }>();
+    h.sendMail.mockImplementationOnce(() => late.promise);
+    const result = send();
+    await vi.advanceTimersByTimeAsync(TASK_TOTAL_TIMEOUT_MS);
+    expect(await result).toEqual({ error: UNCONFIRMED });
+
+    late.open({ accepted: ["bob@example.com"] });
+    await vi.advanceTimersByTimeAsync(SENT_COPY_DEADLINE_MS);
+    await settle();
+    expect(h.imapCtorOpts).toHaveLength(0);
+    expect(h.connect).not.toHaveBeenCalled();
+    expect(h.append).not.toHaveBeenCalled();
+  });
+
+  it("the answer a caller gets is the answer it keeps: a send that finishes at the deadline is not re-reported", async () => {
+    const late = gate<{ accepted: string[] }>();
+    h.sendMail.mockImplementationOnce(() => late.promise);
+    const result = send();
+    await vi.advanceTimersByTimeAsync(TASK_TOTAL_TIMEOUT_MS - 1_000);
+    late.open({ accepted: ["x"] });
+    expect(await result).toHaveProperty("success", true);
+    await vi.advanceTimersByTimeAsync(TASK_TOTAL_TIMEOUT_MS);
+    expect(await result).toHaveProperty("success", true);
+  });
 });
 
 describe("the Sent copy deadline", () => {
-  it("does not make the send's result wait: it arrives at SENT_COPY_DEADLINE_MS, with the IMAP client closed", async () => {
+  it("returns the success the moment the 250 arrives; the copy has its own deadline afterwards", async () => {
     h.connect.mockImplementation(() => new Promise(() => {}));
-    const result = send();
-    let answered = false;
-    void result.then(() => {
-      answered = true;
-    });
-    await vi.advanceTimersByTimeAsync(SENT_COPY_DEADLINE_MS - 1);
-    expect(answered).toBe(false);
-    await vi.advanceTimersByTimeAsync(1);
-
-    const sent = await result;
+    const sent = await send();
+    // no timer has advanced: the caller did not wait for the copy at all
     expect(sent).toMatchObject({ success: true });
+    await settle();
+    expect(h.connect).toHaveBeenCalledTimes(1);
+    expect(h.close).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(SENT_COPY_DEADLINE_MS - 1);
+    expect(h.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
     expect(SENT_COPY_DEADLINE_MS).toBeLessThanOrEqual(10_000);
     expect(h.close).toHaveBeenCalled();
     expect(loggedText()).toContain("sent copy skipped");
@@ -230,10 +261,46 @@ describe("the Sent copy deadline", () => {
 
   it("also bounds a server that connects but never answers a command", async () => {
     h.list.mockImplementation(() => new Promise(() => {}));
-    const result = send();
+    expect(await send()).toMatchObject({ success: true });
     await vi.advanceTimersByTimeAsync(SENT_COPY_DEADLINE_MS);
-    expect(await result).toMatchObject({ success: true });
     expect(h.close).toHaveBeenCalled();
+  });
+
+  it("cannot turn a delivered send into 'unconfirmed', however late the 250 arrived", async () => {
+    const late = gate<{ accepted: string[] }>();
+    h.sendMail.mockImplementationOnce(() => late.promise);
+    h.connect.mockImplementation(() => new Promise(() => {}));
+    const result = send();
+    await vi.advanceTimersByTimeAsync(TASK_TOTAL_TIMEOUT_MS - 1_000);
+    late.open({ accepted: ["bob@example.com"] });
+    // the copy would run past the total timeout; the caller already has its success
+    expect(await result).toMatchObject({ success: true });
+    await vi.advanceTimersByTimeAsync(TASK_TOTAL_TIMEOUT_MS);
+    expect(await result).toMatchObject({ success: true });
+    expect(h.captureError).not.toHaveBeenCalled();
+  });
+
+  it("holds the account's turn and a session slot until the copy is done, then releases them", async () => {
+    const copy = gate();
+    h.connect.mockImplementationOnce(() => copy.promise);
+    expect(await send("u1", "row-1", "first")).toMatchObject({ success: true });
+    await settle();
+
+    const second = send("u1", "row-1", "second");
+    await settle();
+    expect(h.createTransport).toHaveBeenCalledTimes(1);
+    copy.open();
+    expect(await second).toMatchObject({ success: true });
+    expect(h.createTransport).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not file a copy when the send was refused, or after a timeout", async () => {
+    h.sendMail.mockRejectedValueOnce(
+      Object.assign(new Error("554"), { code: "EMESSAGE", responseCode: 554 }),
+    );
+    await send();
+    await settle();
+    expect(h.imapCtorOpts).toHaveLength(0);
   });
 
   it("leaves no timer behind when the copy finishes in time", async () => {

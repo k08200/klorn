@@ -9,6 +9,8 @@
  *   vi.mock("imapflow", async () => ({ ImapFlow: (await import("./helpers/imap-send-harness.js")).FakeImapFlow }));
  */
 
+import type net from "node:net";
+
 import { vi } from "vitest";
 
 export const h = {
@@ -173,3 +175,22 @@ export const sentRaw = () => h.sendMail.mock.calls[0][0].raw as Buffer;
 export const sentMime = () => sentRaw().toString("utf-8");
 export const header = (mime: string, name: string) =>
   new RegExp(`^${name}: (.*)$`, "mi").exec(mime.split("\r\n\r\n")[0])?.[1];
+
+/** The socket the newest SMTP session handed to nodemailer (an unconnected net.Socket). */
+export const lastSmtpSocket = (): net.Socket =>
+  h.createTransport.mock.calls[h.createTransport.mock.calls.length - 1][0].socket;
+
+/** The next SMTP send fails as if the TCP connection had NOT been established. */
+export function failBeforeConnect(err: Error) {
+  h.sendMail.mockImplementationOnce(async () => {
+    throw err;
+  });
+}
+
+/** The next SMTP send fails on a connection that WAS established (and then went wrong). */
+export function failAfterConnect(err: Error) {
+  h.sendMail.mockImplementationOnce(async () => {
+    lastSmtpSocket().emit("connect");
+    throw err;
+  });
+}

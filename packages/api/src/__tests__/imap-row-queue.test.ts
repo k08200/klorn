@@ -44,7 +44,9 @@ vi.mock("../sentry.js", async () => {
 });
 
 const { IMAP_PROVIDERS } = await import("../mail/imap-providers.js");
-const { resetImapSessionState, runAccountTask } = await import("../mail/providers/imap-session.js");
+const { resetImapSessionState, runAccountTask, TASK_TOTAL_TIMEOUT_MS } = await import(
+  "../mail/providers/imap-session.js"
+);
 const { describeFailure, sanitizedError } = await import("../mail/providers/action-failure.js");
 const { imapMailActions } = await import("../mail/providers/imap.js");
 
@@ -196,6 +198,110 @@ describe("runAccountTask", () => {
     expect(await runAccountTask(provider, otherAccount, async () => "fast")).toBe("fast");
     slowGate.open("slow");
     expect(await slow).toBe("slow");
+  });
+});
+
+describe("runAccountTask — work that continues after the caller has its answer", () => {
+  it("answers first, then keeps the account's turn until the follow-up has finished", async () => {
+    const order: string[] = [];
+    const followUp = gate();
+    const first = runAccountTask(provider, account, async ({ afterResult }) => {
+      afterResult(async () => {
+        order.push("follow-up:start");
+        await followUp.promise;
+        order.push("follow-up:end");
+      });
+      order.push("task");
+      return "answer";
+    });
+    const second = runAccountTask(provider, account, async () => {
+      order.push("second");
+      return "second-answer";
+    });
+    expect(await first).toBe("answer");
+    await settle();
+    expect(order).toEqual(["task", "follow-up:start"]);
+
+    followUp.open();
+    expect(await second).toBe("second-answer");
+    expect(order).toEqual(["task", "follow-up:start", "follow-up:end", "second"]);
+  });
+
+  it("holds a global session slot while the follow-up runs", async () => {
+    const followUp = gate();
+    await runAccountTask(provider, account, async ({ afterResult }) => {
+      afterResult(() => followUp.promise);
+      return "a";
+    });
+    // two other accounts fill the remaining slots; a third must wait for the follow-up's slot
+    const others = [2, 3].map((n) => {
+      const hold = gate();
+      const acct = { ...account, rowId: `row-${n}`, credentialKey: `row-${n}:${CIPHER}` };
+      return { hold, result: runAccountTask(provider, acct, () => hold.promise) };
+    });
+    const started = vi.fn(async () => "ran");
+    const fifth = runAccountTask(
+      provider,
+      { ...account, rowId: "row-5", credentialKey: `row-5:${CIPHER}` },
+      started,
+    );
+    await settle();
+    expect(started).not.toHaveBeenCalled();
+    followUp.open();
+    await settle();
+    expect(await fifth).toBe("ran");
+    for (const other of others) other.hold.open();
+    await Promise.all(others.map((other) => other.result));
+  });
+
+  it("swallows a throwing follow-up: the answer stands and the next task still runs", async () => {
+    const first = await runAccountTask(provider, account, async ({ afterResult }) => {
+      afterResult(async () => {
+        throw new Error("copy failed");
+      });
+      return "answer";
+    });
+    expect(first).toBe("answer");
+    expect(await runAccountTask(provider, account, async () => "next")).toBe("next");
+  });
+
+  it("never runs a follow-up for a task that timed out", async () => {
+    vi.useFakeTimers();
+    const followUp = vi.fn(async () => {});
+    const late = gate();
+    const result = runAccountTask(provider, account, async ({ afterResult }) => {
+      afterResult(followUp); // registered, but the task itself never finishes in time
+      await late.promise;
+      return "late answer";
+    });
+    await vi.advanceTimersByTimeAsync(TASK_TOTAL_TIMEOUT_MS);
+    expect(await result).toHaveProperty("error");
+    late.open();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(followUp).not.toHaveBeenCalled();
+  });
+
+  it("gives a task the abort signal, aborted at the deadline", async () => {
+    vi.useFakeTimers();
+    let seen: AbortSignal | undefined;
+    const result = runAccountTask(provider, account, ({ signal }) => {
+      seen = signal;
+      return new Promise<string>(() => {});
+    });
+    await vi.advanceTimersByTimeAsync(TASK_TOTAL_TIMEOUT_MS - 1);
+    expect(seen?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(seen?.aborted).toBe(true);
+    expect(await result).toHaveProperty("error");
+  });
+
+  it("lets the caller choose the timeout answer", async () => {
+    vi.useFakeTimers();
+    const result = runAccountTask(provider, account, () => new Promise<string>(() => {}), {
+      onTimeout: { error: "custom unconfirmed wording" },
+    });
+    await vi.advanceTimersByTimeAsync(TASK_TOTAL_TIMEOUT_MS);
+    expect(await result).toEqual({ error: "custom unconfirmed wording" });
   });
 });
 

@@ -67,7 +67,7 @@ import {
   PLAIN_ADDRESS_ONLY_MESSAGE,
   toSmtpAddress,
 } from "../outbound-message.js";
-import { createSmtpTransport, sendRaw } from "../smtp-transport.js";
+import { classifySmtpFailure, openSmtpSession, type SmtpSession } from "../smtp-transport.js";
 import { describeFailure, fail } from "./action-failure.js";
 import { findCheckedAccount, sessionAccountFor } from "./imap-account.js";
 import { fetchReplyHeaders } from "./imap-reply-headers.js";
@@ -146,10 +146,9 @@ function compose(
   return { raw: Buffer.from(mime, "utf-8"), messageId, date };
 }
 
-/** The server's answer to a message it refused, or null when the failure is not a refusal. */
-function refusalFor(err: unknown, provider: ImapProviderConfig): MailActionFailure | null {
+/** The server's own answer to a message it refused: a definite "no". */
+function refusalFor(err: unknown, provider: ImapProviderConfig): MailActionFailure {
   const { code, command } = (err ?? {}) as { code?: unknown; command?: unknown };
-  if (code !== "EENVELOPE" && code !== "EMESSAGE") return null;
   console.warn(`[${provider.logScope}] send refused by the server (${describeFailure(err)})`);
   if (code === "EMESSAGE") return fail(`${provider.label} refused the message.`);
   return command === "MAIL FROM"
@@ -157,6 +156,50 @@ function refusalFor(err: unknown, provider: ImapProviderConfig): MailActionFailu
     : fail(`${provider.label} rejected the recipient address.`);
 }
 
+/** Delivery is unknown: the connection was up and then failed, or the deadline passed. */
+const unconfirmedFailure = (provider: ImapProviderConfig): MailActionFailure =>
+  fail(
+    `${provider.label} did not confirm delivery. The message may or may not have been sent; check your Sent folder before trying again.`,
+  );
+
+/** Provably nothing was sent: the failure came before any MAIL FROM. */
+const notSentFailure = (provider: ImapProviderConfig): MailActionFailure =>
+  fail(`Could not reach ${provider.label}. The message was not sent; try again shortly.`);
+
+/** nodemailer could not even be loaded or configured: not a problem reaching the mailbox. */
+const sendingUnavailableFailure = (provider: ImapProviderConfig): MailActionFailure =>
+  fail(
+    `Sending through ${provider.label} is temporarily unavailable. The message was not sent; try again later.`,
+  );
+
+/**
+ * The answer for a failed submission, from what the failure proves about delivery
+ * (classifySmtpFailure). A rejected login is rethrown for the shared reconnect
+ * handling and cooldown. Everything else is logged and reported (throttled, class
+ * and code only) and answered here, so a failure on an established connection can
+ * never read as "could not reach, try again shortly".
+ */
+function answerForSendFailure(
+  err: unknown,
+  connected: boolean,
+  provider: ImapProviderConfig,
+  account: SessionAccount,
+): MailActionFailure {
+  const kind = classifySmtpFailure(err, connected);
+  if (kind === "auth") throw err;
+  if (kind === "refused") return refusalFor(err, provider);
+  noteSideFailure(err, provider, account);
+  return kind === "not-sent" ? notSentFailure(provider) : unconfirmedFailure(provider);
+}
+
+/**
+ * Hand the message to the provider's SMTP server. Returns the failure to report,
+ * or null once the server has acknowledged the message (its 250).
+ *
+ * The session's socket is destroyed when the task is aborted, and again when this
+ * returns, so it never outlives the task. Nothing is sent once the task has been
+ * aborted: the caller was already told delivery is unconfirmed.
+ */
 async function submit(
   provider: ImapProviderConfig,
   account: SessionAccount,
@@ -164,23 +207,24 @@ async function submit(
   message: OutboundMessage,
   signal: AbortSignal,
 ): Promise<MailActionFailure | null> {
-  const transport = await createSmtpTransport(provider, {
-    email: account.email,
-    password: account.password,
-  });
-  // The task's total deadline closes the connection, so a hung server cannot hold it.
-  const abort = () => transport.close();
+  let session: SmtpSession;
+  try {
+    session = await openSmtpSession(provider, { email: account.email, password: account.password });
+  } catch (err) {
+    noteSideFailure(err, provider, account);
+    return sendingUnavailableFailure(provider);
+  }
+  const abort = () => session.abort();
   signal.addEventListener("abort", abort, { once: true });
   try {
-    await sendRaw(transport, { from: account.email, to: recipient, raw: message.raw });
+    if (signal.aborted) return unconfirmedFailure(provider);
+    await session.send({ from: account.email, to: recipient, raw: message.raw });
     return null;
   } catch (err) {
-    const refusal = refusalFor(err, provider);
-    if (refusal) return refusal;
-    throw err;
+    return answerForSendFailure(err, session.connected, provider, account);
   } finally {
     signal.removeEventListener("abort", abort);
-    transport.close();
+    session.abort();
   }
 }
 
@@ -350,12 +394,20 @@ async function sendMessage(
     inReplyTo: options?.inReplyTo,
     references: options?.references,
   });
-  return runAccountTask<SendMailResult>(provider, account, async (signal) => {
-    const refused = await submit(provider, account, recipient, message, signal);
-    if (refused) return refused;
-    await saveSentCopy(provider, account, message);
-    return { success: true, messageId: message.messageId, threadId: null };
-  });
+  return runAccountTask<SendMailResult>(
+    provider,
+    account,
+    async ({ signal, afterResult }) => {
+      const failure = await submit(provider, account, recipient, message, signal);
+      if (failure) return failure;
+      // Acknowledged. A send that has been aborted since must not act further.
+      if (signal.aborted) return unconfirmedFailure(provider);
+      // The caller gets its success now; the copy follows within its own deadline.
+      afterResult(() => saveSentCopy(provider, account, message));
+      return { success: true, messageId: message.messageId, threadId: null };
+    },
+    { onTimeout: unconfirmedFailure(provider) },
+  );
 }
 
 async function saveDraft(
@@ -376,7 +428,7 @@ async function saveDraft(
   if ("error" in account) return account;
 
   const message = compose(account.email, recipient, subject, body, attachments, reply ?? {});
-  return runAccountTask<CreateDraftResult>(provider, account, (signal) =>
+  return runAccountTask<CreateDraftResult>(provider, account, ({ signal }) =>
     withImapClient(
       provider,
       account,
@@ -414,7 +466,7 @@ async function readReplyHeaders(
   const account = sessionAccountFor(provider, userId, checked);
   if ("error" in account) return {};
 
-  const headers = await runAccountTask(provider, account, (signal) =>
+  const headers = await runAccountTask(provider, account, ({ signal }) =>
     withImapClient(provider, account, (client) => fetchReplyHeaders(client, uid), signal),
   );
   return "error" in headers ? {} : headers;

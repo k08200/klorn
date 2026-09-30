@@ -6,9 +6,12 @@
  * provider (never from the account row), certificate verification stays on,
  * STARTTLS is mandatory where the registry says STARTTLS (no plaintext
  * fallback), every timeout is an explicit finite constant, nothing that could
- * redirect the connection (proxy, custom socket, sendmail) is set, and the
+ * redirect the connection (proxy, sendmail, pool) is in the options, the only
+ * socket is the unconnected one the session creates itself, and the
  * transport logs nothing (SMTP traffic carries the credential and the mail).
  */
+
+import net from "node:net";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -28,8 +31,10 @@ const {
   SMTP_GREETING_TIMEOUT_MS,
   SMTP_SOCKET_TIMEOUT_MS,
   SMTP_EHLO_NAME,
+  classifySmtpFailure,
   createSmtpTransport,
   isSmtpAuthRejection,
+  openSmtpSession,
   sendRaw,
   smtpTransportOptions,
 } = await import("../mail/smtp-transport.js");
@@ -168,6 +173,126 @@ describe("createSmtpTransport", () => {
       smtpTransportOptions(IMAP_PROVIDERS.NAVER, CREDS),
     );
     expect(transport).toBe(h.createTransport.mock.results[0].value);
+  });
+});
+
+describe("openSmtpSession — a socket the caller can destroy", () => {
+  const transportFor = () => {
+    const sendMail = vi.fn(async () => ({ accepted: ["bob@example.com"] }));
+    const close = vi.fn();
+    h.createTransport.mockReturnValue({ sendMail, close });
+    return { sendMail, close };
+  };
+  const socketOf = () => h.createTransport.mock.calls[0][0].socket as net.Socket;
+
+  it("gives nodemailer the registry options plus a fresh, unconnected socket of its own", async () => {
+    transportFor();
+    await openSmtpSession(IMAP_PROVIDERS.NAVER, CREDS);
+    const options = h.createTransport.mock.calls[0][0];
+    expect(options).toEqual({
+      ...smtpTransportOptions(IMAP_PROVIDERS.NAVER, CREDS),
+      socket: expect.any(net.Socket),
+    });
+    expect(options.host).toBe("smtp.naver.com");
+    expect(socketOf().connecting).toBe(false);
+    expect(socketOf().destroyed).toBe(false);
+  });
+
+  it("uses a different socket for every session", async () => {
+    transportFor();
+    await openSmtpSession(IMAP_PROVIDERS.NAVER, CREDS);
+    await openSmtpSession(IMAP_PROVIDERS.NAVER, CREDS);
+    expect(h.createTransport.mock.calls[0][0].socket).not.toBe(
+      h.createTransport.mock.calls[1][0].socket,
+    );
+  });
+
+  it("abort() destroys the socket itself, not just the transport, and is safe to repeat", async () => {
+    const { close } = transportFor();
+    const session = await openSmtpSession(IMAP_PROVIDERS.NAVER, CREDS);
+    session.abort();
+    expect(socketOf().destroyed).toBe(true);
+    expect(close).toHaveBeenCalled();
+    expect(() => session.abort()).not.toThrow();
+  });
+
+  it("close() ends the transport without touching the socket", async () => {
+    const { close } = transportFor();
+    const session = await openSmtpSession(IMAP_PROVIDERS.NAVER, CREDS);
+    session.close();
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(socketOf().destroyed).toBe(false);
+  });
+
+  it("reports whether the TCP connection was ever established", async () => {
+    transportFor();
+    const session = await openSmtpSession(IMAP_PROVIDERS.NAVER, CREDS);
+    expect(session.connected).toBe(false);
+    socketOf().emit("connect");
+    expect(session.connected).toBe(true);
+  });
+
+  it("send() submits the exact bytes with an explicit envelope", async () => {
+    const { sendMail } = transportFor();
+    const session = await openSmtpSession(IMAP_PROVIDERS.NAVER, CREDS);
+    const raw = Buffer.from("From: me@naver.com\r\n\r\nhi\r\n");
+    await session.send({ from: "me@naver.com", to: "bob@example.com", raw });
+    expect(sendMail).toHaveBeenCalledWith({
+      envelope: { from: "me@naver.com", to: ["bob@example.com"] },
+      raw,
+    });
+  });
+});
+
+describe("classifySmtpFailure — what a failure proves about delivery", () => {
+  const err = (code: string, extra: Record<string, unknown> = {}) =>
+    Object.assign(new Error("x"), { code, ...extra });
+
+  it.each([
+    ["a rejected login (535)", err("EAUTH", { responseCode: 535, command: "AUTH PLAIN" }), true],
+    ["a rejected login (534)", err("EAUTH", { responseCode: 534 }), true],
+  ])("auth: %s", (_name, error, connected) => {
+    expect(classifySmtpFailure(error, connected)).toBe("auth");
+  });
+
+  it.each([
+    ["a rejected recipient", err("EENVELOPE", { responseCode: 550, command: "RCPT TO" })],
+    ["a rejected sender", err("EENVELOPE", { responseCode: 553, command: "MAIL FROM" })],
+    ["a refused message after DATA", err("EMESSAGE", { responseCode: 554 })],
+  ])("refused: %s", (_name, error) => {
+    expect(classifySmtpFailure(error, true)).toBe("refused");
+  });
+
+  it.each([
+    ["DNS failure", err("EDNS", { command: "CONN" }), true],
+    ["a TLS handshake failure", err("ETLS", { command: "CONN" }), true],
+    ["a refused STARTTLS", err("ETLS", { responseCode: 502, command: "STARTTLS" }), true],
+    ["a login failed without a rejection code", err("EAUTH", { responseCode: 454 }), true],
+    ["missing credentials", err("ENOAUTH"), true],
+    ["a bad configuration", err("ECONFIG"), true],
+    ["a connect that never completed (refused)", err("ECONNECTION", { command: "CONN" }), false],
+    ["a connect timeout", err("ETIMEDOUT", { command: "CONN" }), false],
+    ["a socket error before the connection", err("ESOCKET", { command: "CONN" }), false],
+  ])("not-sent: %s", (_name, error, connected) => {
+    expect(classifySmtpFailure(error, connected)).toBe("not-sent");
+  });
+
+  it.each([
+    ["a stall after DATA (reported as ETIMEDOUT on CONN)", err("ETIMEDOUT", { command: "CONN" })],
+    ["a connection dropped mid-message", err("ECONNECTION", { command: "CONN" })],
+    ["a socket error on an open connection", err("ESOCKET", { command: "CONN" })],
+    ["an invalid server response", err("EPROTOCOL")],
+    ["a stream failure", err("ESTREAM")],
+    ["an error with no code", new Error("who knows")],
+    ["a value that is not an error", "boom"],
+  ])("unconfirmed: %s, once the connection was established", (_name, error) => {
+    expect(classifySmtpFailure(error, true)).toBe("unconfirmed");
+  });
+
+  it("the same stall is 'not-sent' only when no connection was ever established", () => {
+    const stall = err("ETIMEDOUT", { command: "CONN" });
+    expect(classifySmtpFailure(stall, false)).toBe("not-sent");
+    expect(classifySmtpFailure(stall, true)).toBe("unconfirmed");
   });
 });
 
