@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
   getAuthedClient: vi.fn(),
-  getLinkedCalendarClient: vi.fn(),
+  buildLinkedCalendarClient: vi.fn(),
   linkedAccountFindFirst: vi.fn(),
   linkedAccountFindMany: vi.fn(),
   eventsList: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock("googleapis", () => ({
 }));
 vi.mock("../mail/gmail.js", () => ({
   getAuthedClient: m.getAuthedClient,
-  getLinkedCalendarClient: m.getLinkedCalendarClient,
+  buildLinkedCalendarClient: m.buildLinkedCalendarClient,
 }));
 vi.mock("../db.js", () => {
   const prisma = {
@@ -37,7 +37,6 @@ vi.mock("../db.js", () => {
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import {
-  calendarActionsFor,
   calendarActionsForProvider,
   connectLinkedCalendars,
   connectPrimaryCalendar,
@@ -52,8 +51,8 @@ const LINKED_AUTH = { tag: "linked" };
 beforeEach(() => {
   vi.clearAllMocks();
   m.getAuthedClient.mockResolvedValue(PRIMARY_AUTH);
-  m.getLinkedCalendarClient.mockImplementation(async (_userId: string, id: string) =>
-    id === "acct-1" ? { client: LINKED_AUTH, id: "acct-1", email: "me@work.com" } : null,
+  m.buildLinkedCalendarClient.mockImplementation((_userId: string, row: { id: string }) =>
+    row.id === "acct-1" ? { client: LINKED_AUTH, id: "acct-1", email: "me@work.com" } : null,
   );
   m.eventsList.mockResolvedValue({ data: { items: [] } });
 });
@@ -74,7 +73,11 @@ describe("calendarActionsForProvider", () => {
     const actions = calendarActionsForProvider(provider);
     expect(actions.provider).toBe(provider);
 
-    const result = await actions.connect({ userId: "u1", linkedAccountId: "acct-x" });
+    const result = await actions.connect({
+      userId: "u1",
+      linkedAccountId: "acct-x",
+      linked: linkedRow("acct-x", { provider }) as never,
+    });
 
     expect(result).not.toBeNull();
     expect(isCalendarUnsupported(result)).toBe(true);
@@ -83,39 +86,23 @@ describe("calendarActionsForProvider", () => {
       error: `Calendar provider ${provider} is not supported from Klorn yet.`,
     });
     expect(m.getAuthedClient).not.toHaveBeenCalled();
-    expect(m.getLinkedCalendarClient).not.toHaveBeenCalled();
+    expect(m.buildLinkedCalendarClient).not.toHaveBeenCalled();
   });
 });
 
-describe("calendarActionsFor", () => {
-  it("resolves the primary calendar (no linked id) to Google without a database lookup", async () => {
-    expect(await calendarActionsFor("u1", null)).toBe(googleCalendarActions);
-    expect(await calendarActionsFor("u1", undefined)).toBe(googleCalendarActions);
-    expect(await calendarActionsFor("u1", "")).toBe(googleCalendarActions);
-    expect(m.linkedAccountFindFirst).not.toHaveBeenCalled();
-  });
-
-  it("dispatches a linked account on its provider column, scoped to the user", async () => {
-    m.linkedAccountFindFirst.mockResolvedValue({ provider: "OUTLOOK" });
-
-    const actions = await calendarActionsFor("u1", "acct-9");
-
-    expect(actions.provider).toBe("OUTLOOK");
-    expect(m.linkedAccountFindFirst).toHaveBeenCalledWith({
-      where: { id: "acct-9", userId: "u1" },
-      select: { provider: true },
-    });
-  });
-
-  it("resolves a stale or foreign id to Google, whose connect then answers not-connected", async () => {
-    m.linkedAccountFindFirst.mockResolvedValue(null);
-
-    const actions = await calendarActionsFor("u1", "gone");
-
-    expect(actions).toBe(googleCalendarActions);
-    expect(await actions.connect({ userId: "u1", linkedAccountId: "gone" })).toBeNull();
-  });
-});
+function linkedRow(id: string, overrides: Record<string, unknown> = {}) {
+  return {
+    id,
+    userId: "u1",
+    provider: "GOOGLE",
+    email: `${id}@work.com`,
+    accessToken: "enc-at",
+    refreshToken: "enc-rt",
+    expiresAt: null,
+    needsReconnect: false,
+    ...overrides,
+  };
+}
 
 describe("Google connect", () => {
   it("opens the primary calendar with the primary token's client, once", async () => {
@@ -124,7 +111,7 @@ describe("Google connect", () => {
     expect(session).not.toBeNull();
     expect(m.getAuthedClient).toHaveBeenCalledTimes(1);
     expect(m.getAuthedClient).toHaveBeenCalledWith("u1");
-    expect(m.getLinkedCalendarClient).not.toHaveBeenCalled();
+    expect(m.buildLinkedCalendarClient).not.toHaveBeenCalled();
   });
 
   it("answers null when the primary account is not connected", async () => {
@@ -132,26 +119,32 @@ describe("Google connect", () => {
     expect(await googleCalendarActions.connect({ userId: "u1", linkedAccountId: null })).toBeNull();
   });
 
-  it("opens a linked account with that account's own client", async () => {
+  it("opens a linked account from the row it is handed, with that account's own client and no read", async () => {
+    const row = linkedRow("acct-1");
     const session = await googleCalendarActions.connect({
       userId: "u1",
       linkedAccountId: "acct-1",
+      linked: row as never,
     });
     if (!session || isCalendarUnsupported(session)) throw new Error("expected a session");
 
     await session.listEvents({ timeMin: "2026-10-01T00:00:00Z", maxResults: 5 });
 
+    expect(m.buildLinkedCalendarClient).toHaveBeenCalledWith("u1", row);
     expect(m.googleCalendar).toHaveBeenCalledWith({ version: "v3", auth: LINKED_AUTH });
     expect(m.getAuthedClient).not.toHaveBeenCalled();
+    expect(m.linkedAccountFindFirst).not.toHaveBeenCalled();
+    expect(m.linkedAccountFindMany).not.toHaveBeenCalled();
   });
 
-  it("answers null for a linked id the user does not have, or whose token is unusable", async () => {
+  it("answers null for a linked row whose token is unusable", async () => {
+    m.buildLinkedCalendarClient.mockReturnValue(null);
     expect(
-      await googleCalendarActions.connect({ userId: "u1", linkedAccountId: "someone-elses" }),
-    ).toBeNull();
-    m.getLinkedCalendarClient.mockResolvedValue(null);
-    expect(
-      await googleCalendarActions.connect({ userId: "u1", linkedAccountId: "acct-1" }),
+      await googleCalendarActions.connect({
+        userId: "u1",
+        linkedAccountId: "acct-1",
+        linked: linkedRow("acct-1") as never,
+      }),
     ).toBeNull();
   });
 });
@@ -255,50 +248,32 @@ describe("Google session — the neutral event shape", () => {
 });
 
 describe("listLinkedCalendarAccounts", () => {
-  it("lists the user's accounts of every provider with what a caller needs to decide, oldest first", async () => {
-    m.linkedAccountFindMany.mockResolvedValue([
-      { id: "acct-1", email: "me@work.com", provider: "GOOGLE", needsReconnect: false },
-    ]);
+  it("reads the user's accounts of every provider as full rows, oldest first: the one read a check pays", async () => {
+    const rows = [linkedRow("acct-1")];
+    m.linkedAccountFindMany.mockResolvedValue(rows);
 
     const accounts = await listLinkedCalendarAccounts("u1");
 
+    expect(m.linkedAccountFindMany).toHaveBeenCalledTimes(1);
     expect(m.linkedAccountFindMany).toHaveBeenCalledWith({
       where: { userId: "u1" },
-      select: { id: true, email: true, provider: true, needsReconnect: true },
       orderBy: { createdAt: "asc" },
     });
-    expect(accounts).toEqual([
-      { id: "acct-1", email: "me@work.com", provider: "GOOGLE", needsReconnect: false },
-    ]);
+    expect(accounts).toEqual(rows);
   });
 });
 
 describe("connectLinkedCalendars", () => {
-  const account = (id: string, provider = "GOOGLE", needsReconnect = false) => ({
-    id,
-    email: `${id}@work.com`,
-    provider,
-    needsReconnect,
-  });
-
   beforeEach(() => {
-    // The provider lookup per account, as the dispatcher does it.
-    m.linkedAccountFindFirst.mockImplementation(async ({ where }: { where: { id: string } }) => {
-      const found = accounts.find((a) => a.id === where.id);
-      return found ? { provider: found.provider } : null;
-    });
-    m.getLinkedCalendarClient.mockImplementation(async (_u: string, id: string) => ({
-      client: { tag: id },
-      id,
-      email: `${id}@work.com`,
+    m.buildLinkedCalendarClient.mockImplementation((_u: string, row: { id: string }) => ({
+      client: { tag: row.id },
+      id: row.id,
+      email: `${row.id}@work.com`,
     }));
   });
 
-  let accounts: ReturnType<typeof account>[] = [];
-
-  it("connects every account through the seam's dispatch, in list order, each with its own client", async () => {
-    accounts = [account("acct-1"), account("acct-2")];
-    m.linkedAccountFindMany.mockResolvedValue(accounts);
+  it("connects every account from the listed rows, in list order, each with its own client", async () => {
+    m.linkedAccountFindMany.mockResolvedValue([linkedRow("acct-1"), linkedRow("acct-2")]);
 
     const connected = await connectLinkedCalendars("u1", { skipNeedsReconnect: false });
 
@@ -307,28 +282,47 @@ describe("connectLinkedCalendars", () => {
       ["acct-2", "acct-2@work.com"],
     ]);
     expect(connected.every((c) => c.session.provider === "GOOGLE")).toBe(true);
-    // Dispatch resolved each account's provider row, then Google built its client.
-    expect(m.linkedAccountFindFirst).toHaveBeenCalledWith({
-      where: { id: "acct-1", userId: "u1" },
-      select: { provider: true },
-    });
-    expect(m.getLinkedCalendarClient).toHaveBeenCalledWith("u1", "acct-1");
-    expect(m.getLinkedCalendarClient).toHaveBeenCalledWith("u1", "acct-2");
+    expect(m.buildLinkedCalendarClient).toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({ id: "acct-1" }),
+    );
+    expect(m.buildLinkedCalendarClient).toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({ id: "acct-2" }),
+    );
+  });
+
+  it("costs one read however many accounts there are: no lookup per account", async () => {
+    m.linkedAccountFindMany.mockResolvedValue([
+      linkedRow("acct-1"),
+      linkedRow("acct-2"),
+      linkedRow("acct-3"),
+    ]);
+
+    await connectLinkedCalendars("u1", { skipNeedsReconnect: false });
+
+    expect(m.linkedAccountFindMany).toHaveBeenCalledTimes(1);
+    expect(m.linkedAccountFindFirst).not.toHaveBeenCalled();
+    expect(m.buildLinkedCalendarClient).toHaveBeenCalledTimes(3);
   });
 
   it("skips accounts flagged needsReconnect when asked to, without trying their token", async () => {
-    accounts = [account("acct-1"), account("acct-2", "GOOGLE", true)];
-    m.linkedAccountFindMany.mockResolvedValue(accounts);
+    m.linkedAccountFindMany.mockResolvedValue([
+      linkedRow("acct-1"),
+      linkedRow("acct-2", { needsReconnect: true }),
+    ]);
 
     const connected = await connectLinkedCalendars("u1", { skipNeedsReconnect: true });
 
     expect(connected.map((c) => c.id)).toEqual(["acct-1"]);
-    expect(m.getLinkedCalendarClient).not.toHaveBeenCalledWith("u1", "acct-2");
+    expect(m.buildLinkedCalendarClient).not.toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({ id: "acct-2" }),
+    );
   });
 
   it("still tries a flagged account when not asked to skip: a refresh can clear the flag", async () => {
-    accounts = [account("acct-2", "GOOGLE", true)];
-    m.linkedAccountFindMany.mockResolvedValue(accounts);
+    m.linkedAccountFindMany.mockResolvedValue([linkedRow("acct-2", { needsReconnect: true })]);
 
     const connected = await connectLinkedCalendars("u1", { skipNeedsReconnect: false });
 
@@ -336,20 +330,26 @@ describe("connectLinkedCalendars", () => {
   });
 
   it("skips an account whose provider has no implementation yet, silently and without touching Google", async () => {
-    accounts = [account("acct-out", "OUTLOOK"), account("acct-1")];
-    m.linkedAccountFindMany.mockResolvedValue(accounts);
+    m.linkedAccountFindMany.mockResolvedValue([
+      linkedRow("acct-out", { provider: "OUTLOOK" }),
+      linkedRow("acct-1"),
+    ]);
 
     const connected = await connectLinkedCalendars("u1", { skipNeedsReconnect: false });
 
     expect(connected.map((c) => c.id)).toEqual(["acct-1"]);
-    expect(m.getLinkedCalendarClient).not.toHaveBeenCalledWith("u1", "acct-out");
+    expect(m.buildLinkedCalendarClient).not.toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({ id: "acct-out" }),
+    );
   });
 
   it("skips an account whose token is unusable (connect answers null)", async () => {
-    accounts = [account("acct-1"), account("acct-bad")];
-    m.linkedAccountFindMany.mockResolvedValue(accounts);
-    m.getLinkedCalendarClient.mockImplementation(async (_u: string, id: string) =>
-      id === "acct-bad" ? null : { client: { tag: id }, id, email: `${id}@work.com` },
+    m.linkedAccountFindMany.mockResolvedValue([linkedRow("acct-1"), linkedRow("acct-bad")]);
+    m.buildLinkedCalendarClient.mockImplementation((_u: string, row: { id: string }) =>
+      row.id === "acct-bad"
+        ? null
+        : { client: { tag: row.id }, id: row.id, email: `${row.id}@work.com` },
     );
 
     const connected = await connectLinkedCalendars("u1", { skipNeedsReconnect: false });
@@ -358,7 +358,6 @@ describe("connectLinkedCalendars", () => {
   });
 
   it("answers [] for a user with no linked accounts", async () => {
-    accounts = [];
     m.linkedAccountFindMany.mockResolvedValue([]);
     expect(await connectLinkedCalendars("u1", { skipNeedsReconnect: true })).toEqual([]);
   });

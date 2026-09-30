@@ -13,15 +13,18 @@ const m = vi.hoisted(() => ({
   captureError: vi.fn(),
 }));
 
+// isGoogleAuthError is deliberately NOT provided: the policy must not use main's
+// broad predicate (it matches any message containing "expired").
 vi.mock("../mail/gmail.js", () => ({
-  isGoogleAuthError: (e: { response?: { status?: number } }) => e?.response?.status === 401,
   markLinkedCalendarForReconnect: m.markLinkedCalendarForReconnect,
 }));
 vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
 
 import {
+  _linkedCalendarFailureLogSizeForTests,
   _resetLinkedCalendarFailureLogForTests,
   handleLinkedCalendarFailure,
+  isRevokedGoogleGrantError,
   LINKED_AUTH_WARN_WINDOW_MS,
 } from "../pim/linked-calendar-failure.js";
 
@@ -132,5 +135,95 @@ describe("handleLinkedCalendarFailure — any other error", () => {
     expect(m.captureError.mock.calls[0]?.[1]).toMatchObject({
       extra: { accountDomain: "unknown" },
     });
+  });
+});
+
+describe("isRevokedGoogleGrantError — precise, not a message substring", () => {
+  it.each([
+    ["HTTP 401", { response: { status: 401 } }],
+    ["a numeric 401 code", { code: 401 }],
+    ["a string 401 code", { code: "401" }],
+    [
+      "the OAuth refresh failure body",
+      {
+        response: {
+          status: 400,
+          data: { error: "invalid_grant", error_description: "Token has been expired or revoked." },
+        },
+      },
+    ],
+    ["an invalid_grant code", { code: "invalid_grant" }],
+    ["an invalid_grant message", { message: "invalid_grant" }],
+    [
+      "an invalid_grant message with its description",
+      { message: "invalid_grant: Token has been expired or revoked." },
+    ],
+    [
+      "unauthorized_client in the body",
+      { response: { status: 400, data: { error: "unauthorized_client" } } },
+    ],
+    ["unauthorized_client in the message", { message: "unauthorized_client: Unauthorized" }],
+  ])("recognises %s", (_name, err) => {
+    expect(isRevokedGoogleGrantError(err)).toBe(true);
+  });
+
+  it.each([
+    ["a message that merely mentions 'expired'", new Error("Request expired")],
+    ["another 'expired' message", new Error("Quota expired for project 123")],
+    ["a message containing 'unauthorized'", new Error("unauthorized domain in header")],
+    ["a message containing 'revoked'", new Error("certificate revoked by issuer")],
+    ["an 'invalid token' message that is not a grant", new Error("invalid token in request body")],
+    ["HTTP 403", { response: { status: 403 } }],
+    [
+      "HTTP 500 with an 'expired' body",
+      { response: { status: 500, data: { error: { message: "cache expired" } } } },
+    ],
+    ["a network error", { code: "ECONNRESET", message: "socket hang up" }],
+    ["a plain string", "expired"],
+    ["null", null],
+    ["undefined", undefined],
+  ])("does not mistake %s for a revoked grant", (_name, err) => {
+    expect(isRevokedGoogleGrantError(err)).toBe(false);
+  });
+});
+
+describe("handleLinkedCalendarFailure — unrelated 'expired' errors (precision)", () => {
+  it("captures it to Sentry and does not flag the account for reconnect", async () => {
+    await handleLinkedCalendarFailure(failure({ err: new Error("Request expired") }));
+
+    expect(m.captureError).toHaveBeenCalledTimes(1);
+    expect(m.markLinkedCalendarForReconnect).not.toHaveBeenCalled();
+  });
+
+  it("treats an invalid_grant refresh failure as a revoked account: flagged, warned, not captured", async () => {
+    await handleLinkedCalendarFailure(
+      failure({ err: { message: "invalid_grant: Token has been expired or revoked." } }),
+    );
+
+    expect(m.markLinkedCalendarForReconnect).toHaveBeenCalledWith("u1", "acct-1");
+    expect(m.captureError).not.toHaveBeenCalled();
+  });
+});
+
+describe("the auth-warning log stays bounded", () => {
+  it("prunes accounts whose window has passed when a new one is written", async () => {
+    for (let i = 0; i < 50; i++) {
+      await handleLinkedCalendarFailure(failure({ err: AUTH_ERROR, linkedAccountId: `acct-${i}` }));
+    }
+    expect(_linkedCalendarFailureLogSizeForTests()).toBe(50);
+
+    vi.setSystemTime(new Date(Date.now() + LINKED_AUTH_WARN_WINDOW_MS + 1));
+    await handleLinkedCalendarFailure(failure({ err: AUTH_ERROR, linkedAccountId: "fresh" }));
+
+    // The 50 stale entries are gone; only the account written now remains.
+    expect(_linkedCalendarFailureLogSizeForTests()).toBe(1);
+  });
+
+  it("keeps entries still inside their window", async () => {
+    await handleLinkedCalendarFailure(failure({ err: AUTH_ERROR, linkedAccountId: "a" }));
+    vi.setSystemTime(new Date(Date.now() + LINKED_AUTH_WARN_WINDOW_MS - 1));
+    await handleLinkedCalendarFailure(failure({ err: AUTH_ERROR, linkedAccountId: "b" }));
+
+    expect(_linkedCalendarFailureLogSizeForTests()).toBe(2);
   });
 });

@@ -18,7 +18,7 @@ import {
   summarizeConflicts,
   summarizeFreeBusy,
 } from "../../google-calendar-time.js";
-import { getAuthedClient, getLinkedCalendarClient } from "../../mail/gmail.js";
+import { buildLinkedCalendarClient, getAuthedClient } from "../../mail/gmail.js";
 import { captureError } from "../../sentry.js";
 import type {
   CalendarAccountRef,
@@ -268,8 +268,7 @@ export function googleSessionFromClient(auth: GoogleAuth): CalendarSession {
 
 async function resolveClient(account: CalendarAccountRef): Promise<GoogleAuth | null> {
   if (account.linkedAccountId === null) return getAuthedClient(account.userId);
-  const linked = await getLinkedCalendarClient(account.userId, account.linkedAccountId);
-  return linked?.client ?? null;
+  return buildLinkedCalendarClient(account.userId, account.linked)?.client ?? null;
 }
 
 export const googleCalendarActions: CalendarProviderActions = {

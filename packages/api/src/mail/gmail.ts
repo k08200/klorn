@@ -1,3 +1,4 @@
+import type { LinkedCalendarAccount } from "@prisma/client";
 import { google } from "googleapis";
 import { MULTI_INBOX_SYNC_ENABLED } from "../config.js";
 import { decryptOptional, decryptToken, encryptOptional, encryptToken } from "../crypto-tokens.js";
@@ -489,24 +490,19 @@ async function persistRefreshedGoogleToken(
 }
 
 /**
- * The OAuth2 client of ONE SECONDARY calendar account the user linked. Mirrors
- * getAuthedClient (decrypt + auto-refresh) for a single LinkedCalendarAccount
- * row, tagged with its id and email. A row whose token can't be decrypted, or
- * that holds no token at all, answers null and is flagged for reconnect: the
- * primary account and the other linked accounts still work. Read by the calendar
- * provider seam's `connect` (conflict checks and the linked sync).
+ * The OAuth2 client of ONE SECONDARY calendar account the user linked, built from
+ * the LinkedCalendarAccount row the provider seam's dispatcher already loaded (so
+ * a conflict check costs no read per account beyond the listing). Mirrors
+ * getAuthedClient (decrypt + auto-refresh), tagged with the row's id and email. A
+ * row whose token can't be decrypted, or that holds no token at all, answers null
+ * and is flagged for reconnect: the primary account and the other linked accounts
+ * still work. Only called for GOOGLE rows (the dispatcher routes by provider): a
+ * CalDAV row has no OAuth token and an OUTLOOK row is not a Google client.
  */
-export async function getLinkedCalendarClient(
+export function buildLinkedCalendarClient(
   userId: string,
-  linkedAccountId: string,
-): Promise<{ client: InstanceType<typeof google.auth.OAuth2>; id: string; email: string } | null> {
-  // GOOGLE only: a CalDAV row has no OAuth token (it would be flagged for
-  // reconnect on every conflict check) and an OUTLOOK row is not a Google client.
-  const row = await prisma.linkedCalendarAccount.findFirst({
-    where: { id: linkedAccountId, userId, provider: "GOOGLE" },
-  });
-  if (!row) return null;
-
+  row: Pick<LinkedCalendarAccount, "id" | "email" | "accessToken" | "refreshToken" | "expiresAt">,
+): { client: InstanceType<typeof google.auth.OAuth2>; id: string; email: string } | null {
   let accessTokenPlain = "";
   let refreshTokenPlain: string | null = null;
   try {
@@ -586,7 +582,7 @@ async function persistRefreshedLinkedToken(
   }
 
   // Both writes are scoped by { id, userId } (not id alone): the row id is a
-  // UUID already filtered by userId in getLinkedCalendarClient, but scoping the
+  // UUID already filtered by userId by the dispatcher, but scoping the
   // write too makes this function safe to reuse from any future call site and
   // can never touch another user's row.
   // A successful refresh means the token is healthy again — clear any stale

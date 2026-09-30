@@ -12,7 +12,7 @@ const m = vi.hoisted(() => ({
   eventsList: vi.fn(),
   googleCalendar: vi.fn(),
   getAuthedClient: vi.fn(),
-  getLinkedCalendarClient: vi.fn(),
+  buildLinkedCalendarClient: vi.fn(),
   isEntitled: vi.fn((_plan: string, _role?: string) => true),
   captureError: vi.fn(),
   overrides: new Map<string, (...args: unknown[]) => unknown>(),
@@ -28,7 +28,7 @@ vi.mock("googleapis", () => ({
 vi.mock("../mail/gmail.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../mail/gmail.js")>()),
   getAuthedClient: m.getAuthedClient,
-  getLinkedCalendarClient: m.getLinkedCalendarClient,
+  buildLinkedCalendarClient: m.buildLinkedCalendarClient,
   getLinkedInboxClients: vi.fn(async () => []),
   renewExpiringGmailWatches: vi.fn(async () => ({ renewed: 0, failed: 0 })),
 }));
@@ -143,10 +143,9 @@ function setLinkedAccounts(accounts: LinkedFixture[]) {
       needsReconnect: a.needsReconnect ?? false,
     })),
   );
-  override("linkedCalendarAccount.findFirst", () => ({ provider: "GOOGLE" }));
-  m.getLinkedCalendarClient.mockImplementation(async (_userId: string, id: string) => {
-    const account = accounts.find((a) => a.id === id);
-    return account ? { client: account.client, id, email: account.email } : null;
+  m.buildLinkedCalendarClient.mockImplementation((_userId: string, row: { id: string }) => {
+    const account = accounts.find((a) => a.id === row.id);
+    return account ? { client: account.client, id: row.id, email: account.email } : null;
   });
 }
 
@@ -379,7 +378,7 @@ describe("scheduler calendar step — primary calendar", () => {
 
   it("does not look at linked calendar accounts at all (today's behaviour)", async () => {
     await runOneTick();
-    expect(m.getLinkedCalendarClient).not.toHaveBeenCalled();
+    expect(m.buildLinkedCalendarClient).not.toHaveBeenCalled();
     expect(callsTo("linkedCalendarAccount.findMany")).toBe(0);
   });
 });
@@ -420,7 +419,7 @@ describe("scheduler calendar step — linked calendars (LINKED_CALENDAR_SYNC_ENA
 
       await runOneTick();
 
-      expect(m.getLinkedCalendarClient).not.toHaveBeenCalled();
+      expect(m.buildLinkedCalendarClient).not.toHaveBeenCalled();
       expect(callsTo("linkedCalendarAccount.findMany")).toBe(0);
       expect(callsTo("linkedCalendarAccount.findFirst")).toBe(0);
       expect(m.getAuthedClient).toHaveBeenCalledTimes(1);
@@ -527,13 +526,23 @@ describe("scheduler calendar step — linked calendars (LINKED_CALENDAR_SYNC_ENA
       expect(callsTo("user.findUnique")).toBe(1);
     });
 
+    it("reads the linked accounts once per cycle and looks nothing else up per account", async () => {
+      setLinkedAccounts([WORK, { ...WORK, id: "acct-school", email: "me@school.edu" }]);
+
+      await runOneTick();
+
+      expect(callsTo("linkedCalendarAccount.findMany")).toBe(1);
+      expect(callsTo("linkedCalendarAccount.findFirst")).toBe(0);
+      expect(m.buildLinkedCalendarClient).toHaveBeenCalledTimes(2);
+    });
+
     it("skips an account flagged needsReconnect until it is re-linked", async () => {
       setLinkedAccounts([{ ...WORK, needsReconnect: true }]);
 
       await runOneTick();
 
       expect(m.eventsList).toHaveBeenCalledTimes(1);
-      expect(m.getLinkedCalendarClient).not.toHaveBeenCalled();
+      expect(m.buildLinkedCalendarClient).not.toHaveBeenCalled();
     });
 
     it("never sends a revoked linked account's auth error to Sentry", async () => {
@@ -564,7 +573,7 @@ describe("scheduler calendar step — linked calendars (LINKED_CALENDAR_SYNC_ENA
 
         expect(m.eventsList).toHaveBeenCalledTimes(1);
         expect(eventUpserts().map((u) => u.create.sourceAccountId)).toEqual([null]);
-        expect(m.getLinkedCalendarClient).not.toHaveBeenCalled();
+        expect(m.buildLinkedCalendarClient).not.toHaveBeenCalled();
         expect(callsTo("linkedCalendarAccount.findMany")).toBe(0);
       });
     });

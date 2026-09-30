@@ -42,7 +42,7 @@ function callWindows(text: string, pattern: RegExp): string[] {
   return windows;
 }
 
-const EVENT_WRITE = /\.calendarEvent\.(create|createMany|upsert)\(/g;
+const EVENT_WRITE = /\bcalendarEvent\s*\.\s*(create|createMany|upsert)\s*\(/g;
 const ACCOUNT_WRITE = /\.linkedCalendarAccount\.(create|createMany|upsert)\(/g;
 const STATES_SOURCE = /provider:|\b\w*[eE]ventSource\w*\(/;
 
@@ -68,7 +68,7 @@ describe("every CalendarEvent writer states its provider", () => {
   });
 
   it("the Google sync upsert exists in exactly one place", () => {
-    const upserters = files.filter((f) => /\.calendarEvent\.upsert\(/.test(f.text));
+    const upserters = files.filter((f) => /\bcalendarEvent\s*\.\s*upsert\s*\(/.test(f.text));
     expect(upserters.map((f) => f.path)).toEqual([ROWS_MODULE]);
   });
 
@@ -129,7 +129,6 @@ describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
   it("finds the known readers (so this guard cannot pass by scanning nothing)", () => {
     const readers = files.filter((f) => callWindows(f.text, READ).length > 0);
     expect(readers.map((f) => f.path).sort()).toEqual([
-      "mail/gmail.ts",
       "pim/calendar-providers/dispatch.ts",
       "pim/linked-calendar-unlink.ts",
       "routes/auth.ts",
@@ -148,7 +147,8 @@ describe("Google-only LinkedCalendarAccount readers filter on provider", () => {
 });
 
 describe("CalendarEvent readers: one event can be two rows (C2)", () => {
-  const READ = /\.calendarEvent\.(findMany|findFirst|findUnique|count)\(/g;
+  const READ =
+    /\bcalendarEvent\s*\.\s*(findMany|findFirst|findUnique|count|aggregate|groupBy|findFirstOrThrow|findUniqueOrThrow)\s*\(/g;
   const readerPaths = files
     .filter((f) => callWindows(f.text, READ).length > 0)
     .map((f) => f.path)
@@ -159,6 +159,7 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
   // dedupes the back-to-back warning only; its weekly count and tomorrow list are
   // a C7 gap (see the plan's C2 block).
   const DEDUPED = [
+    "agentcore/agent-context.ts",
     "agentcore/proactive-actions.ts",
     "mail/meeting-context.ts",
     "pim/briefing-structure.ts",
@@ -214,16 +215,21 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
       const file = files.find((f) => f.path === path);
       const listReads = callWindows(
         file?.text ?? "",
-        /\.calendarEvent\.(findMany|findFirst|count)\(/g,
+        /\bcalendarEvent\s*\.\s*(findMany|findFirst|count|aggregate|groupBy|findFirstOrThrow)\s*\(/g,
       );
       for (const window of listReads) {
-        expect(window.slice(0, 500)).toContain("calendarSourceScope()");
+        // The scope helper, or a literal primary-only filter (stricter: it also
+        // holds while the flag is on).
+        expect(window.slice(0, 500)).toMatch(/calendarSourceScope\(\)|sourceAccountId:\s*null/);
       }
     });
 
     it.each(scoped)("%s checks isCalendarRowVisible() on every row it fetches by id", (path) => {
       const file = files.find((f) => f.path === path);
-      const byId = callWindows(file?.text ?? "", /\.calendarEvent\.findUnique\(/g);
+      const byId = callWindows(
+        file?.text ?? "",
+        /\bcalendarEvent\s*\.\s*(findUnique|findUniqueOrThrow)\s*\(/g,
+      );
       if (byId.length > 0) expect(file?.text).toContain("isCalendarRowVisible(");
     });
   });

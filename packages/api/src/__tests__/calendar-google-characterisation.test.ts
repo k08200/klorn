@@ -46,9 +46,13 @@ vi.mock("googleapis", () => ({
 
 vi.mock("../mail/gmail.js", () => ({
   getAuthedClient: m.getAuthedClient,
-  getLinkedCalendarClient: vi.fn(async (_userId: string, id: string) => {
-    const row = m.linkedRows.find((r) => r.id === id);
-    return row ? { client: row.client, id: row.id, email: row.email } : null;
+  buildLinkedCalendarClient: (
+    _userId: string,
+    row: { id: string; email: string; client: unknown },
+  ) => ({
+    client: row.client,
+    id: row.id,
+    email: row.email,
   }),
   isGoogleAuthError: (e: { response?: { status?: number } }) => e?.response?.status === 401,
   markGoogleTokenForReconnect: m.markGoogleTokenForReconnect,
@@ -61,10 +65,6 @@ vi.mock("../db.js", () => ({
     // The linked accounts the provider seam lists for a conflict check.
     linkedCalendarAccount: {
       findMany: vi.fn(async () => m.linkedRows),
-      findFirst: vi.fn(async ({ where }: { where: { id: string } }) => {
-        const row = m.linkedRows.find((r) => r.id === where.id);
-        return row ? { provider: row.provider } : null;
-      }),
     },
   },
 }));

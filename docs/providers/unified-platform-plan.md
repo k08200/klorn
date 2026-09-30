@@ -1019,7 +1019,8 @@ needs FA-9 and the admin guidance from F0.
     additive: the row JSON returned by `/api/calendar` (list, get, create,
     update) now carries `provider`, `externalId` and `sourceAccountId`.
   - Google-only `LinkedCalendarAccount` readers filter on `provider: "GOOGLE"`
-    (`getLinkedCalendarClients`, the linked-calendars list), so a later CalDAV
+    (`getLinkedCalendarClients`, since replaced in C2 by the dispatcher's routing
+    by provider, and the linked-calendars list), so a later CalDAV
     row with no token is never flagged for reconnect and an OUTLOOK row is
     never given a Google client. The guard test fails for a reader without a
     provider filter; the key-rotation sweep reads every provider on purpose.
@@ -1065,11 +1066,14 @@ needs FA-9 and the admin guidance from F0.
     `{ unsupported: true }`; a session's methods throw on a hard failure, so each
     caller keeps its own error policy. `OUTLOOK`, `ICLOUD`, `NAVER`, `DEVICE` and
     `LOCAL` answer unsupported. Linked accounts go through the same dispatch as
-    the primary one: `connectLinkedCalendars(userId)` lists the accounts of every
-    provider, asks `calendarActionsFor(userId, linkedAccountId)` for each and
-    opens a session per account (`getLinkedCalendarClient` builds one account's
-    client; the batch builder it replaced is gone). The conflict checks and the
-    sync both use it, so C3 and C4 only add implementations. `pim/calendar.ts`
+    the primary one: `connectLinkedCalendars(userId)` reads the user's linked
+    rows once (every provider, full rows), dispatches each on the provider it
+    already holds (`calendarActionsForProvider`) and hands the row to `connect`,
+    which opens a session from it (`buildLinkedCalendarClient` builds the Google
+    client from that row; there is no per-account lookup). A conflict check
+    therefore costs what it cost before C2, one read of the linked rows plus a
+    token decrypt per account, pinned by read-count tests. The conflict checks and
+    the sync both use it, so C3 and C4 only add implementations. `pim/calendar.ts`
     keeps its exported functions and results; the primary path is unchanged,
     pinned by characterisation tests written before the move
     (`calendar-google-characterisation`, `automation-scheduler-calendar-sync`, and
@@ -1091,13 +1095,24 @@ needs FA-9 and the admin guidance from F0.
     hides them at once; the rows stay in the table until their account is unlinked
     or an operator deletes them (see Rollback). The GDPR export is the one reader
     that does not filter: it returns every row the system holds. The guard test
-    fails for a reader that neither filters nor is exempt.
+    fails for a reader that neither filters nor is exempt; its patterns match a
+    call split across lines (`prisma.calendarEvent` newline `.findMany`), which the
+    first version did not and so missed `agent-context.ts`, the reader that feeds
+    the LLM context. That reader now filters and dedupes too.
   - Revoked accounts. One failure policy (`pim/linked-calendar-failure.ts`) serves
-    the conflict checks and the sync: a Google auth error flags the account for
-    reconnect, warns once per account per hour and never reaches Sentry; any other
+    the conflict checks and the sync: a revoked grant flags the account for
+    reconnect, warns once per account per hour (the log is pruned of expired
+    entries) and never reaches Sentry, because only the user can fix it; any other
     failure is warned and captured with the domain only. The sync skips an account
     flagged `needsReconnect` until it is re-linked; the conflict checks still try
-    it, because a successful refresh clears the flag.
+    it, because a successful refresh clears the flag. Deviation from main: a
+    revoked grant is HTTP 401 or an OAuth `invalid_grant` / `unauthorized_client`
+    code (body, code, or the start of the message), not main's broader
+    `isGoogleAuthError`, which also matches any message containing "expired",
+    "unauthorized", "revoked" or "invalid token". With the broad predicate an
+    unrelated "request expired" would be flagged as a revoked account and hidden
+    from Sentry; with this one it is captured and the account is left alone.
+    Main's predicate is unchanged for the primary paths.
   - Gate (a), dedupe, decided: `CalendarEvent.sourceKey TEXT NOT NULL DEFAULT
     'primary'` (the linked account id for a linked row), and the unique becomes
     (userId, provider, sourceKey, externalId). One row per event per source
@@ -1161,10 +1176,13 @@ needs FA-9 and the admin guidance from F0.
     availability, the conflict and focus-block lookups, and meeting prep by id.
     The per-member free/busy keeps its old conservative reading: a busy entry
     missing a start or end still counts as busy (`anyBusy`), never as free.
-  - Intended effects with the flag on: a linked calendar's event also makes
-    `create_event`'s +-30 minute duplicate check refuse the booking, and it
-    suppresses focus-window notifications while it runs, because it is a real
-    commitment of the same person.
+  - Intended effects with the flag on: a linked calendar's event suppresses
+    focus-window notifications while it runs, and a booking that collides with it
+    is refused by `create_event`'s conflict check (which already reads every linked
+    account through Google free/busy), because it is a real commitment of the same
+    person. The +-30 minute duplicate check that runs before it looks at primary
+    and LOCAL rows only, flag on or off: it names an existing event for the model
+    to point at, and a read-only linked mirror is not one.
   - For C7, not deduped yet: the `/api/ops` events-today count, the
     interaction-graph meeting bonus, the weekly-review meeting count and the
     tomorrow list in `proactive-actions.ts`, and the briefing reader's `take: 20`

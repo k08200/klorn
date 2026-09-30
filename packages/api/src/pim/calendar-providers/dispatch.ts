@@ -2,16 +2,13 @@
  * Provider dispatch for calendar accounts (step C2 of
  * docs/providers/unified-platform-plan.md; mirrors mail/providers/dispatch.ts).
  *
- * `calendarActionsFor` answers "which implementation serves this account?" from
- * a linked-calendar id: the primary calendar (null id) is always the Google
- * OAuth login, a linked row dispatches on its `provider` column, and a missing
- * row deliberately resolves to GOOGLE - `connect` then answers null (not
- * connected), which is the right behaviour for a stale id.
- *
- * Callers that already hold the provider skip the lookup with
- * `calendarActionsForProvider`.
+ * `calendarActionsForProvider` answers "which implementation serves this
+ * account?" from its provider. The primary calendar is always the Google OAuth
+ * login; a linked account dispatches on the `provider` column of the row the
+ * listing already read, so choosing an implementation costs no lookup.
  */
 
+import type { LinkedCalendarAccount } from "@prisma/client";
 import { prisma } from "../../db.js";
 import type { CalendarProviderName } from "../calendar-rows.js";
 import { googleCalendarActions } from "./google.js";
@@ -37,51 +34,25 @@ export function calendarActionsForProvider(
   return ACTIONS_BY_PROVIDER[provider];
 }
 
-export async function calendarActionsFor(
-  userId: string,
-  linkedAccountId: string | null | undefined,
-): Promise<CalendarProviderActions> {
-  if (!linkedAccountId) return googleCalendarActions;
-  const row = await prisma.linkedCalendarAccount.findFirst({
-    where: { id: linkedAccountId, userId },
-    select: { provider: true },
-  });
-  return calendarActionsForProvider((row?.provider as CalendarProviderName) ?? "GOOGLE");
-}
-
 /**
  * The primary calendar's session, or null when Google is not connected. The
  * primary login is always Google, so the `unsupported` result cannot occur here.
  */
 export async function connectPrimaryCalendar(userId: string): Promise<CalendarSession | null> {
-  const actions = await calendarActionsFor(userId, null);
-  const session = await actions.connect({ userId, linkedAccountId: null });
+  const session = await googleCalendarActions.connect({ userId, linkedAccountId: null });
   return session && !isCalendarUnsupported(session) ? session : null;
 }
 
-/** A linked calendar account as the seam lists it: enough to decide whether and how to connect. */
-export interface LinkedCalendarAccountRef {
-  readonly id: string;
-  readonly email: string;
-  readonly provider: CalendarProviderName;
-  readonly needsReconnect: boolean;
-}
-
-/** Every linked calendar account of the user, of every provider, oldest first. */
-export async function listLinkedCalendarAccounts(
-  userId: string,
-): Promise<LinkedCalendarAccountRef[]> {
-  const rows = await prisma.linkedCalendarAccount.findMany({
+/**
+ * Every linked calendar account of the user, of every provider, oldest first, as
+ * full rows: the one read a conflict check or a sync pays, which also hands each
+ * provider the credentials it connects with.
+ */
+export async function listLinkedCalendarAccounts(userId: string): Promise<LinkedCalendarAccount[]> {
+  return prisma.linkedCalendarAccount.findMany({
     where: { userId },
-    select: { id: true, email: true, provider: true, needsReconnect: true },
     orderBy: { createdAt: "asc" },
   });
-  return rows.map((row) => ({
-    id: row.id,
-    email: row.email,
-    provider: row.provider as CalendarProviderName,
-    needsReconnect: row.needsReconnect,
-  }));
 }
 
 /** A linked calendar account with a live session. */
@@ -92,12 +63,13 @@ export interface ConnectedLinkedCalendar {
 }
 
 /**
- * Open a session on each of the user's linked calendar accounts, through the
- * same dispatch as every other account: a provider with no implementation yet
+ * Open a session on each of the user's linked calendar accounts, dispatching on
+ * the provider already read with the list: a provider with no implementation yet
  * answers unsupported and its account is skipped, and so is one whose token is
  * unusable. `skipNeedsReconnect` leaves out accounts flagged for a re-link: the
  * sync does not retry a revoked token every cycle, while conflict checks still
- * try it (a successful refresh clears the flag).
+ * try it (a successful refresh clears the flag). One read in total plus, per
+ * account, the token decrypt.
  */
 export async function connectLinkedCalendars(
   userId: string,
@@ -107,8 +79,8 @@ export async function connectLinkedCalendars(
   const connected: ConnectedLinkedCalendar[] = [];
   for (const account of accounts) {
     if (options.skipNeedsReconnect && account.needsReconnect) continue;
-    const actions = await calendarActionsFor(userId, account.id);
-    const session = await actions.connect({ userId, linkedAccountId: account.id });
+    const actions = calendarActionsForProvider(account.provider);
+    const session = await actions.connect({ userId, linkedAccountId: account.id, linked: account });
     if (session && !isCalendarUnsupported(session)) {
       connected.push({ id: account.id, email: account.email, session });
     }

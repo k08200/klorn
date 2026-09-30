@@ -21,14 +21,22 @@
  *     so the seam does not flatten them into one.
  */
 
+import type { LinkedCalendarAccount } from "@prisma/client";
 import type { BusyConflict, ConflictSummary } from "../../google-calendar-time.js";
 import type { CalendarProviderName } from "../calendar-rows.js";
 
-/** Which calendar account an operation targets. `linkedAccountId` null = the primary Google login. */
-export interface CalendarAccountRef {
-  readonly userId: string;
-  readonly linkedAccountId: string | null;
-}
+/**
+ * Which calendar account an operation targets. `linkedAccountId` null is the
+ * primary Google login. A linked account carries the row the dispatcher already
+ * loaded when it listed the accounts, so connecting costs no further read.
+ */
+export type CalendarAccountRef =
+  | { readonly userId: string; readonly linkedAccountId: null }
+  | {
+      readonly userId: string;
+      readonly linkedAccountId: string;
+      readonly linked: LinkedCalendarAccount;
+    };
 
 export type CalendarUnsupported = { unsupported: true; error: string };
 
