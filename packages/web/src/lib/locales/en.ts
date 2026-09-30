@@ -385,6 +385,10 @@ const en: Record<string, string> = {
   "settings.apiKeys.activity.reason.rate_limited": "Write limit reached",
   "settings.apiKeys.activity.reason.tool_error": "The action reported an error",
   "settings.apiKeys.activity.reason.exception": "Unexpected error",
+  "settings.apiKeys.activity.tool.create_draft": "Created a draft",
+  "settings.apiKeys.activity.tool.unknown": "Other action",
+  "settings.apiKeys.activity.limitNote": "Showing the latest {count} actions.",
+  "settings.apiKeys.activity.retry": "Try again",
   "settings.section.rules": "Rules",
   "settings.rules.intro":
     "Write a rule in your own words — Klorn compiles it into sender or domain pins you review before saving.",

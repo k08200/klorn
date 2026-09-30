@@ -317,8 +317,10 @@ Landed 2026-09-30, OFF by default (the flag is unchanged):
   `McpWriteAudit` rows of one key, newest first, as `tool`, `outcome`,
   `reason`, `targetId`, `createdAt` and nothing else (the `select` and the
   mapping are both allow-lists, so `argsHash` cannot leave). A foreign id and an
-  unknown id are the same 404 (`{ error: "API key not found" }`). It is 30 a
-  minute per client address. While the flag is off it is an unregistered route, byte
+  unknown id are the same 404 (`{ error: "API key not found" }`), and so is an
+  id that is not `[A-Za-z0-9-]{1,64}`, checked before any query (`DELETE /:id`
+  checks the same shape and keeps answering a malformed id like an unknown one:
+  `{ revoked: true }`, no query). It is 30 a minute per client address. While the flag is off it is an unregistered route, byte
   for byte (`darkRouteGate`, in `onRequest`, before auth and any query). Query
   in `mcp/key-activity.ts`.
 - `GET /api/keys` adds `writeToolsAvailable: true` only while the flag is on;
@@ -337,7 +339,8 @@ Landed 2026-09-30, OFF by default (the flag is unchanged):
   lands; the flag must not flip before then. A 401 from a revoked key is still
   not audited (A2a gap). The web app has no unit-test runner: its checks are
   the Playwright spec `packages/web/e2e/api-keys-permission.spec.ts` (run by
-  hand, not in CI) and the i18n parity guard.
+  hand, not in CI) and the i18n parity guard, which in CI also fails a new A3
+  string that is a copy of the English text.
 
 **A4 — `create_draft`, reply-only.** Depends on: A2, B0. `email_id` is
 required. The recipient is pinned to the original sender. The account is

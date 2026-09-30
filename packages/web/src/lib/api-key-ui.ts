@@ -17,9 +17,24 @@ const PERMISSION_LABEL_KEYS: Record<ApiKeyPermissionWire, string> = {
 };
 
 /** The choices, in display order. Read only first: it is the default. */
-export const API_KEY_PERMISSIONS = Object.keys(PERMISSION_LABEL_KEYS) as ApiKeyPermissionWire[];
+export const API_KEY_PERMISSIONS = [
+  "read",
+  "read_write",
+] as const satisfies readonly ApiKeyPermissionWire[];
+
+type MustBeNever<T extends never> = T;
+/** Fails to compile when ApiKeyPermissionWire gains a member the list above omits. */
+export type UnlistedPermissions = MustBeNever<
+  Exclude<ApiKeyPermissionWire, (typeof API_KEY_PERMISSIONS)[number]>
+>;
 
 export const DEFAULT_API_KEY_PERMISSION: ApiKeyPermissionWire = "read";
+
+/**
+ * Rows the API returns per key at most (packages/api/src/mcp/key-activity.ts
+ * KEY_ACTIVITY_LIMIT). A full page means older rows may exist.
+ */
+export const KEY_ACTIVITY_LIMIT = 50;
 
 export function permissionLabelKey(permission: ApiKeyPermissionWire): string {
   return PERMISSION_LABEL_KEYS[permission];
@@ -42,12 +57,16 @@ const OUTCOME_LABEL_KEYS: Record<ApiKeyActivityOutcomeWire, string> = {
   attempted: "settings.apiKeys.activity.outcome.attempted",
 };
 
-/** Chip tint per outcome, from the state tokens (each ink is >= 4.5:1 on its own surface). */
+/**
+ * Chip tint per outcome, from the state tokens (each ink is >= 4.5:1 on its own
+ * surface). Every chip has a border so that the neutral one is visible on the
+ * raised surface the activity list sits on.
+ */
 const OUTCOME_CHIP_CLASSES: Record<ApiKeyActivityOutcomeWire, string> = {
-  ok: "bg-state-ok-bg text-state-ok-ink",
-  refused: "bg-state-warn-bg text-state-warn-ink",
-  error: "bg-state-danger-bg text-state-danger-ink",
-  attempted: "bg-surface-raised text-ink-mid",
+  ok: "border border-state-ok-line bg-state-ok-bg text-state-ok-ink",
+  refused: "border border-state-warn-line bg-state-warn-bg text-state-warn-ink",
+  error: "border border-state-danger-line bg-state-danger-bg text-state-danger-ink",
+  attempted: "border border-line bg-surface-panel text-ink-mid",
 };
 
 export function outcomeLabelKey(outcome: ApiKeyActivityOutcomeWire): string {
@@ -58,11 +77,14 @@ export function outcomeChipClasses(outcome: ApiKeyActivityOutcomeWire): string {
   return OUTCOME_CHIP_CLASSES[outcome];
 }
 
-/** Tools and reasons the server may name. Anything else falls back (see below). */
+/** Tools the server may name. A tool added later shows the generic label until it is listed. */
 const TOOL_LABEL_KEYS: Readonly<Record<string, string>> = {
   mark_read: "settings.apiKeys.activity.tool.mark_read",
   set_tier: "settings.apiKeys.activity.tool.set_tier",
+  create_draft: "settings.apiKeys.activity.tool.create_draft",
 };
+
+const TOOL_UNKNOWN_LABEL_KEY = "settings.apiKeys.activity.tool.unknown";
 
 const REASON_LABEL_KEYS: Readonly<Record<string, string>> = {
   permission_denied: "settings.apiKeys.activity.reason.permission_denied",
@@ -76,9 +98,12 @@ function lookup(table: Readonly<Record<string, string>>, name: string): string |
   return Object.hasOwn(table, name) ? table[name] : null;
 }
 
-/** i18n key for a tool, or null for one this build has no label for (show its name). */
-export function toolLabelKey(tool: string): string | null {
-  return lookup(TOOL_LABEL_KEYS, tool);
+/**
+ * i18n key for a tool. One this build has no label for gets a generic localized
+ * label, never its raw identifier.
+ */
+export function toolLabelKey(tool: string): string {
+  return lookup(TOOL_LABEL_KEYS, tool) ?? TOOL_UNKNOWN_LABEL_KEY;
 }
 
 /** i18n key for a reason code, or null when there is none or it is unknown (show nothing). */

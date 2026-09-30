@@ -382,6 +382,10 @@ const ko: Record<string, string> = {
   "settings.apiKeys.activity.reason.rate_limited": "쓰기 한도에 도달함",
   "settings.apiKeys.activity.reason.tool_error": "작업에서 오류가 보고됨",
   "settings.apiKeys.activity.reason.exception": "예기치 않은 오류",
+  "settings.apiKeys.activity.tool.create_draft": "초안 작성",
+  "settings.apiKeys.activity.tool.unknown": "기타 작업",
+  "settings.apiKeys.activity.limitNote": "최근 {count}건만 표시됩니다.",
+  "settings.apiKeys.activity.retry": "다시 시도",
   "settings.section.rules": "규칙",
   "settings.rules.intro":
     "내 말로 규칙을 쓰면 Klorn이 발신자/도메인 핀으로 컴파일합니다. 저장 전 직접 확인합니다.",

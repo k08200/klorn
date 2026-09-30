@@ -382,6 +382,10 @@ const ja: Record<string, string> = {
   "settings.apiKeys.activity.reason.rate_limited": "書き込み上限に達しました",
   "settings.apiKeys.activity.reason.tool_error": "操作がエラーを返しました",
   "settings.apiKeys.activity.reason.exception": "予期しないエラー",
+  "settings.apiKeys.activity.tool.create_draft": "下書きを作成した",
+  "settings.apiKeys.activity.tool.unknown": "その他の操作",
+  "settings.apiKeys.activity.limitNote": "最新の {count} 件のみ表示しています。",
+  "settings.apiKeys.activity.retry": "再試行",
   "settings.section.rules": "ルール",
   "settings.rules.intro":
     "自分の言葉でルールを書くと、Klorn が送信者/ドメインのピンにコンパイルします。保存前に内容を確認できます。",

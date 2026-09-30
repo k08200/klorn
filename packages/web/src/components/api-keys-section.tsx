@@ -17,25 +17,14 @@ import type {
 } from "@klorn/contract";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { buttonClasses } from "../lib/api-key-controls";
 import { DEFAULT_API_KEY_PERMISSION } from "../lib/api-key-ui";
 import { useT } from "../lib/i18n";
 import { captureClientError } from "../lib/sentry";
-import { ApiKeyPermissionPicker } from "./api-key-permission-picker";
+import { ApiKeyCreateForm } from "./api-key-create-form";
 import { ApiKeyRow } from "./api-key-row";
 import { useConfirm } from "./confirm-dialog";
 import { useToast } from "./toast";
-
-const FIELD =
-  "w-full rounded-xl border border-line bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35";
-const BUTTON =
-  "ease-strong inline-flex min-h-9 items-center rounded-lg border border-line bg-surface-panel/70 px-3 text-xs font-medium text-ink transition duration-150 hover:bg-surface-panel disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35";
-const BUTTON_PRIMARY =
-  "ease-strong inline-flex min-h-9 items-center rounded-lg bg-accent-solid px-3 text-xs font-semibold text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35";
-
-/** With write tools on, every control in the section is a >= 44px target (WCAG 2.2 AA). */
-const FIELD_TALL = `${FIELD} min-h-11`;
-const BUTTON_TALL = BUTTON.replace("min-h-9", "min-h-11");
-const BUTTON_PRIMARY_TALL = BUTTON_PRIMARY.replace("min-h-9", "min-h-11");
 
 export function ApiKeysSection() {
   const { t } = useT();
@@ -114,25 +103,15 @@ export function ApiKeysSection() {
     <div className="space-y-4">
       <p className="text-sm text-ink-mid">{t("settings.apiKeys.intro")}</p>
 
-      <div className="flex gap-2">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          maxLength={60}
-          placeholder={t("settings.apiKeys.namePlaceholder")}
-          className={writeTools ? FIELD_TALL : FIELD}
-        />
-        <button
-          type="button"
-          onClick={create}
-          disabled={creating || !name.trim()}
-          className={`${writeTools ? BUTTON_PRIMARY_TALL : BUTTON_PRIMARY} shrink-0`}
-        >
-          {creating ? t("settings.apiKeys.creating") : t("settings.apiKeys.create")}
-        </button>
-      </div>
-
-      {writeTools && <ApiKeyPermissionPicker value={permission} onChange={setPermission} />}
+      <ApiKeyCreateForm
+        name={name}
+        onNameChange={setName}
+        creating={creating}
+        onCreate={create}
+        writeTools={writeTools}
+        permission={permission}
+        onPermissionChange={setPermission}
+      />
 
       {freshKey && (
         <div className="space-y-2 rounded-xl border border-line bg-surface-raised p-3">
@@ -141,17 +120,13 @@ export function ApiKeysSection() {
             {freshKey.key}
           </code>
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={copyFreshKey}
-              className={writeTools ? BUTTON_TALL : BUTTON}
-            >
+            <button type="button" onClick={copyFreshKey} className={buttonClasses(writeTools)}>
               {t("settings.apiKeys.copy")}
             </button>
             <button
               type="button"
               onClick={() => setFreshKey(null)}
-              className={writeTools ? BUTTON_TALL : BUTTON}
+              className={buttonClasses(writeTools)}
             >
               {t("settings.apiKeys.dismiss")}
             </button>

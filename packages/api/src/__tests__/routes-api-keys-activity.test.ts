@@ -320,6 +320,95 @@ describe("GET /api/keys/:id/activity — flag ON", () => {
   });
 });
 
+describe("GET /api/keys/:id/activity — id shape", () => {
+  const NOT_FOUND = '{"error":"API key not found"}';
+
+  beforeEach(() => {
+    process.env.MCP_WRITE_TOOLS_ENABLED = "true";
+  });
+
+  it.each([
+    ["a NUL byte", "%00"],
+    ["a NUL byte inside an id", "k1%00x"],
+    ["a space", "k%201"],
+    ["a SQL-shaped id", "%27%20OR%201%3D1--"],
+    ["an id one past the 64-character cap", "a".repeat(65)],
+  ])("answers %s with the not-found 404 and never reaches the database", async (_l, id) => {
+    const app = await buildApp();
+    const res = await getActivity(app, id);
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toBe(NOT_FOUND);
+    expect(keyFindFirst).not.toHaveBeenCalled();
+    expect(auditFindMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("rejects an id past the router's parameter limit before any handler runs", async () => {
+    const app = await buildApp();
+    const res = await getActivity(app, "a".repeat(200));
+    // find-my-way answers 414 for a parameter over its 100-character limit.
+    expect([404, 414]).toContain(res.statusCode);
+    expect(keyFindFirst).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it.each([
+    ["a uuid", "0b9d5a4e-6f3c-4c58-9d1e-2f7a8b1c3d4e"],
+    ["a short id", "k1"],
+    ["a 64-character id", "a".repeat(64)],
+  ])("still looks up %s", async (_l, id) => {
+    const app = await buildApp();
+    const res = await getActivity(app, id);
+    expect(res.statusCode).toBe(200);
+    expect(keyFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id, userId: OWNER } }),
+    );
+    await app.close();
+  });
+});
+
+describe("GET /api/keys/:id/activity — flag OFF behind the global rate limiter", () => {
+  /** Headers a prober sees, minus the two that change per request by design. */
+  const visible = (headers: Record<string, unknown>) => {
+    const { date: _date, "x-ratelimit-reset": _reset, ...rest } = headers;
+    return rest;
+  };
+
+  async function appWith(routes: boolean): Promise<FastifyInstance> {
+    const app = Fastify();
+    await app.register(rateLimit, { max: 100, timeWindow: "1 minute" });
+    if (routes) {
+      const { apiKeyRoutes } = await import("../routes/api-keys.js");
+      await app.register(apiKeyRoutes, { prefix: "/api/keys" });
+    }
+    return app;
+  }
+
+  it("carries the same status, body and headers (rate-limit headers included) as the route that does not exist", async () => {
+    const dark = await appWith(true);
+    const missing = await appWith(false);
+    const url = activityUrl("k1");
+    const a = await dark.inject({ method: "GET", url, headers: auth() });
+    const b = await missing.inject({ method: "GET", url, headers: auth() });
+    expect(a.statusCode).toBe(404);
+    expect(a.statusCode).toBe(b.statusCode);
+    expect(a.body).toBe(b.body);
+    expect(visible(a.headers)).toEqual(visible(b.headers));
+    await dark.close();
+    await missing.close();
+  });
+
+  it("is not throttled by the route's own limit while dark: 31 requests stay 404", async () => {
+    const dark = await appWith(true);
+    const statuses = new Set<number>();
+    for (let i = 0; i < 31; i++) {
+      statuses.add((await dark.inject({ method: "GET", url: activityUrl("k1") })).statusCode);
+    }
+    expect([...statuses]).toEqual([404]);
+    await dark.close();
+  });
+});
+
 describe("GET /api/keys — writeToolsAvailable", () => {
   const ROWS = [
     {

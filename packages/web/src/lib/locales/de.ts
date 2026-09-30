@@ -396,6 +396,10 @@ const de: Record<string, string> = {
   "settings.apiKeys.activity.reason.rate_limited": "Schreiblimit erreicht",
   "settings.apiKeys.activity.reason.tool_error": "Die Aktion meldete einen Fehler",
   "settings.apiKeys.activity.reason.exception": "Unerwarteter Fehler",
+  "settings.apiKeys.activity.tool.create_draft": "Entwurf erstellt",
+  "settings.apiKeys.activity.tool.unknown": "Andere Aktion",
+  "settings.apiKeys.activity.limitNote": "Es werden nur die letzten {count} Aktionen angezeigt.",
+  "settings.apiKeys.activity.retry": "Erneut versuchen",
   "settings.section.rules": "Regeln",
   "settings.rules.intro":
     "Beschreibe eine Regel in eigenen Worten — Klorn übersetzt sie in Absender- oder Domain-Pins, die du vor dem Speichern prüfst.",

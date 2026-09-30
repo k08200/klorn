@@ -22,8 +22,21 @@ import { darkRouteGate } from "./dark-route-gate.js";
 
 const MAX_NAME_CHARS = 60;
 
-/** Same ceiling the sibling settings reads use (auth.ts, email-mailbox.ts). */
+/** Sibling read routes allow 30 a minute (auth.ts) to 60 (email-mailbox.ts); this takes the lower. */
 const ACTIVITY_RATE_LIMIT = { max: 30, timeWindow: "1 minute" } as const;
+
+/**
+ * What a key id can look like: ApiKey.id is a uuid, so letters, digits and
+ * hyphens, bounded. Checked before any query, so a NUL byte, a space or an
+ * over-long value never reaches Prisma and is answered like an id that matches
+ * no key.
+ */
+const API_KEY_ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/;
+
+const isApiKeyId = (value: unknown): value is string =>
+  typeof value === "string" && API_KEY_ID_PATTERN.test(value);
+
+const KEY_NOT_FOUND = { error: "API key not found" } as const;
 
 /** Stable machine-readable code on the 400 — clients branch on it, not on `error`. */
 const CODE_INVALID_PERMISSION = "INVALID_API_KEY_PERMISSION";
@@ -96,12 +109,13 @@ export async function apiKeyRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
+      if (!isApiKeyId(id)) return reply.code(404).send(KEY_NOT_FOUND);
       const uid = getUserId(request);
       const owned = await prisma.apiKey.findFirst({
         where: { id, userId: uid },
         select: { id: true },
       });
-      if (!owned) return reply.code(404).send({ error: "API key not found" });
+      if (!owned) return reply.code(404).send(KEY_NOT_FOUND);
       return { activity: await listKeyActivity(uid, owned.id) };
     },
   );
@@ -156,10 +170,14 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   app.delete("/:id", { preHandler: requireAuth }, async (request) => {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
-    await prisma.apiKey.updateMany({
-      where: { id, userId: uid, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
+    // A malformed id matches no key, and an id that matches no key is already a
+    // no-op with this exact answer, so it stays one — without the query.
+    if (isApiKeyId(id)) {
+      await prisma.apiKey.updateMany({
+        where: { id, userId: uid, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    }
     return { revoked: true };
   });
 }

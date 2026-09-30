@@ -362,6 +362,10 @@ const zh: Record<string, string> = {
   "settings.apiKeys.activity.reason.rate_limited": "已达写入上限",
   "settings.apiKeys.activity.reason.tool_error": "操作返回了错误",
   "settings.apiKeys.activity.reason.exception": "意外错误",
+  "settings.apiKeys.activity.tool.create_draft": "创建了草稿",
+  "settings.apiKeys.activity.tool.unknown": "其他操作",
+  "settings.apiKeys.activity.limitNote": "仅显示最近 {count} 条操作。",
+  "settings.apiKeys.activity.retry": "重试",
   "settings.section.rules": "规则",
   "settings.rules.intro":
     "用自己的话写下规则，Klorn 会将其编译为发件人或域名固定项，保存前可逐条确认。",

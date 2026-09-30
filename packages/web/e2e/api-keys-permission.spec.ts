@@ -119,22 +119,71 @@ const ACTIVITY: ActivityWire[] = [
   },
 ];
 
+const DRAFT_ROW: ActivityWire = {
+  tool: "create_draft",
+  outcome: "ok",
+  reason: null,
+  targetId: "19a4",
+  createdAt: "2026-09-30T08:00:00.000Z",
+};
+
+const UNKNOWN_TOOL_ROW: ActivityWire = {
+  tool: "frobnicate_widgets",
+  outcome: "ok",
+  reason: null,
+  targetId: null,
+  createdAt: "2026-09-30T07:00:00.000Z",
+};
+
+/** The API's page size: a full page means older rows may exist. */
+const ACTIVITY_PAGE = 50;
+
+/** Exactly one full page, newest first, padded with distinct older rows. */
+const FULL_PAGE: ActivityWire[] = [
+  ...ACTIVITY,
+  DRAFT_ROW,
+  UNKNOWN_TOOL_ROW,
+  ...Array.from({ length: ACTIVITY_PAGE - ACTIVITY.length - 2 }, (_, i) => ({
+    tool: "mark_read",
+    outcome: "ok" as const,
+    reason: null,
+    targetId: `old${i}`,
+    createdAt: new Date(Date.UTC(2026, 8, 29, 0, 0, 60 - i)).toISOString(),
+  })),
+];
+
 interface MockOptions {
   keys: KeyWire[];
   /** Sent verbatim when defined; omitted from the body when undefined (flag OFF). */
   writeToolsAvailable?: boolean;
   activity?: ActivityWire[];
   activityStatus?: number;
+  /** Hold the activity response until `recorded.release()` is called. */
+  holdActivity?: boolean;
   language?: LocaleCode;
 }
 
 interface Recorded {
   createBodies: string[];
   activityUrls: string[];
+  /** Status the activity route answers with; a test may change it between requests. */
+  activityStatus: number;
+  release: () => void;
 }
 
 async function mockApi(page: Page, opts: MockOptions): Promise<Recorded> {
-  const recorded: Recorded = { createBodies: [], activityUrls: [] };
+  let release: () => void = () => {};
+  const released = opts.holdActivity
+    ? new Promise<void>((resolve) => {
+        release = resolve;
+      })
+    : Promise.resolve();
+  const recorded: Recorded = {
+    createBodies: [],
+    activityUrls: [],
+    activityStatus: opts.activityStatus ?? 200,
+    release,
+  };
   await page.addInitScript((language) => {
     localStorage.setItem("klorn-token", "e2e-test-token");
     if (language) localStorage.setItem("klorn-profile", JSON.stringify({ language }));
@@ -176,10 +225,11 @@ async function mockApi(page: Page, opts: MockOptions): Promise<Recorded> {
     if (opts.writeToolsAvailable !== undefined) body.writeToolsAvailable = opts.writeToolsAvailable;
     return route.fulfill({ json: body });
   });
-  await page.route("**/api/keys/*/activity", (route) => {
+  await page.route("**/api/keys/*/activity", async (route) => {
     recorded.activityUrls.push(new URL(route.request().url()).pathname);
-    if (opts.activityStatus && opts.activityStatus !== 200) {
-      return route.fulfill({ status: opts.activityStatus, json: { error: "boom" } });
+    await released;
+    if (recorded.activityStatus !== 200) {
+      return route.fulfill({ status: recorded.activityStatus, json: { error: "boom" } });
     }
     return route.fulfill({ json: { activity: opts.activity ?? [] } });
   });
@@ -382,37 +432,189 @@ test.describe("API keys — write tools ON", () => {
     await expect(root.getByText(en["settings.apiKeys.activity.empty"])).toBeVisible();
   });
 
-  test("says so when the activity cannot be loaded", async ({ page }) => {
-    await mockApi(page, { keys: KEYS, writeToolsAvailable: true, activityStatus: 500 });
+  test("says so when the activity cannot be loaded, and Try again loads it", async ({ page }) => {
+    const recorded = await mockApi(page, {
+      keys: KEYS,
+      writeToolsAvailable: true,
+      activity: ACTIVITY,
+      activityStatus: 500,
+    });
     const root = await openSection(page);
     await root.getByRole("button", { name: /Agent activity for agent/ }).click();
-    await expect(root.getByText(en["settings.apiKeys.activity.loadFailed"])).toBeVisible();
+    const alert = root.getByRole("alert");
+    await expect(alert).toContainText(en["settings.apiKeys.activity.loadFailed"]);
+
+    recorded.activityStatus = 200;
+    await alert.getByRole("button", { name: en["settings.apiKeys.activity.retry"] }).click();
+    await expect(
+      root.getByText(en["settings.apiKeys.activity.outcome.ok"], { exact: true }),
+    ).toBeVisible();
+    await expect(root.getByRole("alert")).toHaveCount(0);
   });
 
-  test("new controls are at least 44px tall and show a visible focus ring", async ({ page }) => {
-    await mockApi(page, { keys: KEYS, writeToolsAvailable: true, activity: ACTIVITY });
+  test("a 404 (write tools switched off meanwhile) reads as empty, not as a failure", async ({
+    page,
+  }) => {
+    await mockApi(page, { keys: KEYS, writeToolsAvailable: true, activityStatus: 404 });
+    const root = await openSection(page);
+    await root.getByRole("button", { name: /Agent activity for agent/ }).click();
+    await expect(root.getByText(en["settings.apiKeys.activity.empty"])).toBeVisible();
+    await expect(root.getByRole("alert")).toHaveCount(0);
+    await expect(root.getByText(en["settings.apiKeys.activity.loadFailed"])).toHaveCount(0);
+  });
+
+  test("a persistent status region is busy while loading and announces the result", async ({
+    page,
+  }) => {
+    const recorded = await mockApi(page, {
+      keys: KEYS,
+      writeToolsAvailable: true,
+      activity: [],
+      holdActivity: true,
+    });
+    const root = await openSection(page);
+    await root.getByRole("button", { name: /Agent activity for agent/ }).click();
+    const status = root.getByRole("status");
+    await expect(status).toHaveAttribute("aria-busy", "true");
+    await expect(status).toContainText(en["settings.apiKeys.activity.loading"]);
+    recorded.release();
+    await expect(status).toHaveAttribute("aria-busy", "false");
+    await expect(status).toContainText(en["settings.apiKeys.activity.empty"]);
+  });
+
+  test("names known tools, and shows a generic label for one it does not know", async ({
+    page,
+  }) => {
+    await mockApi(page, {
+      keys: KEYS,
+      writeToolsAvailable: true,
+      activity: [DRAFT_ROW, UNKNOWN_TOOL_ROW],
+    });
     const root = await openSection(page);
     const toggle = root.getByRole("button", { name: /Agent activity for agent/ });
-    const targets = [
-      root.getByText(en["settings.apiKeys.permission.read"], { exact: true }).first(),
-      root.getByText(en["settings.apiKeys.permission.readWrite"], { exact: true }).first(),
-      toggle,
-      root.getByRole("button", { name: en["settings.apiKeys.revoke"] }).first(),
-    ];
-    for (const target of targets) {
+    await toggle.click();
+    const items = (await controlledPanel(root, toggle)).getByRole("listitem");
+    await expect(items.nth(0)).toContainText(en["settings.apiKeys.activity.tool.create_draft"]);
+    await expect(items.nth(1)).toContainText(en["settings.apiKeys.activity.tool.unknown"]);
+    await expect(root.getByText("frobnicate_widgets")).toHaveCount(0);
+  });
+
+  test("a full page says only the latest rows are listed; a short one does not", async ({
+    page,
+  }) => {
+    await mockApi(page, { keys: KEYS, writeToolsAvailable: true, activity: FULL_PAGE });
+    const root = await openSection(page);
+    await root.getByRole("button", { name: /Agent activity for agent/ }).click();
+    await expect(
+      root.getByText(
+        en["settings.apiKeys.activity.limitNote"].replace("{count}", String(ACTIVITY_PAGE)),
+      ),
+    ).toBeVisible();
+
+    const short = await page.context().newPage();
+    await mockApi(short, { keys: KEYS, writeToolsAvailable: true, activity: ACTIVITY });
+    const shortRoot = await openSection(short);
+    await shortRoot.getByRole("button", { name: /Agent activity for agent/ }).click();
+    await expect(
+      shortRoot.getByText(en["settings.apiKeys.activity.outcome.ok"], { exact: true }),
+    ).toBeVisible();
+    await expect(shortRoot.getByText(/Showing the latest/)).toHaveCount(0);
+  });
+
+  test("the choice comes before Create in tab order, and Enter in the name field submits it", async ({
+    page,
+  }) => {
+    const recorded = await mockApi(page, { keys: [], writeToolsAvailable: true });
+    const root = await openSection(page);
+    const name = root.getByPlaceholder(en["settings.apiKeys.namePlaceholder"]);
+    const readOnly = root.getByRole("radio", { name: en["settings.apiKeys.permission.read"] });
+    const create = root.getByRole("button", { name: en["settings.apiKeys.create"] });
+
+    await name.fill("agent");
+    await name.focus();
+    await page.keyboard.press("Tab");
+    await expect(readOnly).toBeFocused();
+    await page.keyboard.press("ArrowDown"); // Read and write
+    await name.focus();
+    await page.keyboard.press("Tab");
+    await expect(
+      root.getByRole("radio", { name: en["settings.apiKeys.permission.readWrite"] }),
+    ).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(create).toBeFocused();
+
+    await name.focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(() => recorded.createBodies.length).toBe(1);
+    expect(recorded.createBodies).toEqual(['{"name":"agent","permission":"read_write"}']);
+  });
+
+  test("every control is at least 44px and shows the 2px focus ring, not the faint legacy ring", async ({
+    page,
+  }) => {
+    await mockApi(page, { keys: KEYS, writeToolsAvailable: true, activity: ACTIVITY });
+    const root = await openSection(page);
+    const name = root.getByPlaceholder(en["settings.apiKeys.namePlaceholder"]);
+    const create = root.getByRole("button", { name: en["settings.apiKeys.create"] });
+    const toggle = root.getByRole("button", { name: /Agent activity for agent/ });
+    const revoke = root.getByRole("button", { name: en["settings.apiKeys.revoke"] }).first();
+    const radio = root.getByRole("radio", { name: en["settings.apiKeys.permission.read"] });
+    const radioLabel = root
+      .getByText(en["settings.apiKeys.permission.read"], { exact: true })
+      .first();
+    const radioLabelRw = root
+      .getByText(en["settings.apiKeys.permission.readWrite"], { exact: true })
+      .first();
+
+    const expectTarget = async (target: Locator, what: string) => {
       const box = await target.boundingBox();
-      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
-    }
-    for (const control of [
-      root.getByRole("radio", { name: en["settings.apiKeys.permission.read"] }),
-      toggle,
-    ]) {
+      expect(box?.height ?? 0, `${what} height`).toBeGreaterThanOrEqual(44);
+      return box;
+    };
+    const expectFocusRing = async (control: Locator, what: string) => {
+      // :focus-visible follows the last input modality; a mouse click earlier in
+      // the test would make programmatic focus look like a pointer focus.
+      await page.keyboard.press("Shift");
       await control.focus();
-      const outline = await control.evaluate((el) => {
+      const ring = await control.evaluate((el) => {
         const s = getComputedStyle(el);
-        return { width: s.outlineWidth, style: s.outlineStyle };
+        return { width: s.outlineWidth, style: s.outlineStyle, shadow: s.boxShadow };
       });
-      expect(outline).toEqual({ width: "2px", style: "solid" });
+      expect(ring, `${what} focus ring`).toEqual({ width: "2px", style: "solid", shadow: "none" });
+    };
+
+    await name.fill("laptop");
+    for (const [control, what] of [
+      [name, "name input"],
+      [create, "Create"],
+      [toggle, "Agent activity toggle"],
+      [revoke, "Revoke"],
+      [radioLabel, "Read only label"],
+      [radioLabelRw, "Read and write label"],
+    ] as const) {
+      await expectTarget(control, what);
+    }
+    const revokeBox = await revoke.boundingBox();
+    expect(revokeBox?.width ?? 0, "Revoke width").toBeGreaterThanOrEqual(44);
+    for (const [control, what] of [
+      [name, "name input"],
+      [create, "Create"],
+      [radio, "radio"],
+      [toggle, "toggle"],
+      [revoke, "Revoke"],
+    ] as const) {
+      await expectFocusRing(control, what);
+    }
+
+    await create.click();
+    const copy = root.getByRole("button", { name: en["settings.apiKeys.copy"] });
+    const dismiss = root.getByRole("button", { name: en["settings.apiKeys.dismiss"] });
+    for (const [control, what] of [
+      [copy, "Copy"],
+      [dismiss, "Dismiss"],
+    ] as const) {
+      await expectTarget(control, what);
+      await expectFocusRing(control, what);
     }
   });
 
@@ -441,28 +643,9 @@ test.describe("API keys — write tools ON", () => {
   });
 });
 
-const NEW_KEYS = Object.keys(en).filter(
-  (key) =>
-    key.startsWith("settings.apiKeys.permission.") || key.startsWith("settings.apiKeys.activity."),
-);
-
-/** Words that are genuinely the same in another language. Keep this list tiny. */
-const SAME_AS_ENGLISH: Record<string, LocaleCode[]> = {
-  "settings.apiKeys.activity.outcome.error": ["es"],
-};
-
 test.describe("API keys — copy in every web locale", () => {
-  test("every A3 string exists in all seven locales and is not English text in disguise", () => {
-    expect(NEW_KEYS.length).toBeGreaterThanOrEqual(17);
-    for (const [code, table] of Object.entries(LOCALES) as [LocaleCode, Record<string, string>][]) {
-      for (const key of NEW_KEYS) {
-        expect(table[key], `${code} is missing ${key}`).toBeTruthy();
-        if (code === "en" || SAME_AS_ENGLISH[key]?.includes(code)) continue;
-        expect(table[key], `${code} ${key} is still the English text`).not.toBe(en[key]);
-      }
-    }
-  });
-
+  // Presence in all seven locales and "not English text in disguise" are enforced
+  // in CI by .github/scripts/check-i18n-parity.mjs; these render the real thing.
   for (const code of Object.keys(LOCALES) as LocaleCode[]) {
     test(`renders the choice, the permission and the activity list in ${code}`, async ({
       page,
@@ -471,7 +654,7 @@ test.describe("API keys — copy in every web locale", () => {
       await mockApi(page, {
         keys: KEYS,
         writeToolsAvailable: true,
-        activity: ACTIVITY,
+        activity: FULL_PAGE,
         language: code,
       });
       const root = await openSection(page, code);
@@ -489,10 +672,25 @@ test.describe("API keys — copy in every web locale", () => {
       await toggle.click();
       const panel = await controlledPanel(root, toggle);
       const items = panel.getByRole("listitem");
-      await expect(items).toHaveCount(ACTIVITY.length);
+      await expect(items).toHaveCount(ACTIVITY_PAGE);
       await expect(items.nth(0)).toContainText(T["settings.apiKeys.activity.tool.mark_read"]);
       await expect(items.nth(0)).toContainText(T["settings.apiKeys.activity.outcome.ok"]);
       await expect(items.nth(1)).toContainText(T["settings.apiKeys.activity.reason.rate_limited"]);
+      await expect(items.nth(4)).toContainText(T["settings.apiKeys.activity.tool.create_draft"]);
+      await expect(items.nth(5)).toContainText(T["settings.apiKeys.activity.tool.unknown"]);
+      await expect(
+        root.getByText(
+          T["settings.apiKeys.activity.limitNote"].replace("{count}", String(ACTIVITY_PAGE)),
+        ),
+      ).toBeVisible();
+
+      // Short labels (ko, zh) must still be 44px targets in both dimensions.
+      const revokeBox = await root
+        .getByRole("button", { name: T["settings.apiKeys.revoke"] })
+        .first()
+        .boundingBox();
+      expect(revokeBox?.width ?? 0, `${code} Revoke width`).toBeGreaterThanOrEqual(44);
+      expect(revokeBox?.height ?? 0, `${code} Revoke height`).toBeGreaterThanOrEqual(44);
 
       // A missing key renders as the raw key string; none may be on screen.
       expect(await root.innerText()).not.toContain("settings.apiKeys.");

@@ -388,6 +388,10 @@ const es: Record<string, string> = {
   "settings.apiKeys.activity.reason.rate_limited": "Límite de escritura alcanzado",
   "settings.apiKeys.activity.reason.tool_error": "La acción informó de un error",
   "settings.apiKeys.activity.reason.exception": "Error inesperado",
+  "settings.apiKeys.activity.tool.create_draft": "Creó un borrador",
+  "settings.apiKeys.activity.tool.unknown": "Otra acción",
+  "settings.apiKeys.activity.limitNote": "Se muestran las últimas {count} acciones.",
+  "settings.apiKeys.activity.retry": "Reintentar",
   "settings.section.rules": "Reglas",
   "settings.rules.intro":
     "Escribe una regla con tus palabras — Klorn la compila en pines de remitente o dominio que revisas antes de guardar.",
