@@ -12,6 +12,11 @@
 import { drainActionOutbox } from "./agentcore/action-outbox.js";
 import { findAutoModeCandidates } from "./agentcore/auto-mode-candidates.js";
 import { runAutoModeSweep } from "./agentcore/auto-mode-sweep.js";
+import {
+  autoModeLedgerKey,
+  replyLedgerKeys,
+  ruleReplyLedgerKey,
+} from "./agentcore/auto-reply-ledger-keys.js";
 import { isSingleRecipient, sendAutoReplyViaFloor } from "./agentcore/auto-reply-send.js";
 import { runProactiveActions } from "./agentcore/proactive-actions.js";
 import { isEntitled, planHasFeature } from "./billing/stripe.js";
@@ -487,58 +492,104 @@ export async function ensureCalendarDisconnectNotification(
 }
 
 /**
- * "Auto-reply sent" alert — WINNER-ONLY and atomic, at most once per replied
- * message. A `(userId, dedupeKey)` unique (dedupeKey = "auto-reply:<gmailId>")
- * replaces the findFirst-then-create (TOCTOU) so concurrent ticks can't
- * double-create/double-push the same auto-reply alert. The reply SEND itself is
- * unchanged and stays at the call site; only the alert dedup moves here.
+ * True when an unattended reply already claimed this mail: a rule reply
+ * (`auto-reply:<gmailId>`) or an auto-mode reply (`auto-mode-reply:<gmailId>`),
+ * whatever became of that send — a failed send keeps its claim so nothing
+ * retries it (Gmail can accept a send while the client sees an error). The
+ * title clause recognises legacy "Auto-reply sent" rows from before the
+ * dedupeKey. Both sweeps use this one lookup.
  */
-export async function ensureAutoReplyNotification(
+export async function hasAutoReplyClaim(userId: string, gmailId: string): Promise<boolean> {
+  const row = await prisma.notification.findFirst({
+    where: {
+      userId,
+      OR: [
+        { dedupeKey: { in: replyLedgerKeys(gmailId) } },
+        { type: "email", title: "Auto-reply sent", message: { contains: gmailId } },
+      ],
+    },
+    select: { id: true },
+  });
+  return row !== null;
+}
+
+/**
+ * Claim the AUTO_REPLY rule ledger for one mail — WINNER-ONLY and atomic,
+ * written BEFORE the send. The `(userId, dedupeKey)` unique
+ * (dedupeKey = "auto-reply:<gmailId>") is the cross-tick at-most-once lock: a
+ * P2002 loser (null) must never send. The row is titled "pending" until the
+ * provider accepts the send, so it never claims success it has not had.
+ */
+export async function claimAutoReplyLedger(
   userId: string,
   gmailId: string,
   toAddr: string,
   ruleName: string,
-): Promise<{ id: string; createdAt: Date } | null> {
-  let notification: { id: string; createdAt: Date };
+): Promise<{ id: string } | null> {
   try {
-    notification = await prisma.notification.create({
+    return await prisma.notification.create({
       data: {
         userId,
         type: "email",
-        dedupeKey: `auto-reply:${gmailId}`,
-        title: "Auto-reply sent",
-        message: `Auto-replied to ${toAddr} (rule: "${ruleName}") [${gmailId}]`,
+        dedupeKey: ruleReplyLedgerKey(gmailId),
+        title: "Auto-reply pending",
+        message: `Auto-reply to ${toAddr} (rule: "${ruleName}") is being sent [${gmailId}]`,
       },
-      select: { id: true, createdAt: true },
+      select: { id: true },
     });
   } catch (err) {
-    if (isUniqueViolation(err)) return null; // already alerted for this email
+    if (isUniqueViolation(err)) return null; // another tick already claimed this email
     throw err;
   }
-
-  pushNotification(userId, {
-    id: notification.id,
-    type: "email",
-    title: "Auto-reply sent",
-    message: `Auto-replied to ${toAddr}`,
-    createdAt: notification.createdAt.toISOString(),
-  });
-  return notification;
 }
 
 /**
- * Send an AUTO_REPLY rule's reply, then record the "Auto-reply sent" alert.
- *
- * The send goes through the deterministic floor (mint receipt → executeToolCall
- * re-verifies the payloadHash) instead of calling gmail.sendEmail directly, so
- * every send stays on the single gated, audited path (W1). Per-account routing:
- * the executor resolves `email.id`'s account server-side; a primary row
- * resolves to the primary client.
- *
- * sendAutoReplyViaFloor rejects unless the provider accepted the send, so the
- * alert below is written ONLY for a reply that actually left — a refused or
- * unsupported send propagates to the caller's catch (logged + captured)
- * instead of being announced as "Auto-reply sent".
+ * Best-effort ledger rewrite used for failure records. The dedupeKey is never
+ * touched, so the claim survives. A failed rewrite leaves the row claiming a
+ * send that did not happen, so it is reported (captureError), not just logged.
+ */
+async function rewriteLedgerAsFailed(
+  ledgerId: string,
+  data: { title: string; message: string },
+  scope: string,
+): Promise<void> {
+  try {
+    await prisma.notification.update({ where: { id: ledgerId }, data });
+  } catch (err) {
+    console.warn(`[AUTOMATION] ${scope}: failure-ledger update failed`, err);
+    captureError(err, { tags: { scope }, extra: { ledgerId } });
+  }
+}
+
+/** Auto-mode send failed after the ledger committed — rewrite it as a failure record. */
+export async function markAutoModeLedgerFailed(
+  ledgerId: string,
+  toAddr: string,
+  gmailId: string,
+): Promise<void> {
+  await rewriteLedgerAsFailed(
+    ledgerId,
+    {
+      title: "Auto-mode reply failed",
+      message: `Auto-mode reply to ${toAddr} failed — the mail is still in your queue [${gmailId}]`,
+    },
+    "automation.auto-mode-ledger-failed",
+  );
+}
+
+/**
+ * Send an AUTO_REPLY rule's reply under an at-most-once ledger:
+ *   1. claim `auto-reply:<gmailId>` (a P2002 loser never sends),
+ *   2. send through the deterministic floor (mint receipt → executeToolCall
+ *      re-verifies the payloadHash) — the single gated, audited path (W1). The
+ *      executor resolves `email.id`'s account server-side for per-account
+ *      routing,
+ *   3. only after the provider ACCEPTED the send, flip the row to
+ *      "Auto-reply sent" and push.
+ * A send that did not provably succeed rewrites the row as a failure record
+ * with its dedupeKey kept, then rethrows to the caller's catch (logged +
+ * captured). Nothing retries it: Gmail can accept a send while the client sees
+ * an error, so a retry could double-reply.
  */
 export async function deliverRuleAutoReply(
   userId: string,
@@ -548,16 +599,50 @@ export async function deliverRuleAutoReply(
 ): Promise<void> {
   const emailMatch = email.from.match(/<([^>]+)>/) || [null, email.from];
   const toAddr = emailMatch[1] || email.from;
-  await sendAutoReplyViaFloor(userId, toAddr, `Re: ${email.subject}`, replyBody, email.id);
-  await ensureAutoReplyNotification(userId, email.gmailId, toAddr, ruleName);
+  // Refuse a malformed/crafted From before any claim, as auto-mode does.
+  if (!isSingleRecipient(toAddr)) {
+    throw new Error(`auto-reply recipient is not a single valid address: ${toAddr}`);
+  }
+  const ledger = await claimAutoReplyLedger(userId, email.gmailId, toAddr, ruleName);
+  if (!ledger) return;
+  try {
+    await sendAutoReplyViaFloor(userId, toAddr, `Re: ${email.subject}`, replyBody, email.id);
+  } catch (sendErr) {
+    await rewriteLedgerAsFailed(
+      ledger.id,
+      {
+        title: "Auto-reply failed",
+        message: `Auto-reply to ${toAddr} (rule: "${ruleName}") failed — the mail is still in your inbox [${email.gmailId}]`,
+      },
+      "automation.auto-reply-ledger-failed",
+    );
+    throw sendErr;
+  }
+  // Outside the try on purpose: the send succeeded, so a failure here must
+  // never be recorded as a failed send.
+  const settled = await prisma.notification.update({
+    where: { id: ledger.id },
+    data: {
+      title: "Auto-reply sent",
+      message: `Auto-replied to ${toAddr} (rule: "${ruleName}") [${email.gmailId}]`,
+    },
+    select: { id: true, createdAt: true },
+  });
+  pushNotification(userId, {
+    id: settled.id,
+    type: "email",
+    title: "Auto-reply sent",
+    message: `Auto-replied to ${toAddr}`,
+    createdAt: settled.createdAt.toISOString(),
+  });
 }
 
 /**
  * Auto-MODE reply ledger entry (ontology v2 — guideline-driven unattended
- * replies, not EmailRule ones). Same winner-only atomic pattern as
- * ensureAutoReplyNotification with its own dedupeKey namespace, so a mail can
- * never receive both a rule reply alert and a mode reply alert twice; the two
- * SEND paths themselves are mutually exclusive per email at the call site.
+ * replies, not EmailRule ones). Same winner-only atomic claim as
+ * claimAutoReplyLedger with its own dedupeKey namespace; both sweeps check
+ * hasAutoReplyClaim (both namespaces) first, so the two SEND paths are mutually
+ * exclusive per email.
  * Notification-free by design beyond the in-app bell: the founder contract
  * says auto mode only interrupts for PUSH/MEETING, and an auto-handled reply
  * is exactly the thing that shouldn't interrupt.
@@ -572,7 +657,7 @@ export async function ensureAutoModeReplyNotification(
       data: {
         userId,
         type: "email",
-        dedupeKey: `auto-mode-reply:${gmailId}`,
+        dedupeKey: autoModeLedgerKey(gmailId),
         title: "Klorn replied for you",
         message: `Auto-mode replied to ${toAddr} [${gmailId}]`,
       },
@@ -1289,16 +1374,9 @@ async function runUserCycle(
           });
           for (const email of newEmails) {
             try {
-              // Skip if we already sent an auto-reply notification for this email
-              const alreadyReplied = await prisma.notification.findFirst({
-                where: {
-                  userId: config.userId,
-                  type: "email",
-                  title: "Auto-reply sent",
-                  message: { contains: email.gmailId },
-                },
-              });
-              if (alreadyReplied) continue;
+              // Skip if an unattended reply (rule or auto-mode, sent OR failed)
+              // already claimed this email
+              if (await hasAutoReplyClaim(config.userId, email.gmailId)) continue;
 
               const matched = await checkAutoReplyRules(config.userId, email);
               if (
@@ -1376,14 +1454,7 @@ async function runUserCycle(
                 where: { id: emailRowId, userId },
                 select: { id: true, gmailId: true, from: true, subject: true, body: true },
               }),
-            alreadyReplied: async (userId, gmailId) =>
-              (await prisma.notification.findFirst({
-                where: {
-                  userId,
-                  dedupeKey: { in: [`auto-reply:${gmailId}`, `auto-mode-reply:${gmailId}`] },
-                },
-                select: { id: true },
-              })) !== null,
+            alreadyReplied: hasAutoReplyClaim,
             isSingleRecipient,
             draftReply: generateGuidelineReply,
             emailStillExists: async (emailRowId) =>
@@ -1394,19 +1465,7 @@ async function runUserCycle(
             writeLedger: ensureAutoModeReplyNotification,
             send: (userId, toAddr, subject, body, inReplyToEmailId) =>
               sendAutoReplyViaFloor(userId, toAddr, subject, body, inReplyToEmailId),
-            markLedgerFailed: async (ledgerId, toAddr, gmailId) => {
-              await prisma.notification
-                .update({
-                  where: { id: ledgerId },
-                  data: {
-                    title: "Auto-mode reply failed",
-                    message: `Auto-mode reply to ${toAddr} failed — the mail is still in your queue [${gmailId}]`,
-                  },
-                })
-                .catch((updateErr) =>
-                  console.warn(`[AUTOMATION] auto-mode failure-ledger update failed`, updateErr),
-                );
-            },
+            markLedgerFailed: markAutoModeLedgerFailed,
             resolveItem: async (itemId) => {
               await prisma.attentionItem
                 .update({ where: { id: itemId }, data: { status: "RESOLVED" } })

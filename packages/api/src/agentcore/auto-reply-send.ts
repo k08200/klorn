@@ -23,11 +23,11 @@ export type AutoReplyNotSentReason = "error" | "unsupported" | "unrecognized";
  * reply that never left.
  */
 export class AutoReplyNotSentError extends Error {
-  constructor(
-    public readonly reason: AutoReplyNotSentReason,
-    detail: string,
-  ) {
-    super(`auto-reply was not sent (${reason}): ${detail}`);
+  // The message carries the reason code ONLY. The provider's error text can
+  // contain the recipient address or host details, and this error is logged
+  // and sent to Sentry.
+  constructor(public readonly reason: AutoReplyNotSentReason) {
+    super(`auto-reply was not sent (${reason})`);
     this.name = "AutoReplyNotSentError";
   }
 }
@@ -45,18 +45,15 @@ function assertSendSucceeded(raw: string): void {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new AutoReplyNotSentError("unrecognized", "executor result was not JSON");
+    throw new AutoReplyNotSentError("unrecognized");
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    throw new AutoReplyNotSentError("unrecognized", "executor result was not a JSON object");
+    throw new AutoReplyNotSentError("unrecognized");
   }
   const result = parsed as Record<string, unknown>;
-  const detail = typeof result.error === "string" ? result.error : "no detail";
-  if ("unsupported" in result) throw new AutoReplyNotSentError("unsupported", detail);
-  if ("error" in result) throw new AutoReplyNotSentError("error", detail);
-  if (result.success !== true) {
-    throw new AutoReplyNotSentError("unrecognized", "executor result did not report success");
-  }
+  if ("unsupported" in result) throw new AutoReplyNotSentError("unsupported");
+  if ("error" in result) throw new AutoReplyNotSentError("error");
+  if (result.success !== true) throw new AutoReplyNotSentError("unrecognized");
 }
 
 /**

@@ -103,7 +103,6 @@ describe("sendAutoReplyViaFloor — only a proven send resolves", () => {
     );
     expect(err).toBeInstanceOf(AutoReplyNotSentError);
     expect((err as InstanceType<typeof AutoReplyNotSentError>).reason).toBe("error");
-    expect((err as Error).message).toContain("Gmail not connected.");
   });
 
   it("rejects with reason 'unsupported' for { unsupported: true, error } (NAVER/iCloud row)", async () => {
@@ -115,6 +114,20 @@ describe("sendAutoReplyViaFloor — only a proven send resolves", () => {
     ).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AutoReplyNotSentError);
     expect((err as InstanceType<typeof AutoReplyNotSentError>).reason).toBe("unsupported");
+  });
+
+  it("carries the reason code only: provider detail (it can contain the recipient) never reaches the message", async () => {
+    const err = await sendWithResult(
+      JSON.stringify({
+        error: 'Invalid email address: "bob@example.com" at smtp.internal.example',
+      }),
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AutoReplyNotSentError);
+    const message = (err as Error).message;
+    expect(message).toContain("error");
+    expect(message).not.toContain("@");
+    expect(message).not.toContain("bob");
+    expect(message).not.toContain("smtp.internal");
   });
 
   it("treats unsupported as a failure even if it is (wrongly) paired with success: true", async () => {

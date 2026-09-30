@@ -8,35 +8,49 @@
  * flip") — its send either answers `{ unsupported }` or would leave from an
  * account the sender never wrote to.
  *
+ * Items whose mail already has an unattended-reply ledger row (auto-mode or
+ * rule) are excluded too: a send that failed leaves the item OPEN with its
+ * ledger kept, and such an item must not keep taking one of the `take` slots
+ * until the lookback expires.
+ *
  * AttentionItem -> EmailMessage -> LinkedInboxAccount has no Prisma relations
  * (sourceId and EmailMessage.linkedInboxAccountId are plain tags), so the
- * filter is applied after a bounded scan. `take` is applied AFTER exclusion:
- * otherwise five newer NAVER items would starve every sendable item behind
- * them on every tick.
+ * filters are applied after a bounded scan. `take` is applied AFTER exclusion:
+ * otherwise five newer NAVER (or ledger-failed) items would starve every
+ * sendable item behind them on every tick.
  */
 
 import { prisma } from "../db.js";
 import type { AutoModeCandidate } from "./auto-mode-sweep.js";
+import { replyLedgerKeys } from "./auto-reply-ledger-keys.js";
 
 /// Upper bound on items scanned per tick before exclusion. Items are already
 /// limited to the sweep's 6h lookback, so this is a safety cap, not a window.
 export const AUTO_MODE_CANDIDATE_SCAN_MAX = 50;
 
+export interface LinkedInboxSendState {
+  provider: string;
+  needsReconnect: boolean;
+}
+
 /**
  * May Klorn send an unattended reply from the mailbox this email arrived on?
  *
  * `linkedInboxAccountId` is EmailMessage.linkedInboxAccountId: null = the
- * primary Google account. `googleLinkedInboxIds` is the user's linked accounts
- * whose provider is GOOGLE. Fail closed: a tag that is not in that set —
- * a non-Google provider, another user's account, or an inbox unlinked since
+ * primary Google account. `linkedInboxes` is THIS USER's linked accounts by id.
+ * A linked account qualifies only if it is GOOGLE and not flagged
+ * needsReconnect (a revoked token can only fail the send). Fail closed: a tag
+ * that is not in the map — another user's account, or an inbox unlinked since
  * (the mail is kept, the tag goes stale and the send would fall back to the
  * primary address) — is not sendable.
  */
 export function canAutoSendFromMailbox(
   linkedInboxAccountId: string | null,
-  googleLinkedInboxIds: ReadonlySet<string>,
+  linkedInboxes: ReadonlyMap<string, LinkedInboxSendState>,
 ): boolean {
-  return linkedInboxAccountId === null || googleLinkedInboxIds.has(linkedInboxAccountId);
+  if (linkedInboxAccountId === null) return true;
+  const inbox = linkedInboxes.get(linkedInboxAccountId);
+  return inbox !== undefined && inbox.provider === "GOOGLE" && !inbox.needsReconnect;
 }
 
 export async function findAutoModeCandidates(
@@ -62,28 +76,39 @@ export async function findAutoModeCandidates(
 
   const emails = await prisma.emailMessage.findMany({
     where: { userId, id: { in: items.map((item) => item.sourceId) } },
-    select: { id: true, linkedInboxAccountId: true },
+    select: { id: true, gmailId: true, linkedInboxAccountId: true },
   });
-  const accountByEmailId = new Map(emails.map((row) => [row.id, row.linkedInboxAccountId]));
+  if (emails.length === 0) return [];
+  const emailById = new Map(emails.map((row) => [row.id, row]));
+
+  // Mail a previous tick (or the rule sweep) already claimed, whatever became
+  // of that send. The ledger keys are per gmailId.
+  const ledgers = await prisma.notification.findMany({
+    where: { userId, dedupeKey: { in: emails.flatMap((row) => replyLedgerKeys(row.gmailId)) } },
+    select: { dedupeKey: true },
+  });
+  const claimedKeys = new Set(ledgers.map((row) => row.dedupeKey));
 
   // Skip the inbox lookup in the common primary-only case.
   const needsInboxLookup = emails.some((row) => row.linkedInboxAccountId !== null);
-  const googleLinkedInboxIds: ReadonlySet<string> = needsInboxLookup
-    ? new Set(
+  const linkedInboxes: ReadonlyMap<string, LinkedInboxSendState> = needsInboxLookup
+    ? new Map(
         (
           await prisma.linkedInboxAccount.findMany({
-            where: { userId, provider: "GOOGLE" },
-            select: { id: true },
+            where: { userId },
+            select: { id: true, provider: true, needsReconnect: true },
           })
-        ).map((inbox) => inbox.id),
+        ).map((inbox) => [inbox.id, inbox]),
       )
-    : new Set();
+    : new Map();
 
   return items
     .filter((item) => {
-      const account = accountByEmailId.get(item.sourceId);
-      // undefined = the email row is gone; the sweep would skip it anyway.
-      return account !== undefined && canAutoSendFromMailbox(account, googleLinkedInboxIds);
+      const row = emailById.get(item.sourceId);
+      // No row = the email is gone; the sweep would skip it anyway.
+      if (!row) return false;
+      if (replyLedgerKeys(row.gmailId).some((key) => claimedKeys.has(key))) return false;
+      return canAutoSendFromMailbox(row.linkedInboxAccountId, linkedInboxes);
     })
     .slice(0, take);
 }

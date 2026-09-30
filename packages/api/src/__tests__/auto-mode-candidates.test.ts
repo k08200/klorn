@@ -12,6 +12,7 @@ interface ItemRow {
 }
 interface EmailRow {
   id: string;
+  gmailId: string;
   userId: string;
   linkedInboxAccountId: string | null;
 }
@@ -19,12 +20,18 @@ interface InboxRow {
   id: string;
   userId: string;
   provider: "GOOGLE" | "NAVER" | "ICLOUD" | "OUTLOOK" | "IMAP";
+  needsReconnect: boolean;
+}
+interface LedgerRow {
+  userId: string;
+  dedupeKey: string;
 }
 
 const fixtures = vi.hoisted(() => ({
   items: [] as ItemRow[],
   emails: [] as EmailRow[],
   inboxes: [] as InboxRow[],
+  ledgers: [] as LedgerRow[],
 }));
 
 vi.mock("../db.js", () => ({
@@ -40,9 +47,14 @@ vi.mock("../db.js", () => ({
       ),
     },
     linkedInboxAccount: {
-      findMany: vi.fn(async (args: { where: { userId: string; provider: string } }) =>
-        fixtures.inboxes.filter(
-          (i) => i.userId === args.where.userId && i.provider === args.where.provider,
+      findMany: vi.fn(async (args: { where: { userId: string } }) =>
+        fixtures.inboxes.filter((i) => i.userId === args.where.userId),
+      ),
+    },
+    notification: {
+      findMany: vi.fn(async (args: { where: { userId: string; dedupeKey: { in: string[] } } }) =>
+        fixtures.ledgers.filter(
+          (l) => l.userId === args.where.userId && args.where.dedupeKey.in.includes(l.dedupeKey),
         ),
       ),
     },
@@ -63,38 +75,60 @@ function item(n: number): ItemRow {
   return { id: `item-${n}`, sourceId: `row-${n}` };
 }
 function email(n: number, linkedInboxAccountId: string | null, userId = USER): EmailRow {
-  return { id: `row-${n}`, userId, linkedInboxAccountId };
+  return { id: `row-${n}`, gmailId: `g-${n}`, userId, linkedInboxAccountId };
+}
+function inboxes(
+  ...rows: InboxRow[]
+): ReadonlyMap<string, { provider: string; needsReconnect: boolean }> {
+  return new Map(
+    rows.map((r) => [r.id, { provider: r.provider, needsReconnect: r.needsReconnect }]),
+  );
 }
 
 beforeEach(() => {
   fixtures.items = [];
   fixtures.emails = [];
+  fixtures.ledgers = [];
   fixtures.inboxes = [
-    { id: "acc-google", userId: USER, provider: "GOOGLE" },
-    { id: "acc-naver", userId: USER, provider: "NAVER" },
-    { id: "acc-icloud", userId: USER, provider: "ICLOUD" },
-    { id: "acc-outlook", userId: USER, provider: "OUTLOOK" },
-    { id: "acc-imap", userId: USER, provider: "IMAP" },
-    { id: "acc-other-user-google", userId: "someone-else", provider: "GOOGLE" },
+    { id: "acc-google", userId: USER, provider: "GOOGLE", needsReconnect: false },
+    { id: "acc-google-revoked", userId: USER, provider: "GOOGLE", needsReconnect: true },
+    { id: "acc-naver", userId: USER, provider: "NAVER", needsReconnect: false },
+    { id: "acc-icloud", userId: USER, provider: "ICLOUD", needsReconnect: false },
+    { id: "acc-outlook", userId: USER, provider: "OUTLOOK", needsReconnect: false },
+    { id: "acc-imap", userId: USER, provider: "IMAP", needsReconnect: false },
+    {
+      id: "acc-other-user-google",
+      userId: "someone-else",
+      provider: "GOOGLE",
+      needsReconnect: false,
+    },
   ];
   vi.clearAllMocks();
 });
 
 describe("canAutoSendFromMailbox (the named predicate)", () => {
-  const googleIds = new Set(["acc-google"]);
+  const linked = inboxes(
+    { id: "acc-google", userId: USER, provider: "GOOGLE", needsReconnect: false },
+    { id: "acc-google-revoked", userId: USER, provider: "GOOGLE", needsReconnect: true },
+    { id: "acc-naver", userId: USER, provider: "NAVER", needsReconnect: false },
+  );
 
   it("allows the primary account (no linked tag)", () => {
-    expect(canAutoSendFromMailbox(null, googleIds)).toBe(true);
+    expect(canAutoSendFromMailbox(null, linked)).toBe(true);
   });
 
-  it("allows a linked GOOGLE inbox", () => {
-    expect(canAutoSendFromMailbox("acc-google", googleIds)).toBe(true);
+  it("allows a connected linked GOOGLE inbox", () => {
+    expect(canAutoSendFromMailbox("acc-google", linked)).toBe(true);
   });
 
-  it("refuses any other linked account, including a stale tag for an unlinked inbox", () => {
-    expect(canAutoSendFromMailbox("acc-naver", googleIds)).toBe(false);
-    expect(canAutoSendFromMailbox("acc-unlinked-long-ago", googleIds)).toBe(false);
-    expect(canAutoSendFromMailbox("acc-google", new Set())).toBe(false);
+  it("refuses a linked GOOGLE inbox flagged needsReconnect — its send can only fail", () => {
+    expect(canAutoSendFromMailbox("acc-google-revoked", linked)).toBe(false);
+  });
+
+  it("refuses any non-Google linked account, and a stale tag for an unlinked inbox", () => {
+    expect(canAutoSendFromMailbox("acc-naver", linked)).toBe(false);
+    expect(canAutoSendFromMailbox("acc-unlinked-long-ago", linked)).toBe(false);
+    expect(canAutoSendFromMailbox("acc-google", new Map())).toBe(false);
   });
 });
 
@@ -175,6 +209,51 @@ describe("findAutoModeCandidates", () => {
     expect(result.map((r) => r.id)).toEqual(["item-1", "item-2"]);
   });
 
+  it("never returns an item from a linked GOOGLE inbox that needs reconnect", async () => {
+    fixtures.items = [item(1)];
+    fixtures.emails = [email(1, "acc-google-revoked")];
+
+    await expect(findAutoModeCandidates(USER, SINCE, 5)).resolves.toEqual([]);
+  });
+
+  it("excludes items whose mail already has an auto-mode or rule ledger, so ledger-failed items cannot starve sendable ones", async () => {
+    // Six ledger-failed items (still OPEN, newest first) + one sendable item.
+    fixtures.items = [item(1), item(2), item(3), item(4), item(5), item(6), item(7)];
+    fixtures.emails = [1, 2, 3, 4, 5, 6, 7].map((n) => email(n, null));
+    fixtures.ledgers = [
+      { userId: USER, dedupeKey: "auto-mode-reply:g-1" },
+      { userId: USER, dedupeKey: "auto-mode-reply:g-2" },
+      { userId: USER, dedupeKey: "auto-mode-reply:g-3" },
+      { userId: USER, dedupeKey: "auto-reply:g-4" },
+      { userId: USER, dedupeKey: "auto-reply:g-5" },
+      { userId: USER, dedupeKey: "auto-reply:g-6" },
+    ];
+
+    await expect(findAutoModeCandidates(USER, SINCE, 5)).resolves.toEqual([
+      { id: "item-7", sourceId: "row-7" },
+    ]);
+  });
+
+  it("ignores another user's ledger rows", async () => {
+    fixtures.items = [item(1)];
+    fixtures.emails = [email(1, null)];
+    fixtures.ledgers = [{ userId: "someone-else", dedupeKey: "auto-mode-reply:g-1" }];
+
+    await expect(findAutoModeCandidates(USER, SINCE, 5)).resolves.toHaveLength(1);
+  });
+
+  it("looks ledgers up by both key namespaces, scoped to this user", async () => {
+    fixtures.items = [item(1)];
+    fixtures.emails = [email(1, null)];
+
+    await findAutoModeCandidates(USER, SINCE, 5);
+    expect(prisma.notification.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: USER, dedupeKey: { in: ["auto-reply:g-1", "auto-mode-reply:g-1"] } },
+      }),
+    );
+  });
+
   it("keeps the original selection filter and bounds the scan", async () => {
     await findAutoModeCandidates(USER, SINCE, 5);
 
@@ -194,9 +273,10 @@ describe("findAutoModeCandidates", () => {
     });
   });
 
-  it("issues no email or inbox lookups when there are no items", async () => {
+  it("issues no email, ledger or inbox lookups when there are no items", async () => {
     await expect(findAutoModeCandidates(USER, SINCE, 5)).resolves.toEqual([]);
     expect(prisma.emailMessage.findMany).not.toHaveBeenCalled();
+    expect(prisma.notification.findMany).not.toHaveBeenCalled();
     expect(prisma.linkedInboxAccount.findMany).not.toHaveBeenCalled();
   });
 
@@ -208,13 +288,13 @@ describe("findAutoModeCandidates", () => {
     expect(prisma.linkedInboxAccount.findMany).not.toHaveBeenCalled();
   });
 
-  it("scopes the GOOGLE-inbox lookup to this user", async () => {
+  it("scopes the linked-inbox lookup to this user", async () => {
     fixtures.items = [item(1)];
     fixtures.emails = [email(1, "acc-google")];
 
     await findAutoModeCandidates(USER, SINCE, 5);
     expect(prisma.linkedInboxAccount.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: USER, provider: "GOOGLE" } }),
+      expect.objectContaining({ where: { userId: USER } }),
     );
   });
 });
