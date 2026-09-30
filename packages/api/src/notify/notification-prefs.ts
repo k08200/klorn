@@ -7,6 +7,7 @@
  */
 
 import { prisma } from "../db.js";
+import { calendarSourceScope } from "../pim/calendar-scope.js";
 import { normalizeTimeZone } from "../time-zone.js";
 import { isWithinQuietHours } from "./quiet-hours.js";
 
@@ -114,7 +115,14 @@ export async function evaluateNotificationGate(
 /** True while the user is inside a (non-all-day) calendar event. */
 export async function isUserInFocusBlock(userId: string, now: Date = new Date()): Promise<boolean> {
   const block = await prisma.calendarEvent.findFirst({
-    where: { userId, allDay: false, startTime: { lte: now }, endTime: { gt: now } },
+    where: {
+      userId,
+      allDay: false,
+      startTime: { lte: now },
+      endTime: { gt: now },
+      // A linked calendar's event is a real block only while its sync is on (C2).
+      ...calendarSourceScope(),
+    },
     select: { id: true },
   });
   return block !== null;

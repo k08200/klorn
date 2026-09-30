@@ -5,7 +5,7 @@
  * and input guards (bad window, junk members) returning {error} not throws.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   memberBusy: [] as Array<{ email: string; blocks: Array<{ start: string; end: string }> | null }>,
@@ -23,6 +23,7 @@ vi.mock("../db.js", () => {
   return { prisma, db: prisma };
 });
 
+import { prisma } from "../db.js";
 import { getTeamAvailability } from "../pim/team-availability.js";
 
 // Tue 2026-08-25 09:00–18:00 KST = 00:00–09:00Z.
@@ -141,5 +142,30 @@ describe("getTeamAvailability — linked calendar copies (C2)", () => {
     );
     if ("error" in out) throw new Error(out.error);
     expect(out.slots.map((x) => x.startTime)).not.toContain("2026-08-25T01:00:00.000Z");
+  });
+});
+
+describe("getTeamAvailability — kill switch (C2)", () => {
+  const whereOfLastQuery = () =>
+    (
+      vi.mocked(prisma.calendarEvent.findMany).mock.calls.at(-1)?.[0] as {
+        where: Record<string, unknown>;
+      }
+    ).where;
+
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  it("counts primary and LOCAL events only as busy while the flag is off", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    await getTeamAvailability("user-1", ["alice@corp.com"], WINDOW.start, WINDOW.end, 60);
+    expect(whereOfLastQuery().sourceAccountId).toBeNull();
+  });
+
+  it("counts linked calendars' events too once the flag is on", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    await getTeamAvailability("user-1", ["alice@corp.com"], WINDOW.start, WINDOW.end, 60);
+    expect(whereOfLastQuery()).not.toHaveProperty("sourceAccountId");
   });
 });

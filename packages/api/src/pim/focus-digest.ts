@@ -14,6 +14,7 @@ import { prisma } from "../db.js";
 import { isUserInFocusBlock } from "../notify/notification-prefs.js";
 import { sendPushNotification } from "../notify/push.js";
 import { dedupeCalendarEvents } from "./calendar-dedupe.js";
+import { calendarSourceScope } from "./calendar-scope.js";
 
 /** Lookback slack: two ticks, so a slow tick never drops an ended block. */
 export const FOCUS_DIGEST_LOOKBACK_MS = 3 * 60_000;
@@ -27,6 +28,7 @@ export async function sendFocusWindowDigests(now: Date = new Date()): Promise<nu
       allDay: false,
       endTime: { gt: since, lte: now },
       user: { automationConfig: { focusWindowEnabled: true } },
+      ...calendarSourceScope(),
     },
     // The identity fields let a block present in the primary and a linked
     // calendar (two rows, C2) produce one digest: its dedupeKey is per row id.

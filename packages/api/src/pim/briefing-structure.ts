@@ -17,6 +17,7 @@ import { localDayUtcRange } from "../time-zone.js";
 import { stripUntrusted } from "../untrusted.js";
 import { getUserTimeZone } from "../user-timezone.js";
 import { dedupeCalendarEvents } from "./calendar-dedupe.js";
+import { calendarSourceScope } from "./calendar-scope.js";
 import {
   buildDayShape,
   DAY_END_HOUR,
@@ -292,7 +293,13 @@ export async function buildBriefingStructure(
   // and runs into this morning still occupies today's narrated window.
   const [rawRows, pushItems] = await Promise.all([
     prisma.calendarEvent.findMany({
-      where: { userId, allDay: false, startTime: { lt }, endTime: { gt: gte } },
+      where: {
+        userId,
+        allDay: false,
+        startTime: { lt },
+        endTime: { gt: gte },
+        ...calendarSourceScope(),
+      },
       orderBy: { startTime: "asc" },
       take: 50,
       // The identity fields let an invite present in the primary and a linked

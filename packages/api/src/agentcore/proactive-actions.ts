@@ -29,6 +29,7 @@ import type { NotifCategory } from "../notify/notification-prefs.js";
 import { sendPushNotification } from "../notify/push.js";
 import { sendSms } from "../notify/sms.js";
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
+import { calendarSourceScope } from "../pim/calendar-scope.js";
 import { captureError } from "../sentry.js";
 import {
   isLocalTimeWithin,
@@ -102,6 +103,7 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
     where: {
       userId,
       startTime: { gte: soon, lte: justAfter },
+      ...calendarSourceScope(),
     },
     select: {
       id: true,
@@ -220,7 +222,7 @@ async function checkWeeklyReview(userId: string, tz: string): Promise<void> {
       where: { userId, receivedAt: { gte: lastWeek } },
     }),
     prisma.calendarEvent.count({
-      where: { userId, startTime: { gte: lastWeek, lte: now } },
+      where: { userId, startTime: { gte: lastWeek, lte: now }, ...calendarSourceScope() },
     }),
   ]);
 
@@ -259,7 +261,7 @@ async function checkEndOfDayReview(userId: string, tz: string): Promise<void> {
       take: 5,
     }),
     prisma.calendarEvent.findMany({
-      where: { userId, startTime: { gte: tomorrow, lt: tomorrowEnd } },
+      where: { userId, startTime: { gte: tomorrow, lt: tomorrowEnd }, ...calendarSourceScope() },
       select: { title: true, startTime: true },
       orderBy: { startTime: "asc" },
       take: 5,
@@ -416,7 +418,7 @@ async function checkBackToBackMeetings(userId: string, tz: string): Promise<void
   if (existing) return;
 
   const rows = await prisma.calendarEvent.findMany({
-    where: { userId, startTime: { gte: now, lte: todayEnd } },
+    where: { userId, startTime: { gte: now, lte: todayEnd }, ...calendarSourceScope() },
     // The identity fields let an invite present in the primary and a linked
     // calendar (two rows, C2) count once: a duplicate would read as a meeting
     // that starts before the previous one ends and raise a false warning.

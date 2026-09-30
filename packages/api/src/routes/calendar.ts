@@ -20,6 +20,11 @@ import {
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
 import { connectPrimaryCalendar } from "../pim/calendar-providers/dispatch.js";
 import { eventSourceForGoogleId } from "../pim/calendar-rows.js";
+import {
+  calendarSourceScope,
+  isCalendarRowVisible,
+  withReadOnlyFlag,
+} from "../pim/calendar-scope.js";
 import { readSyncTimezone, syncPrimaryCalendarWindow } from "../pim/calendar-sync.js";
 import { buildMeetingPrepPack } from "../pim/meeting-prep-pack.js";
 import { captureError } from "../sentry.js";
@@ -106,12 +111,13 @@ export async function calendarRoutes(app: FastifyInstance) {
       where: {
         userId: uid,
         startTime: { gte: rangeStart, lte: rangeEnd },
+        ...calendarSourceScope(),
       },
       orderBy: { startTime: "asc" },
     });
 
     // An invite in both the primary and a linked calendar is two rows (C2).
-    return { events: dedupeCalendarEvents(rows) };
+    return { events: dedupeCalendarEvents(rows).map(withReadOnlyFlag) };
   });
 
   // Get deterministic prep pack for a meeting/event
@@ -128,9 +134,11 @@ export async function calendarRoutes(app: FastifyInstance) {
     const uid = getUserId(request);
     const { id } = request.params as { id: string };
     const event = await prisma.calendarEvent.findUnique({ where: { id } });
-    if (!event) return reply.code(404).send({ error: "Event not found" });
+    if (!event || !isCalendarRowVisible(event)) {
+      return reply.code(404).send({ error: "Event not found" });
+    }
     if (event.userId !== uid) return reply.code(403).send({ error: "Forbidden" });
-    return event;
+    return withReadOnlyFlag(event);
   });
 
   // Parse free text (voice transcript) into an event draft — read-side, free
@@ -249,7 +257,9 @@ export async function calendarRoutes(app: FastifyInstance) {
     const uid = getUserId(request);
     const { id } = request.params as { id: string };
     const existing = await prisma.calendarEvent.findUnique({ where: { id } });
-    if (!existing) return reply.code(404).send({ error: "Event not found" });
+    if (!existing || !isCalendarRowVisible(existing)) {
+      return reply.code(404).send({ error: "Event not found" });
+    }
     if (existing.userId !== uid) return reply.code(403).send({ error: "Forbidden" });
     if (isLinkedCalendarRow(existing)) return reply.code(409).send({ error: LINKED_READ_ONLY });
 
@@ -328,7 +338,9 @@ export async function calendarRoutes(app: FastifyInstance) {
     const userId = getUserId(request);
     const { id } = request.params as { id: string };
     const event = await prisma.calendarEvent.findUnique({ where: { id } });
-    if (!event) return reply.code(404).send({ error: "Event not found" });
+    if (!event || !isCalendarRowVisible(event)) {
+      return reply.code(404).send({ error: "Event not found" });
+    }
     if (event.userId !== userId) return reply.code(403).send({ error: "Forbidden" });
     if (isLinkedCalendarRow(event)) return reply.code(409).send({ error: LINKED_READ_ONLY });
 
@@ -407,6 +419,7 @@ export async function calendarRoutes(app: FastifyInstance) {
         where: {
           userId: uid,
           startTime: { gte: todayStart, lte: todayEnd },
+          ...calendarSourceScope(),
         },
         orderBy: { startTime: "asc" },
       }),
@@ -418,11 +431,12 @@ export async function calendarRoutes(app: FastifyInstance) {
       (e: { startTime: Date; endTime: Date }) => e.startTime <= now && e.endTime > now,
     );
 
+    const marked = upcoming.map(withReadOnlyFlag);
     return {
       total: events.length,
-      current: current || null,
-      upcoming,
-      nextEvent: upcoming[0] || null,
+      current: current ? withReadOnlyFlag(current) : null,
+      upcoming: marked,
+      nextEvent: marked[0] || null,
     };
   });
 }

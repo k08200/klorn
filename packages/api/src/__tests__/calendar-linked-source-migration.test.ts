@@ -124,6 +124,42 @@ describe("linked-calendar migration — the decision record", () => {
     expect(header).toMatch(/rollback/);
   });
 
+  it("states the real locks: ADD COLUMN holds ACCESS EXCLUSIVE until commit, the FK takes SHARE ROW EXCLUSIVE", () => {
+    expect(header).toMatch(/ADD COLUMN.*ACCESS EXCLUSIVE/);
+    expect(header).toMatch(/until commit/);
+    expect(header).toMatch(/reads of "CalendarEvent" are blocked for the whole migration/);
+    expect(header).toMatch(/SHARE ROW EXCLUSIVE on "LinkedCalendarAccount"/);
+    expect(header).not.toMatch(/brief write lock/);
+  });
+
+  it("records the measured production size (2026-10-01): 197 rows, none linked", () => {
+    expect(header).toMatch(/197 CalendarEvent rows \(195 GOOGLE, 2 LOCAL\)/);
+    expect(header).toMatch(/0 with a non-NULL sourceAccountId/);
+    expect(header).toMatch(/1 LinkedCalendarAccount/);
+  });
+
+  it("carries the runbook: the P3009 recovery, the C1 exposure and the preflight query", () => {
+    expect(header).toContain("P3009");
+    expect(header).toContain(
+      "prisma migrate resolve --rolled-back 20261002010000_calendar_linked_source_key",
+    );
+    expect(header).toContain("20261001010000_calendar_provider");
+    expect(header).toContain(
+      `SELECT count(*) FROM "CalendarEvent" WHERE "sourceAccountId" IS NOT NULL`,
+    );
+  });
+
+  it("carries the rollback steps that apply only if the flag was ever on", () => {
+    expect(header).toMatch(/Rollback, only if LINKED_CALENDAR_SYNC_ENABLED was ever on/);
+    expect(header).toContain(`DELETE FROM "AttentionItem"`);
+    expect(header).toContain(`DELETE FROM "CalendarEvent" WHERE "sourceAccountId" IS NOT NULL`);
+  });
+
+  it("warns the contract phase to move the primary upsert off userId_googleId before dropping googleId", () => {
+    expect(header).toContain("userId_googleId");
+    expect(header).toMatch(/BEFORE .*googleId/);
+  });
+
   it("records what the contract phase drops", () => {
     expect(header).toMatch(/Contract phase/);
     expect(header).toContain(`"sourceKey" DEFAULT`);

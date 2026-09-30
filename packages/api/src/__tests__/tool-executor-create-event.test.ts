@@ -10,7 +10,7 @@
  * instead of silently going through.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const createEventMock = vi.fn();
 const checkConflictsMock = vi.fn();
@@ -173,6 +173,36 @@ describe("create_event — conflict enforcement (#743)", () => {
     expect(result.skipped).toBe(true);
     expect(result.existingEventId).toBe("dup-1");
     expect(checkConflictsMock).not.toHaveBeenCalled();
+    expect(createEventMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("create_event — the ±30 min duplicate check and linked calendars (C2)", () => {
+  const dupWhere = () =>
+    (calendarEventFindFirst.mock.calls.at(-1)?.[0] as { where: Record<string, unknown> }).where;
+
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  it("looks at primary and LOCAL rows only while the linked sync is off (kill switch)", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    await executeToolCall(userId, "create_event", args);
+    expect(dupWhere().sourceAccountId).toBeNull();
+  });
+
+  it("with the sync on, a linked calendar's event in the slot refuses the booking: intended", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    calendarEventFindFirst.mockResolvedValue({
+      id: "linked-ev",
+      title: "Work standup",
+      startTime: new Date("2026-08-01T10:10:00+09:00"),
+    });
+
+    const result = JSON.parse(await executeToolCall(userId, "create_event", args));
+
+    expect(dupWhere()).not.toHaveProperty("sourceAccountId");
+    expect(result.skipped).toBe(true);
     expect(createEventMock).not.toHaveBeenCalled();
   });
 });

@@ -6,14 +6,8 @@
  */
 
 import { prisma } from "../db.js";
-import {
-  getLinkedCalendarClients,
-  isGoogleAuthError,
-  markLinkedCalendarForReconnect,
-} from "../mail/gmail.js";
-import { captureError } from "../sentry.js";
 import { normalizeTimeZone } from "../time-zone.js";
-import { googleSessionFromClient } from "./calendar-providers/google.js";
+import { connectLinkedCalendars } from "./calendar-providers/dispatch.js";
 import type {
   CalendarListQuery,
   CalendarSession,
@@ -24,6 +18,7 @@ import {
   upsertGoogleEventRow,
   upsertLinkedGoogleEventRow,
 } from "./calendar-rows.js";
+import { handleLinkedCalendarFailure } from "./linked-calendar-failure.js";
 
 export const CALENDAR_SYNC_WINDOW_DAYS = 30;
 /** Per account and per sync; identical for the primary and every linked calendar. */
@@ -125,65 +120,40 @@ function isForeignKeyViolation(err: unknown): boolean {
 }
 
 /**
- * A linked account that fails is flagged (auth errors only: a transient failure
- * must not demand a re-link), logged and captured, then skipped. The flag write
- * is best-effort so a DB blip cannot hide the sync error or abort the loop.
- * Domain only goes to Sentry, never the full linked address (PII).
- */
-async function reportLinkedSyncFailure(
-  userId: string,
-  linkedAccountId: string,
-  email: string,
-  err: unknown,
-): Promise<void> {
-  if (isGoogleAuthError(err)) {
-    await markLinkedCalendarForReconnect(userId, linkedAccountId).catch((markErr) => {
-      console.error(
-        `[CALENDAR] Failed to flag linked calendar ${linkedAccountId} for reconnect:`,
-        markErr,
-      );
-      captureError(markErr, { tags: { scope: "calendar.linked.mark-reconnect" } });
-    });
-  }
-  console.warn(
-    `[CALENDAR] linked-account sync failed (skipped): ${err instanceof Error ? err.message : err}`,
-  );
-  captureError(err, {
-    tags: { scope: "calendar.linked_sync_failed" },
-    extra: { userId, accountDomain: email.split("@")[1] ?? "unknown" },
-  });
-}
-
-/**
- * Sync every linked GOOGLE calendar account of a user into rows. Best-effort per
- * account: one account failing never skips the others. Called only behind
- * LINKED_CALENDAR_SYNC_ENABLED; with no linked account it reads nothing else.
+ * Sync every linked calendar account of a user into rows. Accounts come from the
+ * provider seam, so a provider with no implementation yet is skipped, and so is
+ * an account flagged needsReconnect: a revoked token is not retried every cycle
+ * until the user re-links it. Best-effort per account: one failing never skips
+ * the others (see linked-calendar-failure.ts for the policy). Called only behind
+ * LINKED_CALENDAR_SYNC_ENABLED and the user's entitlement; with nothing to sync it
+ * reads no user row.
  */
 export async function syncLinkedCalendars(
   userId: string,
   now: Date = new Date(),
 ): Promise<LinkedCalendarSyncResult> {
-  const linked = await getLinkedCalendarClients(userId);
+  const linked = await connectLinkedCalendars(userId, { skipNeedsReconnect: true });
   if (linked.length === 0) return { accounts: 0, events: 0, failedAccounts: 0 };
 
   const userTimezone = await readSyncTimezone(userId);
   let events = 0;
   let failedAccounts = 0;
-  for (const { client, id, email } of linked) {
+  for (const { session, id, email } of linked) {
     try {
-      events += await syncLinkedCalendarWindow(
-        googleSessionFromClient(client),
-        userId,
-        id,
-        userTimezone,
-        now,
-      );
+      events += await syncLinkedCalendarWindow(session, userId, id, userTimezone, now);
     } catch (err) {
       // The account was unlinked while its sync was in flight: its rows now fail
       // the foreign key, which is exactly the orphan the constraint prevents.
       if (isForeignKeyViolation(err)) continue;
       failedAccounts += 1;
-      await reportLinkedSyncFailure(userId, id, email, err);
+      await handleLinkedCalendarFailure({
+        userId,
+        linkedAccountId: id,
+        email,
+        err,
+        scope: "calendar.linked_sync_failed",
+        action: "sync",
+      });
     }
   }
   return { accounts: linked.length, events, failedAccounts };

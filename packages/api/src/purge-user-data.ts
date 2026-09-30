@@ -12,8 +12,10 @@ type PurgeTx = typeof db;
  * A regression that drops one silently strands user data (this list has
  * regressed before: linked-account OAuth tokens and verbatim email excerpts
  * were surviving). `purge-user-data.test.ts` asserts the required set. Every
- * table below FKs only to `User` (onDelete: Cascade), so delete order is
- * unconstrained.
+ * table below FKs to `User` (onDelete: Cascade). The one other foreign key among
+ * them is CalendarEvent.sourceAccountId -> LinkedCalendarAccount (C2), which also
+ * cascades: deleting an account removes its synced events, and deleting events
+ * never touches an account, so delete order is still unconstrained.
  */
 export async function purgeUserData(tx: PurgeTx, userId: string): Promise<void> {
   const scope = { where: { userId } };

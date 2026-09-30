@@ -17,7 +17,13 @@ const m = vi.hoisted(() => ({
   freebusyQuery: vi.fn(),
   googleCalendar: vi.fn(),
   getAuthedClient: vi.fn(),
-  getLinkedCalendarClients: vi.fn(),
+  linkedRows: [] as Array<{
+    id: string;
+    email: string;
+    provider: string;
+    needsReconnect: boolean;
+    client: unknown;
+  }>,
   markGoogleTokenForReconnect: vi.fn(async () => {}),
   automationConfigFindUnique: vi.fn(),
   captureError: vi.fn(),
@@ -40,14 +46,27 @@ vi.mock("googleapis", () => ({
 
 vi.mock("../mail/gmail.js", () => ({
   getAuthedClient: m.getAuthedClient,
-  getLinkedCalendarClients: m.getLinkedCalendarClients,
+  getLinkedCalendarClient: vi.fn(async (_userId: string, id: string) => {
+    const row = m.linkedRows.find((r) => r.id === id);
+    return row ? { client: row.client, id: row.id, email: row.email } : null;
+  }),
   isGoogleAuthError: (e: { response?: { status?: number } }) => e?.response?.status === 401,
   markGoogleTokenForReconnect: m.markGoogleTokenForReconnect,
   markLinkedCalendarForReconnect: vi.fn(async () => {}),
 }));
 
 vi.mock("../db.js", () => ({
-  prisma: { automationConfig: { findUnique: m.automationConfigFindUnique } },
+  prisma: {
+    automationConfig: { findUnique: m.automationConfigFindUnique },
+    // The linked accounts the provider seam lists for a conflict check.
+    linkedCalendarAccount: {
+      findMany: vi.fn(async () => m.linkedRows),
+      findFirst: vi.fn(async ({ where }: { where: { id: string } }) => {
+        const row = m.linkedRows.find((r) => r.id === where.id);
+        return row ? { provider: row.provider } : null;
+      }),
+    },
+  },
 }));
 
 vi.mock("../sentry.js", () => ({ captureError: m.captureError }));
@@ -72,7 +91,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(NOW);
   m.getAuthedClient.mockResolvedValue(AUTH);
-  m.getLinkedCalendarClients.mockResolvedValue([]);
+  m.linkedRows = [];
   m.automationConfigFindUnique.mockResolvedValue({ timezone: "Asia/Seoul" });
   m.eventsList.mockResolvedValue({ data: { items: [] } });
   m.eventsInsert.mockResolvedValue({
@@ -352,6 +371,22 @@ describe("attendee free/busy (team mode)", () => {
     ]);
   });
 
+  it("checkAttendeeBusy reports a member busy when Google returns any busy entry, even one missing a start or end (conservative: never a false 'free')", async () => {
+    freebusyFor({
+      "a@x.com": { busy: [{ start: "2026-10-02T01:00:00Z" }] },
+      "b@x.com": { busy: [{ end: "2026-10-02T02:00:00Z" }, { start: "s", end: "e" }] },
+      "c@x.com": { busy: [] },
+    });
+
+    const out = await checkAttendeeBusy("u1", ["a@x.com", "b@x.com", "c@x.com"], START, END);
+
+    expect(out).toEqual([
+      { email: "a@x.com", busy: true },
+      { email: "b@x.com", busy: true },
+      { email: "c@x.com", busy: false },
+    ]);
+  });
+
   it("checkAttendeeBusy answers [] for no attendees, not connected, a bad window, or a transport failure", async () => {
     expect(await checkAttendeeBusy("u1", [], START, END)).toEqual([]);
     expect(m.getAuthedClient).not.toHaveBeenCalled();
@@ -476,9 +511,15 @@ describe("checkConflicts — request shapes and ordering", () => {
 
   it("checks each linked account's calendars with that account's own client", async () => {
     const linkedClient = { tag: "linked-client" };
-    m.getLinkedCalendarClients.mockResolvedValue([
-      { client: linkedClient, id: "acct-1", email: "me@work.com" },
-    ]);
+    m.linkedRows = [
+      {
+        id: "acct-1",
+        email: "me@work.com",
+        provider: "GOOGLE",
+        needsReconnect: false,
+        client: linkedClient,
+      },
+    ];
 
     const result = await checkConflicts("u1", START, END);
 

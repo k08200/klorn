@@ -14,6 +14,7 @@ type Row = {
   provider: string;
   externalId: string | null;
   sourceAccountId: string | null;
+  sourceKey?: string;
   userId?: string;
 };
 
@@ -41,9 +42,48 @@ describe("dedupeCalendarEvents", () => {
     expect(ids(out)).toEqual(["p"]);
   });
 
-  it("keeps the first row of a group that exists only in linked calendars", () => {
-    const out = dedupeCalendarEvents([linked("a", "g-1", "acct-1"), linked("b", "g-1", "acct-2")]);
-    expect(ids(out)).toEqual(["a"]);
+  it("picks the same linked copy whatever order the rows arrive in: lowest sourceKey, then id", () => {
+    const a = linked("a", "g-1", "acct-1");
+    const b = linked("b", "g-1", "acct-2");
+    const c = linked("c", "g-1", "acct-2");
+    for (const order of [
+      [a, b, c],
+      [c, b, a],
+      [b, a, c],
+      [b, c, a],
+    ]) {
+      expect(ids(dedupeCalendarEvents(order))).toEqual(["a"]);
+    }
+    for (const order of [
+      [b, c],
+      [c, b],
+    ]) {
+      expect(ids(dedupeCalendarEvents(order))).toEqual(["b"]);
+    }
+  });
+
+  it("orders by sourceKey when the rows carry it, falling back to sourceAccountId when they do not", () => {
+    const withKey = (id: string, sourceKey: string): Row => ({
+      ...linked(id, "g-1", "ignored"),
+      sourceKey,
+    });
+    expect(ids(dedupeCalendarEvents([withKey("z", "b-key"), withKey("y", "a-key")]))).toEqual([
+      "y",
+    ]);
+    expect(
+      ids(dedupeCalendarEvents([linked("z", "g-1", "acct-9"), linked("y", "g-1", "acct-3")])),
+    ).toEqual(["y"]);
+  });
+
+  it("keeps the first row only when nothing distinguishes the copies (selects that carry no id)", () => {
+    const bare = (n: number) => ({
+      provider: "GOOGLE",
+      externalId: "g-1",
+      sourceAccountId: null,
+      n,
+    });
+    const out = dedupeCalendarEvents([bare(1), bare(2)]);
+    expect(out.map((r) => r.n)).toEqual([1]);
   });
 
   it("keeps events with different ids, in their original order", () => {

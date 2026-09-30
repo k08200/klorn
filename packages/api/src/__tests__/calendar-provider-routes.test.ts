@@ -201,7 +201,10 @@ describe("GET /api/calendar — reads are unchanged", () => {
       headers,
     });
     const arg = eventFindMany.mock.calls[0]?.[0] as { where: Record<string, unknown> };
-    expect(Object.keys(arg.where).sort()).toEqual(["startTime", "userId"]);
+    // No provider/externalId filter; the only addition is the C2 kill switch
+    // (linked rows are excluded while LINKED_CALENDAR_SYNC_ENABLED is off).
+    expect(Object.keys(arg.where).sort()).toEqual(["sourceAccountId", "startTime", "userId"]);
+    expect(arg.where.sourceAccountId).toBeNull();
     await app.close();
   });
 });
@@ -369,7 +372,14 @@ describe("POST /api/calendar/sync — Google request and failure handling (chara
   });
 });
 
-describe("linked calendar rows on the read routes (C2)", () => {
+describe("linked calendar rows on the read routes (C2, flag on)", () => {
+  beforeEach(() => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+  });
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
   const start = new Date("2026-10-01T10:00:00.000Z");
   const row = (id: string, externalId: string | null, sourceAccountId: string | null) => ({
     id,
@@ -432,6 +442,13 @@ describe("linked calendar rows on the read routes (C2)", () => {
 });
 
 describe("linked calendar rows are read-only mirrors (C2)", () => {
+  beforeEach(() => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+  });
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
   const linkedRow = {
     id: "ev-linked",
     userId: "user-1",
@@ -498,6 +515,142 @@ describe("linked calendar rows are read-only mirrors (C2)", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(eventUpdate).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+});
+
+describe("kill switch: flag off hides linked rows on every calendar route (C2)", () => {
+  const linkedRow = {
+    id: "ev-linked",
+    userId: "user-1",
+    title: "Work standup",
+    startTime: new Date("2026-10-01T10:00:00.000Z"),
+    endTime: new Date("2026-10-01T11:00:00.000Z"),
+    allDay: false,
+    googleId: null,
+    provider: "GOOGLE",
+    externalId: "g-work-1",
+    sourceAccountId: "acct-1",
+    sourceKey: "acct-1",
+  };
+  const whereOf = (call: unknown[] | undefined) =>
+    (call?.[0] as { where: Record<string, unknown> }).where;
+
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  it("GET / and GET /today/summary query primary and LOCAL rows only", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/api/calendar", headers });
+    await app.inject({ method: "GET", url: "/api/calendar/today/summary", headers });
+    expect(eventFindMany.mock.calls).toHaveLength(2);
+    for (const call of eventFindMany.mock.calls) expect(whereOf(call).sourceAccountId).toBeNull();
+    await app.close();
+  });
+
+  it("with the flag on the queries are not narrowed", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/api/calendar", headers });
+    await app.inject({ method: "GET", url: "/api/calendar/today/summary", headers });
+    for (const call of eventFindMany.mock.calls)
+      expect(whereOf(call)).not.toHaveProperty("sourceAccountId");
+    await app.close();
+  });
+
+  it("GET /:id, PATCH and DELETE answer 404 for a linked row while the flag is off", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    eventFindUnique.mockResolvedValue(linkedRow);
+    const app = await buildApp();
+    const get = await app.inject({ method: "GET", url: "/api/calendar/ev-linked", headers });
+    const patch = await app.inject({
+      method: "PATCH",
+      url: "/api/calendar/ev-linked",
+      headers,
+      payload: { title: "x" },
+    });
+    const del = await app.inject({ method: "DELETE", url: "/api/calendar/ev-linked", headers });
+    expect([get.statusCode, patch.statusCode, del.statusCode]).toEqual([404, 404, 404]);
+    expect(eventUpdate).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("GET /:id returns the linked row once the flag is on", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    eventFindUnique.mockResolvedValue(linkedRow);
+    const app = await buildApp();
+    const get = await app.inject({ method: "GET", url: "/api/calendar/ev-linked", headers });
+    expect(get.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe("wire: linked rows say readOnly (C2)", () => {
+  const start = new Date("2026-10-01T10:00:00.000Z");
+  const row = (id: string, sourceAccountId: string | null) => ({
+    id,
+    userId: "user-1",
+    title: `event ${id}`,
+    startTime: start,
+    endTime: new Date(start.getTime() + 3_600_000),
+    allDay: false,
+    googleId: sourceAccountId ? null : `g-${id}`,
+    provider: "GOOGLE",
+    externalId: `g-${id}`,
+    sourceAccountId,
+    sourceKey: sourceAccountId ?? "primary",
+  });
+
+  beforeEach(() => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+  });
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  it("GET / marks a linked row readOnly: true and leaves the field off primary and LOCAL rows", async () => {
+    eventFindMany.mockResolvedValueOnce([row("linked", "acct-1"), row("primary", null)]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar", headers });
+    const events = res.json().events as Array<Record<string, unknown>>;
+    const byId = Object.fromEntries(events.map((e) => [e.id as string, e]));
+    expect(byId.linked?.readOnly).toBe(true);
+    expect("readOnly" in (byId.primary ?? {})).toBe(false);
+    await app.close();
+  });
+
+  it("flag off: the primary rows' JSON is byte-identical to the row itself (no new field)", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    const primary = row("primary", null);
+    eventFindMany.mockResolvedValueOnce([primary]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar", headers });
+    expect(res.body).toBe(JSON.stringify({ events: [primary] }));
+    await app.close();
+  });
+
+  it("GET /:id marks a linked row readOnly: true", async () => {
+    eventFindUnique.mockResolvedValue(row("linked", "acct-1"));
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar/linked", headers });
+    expect(res.json().readOnly).toBe(true);
+    await app.close();
+  });
+
+  it("GET /today/summary marks linked rows wherever they appear", async () => {
+    const soon = (id: string, sourceAccountId: string | null) => ({
+      ...row(id, sourceAccountId),
+      startTime: new Date(Date.now() + 60_000),
+      endTime: new Date(Date.now() + 3_600_000),
+    });
+    eventFindMany.mockResolvedValueOnce([soon("linked-only", "acct-1")]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/calendar/today/summary", headers });
+    const body = res.json();
+    expect(body.upcoming[0].readOnly).toBe(true);
+    expect(body.nextEvent.readOnly).toBe(true);
     await app.close();
   });
 });

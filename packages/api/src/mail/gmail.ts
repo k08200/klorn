@@ -489,72 +489,72 @@ async function persistRefreshedGoogleToken(
 }
 
 /**
- * OAuth2 clients for every SECONDARY calendar account the user linked. Mirrors
- * getAuthedClient (decrypt + auto-refresh) but returns one client per
- * LinkedCalendarAccount row, tagged with its email. A row whose token can't be
- * decrypted is skipped, not fatal — the primary account and the other linked
- * accounts still work. Read only by checkConflicts.
+ * The OAuth2 client of ONE SECONDARY calendar account the user linked. Mirrors
+ * getAuthedClient (decrypt + auto-refresh) for a single LinkedCalendarAccount
+ * row, tagged with its id and email. A row whose token can't be decrypted, or
+ * that holds no token at all, answers null and is flagged for reconnect: the
+ * primary account and the other linked accounts still work. Read by the calendar
+ * provider seam's `connect` (conflict checks and the linked sync).
  */
-export async function getLinkedCalendarClients(
+export async function getLinkedCalendarClient(
   userId: string,
-): Promise<Array<{ client: InstanceType<typeof google.auth.OAuth2>; id: string; email: string }>> {
+  linkedAccountId: string,
+): Promise<{ client: InstanceType<typeof google.auth.OAuth2>; id: string; email: string } | null> {
   // GOOGLE only: a CalDAV row has no OAuth token (it would be flagged for
   // reconnect on every conflict check) and an OUTLOOK row is not a Google client.
-  const rows = await prisma.linkedCalendarAccount.findMany({
-    where: { userId, provider: "GOOGLE" },
+  const row = await prisma.linkedCalendarAccount.findFirst({
+    where: { id: linkedAccountId, userId, provider: "GOOGLE" },
   });
-  const clients: Array<{
-    client: InstanceType<typeof google.auth.OAuth2>;
-    id: string;
-    email: string;
-  }> = [];
-  for (const row of rows) {
-    let accessTokenPlain = "";
-    let refreshTokenPlain: string | null = null;
-    try {
-      accessTokenPlain = row.accessToken ? decryptToken(row.accessToken) : "";
-      refreshTokenPlain = decryptOptional(row.refreshToken);
-    } catch {
-      // Undecryptable token can only be fixed by a re-link — flag it (fire-and-
-      // forget; this loop is sync) so the UI prompts a reconnect, then skip.
-      console.warn(`[GOOGLE] Skipping linked calendar ${row.id} — token decrypt failed`);
-      void markLinkedCalendarForReconnect(userId, row.id).catch((markErr) => {
-        console.error(`[GOOGLE] Failed to flag linked calendar ${row.id} for reconnect:`, markErr);
-        captureError(markErr, { tags: { scope: "gmail.linked-calendar.mark-reconnect" } });
-      });
-      continue;
-    }
-    if (!accessTokenPlain && !refreshTokenPlain) {
-      // Empty tokens (corruption / prior invalidation): flag for reconnect so the
-      // calendar surfaces a re-link prompt instead of silently dropping out of
-      // free/busy (mirror of the decrypt-failure branch above).
-      console.warn(`[GOOGLE] Linked calendar ${row.id} has empty tokens — flagging for reconnect`);
-      void markLinkedCalendarForReconnect(userId, row.id).catch((markErr) => {
-        console.error(`[GOOGLE] Failed to flag linked calendar ${row.id} for reconnect:`, markErr);
-        captureError(markErr, { tags: { scope: "gmail.linked-calendar.mark-reconnect" } });
-      });
-      continue;
-    }
+  if (!row) return null;
 
-    const oauth2 = getOAuth2Client();
-    oauth2.setCredentials({
-      access_token: accessTokenPlain,
-      refresh_token: refreshTokenPlain,
-      expiry_date: row.expiresAt ? row.expiresAt.getTime() : undefined,
-    });
-    oauth2.on("tokens", async (newTokens) => {
-      try {
-        await persistRefreshedLinkedToken(row.id, userId, newTokens);
-      } catch (err) {
-        console.error(
-          `[GOOGLE] Failed to persist refreshed linked-calendar token for user ${userId}:`,
-          err instanceof Error ? err.message : err,
-        );
-      }
-    });
-    clients.push({ client: oauth2, id: row.id, email: row.email });
+  let accessTokenPlain = "";
+  let refreshTokenPlain: string | null = null;
+  try {
+    accessTokenPlain = row.accessToken ? decryptToken(row.accessToken) : "";
+    refreshTokenPlain = decryptOptional(row.refreshToken);
+  } catch {
+    // Undecryptable token can only be fixed by a re-link — flag it (fire-and-
+    // forget) so the UI prompts a reconnect, then report it unusable.
+    console.warn(`[GOOGLE] Skipping linked calendar ${row.id} — token decrypt failed`);
+    flagLinkedCalendarForReconnect(userId, row.id);
+    return null;
   }
-  return clients;
+  if (!accessTokenPlain && !refreshTokenPlain) {
+    // Empty tokens (corruption / prior invalidation): flag for reconnect so the
+    // calendar surfaces a re-link prompt instead of silently dropping out of
+    // free/busy (mirror of the decrypt-failure branch above).
+    console.warn(`[GOOGLE] Linked calendar ${row.id} has empty tokens — flagging for reconnect`);
+    flagLinkedCalendarForReconnect(userId, row.id);
+    return null;
+  }
+
+  const oauth2 = getOAuth2Client();
+  oauth2.setCredentials({
+    access_token: accessTokenPlain,
+    refresh_token: refreshTokenPlain,
+    expiry_date: row.expiresAt ? row.expiresAt.getTime() : undefined,
+  });
+  oauth2.on("tokens", async (newTokens) => {
+    try {
+      await persistRefreshedLinkedToken(row.id, userId, newTokens);
+    } catch (err) {
+      console.error(
+        `[GOOGLE] Failed to persist refreshed linked-calendar token for user ${userId}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  });
+  return { client: oauth2, id: row.id, email: row.email };
+}
+
+function flagLinkedCalendarForReconnect(userId: string, linkedAccountId: string): void {
+  void markLinkedCalendarForReconnect(userId, linkedAccountId).catch((markErr) => {
+    console.error(
+      `[GOOGLE] Failed to flag linked calendar ${linkedAccountId} for reconnect:`,
+      markErr,
+    );
+    captureError(markErr, { tags: { scope: "gmail.linked-calendar.mark-reconnect" } });
+  });
 }
 
 async function persistRefreshedLinkedToken(
@@ -586,7 +586,7 @@ async function persistRefreshedLinkedToken(
   }
 
   // Both writes are scoped by { id, userId } (not id alone): the row id is a
-  // UUID already filtered by userId in getLinkedCalendarClients, but scoping the
+  // UUID already filtered by userId in getLinkedCalendarClient, but scoping the
   // write too makes this function safe to reuse from any future call site and
   // can never touch another user's row.
   // A successful refresh means the token is healthy again — clear any stale

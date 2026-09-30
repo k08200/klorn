@@ -68,17 +68,44 @@
 --     every writer states it (they all do, through pim/calendar-rows.ts);
 --   * the "googleId" column and "CalendarEvent_userId_googleId_key", after reads
 --     move to (provider, externalId). The unique created below is the key that
---     replaces it.
--- It keeps the new unique, the CHECK and the index. C7 also decides whether to
--- match events across calendars by iCalUID instead of the event id (an invite
--- to two Google accounts of one person does not always share an id).
+--     replaces it. The primary sync upsert targets userId_googleId
+--     (upsertGoogleEventRow in pim/calendar-rows.ts), so its writers must move
+--     to the four-column key BEFORE googleId and its unique are dropped, or the
+--     primary upsert has no conflict target.
+-- It keeps the new unique, the CHECK, the index and the foreign key. C7 also
+-- decides whether to match events across calendars by iCalUID instead of the
+-- event id (an invite to two Google accounts of one person does not always
+-- share an id).
 --
--- Cost. The column add is metadata-only (constant default, Postgres 11+). The
--- two index builds, the foreign key and the CHECK validation take a brief write
--- lock because
--- Prisma migrations run in a transaction, where CONCURRENTLY is illegal;
--- acceptable on this small table (the call C1 made). lock_timeout below makes a
--- deploy blocked by a long transaction fail fast instead of queueing behind it.
+-- Locks and cost. ADD COLUMN is metadata-only (constant default, Postgres 11+)
+-- but takes ACCESS EXCLUSIVE on "CalendarEvent", and because Prisma runs the
+-- whole migration in one transaction that lock is held until commit: reads of
+-- "CalendarEvent" are blocked for the whole migration, not only during the index
+-- builds. ADD FOREIGN KEY takes SHARE ROW EXCLUSIVE on "LinkedCalendarAccount"
+-- (and on "CalendarEvent"); the two index builds and the CHECK validation scan
+-- the table under those locks, and CONCURRENTLY is illegal inside a transaction.
+-- Size in production on 2026-10-01 (measured read-only): 197 CalendarEvent rows
+-- (195 GOOGLE, 2 LOCAL), 0 with a non-NULL sourceAccountId, 1
+-- LinkedCalendarAccount, no unfinished migration, latest applied
+-- 20261001010000_calendar_provider. At that size the locks are negligible.
+-- lock_timeout below makes a deploy blocked by a long transaction fail fast
+-- instead of queueing behind it.
+--
+-- Runbook.
+--   * Preflight: SELECT count(*) FROM "CalendarEvent" WHERE "sourceAccountId" IS NOT NULL
+--     (0 on 2026-10-01). Above 0, a linked row already exists: read the rollback
+--     note below before deploying anything.
+--   * If this migration fails on lock_timeout, Prisma records it as failed and
+--     refuses every later deploy with P3009. The transaction rolled back, so
+--     recover with: prisma migrate resolve --rolled-back 20261002010000_calendar_linked_source_key
+--     and redeploy. 20261001010000_calendar_provider (C1) has the same exposure
+--     and the same recovery.
+--   * Rollback, only if LINKED_CALENDAR_SYNC_ENABLED was ever on: set the flag
+--     OFF (readers then hide linked rows); DELETE FROM "AttentionItem" WHERE
+--     "source" = 'CALENDAR_EVENT' AND "sourceId" IN (SELECT "id" FROM
+--     "CalendarEvent" WHERE "sourceAccountId" IS NOT NULL); DELETE FROM
+--     "CalendarEvent" WHERE "sourceAccountId" IS NOT NULL; then revert the code.
+--     If the flag was never on, reverting the code is enough.
 
 SET LOCAL lock_timeout = '5s';
 

@@ -31,6 +31,7 @@ import {
   listEvents,
 } from "../pim/calendar.js";
 import { eventSourceForGoogleId } from "../pim/calendar-rows.js";
+import { calendarSourceScope } from "../pim/calendar-scope.js";
 import {
   getUpcomingMeetings,
   joinMeeting,
@@ -405,6 +406,9 @@ async function executeToolCallInternal(
               gte: new Date(evStartDate.getTime() - 30 * 60_000),
               lte: new Date(evStartDate.getTime() + 30 * 60_000),
             },
+            // With the linked sync on, a linked calendar's event in the slot
+            // refuses the booking too (intended); off, only primary/LOCAL rows count.
+            ...calendarSourceScope(),
           },
         });
         if (dupCheck) {

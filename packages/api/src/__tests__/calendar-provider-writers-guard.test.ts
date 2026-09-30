@@ -201,6 +201,33 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
     expect(stale).toEqual([]);
   });
 
+  // Exempt from the kill switch on purpose: the GDPR export returns every row the
+  // system holds, and unlink deletes an account's own rows.
+  const EXEMPT_FROM_KILL_SWITCH = ["index.ts", "pim/linked-calendar-unlink.ts"];
+
+  describe("kill switch: with LINKED_CALENDAR_SYNC_ENABLED off, every reader excludes linked rows", () => {
+    const scoped = readerPaths.filter((path) => !EXEMPT_FROM_KILL_SWITCH.includes(path));
+
+    it.each(
+      scoped,
+    )("%s scopes every list, count and first-row query with calendarSourceScope()", (path) => {
+      const file = files.find((f) => f.path === path);
+      const listReads = callWindows(
+        file?.text ?? "",
+        /\.calendarEvent\.(findMany|findFirst|count)\(/g,
+      );
+      for (const window of listReads) {
+        expect(window.slice(0, 500)).toContain("calendarSourceScope()");
+      }
+    });
+
+    it.each(scoped)("%s checks isCalendarRowVisible() on every row it fetches by id", (path) => {
+      const file = files.find((f) => f.path === path);
+      const byId = callWindows(file?.text ?? "", /\.calendarEvent\.findUnique\(/g);
+      if (byId.length > 0) expect(file?.text).toContain("isCalendarRowVisible(");
+    });
+  });
+
   it.each(DEDUPED)("%s dedupes through dedupeCalendarEvents", (path) => {
     const file = files.find((f) => f.path === path);
     expect(file?.text).toContain("dedupeCalendarEvents(");

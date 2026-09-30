@@ -18,7 +18,7 @@ import {
   summarizeConflicts,
   summarizeFreeBusy,
 } from "../../google-calendar-time.js";
-import { getAuthedClient, getLinkedCalendarClients } from "../../mail/gmail.js";
+import { getAuthedClient, getLinkedCalendarClient } from "../../mail/gmail.js";
 import { captureError } from "../../sentry.js";
 import type {
   CalendarAccountRef,
@@ -136,13 +136,17 @@ async function freeBusyAcrossCalendars(calendar: calendar_v3.Calendar, window: C
   return summarizeFreeBusy(calendars, calendarLabelMap(list.data.items));
 }
 
-function visibleBlocks(cal: calendar_v3.Schema$FreeBusyCalendar | undefined) {
-  if (!cal || (cal.errors?.length ?? 0) > 0) return null;
+function toPersonFreeBusy(
+  email: string,
+  cal: calendar_v3.Schema$FreeBusyCalendar | undefined,
+): PersonFreeBusy {
+  // Not visible (absent, or an inline error): unknown, never free.
+  if (!cal || (cal.errors?.length ?? 0) > 0) return { email, blocks: null, anyBusy: false };
   const blocks: Array<{ start: string; end: string }> = [];
   for (const b of cal.busy ?? []) {
     if (b.start && b.end) blocks.push({ start: b.start, end: b.end });
   }
-  return blocks;
+  return { email, blocks, anyBusy: (cal.busy?.length ?? 0) > 0 };
 }
 
 async function listEventsVia(
@@ -238,7 +242,7 @@ async function peopleFreeBusyVia(
     },
   });
   const calendars = fb.data.calendars ?? {};
-  return emails.map((email) => ({ email, blocks: visibleBlocks(calendars[email]) }));
+  return emails.map((email) => toPersonFreeBusy(email, calendars[email]));
 }
 
 /** A session over one already-resolved OAuth client. */
@@ -264,8 +268,8 @@ export function googleSessionFromClient(auth: GoogleAuth): CalendarSession {
 
 async function resolveClient(account: CalendarAccountRef): Promise<GoogleAuth | null> {
   if (account.linkedAccountId === null) return getAuthedClient(account.userId);
-  const linked = await getLinkedCalendarClients(account.userId);
-  return linked.find((entry) => entry.id === account.linkedAccountId)?.client ?? null;
+  const linked = await getLinkedCalendarClient(account.userId, account.linkedAccountId);
+  return linked?.client ?? null;
 }
 
 export const googleCalendarActions: CalendarProviderActions = {

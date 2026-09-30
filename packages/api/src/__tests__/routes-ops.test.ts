@@ -29,6 +29,8 @@ vi.mock("../pim/briefing-status.js", () => ({
   })),
 }));
 
+const calendarEventCount = vi.hoisted(() => vi.fn(async (_args?: unknown) => 1));
+
 vi.mock("../db.js", () => {
   const now = new Date("2026-04-29T08:00:00.000Z");
   const prisma = {
@@ -83,7 +85,7 @@ vi.mock("../db.js", () => {
       findMany: vi.fn(async () => [{ id: "notif-1", title: "Reminder", createdAt: now }]),
     },
     emailMessage: { count: vi.fn(async () => 3) },
-    calendarEvent: { count: vi.fn(async () => 1) },
+    calendarEvent: { count: calendarEventCount },
     user: { findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })) },
   };
   return { prisma, db: prisma };
@@ -160,5 +162,29 @@ describe("ops routes", () => {
     expect(ai.message).toMatch(/cooldown/i);
     expect(body.status).toBe("error");
     await app.close();
+  });
+});
+
+describe("ops readiness — kill switch (C2)", () => {
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  const countedWhere = async () => {
+    calendarEventCount.mockClear();
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/api/ops/readiness", headers: auth() });
+    await app.close();
+    return (calendarEventCount.mock.calls.at(-1)?.[0] as { where: Record<string, unknown> }).where;
+  };
+
+  it("counts today's events from primary and LOCAL rows only while the linked sync is off", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    expect((await countedWhere()).sourceAccountId).toBeNull();
+  });
+
+  it("does not narrow the count once the linked sync is on", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    expect(await countedWhere()).not.toHaveProperty("sourceAccountId");
   });
 });

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type EventRow = {
   id: string;
@@ -125,16 +125,37 @@ describe("buildMeetingPrepPack", () => {
 });
 
 describe("buildMeetingPrepPack — a linked calendar's event (C2)", () => {
-  it("builds a pack for a row synced from a linked calendar, for its owner only", async () => {
-    stores.event = {
+  const linkedEvent = () =>
+    ({
       ...(stores.event as EventRow),
       id: "linked-event",
       sourceAccountId: "acct-1",
       provider: "GOOGLE",
       externalId: "g-work-1",
-    } as EventRow;
+    }) as EventRow;
+
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  it("builds a pack for a row synced from a linked calendar, for its owner only, once the flag is on", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    stores.event = linkedEvent();
 
     expect(await buildMeetingPrepPack("user-1", "linked-event", { now: NOW })).not.toBeNull();
     expect(await buildMeetingPrepPack("someone-else", "linked-event", { now: NOW })).toBeNull();
+  });
+
+  it("kill switch: answers null for a linked row while the flag is off", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    stores.event = linkedEvent();
+
+    expect(await buildMeetingPrepPack("user-1", "linked-event", { now: NOW })).toBeNull();
+  });
+
+  it("still builds a pack for a primary row while the flag is off", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+
+    expect(await buildMeetingPrepPack("user-1", "event-1", { now: NOW })).not.toBeNull();
   });
 });

@@ -12,7 +12,8 @@ const m = vi.hoisted(() => ({
   eventsList: vi.fn(),
   googleCalendar: vi.fn(),
   getAuthedClient: vi.fn(),
-  getLinkedCalendarClients: vi.fn(),
+  getLinkedCalendarClient: vi.fn(),
+  isEntitled: vi.fn((_plan: string, _role?: string) => true),
   captureError: vi.fn(),
   overrides: new Map<string, (...args: unknown[]) => unknown>(),
   calls: [] as string[],
@@ -27,12 +28,17 @@ vi.mock("googleapis", () => ({
 vi.mock("../mail/gmail.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../mail/gmail.js")>()),
   getAuthedClient: m.getAuthedClient,
-  getLinkedCalendarClients: m.getLinkedCalendarClients,
+  getLinkedCalendarClient: m.getLinkedCalendarClient,
   getLinkedInboxClients: vi.fn(async () => []),
   renewExpiringGmailWatches: vi.fn(async () => ({ renewed: 0, failed: 0 })),
 }));
 
 vi.mock("../sentry.js", () => ({ captureError: m.captureError, initSentry: vi.fn() }));
+
+vi.mock("../billing/stripe.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../billing/stripe.js")>()),
+  isEntitled: m.isEntitled,
+}));
 
 // Fire-and-forget jobs a tick launches; none of them is under test and several
 // would reach the network.
@@ -120,6 +126,30 @@ function override(key: string, fn: (...args: unknown[]) => unknown) {
   m.overrides.set(key, fn);
 }
 
+type LinkedFixture = {
+  client: unknown;
+  id: string;
+  email: string;
+  needsReconnect?: boolean;
+};
+
+/** The linked accounts the seam lists, and the client each one resolves to. */
+function setLinkedAccounts(accounts: LinkedFixture[]) {
+  override("linkedCalendarAccount.findMany", () =>
+    accounts.map((a) => ({
+      id: a.id,
+      email: a.email,
+      provider: "GOOGLE",
+      needsReconnect: a.needsReconnect ?? false,
+    })),
+  );
+  override("linkedCalendarAccount.findFirst", () => ({ provider: "GOOGLE" }));
+  m.getLinkedCalendarClient.mockImplementation(async (_userId: string, id: string) => {
+    const account = accounts.find((a) => a.id === id);
+    return account ? { client: account.client, id, email: account.email } : null;
+  });
+}
+
 function callsTo(key: string) {
   return m.calls.filter((c) => c === key).length;
 }
@@ -167,7 +197,8 @@ beforeEach(() => {
   m.calls.length = 0;
   upsertArgs = [];
   m.getAuthedClient.mockResolvedValue(AUTH);
-  m.getLinkedCalendarClients.mockResolvedValue([]);
+  setLinkedAccounts([]);
+  m.isEntitled.mockReturnValue(true);
   m.eventsList.mockResolvedValue({ data: { items: [] } });
   override("automationConfig.findMany", () => [
     {
@@ -348,7 +379,7 @@ describe("scheduler calendar step — primary calendar", () => {
 
   it("does not look at linked calendar accounts at all (today's behaviour)", async () => {
     await runOneTick();
-    expect(m.getLinkedCalendarClients).not.toHaveBeenCalled();
+    expect(m.getLinkedCalendarClient).not.toHaveBeenCalled();
     expect(callsTo("linkedCalendarAccount.findMany")).toBe(0);
   });
 });
@@ -381,7 +412,7 @@ describe("scheduler calendar step — linked calendars (LINKED_CALENDAR_SYNC_ENA
     beforeEach(() => {
       if (value === undefined) delete process.env[KEY];
       else process.env[KEY] = value;
-      m.getLinkedCalendarClients.mockResolvedValue([WORK]);
+      setLinkedAccounts([WORK]);
     });
 
     it("behaves exactly as before: one Google call, primary rows only, linked accounts never looked up", async () => {
@@ -389,8 +420,9 @@ describe("scheduler calendar step — linked calendars (LINKED_CALENDAR_SYNC_ENA
 
       await runOneTick();
 
-      expect(m.getLinkedCalendarClients).not.toHaveBeenCalled();
+      expect(m.getLinkedCalendarClient).not.toHaveBeenCalled();
       expect(callsTo("linkedCalendarAccount.findMany")).toBe(0);
+      expect(callsTo("linkedCalendarAccount.findFirst")).toBe(0);
       expect(m.getAuthedClient).toHaveBeenCalledTimes(1);
       expect(m.googleCalendar).toHaveBeenCalledTimes(1);
       expect(m.googleCalendar).toHaveBeenCalledWith({ version: "v3", auth: AUTH });
@@ -405,7 +437,7 @@ describe("scheduler calendar step — linked calendars (LINKED_CALENDAR_SYNC_ENA
   describe("flag on", () => {
     beforeEach(() => {
       process.env[KEY] = "true";
-      m.getLinkedCalendarClients.mockResolvedValue([WORK]);
+      setLinkedAccounts([WORK]);
     });
 
     it("syncs the primary calendar first, then each linked account with its own client", async () => {
@@ -474,7 +506,9 @@ describe("scheduler calendar step — linked calendars (LINKED_CALENDAR_SYNC_ENA
 
     it("an unexpected linked-sync error is contained: the tick still completes", async () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      m.getLinkedCalendarClients.mockRejectedValue(new Error("decrypt blew up"));
+      override("linkedCalendarAccount.findMany", () => {
+        throw new Error("decrypt blew up");
+      });
       m.eventsList.mockResolvedValue({ data: { items: [timed("g-primary")] } });
 
       await runOneTick();
@@ -485,12 +519,54 @@ describe("scheduler calendar step — linked calendars (LINKED_CALENDAR_SYNC_ENA
     });
 
     it("does nothing extra for a user with no linked accounts", async () => {
-      m.getLinkedCalendarClients.mockResolvedValue([]);
+      setLinkedAccounts([]);
 
       await runOneTick();
 
       expect(m.eventsList).toHaveBeenCalledTimes(1);
       expect(callsTo("user.findUnique")).toBe(1);
+    });
+
+    it("skips an account flagged needsReconnect until it is re-linked", async () => {
+      setLinkedAccounts([{ ...WORK, needsReconnect: true }]);
+
+      await runOneTick();
+
+      expect(m.eventsList).toHaveBeenCalledTimes(1);
+      expect(m.getLinkedCalendarClient).not.toHaveBeenCalled();
+    });
+
+    it("never sends a revoked linked account's auth error to Sentry", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      m.eventsList
+        .mockResolvedValueOnce({ data: { items: [] } })
+        .mockRejectedValueOnce({ response: { status: 401 } });
+
+      await runOneTick();
+
+      expect(m.captureError).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    describe("entitlement", () => {
+      it("syncs linked calendars for an entitled user, asking with the user's plan and role", async () => {
+        await runOneTick();
+
+        expect(m.isEntitled).toHaveBeenCalledWith("PRO", "USER");
+        expect(m.eventsList).toHaveBeenCalledTimes(2);
+      });
+
+      it("does not sync linked calendars for a lapsed user (exactly like linking): primary still syncs, nothing linked is looked up", async () => {
+        m.isEntitled.mockReturnValue(false);
+        m.eventsList.mockResolvedValue({ data: { items: [timed("g-primary")] } });
+
+        await runOneTick();
+
+        expect(m.eventsList).toHaveBeenCalledTimes(1);
+        expect(eventUpserts().map((u) => u.create.sourceAccountId)).toEqual([null]);
+        expect(m.getLinkedCalendarClient).not.toHaveBeenCalled();
+        expect(callsTo("linkedCalendarAccount.findMany")).toBe(0);
+      });
     });
   });
 });

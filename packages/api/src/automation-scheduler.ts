@@ -1235,10 +1235,12 @@ async function runUserCycle(
 
     // Linked Google calendars (step C2), behind LINKED_CALENDAR_SYNC_ENABLED and
     // read per tick. Off: nothing below runs, so no linked-account lookup and no
-    // extra Google call. Isolated from the primary sync above: neither one's
-    // failure skips the other, and a linked failure never raises the
-    // "Google disconnected" alert (that is about the primary token).
-    if (linkedCalendarSyncEnabled()) {
+    // extra Google call. Entitled users only, exactly like linking one (the
+    // link-calendar callback in routes/auth.ts): linked calendars are a Pro
+    // feature, so a lapsed user's accounts stop syncing. Isolated from the primary
+    // sync above: neither one's failure skips the other, and a linked failure
+    // never raises the "Google disconnected" alert (that is about the primary token).
+    if (linkedCalendarSyncEnabled() && isEntitled(configUserPlan, configUserRole)) {
       try {
         await syncLinkedCalendars(config.userId);
       } catch (err) {

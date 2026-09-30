@@ -3,7 +3,7 @@
  * segmentation, measured-only summaries, attention capped at 3.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   timezone: "Asia/Seoul",
@@ -33,6 +33,7 @@ vi.mock("../user-timezone.js", () => ({
   getUserTimeZone: vi.fn(async () => state.timezone),
 }));
 
+import { prisma } from "../db.js";
 import { buildBriefingStructure } from "../pim/briefing-structure.js";
 
 // Saturday 2026-08-22, 07:00 KST.
@@ -151,5 +152,28 @@ describe("buildBriefingStructure — linked calendar copies (C2)", () => {
       { ...copy("acct-1"), externalId: "g-b" },
     ];
     expect(Math.max(...(await buildBriefingStructure("u1", NOW)).curve)).toBe(2);
+  });
+});
+
+describe("buildBriefingStructure — kill switch (C2)", () => {
+  const eventQueryWhere = () => {
+    const call = vi.mocked(prisma.calendarEvent.findMany).mock.calls.at(-1);
+    return (call?.[0] as { where: Record<string, unknown> }).where;
+  };
+
+  afterEach(() => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+  });
+
+  it("reads primary and LOCAL rows only while LINKED_CALENDAR_SYNC_ENABLED is off", async () => {
+    delete process.env.LINKED_CALENDAR_SYNC_ENABLED;
+    await buildBriefingStructure("u1", NOW);
+    expect(eventQueryWhere().sourceAccountId).toBeNull();
+  });
+
+  it("does not narrow the query once the flag is on", async () => {
+    process.env.LINKED_CALENDAR_SYNC_ENABLED = "true";
+    await buildBriefingStructure("u1", NOW);
+    expect(eventQueryWhere()).not.toHaveProperty("sourceAccountId");
   });
 });

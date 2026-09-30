@@ -1,16 +1,10 @@
 import { prisma } from "../db.js";
 import { type BusyConflict, toAbsoluteInstant } from "../google-calendar-time.js";
-import {
-  getLinkedCalendarClients,
-  isGoogleAuthError,
-  markGoogleTokenForReconnect,
-  markLinkedCalendarForReconnect,
-} from "../mail/gmail.js";
-import { captureError } from "../sentry.js";
+import { isGoogleAuthError, markGoogleTokenForReconnect } from "../mail/gmail.js";
 import { normalizeTimeZone } from "../time-zone.js";
 import { wrapUntrusted } from "../untrusted.js";
-import { connectPrimaryCalendar } from "./calendar-providers/dispatch.js";
-import { googleSessionFromClient } from "./calendar-providers/google.js";
+import { connectLinkedCalendars, connectPrimaryCalendar } from "./calendar-providers/dispatch.js";
+import { handleLinkedCalendarFailure } from "./linked-calendar-failure.js";
 
 // Tests and the web layer import this from here; the implementation moved behind
 // the provider seam (step C2) without changing.
@@ -212,41 +206,32 @@ function conflictResult(
   };
 }
 
-/** Busy blocks from every LINKED (secondary) Google account — e.g. a work
- *  account — which one primary token structurally can't see. Best-effort: a
- *  linked account that errors is logged + captured and skipped, never sinking
- *  the whole check (primary + the other linked accounts still count). */
+/** Busy blocks from every LINKED (secondary) calendar account — e.g. a work
+ *  account — which one primary token structurally can't see. Accounts come from
+ *  the provider seam, so a provider with no implementation yet is skipped. Best-
+ *  effort: a linked account that errors goes through the shared failure policy
+ *  (flagged for reconnect on a revoked token, otherwise logged + captured) and is
+ *  skipped, never sinking the whole check (primary + the other linked accounts
+ *  still count). */
 async function linkedAccountConflicts(
   userId: string,
   timeMin: string,
   timeMax: string,
 ): Promise<{ conflicts: BusyConflict[]; accountsChecked: number }> {
-  const linked = await getLinkedCalendarClients(userId);
+  // A flagged account is still tried: a successful token refresh clears the flag.
+  const linked = await connectLinkedCalendars(userId, { skipNeedsReconnect: false });
   const conflicts: BusyConflict[] = [];
-  for (const { client, id, email } of linked) {
+  for (const { session, id, email } of linked) {
     try {
-      // Linked accounts are Google-only (getLinkedCalendarClients filters on it),
-      // so the Google session is built straight from each client.
-      conflicts.push(...(await googleSessionFromClient(client).busyBlocks({ timeMin, timeMax })));
+      conflicts.push(...(await session.busyBlocks({ timeMin, timeMax })));
     } catch (err) {
-      // A revoked linked-calendar token 401s here. Flag it for reconnect so the
-      // UI prompts a re-link instead of the account silently dropping out of
-      // free/busy on every check. Only auth errors flag — a transient failure
-      // must not demand a re-link. Best-effort: a DB blip in the flag-write must
-      // NOT abort the loop or skip the error logging below (skip-and-continue).
-      if (isGoogleAuthError(err)) {
-        await markLinkedCalendarForReconnect(userId, id).catch((markErr) => {
-          console.error(`[CALENDAR] Failed to flag linked calendar ${id} for reconnect:`, markErr);
-          captureError(markErr, { tags: { scope: "calendar.linked.mark-reconnect" } });
-        });
-      }
-      console.warn(
-        `[CALENDAR] linked-account free/busy failed (skipped): ${err instanceof Error ? err.message : err}`,
-      );
-      captureError(err, {
-        tags: { scope: "calendar.linked_freebusy_failed" },
-        // Domain only — never send the full linked email (PII) to Sentry.
-        extra: { userId, accountDomain: email.split("@")[1] ?? "unknown" },
+      await handleLinkedCalendarFailure({
+        userId,
+        linkedAccountId: id,
+        email,
+        err,
+        scope: "calendar.linked_freebusy_failed",
+        action: "free/busy",
       });
     }
   }
@@ -277,7 +262,7 @@ export async function checkAttendeeBusy(
   try {
     const people = await session.peopleFreeBusy(attendeeEmails, { timeMin, timeMax });
     // A calendar we cannot see (blocks null) is unknown — omitted, never "free".
-    return people.flatMap((p) => (p.blocks ? [{ email: p.email, busy: p.blocks.length > 0 }] : []));
+    return people.flatMap((p) => (p.blocks ? [{ email: p.email, busy: p.anyBusy }] : []));
   } catch (err) {
     console.warn(`[CALENDAR] attendee freebusy failed for ${userId}:`, err);
     return [];
@@ -326,10 +311,11 @@ export async function getAttendeeBusyByMember(
   const session = await connectPrimaryCalendar(userId);
   if (!session) return attendeeEmails.map((email) => ({ email, blocks: null }));
   try {
-    return await session.peopleFreeBusy(attendeeEmails, {
+    const people = await session.peopleFreeBusy(attendeeEmails, {
       timeMin: timeMinIso,
       timeMax: timeMaxIso,
     });
+    return people.map(({ email, blocks }) => ({ email, blocks }));
   } catch (err) {
     console.warn(`[CALENDAR] per-member busy query failed for ${userId}:`, err);
     return attendeeEmails.map((email) => ({ email, blocks: null }));

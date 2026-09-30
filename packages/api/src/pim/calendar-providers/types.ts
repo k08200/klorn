@@ -105,6 +105,12 @@ export interface CalendarEventWritten {
 export interface PersonFreeBusy {
   readonly email: string;
   readonly blocks: Array<{ start: string; end: string }> | null;
+  /**
+   * True when the provider returned ANY busy entry, including one missing its
+   * start or end (which `blocks` leaves out). A malformed entry still reads as
+   * busy: the safe direction, never a false "free".
+   */
+  readonly anyBusy: boolean;
 }
 
 export interface CalendarSession {
