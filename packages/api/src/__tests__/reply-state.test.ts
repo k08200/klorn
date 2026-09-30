@@ -31,7 +31,12 @@ vi.mock("../sentry.js", () => ({
   }),
 }));
 
-import { markEmailReplied, replyStateOf } from "../mail/reply-state.js";
+import {
+  draftReadyFor,
+  markEmailReplied,
+  offeredDraftFor,
+  replyStateOf,
+} from "../mail/reply-state.js";
 
 describe("replyStateOf", () => {
   it("a recorded reply beats the judged need; nothing claims nothing", () => {
@@ -40,6 +45,24 @@ describe("replyStateOf", () => {
     expect(replyStateOf({ needsReply: false, repliedAt: null })).toBeNull();
     // Rows from a partially-selected query (older callers) carry neither.
     expect(replyStateOf({})).toBeNull();
+  });
+});
+
+describe("offeredDraftFor / draftReadyFor", () => {
+  it("offers a stored draft only while the mail is unanswered", () => {
+    const draft = "Hi — 3pm works.";
+    expect(offeredDraftFor({ proactiveDraft: draft, repliedAt: null })).toBe(draft);
+    expect(draftReadyFor({ proactiveDraft: draft, repliedAt: null })).toBe(true);
+    // Answered since: the draft is history, not an offer.
+    expect(offeredDraftFor({ proactiveDraft: draft, repliedAt: new Date() })).toBeNull();
+    expect(draftReadyFor({ proactiveDraft: draft, repliedAt: new Date() })).toBe(false);
+  });
+
+  it("an attempt that produced nothing offers nothing", () => {
+    expect(offeredDraftFor({ proactiveDraft: null })).toBeNull();
+    expect(offeredDraftFor({ proactiveDraft: "   " })).toBeNull();
+    // Rows from a query that never selected the column.
+    expect(draftReadyFor({})).toBe(false);
   });
 });
 

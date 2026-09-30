@@ -37,7 +37,20 @@ export function draftReadyFor(email: {
   proactiveDraft?: string | null;
   repliedAt?: Date | null;
 }): boolean {
-  return Boolean(email.proactiveDraft) && !email.repliedAt;
+  return offeredDraftFor(email) !== null;
+}
+
+/**
+ * The draft the reading pane may offer, or null. One rule for the row flag
+ * and the detail payload: an answered mail offers nothing, however good the
+ * draft was.
+ */
+export function offeredDraftFor(email: {
+  proactiveDraft?: string | null;
+  repliedAt?: Date | null;
+}): string | null {
+  if (email.repliedAt) return null;
+  return email.proactiveDraft?.trim() ? email.proactiveDraft : null;
 }
 
 /**

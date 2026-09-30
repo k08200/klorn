@@ -64,7 +64,7 @@ export function selectDraftTargets(input: {
   if (budget <= 0) return [];
   return input.candidates
     .filter((candidate) => input.pushIds.has(candidate.id))
-    .toSorted((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime())
+    .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime())
     .slice(0, budget)
     .map((candidate) => candidate.id);
 }

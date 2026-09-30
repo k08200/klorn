@@ -49,7 +49,13 @@ const attentionRow = {
   inputHash: correctHash, // overwritten per test below
 };
 
-const emailRow = {
+const emailRow: typeof baseEmailFields & {
+  id: string;
+  gmailId: string;
+  needsReply?: boolean;
+  repliedAt?: Date | null;
+  proactiveDraft?: string | null;
+} = {
   id: "email-1",
   gmailId: "gmail-1",
   ...baseEmailFields,
@@ -139,6 +145,37 @@ function findItem(body: FirewallResponseWire, id: string): FirewallItemWire | un
   }
   return undefined;
 }
+
+describe("GET /api/inbox/firewall — draftReady on the row", () => {
+  async function rowEmail() {
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
+    await app.close();
+    return findItem(res.json() as FirewallResponseWire, "att-1")?.email;
+  }
+
+  it("is true while a stored draft waits, false once answered or when none exists", async () => {
+    attentionRow.inputHash = correctHash;
+    expect((await rowEmail())?.draftReady).toBe(false);
+
+    emailRow.needsReply = true;
+    emailRow.proactiveDraft = "Hi — 3pm works.";
+    try {
+      const waiting = await rowEmail();
+      expect(waiting?.draftReady).toBe(true);
+      expect(waiting?.replyState).toBe("needsReply");
+
+      emailRow.repliedAt = new Date("2026-09-28T01:00:00Z");
+      const answered = await rowEmail();
+      expect(answered?.draftReady).toBe(false);
+      expect(answered?.replyState).toBe("replied");
+    } finally {
+      delete emailRow.needsReply;
+      delete emailRow.proactiveDraft;
+      delete emailRow.repliedAt;
+    }
+  });
+});
 
 describe("GET /api/inbox/firewall — hash verify integration", () => {
   beforeEach(async () => {
